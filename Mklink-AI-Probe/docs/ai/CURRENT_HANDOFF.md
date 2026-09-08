@@ -4,11 +4,11 @@
 
 ## 当前断点
 
-- 更新时间：`2026-09-08T20:54:06+08:00`
+- 更新时间：`2026-09-08T21:14:34+08:00`
 - 分支：`main`
 - HEAD：`最新提交以 Git 为准；应用发布标签 v0.2.0 = 911a70f。`
 - 远端 HEAD：`microkeen/main 为开发主线；origin/master 保留旧发布基线。`
-- 工作树：清理旧候选包和缓存约 1.08 GB；链接/权限目录保留，详见 .build/reports/workspace-cleanup-20260908/cleanup-summary.md。
+- 工作树：旧候选包/缓存已清理约 1.08 GB，用户随后清空 .build/runs，已核实。其余保留项见 .build/reports/workspace-cleanup-20260908/cleanup-summary.md。
 - 当前任务：发布与仓库迁移完成；定时任务暂停，等待用户手动指定 Issue。
 - 状态：`ready`
 
