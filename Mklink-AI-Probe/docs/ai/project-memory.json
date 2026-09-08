@@ -1,20 +1,20 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-09-08T09:26:58+08:00",
+  "updated_at": "2026-09-08T11:11:09+08:00",
   "repository": {
-    "url": "https://github.com/Aladdin-Wang/Mklink-AI-Probe",
+    "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
-    "branch": "master",
-    "head": "应用 v0.2.0 发布提交 911a70f；master 后续包含验收记录及独立固件目录更新。",
-    "remote_head": "GitHub/Gitee 应用 0.2.0 与独立固件索引已同步；最新 master 以 Git 为准。",
+    "branch": "main",
+    "head": "以已发布 dbb6077 为基线，增加授权报障和第一阶段维护队列；最新提交以 Git 为准。",
+    "remote_head": "MicroKeen/main 为后续开发入口；旧仓库 master 和上游 PR #17 保留。",
     "working_tree": "仅保留当前结论；历史操作见 Git 和验证报告。"
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "published",
-    "current_task": "应用 0.2.0 与 MicroLink V3.4.0/V4.4.0 固件发布完成；后者仅做格式、发布与下载验证，未做新固件 HIL。"
+    "status": "active",
+    "current_task": "第一阶段：授权报障、定时分诊、修复 PR 与测试报告，人工审核合并；发布渠道暂不迁移。"
   },
   "milestones": [
     {
@@ -24,6 +24,10 @@
     }
   ],
   "verification": [
+    {
+      "area": "报障流程",
+      "result": "docs/verification/issue-feedback-stage1.md：本地 60 项通过、Skill 校验通过、真实 GitHub 空队列扫描成功；未宣称真实缺陷修复闭环。"
+    },
     {
       "area": "本轮门禁",
       "result": "docs/verification/v0.2.0-release-qualification.md：Python 1913、GUI 682、Rust 19；正式包安装、算法/文件哈希、CLI/MCP 和双端发布通过。"
@@ -54,8 +58,8 @@
     "外设轮询可能漏短脉冲，SVD 过滤依赖厂商标注，缓冲有限；SystemView 启动少量丢弃，不称绝对无损。"
   ],
   "next_actions": [
-    "后续版本开发和上游 PR 按用户下一步安排；应用和本轮固件发布均已完成，新固件真机功能尚未验收。",
-    "保留已登记的 RTT、USB 和芯片安全限制，不能由本次发布推断已修复。"
+    "定时任务遵循 docs/ai/issue-maintenance.md，每小时检查 MicroKeen Issues，每轮最多三项；仅创建修复 PR，不合并、不发布、不操作硬件。",
+    "后续迁移 Release/更新索引须单独验证现有客户端下载兼容性；0.2.0 与固件原发布渠道继续可用。"
   ],
   "continuation_protocol": [
     "开始校正 Git/设备/进程；结束渲染并验证记忆、提交推送；环境失败和未覆盖不能写 PASS。"
