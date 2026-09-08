@@ -9,6 +9,9 @@
 - Skill 校验通过；用户参考页可随运行时包发布，队列脚本和维护说明不在公共包白名单。
 - 真实 GitHub 队列只读扫描成功，目前为空；未人为制造用户报障，也未宣称已完成真实缺陷的自动修复闭环。
 - `Feedback checks` 在 push/PR 时执行队列与 Skill 边界检查，上传 JUnit 报告。它不是全产品或 HIL 验收。
+- GitHub Windows runner [首次运行](https://github.com/MicroKeen/Mklink-AI-Probe/actions/runs/34182692110)
+  在 `bde9f2f` 上 60 项通过，JUnit 附件已上传；无秘密凭据、仅授予 contents:read。
+- 本机每小时任务 `mklink-issues-pr` 已启用，七项 `ai:*` 状态标签已配置。
 - 本机定时任务承担分诊和修复 PR；需要本机/Codex 在线、GitHub 登录可用。缺少硬件时只记录待 HIL，
   不继承先前交互测试中的设备写入许可，不自动合并或发布。
 

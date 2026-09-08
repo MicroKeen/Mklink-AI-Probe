@@ -4,12 +4,12 @@
 
 ## 当前断点
 
-- 更新时间：`2026-09-08T11:11:09+08:00`
+- 更新时间：`2026-09-08T11:13:41+08:00`
 - 分支：`main`
 - HEAD：`以已发布 dbb6077 为基线，增加授权报障和第一阶段维护队列；最新提交以 Git 为准。`
 - 远端 HEAD：`MicroKeen/main 为后续开发入口；旧仓库 master 和上游 PR #17 保留。`
 - 工作树：仅保留当前结论；历史操作见 Git 和验证报告。
-- 当前任务：第一阶段：授权报障、定时分诊、修复 PR 与测试报告，人工审核合并；发布渠道暂不迁移。
+- 当前任务：第一阶段已部署：用户授权报障、本机每小时分诊与修复 PR、CI 测试报告、人工合并；当前队列为空。
 - 状态：`active`
 
 ## 里程碑
@@ -18,7 +18,7 @@
 
 ## 验证证据
 
-- **报障流程**：docs/verification/issue-feedback-stage1.md：本地 60 项通过、Skill 校验通过、真实 GitHub 空队列扫描成功；未宣称真实缺陷修复闭环。
+- **报障流程**：docs/verification/issue-feedback-stage1.md：本地和 GitHub CI 各 60 项通过，JUnit 已上传，Skill 校验与真实空队列扫描通过；每小时任务 mklink-issues-pr 已启用，尚无真实缺陷端到端修复证据。
 - **本轮门禁**：docs/verification/v0.2.0-release-qualification.md：Python 1913、GUI 682、Rust 19；正式包安装、算法/文件哈希、CLI/MCP 和双端发布通过。
 - **真机基线**：docs/verification/v0.2.0-prerelease-hil-20260907.md；类型写入追加见 v0.2.0-superwatch-write-20260907.md。历史通过不能代替新正式包安装验收。
 - **固件发布**：docs/verification/firmware-20260908.md：V3.4.0/V4.4.0；25 项测试、UF2/版本检查、双端下载哈希和公开索引一致性通过。
