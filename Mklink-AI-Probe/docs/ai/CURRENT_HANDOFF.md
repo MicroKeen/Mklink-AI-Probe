@@ -4,63 +4,48 @@
 
 ## 当前断点
 
-- 更新时间：`2026-09-02T13:18:45+08:00`
+- 更新时间：`2026-09-08T09:26:58+08:00`
 - 分支：`master`
-- HEAD：`master contains the SystemView session lifecycle fix, bounded first-session recovery, synchronized Web assets, and regression coverage.`
-- 远端 HEAD：`origin/master contains the validated SystemView session lifecycle fix; feature/eternal-chip-gui carries the corresponding source fix with its own branded Web assets.`
-- 工作树：Keep the checkout clean; build output belongs in MKLINK_BUILD_ROOT or the ignored .build directory.
-- 当前任务：SystemView WebGUI 会话生命周期、首会话单次有界恢复、状态可观测性、回归测试、真机 HIL 以及 master/立芯分支同步均已完成。
-- 状态：`v0.1.9-systemview-session-fixed`
+- HEAD：`应用 v0.2.0 发布提交 911a70f；master 后续包含验收记录及独立固件目录更新。`
+- 远端 HEAD：`GitHub/Gitee 应用 0.2.0 与独立固件索引已同步；最新 master 以 Git 为准。`
+- 工作树：仅保留当前结论；历史操作见 Git 和验证报告。
+- 当前任务：应用 0.2.0 与 MicroLink V3.4.0/V4.4.0 固件发布完成；后者仅做格式、发布与下载验证，未做新固件 HIL。
+- 状态：`published`
 
 ## 里程碑
 
-- **0.1.9 桌面端与 WebGUI** — `complete`。采用 PR #15 的 UF2 固件与 AGENTS.md；修复构建包装器退出码和锁定临时目录清理，稳定 Windows GUI 全量门禁，并同步生产 Web 资源。
-- **隐私安全的内存可观测性** — `complete`。从两个备份分支一次性迁移 MCP 私有流、统一观测事件、内存 dump/RTT/SystemView 发布和测试；保留 0.1.9 的 32 位地址、4 KiB 直读、8 区域批写、12 KiB flush 与写后校验边界。
-- **PR #15 本地集成门禁** — `complete`。Python、GUI、Go/STCP、Web、Tauri 和 HIL-Infra 只读门禁全部通过；PR #15 已以 merge commit 方式合并到 master。
-- **SystemView 会话生命周期修复** — `complete`。分离 duration 与单调时钟 idle watchdog，容忍瞬态读取，按设备连接代次仅为第一个会话提供一次自动恢复；重试时清理解析器、历史、统计、任务与 CPU hint，并在 WebGUI 显示恢复代次、原因和停止错误。
+- **0.2.0 正式版** — `complete`。GitHub/Gitee Release、更新签名与 latest.json 已发布；本地桌面和 Skill 已同步。
 
 ## 验证证据
 
-- **Python**：最终全量 1805 passed, 1 skipped，耗时 657.28 秒；SystemView 状态机定向回归 15 passed。Windows 默认 GBK 会使发布清单夹具解码 Git UTF-8 内容失败，使用明确的 PYTHONUTF8=1 后定向与全量均通过。
-- **GUI 与 Web**：Vitest 59 files / 627 tests 全部通过；生产构建转换 1945 modules。真实 Chromium 连接 STM32F411CE 目标验证 SystemView 持续约 70 秒达到 260744 events、Sync Ready，浏览器零 error/零 warning，停止、断连和进程退出正常。
-- **Go/STCP**：官方 Go 1.25.12 工具链下 go test ./... 通过；当前源码 DLL SHA-256=C49908A030D16629253683C7B3B4837673863081E4602D8A1F25B54AA0B79087。
-- **Tauri Release 可执行文件**：Rust 1.95.0、Node 24.15.0 与 Python 依赖检查通过；npx tauri build --no-bundle 成功，16.3 MB EXE SHA-256=86D3F036D828699737610C0AB7A1129D04431F47234236C804A6A2401355D072。
-- **HIL-Infra 硬门禁**：contract_check 61 symbols / SHA 0347576fb2dd8c02...；pytest 380 passed；6 个 capmap 静态一致性零错误零豁免；bench-01、bench-gec1900、运行计划和资源映射通过。
-- **HIL 运行时与插件准入**：MKLink runtime 拒绝探针与自动化插件评审 11/11 OK；run-verify RV-01..RV-10 全部 OK，run-doctor 零孤儿、结束后无活动锁。本轮未烧录目标、未执行 OTA、未改变供电或发送 CAN。
-- **SystemView 真机链路**：原生 CLI 在 COM5、channel 1、RTT 控制块 0x20010d40 上运行 10 秒并持续输出有效事件；最终生产 WebGUI 会话约 70 秒达到 260744 events。既有故障故事中的首会话自动恢复实测曾持续 80 秒达到 165967 events 且零错误。
-- **PR #15 固件资产**：按用户决策采用 PR 文件：HPMLink V4.3.8 SHA-256=D295858F3914998ABB7A19F6064157F6695C5B43E362CB00553D7A295A7E3FA8；MicroLink V3.3.8 SHA-256=E213B248A137C6519A9E926EAAC78718CE844C2A20555F3A3D2A48581B099BE8；MicroLink V4.3.9 SHA-256=F29821A6A34B75F3DAE96416595CA572A2DACAAF54C9DCC17521845F212DCEF6。
+- **本轮门禁**：docs/verification/v0.2.0-release-qualification.md：Python 1913、GUI 682、Rust 19；正式包安装、算法/文件哈希、CLI/MCP 和双端发布通过。
+- **真机基线**：docs/verification/v0.2.0-prerelease-hil-20260907.md；类型写入追加见 v0.2.0-superwatch-write-20260907.md。历史通过不能代替新正式包安装验收。
+- **固件发布**：docs/verification/firmware-20260908.md：V3.4.0/V4.4.0；25 项测试、UF2/版本检查、双端下载哈希和公开索引一致性通过。
 
 ## 架构决策
 
-- UF2 固件文件和 AGENTS.md 采用 PR #15 版本。
-- 两个本地备份包含同一份核心内存可观测性实现；只迁移一次代码，旧交接文档不覆盖当前 0.1.9 记忆，Eternal Chip GUI 分支历史不混入 PR。
-- 观测数据的公开事件仅包含安全事实，原始内存、RTT 和 SystemView 内容走有界私有流；发布失败降级但不改变成功读取结果。
-- SystemView 自动恢复限定为每次 Device 连接的第一个会话最多一次；恢复状态显式暴露，后续会话和持续失败不会进入隐式重试循环。
-- 构建、测试、日志和缓存统一位于 MKLINK_BUILD_ROOT 或主工作区忽略的 .build，并经 scripts/build_workspace.ps1 运行。
-- 实际烧录、复位、供电、CAN 发送等不可逆或有外部影响的动作必须获得针对本次操作的明确确认。
-- 应用 Release、标签、更新签名和探针固件发布彼此独立，不随 PR 合并自动执行。
+- 构建/测试统一经 scripts/build_workspace.ps1，产物与原始证据留外层 .build；保留唯一备份，不上传用户固件、标识或 Pack。
+- 正式包为签名标准 NSIS + 独立 sidecar；Skill 仅含运行时，首次加载检查更新，不携带维护交接、测试和构建信息。
+- 默认扇区擦除；全片擦除需明确选择。文件哈希变化重载并停止依赖采集，不自动烧录。GPIO 分图由用户控制。
+- 探针 I/O 串行，USB 失效释放旧句柄；HPM 保持 ROM API。安全操作遵循已验证芯片矩阵与单独电压授权，禁止 RDP2。
 
 ## 真机环境
 
-- **probe**：HIL-Infra bench-01 将 MKLink V4 命令口映射为 COM5；交接不依赖端口号，使用台架 selector 与互操作锁。
-- **target**：本轮使用 ec_s100_watch_V2.6_tony 的 STM32F411CE + FreeRTOS + LVGL 既有固件，通过 RTT 控制块 0x20010d40 验证 SystemView；未重烧目标。
-- **permission**：本轮执行 SystemView 启停、读取和一次探针重启以复现冷启动问题；未执行目标烧录、OTA、供电变更或 CAN 激励。后续写入动作仍需针对目标和固件单独确认。
+- **current**：最近受测 V3 + STM32F103RE；正常 sw_write 测试程序，采集/串口已释放。此前完整 HIL 使用 V4。本次发布验收只发现探针，未写目标芯片。
+- **backup**：Flash/工程备份留 .build/reports/prerelease-hil-20260907 和 superwatch-write-20260907。F103 测试获准修改/下载及 3.3V 保护往返；无 Modbus 从站。
 
 ## 下一动作
 
-1. 另行定位探针冷启动后连续复位或停流问题；保持主机侧单次有界恢复，避免用无限重试掩盖探针固件故障。
-2. 正式发布另行处理 NSIS、安装验证、Authenticode/更新签名、标签和 Release 资产；不要从本次 PR 合并自动推断。
+1. 后续版本开发和上游 PR 按用户下一步安排；应用和本轮固件发布均已完成，新固件真机功能尚未验收。
+2. 保留已登记的 RTT、USB 和芯片安全限制，不能由本次发布推断已修复。
 
 ## 已知限制
 
-- 本轮没有重新执行物理烧录 HIL；docs/verification/v0.1.9-stm32f103re-release-hil.md 的原始日志未在当前工作区找到，因此只能作为既有叙述证据，不能冒充本轮新证据。
-- Tauri 本轮只完成 --no-bundle Release 可执行文件构建；未生成或安装 NSIS，未做仅系统 PATH 的安装后运行验证，也未使用更新签名密钥。
-- Web 生产构建仍提示 DashboardView 压缩后约 551.11 KiB，超过 500 KiB 建议阈值，但不影响构建成功。
-- 探针冷启动后曾出现每次 SystemView start 都复位或停流的独立固件状态，增加到多次主机重试仍不能恢复；本次主机修复保持一次有界恢复，不掩盖该固件问题。经原生 CLI 正向控制后，同一目标的最终生产 WebGUI 长流验证通过。
-- HIL relay 插件仍有既有 runtime/拒绝探针证据缺口；不影响本次 MKLink 插件 11/11 自动化准入。
+- RTT 偶发启动失败与停止后 UART 残留前缀仍未闭环；高速 USB 识别异常按用户要求暂缓。
+- PY32F030 保护后恢复未闭环，见 docs/ai/security-roadmap.md。
+- 未覆盖物理 Modbus、其他板卡组合、Mac/Linux、跨主机 Agent；不由 F103 外推。
+- 外设轮询可能漏短脉冲，SVD 过滤依赖厂商标注，缓冲有限；SystemView 启动少量丢弃，不称绝对无损。
 
 ## 延续协议
 
-- 开始前校正 Git、台架 selector、目标固件和运行进程；硬件操作保持串行并遵守 HIL 锁。
-- 不把环境失败、旧叙述证据或未覆盖场景写成 PASS；关键证据写验证报告，交接只保留结论。
-- 结束前更新 project-memory.json、渲染 CURRENT_HANDOFF.md，并保持工作树与目标远端分支同步。
+- 开始校正 Git/设备/进程；结束渲染并验证记忆、提交推送；环境失败和未覆盖不能写 PASS。
