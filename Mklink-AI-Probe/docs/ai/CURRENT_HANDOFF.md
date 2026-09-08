@@ -4,12 +4,12 @@
 
 ## 当前断点
 
-- 更新时间：`2026-09-08T11:13:41+08:00`
+- 更新时间：`2026-09-08T11:16:45+08:00`
 - 分支：`main`
 - HEAD：`以已发布 dbb6077 为基线，增加授权报障和第一阶段维护队列；最新提交以 Git 为准。`
 - 远端 HEAD：`MicroKeen/main 为后续开发入口；旧仓库 master 和上游 PR #17 保留。`
 - 工作树：仅保留当前结论；历史操作见 Git 和验证报告。
-- 当前任务：第一阶段已部署：用户授权报障、本机每小时分诊与修复 PR、CI 测试报告、人工合并；当前队列为空。
+- 当前任务：第一阶段报障与修复 PR 流程已部署；按用户要求暂停定时任务，先学习手动触发，不自动恢复。
 - 状态：`active`
 
 ## 里程碑
@@ -18,7 +18,7 @@
 
 ## 验证证据
 
-- **报障流程**：docs/verification/issue-feedback-stage1.md：本地和 GitHub CI 各 60 项通过，JUnit 已上传，Skill 校验与真实空队列扫描通过；每小时任务 mklink-issues-pr 已启用，尚无真实缺陷端到端修复证据。
+- **报障流程**：docs/verification/issue-feedback-stage1.md：本地和 GitHub CI 各 60 项通过，JUnit 已上传，Skill 校验与真实空队列扫描通过；任务 mklink-issues-pr 已部署，现按用户要求暂停，尚无真实缺陷端到端修复证据。
 - **本轮门禁**：docs/verification/v0.2.0-release-qualification.md：Python 1913、GUI 682、Rust 19；正式包安装、算法/文件哈希、CLI/MCP 和双端发布通过。
 - **真机基线**：docs/verification/v0.2.0-prerelease-hil-20260907.md；类型写入追加见 v0.2.0-superwatch-write-20260907.md。历史通过不能代替新正式包安装验收。
 - **固件发布**：docs/verification/firmware-20260908.md：V3.4.0/V4.4.0；25 项测试、UF2/版本检查、双端下载哈希和公开索引一致性通过。
@@ -37,7 +37,7 @@
 
 ## 下一动作
 
-1. 定时任务遵循 docs/ai/issue-maintenance.md，每小时检查 MicroKeen Issues，每轮最多三项；仅创建修复 PR，不合并、不发布、不操作硬件。
+1. 定时任务 mklink-issues-pr 已按用户要求暂停。由用户手动指定 Issue 后分析或修复并提交 PR；未经再次明确要求，不恢复定时运行。
 2. 后续迁移 Release/更新索引须单独验证现有客户端下载兼容性；0.2.0 与固件原发布渠道继续可用。
 
 ## 已知限制
