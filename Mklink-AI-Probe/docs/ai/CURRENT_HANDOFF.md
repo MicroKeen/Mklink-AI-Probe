@@ -4,49 +4,47 @@
 
 ## 当前断点
 
-- 更新时间：`2026-09-08T11:16:45+08:00`
+- 更新时间：`2026-09-08T20:54:06+08:00`
 - 分支：`main`
-- HEAD：`以已发布 dbb6077 为基线，增加授权报障和第一阶段维护队列；最新提交以 Git 为准。`
-- 远端 HEAD：`MicroKeen/main 为后续开发入口；旧仓库 master 和上游 PR #17 保留。`
-- 工作树：仅保留当前结论；历史操作见 Git 和验证报告。
-- 当前任务：第一阶段报障与修复 PR 流程已部署；按用户要求暂停定时任务，先学习手动触发，不自动恢复。
-- 状态：`active`
+- HEAD：`最新提交以 Git 为准；应用发布标签 v0.2.0 = 911a70f。`
+- 远端 HEAD：`microkeen/main 为开发主线；origin/master 保留旧发布基线。`
+- 工作树：清理旧候选包和缓存约 1.08 GB；链接/权限目录保留，详见 .build/reports/workspace-cleanup-20260908/cleanup-summary.md。
+- 当前任务：发布与仓库迁移完成；定时任务暂停，等待用户手动指定 Issue。
+- 状态：`ready`
 
 ## 里程碑
 
-- **0.2.0 正式版** — `complete`。GitHub/Gitee Release、更新签名与 latest.json 已发布；本地桌面和 Skill 已同步。
+- **已交付** — `complete`。应用 0.2.0、MicroLink V3.4.0/V4.4.0 已发布；最新源码与报障流程已同步 MicroKeen/main。
 
 ## 验证证据
 
-- **报障流程**：docs/verification/issue-feedback-stage1.md：本地和 GitHub CI 各 60 项通过，JUnit 已上传，Skill 校验与真实空队列扫描通过；任务 mklink-issues-pr 已部署，现按用户要求暂停，尚无真实缺陷端到端修复证据。
-- **本轮门禁**：docs/verification/v0.2.0-release-qualification.md：Python 1913、GUI 682、Rust 19；正式包安装、算法/文件哈希、CLI/MCP 和双端发布通过。
-- **真机基线**：docs/verification/v0.2.0-prerelease-hil-20260907.md；类型写入追加见 v0.2.0-superwatch-write-20260907.md。历史通过不能代替新正式包安装验收。
-- **固件发布**：docs/verification/firmware-20260908.md：V3.4.0/V4.4.0；25 项测试、UF2/版本检查、双端下载哈希和公开索引一致性通过。
+- **正式版**：docs/verification/v0.2.0-release-qualification.md：Python 1913、GUI 682、Rust 19；安装/Skill/CLI/MCP 及下载校验通过。
+- **报障流程**：docs/verification/issue-feedback-stage1.md：本地/CI 各 60 项通过；真实缺陷自动修复闭环未验证。
+- **硬件与固件**：docs/verification/v0.2.0-prerelease-hil-20260907.md、v0.2.0-superwatch-write-20260907.md；firmware-20260908.md 仅验证发布/格式/哈希，新固件未做 HIL。
 
 ## 架构决策
 
-- 构建/测试统一经 scripts/build_workspace.ps1，产物与原始证据留外层 .build；保留唯一备份，不上传用户固件、标识或 Pack。
-- 正式包为签名标准 NSIS + 独立 sidecar；Skill 仅含运行时，首次加载检查更新，不携带维护交接、测试和构建信息。
-- 默认扇区擦除；全片擦除需明确选择。文件哈希变化重载并停止依赖采集，不自动烧录。GPIO 分图由用户控制。
-- 探针 I/O 串行，USB 失效释放旧句柄；HPM 保持 ROM API。安全操作遵循已验证芯片矩阵与单独电压授权，禁止 RDP2。
+- 用户 Skill 只含运行时，报障指南按需读取；主仓库 MicroKeen/main，现有 Release/更新索引仍在 Aladdin-Wang 与 Gitee。
+- 任务 mklink-issues-pr 为 PAUSED，未经要求不恢复；手动流程见 docs/ai/issue-maintenance.md，修复只提交 PR，合并由用户决定。
+- 构建/清理遵循 AGENTS.md 与 docs/ai/build-storage.md；保留正式包、唯一备份、依赖缓存及 HIL 证据。
 
 ## 真机环境
 
-- **current**：最近受测 V3 + STM32F103RE；正常 sw_write 测试程序，采集/串口已释放。此前完整 HIL 使用 V4。本次发布验收只发现探针，未写目标芯片。
-- **backup**：Flash/工程备份留 .build/reports/prerelease-hil-20260907 和 superwatch-write-20260907。F103 测试获准修改/下载及 3.3V 保护往返；无 Modbus 从站。
+- **state**：本轮仅清理与交接，不操作硬件；以重新发现设备为准，旧测试的写入/供电授权不自动延续。
+- **backups**：.build/reports/prerelease-hil-20260907、superwatch-write-20260907；保留其他芯片唯一备份。
+- **installer**：.build/artifacts/release-0.2.0-20260908/Mklink-AI-Probe-v0.2.0-x64-Setup.exe
 
 ## 下一动作
 
-1. 定时任务 mklink-issues-pr 已按用户要求暂停。由用户手动指定 Issue 后分析或修复并提交 PR；未经再次明确要求，不恢复定时运行。
-2. 后续迁移 Release/更新索引须单独验证现有客户端下载兼容性；0.2.0 与固件原发布渠道继续可用。
+1. 等待用户指定 Issue：先分析或按要求修复、验证、提交 PR；不自动合并/发布/恢复定时任务。
+2. 上游 su5176 PR #17 仍 OPEN 且冲突；仅按用户后续要求整合。迁移新仓库 Release/更新服务也尚未进行。
 
 ## 已知限制
 
-- RTT 偶发启动失败与停止后 UART 残留前缀仍未闭环；高速 USB 识别异常按用户要求暂缓。
-- PY32F030 保护后恢复未闭环，见 docs/ai/security-roadmap.md。
-- 未覆盖物理 Modbus、其他板卡组合、Mac/Linux、跨主机 Agent；不由 F103 外推。
-- 外设轮询可能漏短脉冲，SVD 过滤依赖厂商标注，缓冲有限；SystemView 启动少量丢弃，不称绝对无损。
+- 高速 USB 识别异常暂缓；RTT 偶发启动失败及停止后 UART 残留未闭环。
+- PY32F030 保护后恢复未闭环；未覆盖物理 Modbus、所有板卡、Mac/Linux 与跨主机 Agent。
+- 外设轮询可漏短脉冲，缓冲有限；SystemView 启动可能丢弃少量数据。
 
 ## 延续协议
 
-- 开始校正 Git/设备/进程；结束渲染并验证记忆、提交推送；环境失败和未覆盖不能写 PASS。
+- 先核对 Git、任务和设备状态；仅按需读相关验证报告，不加载历史流水账。
