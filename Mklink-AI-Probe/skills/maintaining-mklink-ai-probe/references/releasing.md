@@ -1,5 +1,12 @@
 # Maintainer Release Procedure
 
+The procedure below still targets the legacy Aladdin-Wang/Gitee publication
+channels and its `master` prerequisite. MicroKeen development uses reviewed PRs
+to `main`; the new protected `updates` and `firmware` branches are initialized
+copies, not a completed publisher migration. Only Aladdin-Wang may publish.
+See `docs/ai/repository-governance.md` relative to the source root before any
+publication. Do not run the legacy publisher against MicroKeen unchanged.
+
 GitHub is the primary source and collaboration repository. Gitee mirrors the
 official release for users who cannot access GitHub, but Gitee synchronization
 is performed only by the maintainer or maintainer-controlled CI.

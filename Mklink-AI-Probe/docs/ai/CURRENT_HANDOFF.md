@@ -4,12 +4,12 @@
 
 ## 当前断点
 
-- 更新时间：`2026-09-08T21:14:34+08:00`
-- 分支：`master`
+- 更新时间：`2026-09-09T18:12:12+08:00`
+- 分支：`codex/repository-governance`
 - HEAD：`最新提交以 Git 为准；应用发布标签 v0.2.0 = 911a70f。`
-- 远端 HEAD：`上游开发主线 microkeen/main 已整体合入本仓 master（含 issue 反馈工作流）；本仓另保留内存可观测性与 SystemView 生命周期修复。`
-- 工作树：旧候选包/缓存已清理约 1.08 GB，用户随后清空 .build/runs，已核实。其余保留项见 .build/reports/workspace-cleanup-20260908/cleanup-summary.md。
-- 当前任务：发布与仓库迁移完成；定时任务暂停，等待用户手动指定 Issue。
+- 远端 HEAD：`开发主线 microkeen/main；本次基线 04f1f7b，已包含上游 PR #15/#17 的合并历史。`
+- 工作树：权限配置与协作文档使用独立工作树；主工作区原 main 未切换。
+- 当前任务：MicroKeen 更新分支与主线保护已配置，协作文档提交 PR 待另一维护者审核；未迁移正式发布服务。
 - 状态：`ready`
 
 ## 里程碑
@@ -21,23 +21,26 @@
 - **正式版**：docs/verification/v0.2.0-release-qualification.md：Python 1913、GUI 682、Rust 19；安装/Skill/CLI/MCP 及下载校验通过。
 - **报障流程**：docs/verification/issue-feedback-stage1.md：本地/CI 各 60 项通过；真实缺陷自动修复闭环未验证。
 - **硬件与固件**：docs/verification/v0.2.0-prerelease-hil-20260907.md、v0.2.0-superwatch-write-20260907.md；firmware-20260908.md 仅验证发布/格式/哈希，新固件未做 HIL。
+- **仓库权限**：GitHub API 回读四项 active 规则；updates/firmware 与旧索引提交一致。仅 Aladdin-Wang 可绕过发布引用规则，main 审核/CI 无绕过者；未使用 su5176 身份执行写入测试。
 
 ## 架构决策
 
 - 用户 Skill 只含运行时，报障指南按需读取；主仓库 MicroKeen/main，现有 Release/更新索引仍在 Aladdin-Wang 与 Gitee。
 - 任务 mklink-issues-pr 为 PAUSED，未经要求不恢复；手动流程见 docs/ai/issue-maintenance.md，修复只提交 PR，合并由用户决定。
 - 构建/清理遵循 AGENTS.md 与 docs/ai/build-storage.md；保留正式包、唯一备份、依赖缓存及 HIL 证据。
+- 协作权限见 docs/ai/repository-governance.md：Aladdin-Wang、su5176 保持 Admin/Owner 并处理 PR；更新分支和正式标签仅 Aladdin-Wang 可写，最高管理员仍可修改规则，Release 附件权限不由分支规则隔离。
 
 ## 真机环境
 
-- **state**：本轮仅清理与交接，不操作硬件；以重新发现设备为准，旧测试的写入/供电授权不自动延续。
+- **state**：本次只配置仓库权限、复制已发布索引并更新维护文档，未操作硬件。
 - **backups**：.build/reports/prerelease-hil-20260907、superwatch-write-20260907；保留其他芯片唯一备份。
 - **installer**：.build/artifacts/release-0.2.0-20260908/Mklink-AI-Probe-v0.2.0-x64-Setup.exe
 
 ## 下一动作
 
-1. 等待用户指定 Issue：先分析或按要求修复、验证、提交 PR；不自动合并/发布/恢复定时任务。
-2. 上游 su5176 PR #17 仍 OPEN 且冲突；仅按用户后续要求整合。迁移新仓库 Release/更新服务也尚未进行。
+1. 由另一位维护者审核 codex/repository-governance 的文档 PR，CI 通过后由两名指定维护者之一合并；AI 不自动合并。
+2. 后续缺陷/功能从最新 microkeen/main 创建独立任务分支并提交 PR；定时任务保持暂停。
+3. 正式发布仍使用原 Aladdin-Wang/Gitee 渠道。新 updates/firmware 不自动同步；切换前另行适配发布脚本并验证资产、签名与旧客户端兼容。
 
 ## 已知限制
 
