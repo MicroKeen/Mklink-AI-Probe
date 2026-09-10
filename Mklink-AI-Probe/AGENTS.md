@@ -34,7 +34,7 @@ Paths below are relative to the source root containing this file and
   Main requires another person's approval and the `feedback-contract` check;
   neither administrator has a bypass of those gates. An AI must still obtain
   explicit merge authorization, and must not weaken rules to complete a task.
-- Only `Aladdin-Wang` may update the `updates` and `firmware` channels or official
+- Only `Aladdin-Wang` may update the `release` and `firmware` channels or official
   `v*` / `firmware-assets` tags. Development authorization does not authorize a
   publication, signing, credential change, or migration of client update URLs.
 - Authorized Issue automation follows `docs/ai/issue-maintenance.md`: use an

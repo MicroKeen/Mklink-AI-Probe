@@ -1,6 +1,8 @@
 # MicroKeen 协作与发布权限
 
 2026-09-09 由 Aladdin-Wang 授权配置，仓库为 `MicroKeen/Mklink-AI-Probe`。
+2026-09-10 按维护者要求，将应用发布渠道分支 `updates` 重命名为 `release`，
+提交内容与唯一发布者权限保持不变；下文使用新名称。
 
 ## 分工
 
@@ -8,7 +10,7 @@
 | --- | --- | --- |
 | `main` | 共同开发主线，接收审核通过的 PR | Aladdin-Wang、su5176 合并 |
 | 任务分支 | 每项修复或功能的独立开发 | 有写权限的开发者；外部贡献者使用 fork |
-| `updates` | 应用与 Skill 的 `latest.json` 更新索引 | 仅 Aladdin-Wang 更新 |
+| `release` | 应用新版本发布渠道，保存应用与 Skill 的 `latest.json` 索引 | 仅 Aladdin-Wang 更新 |
 | `firmware` | 探针固件的 `latest.json` 更新索引 | 仅 Aladdin-Wang 更新 |
 | `v*`、`firmware-assets` 标签 | 正式应用版本与固件资产引用 | 仅 Aladdin-Wang 创建或变更 |
 
@@ -26,7 +28,7 @@
   限制更新主线，只有 Aladdin-Wang 和 su5176 可在 PR 场景绕过此项更新限制。
   这不绕过前一条独立的审核与 CI 规则，因此不能直接推送或自行批准自己的 PR。
 - [更新分支权限](https://github.com/MicroKeen/Mklink-AI-Probe/rules/22630498)：
-  限制 `updates`、`firmware` 的创建、更新、删除和强推，唯一绕过账号为 Aladdin-Wang。
+  限制 `release`、`firmware` 的创建、更新、删除和强推，唯一绕过账号为 Aladdin-Wang。
   其发布身份可更新独立索引历史；这不表示普通开发任务获得强推或删除授权。
 - [正式标签权限](https://github.com/MicroKeen/Mklink-AI-Probe/rules/22630543)：
   限制 `v*` 与 `firmware-assets` 标签的创建、更新和删除，唯一绕过账号为 Aladdin-Wang。
@@ -50,9 +52,10 @@ AI 使用哪个登录账号，就受到该账号对应的权限限制；Issue、
 
 ## 初始化与发布迁移状态
 
-新分支复制自 Aladdin-Wang 仓库，提交与 JSON 内容完全相同：
+新分支复制自 Aladdin-Wang 仓库，提交与 JSON 内容完全相同；
+MicroKeen 的 `release` 对应旧仓库的 `updates`，旧仓库分支名未改动：
 
-- `updates`：`7dc074b2aaee2c652731eec167bde7cc1258e87d`，应用版本 0.2.0。
+- `release`：`7dc074b2aaee2c652731eec167bde7cc1258e87d`，应用版本 0.2.0。
 - `firmware`：`30740ffb9943625e7c9cce931070510754283696`，HPMLink V4.3.8、MicroLink V3.4.0/V4.4.0。
 
 索引仍引用原 GitHub/Gitee 发布资产。本次没有搬迁安装包、固件资产、签名密钥或客户端更新 URL，

@@ -2,7 +2,7 @@
 
 The procedure below still targets the legacy Aladdin-Wang/Gitee publication
 channels and its `master` prerequisite. MicroKeen development uses reviewed PRs
-to `main`; the new protected `updates` and `firmware` branches are initialized
+to `main`; the new protected `release` and `firmware` branches are initialized
 copies, not a completed publisher migration. Only Aladdin-Wang may publish.
 See `docs/ai/repository-governance.md` relative to the source root before any
 publication. Do not run the legacy publisher against MicroKeen unchanged.

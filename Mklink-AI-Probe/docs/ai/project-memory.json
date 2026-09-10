@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-09-09T18:12:12+08:00",
+  "updated_at": "2026-09-10T10:14:15+08:00",
   "repository": {
     "url": "https://github.com/su5176/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
@@ -14,7 +14,7 @@
   },
   "current_session": {
     "status": "ready",
-    "current_task": "MicroKeen 更新分支与主线保护已配置，协作文档提交 PR 待另一维护者审核；未迁移正式发布服务。"
+    "current_task": "MicroKeen 的 updates 已重命名为 release，保护规则与维护文档同步调整；PR #1 待审核，正式发布服务未迁移。"
   },
   "milestones": [
     {
@@ -38,7 +38,7 @@
     },
     {
       "area": "仓库权限",
-      "result": "GitHub API 回读四项 active 规则；updates/firmware 与旧索引提交一致。仅 Aladdin-Wang 可绕过发布引用规则，main 审核/CI 无绕过者；未使用 su5176 身份执行写入测试。"
+      "result": "GitHub API 回读四项 active 规则；release/firmware 与旧索引提交一致。仅 Aladdin-Wang 可绕过发布引用规则，main 审核/CI 无绕过者；未使用 su5176 身份执行写入测试。"
     }
   ],
   "decisions": [
@@ -60,7 +60,7 @@
   "next_actions": [
     "由另一位维护者审核 codex/repository-governance 的文档 PR，CI 通过后由两名指定维护者之一合并；AI 不自动合并。",
     "后续缺陷/功能从最新 microkeen/main 创建独立任务分支并提交 PR；定时任务保持暂停。",
-    "正式发布仍使用原 Aladdin-Wang/Gitee 渠道。新 updates/firmware 不自动同步；切换前另行适配发布脚本并验证资产、签名与旧客户端兼容。"
+    "正式发布仍使用原 Aladdin-Wang/Gitee 渠道。新 release/firmware 不自动同步；切换前另行适配发布脚本并验证资产、签名与旧客户端兼容。"
   ],
   "continuation_protocol": [
     "先核对 Git、任务和设备状态；仅按需读相关验证报告，不加载历史流水账。"
