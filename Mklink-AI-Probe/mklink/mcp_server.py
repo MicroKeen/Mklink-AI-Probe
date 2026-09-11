@@ -975,6 +975,43 @@ def _register_memory_tools(mcp: Any) -> None:
 
 
 def _register_variable_tools(mcp: Any) -> None:
+    @mcp.tool()
+    def peripheral_targets(project_root: str = ".", query: str = "") -> dict:
+        """List installed peripheral chip descriptions without opening hardware."""
+        from .peripheral_watch import discover_svd_targets
+
+        return {
+            "targets": [
+                t.public()
+                for t in discover_svd_targets(project_root)
+                if query.casefold() in t.target.casefold()
+            ]
+        }
+
+    @mcp.tool()
+    @_exclusive_hardware_tool
+    def select_peripherals(target_id: str = "", chip: str = "", svd: str = "") -> dict:
+        """Select one exact chip ID/name or SVD; shared with CLI/Web in this project."""
+        return _connected_device().select_peripherals(
+            target_id=target_id or None, chip=chip or None, svd=svd or None
+        )
+
+    @mcp.tool()
+    @_exclusive_hardware_tool
+    def list_peripherals(query: str = "") -> dict:
+        """List readable register and bit-field names in the selected catalog."""
+        return _connected_device().peripheral_catalog(query)
+
+    @mcp.tool()
+    @_exclusive_hardware_tool
+    def capture_peripherals(
+        names: list[str], duration: float = 1.0, period: float = 0.01
+    ) -> dict:
+        """Capture selected register/field channels; <=15 regions and <=30 seconds."""
+        return _connected_device().capture_peripherals(
+            names, duration=duration, period=period
+        )
+
     from mklink.mcp_stream_bridge import publish_mcp_superwatch
 
     @mcp.tool()

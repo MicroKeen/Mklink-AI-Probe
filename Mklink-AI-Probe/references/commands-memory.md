@@ -33,6 +33,45 @@ python -m mklink read-reg --addr 0xE000ED28 --width 32
 
 注意：`read-reg` 读取的是内存映射寄存器地址；R0/R1/MSP/PSP/LR/PC 这类 CPU 核心寄存器不是普通内存地址，不能直接用 `cmd.read_ram` 当作地址读取。HardFault 自动栈帧解析需要用户提供异常栈帧地址 `--sp`。
 
+### 外设目录、字段与采集（0.2.1 开发分支）
+
+CLI、MCP 和 Web 的外设目录共用同一解析与位提取逻辑，无需 AXF。
+先指定项目和实际型号；选择保存在项目 `.mklink/peripheral-selection.json`。
+三端必须使用同一 `project_root`。Web 重连会恢复选择；停止采集后再换型号。
+多个 Pack 提供同名型号时，使用 `targets` 返回的精确 `--target-id`，不会猜第一个 SVD。
+
+```powershell
+python -m mklink peripherals targets --query HPM --project-root .
+python -m mklink peripherals select --chip HPM5301 --project-root . --query UART0.GPR
+python -m mklink peripherals list --query UART0.GPR --project-root .
+python -m mklink peripherals read UART0.GPR.DATA --project-root .
+python -m mklink peripherals capture UART0.GPR.DATA --duration 3 --period 0.001 --project-root .
+python -m mklink read-reg UART0.GPR.DATA --project-root . --format dec
+```
+
+自备 SVD 可用 `peripherals select --svd <文件>`，ARM 型号从已安装 CMSIS-Pack 的
+PDSC 精确映射发现。`superwatch --chip/--target-id/--svd` 也使用此目录；省略选择参数时恢复项目选择。
+已选芯片后，不在该目录里的寄存器名或裸地址不会回退到其他芯片的定义。
+显式裸内存操作仍由 `read-ram` / `dump-memory` 提供，不受 SVD 副作用过滤保护。
+
+MCP 对应 `peripheral_targets(project_root, query)`、连接后
+`select_peripherals(chip=...)`、`list_peripherals(query=...)`、
+`read_register(name=...)`、`capture_peripherals(names=[...], duration=3, period=0.001)`。
+采集返回通道名称、设备时间戳、位提取后的数值以及完整性计数；最长 30 秒、最多
+15 个寄存器区域、最多 100000 行。同一寄存器多个字段共用一次读取，不跨邻接寄存器合并。
+
+当前共享目录只接受对齐的 **32 位、小端** 寄存器访问。位字段读取整个所属寄存器后
+执行移位和掩码，保留位不会混入字段值。当前探针 ARM 实现的 16 位读取拆为两个字节事务，
+因此不模拟窄寄存器访问，也不扩大读取范围；真正支持半字事务需另行修改探针协议/固件。
+已声明的只写、读取清除/弹出、替代寄存器组等不进入目录；SysTick CSR/CTRL 也不参与轮询。
+未标注的副作用、时钟关闭、封装差异仍需依据对应芯片资料判断。
+ARM 内置寄存器名仅用于未选择目录的兼容快照入口，不应套用到 HPM。
+
+目录支持 SVD 的继承、cluster、寄存器/字段数组、字母索引和 bitRange。
+型号覆盖取决于本地描述文件；本机 HPM SDK 1.11.0 的 43 个型号描述已验证可加载，
+不代表每个外设都已做实板验证。GUI 波形传输为 Float32，大整数曲线可能舍入；
+需要精确寄存器值时使用单次 `read` / `read_register`。
+
 ### 写入 RAM
 
 #### `python -m mklink write-ram --addr <地址> <字节1> <字节2> ... [--port COM6]`
