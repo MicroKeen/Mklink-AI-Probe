@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-09-11T14:24:44+08:00",
+  "updated_at": "2026-09-11T16:08:19+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
@@ -14,7 +14,7 @@
   },
   "current_session": {
     "status": "ready_for_review",
-    "current_task": "已完成外设三端统一和 ARM 读取审计；190 通过/1 跳过，43 个 HPM 型号可加载，最终 HPM5301 CLI/MCP/Chrome 三通道约 1 kHz 通过。提交指定开发分支供审核。"
+    "current_task": "完成选项字节/OTP 可视化第一阶段：CLI/MCP/Web 共用只读服务，HPM5301 八字段三端实测一致，ARM 现有读保护配置与脚本预览接入；提交既有 PR #2 审核。"
   },
   "milestones": [
     {
@@ -43,6 +43,10 @@
     {
       "area": "外设三端统一",
       "result": "docs/verification/v0.2.1-peripheral-unification.md：Python 190 通过/1 跳过；HPM 43 型号共 1226962 条目录项可加载；HPM5301 CLI/MCP stdio/Chrome 三通道约 1 kHz，CRC/帧丢失/固件丢样标记为零。ARM 未做实板验证。"
+    },
+    {
+      "area": "选项字节/OTP 第一阶段",
+      "result": "docs/verification/v0.2.1-device-configuration-stage1.md：Python 103、GUI 24、正式构建通过；HPM5301 CLI/MCP/Chrome 8 个公开字段一致；Chrome ARM 配置及脚本预览通过，没有 ARM 实板读写或 OTP 编程。"
     }
   ],
   "decisions": [
@@ -53,19 +57,21 @@
     "2026-09-10 用户指定 codex/v0.2.1-development 为本轮持续开发分支；后续修复继续该分支并推送 microkeen，整合 main 仍走审核 PR，不自动发布。"
   ],
   "hardware": {
-    "state": "HPM5301 已完成 GPIO 位、UART GPR 字段和 GPTMR1 三通道 CLI/MCP/Web 采集；源码服务保留，采集停止。全局已安装 Skill 与正式安装器未升级。",
-    "backups": ".build/reports/prerelease-hil-20260907、superwatch-write-20260907；保留其他芯片唯一备份。；本轮本地证据 .build/reports/peripheral-unification。",
+    "state": "HPM5301 完成公开 OTP/影子字段三端只读验证，源码 Web 服务保留，采集停止。本轮无需修改目标或下载器固件；正式安装器/全局 Skill 未更新。",
+    "backups": ".build/reports/prerelease-hil-20260907、superwatch-write-20260907；保留其他芯片唯一备份。；本轮本地证据 .build/reports/peripheral-unification。；本轮 OTP 只读和浏览器证据 .build/reports/device-configuration。",
     "installer": ".build/artifacts/release-0.2.0-20260908/Mklink-AI-Probe-v0.2.0-x64-Setup.exe"
   },
   "known_limits": [
     "高速 USB 识别异常暂缓；RTT 偶发启动失败及停止后 UART 残留未闭环。",
     "PY32F030 保护后恢复未闭环；未覆盖物理 Modbus、所有板卡、Mac/Linux 与跨主机 Agent。",
     "外设轮询可漏短脉冲，缓冲有限；SystemView 启动可能丢弃少量数据。",
-    "共享外设目录目前只支持对齐 32 位、小端、无已知读取副作用的寄存器；真实 16 位 MMIO 需要探针协议/固件补齐和 ARM 实板验证。HPM 全型号目录加载不等同全外设 HIL。"
+    "共享外设目录目前只支持对齐 32 位、小端、无已知读取副作用的寄存器；真实 16 位 MMIO 需要探针协议/固件补齐和 ARM 实板验证。HPM 全型号目录加载不等同全外设 HIL。",
+    "选项字节面板第一阶段只开放现有 ARM 安全配方和 HPM5301 公开 OTP 读取；G474/PY32 脱机仍仅 V3。更多 ARM 字段与 HPM 永久写入需要固件执行能力及对应实板验证。"
   ],
   "next_actions": [
-    "审核 codex/v0.2.1-development 的外设统一 PR；不自动合并或发布。",
-    "若后续需要 8/16 位 MMIO，先补齐明确访问宽度协议和固件实现，再连接 ARM 实板验证。",
+    "审核 PR #2 的外设统一与选项字节/OTP 第一阶段；不自动合并或发布。",
+    "第二阶段按精确型号扩展 ARM 选项字节描述和固件执行器，先验证可逆字段；HPM 其他型号逐项核对 OTP 表。",
+    "HPM 永久编程仅在专用固件命令与单独授权的可消耗板卡验证流程完成后开放。",
     "正式安装器/全局 Skill 未更新；发布仍需单独授权，既有定时任务保持暂停。"
   ],
   "continuation_protocol": [

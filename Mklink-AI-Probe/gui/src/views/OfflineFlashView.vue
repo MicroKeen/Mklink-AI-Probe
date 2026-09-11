@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
 import ConfirmationDialog from '../components/ConfirmationDialog.vue'
+import DeviceConfigurationPanel from '../components/DeviceConfigurationPanel.vue'
 import { provideConfirmation } from '../composables/useConfirmation'
 import { useOfflineFlashApi } from '../composables/useOfflineFlashApi'
 import { useOnlineFlashApi } from '../composables/useOnlineFlashApi'
@@ -833,6 +834,7 @@ onBeforeUnmount(() => {
         <label class="setting-row"><span>{{ tr('自动烧录次数', 'Automatic Flash Count') }}</span><input v-model.number="automaticCount" type="number" min="1" max="9999" class="form-input" :disabled="effectiveModel === 'V2'"></label>
         <label class="setting-row"><span>{{ tr('IDCODE 超时', 'IDCODE Timeout') }}</span><input v-model.number="idcodeTimeout" type="number" min="500" max="600000" step="500" class="form-input"><em>ms</em></label>
         <label class="setting-row"><span>{{ tr('SWD 速率', 'SWD Rate') }}</span><select v-model.number="swdClock" class="form-select"><option :value="1000000">1 MHz</option><option :value="5000000">5 MHz</option><option :value="8000000">8 MHz</option><option :value="10000000">10 MHz</option></select></label>
+        <DeviceConfigurationPanel :part-number="targetPart" :model="model" :unlock-before-download="unlockBeforeDownload" :lock-after-download="lockAfterDownload">
         <div class="security-settings">
           <div class="security-title">
             <span>{{ tr('擦除与安全操作', 'Erase and Security Operations') }}</span>
@@ -857,6 +859,7 @@ onBeforeUnmount(() => {
           <p v-else-if="securityCapability && !securityCapability.supported" class="security-reason">{{ securityCapability.reason }}</p>
           <p v-else-if="securityCapability?.supported" class="security-reason">{{ tr('加锁与解锁只对已真机验证的器件开放；配置、器件 ID、容量和 FLM 均会严格校验。', 'Lock and unlock are enabled only for hardware-validated targets; configuration, device ID, density, and FLM are strictly verified.') }}</p>
         </div>
+        </DeviceConfigurationPanel>
         <div class="deploy-actions">
           <button class="btn" :disabled="operationBusy || !canBuild" @click="generatePreview">{{ tr('生成预览', 'Generate Preview') }}</button>
           <button class="btn btn-primary" data-testid="offline-deploy" :disabled="operationBusy || !canBuild" @click="deploy">{{ tr('部署到 U 盘', 'Deploy to USB Drive') }}</button>

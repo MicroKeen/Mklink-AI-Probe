@@ -3689,6 +3689,14 @@ def main():
     from mklink.peripheral_cli import add_parser as add_peripheral_parser
 
     add_peripheral_parser(subparsers)
+    config_parser = subparsers.add_parser(
+        "configuration", help="Read-only option-byte/OTP inspection"
+    )
+    config_parser.add_argument("action", choices=("describe", "read"))
+    config_parser.add_argument("--chip", required=True)
+    config_parser.add_argument("--model", choices=("V2", "V3", "V4"), default="V4")
+    config_parser.add_argument("--port")
+    config_parser.add_argument("--project-root", default=".")
 
     subparsers.add_parser(
         "remote",
@@ -4572,6 +4580,10 @@ def main():
         _cli_memmap(args)
     elif args.command == "watch":
         _cli_watch(args)
+    elif args.command == "configuration":
+        from mklink.device_configuration import run_cli
+
+        run_cli(args)
     elif args.command == "peripherals":
         from mklink.peripheral_cli import run
 

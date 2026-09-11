@@ -3150,6 +3150,31 @@ def create_app(
             except Exception as e:
                 raise HTTPException(status_code=500, detail=str(e))
 
+    @app.get("/api/device/configuration")
+    async def configuration_description(part_number: str, model: str = "V4"):
+        from mklink.device_configuration import describe_configuration
+
+        try:
+            return await run_in_threadpool(describe_configuration, part_number, model)
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+
+    @app.post("/api/device/configuration/read")
+    async def configuration_read(part_number: str = Body(...), model: str = Body("V4")):
+        from mklink.device_configuration import read_configuration
+
+        if not _state["device"] or not _state["device"].connected:
+            raise HTTPException(
+                status_code=400, detail="Connect the target device first"
+            )
+        async with async_target_debug_lease(_state, "configuration-read"):
+            try:
+                return await run_in_threadpool(
+                    read_configuration, _state["device"], part_number, model
+                )
+            except (ValueError, RuntimeError, OSError) as error:
+                raise HTTPException(status_code=422, detail=str(error)) from error
+
     @app.post("/api/device/read-register")
     async def read_register(name: str = Body(..., embed=True)):
         if not _state["device"] or not _state["device"].connected:

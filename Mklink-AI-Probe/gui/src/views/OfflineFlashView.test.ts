@@ -35,6 +35,9 @@ vi.mock('../composables/useOnlineFlashApi', () => ({
 describe('OfflineFlashView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({
+      kind: 'option_bytes', read_supported: false, fields: [], reason: 'Configuration description fixture',
+    }) }))
     const stored = new Map<string, string>()
     vi.stubGlobal('localStorage', {
       getItem: (key: string) => stored.get(key) ?? null,

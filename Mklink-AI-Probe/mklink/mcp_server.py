@@ -976,6 +976,21 @@ def _register_memory_tools(mcp: Any) -> None:
 
 def _register_variable_tools(mcp: Any) -> None:
     @mcp.tool()
+    def configuration_description(part_number: str, model: str = "V4") -> dict:
+        """Describe supported option-byte/OTP fields without opening a device."""
+        from .device_configuration import describe_configuration
+
+        return describe_configuration(part_number, model)
+
+    @mcp.tool()
+    @_exclusive_hardware_tool
+    def read_configuration(part_number: str, model: str = "V4") -> dict:
+        """Read a bounded public configuration snapshot; never program OTP or change protection."""
+        from .device_configuration import read_configuration as read
+
+        return read(_connected_device(), part_number, model)
+
+    @mcp.tool()
     def peripheral_targets(project_root: str = ".", query: str = "") -> dict:
         """List installed peripheral chip descriptions without opening hardware."""
         from .peripheral_watch import discover_svd_targets

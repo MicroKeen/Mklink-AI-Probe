@@ -4,12 +4,12 @@
 
 ## 当前断点
 
-- 更新时间：`2026-09-11T14:24:44+08:00`
+- 更新时间：`2026-09-11T16:08:19+08:00`
 - 分支：`codex/v0.2.1-development`
 - HEAD：`最新提交以 Git 为准；应用发布标签 v0.2.0 = 911a70f。`
 - 远端 HEAD：`从 microkeen/main 的 7b826c35b1bea146c9afae6f0054e7df5477f28c 创建 0.2.1 开发分支，已包含合并的 PR #1。`
 - 工作树：本轮在既有 codex/v0.2.1-development 修改上位机源码；协作固件项目仅审计，未修改或更新探针固件。
-- 当前任务：已完成外设三端统一和 ARM 读取审计；190 通过/1 跳过，43 个 HPM 型号可加载，最终 HPM5301 CLI/MCP/Chrome 三通道约 1 kHz 通过。提交指定开发分支供审核。
+- 当前任务：完成选项字节/OTP 可视化第一阶段：CLI/MCP/Web 共用只读服务，HPM5301 八字段三端实测一致，ARM 现有读保护配置与脚本预览接入；提交既有 PR #2 审核。
 - 状态：`ready_for_review`
 
 ## 里程碑
@@ -23,6 +23,7 @@
 - **硬件与固件**：docs/verification/v0.2.0-prerelease-hil-20260907.md、v0.2.0-superwatch-write-20260907.md；firmware-20260908.md 仅验证发布/格式/哈希，新固件未做 HIL。
 - **仓库权限**：GitHub API 回读四项 active 规则；release/firmware 与旧索引提交一致。仅 Aladdin-Wang 可绕过发布引用规则，main 审核/CI 无绕过者；未使用 su5176 身份执行写入测试。
 - **外设三端统一**：docs/verification/v0.2.1-peripheral-unification.md：Python 190 通过/1 跳过；HPM 43 型号共 1226962 条目录项可加载；HPM5301 CLI/MCP stdio/Chrome 三通道约 1 kHz，CRC/帧丢失/固件丢样标记为零。ARM 未做实板验证。
+- **选项字节/OTP 第一阶段**：docs/verification/v0.2.1-device-configuration-stage1.md：Python 103、GUI 24、正式构建通过；HPM5301 CLI/MCP/Chrome 8 个公开字段一致；Chrome ARM 配置及脚本预览通过，没有 ARM 实板读写或 OTP 编程。
 
 ## 架构决策
 
@@ -34,15 +35,16 @@
 
 ## 真机环境
 
-- **state**：HPM5301 已完成 GPIO 位、UART GPR 字段和 GPTMR1 三通道 CLI/MCP/Web 采集；源码服务保留，采集停止。全局已安装 Skill 与正式安装器未升级。
-- **backups**：.build/reports/prerelease-hil-20260907、superwatch-write-20260907；保留其他芯片唯一备份。；本轮本地证据 .build/reports/peripheral-unification。
+- **state**：HPM5301 完成公开 OTP/影子字段三端只读验证，源码 Web 服务保留，采集停止。本轮无需修改目标或下载器固件；正式安装器/全局 Skill 未更新。
+- **backups**：.build/reports/prerelease-hil-20260907、superwatch-write-20260907；保留其他芯片唯一备份。；本轮本地证据 .build/reports/peripheral-unification。；本轮 OTP 只读和浏览器证据 .build/reports/device-configuration。
 - **installer**：.build/artifacts/release-0.2.0-20260908/Mklink-AI-Probe-v0.2.0-x64-Setup.exe
 
 ## 下一动作
 
-1. 审核 codex/v0.2.1-development 的外设统一 PR；不自动合并或发布。
-2. 若后续需要 8/16 位 MMIO，先补齐明确访问宽度协议和固件实现，再连接 ARM 实板验证。
-3. 正式安装器/全局 Skill 未更新；发布仍需单独授权，既有定时任务保持暂停。
+1. 审核 PR #2 的外设统一与选项字节/OTP 第一阶段；不自动合并或发布。
+2. 第二阶段按精确型号扩展 ARM 选项字节描述和固件执行器，先验证可逆字段；HPM 其他型号逐项核对 OTP 表。
+3. HPM 永久编程仅在专用固件命令与单独授权的可消耗板卡验证流程完成后开放。
+4. 正式安装器/全局 Skill 未更新；发布仍需单独授权，既有定时任务保持暂停。
 
 ## 已知限制
 
@@ -50,6 +52,7 @@
 - PY32F030 保护后恢复未闭环；未覆盖物理 Modbus、所有板卡、Mac/Linux 与跨主机 Agent。
 - 外设轮询可漏短脉冲，缓冲有限；SystemView 启动可能丢弃少量数据。
 - 共享外设目录目前只支持对齐 32 位、小端、无已知读取副作用的寄存器；真实 16 位 MMIO 需要探针协议/固件补齐和 ARM 实板验证。HPM 全型号目录加载不等同全外设 HIL。
+- 选项字节面板第一阶段只开放现有 ARM 安全配方和 HPM5301 公开 OTP 读取；G474/PY32 脱机仍仅 V3。更多 ARM 字段与 HPM 永久写入需要固件执行能力及对应实板验证。
 
 ## 延续协议
 
