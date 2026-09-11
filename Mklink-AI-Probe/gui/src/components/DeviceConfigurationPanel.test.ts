@@ -10,6 +10,26 @@ const response = (data: unknown, ok = true) => ({ ok, json: async () => data })
 afterEach(() => vi.unstubAllGlobals())
 
 describe('DeviceConfigurationPanel', () => {
+  it('edits reversible fields, clears changes to preserve, and displays ARM shadows', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response({ kind: 'option_bytes', read_supported: true,
+      shadow_supported: true, reason: 'STM32F103', fields: [
+        { id: 'RDP', current: 'unprotected', shadow: null },
+        { id: 'DATA0', current: 255, shadow: 90, bit_width: 8, writable: true },
+        { id: 'WDG_SW', current: 1, shadow: 1, bit_width: 1, writable: true },
+      ] })))
+    const wrapper = mount(DeviceConfigurationPanel, { props: { ...props, partNumber: 'STM32F103xE',
+      hasFirmware: false, changes: { DATA0: '0x5A' } } })
+    await flushPromises()
+    expect(wrapper.text()).toContain('0x5A')
+    expect(wrapper.get('[data-testid="configuration-plan"]').text()).toContain('写入选项字节')
+    expect(wrapper.get('[data-testid="configuration-plan"]').text()).not.toContain('烧录固件')
+    expect(wrapper.find('[aria-label="RDP"]').exists()).toBe(false)
+    await wrapper.get('[aria-label="WDG_SW"]').setValue('1')
+    expect(wrapper.emitted('update:changes')?.at(-1)).toEqual([{ DATA0: '0x5A', WDG_SW: '1' }])
+    await wrapper.get('[aria-label="DATA0"]').setValue('')
+    expect(wrapper.emitted('update:changes')?.at(-1)).toEqual([{}])
+    wrapper.unmount()
+  })
   it('loads descriptions without reading hardware and keeps fuse and shadow distinct', async () => {
     const fetch = vi.fn().mockResolvedValueOnce(response(description)).mockResolvedValueOnce(response({
       ...description, read_at: '2026-09-11T00:00:00Z', fields: [{ ...description.fields[0], current: 0x1234, shadow: 0x5678 }],

@@ -136,6 +136,7 @@ const selectionWarning = computed(() => unavailableSelectedAlgorithms.value.leng
     `The flash sequence uses unavailable algorithms: ${unavailableSelectedAlgorithms.value.map(item => item.file_name).join(', ')}. Choose a local FLM replacement or select another algorithm.`,
   )
   : '')
+const optionByteChanges = ref<Record<string, number | string>>({})
 const securityRequested = computed(() => unlockBeforeDownload.value || lockAfterDownload.value)
 const securityReady = computed(() => (
   !securityRequested.value
@@ -148,12 +149,13 @@ const canBuild = computed(() => (
   !!effectiveModel.value
   && !!disk.value?.available
   && securityReady.value
-  && firmwares.value.length > 0
-  && (hpmMode.value
+  && ((firmwares.value.length === 0 && Object.keys(optionByteChanges.value).length > 0
+    && !securityRequested.value && !eraseAllBeforeDownload.value)
+  || (firmwares.value.length > 0 && (hpmMode.value
     ? !!hpmBoard.value && firmwares.value.every(item => (item.file || item.source_path) && item.format === 'bin' && !!item.base_address)
     : selectedAlgorithms.value.length > 0
       && unavailableSelectedAlgorithms.value.length === 0
-      && firmwares.value.every(item => (item.file || item.source_path) && item.algorithm_id && algorithms.value.some(algorithm => algorithm.id === item.algorithm_id)))
+      && firmwares.value.every(item => (item.file || item.source_path) && item.algorithm_id && algorithms.value.some(algorithm => algorithm.id === item.algorithm_id)))))
 ))
 const canTrigger = computed(() => (
   !!disk.value?.available
@@ -163,7 +165,7 @@ const canTrigger = computed(() => (
 ))
 
 watch(
-  [model, scriptName, automaticCount, idcodeTimeout, swdClock, targetPart, hpmBoard, algorithms, firmwares, eraseAllBeforeDownload, unlockBeforeDownload, lockAfterDownload, securityVoltageMv],
+  [model, scriptName, automaticCount, idcodeTimeout, swdClock, targetPart, hpmBoard, algorithms, firmwares, eraseAllBeforeDownload, unlockBeforeDownload, lockAfterDownload, securityVoltageMv, optionByteChanges],
   () => {
     preview.value = null
     deployedScriptName.value = ''
@@ -265,6 +267,7 @@ async function refreshSecurityCapability(): Promise<void> {
   answerConfirmation(false)
   unlockBeforeDownload.value = false
   lockAfterDownload.value = false
+  optionByteChanges.value = {}
   securityCapability.value = null
   securityLoading.value = false
   if (!model.value || !targetPart.value || hpmMode.value) return
@@ -354,9 +357,12 @@ async function toggleLock(event: Event): Promise<void> {
   ))) lockAfterDownload.value = true
 }
 
+let targetSearchRevision = 0
 async function searchTargets(openSuggestions = true): Promise<void> {
+  const revision = ++targetSearchRevision
   const query = targetQuery.value.trim()
   if (!query) {
+    targetBusy.value = false
     targets.value = []
     targetSuggestionsOpen.value = false
     activeTargetSuggestion.value = -1
@@ -365,15 +371,18 @@ async function searchTargets(openSuggestions = true): Promise<void> {
   targetBusy.value = true
   clearError()
   try {
-    targets.value = await online.searchTargets(query, { limit: 30 })
+    const results = await online.searchTargets(query, { limit: 30 })
+    if (revision !== targetSearchRevision) return
+    targets.value = results
     activeTargetSuggestion.value = targets.value.length ? 0 : -1
     targetSuggestionsOpen.value = openSuggestions && targets.value.length > 0
   }
-  catch (value) { setError(value) }
-  finally { targetBusy.value = false }
+  catch (value) { if (revision === targetSearchRevision) setError(value) }
+  finally { if (revision === targetSearchRevision) targetBusy.value = false }
 }
 
 function scheduleTargetSearch(): void {
+  targetSearchRevision++
   if (targetSearchTimer !== null) clearTimeout(targetSearchTimer)
   activeTargetSuggestion.value = -1
   targetSearchTimer = setTimeout(() => { void searchTargets(true) }, 150)
@@ -426,6 +435,7 @@ function mergeAlgorithms(items: OfflineAlgorithmCandidate[]): void {
 }
 
 async function addTargetAlgorithms(target: TargetRecord): Promise<void> {
+  targetSearchRevision++
   targetBusy.value = true
   clearError()
   notice.value = ''
@@ -674,6 +684,7 @@ function buildRequest(): {
       unlock_before_download: unlockBeforeDownload.value,
       lock_after_download: lockAfterDownload.value,
       security_voltage_mv: securityRequested.value ? securityVoltageMv.value : null,
+      option_bytes: optionByteChanges.value,
       algorithms: algorithmPayload,
       firmwares: firmwarePayload,
     },
@@ -742,6 +753,7 @@ onDeactivated(() => {
   stopNativeDrops()
 })
 onBeforeUnmount(() => {
+  targetSearchRevision++
   if (targetSearchTimer !== null) clearTimeout(targetSearchTimer)
   stopSourcePolling()
   stopNativeDrops()
@@ -822,7 +834,7 @@ onBeforeUnmount(() => {
               <button class="icon-command" :title="tr('移除固件', 'Remove firmware')" @click="firmwares.splice(index, 1)">×</button>
             </div>
           </div>
-          <p v-if="!firmwares.length" class="empty-state">{{ tr('拖拽 BIN / HEX 到此工作区，或点击“添加固件”', 'Drop BIN / HEX into this workspace, or click Add Firmware') }}</p>
+          <p v-if="!firmwares.length" class="empty-state">{{ tr('拖拽 BIN / HEX 到此工作区，或点击“添加固件”。仅配置选项字节时无需添加固件。', 'Drop BIN / HEX here, or click Add Firmware. Option-only configuration needs no firmware file.') }}</p>
         </div>
       </section>
 
@@ -834,7 +846,7 @@ onBeforeUnmount(() => {
         <label class="setting-row"><span>{{ tr('自动烧录次数', 'Automatic Flash Count') }}</span><input v-model.number="automaticCount" type="number" min="1" max="9999" class="form-input" :disabled="effectiveModel === 'V2'"></label>
         <label class="setting-row"><span>{{ tr('IDCODE 超时', 'IDCODE Timeout') }}</span><input v-model.number="idcodeTimeout" type="number" min="500" max="600000" step="500" class="form-input"><em>ms</em></label>
         <label class="setting-row"><span>{{ tr('SWD 速率', 'SWD Rate') }}</span><select v-model.number="swdClock" class="form-select"><option :value="1000000">1 MHz</option><option :value="5000000">5 MHz</option><option :value="8000000">8 MHz</option><option :value="10000000">10 MHz</option></select></label>
-        <DeviceConfigurationPanel :part-number="targetPart" :model="model" :unlock-before-download="unlockBeforeDownload" :lock-after-download="lockAfterDownload">
+        <DeviceConfigurationPanel v-model:changes="optionByteChanges" :has-firmware="firmwares.length > 0" :part-number="targetPart" :model="model" :unlock-before-download="unlockBeforeDownload" :lock-after-download="lockAfterDownload">
         <div class="security-settings">
           <div class="security-title">
             <span>{{ tr('擦除与安全操作', 'Erase and Security Operations') }}</span>

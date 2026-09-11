@@ -84,16 +84,25 @@ def _profile(part: str, model: str):
         shadow=None,
         description="通过下方已验证的解锁/加锁选项生成脚本；其他选项字节保持不变。",
     )
+    from .stm32f1_options import fields as option_fields
+
+    extra = option_fields(part)
     return dict(
         part_number=part,
         model=model,
         kind="option_bytes",
         supported=True,
         read_supported=True,
-        fields=[field],
+        fields=[field, *extra],
+        shadow_supported=bool(extra),
+        option_write_supported=bool(extra),
         source="Validated offline security recipe",
         security=capability,
-        reason="目前支持读保护配置；BOR、看门狗、启动及写保护字段尚未开放。",
+        reason=(
+            "USER / DATA / 写保护可配置；空白表示保持。读保护使用下方加解锁流程。"
+            if extra
+            else "目前支持读保护配置；BOR、看门狗、启动及写保护字段尚未开放。"
+        ),
     ), cfg
 
 
@@ -156,9 +165,60 @@ def read_configuration(device, part_number: str, model: str = "V4") -> dict:
                 else "protected"
             )
         result["fields"][0]["current"] = state
+        if result.get("shadow_supported"):
+            from .stm32f1_options import geometry
+
+            if word(0x1FFFF7E0) & 0xFFFF != geometry(result["part_number"]).flash_kib:
+                raise ValueError(
+                    "Connected target Flash density does not match the selected part"
+                )
+            wrp = word(0x40022020)
+            shadow = {
+                2: (status >> 2) & 255,
+                4: (status >> 10) & 255,
+                6: (status >> 18) & 255,
+                **{8 + i * 2: (wrp >> (8 * i)) & 255 for i in range(4)},
+            }
+            raw = None
+            if state == "unprotected":
+                raw = device.read_memory(0x1FFFF800, 16)
+                if len(raw) != 16 or any(
+                    raw[i] ^ raw[i + 1] != 255 for i in range(0, 16, 2)
+                ):
+                    raise RuntimeError(
+                        "Option-byte storage length/complement validation failed"
+                    )
+                result["raw_options_hex"] = raw.hex()
+            for field in result["fields"][1:]:
+                offset, shift = field["byte_offset"], field["bit_offset"]
+                mask = (1 << field["bit_width"]) - 1
+                field["current"] = (
+                    (raw[offset] >> shift) & mask if raw is not None else None
+                )
+                field["shadow"] = (shadow[offset] >> shift) & mask
     result["read_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     result["snapshot_only"] = True
     return result
+
+
+def configuration_script(part_number: str, changes: dict, model: str = "V4") -> dict:
+    from .offline_download import parse_offline_config, generate_offline_script
+
+    payload = dict(
+        model=model,
+        target_part=part_number,
+        script_name="option-config.py",
+        option_bytes=changes,
+        algorithms=[],
+        firmwares=[],
+    )
+    config = parse_offline_config(payload)
+    return dict(
+        config=payload,
+        script_name=config.script_name,
+        script=generate_offline_script(config),
+        algorithm="STM32F10x_OPT.FLM",
+    )
 
 
 def run_cli(args):
@@ -166,6 +226,14 @@ def run_cli(args):
 
     if args.action == "describe":
         result = describe_configuration(args.chip, args.model)
+    elif args.action == "generate":
+        changes = {}
+        for assignment in args.set:
+            name, separator, value = assignment.partition("=")
+            if not separator or name in changes:
+                raise ValueError("Each --set must be a unique FIELD=VALUE")
+            changes[name] = value
+        result = configuration_script(args.chip, changes, args.model)
     else:
         from .device import connect
 

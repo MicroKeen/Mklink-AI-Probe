@@ -8,6 +8,7 @@ interface ConfigurationField {
   label: string
   description: string
   bit_width?: number
+  writable?: boolean
   current: number | string | null
   shadow: number | null
 }
@@ -17,13 +18,24 @@ interface Configuration {
   reason: string
   fields: ConfigurationField[]
   read_at?: string
+  shadow_supported?: boolean
 }
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   partNumber: string
   model: string
   unlockBeforeDownload: boolean
   lockAfterDownload: boolean
-}>()
+  changes?: Record<string, number | string>
+  hasFirmware?: boolean
+}>(), { hasFirmware: true })
+const emit = defineEmits<{ 'update:changes': [value: Record<string, number | string>] }>()
+function setField(id: string, event: Event) {
+  const value = (event.target as HTMLInputElement).value
+  const changes = { ...props.changes }
+  if (value === '') delete changes[id]
+  else changes[id] = value
+  emit('update:changes', changes)
+}
 const configuration = ref<Configuration | null>(null)
 const busy = ref(false)
 const error = ref('')
@@ -31,7 +43,8 @@ let revision = 0
 let controller: AbortController | null = null
 const plan = computed(() => [
   ...(props.unlockBeforeDownload ? [tr('解锁并擦除', 'Unlock and erase')] : []),
-  tr('烧录固件', 'Program firmware'),
+  ...(props.hasFirmware !== false ? [tr('烧录固件', 'Program firmware')] : []),
+  ...(Object.keys(props.changes ?? {}).length ? [tr('写入选项字节', 'Configure option bytes')] : []),
   ...(props.lockAfterDownload ? [tr('加锁', 'Lock')] : []),
 ].join(' → '))
 
@@ -98,12 +111,18 @@ onBeforeUnmount(cancel)
       <p v-if="configuration.read_at" data-testid="configuration-timestamp">{{ tr('读取快照', 'Snapshot') }} · {{ configuration.read_at }}</p>
       <div v-if="configuration.fields.length" class="configuration-table">
         <table>
-          <thead><tr><th>{{ tr('字段', 'Field') }}</th><th>{{ configuration.kind === 'otp' ? tr('熔丝值', 'Fuse') : tr('读取值', 'Read Value') }}</th><th v-if="configuration.kind === 'otp'">{{ tr('影子值', 'Shadow') }}</th><th>{{ tr('配置目标', 'Target') }}</th></tr></thead>
+          <thead><tr><th>{{ tr('字段', 'Field') }}</th><th>{{ configuration.kind === 'otp' ? tr('熔丝值', 'Fuse') : tr('读取值', 'Read Value') }}</th><th v-if="configuration.kind === 'otp' || configuration.shadow_supported">{{ tr('影子值', 'Shadow') }}</th><th>{{ tr('配置目标', 'Target') }}</th></tr></thead>
           <tbody><tr v-for="field in configuration.fields" :key="field.id" :data-testid="`configuration-field-${field.id}`">
             <td :title="field.description"><b>{{ field.id }}</b><small>{{ field.label }}</small><small>{{ field.description }}</small></td>
             <td>{{ display(field.current, field.bit_width) }}</td>
-            <td v-if="configuration.kind === 'otp'">{{ display(field.shadow, field.bit_width) }}</td>
-            <td>{{ configuration.kind === 'otp' ? tr('只读', 'Read only') : lockAfterDownload ? tr('加锁', 'Lock') : unlockBeforeDownload ? tr('解锁', 'Unlock') : tr('保持', 'Preserve') }}</td>
+            <td v-if="configuration.kind === 'otp' || configuration.shadow_supported">{{ display(field.shadow, field.bit_width) }}</td>
+            <td v-if="field.id !== 'RDP' && configuration.kind !== 'otp' && field.writable">
+              <select v-if="field.bit_width === 1" :aria-label="field.id" :value="changes?.[field.id] ?? ''" @change="setField(field.id, $event)">
+                <option value="">{{ tr('保持', 'Preserve') }}</option><option value="0">0</option><option value="1">1</option>
+              </select>
+              <input v-else :aria-label="field.id" :value="changes?.[field.id] ?? ''" :placeholder="tr('保持 / 0xFF', 'Preserve / 0xFF')" @input="setField(field.id, $event)">
+            </td>
+            <td v-else>{{ configuration.kind === 'otp' || field.id !== 'RDP' ? tr('只读', 'Read only') : lockAfterDownload ? tr('加锁', 'Lock') : unlockBeforeDownload ? tr('解锁', 'Unlock') : tr('保持', 'Preserve') }}</td>
           </tr></tbody>
         </table>
       </div>
@@ -125,4 +144,5 @@ th{background:var(--bg);position:sticky;top:0;white-space:nowrap}
 td:not(:first-child){font-family:var(--font-mono);white-space:nowrap}
 td b{font:11px var(--font-mono)}
 td small{display:block;min-width:90px;margin-top:3px;color:var(--muted);line-height:1.4}
+.configuration-table input,.configuration-table select{width:105px;padding:4px;border:1px solid var(--border);border-radius:4px;color:var(--fg);background:var(--surface);font:11px var(--font-mono)}
 </style>

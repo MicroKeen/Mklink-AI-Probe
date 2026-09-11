@@ -3690,9 +3690,11 @@ def main():
 
     add_peripheral_parser(subparsers)
     config_parser = subparsers.add_parser(
-        "configuration", help="Read-only option-byte/OTP inspection"
+        "configuration",
+        help="Inspect option bytes/OTP and generate option configuration scripts",
     )
-    config_parser.add_argument("action", choices=("describe", "read"))
+    config_parser.add_argument("action", choices=("describe", "read", "generate"))
+    config_parser.add_argument("--set", action="append", default=[], metavar="FIELD=VALUE")
     config_parser.add_argument("--chip", required=True)
     config_parser.add_argument("--model", choices=("V2", "V3", "V4"), default="V4")
     config_parser.add_argument("--port")

@@ -95,9 +95,13 @@ def test_arm_uses_existing_recipe_identity_and_status(part, family, monkeypatch)
     }
     if not int(cfg["status_protected_mask"], 0):
         memory[int(cfg["shadow_word0_address"], 0)] = 0xAA
-    dev = SimpleNamespace(
-        mcu_name=part, read_memory=lambda a, n: memory[a].to_bytes(4, "little")
-    )
+    if part.startswith('STM32F103'):
+        from mklink.stm32f1_options import geometry
+        memory[0x1FFFF7E0] = geometry(part).flash_kib
+        memory[0x40022020] = 0xFFFFFFFF
+    dev = SimpleNamespace(mcu_name=part, read_memory=lambda a, n:
+        bytes.fromhex('a55aff00ff00ff00ff00ff00ff00ff00') if a == 0x1FFFF800
+        else memory[a].to_bytes(4, 'little'))
     assert read_configuration(dev, part)["fields"][0]["current"] == "unprotected"
     if int(cfg["status_protected_mask"], 0):
         memory[int(cfg["status_address"], 0)] = int(cfg["status_protected_mask"], 0)
