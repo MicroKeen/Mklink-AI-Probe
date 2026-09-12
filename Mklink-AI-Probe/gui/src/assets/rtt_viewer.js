@@ -384,6 +384,7 @@ var postTriggerRemaining = 0;
 var autoTimeout = null;
 var lastTriggerValue = null;
 var triggerCaptureData = {};
+var singleTriggerCaptureFrozen = false;
 
 // Batch read optimization state (Task 7I)
 var batchReadPending = false;
@@ -944,8 +945,8 @@ document.getElementById('btn-pause').addEventListener('click', function() {
   renderPaused = collectionState !== 'paused';
   updateCollectionUI(renderPaused ? 'paused' : 'running');
 });
-document.getElementById('btn-stop').addEventListener('click', function() {
-  fetch(API_CTRL + 'stop', {method:'POST'})
+function stopCollection() {
+  return fetch(API_CTRL + 'stop', {method:'POST'})
     .then(function(r){
       return r.json().catch(function(){ return {}; }).then(function(d){
         if (!r.ok) throw new Error(apiErrorMessage(d, r.status));
@@ -960,7 +961,8 @@ document.getElementById('btn-stop').addEventListener('click', function() {
     .catch(function(err){
       showControlError(err && err.message ? err.message : t('error'));
     });
-});
+}
+document.getElementById('btn-stop').addEventListener('click', stopCollection);
 var bufferInput = document.getElementById('buffer-input');
 bufferInput.addEventListener('input', updateBufferMemoryEstimate);
 updateBufferMemoryEstimate();
@@ -2439,7 +2441,7 @@ function deserializeState(json) {
 // CSV/PNG export
 // ============================================================
 function exportCSV() {
-  if (IS_SUPERWATCH_MODE && binaryHistoryRequester) {
+  if (IS_SUPERWATCH_MODE && binaryHistoryRequester && !singleTriggerCaptureFrozen) {
     if (!binaryExportPending) {
       binaryExportPending = true;
       binaryHistoryRequester();
@@ -2946,6 +2948,7 @@ function configureBinaryChannels(channels) {
 
 function acceptBinaryBatch(batch, channels) {
   if (!IS_BINARY_WAVEFORM_MODE || !batch || batch.layout !== 'sample-major-float32') return false;
+  if (singleTriggerCaptureFrozen) return true;
   if (channels) configureBinaryChannels(channels);
   if (!binaryChannelNames.length || batch.channelCount !== binaryChannelNames.length) return false;
   var previousSequence = IS_SUPERWATCH_MODE ? binaryLastDetailSequence : binaryLastSequence;
@@ -2989,7 +2992,10 @@ function acceptBinaryBatch(batch, channels) {
       for (var captureChannel = 0; captureChannel < batch.channelCount; captureChannel++) {
         capture[binaryChannelNames[captureChannel]] = values[sample * batch.channelCount + captureChannel];
       }
-      if (!checkTrigger(capture)) continue;
+      if (!checkTrigger(capture)) {
+        if (singleTriggerCaptureFrozen) return true;
+        continue;
+      }
     }
     for (var channelIndex = 0; channelIndex < batch.channelCount; channelIndex++) {
       var name = binaryChannelNames[channelIndex];
@@ -3006,6 +3012,7 @@ function acceptBinaryBatch(batch, channels) {
 
 function acceptBinarySummary(summary, channels) {
   if (!IS_SUPERWATCH_MODE || !summary) return false;
+  if (singleTriggerCaptureFrozen) return true;
   if (channels) configureBinaryChannels(channels);
   if (!binaryChannelNames.length || summary.channelCount !== binaryChannelNames.length) return false;
   if (binaryLastSequence !== null && summary.sequence <= binaryLastSequence) return false;
@@ -3065,7 +3072,7 @@ function requestBinaryVisibleRangeAfterTimelineChange() {
 function requestBinaryDetail(enabled) {
   binaryDetailEnabled = !!enabled;
   if (IS_SUPERWATCH_MODE && binaryDetailRequester) binaryDetailRequester(binaryDetailEnabled);
-  if (IS_SUPERWATCH_MODE) {
+  if (IS_SUPERWATCH_MODE && !singleTriggerCaptureFrozen) {
     resizeWaveformMainRings(binaryDetailEnabled ? RING_BUFFER_CAPACITY : SUPERWATCH_MAIN_RING_CAPACITY);
   }
 }
@@ -3091,7 +3098,7 @@ function getBinaryStorageDiagnostics() {
 }
 
 function getBinaryVisibleRange() {
-  if (!IS_BINARY_WAVEFORM_MODE || binaryTimeOrigin === null) return null;
+  if (!IS_BINARY_WAVEFORM_MODE || binaryTimeOrigin === null || singleTriggerCaptureFrozen) return null;
   var range = getVisibleTimeRange();
   var pixelWidth = Math.max(1, Math.floor(canvas.clientWidth || 1));
   return {
@@ -3166,6 +3173,7 @@ function nearestBinaryEnvelopeSample(name, viewTime) {
 
 function renderBinaryEnvelope(envelope, renderWhilePaused) {
   if (!IS_BINARY_WAVEFORM_MODE) return false;
+  if (singleTriggerCaptureFrozen) return true;
   canvas.dataset.binaryEnvelopeRequestId = String(envelope && envelope.requestId !== undefined
     ? envelope.requestId : '');
   canvas.dataset.binaryEnvelopeInteractive = renderWhilePaused ? 'true' : 'false';
@@ -3198,6 +3206,7 @@ function renderBinaryEnvelope(envelope, renderWhilePaused) {
 
 function resetBinaryStream() {
   if (!IS_BINARY_WAVEFORM_MODE) return;
+  singleTriggerCaptureFrozen = false;
   binaryTimeOrigin = null;
   binaryLastTimestamp = null;
   binaryLastSequence = null;
@@ -3300,7 +3309,7 @@ function computeFullTimeRange() {
       Number.isFinite(binaryBufferStart) && Number.isFinite(binaryBufferEnd)) {
     var retainedMin = binaryBufferStart - binaryTimeOrigin;
     var retainedMax = binaryBufferEnd - binaryTimeOrigin;
-    if (retainedMax - retainedMin < 1) retainedMin = retainedMax - 1;
+    if (!singleTriggerCaptureFrozen && retainedMax - retainedMin < 1) retainedMin = retainedMax - 1;
     return { tMin: retainedMin, tMax: retainedMax };
   }
   var tMax = 0, tMin = Infinity;
@@ -4970,6 +4979,7 @@ function updateTriggerSourceOptions() {
 }
 
 function armTrigger() {
+  singleTriggerCaptureFrozen = false;
   requestBinaryDetail(true);
   triggerSettings.state = 'armed';
   preTriggerBuffer = [];
@@ -5034,11 +5044,6 @@ function checkTrigger(point) {
   val = Number(val);
 
   if (triggerSettings.state === 'armed') {
-    preTriggerBuffer.push(point);
-    if (preTriggerBuffer.length > triggerSettings.preTriggerSamples) {
-      preTriggerBuffer.shift();
-    }
-
     var triggered = false;
     if (lastTriggerValue !== null) {
       var edge = triggerSettings.edge;
@@ -5059,9 +5064,13 @@ function checkTrigger(point) {
       postTriggerRemaining = triggerSettings.preTriggerSamples;
       triggerCaptureData = {};
       copyBufferedTriggerPoints(preTriggerBuffer);
+      appendTriggerPoint(point);
       if (autoTimeout) { clearTimeout(autoTimeout); autoTimeout = null; }
       updateTriggerStateBadge();
       document.getElementById('trigger-force-btn').classList.remove('visible');
+    } else {
+      preTriggerBuffer.push(point);
+      if (preTriggerBuffer.length > triggerSettings.preTriggerSamples) preTriggerBuffer.shift();
     }
     return true;
   }
@@ -5071,13 +5080,16 @@ function checkTrigger(point) {
     postTriggerRemaining--;
     if (postTriggerRemaining <= 0) {
       triggerSettings.state = 'done';
-      if (triggerSettings.mode === 'single') requestBinaryDetail(false);
+      if (triggerSettings.mode === 'single') {
+        requestBinaryDetail(false);
+        if (IS_SUPERWATCH_MODE) freezeSingleTriggerCapture();
+      }
       updateTriggerStateBadge();
       if (triggerSettings.mode === 'normal' || triggerSettings.mode === 'auto') {
         setTimeout(function() { armTrigger(); }, 100);
       }
     }
-    return true;
+    return !singleTriggerCaptureFrozen;
   }
 
   return true;
@@ -5085,6 +5097,43 @@ function checkTrigger(point) {
 
 function copyBufferedTriggerPoints(points) {
   for (var i = 0; i < points.length; i++) appendTriggerPoint(points[i]);
+}
+
+function freezeSingleTriggerCapture() {
+  singleTriggerCaptureFrozen = true;
+  binaryEnvelope = null;
+  binaryExportPending = false;
+  var start = Infinity, end = -Infinity, count = 0;
+  for (var name in FIELDS) {
+    if (!FIELDS.hasOwnProperty(name) || FIELDS[name].isArraySnapshot) continue;
+    var points = triggerCaptureData[name] || [];
+    var ring = new RingBuffer(Math.max(1, points.length));
+    for (var i = 0; i < points.length; i++) ring.push(points[i].t, points[i].y);
+    FIELDS[name].ringBuf = ring;
+    if (points.length) {
+      start = Math.min(start, points[0].t);
+      end = Math.max(end, points[points.length - 1].t);
+      count = Math.max(count, points.length);
+    }
+  }
+  binaryBufferStart = binaryTimeOrigin + start;
+  binaryBufferEnd = binaryTimeOrigin + end;
+  binaryBufferedSamples = count;
+  preTriggerBuffer = [];
+  triggerCaptureData = {};
+  resetTimelineView();
+  clearFrozenView();
+  renderPaused = true;
+  updateCollectionUI('paused');
+  canvas.dataset.triggerCaptureSamples = String(count);
+  drawChart();
+  drawMinimap();
+  updateUI();
+  updateWatchTable();
+  // Freeze first so queued summaries/envelopes cannot overwrite the capture.
+  // The normal stop path then stops device sampling and closes the transport;
+  // on failure it keeps the capture and exposes the error for a stop retry.
+  stopCollection();
 }
 
 function appendTriggerPoint(point) {

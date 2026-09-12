@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-09-12T22:52:00+08:00",
+  "updated_at": "2026-09-12T22:58:00+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
@@ -14,7 +14,7 @@
   },
   "current_session": {
     "status": "in_progress",
-    "current_task": "修复 SuperWatch 开始采样后 Armed 不触发、浮动游标时间模式差值错误；93 项 WaveformViewer 回归通过，待文档任务 Chrome 实板复测。"
+    "current_task": "Chrome实板已确认触发Armed→Done及游标两处一致；追加完整single窗口冻结/停止采集修复，94项回归通过，待新构建实板复测。SystemView dropped_bytes待离线定位。"
   },
   "milestones": [
     {
@@ -54,7 +54,7 @@
     },
     {
       "area": "SuperWatch 触发与游标",
-      "result": "docs/verification/v0.2.1-superwatch-trigger-cursors.md：修复前回归复现 detail 被关闭及浮动差值为0；修复后93项通过。上位机补丁，无固件变更，浏览器实板待复测。"
+      "result": "docs/verification/v0.2.1-superwatch-trigger-cursors.md：首补丁Chrome触发状态/六通道两种游标一致；发现Done未冻结后追加固定201点窗口及停止/失败重试，94项通过，完整single实板待复测。"
     }
   ],
   "decisions": [

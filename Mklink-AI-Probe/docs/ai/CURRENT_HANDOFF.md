@@ -4,12 +4,12 @@
 
 ## 当前断点
 
-- 更新时间：`2026-09-12T22:52:00+08:00`
+- 更新时间：`2026-09-12T22:58:00+08:00`
 - 分支：`codex/v0.2.1-development`
 - HEAD：`最新提交以 Git 为准；应用发布标签 v0.2.0 = 911a70f。`
 - 远端 HEAD：`从 microkeen/main 的 7b826c35b1bea146c9afae6f0054e7df5477f28c 创建 0.2.1 开发分支，已包含合并的 PR #1。`
 - 工作树：持续开发分支增加 mem_dump 三档、CLI/MCP 周期测量、SuperWatch 档位入口及 Windows 独立串口接收；协作探针固件已更新并完成 HPM 三档测试。
-- 当前任务：修复 SuperWatch 开始采样后 Armed 不触发、浮动游标时间模式差值错误；93 项 WaveformViewer 回归通过，待文档任务 Chrome 实板复测。
+- 当前任务：Chrome实板已确认触发Armed→Done及游标两处一致；追加完整single窗口冻结/停止采集修复，94项回归通过，待新构建实板复测。SystemView dropped_bytes待离线定位。
 - 状态：`in_progress`
 
 ## 里程碑
@@ -25,7 +25,7 @@
 - **选项字节/OTP 第一阶段**：docs/verification/v0.2.1-device-configuration-stage1.md：Python 103、GUI 24、正式构建通过；HPM5301 CLI/MCP/Chrome 8 个公开字段一致；Chrome ARM 配置及脚本预览通过，没有 ARM 实板读写或 OTP 编程。
 - **STM32F103 选项字节第二阶段**：docs/verification/v0.2.1-stm32f103-options-stage2.md：Python 99、GUI 29、生产构建通过；CLI/MCP stdio/Chrome 10 字段一致，DATA、两项低功耗复位位及 WRP3 写入/复位/回读/恢复通过；组合下载通过，最终全部 512 KiB Flash 与原始备份一致。未测试 RDP 转换及看门狗/低功耗/WRP 拒写行为。
 - **mem_dump 三档与 USB 暂停容忍**：docs/verification/v0.2.1-mem-dump-batch.md：新固件4/10/20MHz单变量33.40/60.22/88.24k；多变量/4KB矩阵、6组30秒、逐帧BIN比对、150ms GIL暂停、MCP stdio/Web REST通过；C模型含错误/背压。旧121 Python/29 GUI证据在profiles报告，浏览器点击仍被工具阻断。
-- **SuperWatch 触发与游标**：docs/verification/v0.2.1-superwatch-trigger-cursors.md：修复前回归复现 detail 被关闭及浮动差值为0；修复后93项通过。上位机补丁，无固件变更，浏览器实板待复测。
+- **SuperWatch 触发与游标**：docs/verification/v0.2.1-superwatch-trigger-cursors.md：首补丁Chrome触发状态/六通道两种游标一致；发现Done未冻结后追加固定201点窗口及停止/失败重试，94项通过，完整single实板待复测。
 
 ## 架构决策
 

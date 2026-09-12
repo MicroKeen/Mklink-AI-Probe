@@ -2112,7 +2112,7 @@ describe('VOFA viewer hot path source guard', () => {
   })
 
   it('stops collection directly and surfaces stop failures inline', () => {
-    const stopHandler = viewerSource.match(/document\.getElementById\('btn-stop'\)\.addEventListener[\s\S]*?\n}\);/)?.[0] ?? ''
+    const stopHandler = viewerSource.match(/function stopCollection\(\)[\s\S]*?\n}/)?.[0] ?? ''
     expect(stopHandler).not.toContain('confirm(')
     expect(stopHandler).toContain('showControlError')
   })
@@ -3025,6 +3025,7 @@ describe('VOFA viewer typed-ring runtime', () => {
       Object.assign(runtime.probe.trigger, { source: 'A', mode: 'single', preTriggerSamples: 2 })
       document.getElementById('trigger-enable-btn')!.click()
       for (let run = 0; run < 2; run++) {
+        runtime.probe.syncStatus({ state: 'running' })
         runtime.viewer.resetBinaryStream()
         expect(runtime.probe.trigger.state).toBe('armed')
         expect(detail).toHaveBeenLastCalledWith(true)
@@ -3035,11 +3036,77 @@ describe('VOFA viewer typed-ring runtime', () => {
         })).toBe(true)
         expect(runtime.probe.trigger.state).toBe('done')
         expect(detail).toHaveBeenLastCalledWith(false)
+        expect(runtime.probe.fields().A.ringBuf.toArray().map((p: any) => p.y)).toEqual([-2, -1, 1, 2, 3])
+        const capturedRange = runtime.probe.fullTimeRange()
+        expect(capturedRange.tMax - capturedRange.tMin).toBeCloseTo(0.004)
+        runtime.viewer.acceptBinarySummary({
+          sequence: 99n, channelCount: 1, latestTimeMs: 9_000,
+          bufferStartMs: 0, bufferEndMs: 9_000,
+          latestValues: Float32Array.of(99).buffer,
+        })
+        runtime.viewer.renderBinaryEnvelope({ invalid: 'late pending render' }, true)
+        expect(runtime.probe.fullTimeRange()).toEqual(capturedRange)
+        expect(runtime.probe.fields().A.ringBuf.count).toBe(5)
+        expect(runtime.viewer.getBinaryVisibleRange()).toBeNull()
+        await new Promise(resolve => setTimeout(resolve, 0))
+        expect(runtime.probe.collectionState().state).toBe('stopped')
+        expect(fetch).toHaveBeenCalledWith('/api/dash/superwatch/stop', { method: 'POST' })
       }
       document.getElementById('trigger-enable-btn')!.click()
       runtime.viewer.resetBinaryStream()
       expect(runtime.probe.trigger.state).toBe('idle')
       expect(detail).toHaveBeenLastCalledWith(false)
+    } finally {
+      runtime.cleanup()
+    }
+  })
+
+  it('freezes 16 channels at 100 pre + crossing + 100 post samples and retains them if stop fails', async () => {
+    mocks.useBinaryStream.mockReturnValue({
+      ...mocks.binary, waveformBatch: shallowRef(null), envelope: shallowRef(null),
+      telemetry: shallowRef(null), state: shallowRef({ phase: 'stopped' }),
+      error: shallowRef(null), superwatchMetadata: shallowRef(null),
+    })
+    const runtime = await loadRttViewerRuntime('SuperWatch', 32)
+    try {
+      await new Promise(resolve => setTimeout(resolve, 0))
+      runtime.viewer.configureBinaryChannels(Array.from({ length: 16 }, (_, i) => ({ name: `wave[${i}]` })))
+      Object.assign(runtime.probe.trigger, { source: 'wave[0]', mode: 'single', preTriggerSamples: 100 })
+      document.getElementById('trigger-enable-btn')!.click()
+      runtime.probe.syncStatus({ state: 'running' })
+      runtime.viewer.resetBinaryStream()
+      let failStop = true
+      vi.mocked(fetch).mockImplementation(async url => {
+        if (String(url).endsWith('/stop') && failStop) {
+          failStop = false
+          return { ok: false, status: 503, json: async () => ({ detail: 'stop failed' }) } as Response
+        }
+        return { ok: true, json: async () => ({}) } as Response
+      })
+      const send = (sequence: bigint, first: number, count: number) => runtime.viewer.acceptBinaryBatch({
+        sequence, timestampNs: BigInt(first + count) * 1_000_000n, itemCount: count, channelCount: 16,
+        layout: 'sample-major-float32',
+        values: Float32Array.from({ length: count * 16 }, (_, i) => first + Math.floor(i / 16) - 199.5 + (i % 16) * 1000).buffer,
+        times: Float64Array.from({ length: count }, (_, i) => first + i).buffer,
+      })
+      send(1n, 0, 200)
+      expect(runtime.probe.trigger.state).toBe('armed')
+      send(2n, 200, 110)
+      expect(runtime.probe.trigger.state).toBe('done')
+      send(3n, 310, 100)
+      for (let channel = 0; channel < 16; channel++) {
+        const ring = runtime.probe.fields()[`wave[${channel}]`].ringBuf
+        expect(ring.count).toBe(201)
+        expect(ring.valueAt(0)).toBe(-99.5 + channel * 1000)
+        expect(ring.valueAt(200)).toBe(100.5 + channel * 1000)
+      }
+      await new Promise(resolve => setTimeout(resolve, 0))
+      expect(runtime.probe.collectionState()).toMatchObject({ state: 'paused', paused: true })
+      expect(document.getElementById('conn-status')?.textContent).toContain('stop failed')
+      document.getElementById('btn-stop')!.click()
+      await new Promise(resolve => setTimeout(resolve, 0))
+      expect(runtime.probe.collectionState().state).toBe('stopped')
+      expect(runtime.probe.fields()['wave[0]'].ringBuf.count).toBe(201)
     } finally {
       runtime.cleanup()
     }
