@@ -2755,6 +2755,7 @@ function setArraySnapshot(snapshot) {
   field.ringBuf.push(Number(snapshot.timestamp_us || Date.now() * 1000) / 1000000, values[values.length - 1]);
   arraySnapshotName = name;
   CHANNEL_METADATA[name] = { source: 'array-snapshot', type: field.type, size: field.size };
+  updateUI();
   updateChartLegend();
   drawChart();
   drawMinimap();
@@ -3752,6 +3753,17 @@ if (xAxisHit && yAxisHit) {
   }, { signal: viewerAbortController.signal });
 }
 
+function getArrayOnlySnapshot() {
+  var snapshot = null;
+  for (var name in FIELDS) {
+    var field = FIELDS[name];
+    if (!field.visible) continue;
+    if (field.isArraySnapshot && field.arrayValues && field.arrayValues.length) snapshot = field;
+    else if (field.ringBuf.count || binaryChannelIndex[name] !== undefined) return null;
+  }
+  return snapshot;
+}
+
 function formatTimeAxisValue(seconds) {
   if (timeUnit === 'us') return Math.round(seconds * 1000000) + 'us';
   if (timeUnit === 's') return seconds.toFixed(3) + 's';
@@ -3788,6 +3800,7 @@ function drawChart() {
   // Get visible time range (with zoom/offset)
   var tr = getVisibleTimeRange();
   var tMin = tr.tMin, tMax = tr.tMax;
+  var arrayOnly = getArrayOnlySnapshot();
 
   // The accepted envelope is the frozen snapshot while paused/stopped. Keep
   // drawing it during timeline interaction; background responses are filtered
@@ -3919,13 +3932,15 @@ function drawChart() {
     ctx.fillStyle = TEXT_DIM;
     ctx.font = '11px ' + getComputedStyle(document.body).getPropertyValue('--font-mono');
     ctx.textAlign = 'center';
-    ctx.fillText(formatTimeAxisValue(xv), xp, mt + ph + 16);
+    ctx.fillText(arrayOnly
+      ? String(arrayOnly.arrayStartIndex + Math.round((arrayOnly.arrayValues.length - 1) * i / 5))
+      : formatTimeAxisValue(xv), xp, mt + ph + 16);
   }
 
   ctx.fillStyle = TEXT_DIM;
   ctx.font = '11px ' + getComputedStyle(document.body).getPropertyValue('--font-body');
   ctx.textAlign = 'center';
-  ctx.fillText('time (' + timeUnit + ')', ml + pw/2, H - 4);
+  ctx.fillText(arrayOnly ? 'index' : 'time (' + timeUnit + ')', ml + pw/2, H - 4);
   ctx.save();
   ctx.translate(10, mainTop + mainHeight/2);
   ctx.rotate(-Math.PI/2);
@@ -4753,6 +4768,8 @@ function updateUI() {
   // SuperWatch keeps history in the Worker and only one latest row on the UI thread.
   var points = IS_SUPERWATCH_MODE && binaryLastSequence !== null
     ? binaryBufferedSamples : (count ? Math.floor(total/count) : 0);
+  var arrayOnly = getArrayOnlySnapshot();
+  if (arrayOnly) points = arrayOnly.arrayValues.length;
   document.getElementById('pts-count').textContent = points + ' pts';
 
   var sel = document.getElementById('var-selector');

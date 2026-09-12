@@ -1119,6 +1119,36 @@ def test_device_connect_closes_stale_hotplug_session_before_reconnect(tmp_path):
     assert connect.call_args.kwargs["initialize_target_now"] is False
 
 
+def test_connect_catalog_failure_closes_unpublished_device_and_allows_retry(tmp_path):
+    from mklink.remote.dashboards import get_managers
+
+    device, _ = _connected_symbol_device(tmp_path)
+    app = create_app(auth_token=None, project_root=str(tmp_path))
+    state = app.state.mklink_state
+    manager = get_managers()['superwatch']
+    saved_connection = dict(state.get('last_device_connection') or {})
+    with patch.object(manager, '_runtime', None), patch.object(manager, '_device', None), patch(
+        'mklink.connect', return_value=device,
+    ), patch.object(device, 'close') as close, patch(
+        'mklink.device.initialize_target', return_value={},
+    ) as initialize, TestClient(app) as client:
+        with patch('mklink.peripheral_watch.load_catalog', side_effect=ValueError('Select an exact target_id')):
+            response = client.post('/api/device/connect', json={})
+        assert response.status_code == 400
+        assert response.json()['detail'] == 'Cannot restore peripheral selection: Select an exact target_id'
+        close.assert_called_once_with()
+        initialize.assert_not_called()
+        assert state['device'] is state['dispatcher'] is None
+        assert manager._device is None
+        assert dict(state.get('last_device_connection') or {}) == saved_connection
+        assert state['resource_manager'].get_status() == {}
+        assert client.get('/api/device/status').json()['connected'] is False
+        with patch('mklink.peripheral_watch.load_catalog', return_value=None):
+            assert client.post('/api/device/connect', json={}).status_code == 200
+        assert state['device'] is device
+        assert manager._device is device
+
+
 def test_device_parse_axf_forwards_explicit_elf_backend(tmp_path):
     from mklink.remote.dashboards import get_managers
 

@@ -1622,15 +1622,27 @@ def create_app(
             )
 
         async with async_target_debug_lease(_state, "connect"):
+            device = None
             try:
                 device = await loop.run_in_executor(None, _connect)
-            except Exception as e:
-                raise HTTPException(status_code=500, detail=str(e))
-
-        _state["device"] = device
-        _state["dispatcher"] = DeviceDispatcher(device)
-        await run_in_threadpool(get_managers()["superwatch"].prepare, device)
-        remember_device_connection(_state, device, mcu=mcu)
+                await run_in_threadpool(get_managers()["superwatch"].prepare, device)
+                dispatcher = DeviceDispatcher(device)
+            except Exception as exc:
+                detail = str(exc)
+                if device is not None:
+                    try:
+                        await run_in_threadpool(device.close)
+                    except Exception as close_error:
+                        detail += f"; connection cleanup failed: {close_error}"
+                raise HTTPException(
+                    status_code=400 if isinstance(exc, ValueError) else 500,
+                    detail=detail,
+                ) from exc
+            # Publish only a fully prepared command session. A catalog/symbol
+            # failure must not leave an apparently connected 0x0 probe behind.
+            _state["device"] = device
+            _state["dispatcher"] = dispatcher
+            remember_device_connection(_state, device, mcu=mcu)
 
         async def _initialize_target_later():
             try:

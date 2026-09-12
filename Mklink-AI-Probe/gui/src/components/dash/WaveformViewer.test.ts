@@ -359,6 +359,25 @@ describe('WaveformViewer VOFA binary transport', () => {
     }
   })
 
+  it('labels a standalone array snapshot by index and counts its elements', async () => {
+    const runtime = await loadRttViewerRuntime('SuperWatch')
+    try {
+      ;(window as any).__canvasLabels = []
+      runtime.probe.setArraySnapshot({
+        name: 'samples', type_name: 'float', element_size: 4,
+        start_index: 4, sequence: 1, values: [1, 5, 2, 3, 4, 6],
+      })
+      const labels = (window as any).__canvasLabels
+      expect(labels).toContain('index')
+      expect(labels).toContain('4')
+      expect(labels).toContain('9')
+      expect(labels).not.toContain('time (ms)')
+      expect(document.getElementById('pts-count')?.textContent).toBe('6 pts')
+    } finally {
+      runtime.cleanup()
+    }
+  })
+
   it('stops SuperWatch transport without clearing the retained viewer state', async () => {
     const resetBinaryStream = vi.fn()
     ;(window as any).__waveformViewers.SuperWatch = { resetBinaryStream }

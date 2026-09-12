@@ -468,7 +468,7 @@ def _generate_v2_script(config: OfflineDownloadConfig) -> str:
         (
             "if not abort:",
             '    print("offline download finished")',
-            "    cmd.set_reset()",
+            *([] if config.is_hpm else ["    cmd.set_reset()"]),
             "    cmd.set_beep_on()",
             "    time.sleep_ms(1000)",
             "    cmd.set_beep_off()",
@@ -555,8 +555,8 @@ def generate_offline_script(config: OfflineDownloadConfig) -> str:
             "        elapsed += 500",
             "if not abort:",
             '    print("auto download finished")',
-            "    cmd.set_reset()",
-            "    cmd.cpu_run()",
+            # HPM ROM programming already resets and starts the target.
+            *([] if config.is_hpm else ["    cmd.set_reset()", "    cmd.cpu_run()"]),
             "    cmd.set_beep_on()",
             "    time.sleep_ms(1000)",
             "    cmd.set_beep_off()",

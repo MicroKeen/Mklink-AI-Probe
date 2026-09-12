@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-09-12T23:04:00+08:00",
+  "updated_at": "2026-09-12T23:13:04+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
@@ -14,7 +14,7 @@
   },
   "current_session": {
     "status": "in_progress",
-    "current_task": "Chrome专用扩展已恢复可用：三档视觉验证通过；single两轮201点冻结/transport stopped及游标实板通过。CSV生成98项回归通过，浏览器保存待确认。SystemView143项/真实raw零丢弃通过，live待文档任务安装复测。"
+    "current_task": "HPM GUI验收：连接准备失败回滚、HPM脱机无通用reset/run、数组index/元素数已修。SystemView parser live 20026事件0丢弃通过；二次启动收到原始同步头，探针Recorder状态复位补丁已构建待升级复测。"
   },
   "milestones": [
     {
@@ -54,7 +54,7 @@
     },
     {
       "area": "SuperWatch 与 SystemView 文档实测修复",
-      "result": "docs/verification/v0.2.1-superwatch-trigger-cursors.md：Chrome两轮201点single冻结停止及六通道两种游标一致；GUI含CSV98项通过，浏览器保存待确认。systemview-freertos-framing.md：143项/真实105400B重放20036事件0丢弃，live待复测。"
+      "result": "docs/verification/v0.2.1-hpm-gui-acceptance.md：172+159+149 Python、95 GUI与构建通过，部署复测协调中。trigger-cursors报告：Chrome两轮201点及游标通过。systemview-freertos-framing报告：live 5秒20026事件105348B丢弃0/0。原生CSV/PNG保存未验证。"
     }
   ],
   "decisions": [
@@ -78,7 +78,7 @@
     "新批量路径限HPM5301白名单DLM/XIP对齐<=64B/16word、最多15区域，<50us请求沿用满速语义。批末验证、每样本末word响应时间戳，非原子多变量/硬实时。未达参考148K，4KB无收益；旧4.361ms根因仍未定位，冻结安装版无独立接收进程。"
   ],
   "next_actions": [
-    "文档任务确认Chrome CSV另存为文件，并安装SystemView parser25562e7后重启服务、进行live复测；不更新探针固件。",
+    "文档任务完成HPM脱机/数组GUI复测后释放COM488；升级Recorder会话复位固件并做连续两轮SystemView开始停止。记录新UF2哈希，不将既有性能矩阵冒充新固件重测。",
     "Chrome扩展browser3已可用；已完成三档显示及single/游标实板，ARM20M仍待板卡校准。",
     "审核 PR #2 的三端外设统一、OTP 读取与 STM32F103 选项配置；不自动合并或发布。",
     "后续以用户提供的 STM32F103 工程补充看门狗、STOP/STANDBY 和 WRP 拒写行为测试，再扩展其他 ARM 系列和容量板卡；当前验证报告区分配置加载与外设行为。",

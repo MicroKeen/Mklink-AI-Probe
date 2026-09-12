@@ -1643,13 +1643,13 @@ class SuperWatchStreamManager:
         """Build runtime from DWARF info so search/add work before collection starts."""
         with self._read_lock:
             if self._device is not device and self._runtime is not None:
-                for item in list(self._runtime.items):
-                    if item.source == "peripheral":
-                        self._runtime.remove(item.name)
                 from mklink.peripheral_watch import load_catalog
                 from mklink.superwatch import catalog_registers
 
                 restored = load_catalog(getattr(device, "_project_root", "."))
+                for item in list(self._runtime.items):
+                    if item.source == "peripheral":
+                        self._runtime.remove(item.name)
                 self._runtime.peripheral_items = restored.items if restored else {}
                 self._runtime.svd_registers = catalog_registers(restored)
                 self._peripheral_selection = (
@@ -1657,7 +1657,6 @@ class SuperWatchStreamManager:
                     if restored
                     else None
                 )
-            self._device = device
             if self._runtime is not None:
                 runtime = self._runtime
                 new_catalog = getattr(device, "symbol_catalog", None)
@@ -1692,6 +1691,7 @@ class SuperWatchStreamManager:
                 else:
                     runtime.port = getattr(device, "_port", None)
                     runtime.dwarf_info = getattr(device, "_dwarf_info", None)
+                self._device = device
                 return
             dwarf_info = getattr(device, "_dwarf_info", None)
             svd_registers = {}
@@ -1726,6 +1726,7 @@ class SuperWatchStreamManager:
                 read_lock=self._read_lock,
             )
             self._rebuild_metadata_cache_locked(publish=True)
+            self._device = device
 
     def _build_array_snapshot_locked(
         self,

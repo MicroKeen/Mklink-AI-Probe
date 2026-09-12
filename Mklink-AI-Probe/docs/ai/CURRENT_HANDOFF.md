@@ -4,12 +4,12 @@
 
 ## 当前断点
 
-- 更新时间：`2026-09-12T23:04:00+08:00`
+- 更新时间：`2026-09-12T23:13:04+08:00`
 - 分支：`codex/v0.2.1-development`
 - HEAD：`最新提交以 Git 为准；应用发布标签 v0.2.0 = 911a70f。`
 - 远端 HEAD：`从 microkeen/main 的 7b826c35b1bea146c9afae6f0054e7df5477f28c 创建 0.2.1 开发分支，已包含合并的 PR #1。`
 - 工作树：持续开发分支增加 mem_dump 三档、CLI/MCP 周期测量、SuperWatch 档位入口及 Windows 独立串口接收；协作探针固件已更新并完成 HPM 三档测试。
-- 当前任务：Chrome专用扩展已恢复可用：三档视觉验证通过；single两轮201点冻结/transport stopped及游标实板通过。CSV生成98项回归通过，浏览器保存待确认。SystemView143项/真实raw零丢弃通过，live待文档任务安装复测。
+- 当前任务：HPM GUI验收：连接准备失败回滚、HPM脱机无通用reset/run、数组index/元素数已修。SystemView parser live 20026事件0丢弃通过；二次启动收到原始同步头，探针Recorder状态复位补丁已构建待升级复测。
 - 状态：`in_progress`
 
 ## 里程碑
@@ -25,7 +25,7 @@
 - **选项字节/OTP 第一阶段**：docs/verification/v0.2.1-device-configuration-stage1.md：Python 103、GUI 24、正式构建通过；HPM5301 CLI/MCP/Chrome 8 个公开字段一致；Chrome ARM 配置及脚本预览通过，没有 ARM 实板读写或 OTP 编程。
 - **STM32F103 选项字节第二阶段**：docs/verification/v0.2.1-stm32f103-options-stage2.md：Python 99、GUI 29、生产构建通过；CLI/MCP stdio/Chrome 10 字段一致，DATA、两项低功耗复位位及 WRP3 写入/复位/回读/恢复通过；组合下载通过，最终全部 512 KiB Flash 与原始备份一致。未测试 RDP 转换及看门狗/低功耗/WRP 拒写行为。
 - **mem_dump 三档与 USB 暂停容忍**：docs/verification/v0.2.1-mem-dump-batch.md：新固件4/10/20MHz单变量33.40/60.22/88.24k；多变量/4KB矩阵、6组30秒、逐帧BIN比对、150ms GIL暂停、MCP stdio/Web REST通过；C模型含错误/背压。旧121 Python/29 GUI证据在profiles报告，浏览器点击仍被工具阻断。
-- **SuperWatch 与 SystemView 文档实测修复**：docs/verification/v0.2.1-superwatch-trigger-cursors.md：Chrome两轮201点single冻结停止及六通道两种游标一致；GUI含CSV98项通过，浏览器保存待确认。systemview-freertos-framing.md：143项/真实105400B重放20036事件0丢弃，live待复测。
+- **SuperWatch 与 SystemView 文档实测修复**：docs/verification/v0.2.1-hpm-gui-acceptance.md：172+159+149 Python、95 GUI与构建通过，部署复测协调中。trigger-cursors报告：Chrome两轮201点及游标通过。systemview-freertos-framing报告：live 5秒20026事件105348B丢弃0/0。原生CSV/PNG保存未验证。
 
 ## 架构决策
 
@@ -43,7 +43,7 @@
 
 ## 下一动作
 
-1. 文档任务确认Chrome CSV另存为文件，并安装SystemView parser25562e7后重启服务、进行live复测；不更新探针固件。
+1. 文档任务完成HPM脱机/数组GUI复测后释放COM488；升级Recorder会话复位固件并做连续两轮SystemView开始停止。记录新UF2哈希，不将既有性能矩阵冒充新固件重测。
 2. Chrome扩展browser3已可用；已完成三档显示及single/游标实板，ARM20M仍待板卡校准。
 3. 审核 PR #2 的三端外设统一、OTP 读取与 STM32F103 选项配置；不自动合并或发布。
 4. 后续以用户提供的 STM32F103 工程补充看门狗、STOP/STANDBY 和 WRP 拒写行为测试，再扩展其他 ARM 系列和容量板卡；当前验证报告区分配置加载与外设行为。
