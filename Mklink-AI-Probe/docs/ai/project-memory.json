@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-09-12T22:58:00+08:00",
+  "updated_at": "2026-09-12T23:01:00+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
@@ -14,7 +14,7 @@
   },
   "current_session": {
     "status": "in_progress",
-    "current_task": "Chrome实板已确认触发Armed→Done及游标两处一致；追加完整single窗口冻结/停止采集修复，94项回归通过，待新构建实板复测。SystemView dropped_bytes待离线定位。"
+    "current_task": "完整SuperWatch single捕获新GUI待Chrome复测；另修复SystemView RTOS API ID与64位SYSTIME分帧，两者均上位机问题。143项通过，真实105400B跨5种分块重放零丢弃，待安装及live复测。"
   },
   "milestones": [
     {
@@ -53,8 +53,8 @@
       "result": "docs/verification/v0.2.1-mem-dump-batch.md：新固件4/10/20MHz单变量33.40/60.22/88.24k；多变量/4KB矩阵、6组30秒、逐帧BIN比对、150ms GIL暂停、MCP stdio/Web REST通过；C模型含错误/背压。旧121 Python/29 GUI证据在profiles报告，浏览器点击仍被工具阻断。"
     },
     {
-      "area": "SuperWatch 触发与游标",
-      "result": "docs/verification/v0.2.1-superwatch-trigger-cursors.md：首补丁Chrome触发状态/六通道两种游标一致；发现Done未冻结后追加固定201点窗口及停止/失败重试，94项通过，完整single实板待复测。"
+      "area": "SuperWatch 与 SystemView 文档实测修复",
+      "result": "docs/verification/v0.2.1-superwatch-trigger-cursors.md：首补丁Chrome触发状态/六通道两种游标一致；发现Done未冻结后追加固定201点窗口及停止/失败重试，94项通过，完整single实板待复测。 docs/verification/v0.2.1-systemview-freertos-framing.md：143项通过，raw重放20036事件/0丢弃，live待复测。"
     }
   ],
   "decisions": [
