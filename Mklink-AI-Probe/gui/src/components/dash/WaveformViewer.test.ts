@@ -3107,6 +3107,21 @@ describe('VOFA viewer typed-ring runtime', () => {
       await new Promise(resolve => setTimeout(resolve, 0))
       expect(runtime.probe.collectionState().state).toBe('stopped')
       expect(runtime.probe.fields()['wave[0]'].ringBuf.count).toBe(201)
+      const save = vi.fn()
+      const previousSave = (window as any).__MKLINK_SAVE_FILE__
+      ;(window as any).__MKLINK_SAVE_FILE__ = save
+      try {
+        runtime.probe.exportCSV()
+        expect(save).toHaveBeenCalledOnce()
+        const rows = String(save.mock.calls[0][1]).split('\n')
+        expect(rows).toHaveLength(202)
+        expect(rows[0].split(',')).toHaveLength(17)
+        const channelZero = rows[0].split(',').indexOf('wave[0]')
+        expect(Number(rows[1].split(',')[channelZero])).toBe(-99.5)
+        expect(Number(rows[201].split(',')[channelZero])).toBe(100.5)
+      } finally {
+        ;(window as any).__MKLINK_SAVE_FILE__ = previousSave
+      }
     } finally {
       runtime.cleanup()
     }
