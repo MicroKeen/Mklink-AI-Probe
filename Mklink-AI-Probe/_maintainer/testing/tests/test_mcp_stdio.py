@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import copy
+
 import asyncio
 import io
 import sys
@@ -116,7 +118,12 @@ def test_real_fastmcp_dump_memory_jsonrpc_result_snapshot(monkeypatch):
     finally:
         observe_bridge.shutdown_process_observation(timeout=1.0)
 
-    assert tool.inputSchema == {
+    # FastMCP versions may add docstring descriptions; validate every wire
+    # constraint while allowing this non-semantic documentation metadata.
+    schema = copy.deepcopy(tool.inputSchema)
+    for property_schema in schema.get("properties", {}).values():
+        property_schema.pop("description", None)
+    assert schema == {
         "additionalProperties": False,
         "properties": {
             "regions": {

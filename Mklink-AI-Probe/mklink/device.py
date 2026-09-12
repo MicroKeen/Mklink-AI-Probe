@@ -410,8 +410,9 @@ class Device:
         # 0. Doing it here fixes all of them at once. Tolerant: a missing
         # target leaves idcode at 0 rather than failing connect (see
         # initialize_target docstring).
+        detected_idcode = 0
         if self._initialize_target_now:
-            initialize_target(
+            detected_idcode = initialize_target(
                 self._bridge,
                 self._flash,
                 mcu_hint=self._mcu_hint,
@@ -420,6 +421,18 @@ class Device:
 
         if self._axf:
             self._load_dwarf_info()
+
+        if self._initialize_target_now and (config.get("debug_speed") or detected_idcode == 0x1000563D):
+            try:
+                self.set_debug_speed(config.get("debug_speed", "medium"))
+            except Exception:
+                self.close()
+                raise
+
+    def set_debug_speed(self, profile: str) -> dict:
+        """Apply a named 4/10/20 MHz profile to an idle connection."""
+        from mklink.debug_speed import apply_profile
+        return apply_profile(self, profile)
 
     def close(self) -> None:
         if self._rtt_session and self._rtt_session._running:
@@ -2227,10 +2240,50 @@ class Device:
     # ------------------------------------------------------------------
     # Registers
     # ------------------------------------------------------------------
+    def select_peripherals(self, *, target_id=None, chip=None, svd=None):
+        from .peripheral_watch import load_catalog, save_catalog_selection
+
+        catalog = load_catalog(
+            self._project_root, target_id=target_id, chip=chip, svd=svd
+        )
+        if catalog is None:
+            raise ValueError("Select a peripheral chip or SVD first")
+        save_catalog_selection(self._project_root, catalog)
+        self._peripheral_catalog = catalog
+        return catalog.public()
+
+    def peripheral_catalog(self, query=""):
+        from .peripheral_watch import load_catalog
+
+        catalog = load_catalog(self._project_root)
+        self._peripheral_catalog = catalog
+        return catalog.public(query) if catalog else {"selection": None, "items": []}
+
+    def capture_peripherals(self, names, *, duration=1.0, period=0.01):
+        from .peripheral_watch import load_catalog, capture_items
+
+        self._require_connected()
+        catalog = load_catalog(self._project_root)
+        if catalog is None:
+            raise ValueError("Select a peripheral chip first")
+        return capture_items(
+            self, [catalog.resolve(n) for n in names], duration=duration, period=period
+        )
+
     def read_register(self, name: str) -> int:
         self._require_connected()
+        from .peripheral_watch import load_catalog, read_item
+
+        catalog = load_catalog(self._project_root)
+        if catalog:
+            # An explicit chip selection is authoritative, including exclusions.
+            return read_item(self, catalog.resolve(name))
         from mklink.registers import resolve_register
         reg = resolve_register(name)
+        if "HPM" in self.mcu_name.upper() and not name.strip().lower().startswith("0x"):
+            raise ValueError(
+                "Select the HPM peripheral catalog before using register names"
+            )
         addr = reg.address
         raw = self.read_memory(addr, 4)
         if len(raw) < 4:
