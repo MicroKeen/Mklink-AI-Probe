@@ -4,12 +4,12 @@
 
 ## 当前断点
 
-- 更新时间：`2026-09-12T16:39:07+08:00`
+- 更新时间：`2026-09-12T17:24:10+08:00`
 - 分支：`codex/v0.2.1-development`
 - HEAD：`最新提交以 Git 为准；应用发布标签 v0.2.0 = 911a70f。`
 - 远端 HEAD：`从 microkeen/main 的 7b826c35b1bea146c9afae6f0054e7df5477f28c 创建 0.2.1 开发分支，已包含合并的 PR #1。`
 - 工作树：持续开发分支增加 mem_dump 三档、CLI/MCP 周期测量、SuperWatch 档位入口及 Windows 独立串口接收；协作探针固件已更新并完成 HPM 三档测试。
-- 当前任务：HPM5301 mem_dump 4/10/20 MHz 三档及接口已实现并 HIL；等待参考 fixed-4B 实现继续缩减 DMI 事务。浏览器交互 gate 未完成，ARM 高速待实板验证。
+- 当前任务：HPM5301 批量 mem_dump 流水线已编译升级并 HIL，4/10/20MHz 单变量约33.40/60.22/88.24k；多变量明显提速，4KB基本持平。官网文档同步完成；Chrome URL识别阻断，GUI点击/截图待补。
 - 状态：`in_progress`
 
 ## 里程碑
@@ -25,7 +25,7 @@
 - **外设三端统一**：docs/verification/v0.2.1-peripheral-unification.md：Python 190 通过/1 跳过；HPM 43 型号共 1226962 条目录项可加载；HPM5301 CLI/MCP stdio/Chrome 三通道约 1 kHz，CRC/帧丢失/固件丢样标记为零。ARM 未做实板验证。
 - **选项字节/OTP 第一阶段**：docs/verification/v0.2.1-device-configuration-stage1.md：Python 103、GUI 24、正式构建通过；HPM5301 CLI/MCP/Chrome 8 个公开字段一致；Chrome ARM 配置及脚本预览通过，没有 ARM 实板读写或 OTP 编程。
 - **STM32F103 选项字节第二阶段**：docs/verification/v0.2.1-stm32f103-options-stage2.md：Python 99、GUI 29、生产构建通过；CLI/MCP stdio/Chrome 10 字段一致，DATA、两项低功耗复位位及 WRP3 写入/复位/回读/恢复通过；组合下载通过，最终全部 512 KiB Flash 与原始备份一致。未测试 RDP 转换及看门狗/低功耗/WRP 拒写行为。
-- **mem_dump 三档与 USB 暂停容忍**：docs/verification/v0.2.1-mem-dump-profiles.md：121 Python/29 GUI，构建通过；CLI、MCP stdio、Web REST HIL 通过。4/10/20 MHz 单变量约 17.87/31.84/45.88 kSa/s。浏览器交互未通过工具可用性 gate。
+- **mem_dump 三档与 USB 暂停容忍**：docs/verification/v0.2.1-mem-dump-batch.md：新固件4/10/20MHz单变量33.40/60.22/88.24k；多变量/4KB矩阵、6组30秒、逐帧BIN比对、150ms GIL暂停、MCP stdio/Web REST通过；C模型含错误/背压。旧121 Python/29 GUI证据在profiles报告，浏览器点击仍被工具阻断。
 
 ## 架构决策
 
@@ -37,13 +37,13 @@
 
 ## 真机环境
 
-- **state**：当前连接 HPM5301；探针固件三档 HIL 完成并恢复同一稳定 UF2。目标固件未改写。源码后端保留，测量流已停止；安装器/全局 Skill 未更新。
+- **state**：HPM5301 目标固件未改写；探针已更新9836a48e批量采样开发固件，三档矩阵、6组30秒、数据比对、150ms GIL暂停、MCP和Web REST通过。流已停止，默认中速保留；安装器/全局Skill未更新。
 - **backups**：.build/reports/prerelease-hil-20260907、superwatch-write-20260907；保留其他芯片唯一备份。；本轮本地证据 .build/reports/peripheral-unification。；本轮 OTP 只读和浏览器证据 .build/reports/device-configuration。；STM32F103 唯一原始备份与本轮证据 .build/reports/stm32f103-options。
 - **installer**：.build/artifacts/release-0.2.0-20260908/Mklink-AI-Probe-v0.2.0-x64-Setup.exe
 
 ## 下一动作
 
-1. 取得参考 fixed-4B 周期采样的 SBA/DMI、缓存和统计实现，验证预取/时间戳/错误处理语义后继续优化。
+1. 恢复Chrome URL识别后补齐三档GUI点击及真实截图，并提供给已同步数值的MicroKeen官网与文档任务；保持现有已测新固件。
 2. 恢复浏览器工具后完成 SuperWatch 三档实页面点击验证；ARM 高速需要换接 ARM 板卡单独校准，当前不开放20M。
 3. 审核 PR #2 的三端外设统一、OTP 读取与 STM32F103 选项配置；不自动合并或发布。
 4. 后续以用户提供的 STM32F103 工程补充看门狗、STOP/STANDBY 和 WRP 拒写行为测试，再扩展其他 ARM 系列和容量板卡；当前验证报告区分配置加载与外设行为。
@@ -56,7 +56,7 @@
 - 外设轮询可漏短脉冲，缓冲有限；SystemView 启动可能丢弃少量数据。
 - 共享外设目录目前只支持对齐 32 位、小端、无已知读取副作用的寄存器；真实 16 位 MMIO 需要探针协议/固件补齐和 ARM 实板验证。HPM 全型号目录加载不等同全外设 HIL。
 - STM32F103 非 XL USER/DATA/WRP 配置已开放，实板为 V4 高容量组；WDG_SW 保持软件模式，未验证低功耗进入和 WRP 拒写行为。V3/其他容量仅描述与生成测试；其他 ARM 维持原有安全配方，G474/PY32 仍仅 V3。HPM OTP 永久写入未开放。
-- HPM 20 MHz 单变量仍需四次 DMI；未复现参考 148K。一次双通道测试存在 4.361 ms 间隔异常，未定位；后续 30 s raw 复测最大226 µs。冻结安装版尚未启用独立串口接收进程。
+- 新批量路径限HPM5301白名单DLM/XIP对齐<=64B/16word、最多15区域，<50us请求沿用满速语义。批末验证、每样本末word响应时间戳，非原子多变量/硬实时。未达参考148K，4KB无收益；旧4.361ms根因仍未定位，冻结安装版无独立接收进程。
 
 ## 延续协议
 
