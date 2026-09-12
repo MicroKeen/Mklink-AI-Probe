@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-09-12T23:17:48+08:00",
+  "updated_at": "2026-09-12T23:20:33+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
@@ -14,7 +14,7 @@
   },
   "current_session": {
     "status": "in_progress",
-    "current_task": "本地Skill/Chrome界面已更新三档。HPM脱机全回读、single201点/游标、数组index及SystemView新固件两轮GUI闭环通过；已推开发分支。文档任务同步证据。原生CSV/PNG保存与VOFA固定1损坏未验证/未定位。"
+    "current_task": "本地Skill/Chrome三档已更新，HPM脱机/数组/SystemView两轮实板闭环通过。VOFA有界raw证实本次1损坏计数为68B启动回显重同步，3301帧之后无丢弃。文档任务同步；原生CSV/PNG保存未验证。"
   },
   "milestones": [
     {
@@ -78,7 +78,7 @@
     "新批量路径限HPM5301白名单DLM/XIP对齐<=64B/16word、最多15区域，<50us请求沿用满速语义。批末验证、每样本末word响应时间戳，非原子多变量/硬实时。未达参考148K，4KB无收益；旧4.361ms根因仍未定位，冻结安装版无独立接收进程。"
   ],
   "next_actions": [
-    "官网文档任务完成版本/证据同步；VOFA固定1损坏保留未定位说明和已有原始证据。原生CSV/PNG文件保存未验证，禁止冒充通过。",
+    "官网文档任务完成版本/证据同步；VOFA保留真实1次重同步计数及68B启动文本证据，不称无CRC数值验证。原生CSV/PNG文件保存未验证。",
     "Chrome扩展browser3已可用；已完成三档显示及single/游标实板，ARM20M仍待板卡校准。",
     "审核 PR #2 的三端外设统一、OTP 读取与 STM32F103 选项配置；不自动合并或发布。",
     "后续以用户提供的 STM32F103 工程补充看门狗、STOP/STANDBY 和 WRP 拒写行为测试，再扩展其他 ARM 系列和容量板卡；当前验证报告区分配置加载与外设行为。",
