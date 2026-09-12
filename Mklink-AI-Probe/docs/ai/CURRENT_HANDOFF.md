@@ -4,12 +4,12 @@
 
 ## 当前断点
 
-- 更新时间：`2026-09-12T23:16:42+08:00`
+- 更新时间：`2026-09-12T23:17:48+08:00`
 - 分支：`codex/v0.2.1-development`
 - HEAD：`最新提交以 Git 为准；应用发布标签 v0.2.0 = 911a70f。`
 - 远端 HEAD：`从 microkeen/main 的 7b826c35b1bea146c9afae6f0054e7df5477f28c 创建 0.2.1 开发分支，已包含合并的 PR #1。`
 - 工作树：持续开发分支增加 mem_dump 三档、CLI/MCP 周期测量、SuperWatch 档位入口及 Windows 独立串口接收；协作探针固件已更新并完成 HPM 三档测试。
-- 当前任务：HPM脱机78464B全回读及数组index0..15/16pts Chrome通过。探针Recorder复位固件9a338046升级并恢复握手；随后WebSocket raw_36范围遗漏已修，158测试与20036事件完整编解码通过，待两轮GUI启停。
+- 当前任务：本地Skill/Chrome界面已更新三档。HPM脱机全回读、single201点/游标、数组index及SystemView新固件两轮GUI闭环通过；已推开发分支。文档任务同步证据。原生CSV/PNG保存与VOFA固定1损坏未验证/未定位。
 - 状态：`in_progress`
 
 ## 里程碑
@@ -25,7 +25,7 @@
 - **选项字节/OTP 第一阶段**：docs/verification/v0.2.1-device-configuration-stage1.md：Python 103、GUI 24、正式构建通过；HPM5301 CLI/MCP/Chrome 8 个公开字段一致；Chrome ARM 配置及脚本预览通过，没有 ARM 实板读写或 OTP 编程。
 - **STM32F103 选项字节第二阶段**：docs/verification/v0.2.1-stm32f103-options-stage2.md：Python 99、GUI 29、生产构建通过；CLI/MCP stdio/Chrome 10 字段一致，DATA、两项低功耗复位位及 WRP3 写入/复位/回读/恢复通过；组合下载通过，最终全部 512 KiB Flash 与原始备份一致。未测试 RDP 转换及看门狗/低功耗/WRP 拒写行为。
 - **mem_dump 三档与 USB 暂停容忍**：docs/verification/v0.2.1-mem-dump-batch.md：新固件4/10/20MHz单变量33.40/60.22/88.24k；多变量/4KB矩阵、6组30秒、逐帧BIN比对、150ms GIL暂停、MCP stdio/Web REST通过；C模型含错误/背压。旧121 Python/29 GUI证据在profiles报告，浏览器点击仍被工具阻断。
-- **SuperWatch 与 SystemView 文档实测修复**：docs/verification/v0.2.1-hpm-gui-acceptance.md：172+159+158 Python、95 GUI/构建；HPM脱机78464B全回读和数组16pts/index Chrome通过。SystemView真实105400B/20036事件经Web codec零丢弃。新9a338046探针握手通过，两轮GUI待复测；原生CSV/PNG保存未验证。
+- **SuperWatch 与 SystemView 文档实测修复**：docs/verification/v0.2.1-hpm-gui-acceptance.md：172+159+158 Python、95 GUI/构建；HPM脱机78464B全回读、数组index0..15/16pts通过。新9a338046探针+Web codec两轮Chrome16449/16577事件、3任务、RuntimeDrop0，已断开。原生CSV/PNG保存未验证。
 
 ## 架构决策
 
@@ -37,13 +37,13 @@
 
 ## 真机环境
 
-- **state**：探针已升级SystemView状态复位UF2 9a338046，COM488交还文档任务。旧性能矩阵属于9836a48e。Skill已部署GUI/连接/HPM脱机/Recorder提示符补丁；WebSocket raw范围修复部署复测中。
+- **state**：探针UF2 9a338046完成SystemView两轮Chrome启停，COM488已断开释放。旧性能矩阵属于9836a48e。Skill已部署GUI/后端开发补丁，官网文档任务同步实板结果，未发布正式版。
 - **backups**：.build/reports/prerelease-hil-20260907、superwatch-write-20260907；保留其他芯片唯一备份。；本轮本地证据 .build/reports/peripheral-unification。；本轮 OTP 只读和浏览器证据 .build/reports/device-configuration。；STM32F103 唯一原始备份与本轮证据 .build/reports/stm32f103-options。
 - **installer**：.build/artifacts/release-0.2.0-20260908/Mklink-AI-Probe-v0.2.0-x64-Setup.exe
 
 ## 下一动作
 
-1. 文档任务同步WebSocket stream_protocol.py后连续两轮GUI SystemView开始停止，更新实际结果；不用再次升级探针。
+1. 官网文档任务完成版本/证据同步；VOFA固定1损坏保留未定位说明和已有原始证据。原生CSV/PNG文件保存未验证，禁止冒充通过。
 2. Chrome扩展browser3已可用；已完成三档显示及single/游标实板，ARM20M仍待板卡校准。
 3. 审核 PR #2 的三端外设统一、OTP 读取与 STM32F103 选项配置；不自动合并或发布。
 4. 后续以用户提供的 STM32F103 工程补充看门狗、STOP/STANDBY 和 WRP 拒写行为测试，再扩展其他 ARM 系列和容量板卡；当前验证报告区分配置加载与外设行为。
