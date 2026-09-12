@@ -3011,6 +3011,73 @@ describe('VOFA viewer typed-ring runtime', () => {
     },
   )
 
+  it('rearms an enabled SuperWatch trigger with detail after every acquisition reset', async () => {
+    mocks.useBinaryStream.mockReturnValue({
+      ...mocks.binary, waveformBatch: shallowRef(null), envelope: shallowRef(null),
+      telemetry: shallowRef(null), state: shallowRef({ phase: 'stopped' }),
+      error: shallowRef(null), superwatchMetadata: shallowRef(null),
+    })
+    const runtime = await loadRttViewerRuntime('SuperWatch', 32)
+    try {
+      runtime.viewer.configureBinaryChannels([{ name: 'A' }])
+      const detail = vi.fn()
+      runtime.viewer.setBinaryDetailRequester(detail)
+      Object.assign(runtime.probe.trigger, { source: 'A', mode: 'single', preTriggerSamples: 2 })
+      document.getElementById('trigger-enable-btn')!.click()
+      for (let run = 0; run < 2; run++) {
+        runtime.viewer.resetBinaryStream()
+        expect(runtime.probe.trigger.state).toBe('armed')
+        expect(detail).toHaveBeenLastCalledWith(true)
+        expect(runtime.viewer.acceptBinaryBatch({
+          sequence: 1n, timestampNs: 5_000_000n, itemCount: 5, channelCount: 1,
+          layout: 'sample-major-float32', values: Float32Array.of(-2, -1, 1, 2, 3).buffer,
+          times: Float64Array.of(1, 2, 3, 4, 5).buffer,
+        })).toBe(true)
+        expect(runtime.probe.trigger.state).toBe('done')
+        expect(detail).toHaveBeenLastCalledWith(false)
+      }
+      document.getElementById('trigger-enable-btn')!.click()
+      runtime.viewer.resetBinaryStream()
+      expect(runtime.probe.trigger.state).toBe('idle')
+      expect(detail).toHaveBeenLastCalledWith(false)
+    } finally {
+      runtime.cleanup()
+    }
+  })
+
+  it.each(['time', 'value'])('uses the same SuperWatch history for both %s cursor readouts', async mode => {
+    mocks.useBinaryStream.mockReturnValue({
+      ...mocks.binary, waveformBatch: shallowRef(null), envelope: shallowRef(null),
+      telemetry: shallowRef(null), state: shallowRef({ phase: 'stopped' }),
+      error: shallowRef(null), superwatchMetadata: shallowRef(null),
+    })
+    const runtime = await loadRttViewerRuntime('SuperWatch', 32)
+    try {
+      runtime.viewer.configureBinaryChannels([{ name: 'A' }])
+      runtime.viewer.acceptBinarySummary({
+        sequence: 1n, timestampNs: 8_000_000_000n,
+        collectedItemCount: 8, bufferedItemCount: 8, channelCount: 1,
+        bufferStartMs: 0, bufferEndMs: 8_000, latestTimeMs: 8_000,
+        latestValues: Float32Array.of(99).buffer,
+      })
+      Object.assign(runtime.probe.cursor, { enabled: true, mode, a: { t: 1 }, b: { t: 2 } })
+      runtime.viewer.renderBinaryEnvelope({
+        type: 'render-envelope', mode: 'min-max-v1', timestampKind: 'sample-milliseconds',
+        requestId: 1, pixelWidth: 800, channelCount: 1, pointCount: 3,
+        candidateSampleCount: 3, times: Float64Array.of(0, 1_000, 2_000).buffer,
+        timeIndices: Uint32Array.of(0, 1, 2).buffer,
+        values: Float32Array.of(0, 10, 30).buffer,
+        channelOffsets: Uint32Array.of(0, 3).buffer,
+      })
+      expect(runtime.probe.fields().A.ringBuf.count).toBe(1)
+      expect(document.getElementById('cursor-readout')?.textContent).toContain('A d=20.00')
+      expect(document.getElementById('cursor-measure-panel')?.textContent)
+        .toContain(mode === 'time' ? 'd=20.00' : 'A:10.00 B:30.00 dV:20.00')
+    } finally {
+      runtime.cleanup()
+    }
+  })
+
   it('renders wrapped multi-channel cursor data without copying either ring', async () => {
     const runtime = await loadRttViewerRuntime()
     try {

@@ -3213,6 +3213,9 @@ function resetBinaryStream() {
     var field = FIELDS[binaryChannelNames[channel]];
     if (field && field.ringBuf) field.ringBuf.clear();
   }
+  // A new acquisition resets the Worker too. Re-enable full sample delivery
+  // and discard trigger history from the previous time base, including Done.
+  if (triggerSettings.enabled) armTrigger();
 }
 
 function updateBinaryHealth(health) {
@@ -4483,6 +4486,11 @@ addViewerGlobalListener(window, 'keydown', function(e) {
 // ============================================================
 // Cursor readout (Task 5I)
 // ============================================================
+function cursorValueAt(name, t) {
+  var sample = IS_SUPERWATCH_MODE ? nearestBinaryEnvelopeSample(name, t) : null;
+  return sample ? sample.value : sampleValueAt(FIELDS[name].ringBuf, t);
+}
+
 function updateCursorReadout() {
   if (!cursorState.enabled || !cursorState.a || !cursorState.b) {
     cursorReadout.textContent = '';
@@ -4501,10 +4509,8 @@ function updateCursorReadout() {
     var name = names[i];
     var meta = FIELDS[name];
     if (!meta || !meta.visible || !meta.ringBuf || (meta.ringBuf.count < 1 && !binaryEnvelope)) continue;
-    var aSample = IS_SUPERWATCH_MODE ? nearestBinaryEnvelopeSample(name, cursorState.a.t) : null;
-    var bSample = IS_SUPERWATCH_MODE ? nearestBinaryEnvelopeSample(name, cursorState.b.t) : null;
-    var av = aSample ? aSample.value : sampleValueAt(meta.ringBuf, cursorState.a.t);
-    var bv = bSample ? bSample.value : sampleValueAt(meta.ringBuf, cursorState.b.t);
+    var av = cursorValueAt(name, cursorState.a.t);
+    var bv = cursorValueAt(name, cursorState.b.t);
     if (av === null || bv === null) continue;
     if (deltaCount >= deltaLimit) {
       lines.push('+' + (names.length - i) + ' ch');
@@ -4527,10 +4533,8 @@ function updateCursorReadout() {
         var vn = names[j];
         var vm = FIELDS[vn];
         if (!vm || !vm.visible || !vm.ringBuf || (vm.ringBuf.count < 1 && !binaryEnvelope)) continue;
-        var vaSample = IS_SUPERWATCH_MODE ? nearestBinaryEnvelopeSample(vn, cursorState.a.t) : null;
-        var vbSample = IS_SUPERWATCH_MODE ? nearestBinaryEnvelopeSample(vn, cursorState.b.t) : null;
-        var va = vaSample ? vaSample.value : sampleValueAt(vm.ringBuf, cursorState.a.t);
-        var vb = vbSample ? vbSample.value : sampleValueAt(vm.ringBuf, cursorState.b.t);
+        var va = cursorValueAt(vn, cursorState.a.t);
+        var vb = cursorValueAt(vn, cursorState.b.t);
         if (va === null || vb === null) continue;
         if (vc >= deltaLimit) break;
         var prec = vm.precision || 2;
@@ -4549,9 +4553,9 @@ function updateCursorReadout() {
       for (var k = 0; k < names.length; k++) {
         var tn = names[k];
         var tm = FIELDS[tn];
-        if (!tm || !tm.visible || !tm.ringBuf || tm.ringBuf.count < 1) continue;
-        var ta = sampleValueAt(tm.ringBuf, cursorState.a.t);
-        var tb = sampleValueAt(tm.ringBuf, cursorState.b.t);
+        if (!tm || !tm.visible || !tm.ringBuf || (tm.ringBuf.count < 1 && !binaryEnvelope)) continue;
+        var ta = cursorValueAt(tn, cursorState.a.t);
+        var tb = cursorValueAt(tn, cursorState.b.t);
         if (ta === null || tb === null) continue;
         if (tc >= deltaLimit) break;
         html += '<div class="cm-row">';

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-09-12T17:24:10+08:00",
+  "updated_at": "2026-09-12T22:52:00+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
@@ -14,7 +14,7 @@
   },
   "current_session": {
     "status": "in_progress",
-    "current_task": "HPM5301 批量 mem_dump 流水线已编译升级并 HIL，4/10/20MHz 单变量约33.40/60.22/88.24k；多变量明显提速，4KB基本持平。官网文档同步完成；Chrome URL识别阻断，GUI点击/截图待补。"
+    "current_task": "修复 SuperWatch 开始采样后 Armed 不触发、浮动游标时间模式差值错误；93 项 WaveformViewer 回归通过，待文档任务 Chrome 实板复测。"
   },
   "milestones": [
     {
@@ -55,6 +55,10 @@
     {
       "area": "mem_dump 三档与 USB 暂停容忍",
       "result": "docs/verification/v0.2.1-mem-dump-batch.md：新固件4/10/20MHz单变量33.40/60.22/88.24k；多变量/4KB矩阵、6组30秒、逐帧BIN比对、150ms GIL暂停、MCP stdio/Web REST通过；C模型含错误/背压。旧121 Python/29 GUI证据在profiles报告，浏览器点击仍被工具阻断。"
+    },
+    {
+      "area": "SuperWatch 触发与游标",
+      "result": "docs/verification/v0.2.1-superwatch-trigger-cursors.md：修复前回归复现 detail 被关闭及浮动差值为0；修复后93项通过。上位机补丁，无固件变更，浏览器实板待复测。"
     }
   ],
   "decisions": [
@@ -65,7 +69,7 @@
     "2026-09-10 用户指定 codex/v0.2.1-development 为本轮持续开发分支；后续修复继续该分支并推送 microkeen，整合 main 仍走审核 PR，不自动发布。"
   ],
   "hardware": {
-    "state": "HPM5301 目标固件未改写；探针已更新9836a48e批量采样开发固件，三档矩阵、6组30秒、数据比对、150ms GIL暂停、MCP和Web REST通过。流已停止，默认中速保留；安装器/全局Skill未更新。",
+    "state": "探针保持9836a48e批量固件。全局Skill已安装b0eed36开发快照并验证38个HTTP资源/三档接口；文档任务已将目标更新为16路波形RTT扩展。当前本任务不占设备，由文档任务协调Chrome复测。",
     "backups": ".build/reports/prerelease-hil-20260907、superwatch-write-20260907；保留其他芯片唯一备份。；本轮本地证据 .build/reports/peripheral-unification。；本轮 OTP 只读和浏览器证据 .build/reports/device-configuration。；STM32F103 唯一原始备份与本轮证据 .build/reports/stm32f103-options。",
     "installer": ".build/artifacts/release-0.2.0-20260908/Mklink-AI-Probe-v0.2.0-x64-Setup.exe"
   },
@@ -78,11 +82,11 @@
     "新批量路径限HPM5301白名单DLM/XIP对齐<=64B/16word、最多15区域，<50us请求沿用满速语义。批末验证、每样本末word响应时间戳，非原子多变量/硬实时。未达参考148K，4KB无收益；旧4.361ms根因仍未定位，冻结安装版无独立接收进程。"
   ],
   "next_actions": [
-    "恢复Chrome URL识别后补齐三档GUI点击及真实截图，并提供给已同步数值的MicroKeen官网与文档任务；保持现有已测新固件。",
+    "部署 SuperWatch 触发/游标修复生产构建，由文档任务 Chrome 在当前HPM实板复测；不更新探针固件。",
     "恢复浏览器工具后完成 SuperWatch 三档实页面点击验证；ARM 高速需要换接 ARM 板卡单独校准，当前不开放20M。",
     "审核 PR #2 的三端外设统一、OTP 读取与 STM32F103 选项配置；不自动合并或发布。",
     "后续以用户提供的 STM32F103 工程补充看门狗、STOP/STANDBY 和 WRP 拒写行为测试，再扩展其他 ARM 系列和容量板卡；当前验证报告区分配置加载与外设行为。",
-    "HPM 永久编程仅在专用固件命令与单独授权的可消耗板卡验证流程完成后开放。 / 正式安装器/全局 Skill 未更新；发布仍需单独授权，既有定时任务保持暂停。"
+    "HPM 永久编程仍需专用固件及单独授权。全局Skill已更新开发快照，正式安装器未更新；不发布，定时任务保持暂停。"
   ],
   "continuation_protocol": [
     "先核对 Git、任务和设备状态；仅按需读相关验证报告，不加载历史流水账。"
