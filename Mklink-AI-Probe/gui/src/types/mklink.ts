@@ -16,6 +16,7 @@ export interface ProjectConfig {
   com_port?: string
   mcu_key?: string
   swd_clock?: string
+  debug_speed?: '' | 'low' | 'medium' | 'high'
 }
 
 export interface ProjectInfo {

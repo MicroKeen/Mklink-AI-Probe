@@ -410,8 +410,9 @@ class Device:
         # 0. Doing it here fixes all of them at once. Tolerant: a missing
         # target leaves idcode at 0 rather than failing connect (see
         # initialize_target docstring).
+        detected_idcode = 0
         if self._initialize_target_now:
-            initialize_target(
+            detected_idcode = initialize_target(
                 self._bridge,
                 self._flash,
                 mcu_hint=self._mcu_hint,
@@ -420,6 +421,18 @@ class Device:
 
         if self._axf:
             self._load_dwarf_info()
+
+        if self._initialize_target_now and (config.get("debug_speed") or detected_idcode == 0x1000563D):
+            try:
+                self.set_debug_speed(config.get("debug_speed", "medium"))
+            except Exception:
+                self.close()
+                raise
+
+    def set_debug_speed(self, profile: str) -> dict:
+        """Apply a named 4/10/20 MHz profile to an idle connection."""
+        from mklink.debug_speed import apply_profile
+        return apply_profile(self, profile)
 
     def close(self) -> None:
         if self._rtt_session and self._rtt_session._running:

@@ -1199,6 +1199,7 @@ def create_app(
         com_port: str | None = None
         mcu_key: str | None = None
         swd_clock: str | None = None
+        debug_speed: str | None = None
 
     @app.get("/api/config")
     async def get_config():
@@ -1210,8 +1211,19 @@ def create_app(
         com_port: str | None = Body(default=None),
         mcu_key: str | None = Body(default=None),
         swd_clock: str | None = Body(default=None),
+        debug_speed: str | None = Body(default=None),
     ):
         config = load_config(_state["project_root"]) or {}
+        if debug_speed is not None:
+            from mklink.debug_speed import profile_clock
+            if debug_speed:
+                try:
+                    profile_clock(debug_speed)
+                except ValueError as error:
+                    raise HTTPException(status_code=422, detail=str(error)) from error
+                config["debug_speed"] = debug_speed
+            else:
+                config.pop("debug_speed", None)
         if com_port is not None:
             config["com_port"] = com_port
         if mcu_key is not None:
@@ -1849,6 +1861,32 @@ def create_app(
         async with _exclusive_probe_control("reset") as (device, stopped):
             await run_in_threadpool(device.reset)
         return {"status": "ok", "stopped": stopped}
+
+    @app.post("/api/device/debug-speed")
+    async def set_debug_speed(profile: str = Body(..., embed=True)):
+        from mklink.debug_speed import profile_clock
+        try:
+            profile_clock(profile)
+            async with _exclusive_probe_control("debug-speed") as (device, stopped):
+                result = await run_in_threadpool(device.set_debug_speed, profile)
+        except ValueError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
+        config = load_config(_state["project_root"]) or {}
+        config["debug_speed"] = profile
+        save_config(_state["project_root"], config)
+        return {**result, "stopped": stopped}
+
+    @app.get("/api/device/debug-speed")
+    async def get_debug_speed():
+        from mklink.debug_speed import PROFILES
+        config = load_config(_state["project_root"]) or {}
+        profile = config.get("debug_speed", "medium")
+        device = _state.get("device")
+        hz = PROFILES.get(profile, PROFILES["medium"])
+        if device and device.connected:
+            hz = device._bridge._ctx.swd_clock_hz or hz
+            profile = next((name for name, value in PROFILES.items() if value == hz), None)
+        return {"profile": profile, "clock_hz": hz, "default": "medium", "profiles": PROFILES}
 
     @asynccontextmanager
     async def _exclusive_probe_control(operation: str):

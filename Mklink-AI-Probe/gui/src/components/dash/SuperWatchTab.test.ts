@@ -1,11 +1,32 @@
-import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { mount, flushPromises } from '@vue/test-utils'
+import { describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import SuperWatchTab from './SuperWatchTab.vue'
 import SymbolVariablePanel from './SymbolVariablePanel.vue'
 import WaveformViewer from './WaveformViewer.vue'
 
 describe('SuperWatchTab', () => {
+  it('defaults to medium and applies the selected memory sampling clock', async () => {
+    const fetchMock = vi.fn(async (_url: any, init?: RequestInit) => ({
+      ok: true, json: async () => init ? { clock_hz: 20000000 } : { profile: 'medium' },
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+    const wrapper = mount(SuperWatchTab, {
+      props: { deviceConnected: true },
+      global: { stubs: { SymbolVariablePanel: true, PeripheralWatchPanel: true, WaveformViewer: true } },
+    })
+    await flushPromises()
+    expect(wrapper.get<HTMLSelectElement>('[data-testid="superwatch-speed"]').element.value).toBe('medium')
+    await wrapper.get('[data-testid="superwatch-speed"]').setValue('high')
+    await wrapper.get('[data-testid="apply-superwatch-speed"]').trigger('click')
+    await flushPromises()
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/api/device/debug-speed'), expect.objectContaining({
+      method: 'POST', body: JSON.stringify({ profile: 'high' }),
+    }))
+    expect(wrapper.get('[role="status"]').text()).toContain('已应用')
+    wrapper.unmount()
+    vi.unstubAllGlobals()
+  })
   it('shares waveform values and channel visibility between both workspace panes', async () => {
     const wrapper = mount(SuperWatchTab, {
       props: { deviceConnected: true },

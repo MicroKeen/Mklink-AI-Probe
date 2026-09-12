@@ -1818,6 +1818,7 @@ def _cli_dump_memory(
     duration: float = 2.0,
     save: str | None = None,
     json_output: bool = False,
+    speed_profile: str | None = None,
 ) -> int:
     """Public dump_memory CLI.
 
@@ -1886,6 +1887,10 @@ def _cli_dump_memory(
         return frame.get("block_index", 0) + 1 >= frame.get("block_count", 1)
 
     try:
+        from mklink.debug_speed import apply_bridge_profile
+        from mklink.project_config import load_config
+        chosen_speed = speed_profile or (load_config(".") or {}).get("debug_speed", "medium")
+        print(json.dumps(apply_bridge_profile(bridge, chosen_speed), ensure_ascii=False))
         print(f"[*] {cmd}")
         bridge._enter_stream(DeviceState.DUMP_STREAM)
         stream_started = True
@@ -3689,6 +3694,18 @@ def main():
     from mklink.peripheral_cli import add_parser as add_peripheral_parser
 
     add_peripheral_parser(subparsers)
+    speed_parser = subparsers.add_parser("debug-speed", help="Set low=4 MHz / medium=10 MHz / high=20 MHz debug timing")
+    speed_parser.add_argument("profile", choices=("low", "medium", "high"))
+    speed_parser.add_argument("--port", default=None)
+    speed_parser.add_argument("--project-root", default=".")
+    speed_parser.add_argument("--save", action="store_true", help="Apply this profile on future connections")
+    measure_parser = subparsers.add_parser("dump-benchmark", help="Measure periodic mem_dump without a waveform GUI")
+    measure_parser.add_argument("regions", nargs="+")
+    measure_parser.add_argument("--speed", choices=("low", "medium", "high"), default=None)
+    measure_parser.add_argument("--port", default=None)
+    measure_parser.add_argument("--project-root", default=".")
+    measure_parser.add_argument("--duration", type=float, default=3.0)
+    measure_parser.add_argument("--period", type=float, default=0.000001)
     config_parser = subparsers.add_parser(
         "configuration",
         help="Inspect option bytes/OTP and generate option configuration scripts",
@@ -3891,6 +3908,8 @@ def main():
         help="读取 dump_memory 二进制帧（公共高速内存 dump；默认采集 1 个样本）",
     )
     dump_memory_parser.add_argument("--port", help="COM 端口（默认自动检测）")
+    dump_memory_parser.add_argument("--speed", choices=("low", "medium", "high"), default=None,
+                                    help="mem_dump 档位：4/10/20 MHz；默认 medium，或已保存档位")
     dump_memory_parser.add_argument(
         "regions",
         nargs="+",
@@ -4408,7 +4427,26 @@ def main():
         _cli_test(args.port)
         return
 
-    if args.command == "test":
+    if args.command == "dump-benchmark":
+        import json
+        from mklink.device import connect
+        from mklink.dump_benchmark import measure
+        regions = [_parse_dump_region(r) for r in args.regions]
+        with connect(port=args.port, project_root=args.project_root) as device:
+            result = measure(device, regions, duration=args.duration, period=args.period, speed_profile=args.speed)
+        print(json.dumps(result, ensure_ascii=False))
+    elif args.command == "debug-speed":
+        import json
+        from mklink.device import connect
+        from mklink.project_config import load_config, save_config
+        with connect(port=args.port, project_root=args.project_root) as device:
+            result = device.set_debug_speed(args.profile)
+        if args.save:
+            config = load_config(args.project_root) or {}
+            config["debug_speed"] = args.profile
+            save_config(args.project_root, config)
+        print(json.dumps(result, ensure_ascii=False))
+    elif args.command == "test":
         _cli_test(args.port)
     elif args.command == "discover":
         if args.list:
@@ -4532,6 +4570,7 @@ def main():
             duration=args.duration,
             save=args.save,
             json_output=args.json,
+            speed_profile=args.speed,
         )
     elif args.command == "flush-memory":
         # argparse aliases: 旧拼写 "flush-memroy" 仍可工作，但会归一化为
