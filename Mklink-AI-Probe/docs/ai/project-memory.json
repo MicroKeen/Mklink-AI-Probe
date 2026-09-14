@@ -1,32 +1,32 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-09-15T00:14:55.9117651+08:00",
+  "updated_at": "2026-09-15T00:52:25.1345542+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
-    "branch": "codex/v0.2.1-development",
-    "head": "最新提交以 Git 为准；应用发布标签 v0.2.0 = 911a70f。",
-    "remote_head": "从 microkeen/main 的 7b826c35b1bea146c9afae6f0054e7df5477f28c 创建 0.2.1 开发分支，已包含合并的 PR #1。",
-    "working_tree": "发布准备沿用 codex/v0.2.1-development；PR #2 待审核整合 main，再生成正式签名版本。"
+    "branch": "codex/v0.2.1-release-record",
+    "head": "发布标签 v0.2.1 = 2233514d7bf7c55a6410c3cc3586dff1074cd1eb；后续文档提交以 Git 为准。",
+    "remote_head": "microkeen/main 已合并 PR #2，正式发布源码 2233514；发布记录另走普通审核 PR。",
+    "working_tree": "仅补充正式发布记录和交接；不移动版本标签或重建已发布资产。"
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "in_progress",
-    "current_task": "0.2.1候选回归和覆盖安装完成：Python2187通过/2可选依赖跳过，GUI698，Rust19，真实Skill/MCP68工具和ping通过；修复空egg-info导致版本为None。2026-09-15用户追加授权自动审核合并PR #2并正式发布。待最后提交推送后尝试受保护PR合并；尚未签名、发布标签/Release/索引。"
+    "status": "complete",
+    "current_task": "0.2.1 正式签名构建、本机覆盖安装、两个 GitHub 与 Gitee 发布及三个更新索引核验完成；真实旧版 0.2.0 Skill 从旧入口升级 0.2.1 后默认切换 MicroKeen。PR #2 按用户发布例外授权合并，普通 PR 审核规则已恢复。"
   },
   "milestones": [
     {
       "name": "已交付",
       "status": "complete",
-      "notes": "应用 0.2.0、MicroLink V3.4.0/V4.4.0 已发布；最新源码与报障流程已同步 MicroKeen/main。"
+      "notes": "应用 0.2.1 已在新旧 GitHub 与 Gitee 发布；固件渠道保持原状。"
     }
   ],
   "verification": [
     {
       "area": "正式版",
-      "result": "docs/verification/v0.2.0-release-qualification.md：Python 1913、GUI 682、Rust 19；安装/Skill/CLI/MCP 及下载校验通过。 docs/verification/v0.2.0-prerelease-hil-20260907.md、v0.2.0-superwatch-write-20260907.md；firmware-20260908.md 仅验证发布/格式/哈希，新固件未做 HIL。 docs/verification/v0.2.1-release-candidate.md：完整回归、0.2.1实际覆盖安装、68工具MCP、7059型号/2224算法审计通过。新旧GitHub/Gitee迁移准备完成；正式发布未执行。"
+      "result": "docs/verification/v0.2.1-release-qualification.md：Python 2187 通过/2 可选依赖跳过，GUI 698，Rust 19；正式签名、本机覆盖安装、2460 Skill 文件/68 MCP 工具、7059 型号/2224 算法审计通过。三仓库资产与更新索引通过；真实 0.2.0 Skill 经旧公开入口升级后改用 MicroKeen。旧桌面应用内自动更新按钮未单独端到端验证，桌面已做 NSIS 覆盖和签名验证。"
     },
     {
       "area": "报障流程",
@@ -34,7 +34,7 @@
     },
     {
       "area": "仓库权限",
-      "result": "GitHub API 回读四项 active 规则；release/firmware 与旧索引提交一致。仅 Aladdin-Wang 可绕过发布引用规则，main 审核/CI 无绕过者；未使用 su5176 身份执行写入测试。"
+      "result": "2026-09-15 用户授权版本发布免第二人审批。PR #2 按确切头提交合并；临时例外后 API 回读恢复普通 PR 的 1 人审批、最后推送审批、附加审批及必需 CI，无 bypass actors。发布引用权限保持原状。"
     },
     {
       "area": "外设三端统一",
@@ -58,16 +58,16 @@
     }
   ],
   "decisions": [
-    "用户 Skill 只含运行时，报障指南按需读取；主仓库 MicroKeen/main，现有 Release/更新索引仍在 Aladdin-Wang 与 Gitee。",
+    "用户 Skill 只含运行时；开发主仓库 MicroKeen/main，0.2.1 起默认更新源 MicroKeen/release；旧 GitHub/updates 提供桥接版，Gitee/updates 保持原址。",
     "任务 mklink-issues-pr 为 PAUSED，未经要求不恢复；手动流程见 docs/ai/issue-maintenance.md，修复只提交 PR，合并由用户决定。",
     "构建/清理遵循 AGENTS.md 与 docs/ai/build-storage.md；保留正式包、唯一备份、依赖缓存及 HIL 证据。",
     "协作权限见 docs/ai/repository-governance.md：Aladdin-Wang、su5176 保持 Admin/Owner 并处理 PR；更新分支和正式标签仅 Aladdin-Wang 可写，最高管理员仍可修改规则，Release 附件权限不由分支规则隔离。",
-    "2026-09-10 用户指定 codex/v0.2.1-development 为本轮持续开发分支；后续修复继续该分支并推送 microkeen，整合 main 仍走审核 PR，不自动发布。"
+    "普通 PR 仍需另一人审批；经用户明确授权的版本发布，完成回归及 CI 后可使用有界审批例外，按确切头合并并立即恢复规则。本次 PR #2 已完成。"
   ],
   "hardware": {
     "state": "STM32F103RET6 / 72MHz / RT-Thread 5.1.0；MKLINK V4 HPM5301 360MHz，pipe-r20固化候选已升级并通过报告所列ARM验证；恢复10M并断开。Chrome新安装版GUI保留8771页面。HPM板切换待用户。",
     "backups": ".build/reports/prerelease-hil-20260907、superwatch-write-20260907；保留其他芯片唯一备份。；本轮本地证据 .build/reports/peripheral-unification。；本轮 OTP 只读和浏览器证据 .build/reports/device-configuration。；STM32F103 唯一原始备份与本轮证据 .build/reports/stm32f103-options。",
-    "installer": ".build/artifacts/release-0.2.1-candidate/Mklink-AI-Probe-v0.2.1-x64-Setup.exe"
+    "installer": ".build/artifacts/release-0.2.1-20260915/Mklink-AI-Probe-v0.2.1-x64-Setup.exe"
   },
   "known_limits": [
     "本轮已复现的USB停读后32B缺失由独立对齐DMA槽修复，并修复RTT回执/描述符并发。有限缓存仍不保证无限暂停或物理断线无损；历史枚举异常未做全部场景认证。",
@@ -78,11 +78,11 @@
     "批量路径覆盖已列明HPM5301 DLM/XIP和新增HPM6E80 AXI SRAM、最多15区域；shared JTAG ID不识别精确型号，也不证明接线稳定。<50us请求沿用满速语义，非原子多变量/硬实时。XIP有界块忙冲突恢复不适用于RAM/MMIO或真实总线错误。历史HPM资格按对应固件保留；pipe-r20 HPM批时间戳/USB改动仍待HPM实板回归。ARM高速本轮按专门报告验证。"
   ],
   "next_actions": [
-    "按2026-09-15追加授权审核并尝试合并PR #2，保持另一维护者审批和CI规则；合并后的确定main上签名重建、完整资产校验并同步两个GitHub和Gitee，最后更新三端索引。",
+    "审核正式发布记录 PR；后续改动从 MicroKeen/main 新建任务分支，不移动 v0.2.1 标签。Gitee 配额清理仅删除已授权的 v0.1.0 旧安装器，校验备份和旧 GitHub 原件保留。",
     "换接HPM5301/HPM6E80回归pipe-r20批时间戳、USB和四档，不继承旧版硬件资格。ARM固化包已通过77源文件哈希对照。",
     "官网文档任务已收到四档Chrome真图和技术附件；保留公众号风格及技术附件分层，不自动发布。继续优化前先拆分批间组帧/调度开销；慢浏览器订阅需按队列背压评估，勿与USB字节故障混同。",
     "后续按原计划补STM32F103看门狗、STOP/STANDBY和WRP拒写行为及其他ARM实板；HPM永久编程未开放。",
-    "本地Skill开发快照与正式安装器/发布渠道分开；定时任务维持暂停。"
+    "本机正式安装器及 Skill 已更新 0.2.1；定时任务维持暂停。"
   ],
   "continuation_protocol": [
     "先核对 Git、任务和设备状态；仅按需读相关验证报告，不加载历史流水账。"
