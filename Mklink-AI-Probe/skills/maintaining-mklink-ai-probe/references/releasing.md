@@ -2,10 +2,10 @@
 
 Application 0.2.1 prepares the migration to MicroKeen. Only Aladdin-Wang may
 publish. Use reviewed, clean `main` equal to the remote MicroKeen `main` tip.
-For an explicitly authorized version release, the maintainer's 2026-09-15
-exception permits qualified release-PR integration without another person's
-approval. Follow the temporary approval-only change and mandatory restoration
-in `docs/ai/repository-governance.md`; ordinary PR review and required CI remain.
+The maintainer's latest 2026-09-15 policy removes mandatory second-person
+approval for all PRs. No temporary approval change or restoration is needed.
+Explicit merge/publication authorization, diff review, required CI and release
+qualification remain mandatory; see `docs/ai/repository-governance.md`.
 The application publisher sends identical signed assets and immutable tags to
 MicroKeen, legacy Aladdin-Wang GitHub, and the existing Gitee repository. It
 does not push source branches. See `docs/ai/repository-governance.md` before publication.
