@@ -4,23 +4,23 @@
 
 ## 当前断点
 
-- 更新时间：`2026-09-15T00:52:25.1345542+08:00`
-- 分支：`codex/v0.2.1-release-record`
-- HEAD：`发布标签 v0.2.1 = 2233514d7bf7c55a6410c3cc3586dff1074cd1eb；后续文档提交以 Git 为准。`
-- 远端 HEAD：`microkeen/main 已合并 PR #2，正式发布源码 2233514；发布记录另走普通审核 PR。`
-- 工作树：仅补充正式发布记录和交接；不移动版本标签或重建已发布资产。
-- 当前任务：0.2.1 正式签名构建、本机覆盖安装、两个 GitHub 与 Gitee 发布及三个更新索引核验完成；真实旧版 0.2.0 Skill 从旧入口升级 0.2.1 后默认切换 MicroKeen。PR #2 按用户发布例外授权合并，普通 PR 审核规则已恢复。
+- 更新时间：`2026-09-15T14:20:05.2537333+08:00`
+- 分支：`codex/firmware-v4.5.0-release`
+- HEAD：`已整合 PR #3 的 main 370a907；本 PR #4 补齐固件记录及取消强制第二人审批的最新规则。`
+- 远端 HEAD：`PR #3 已合并；PR #4 更新后等待必需 CI，并按用户授权合并。`
+- 工作树：独立工作树解决两份交接冲突，保留应用及固件发布报告；原工作树用户 UF2 不动。
+- 当前任务：按维护者授权处理 PR #3/#4，并永久取消全部 PR 的第二人审批门槛。PR #3 已合并，PR #4 包含整合后的发布记录及规则文档；按最新头通过 CI 后合并。保留 PR、CI、讨论解决、禁止删除和强推规则。
 - 状态：`complete`
 
 ## 里程碑
 
-- **已交付** — `complete`。应用 0.2.1 已在新旧 GitHub 与 Gitee 发布；固件渠道保持原状。
+- **已交付** — `complete`。应用 0.2.1 已发布；HPMLink/MicroLink V4.5.0 独立固件发布，MicroLink V3.4.0 保留。
 
 ## 验证证据
 
-- **正式版**：docs/verification/v0.2.1-release-qualification.md：Python 2187 通过/2 可选依赖跳过，GUI 698，Rust 19；正式签名、本机覆盖安装、2460 Skill 文件/68 MCP 工具、7059 型号/2224 算法审计通过。三仓库资产与更新索引通过；真实 0.2.0 Skill 经旧公开入口升级后改用 MicroKeen。旧桌面应用内自动更新按钮未单独端到端验证，桌面已做 NSIS 覆盖和签名验证。
+- **正式版**：docs/verification/v0.2.1-release-qualification.md：Python 2187 通过/2 可选依赖跳过，GUI 698，Rust 19；正式签名、本机覆盖安装、2460 Skill 文件/68 MCP 工具、7059 型号/2224 算法审计通过。三仓库资产与更新索引通过；真实 0.2.0 Skill 经旧公开入口升级后改用 MicroKeen。旧桌面应用内自动更新按钮未单独端到端验证，桌面已做 NSIS 覆盖和签名验证。 固件记录 docs/verification/firmware-20260915.md：发布/升级定向测试 25 通过，UF2 与公开下载尺寸/SHA-256、三端索引解析核验通过；没有新增硬件认证。应用正式验收报告由 PR #3 提供。
 - **报障流程**：docs/verification/issue-feedback-stage1.md：本地/CI 各 60 项通过；真实缺陷自动修复闭环未验证。
-- **仓库权限**：2026-09-15 用户授权版本发布免第二人审批。PR #2 按确切头提交合并；临时例外后 API 回读恢复普通 PR 的 1 人审批、最后推送审批、附加审批及必需 CI，无 bypass actors。发布引用权限保持原状。
+- **仓库权限**：2026-09-15 最新授权：规则 22630535 审批人数为 0、关闭最后推送审批和附加审批。必需 feedback-contract、PR、讨论解决、禁止删除和强推保留，无新增绕过者；已通过 API 回读。此永久规则取代早前发布临时例外。
 - **外设三端统一**：docs/verification/v0.2.1-peripheral-unification.md：Python 190 通过/1 跳过；HPM 43 型号共 1226962 条目录项可加载；HPM5301 CLI/MCP stdio/Chrome 三通道约 1 kHz，CRC/帧丢失/固件丢样标记为零。ARM 未做实板验证。
 - **选项字节/OTP 第一阶段**：docs/verification/v0.2.1-device-configuration-stage1.md：Python 103、GUI 24、正式构建通过；HPM5301 CLI/MCP/Chrome 8 个公开字段一致；Chrome ARM 配置及脚本预览通过，没有 ARM 实板读写或 OTP 编程。
 - **STM32F103 选项字节与 ARM mem_dump**：docs/verification/v0.2.1-stm32f103-options-stage2.md：Python 99、GUI 29、生产构建通过；CLI/MCP stdio/Chrome 10 字段一致，DATA、两项低功耗复位位及 WRP3 写入/复位/回读/恢复通过；组合下载通过，最终全部 512 KiB Flash 与原始备份一致。未测试 RDP 转换及看门狗/低功耗/WRP 拒写行为。 docs/verification/v0.2.1-stm32f103-mem-dump.md：27软件测试、14项稳定矩阵、LA3.904/10.549MHz测量、CLI/MCP/Chrome低中档通过；20/30电气试验失败保留。单RAM60s约603万点101.293kSa/s，4KB630.34KiB/s；GUI功能素材和RTT双消费者修复分别记录A/B演示构建，未做多小时认证。 docs/verification/v0.2.1-stm32-clock-calibration.md：117相关Python测试通过；Keil/在线/脱机频率实测、RTT/SystemView短时复测通过，20/30M不合格。GUI同一API改频与LA通过，RTT修复后14项mem_dump通过；最终Chrome截图尚未完成。 本轮更新（旧失败仅属旧板/旧固件）：docs/verification/v0.2.1-stm32-four-profile-freeze.md。pipe-r20四档20项完整矩阵通过，持续59.598/111.956/157.770/187.636kSa/s；20M60秒/30M120秒。Keil1/2/5/10M，Chrome配置四档和SuperWatch四档，在线/脱机各四档LA通过。USB暂停/启停20、CDC12、RTT/SV32次启动及功能/CLI/MCP通过。入口Python405、间隔66、GUI144/29（重叠）/95、生产构建与2460文件本地Skill安装审计通过。Chrome真图已交文档任务，发布渠道不变。
@@ -29,11 +29,11 @@
 
 ## 架构决策
 
-- 用户 Skill 只含运行时；开发主仓库 MicroKeen/main，0.2.1 起默认更新源 MicroKeen/release；旧 GitHub/updates 提供桥接版，Gitee/updates 保持原址。
+- 用户 Skill 只含运行时；开发主仓库 MicroKeen/main，0.2.1 起默认更新源 MicroKeen/release；旧 GitHub/updates 提供桥接版，Gitee/updates 保持原址。 固件资产仍使用旧 GitHub firmware-assets 与 Gitee 后备，MicroKeen/firmware 同步兼容索引，未迁移客户端固件 URL。
 - 任务 mklink-issues-pr 为 PAUSED，未经要求不恢复；手动流程见 docs/ai/issue-maintenance.md，修复只提交 PR，合并由用户决定。
 - 构建/清理遵循 AGENTS.md 与 docs/ai/build-storage.md；保留正式包、唯一备份、依赖缓存及 HIL 证据。
 - 协作权限见 docs/ai/repository-governance.md：Aladdin-Wang、su5176 保持 Admin/Owner 并处理 PR；更新分支和正式标签仅 Aladdin-Wang 可写，最高管理员仍可修改规则，Release 附件权限不由分支规则隔离。
-- 普通 PR 仍需另一人审批；经用户明确授权的版本发布，完成回归及 CI 后可使用有界审批例外，按确切头合并并立即恢复规则。本次 PR #2 已完成。
+- 所有 PR 不再强制第二人审批；核对差异及相关验证、必需 CI 后，按明确合并授权和确切头提交整合。不得恢复旧审批门槛；发布仍需独立授权，其他保护保留。
 
 ## 真机环境
 
@@ -43,7 +43,7 @@
 
 ## 下一动作
 
-1. 审核正式发布记录 PR；后续改动从 MicroKeen/main 新建任务分支，不移动 v0.2.1 标签。Gitee 配额清理仅删除已授权的 v0.1.0 旧安装器，校验备份和旧 GitHub 原件保留。
+1. 发布记录整合后，后续任务从最新 MicroKeen/main 建分支；PR 不强制第二人审批，但仍需必需 CI 和明确合并授权。应用及固件标签保持不可变。
 2. 换接HPM5301/HPM6E80回归pipe-r20批时间戳、USB和四档，不继承旧版硬件资格。ARM固化包已通过77源文件哈希对照。
 3. 官网文档任务已收到四档Chrome真图和技术附件；保留公众号风格及技术附件分层，不自动发布。继续优化前先拆分批间组帧/调度开销；慢浏览器订阅需按队列背压评估，勿与USB字节故障混同。
 4. 后续按原计划补STM32F103看门狗、STOP/STANDBY和WRP拒写行为及其他ARM实板；HPM永久编程未开放。
