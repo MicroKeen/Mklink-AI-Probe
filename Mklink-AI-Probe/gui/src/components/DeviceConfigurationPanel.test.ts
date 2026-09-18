@@ -45,7 +45,8 @@ describe('DeviceConfigurationPanel', () => {
     expect(wrapper.text()).toContain('0x1234')
     expect(wrapper.text()).toContain('0x5678')
     expect(wrapper.get('[data-testid="configuration-timestamp"]').text()).toContain('2026-09-11')
-    expect(wrapper.findAll('input')).toHaveLength(0)
+    expect(wrapper.findAll('.configuration-table input')).toHaveLength(0)
+    expect(wrapper.find('[data-testid="hpm-user-otp"]').exists()).toBe(true)
     wrapper.unmount()
   })
 

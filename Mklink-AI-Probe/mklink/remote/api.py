@@ -3236,6 +3236,27 @@ def create_app(
             except (ValueError, RuntimeError, OSError) as error:
                 raise HTTPException(status_code=422, detail=str(error)) from error
 
+    @app.post("/api/device/configuration/hpm-user-otp/{action}")
+    async def hpm_user_otp(action: str, part_number: str = Body(...), model: str = Body("V4"),
+                           word: int = Body(69, strict=True), expected: int | str = Body(0),
+                           desired: int | str = Body(0), confirm_irreversible: bool = Body(False, strict=True)):
+        from mklink import hpm_otp
+        if action not in ("read", "plan", "program"):
+            raise HTTPException(status_code=422, detail="Unsupported OTP action")
+        if not _state["device"] or not _state["device"].connected:
+            raise HTTPException(status_code=400, detail="Connect the target device first")
+        async with async_target_debug_lease(_state, "hpm-user-otp"):
+            try:
+                device = _state["device"]
+                if action == "read":
+                    return await run_in_threadpool(hpm_otp.snapshot, device, part_number, model)
+                if action == "plan":
+                    return await run_in_threadpool(hpm_otp.plan, device, word, expected, desired, part_number, model)
+                return await run_in_threadpool(hpm_otp.program, device, word, expected, desired,
+                                               confirm_irreversible, part_number, model)
+            except (ValueError, RuntimeError, OSError) as error:
+                raise HTTPException(status_code=422, detail=str(error)) from error
+
     @app.post("/api/device/read-register")
     async def read_register(name: str = Body(..., embed=True)):
         if not _state["device"] or not _state["device"].connected:

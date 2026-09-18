@@ -49,7 +49,7 @@ def _profile(part: str, model: str):
             read_supported=True,
             fields=fields,
             source="HPM SDK 1.11.0 / HPM5301",
-            reason="公开 OTP 配置只读；熔丝值与影子值分别显示，永久写入暂不支持。",
+            reason="安全配置只读；熔丝值与影子值分别显示。V4 HPMLink 可在下方单独配置已验证型号的用户 OTP。",
             security=None,
         ), None
     capability = offline_security_capability(model, part)
@@ -123,7 +123,8 @@ def read_configuration(device, part_number: str, model: str = "V4") -> dict:
 
     name = device.mcu_name.upper()
     if result["kind"] == "otp":
-        if not re.search(r"\bHPM5301\b", name) or device.idcode != 0x1000563D:
+        if device.idcode != 0x1000563D or (not re.search(r"\bHPM5301\b", name) and
+                (name or word(0xF3050500) != 0x11705142)):
             raise ValueError("Connected target does not match the HPM5301 description")
         snapshots = {}
         for index in sorted({field["word"] for field in result["fields"]}):

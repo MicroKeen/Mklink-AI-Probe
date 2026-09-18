@@ -2,6 +2,7 @@
 import { computed, onActivated, onBeforeUnmount, onDeactivated, ref, watch } from 'vue'
 import { API_BASE } from '../lib/runtimeEndpoint'
 import { tr } from '../composables/useLanguage'
+import HpmUserOtpPanel from './HpmUserOtpPanel.vue'
 
 interface ConfigurationField {
   id: string
@@ -127,6 +128,7 @@ onBeforeUnmount(cancel)
           </tr></tbody>
         </table>
       </div>
+      <HpmUserOtpPanel v-if="configuration.kind === 'otp' && model === 'V4'" :part-number="partNumber" :model="model" />
       <p v-if="configuration.kind === 'option_bytes' && configuration.read_supported" data-testid="configuration-plan">{{ tr('生成脚本的动作顺序：', 'Generated script sequence: ') }}{{ plan }}</p>
     </template>
     </details>
