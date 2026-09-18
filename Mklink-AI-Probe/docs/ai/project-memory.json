@@ -54,11 +54,7 @@
     },
     {
       "area": "V2 narrow reads and shared RTT validation",
-      "result": "docs/verification/v0.2.2-rtt-narrow-alignment.md：V2 三档 172583 动态帧/1035498 窄值校验通过；8695 混合偏移帧通过；168-byte RTT边界实板、MCP动态RTT/SystemView及Chrome RTT通过；三代固件编译。V3/V4硬件未复测；客户8位毛刺未独立复现。 docs/verification/v0.2.2-superwatch-presentation.md：Python 83、GUI 109、生产构建通过；V2/STM32F103RET6 30M 双订阅约65秒891万样本，CRC/固件/分发丢点零，队列峰值6，曲线约20.5次/秒；非全平台长期认证。 docs/verification/v0.2.2-svd-selection.md：3 GUI 测试、生产构建；Chrome 复现并验证 C8→RE 切换及 4876 项目录加载，恢复变量采集；未做 APM 实板验证。 docs/verification/v0.2.2-v3-regression.md：V3三档4B/4KiB/15区域、RTT/UART/CLI/MCP/Chrome/LA通过；禁用WS压缩后GUI20/30多消费者零缺口。在线30M复位下初始化偶发ACK/缺xpsr已改为低速初始化后恢复请求频率，并拒绝残缺CPU。修复后30M两种模式各10次、20M3次全量读回/独立标记/节拍通过，LA烧录仍30.25M。脱机17次通过含全片与Chrome真机；IDCODE日志显示正常。软件42+141+228定向测试通过，未发布。 docs/verification/v0.2.2-gui-session-layout.md：176 Python、706 GUI、生产构建；V4 30MHz 60秒7344885样本，序号/时间戳异常和CRC错误零；目标时间轴190.62kSa/s、主机122.39kSa/s。Chrome SystemView/API启动、串口首段与长路径横向滚动通过。版本0.2.2及双语更新记录已更新，未重建安装包或发布。"
-    },
-    {
-      "area": "V4 narrow shared stream",
-      "result": "docs/verification/v0.2.2-v4-narrow-stream.md：10/20/30MHz静态8通道与动态6通道各30秒通过；修复legacy WebSocket heartbeat/drain断流，223项Python回归通过。测试清理超时后已手动恢复并复位，节拍推进。"
+      "result": "docs/verification/v0.2.2-rtt-narrow-alignment.md：V2 三档 172583 动态帧/1035498 窄值校验通过；8695 混合偏移帧通过；168-byte RTT边界实板、MCP动态RTT/SystemView及Chrome RTT通过；三代固件编译。V3/V4硬件未复测；客户8位毛刺未独立复现。 docs/verification/v0.2.2-superwatch-presentation.md：Python 83、GUI 109、生产构建通过；V2/STM32F103RET6 30M 双订阅约65秒891万样本，CRC/固件/分发丢点零，队列峰值6，曲线约20.5次/秒；非全平台长期认证。 docs/verification/v0.2.2-svd-selection.md：3 GUI 测试、生产构建；Chrome 复现并验证 C8→RE 切换及 4876 项目录加载，恢复变量采集；未做 APM 实板验证。 docs/verification/v0.2.2-v3-regression.md：V3三档4B/4KiB/15区域、RTT/UART/CLI/MCP/Chrome/LA通过；禁用WS压缩后GUI20/30多消费者零缺口。在线30M复位下初始化偶发ACK/缺xpsr已改为低速初始化后恢复请求频率，并拒绝残缺CPU。修复后30M两种模式各10次、20M3次全量读回/独立标记/节拍通过，LA烧录仍30.25M。脱机17次通过含全片与Chrome真机；IDCODE日志显示正常。软件42+141+228定向测试通过，未发布。 docs/verification/v0.2.2-gui-session-layout.md：176 Python、706 GUI、生产构建；V4 30MHz 60秒7344885样本，序号/时间戳异常和CRC错误零；目标时间轴190.62kSa/s、主机122.39kSa/s。Chrome SystemView/API启动、串口首段与长路径横向滚动通过。版本0.2.2及双语更新记录已更新，未重建安装包或发布。 docs/verification/v0.2.2-v4-narrow-stream.md：10/20/30MHz静态8通道与动态6通道各30秒通过；修复legacy WebSocket heartbeat/drain断流，223项Python回归通过。测试清理超时后已手动恢复并复位，节拍推进。"
     }
   ],
   "decisions": [
