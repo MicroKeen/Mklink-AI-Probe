@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-09-18T14:20:09.0869143+08:00",
+  "updated_at": "2026-09-18T14:39:59.0570460+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.2.2-development",
-    "head": "Development continues from e305748; high-rate SuperWatch presentation fix.",
+    "head": "Development continues from cb0b6cb; SVD chip-switch selection fix.",
     "remote_head": "Task branch to be pushed for PR review; no merge/release authorized in this task.",
     "working_tree": "Development changes and generated GUI assets; firmware changes are in separate local repositories."
   },
@@ -14,7 +14,7 @@
   },
   "current_session": {
     "status": "complete",
-    "current_task": "修复 SuperWatch 30 MHz 高速流界面卡顿：4096 样本批量传输与 33ms 展示合并，真机双订阅无分发丢点。"
+    "current_task": "修复切换芯片后 SVD 下拉框为空；直接输入候选、过期搜索隔离、真实浏览器加载验证。"
   },
   "milestones": [
     {
@@ -54,7 +54,7 @@
     },
     {
       "area": "V2 narrow reads and shared RTT validation",
-      "result": "docs/verification/v0.2.2-rtt-narrow-alignment.md：V2 三档 172583 动态帧/1035498 窄值校验通过；8695 混合偏移帧通过；168-byte RTT边界实板、MCP动态RTT/SystemView及Chrome RTT通过；三代固件编译。V3/V4硬件未复测；客户8位毛刺未独立复现。 docs/verification/v0.2.2-superwatch-presentation.md：Python 83、GUI 109、生产构建通过；V2/STM32F103RET6 30M 双订阅约65秒891万样本，CRC/固件/分发丢点零，队列峰值6，曲线约20.5次/秒；非全平台长期认证。"
+      "result": "docs/verification/v0.2.2-rtt-narrow-alignment.md：V2 三档 172583 动态帧/1035498 窄值校验通过；8695 混合偏移帧通过；168-byte RTT边界实板、MCP动态RTT/SystemView及Chrome RTT通过；三代固件编译。V3/V4硬件未复测；客户8位毛刺未独立复现。 docs/verification/v0.2.2-superwatch-presentation.md：Python 83、GUI 109、生产构建通过；V2/STM32F103RET6 30M 双订阅约65秒891万样本，CRC/固件/分发丢点零，队列峰值6，曲线约20.5次/秒；非全平台长期认证。 docs/verification/v0.2.2-svd-selection.md：3 GUI 测试、生产构建；Chrome 复现并验证 C8→RE 切换及 4876 项目录加载，恢复变量采集；未做 APM 实板验证。"
     }
   ],
   "decisions": [
