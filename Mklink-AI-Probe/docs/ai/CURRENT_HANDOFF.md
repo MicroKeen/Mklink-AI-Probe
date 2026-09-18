@@ -4,12 +4,12 @@
 
 ## 当前断点
 
-- 更新时间：`2026-09-18T20:50:29.4958813+08:00`
+- 更新时间：`2026-09-18T21:01:28.9598436+08:00`
 - 分支：`codex/v0.2.2-development`
 - HEAD：`Development continues from e2cba62; v0.2.2 GUI session synchronization and draggable long paths verified.`
 - 远端 HEAD：`Task branch to be pushed for PR review; no merge/release authorized in this task.`
 - 工作树：Development changes and generated GUI assets; firmware changes are in separate local repositories.
-- 当前任务：HPM5301 用户 OTP 首阶段完成：HPMLink ROM 写入、WebGUI 读写、复位校验通过；危险字段继续只读，未发布。
+- 当前任务：第二颗HPM5301：测试程序重新下载全回读通过；Chrome用户OTP word79=0x80000003、邻字与Flash保持、tick正常。安全字段未烧写。
 - 状态：`complete`
 
 ## 里程碑
