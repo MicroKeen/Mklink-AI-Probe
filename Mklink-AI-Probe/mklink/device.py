@@ -2125,7 +2125,13 @@ class Device:
         from mklink.memory_access import parse_read_ram_response
         cmd = f"cmd.read_ram(0x{address:08X}, {size})"
         raw = self._bridge.send_command(cmd, timeout=10.0)
-        return parse_read_ram_response(raw)
+        payload = parse_read_ram_response(raw)
+        if len(payload) != size:
+            raise DeviceError(
+                f"Memory read at 0x{address:08X} returned {len(payload)} bytes, expected {size}; "
+                "target debug access may be disabled or unavailable"
+            )
+        return payload
 
     def read_memory_regions(self, regions: list[tuple[int, int]]) -> list[bytes]:
         """Read several regions while coalescing contiguous target ranges.
