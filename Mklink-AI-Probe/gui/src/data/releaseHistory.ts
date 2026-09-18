@@ -15,7 +15,7 @@ export const releaseHistory: ReleaseHistoryEntry[] = [
     changes: [
       'SuperWatch 长变量支持原位横向拖动查看，悬停显示完整路径；窄侧栏数值与操作分行显示。',
       '同步 AI/API 修改的采集档位，SystemView 可接入外部启动的实时采集，不重复启动设备。',
-      '修复 API 重启采集后时间轴未重置导致的误丢帧；串口页面提前订阅，保留首段输出。',
+      '修复 API 重启采集后的时间轴误丢帧及高吞吐 WebSocket 心跳并发断流；串口页面提前订阅，保留首段输出。',
       '优化高频采集显示与共享数据流；修复切换芯片后的 SVD 候选选择。',
       '完善 RTT 搜索边界和窄变量、非对齐读取；相关探针修复需配套固件。',
       '改善高速在线烧录的复位初始化，修复脱机 IDCODE 日志被误隐藏。',
@@ -23,7 +23,7 @@ export const releaseHistory: ReleaseHistoryEntry[] = [
     changesEn: [
       'Drag long variable paths horizontally in place, hover for the full path, and separate values and controls in narrow catalogs.',
       'Follow AI/API clock changes and attach to externally started SystemView sessions without restarting capture.',
-      'Reset timeline epochs on API capture restarts and subscribe early to preserve initial serial output.',
+      'Reset capture timeline epochs, avoid high-throughput WebSocket heartbeat drain failures, and preserve initial serial output.',
       'Improve high-rate shared streams and SVD selection after changing chips.',
       'Improve RTT search bounds and narrow/unaligned reads; probe-side fixes require compatible firmware.',
       'Improve reset initialization during fast online flashing and preserve offline IDCODE logs.',

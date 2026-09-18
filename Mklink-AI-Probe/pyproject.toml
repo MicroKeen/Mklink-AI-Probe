@@ -27,7 +27,7 @@ remote = ["websockets>=11.0", "intelhex>=2.3"]
 gui = [
     "fastapi>=0.100",
     "starlette>=0.40,<0.47",
-    "uvicorn>=0.20",
+    "uvicorn>=0.35",
     "websockets>=11.0",
     "pyocd>=0.44,<0.45",
     "intelhex>=2.3",
