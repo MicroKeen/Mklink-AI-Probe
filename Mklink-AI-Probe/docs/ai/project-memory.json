@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-09-18T12:52:31.988591+08:00",
+  "updated_at": "2026-09-18T14:20:09.0869143+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.2.2-development",
-    "head": "Development based on main 634d323; RTT scan bounds and V2 compatibility fixes.",
+    "head": "Development continues from e305748; high-rate SuperWatch presentation fix.",
     "remote_head": "Task branch to be pushed for PR review; no merge/release authorized in this task.",
     "working_tree": "Development changes and generated GUI assets; firmware changes are in separate local repositories."
   },
@@ -14,7 +14,7 @@
   },
   "current_session": {
     "status": "complete",
-    "current_task": "修复 RTT 默认搜索边界；V2/V3/V4 窄变量和非对齐缓冲访问修复，当前 V2 已升级实测。见 docs/verification/v0.2.2-rtt-narrow-alignment.md。"
+    "current_task": "修复 SuperWatch 30 MHz 高速流界面卡顿：4096 样本批量传输与 33ms 展示合并，真机双订阅无分发丢点。"
   },
   "milestones": [
     {
@@ -54,7 +54,7 @@
     },
     {
       "area": "V2 narrow reads and shared RTT validation",
-      "result": "docs/verification/v0.2.2-rtt-narrow-alignment.md：V2 三档 172583 动态帧/1035498 窄值校验通过；8695 混合偏移帧通过；168-byte RTT边界实板、MCP动态RTT/SystemView及Chrome RTT通过；三代固件编译。V3/V4硬件未复测；客户8位毛刺未独立复现。"
+      "result": "docs/verification/v0.2.2-rtt-narrow-alignment.md：V2 三档 172583 动态帧/1035498 窄值校验通过；8695 混合偏移帧通过；168-byte RTT边界实板、MCP动态RTT/SystemView及Chrome RTT通过；三代固件编译。V3/V4硬件未复测；客户8位毛刺未独立复现。 docs/verification/v0.2.2-superwatch-presentation.md：Python 83、GUI 109、生产构建通过；V2/STM32F103RET6 30M 双订阅约65秒891万样本，CRC/固件/分发丢点零，队列峰值6，曲线约20.5次/秒；非全平台长期认证。"
     }
   ],
   "decisions": [

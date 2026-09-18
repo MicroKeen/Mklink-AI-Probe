@@ -1555,7 +1555,7 @@ class SuperWatchStreamManager:
     """
 
     def __init__(
-        self, stream_hub=None, *, batch_samples: int = 512,
+        self, stream_hub=None, *, batch_samples: int = 4096,
         batch_bytes: int = 64 * 1024,
         batch_max_latency: float = 0.020,
         clock=time.perf_counter,

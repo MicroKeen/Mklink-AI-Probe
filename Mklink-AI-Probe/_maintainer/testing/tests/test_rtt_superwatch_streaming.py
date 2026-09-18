@@ -162,6 +162,19 @@ def test_superwatch_binary_batch_uses_sample_byte_and_latency_limits():
     assert sample_calls[0].kwargs["item_count"] == 15
 
 
+def test_superwatch_default_batches_high_rate_samples_without_discarding_rows():
+    hub = Mock()
+    manager = SuperWatchStreamManager(stream_hub=hub, clock=lambda: 0.0)
+    manager._runtime = SimpleNamespace(items=[SimpleNamespace(name="a")])
+    manager.set_interval(0.000001)
+    for sample in range(4096):
+        assert manager.publish_sample_points([{"_t": sample / 200000, "a": float(sample)}])
+    calls = [call for call in hub.publish.call_args_list if call.kwargs.get("item_count")]
+    assert len(calls) == 1
+    assert calls[0].kwargs["item_count"] == 4096
+    assert len(calls[0].args[0]) == 4096 * 12
+
+
 def test_superwatch_low_rate_sample_flushes_immediately():
     hub = Mock()
     manager = SuperWatchStreamManager(
