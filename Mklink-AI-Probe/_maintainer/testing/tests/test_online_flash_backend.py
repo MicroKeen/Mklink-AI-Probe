@@ -1315,6 +1315,42 @@ def test_connect_builds_supported_options_and_reconnect_closes_old(
     backend.disconnect()
 
 
+@pytest.mark.parametrize("frequency", [2_000_000, 20_000_000, 30_000_000])
+def test_under_reset_initializes_before_restoring_requested_clock(frequency):
+    events = []
+    probe = SimpleNamespace(set_clock=lambda hz: events.append(("clock", hz)))
+    session = FakeSession()
+    session.options = {}
+    session.open = lambda: events.append(("open", session.options["frequency"]))
+
+    def factory(_probe, options):
+        session.options.update(options)
+        return session
+
+    backend = PyOcdBackend(session_factory=factory)
+    backend.connect(probe, "STM32F103RE", frequency, connect_mode="under-reset")
+    assert events == [("open", min(frequency, 4_000_000))] + (
+        [("clock", frequency)] if frequency > 4_000_000 else []
+    )
+    assert session.options["frequency"] == frequency
+    backend.disconnect()
+
+
+def test_incomplete_cpu_is_rejected_before_flash_operations():
+    session = FakeSession()
+    session.target.selected_core = SimpleNamespace(
+        core_registers=SimpleNamespace(by_name={})
+    )
+    backend = PyOcdBackend(session_factory=lambda _probe, _options: session)
+    error = assert_error(
+        FlashErrorCode.CONNECT_FAIL,
+        lambda: backend.connect(object(), "STM32F103RE", 30_000_000),
+    )
+    assert "CPU initialization is incomplete" in str(error)
+    assert session.close_calls == 1
+    assert backend._session is None
+
+
 def test_connect_closes_partial_session_when_open_fails() -> None:
     class BrokenSession(FakeSession):
         def open(self) -> None:

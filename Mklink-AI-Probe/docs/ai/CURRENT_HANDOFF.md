@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-09-18T15:45:17.713916+08:00`
+- 更新时间：`2026-09-18T15:57:49.026961+08:00`
 - 分支：`codex/v0.2.2-development`
-- HEAD：`Development continues from ee673e6; V3 regression, shared-stream and online initialization fixes.`
+- HEAD：`Development continues from 2827d5f; verified V3 online initialization and offline IDCODE display fixes.`
 - 远端 HEAD：`Task branch to be pushed for PR review; no merge/release authorized in this task.`
 - 工作树：Development changes and generated GUI assets; firmware changes are in separate local repositories.
-- 当前任务：V3 20/30 MHz采样已完成；修复在线30 MHz复位下初始化失败，继续真机烧录回归。
-- 状态：`in_progress`
+- 当前任务：V3三档采样、串口/RTT、频率校准与烧录回归完成；修复在线复位下高速初始化和脱机IDCODE误脱敏。
+- 状态：`complete`
 
 ## 里程碑
 
@@ -25,7 +25,7 @@
 - **STM32F103 选项字节与 ARM mem_dump**：docs/verification/v0.2.1-stm32f103-options-stage2.md：Python 99、GUI 29、生产构建通过；CLI/MCP stdio/Chrome 10 字段一致，DATA、两项低功耗复位位及 WRP3 写入/复位/回读/恢复通过；组合下载通过，最终全部 512 KiB Flash 与原始备份一致。未测试 RDP 转换及看门狗/低功耗/WRP 拒写行为。 docs/verification/v0.2.1-stm32f103-mem-dump.md：27软件测试、14项稳定矩阵、LA3.904/10.549MHz测量、CLI/MCP/Chrome低中档通过；20/30电气试验失败保留。单RAM60s约603万点101.293kSa/s，4KB630.34KiB/s；GUI功能素材和RTT双消费者修复分别记录A/B演示构建，未做多小时认证。 docs/verification/v0.2.1-stm32-clock-calibration.md：117相关Python测试通过；Keil/在线/脱机频率实测、RTT/SystemView短时复测通过，20/30M不合格。GUI同一API改频与LA通过，RTT修复后14项mem_dump通过；最终Chrome截图尚未完成。 本轮更新（旧失败仅属旧板/旧固件）：docs/verification/v0.2.1-stm32-four-profile-freeze.md。pipe-r20四档20项完整矩阵通过，持续59.598/111.956/157.770/187.636kSa/s；20M60秒/30M120秒。Keil1/2/5/10M，Chrome配置四档和SuperWatch四档，在线/脱机各四档LA通过。USB暂停/启停20、CDC12、RTT/SV32次启动及功能/CLI/MCP通过。入口Python405、间隔66、GUI144/29（重叠）/95、生产构建与2460文件本地Skill安装审计通过。Chrome真图已交文档任务，发布渠道不变。
 - **mem_dump 四档与 HPM 实板稳定性**：docs/verification/v0.2.1-mem-dump-four-speeds.md：143 Python、3 GUI、生产构建、72打包/更新/边界通过；CLI/MCP stdio及Chrome四档切换/曲线实板通过。旧7510单变量两档各30min，旧20M 4KB失败保留；新2927修复版48用例通过，20M 4KB600s/30M300s及小块、动态RAM、10轮四档重连。SBA忙冲突按报告计数恢复，不称零冲突。 HPM6E80独立记录v0.2.1-hpm6e80-mem-dump.md：21软件测试、304候选28矩阵/30长测重连、cbd最终28回归、CLI/MCP24和Chrome通过；共享ID不识别精确型号。
 - **SuperWatch 与 SystemView 文档实测修复**：docs/verification/v0.2.1-hpm-gui-acceptance.md：172+159+158 Python、95 GUI/构建；HPM脱机78464B全回读、数组index0..15/16pts通过。新9a338046探针+Web codec两轮Chrome16449/16577事件、3任务、RuntimeDrop0，已断开。原生CSV/PNG保存未验证。 Web修复：docs/verification/v0.2.1-hex-preview.md，159 Python、121 GUI、生产构建；Chrome 无芯片 FLM+25.5MiB HEX、IAP越界提示与预览、默认折叠通过。
-- **V2 narrow reads and shared RTT validation**：docs/verification/v0.2.2-rtt-narrow-alignment.md：V2 三档 172583 动态帧/1035498 窄值校验通过；8695 混合偏移帧通过；168-byte RTT边界实板、MCP动态RTT/SystemView及Chrome RTT通过；三代固件编译。V3/V4硬件未复测；客户8位毛刺未独立复现。 docs/verification/v0.2.2-superwatch-presentation.md：Python 83、GUI 109、生产构建通过；V2/STM32F103RET6 30M 双订阅约65秒891万样本，CRC/固件/分发丢点零，队列峰值6，曲线约20.5次/秒；非全平台长期认证。 docs/verification/v0.2.2-svd-selection.md：3 GUI 测试、生产构建；Chrome 复现并验证 C8→RE 切换及 4876 项目录加载，恢复变量采集；未做 APM 实板验证。 docs/verification/v0.2.2-v3-regression.md：最终三档4B/4KiB/15region通过；RTT/UART/CLI/MCP/Chrome及LA频率验证。关闭WS压缩后GUI20/30多消费者零序号缺口/CRC/分发丢批次。脱机10M全片3次、30M普通10次/全片3次通过；在线30M复位下连接复现一次CPU初始化不完整，修复后的真机烧录验证待完成。软件42+141+150测试通过（定向套件）。
+- **V2 narrow reads and shared RTT validation**：docs/verification/v0.2.2-rtt-narrow-alignment.md：V2 三档 172583 动态帧/1035498 窄值校验通过；8695 混合偏移帧通过；168-byte RTT边界实板、MCP动态RTT/SystemView及Chrome RTT通过；三代固件编译。V3/V4硬件未复测；客户8位毛刺未独立复现。 docs/verification/v0.2.2-superwatch-presentation.md：Python 83、GUI 109、生产构建通过；V2/STM32F103RET6 30M 双订阅约65秒891万样本，CRC/固件/分发丢点零，队列峰值6，曲线约20.5次/秒；非全平台长期认证。 docs/verification/v0.2.2-svd-selection.md：3 GUI 测试、生产构建；Chrome 复现并验证 C8→RE 切换及 4876 项目录加载，恢复变量采集；未做 APM 实板验证。 docs/verification/v0.2.2-v3-regression.md：V3三档4B/4KiB/15区域、RTT/UART/CLI/MCP/Chrome/LA通过；禁用WS压缩后GUI20/30多消费者零缺口。在线30M复位下初始化偶发ACK/缺xpsr已改为低速初始化后恢复请求频率，并拒绝残缺CPU。修复后30M两种模式各10次、20M3次全量读回/独立标记/节拍通过，LA烧录仍30.25M。脱机17次通过含全片与Chrome真机；IDCODE日志显示正常。软件42+141+228定向测试通过，未发布。
 
 ## 架构决策
 
@@ -37,13 +37,13 @@
 
 ## 真机环境
 
-- **state**：当前 V3 + STM32F103RET6，V3.5.0开发固件已升级；采样/RTT/UART已复测，正在在线烧录回归。未发布固件。
+- **state**：V3 + STM32F103RET6已完成本轮验证；最终Chrome脱机恢复原测试镜像，全量读回一致、RT-Thread节拍正常。串口已释放，WebGUI保持运行。固件与上位机未发布。
 - **backups**：.build/reports/prerelease-hil-20260907、superwatch-write-20260907；保留其他芯片唯一备份。；本轮本地证据 .build/reports/peripheral-unification。；本轮 OTP 只读和浏览器证据 .build/reports/device-configuration。；STM32F103 唯一原始备份与本轮证据 .build/reports/stm32f103-options。
 - **installer**：.build/artifacts/release-0.2.1-20260915/Mklink-AI-Probe-v0.2.1-x64-Setup.exe
 
 ## 下一动作
 
-1. 完成V3在线初始化修复后的重复烧录、完整读回和启动验证；更新报告并推送开发PR，不合并或发布。V4窄读取回归仍待换板。
+1. 审阅V3验证与上位机修复开发PR；未经新授权不合并或发布。V4窄读取及HPM批间时间戳回归仍待对应硬件，不能继承V3资格。
 2. 换接HPM5301/HPM6E80回归pipe-r20批时间戳、USB和四档，不继承旧版硬件资格。ARM固化包已通过77源文件哈希对照。
 3. 官网文档任务已收到四档Chrome真图和技术附件；保留公众号风格及技术附件分层，不自动发布。继续优化前先拆分批间组帧/调度开销；慢浏览器订阅需按队列背压评估，勿与USB字节故障混同。
 4. 后续按原计划补STM32F103看门狗、STOP/STANDBY和WRP拒写行为及其他ARM实板；HPM永久编程未开放。

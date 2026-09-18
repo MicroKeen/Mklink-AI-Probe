@@ -1105,7 +1105,7 @@ def test_trigger_api_runs_the_configured_v4_script_with_both_resources_leased(mo
 
         def send_command(self, command, timeout, echo):
             calls.append(("send", command, timeout, echo))
-            return "offline download finished"
+            return "IDCODE: 0x2BA01477\noffline download finished"
 
         def close(self):
             calls.append(("close",))
@@ -1122,6 +1122,7 @@ def test_trigger_api_runs_the_configured_v4_script_with_both_resources_leased(mo
 
     assert response.status_code == 200, response.text
     assert response.json()["status"] == "completed"
+    assert "IDCODE: 0x2BA01477" in response.json()["lines"]
     assert calls == [
         ("init", "TEST_CDC"),
         ("connect",),
@@ -1225,6 +1226,7 @@ def test_trigger_api_streams_device_output_before_the_terminal_result(monkeypatc
             assert command == 'load.offline("Python/factory-line-a.py")'
             assert timeout == 600
             assert echo is False
+            on_output("IDCODE: 0x2BA01477")
             on_output("erase started")
             on_output("program finished")
             return "erase started\nprogram finished\noffline download finished"
@@ -1246,7 +1248,8 @@ def test_trigger_api_streams_device_output_before_the_terminal_result(monkeypatc
     assert response.status_code == 200, response.text
     assert response.headers["content-type"].startswith("application/x-ndjson")
     messages = [json.loads(line) for line in response.text.splitlines() if line]
-    assert messages[:2] == [
+    assert messages[:3] == [
+        {"type": "line", "line": "IDCODE: 0x2BA01477"},
         {"type": "line", "line": "erase started"},
         {"type": "line", "line": "program finished"},
     ]
