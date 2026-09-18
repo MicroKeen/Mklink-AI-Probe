@@ -75,4 +75,3 @@ def test_api_routes_confirmation_and_validation(tmp_path):
             assert client.post(base+'program',json={**args,**extra}).status_code==422
         d._bridge.send_command.assert_not_called()
         app.state.mklink_state['device']=None
-
