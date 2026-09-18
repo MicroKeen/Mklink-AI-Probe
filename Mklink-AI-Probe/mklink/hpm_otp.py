@@ -100,6 +100,9 @@ def lock_plan(device, group, expected, part_number="HPM5301", model="V4"):
     state = snapshot(device, part_number, model)
     if state["hard_lock"] != expected:
         raise ValueError("HARD_LOCK snapshot changed; read again")
+    if (state["hard_lock"] & 1 or _read(device, 0xF3050600) & 1
+            or _read(device, 0xF3050200) & 1):
+        raise ValueError("OTP HARD_LOCK is write-locked in the current boot state; no permanent-lock plan can be generated")
     response = device._bridge.send_command(f"hpm.otp_user_lock({group},{expected},0)", timeout=5)
     _lock_result(response)
     desired = expected | (1 << group)

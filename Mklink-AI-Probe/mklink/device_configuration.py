@@ -123,9 +123,12 @@ def read_configuration(device, part_number: str, model: str = "V4") -> dict:
 
     name = device.mcu_name.upper()
     if result["kind"] == "otp":
-        if device.idcode != 0x1000563D or (not re.search(r"\bHPM5301\b", name) and
-                (name or word(0xF3050500) != 0x11705142)):
+        if device.idcode != 0x1000563D or (name and not re.search(r"\bHPM5301\b", name)):
             raise ValueError("Connected target does not match the HPM5301 description")
+        # A cached MCU name and readable TAP ID do not prove SBA access.
+        # SECURE hardware can return a fixed word for every protected address.
+        if word(0xF3050500) != 0x11705142:
+            raise ValueError("HPM5301 CHIP_ID is unreadable or does not match; debug access may be protected. No OTP snapshot is valid.")
         snapshots = {}
         for index in sorted({field["word"] for field in result["fields"]}):
             # Read only the explicit public configuration words, never a bulk OTP dump.

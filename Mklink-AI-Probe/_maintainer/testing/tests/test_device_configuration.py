@@ -24,7 +24,7 @@ class HpmDevice:
         self.reads.append((address, size))
         assert size == 4
         # Public USB configuration: different fuse and shadow values.
-        return {0xF3050510: 0x12345678, 0xF3050110: 0xABCD9876}.get(
+        return {0xF3050500: 0x11705142, 0xF3050510: 0x12345678, 0xF3050110: 0xABCD9876}.get(
             address, 0
         ).to_bytes(4, "little")
 
@@ -32,7 +32,7 @@ class HpmDevice:
 def test_hpm_reads_only_public_words_and_keeps_shadow_distinct():
     dev = HpmDevice()
     result = read_configuration(dev, "HPM5301xEGx")
-    assert dev.reads == [
+    assert dev.reads == [(0xF3050500, 4)] + [
         (base + index * 4, 4)
         for index in (0, 1, 3, 68)
         for base in (0xF3050400, 0xF3050000)
@@ -58,6 +58,18 @@ def test_hpm_identity_checked_before_any_memory_access(name, code):
     with pytest.raises(ValueError, match="does not match"):
         read_configuration(dev, "HPM5301")
     assert not dev.reads
+
+
+@pytest.mark.parametrize("blocked_value", [0, 0x20150407, 0xFFFFFFFF])
+def test_hpm_cached_name_does_not_bypass_live_chip_identity(blocked_value):
+    dev = HpmDevice()
+    def protected_read(address, size):
+        dev.reads.append((address, size))
+        return blocked_value.to_bytes(4, "little")
+    dev.read_memory = protected_read
+    with pytest.raises(ValueError, match="debug access may be protected"):
+        read_configuration(dev, "HPM5301")
+    assert dev.reads == [(0xF3050500, 4)]
 
 
 def test_short_read_and_unknown_chip_are_not_zero_snapshots():

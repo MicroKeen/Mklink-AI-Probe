@@ -3,6 +3,9 @@ import { computed, onActivated, onBeforeUnmount, onDeactivated, ref, watch } fro
 import { API_BASE } from '../lib/runtimeEndpoint'
 import { tr } from '../composables/useLanguage'
 import HpmUserOtpPanel from './HpmUserOtpPanel.vue'
+import { useMklinkApi } from '../composables/useMklinkApi'
+
+const { deviceStatus } = useMklinkApi()
 
 interface ConfigurationField {
   id: string
@@ -92,6 +95,12 @@ function display(value: number | string | null, width = 32): string {
   return value
 }
 watch(() => [props.partNumber, props.model], () => void load(), { immediate: true })
+watch([() => deviceStatus.value.connected, () => deviceStatus.value.port, () => deviceStatus.value.idcode], () => {
+  // A replacement chip can have the same part and IDCODE. A connection change
+  // invalidates all target snapshots and destroys the child OTP write plan.
+  emit('update:changes', {})
+  void load()
+})
 onDeactivated(() => { cancel(); configuration.value = null })
 onActivated(() => { if (!configuration.value && !busy.value) void load() })
 onBeforeUnmount(cancel)

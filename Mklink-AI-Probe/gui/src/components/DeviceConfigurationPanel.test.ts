@@ -1,6 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import DeviceConfigurationPanel from './DeviceConfigurationPanel.vue'
+import { useMklinkApi } from '../composables/useMklinkApi'
 
 const props = { partNumber: 'HPM5301', model: 'V4', unlockBeforeDownload: false, lockAfterDownload: false }
 const description = { kind: 'otp', read_supported: true, reason: '只读', fields: [
@@ -10,6 +11,35 @@ const response = (data: unknown, ok = true) => ({ ok, json: async () => data })
 afterEach(() => vi.unstubAllGlobals())
 
 describe('DeviceConfigurationPanel', () => {
+  it('drops OTP snapshots and confirmed plans when the connection changes', async () => {
+    let connected = true
+    const fetch = vi.fn(async (url: string) => {
+      if (url.endsWith('/status')) return response({ connected, port: 'test', idcode: 'same-chip-family' })
+      if (url.endsWith('/hpm-user-otp/read')) return response({ words: [{ word:69,current:0,shadow:0,locked:false }] })
+      if (url.endsWith('/hpm-user-otp/plan')) return response({ word:69,expected:0,desired:1,delta:1,script:'old target plan' })
+      return response(description)
+    })
+    vi.stubGlobal('fetch', fetch)
+    const api = useMklinkApi()
+    await api.refreshStatus()
+    const wrapper = mount(DeviceConfigurationPanel, { props })
+    await flushPromises()
+    await wrapper.get('[data-testid=otp-read]').trigger('click'); await flushPromises()
+    await wrapper.get('[aria-label="OTP desired value"]').setValue('1')
+    await wrapper.get('[data-testid=otp-plan]').trigger('click'); await flushPromises()
+    await wrapper.get('[data-testid=otp-confirm]').setValue(true)
+    expect(wrapper.text()).toContain('old target plan')
+    await api.refreshStatus(); await flushPromises()
+    expect(wrapper.text()).toContain('old target plan')
+    expect(wrapper.get('[data-testid=otp-program]').attributes('disabled')).toBeUndefined()
+    connected = false
+    await api.refreshStatus(); await flushPromises()
+    expect(wrapper.text()).not.toContain('old target plan')
+    expect(wrapper.find('[data-testid=otp-program]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid=otp-plan]').attributes('disabled')).toBeDefined()
+    expect(wrapper.emitted('update:changes')?.at(-1)).toEqual([{}])
+    wrapper.unmount()
+  })
   it('edits reversible fields, clears changes to preserve, and displays ARM shadows', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response({ kind: 'option_bytes', read_supported: true,
       shadow_supported: true, reason: 'STM32F103', fields: [

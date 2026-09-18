@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { API_BASE } from '../lib/runtimeEndpoint'
 import { tr } from '../composables/useLanguage'
 const props = defineProps<{ partNumber: string; model: string }>()
@@ -17,6 +17,7 @@ watch(() => [props.partNumber, props.model], () => {
   revision++; rows.value = []; hardLock.value = null; desired.value = ''; result.value = ''; invalidate()
 })
 watch([selected, desired, operation, group], invalidate)
+onBeforeUnmount(() => { revision++; invalidate() })
 async function request(action: 'read' | 'plan' | 'program') {
   if (busy.value) return
   const requestRevision = revision, plan = prepared.value

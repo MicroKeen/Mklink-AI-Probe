@@ -84,6 +84,16 @@ def test_permanent_lock_has_bounded_delta_and_no_retry():
     assert d._bridge.send_command.call_count==2
 
 
+@pytest.mark.parametrize('address', [otp.FUSE, 0xF3050600, 0xF3050200])
+def test_permanent_lock_rejects_write_locked_control_word(address):
+    d = device()
+    original = d.read_memory.side_effect
+    d.read_memory.side_effect = lambda a,n: (1).to_bytes(4,'little') if a == address else original(a,n)
+    with pytest.raises(ValueError, match='HARD_LOCK is write-locked'):
+        otp.lock_plan(d,19,1 if address == otp.FUSE else 0)
+    d._bridge.send_command.assert_not_called()
+
+
 def test_api_routes_confirmation_and_validation(tmp_path):
     from fastapi.testclient import TestClient
     from mklink.remote.api import create_app
