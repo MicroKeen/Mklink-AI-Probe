@@ -202,17 +202,20 @@ def test_offline_swd_clock_rejects_unnamed_high_clock():
 
 
 @pytest.mark.parametrize("hz", [4_000_000, 10_000_000, 20_000_000, 30_000_000])
-def test_v4_offline_four_clock_profiles(hz):
-    payload = _config("V4")
+@pytest.mark.parametrize("model", ["V2", "V3", "V4"])
+def test_offline_four_clock_profiles(hz, model):
+    payload = _config(model)
+    if model == "V2":
+        payload["auto_download_count"] = 1
     payload["swd_clock_hz"] = hz
     assert parse_offline_config(payload).swd_clock_hz == hz
 
 
-@pytest.mark.parametrize("model", ["V2", "V3"])
-def test_legacy_offline_models_keep_ten_mhz_limit(model):
+@pytest.mark.parametrize("model", ["V2"])
+def test_v2_offline_rejects_unnamed_high_clock(model):
     payload = _config(model)
     payload["auto_download_count"] = 1
-    payload["swd_clock_hz"] = 20_000_000
+    payload["swd_clock_hz"] = 25_000_000
     with pytest.raises(OfflineDownloadError, match="SWD clock"):
         parse_offline_config(payload)
 

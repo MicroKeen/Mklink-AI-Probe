@@ -96,6 +96,21 @@ describe('OfflineFlashView', () => {
     expect(wrapper.get('[data-testid="offline-deploy"]').attributes('disabled')).toBeDefined()
   })
 
+  it('keeps high clocks available when switching from V3 to updated V2', async () => {
+    const wrapper = mount(OfflineFlashView)
+    await flushPromises()
+    await wrapper.get('[data-testid="offline-model"]').setValue('V3')
+    const clock = wrapper.get('[data-testid="offline-clock"]')
+    expect(clock.find('option[value="20000000"]').exists()).toBe(true)
+    expect(clock.find('option[value="30000000"]').exists()).toBe(true)
+    await clock.setValue('30000000')
+    await wrapper.get('[data-testid="offline-model"]').setValue('V2')
+    expect(clock.element).toHaveProperty('value', '30000000')
+    expect(clock.find('option[value="20000000"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('新版固件')
+    wrapper.unmount()
+  })
+
   it('provides multi-file firmware selection and editable BIN address and FLM bases', () => {
     const source = readFileSync('src/views/OfflineFlashView.vue', 'utf8')
 

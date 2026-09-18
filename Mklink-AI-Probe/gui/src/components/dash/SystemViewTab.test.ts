@@ -226,7 +226,7 @@ describe('SystemViewTab asynchronous lifecycle', () => {
       addr: '0x0008E488',
       channel: 1,
       mode: 0,
-      search_size: 1024,
+      search_size: 0,
     })
     wrapper.unmount()
   })

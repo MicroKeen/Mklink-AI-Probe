@@ -166,7 +166,7 @@ def parse_offline_config(
         payload.get("swd_clock_hz", 10000000),
         "SWD clock",
         100000,
-        30000000 if model == "V4" else 10000000,
+        30000000,
     )
     from mklink.debug_speed import validate_clock_hz
     try:

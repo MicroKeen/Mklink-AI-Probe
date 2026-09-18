@@ -1771,3 +1771,17 @@ def test_superwatch_applies_c_layout_and_restores_paused_collection(tmp_path, mo
     assert manager._runtime.symbol_catalog is new_catalog
     assert manager.running is True
     assert manager._collecting.is_set() is False
+
+
+@pytest.mark.parametrize("offset", range(4))
+@pytest.mark.parametrize("type_name,size,kind,value", [
+    ("uint8_t", 1, "unsigned", 255), ("int8_t", 1, "signed", -128),
+    ("uint16_t", 2, "unsigned", 65535), ("int16_t", 2, "signed", -32768),
+])
+def test_narrow_superwatch_decode_preserves_offset_width_and_sign(offset, type_name, size, kind, value):
+    base = 0x20000000
+    item = WatchItem("narrow", base + offset, type_name, size, scalar_kind=kind)
+    block = ReadBlock(base, offset + size + 1, [item])
+    decoder = compile_frame_decoder([item], [block])
+    payload = bytes([0xA5]) * offset + value.to_bytes(size, "little", signed=kind == "signed") + b"\x5a"
+    assert decoder.decode({"regions": [(0, payload)]}) == [float(value)]

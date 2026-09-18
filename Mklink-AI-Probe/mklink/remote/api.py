@@ -2113,7 +2113,7 @@ def create_app(
         addr: str | None = Body(default=None),
         channel: Annotated[StrictInt, Body()] = 0,
         mode: Annotated[StrictInt, Body()] = 0,
-        search_size: Annotated[StrictInt, Body()] = 1024,
+        search_size: Annotated[StrictInt, Body()] = 0,
         encoding: str = Body(default="utf-8"),
     ):
         from mklink.remote.dashboards import normalize_rtt_encoding
@@ -2255,7 +2255,7 @@ def create_app(
         addr: str | None = Body(default=None),
         channel: Annotated[StrictInt, Body()] = 1,
         mode: Annotated[StrictInt, Body()] = 0,
-        search_size: Annotated[StrictInt, Body()] = 1024,
+        search_size: Annotated[StrictInt, Body()] = 0,
     ):
         if mode not in (0, 1):
             raise HTTPException(

@@ -405,7 +405,7 @@ class RttStreamManager:
         self._flush_terminal_batch()
 
     def start(self, device, *, addr: str | None = None, channel: int = 0,
-              mode: int = 0, search_size: int = 1024,
+              mode: int = 0, search_size: int = 0,
               duration: float = 86400, encoding: str = "utf-8") -> None:
         with self._lifecycle_lock:
             self._start_locked(
@@ -419,7 +419,7 @@ class RttStreamManager:
             )
 
     def _start_locked(self, device, *, addr: str | None = None, channel: int = 0,
-                      mode: int = 0, search_size: int = 1024,
+                      mode: int = 0, search_size: int = 0,
                       duration: float = 86400, encoding: str = "utf-8") -> None:
         """Start RTT polling in a background thread."""
         if self._thread is not None and self._thread.is_alive():
@@ -734,7 +734,7 @@ class SystemViewStreamManager:
         self._stream_hub = stream_hub
 
     def start(self, device, *, addr: str | None = None, channel: int = 1,
-              mode: int = 0, search_size: int = 1024,
+              mode: int = 0, search_size: int = 0,
               duration: float = 86400) -> None:
         """Start SystemView polling in a background thread."""
         if self._thread is not None and self._thread.is_alive():

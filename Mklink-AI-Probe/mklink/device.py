@@ -1347,7 +1347,7 @@ class Device:
         for start, end in catalog_ranges:
             ranges.append((int(start), int(end)))
 
-        if self._axf and Path(self._axf).exists() and not catalog_ranges:
+        if self._axf and Path(self._axf).exists():
             try:
                 from mklink.elf_backend import writable_memory_ranges
 
@@ -1464,6 +1464,21 @@ class Device:
                 f"{purpose} must stay inside known target writable RAM"
             )
 
+    def _rtt_bounded_search_size(self, address: int, search_size: int) -> int:
+        """Clip only the implicit scan to the containing trusted RAM range.
+
+        An ELF symbol may sit near the end of an allocated writable section.
+        Its control block can be valid even though the default 1 KiB search
+        would cross that boundary. Explicit search windows remain strict.
+        """
+        if search_size:
+            return search_size
+        self._require_target_ram_range(address, 24, purpose="RTT control block")
+        limit = max(end for start, end in self._target_writable_ram_ranges()
+                    if start <= address < end)
+        return min(_RTT_DEFAULT_SEARCH_SIZE,
+                   limit - address - len(_RTT_SIGNATURE) + 1)
+
     def validate_rtt_stream_request(
         self,
         addr: str | int,
@@ -1479,7 +1494,7 @@ class Device:
         if address % 4:
             raise ValueError("addr must be 4-byte aligned")
         if mode == 0:
-            span = (search_size or _RTT_DEFAULT_SEARCH_SIZE) + len(_RTT_SIGNATURE) - 1
+            span = self._rtt_bounded_search_size(address, search_size) + len(_RTT_SIGNATURE) - 1
             purpose = "RTT scan window"
         else:
             span = 24
@@ -1666,7 +1681,7 @@ class Device:
         addr: str | int | None = None,
         *,
         channel: int = 0,
-        search_size: int = 1024,
+        search_size: int = 0,
         mode: int | None = None,
     ) -> dict:
         """启动 RTT 会话。
@@ -1697,7 +1712,7 @@ class Device:
             addr, search_size=search_size, mode=mode,
         )
         if mode == 0:
-            host_search_size = search_size or _RTT_DEFAULT_SEARCH_SIZE
+            host_search_size = self._rtt_bounded_search_size(requested_addr, search_size)
             control_block_addr = self._find_rtt_control_block(
                 requested_addr, host_search_size,
             )
@@ -1866,7 +1881,7 @@ class Device:
         addr: str | int | None = None,
         *,
         channel: int = 1,
-        search_size: int = 1024,
+        search_size: int = 0,
         mode: int | None = None,
     ) -> dict:
         """启动 SystemView 采集（RTT 通道 1，二进制）。
@@ -1908,7 +1923,7 @@ class Device:
             addr, search_size=search_size, mode=mode,
         )
         if mode == 0:
-            host_search_size = search_size or _RTT_DEFAULT_SEARCH_SIZE
+            host_search_size = self._rtt_bounded_search_size(requested_addr, search_size)
             control_block_addr = self._find_rtt_control_block(
                 requested_addr, host_search_size,
             )

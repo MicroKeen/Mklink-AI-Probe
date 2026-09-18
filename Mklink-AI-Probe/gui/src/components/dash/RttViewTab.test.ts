@@ -310,7 +310,7 @@ describe('RttViewTab binary migration', () => {
     expect(mocks.binary.reset).toHaveBeenCalled()
     expect(mocks.terminalBinary.reset).toHaveBeenCalled()
     expect(mocks.dash.start).toHaveBeenCalledWith({
-      addr: '0x20000000', mode: 0, search_size: 1024, encoding: 'utf-8',
+      addr: '0x20000000', mode: 0, search_size: 0, encoding: 'utf-8',
     })
     expect(mocks.terminalBinary.start).toHaveBeenCalled()
     mocks.dash.state.value = 'running'
@@ -338,7 +338,7 @@ describe('RttViewTab binary migration', () => {
     await flushPromises()
 
     expect(mocks.dash.start).toHaveBeenCalledWith({
-      addr: '0x20000000', mode: 0, search_size: 1024, encoding: 'gbk',
+      addr: '0x20000000', mode: 0, search_size: 0, encoding: 'gbk',
     })
     expect(JSON.parse(localStorage.getItem('mklink.desktop.settings.v1') ?? '{}').rttEncoding)
       .toBe('gbk')

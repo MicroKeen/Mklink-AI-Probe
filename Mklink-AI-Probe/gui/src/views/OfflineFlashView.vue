@@ -259,7 +259,9 @@ async function refreshDisk(): Promise<void> {
 
 function modelChanged(): void {
   preview.value = null
-  if (effectiveModel.value === 'V2') automaticCount.value = 1
+  if (effectiveModel.value === 'V2') {
+    automaticCount.value = 1
+  }
 }
 
 async function refreshSecurityCapability(): Promise<void> {
@@ -845,7 +847,8 @@ onBeforeUnmount(() => {
         <label class="setting-row"><span>{{ tr('脚本文件名', 'Script File Name') }}</span><input v-model="scriptFieldName" class="form-input mono" data-testid="offline-script-name" :disabled="effectiveModel !== 'V4'"></label>
         <label class="setting-row"><span>{{ tr('自动烧录次数', 'Automatic Flash Count') }}</span><input v-model.number="automaticCount" type="number" min="1" max="9999" class="form-input" :disabled="effectiveModel === 'V2'"></label>
         <label class="setting-row"><span>{{ tr('IDCODE 超时', 'IDCODE Timeout') }}</span><input v-model.number="idcodeTimeout" type="number" min="500" max="600000" step="500" class="form-input"><em>ms</em></label>
-        <label class="setting-row"><span>{{ tr('SWD 速率', 'SWD Rate') }}</span><select v-model.number="swdClock" class="form-select"><option :value="1000000">1 MHz</option><option :value="4000000">4 MHz</option><option :value="5000000">5 MHz</option><option :value="8000000">8 MHz</option><option :value="10000000">10 MHz</option><option v-if="effectiveModel === 'V4'" :value="20000000">20 MHz</option><option v-if="effectiveModel === 'V4'" :value="30000000">30 MHz</option></select></label>
+        <label class="setting-row"><span>{{ tr('SWD 速率', 'SWD Rate') }}</span><select v-model.number="swdClock" class="form-select" data-testid="offline-clock"><option :value="1000000">1 MHz</option><option :value="4000000">4 MHz</option><option :value="5000000">5 MHz</option><option :value="8000000">8 MHz</option><option :value="10000000">10 MHz</option><option :value="20000000">20 MHz</option><option :value="30000000">30 MHz</option></select></label>
+        <p v-if="effectiveModel === 'V2' && swdClock > 10000000" class="muted">{{ tr('V2 的 20/30 MHz 需要支持高速时序的新版固件。', 'V2 20/30 MHz requires updated firmware with high-speed timing support.') }}</p>
         <DeviceConfigurationPanel v-model:changes="optionByteChanges" :has-firmware="firmwares.length > 0" :part-number="targetPart" :model="model" :unlock-before-download="unlockBeforeDownload" :lock-after-download="lockAfterDownload">
         <details class="security-settings">
           <summary class="security-title">

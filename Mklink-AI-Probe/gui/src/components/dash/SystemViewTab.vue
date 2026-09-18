@@ -425,7 +425,8 @@ let mounted = false
 let operationGeneration = 0
 let searchGeneration = 0
 const SYSTEMVIEW_CHANNEL = 1
-const RTT_SEARCH_SIZE = 1024
+// Zero lets the host bound the default scan to the actual RAM map.
+const RTT_SEARCH_SIZE = 0
 
 function persistSettings(next: DesktopSettings): void {
   settings.value = saveDesktopSettings(desktopStorage, next)
