@@ -1798,3 +1798,23 @@ def test_narrow_superwatch_decode_preserves_offset_width_and_sign(offset, type_n
     decoder = compile_frame_decoder([item], [block])
     payload = bytes([0xA5]) * offset + value.to_bytes(size, "little", signed=kind == "signed") + b"\x5a"
     assert decoder.decode({"regions": [(0, payload)]}) == [float(value)]
+
+
+def test_restart_publishes_new_timeline_metadata_after_flushing_old_samples(monkeypatch):
+    hub = _RecordingHub()
+    manager = SuperWatchStreamManager(stream_hub=hub, batch_samples=8)
+    manager._runtime = _MutableWatchRuntime()
+    manager.publish_metadata(force=True)
+    old_version = manager.get_status()["metadata_version"]
+    manager.publish_sample_points([{"a": 1.0, "_t": 10.0}])
+    # Exercise start's synchronous boundary without a hardware worker.
+    thread = Mock()
+    thread.is_alive.return_value = False
+    monkeypatch.setattr(threading, "Thread", Mock(return_value=thread))
+    manager.start(SimpleNamespace(_bridge=object()))
+    batches = hub.snapshot()
+    old_sample = next(i for i, b in enumerate(batches) if b.flags == SUPERWATCH_TIMESTAMPED_FLOAT32)
+    new_metadata = [i for i, b in enumerate(batches) if b.flags == SUPERWATCH_METADATA_JSON][-1]
+    assert old_sample < new_metadata
+    assert decode_superwatch_metadata(batches[new_metadata].payload)["version"] > old_version
+    manager.stop()

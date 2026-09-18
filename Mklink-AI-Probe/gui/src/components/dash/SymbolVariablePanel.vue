@@ -214,16 +214,9 @@
                 <Eye v-else :size="15" aria-hidden="true" />
               </button>
             </span>
-            <button
-              class="variable-name"
-              type="button"
-              :title="row.node.descriptor.path"
-              @click="beginEdit(row.node.descriptor)"
-            >
-              {{ row.node.label }}
-            </button>
+            <VariablePath class="variable-name" :path="row.node.descriptor.path" />
             <span class="variable-type">{{ row.node.descriptor.type_name }}</span>
-            <span :data-testid="`latest-${row.node.descriptor.path}`" class="variable-value">
+            <span :data-testid="`latest-${row.node.descriptor.path}`" class="variable-value" :title="formatValue(latestValues[row.node.descriptor.path])">
               {{ formatValue(latestValues[row.node.descriptor.path]) }}
             </span>
             <button
@@ -398,6 +391,7 @@ import type { SymbolDescriptor } from '../../types/mklink'
 import type { SymbolTreeNode, VisibleSymbolRow } from '../../lib/symbolTree'
 import { tr } from '../../composables/useLanguage'
 import SetupHint from './SetupHint.vue'
+import VariablePath from './VariablePath.vue'
 import { API_BASE } from '../../lib/runtimeEndpoint'
 
 const props = withDefaults(defineProps<{
@@ -1047,10 +1041,10 @@ watch(tree, roots => {
 .visibility-button:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .visibility-button.hidden { color: var(--muted); }
 .visibility-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.variable-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 0; background: transparent; color: var(--fg); cursor: pointer; text-align: left; font: 12px Consolas, monospace; }
+.variable-name { min-width: 0; }
 .variable-type, .variable-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font: 11px Consolas, monospace; }
-.variable-value { color: var(--info); text-align: right; }
-@container (max-width: 440px) {
+.variable-value { color: var(--info); text-align: right; white-space: normal; overflow-wrap: anywhere; }
+@container (max-width: 720px) {
   .variable-main { grid-template-columns: 18px 24px minmax(0, 1fr) 32px auto; row-gap: 0; }
   .variable-main > input { grid-column: 1; grid-row: 1 / 3; }
   .visibility-slot { grid-column: 2; grid-row: 1 / 3; }

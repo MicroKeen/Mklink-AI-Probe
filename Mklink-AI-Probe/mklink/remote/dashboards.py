@@ -1823,8 +1823,11 @@ class SuperWatchStreamManager:
         self._dump_restart.clear()
         self._running = True
         with self._read_lock:
-            self._origin_us = None
             self._flush_binary_batch_locked()
+            self._origin_us = None
+            # A new capture starts a new device timeline, even with identical
+            # channels. Existing GUI/AI subscribers must reset before sample 0.
+            self._rebuild_metadata_cache_locked(publish=True, new_epoch=True)
             self._rate_timestamps.clear()
             self._actual_rate = 0.0
 
@@ -2298,12 +2301,12 @@ class SuperWatchStreamManager:
         with self._read_lock:
             return self._rebuild_metadata_cache_locked(publish=force)
 
-    def _rebuild_metadata_cache_locked(self, *, publish: bool = False) -> int:
+    def _rebuild_metadata_cache_locked(self, *, publish: bool = False, new_epoch: bool = False) -> int:
         channels = self._list_watches_locked()
         signature = json.dumps(channels, sort_keys=True, default=str)
         snapshot_json = json.dumps(channels, separators=(",", ":"), default=str)
         with self._metadata_publish_lock:
-            changed = signature != self._published_metadata_signature
+            changed = new_epoch or signature != self._published_metadata_signature
             if changed:
                 self._metadata_version += 1
                 self._config_generation += 1

@@ -616,7 +616,7 @@ function observeTimelineFrameRate(
 onMounted(() => {
   mounted = true
   window.addEventListener(DESKTOP_SETTINGS_CHANGED_EVENT, syncRttAddressFromSettings)
-  const generation = ++operationGeneration
+  ++operationGeneration
   refreshLogList()
   if (tlCanvas.value && tlTip.value && tlLegend.value) {
     tlInstance = new SvTimeline(
@@ -671,9 +671,10 @@ onMounted(() => {
     requestTimelineVisibleRange(start, end, tlCanvas.value?.clientWidth || 800)
   }, undefined, undefined, { frameRate: TIMELINE_STARTUP_FRAME_RATE, continuous: true })
   renderScheduler.start()
-  reconnectRunningTrace(generation)
+  void pollExternalTrace()
 })
 onUnmounted(() => {
+  if (externalTraceTimer !== null) clearTimeout(externalTraceTimer)
   mounted = false
   operationGeneration++
   searchGeneration++
@@ -895,6 +896,13 @@ function ingestEvents(events: any[], countEvents = true) {
   }
 }
 
+let externalTraceTimer: ReturnType<typeof setTimeout> | null = null
+async function pollExternalTrace() {
+  if (!mounted) return
+  if (!starting.value && !searching.value && !offlineMode.value) await reconnectRunningTrace(operationGeneration)
+  if (mounted) externalTraceTimer = setTimeout(pollExternalTrace, 1000)
+}
+
 async function reconnectRunningTrace(generation: number) {
   if (offlineMode.value) return
   try {
@@ -915,10 +923,16 @@ async function reconnectRunningTrace(generation: number) {
       if (status.recording_error !== undefined) meta.recordingError = status.recording_error || ''
       if (status.task_names) applyTaskNames(status.task_names)
       if (status.isr_names) applyIsrNames(status.isr_names)
-      await dash.start()
-      if (!operationIsActive(generation)) return
-      connectStatus()
-      binaryStream.start()
+      if (dash.state.value !== 'running') {
+        dash.syncState(true)
+        renderScheduler?.start()
+        connectStatus()
+        binaryStream.start()
+      }
+    } else if (dash.state.value === 'running') {
+      dash.syncState(false)
+      disconnectStatus()
+      binaryStream.stop()
     }
   } catch {
     // Best effort: opening the tab should not surface a stale-status error.

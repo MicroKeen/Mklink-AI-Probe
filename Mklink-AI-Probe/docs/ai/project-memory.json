@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-09-18T15:57:49.026961+08:00",
+  "updated_at": "2026-09-18T18:03:50.7681912+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.2.2-development",
-    "head": "Development continues from 2827d5f; verified V3 online initialization and offline IDCODE display fixes.",
+    "head": "Development continues from e2cba62; v0.2.2 GUI session synchronization and draggable long paths verified.",
     "remote_head": "Task branch to be pushed for PR review; no merge/release authorized in this task.",
     "working_tree": "Development changes and generated GUI assets; firmware changes are in separate local repositories."
   },
@@ -14,7 +14,7 @@
   },
   "current_session": {
     "status": "complete",
-    "current_task": "V3三档采样、串口/RTT、频率校准与烧录回归完成；修复在线复位下高速初始化和脱机IDCODE误脱敏。"
+    "current_task": "完成0.2.2版本标识与更新记录；修复共享采集重启时间轴、API档位/SystemView同步、串口首段显示；长路径按用户要求改为原位拖动，无展开箭头。"
   },
   "milestones": [
     {
@@ -54,7 +54,7 @@
     },
     {
       "area": "V2 narrow reads and shared RTT validation",
-      "result": "docs/verification/v0.2.2-rtt-narrow-alignment.md：V2 三档 172583 动态帧/1035498 窄值校验通过；8695 混合偏移帧通过；168-byte RTT边界实板、MCP动态RTT/SystemView及Chrome RTT通过；三代固件编译。V3/V4硬件未复测；客户8位毛刺未独立复现。 docs/verification/v0.2.2-superwatch-presentation.md：Python 83、GUI 109、生产构建通过；V2/STM32F103RET6 30M 双订阅约65秒891万样本，CRC/固件/分发丢点零，队列峰值6，曲线约20.5次/秒；非全平台长期认证。 docs/verification/v0.2.2-svd-selection.md：3 GUI 测试、生产构建；Chrome 复现并验证 C8→RE 切换及 4876 项目录加载，恢复变量采集；未做 APM 实板验证。 docs/verification/v0.2.2-v3-regression.md：V3三档4B/4KiB/15区域、RTT/UART/CLI/MCP/Chrome/LA通过；禁用WS压缩后GUI20/30多消费者零缺口。在线30M复位下初始化偶发ACK/缺xpsr已改为低速初始化后恢复请求频率，并拒绝残缺CPU。修复后30M两种模式各10次、20M3次全量读回/独立标记/节拍通过，LA烧录仍30.25M。脱机17次通过含全片与Chrome真机；IDCODE日志显示正常。软件42+141+228定向测试通过，未发布。"
+      "result": "docs/verification/v0.2.2-rtt-narrow-alignment.md：V2 三档 172583 动态帧/1035498 窄值校验通过；8695 混合偏移帧通过；168-byte RTT边界实板、MCP动态RTT/SystemView及Chrome RTT通过；三代固件编译。V3/V4硬件未复测；客户8位毛刺未独立复现。 docs/verification/v0.2.2-superwatch-presentation.md：Python 83、GUI 109、生产构建通过；V2/STM32F103RET6 30M 双订阅约65秒891万样本，CRC/固件/分发丢点零，队列峰值6，曲线约20.5次/秒；非全平台长期认证。 docs/verification/v0.2.2-svd-selection.md：3 GUI 测试、生产构建；Chrome 复现并验证 C8→RE 切换及 4876 项目录加载，恢复变量采集；未做 APM 实板验证。 docs/verification/v0.2.2-v3-regression.md：V3三档4B/4KiB/15区域、RTT/UART/CLI/MCP/Chrome/LA通过；禁用WS压缩后GUI20/30多消费者零缺口。在线30M复位下初始化偶发ACK/缺xpsr已改为低速初始化后恢复请求频率，并拒绝残缺CPU。修复后30M两种模式各10次、20M3次全量读回/独立标记/节拍通过，LA烧录仍30.25M。脱机17次通过含全片与Chrome真机；IDCODE日志显示正常。软件42+141+228定向测试通过，未发布。 docs/verification/v0.2.2-gui-session-layout.md：176 Python、706 GUI、生产构建；V4 30MHz 60秒7344885样本，序号/时间戳异常和CRC错误零；目标时间轴190.62kSa/s、主机122.39kSa/s。Chrome SystemView/API启动、串口首段与长路径横向滚动通过。版本0.2.2及双语更新记录已更新，未重建安装包或发布。"
     }
   ],
   "decisions": [
@@ -65,7 +65,7 @@
     "所有 PR 不再强制第二人审批；核对差异及相关验证、必需 CI 后，按明确合并授权和确切头提交整合。不得恢复旧审批门槛；发布仍需独立授权，其他保护保留。"
   ],
   "hardware": {
-    "state": "V3 + STM32F103RET6已完成本轮验证；最终Chrome脱机恢复原测试镜像，全量读回一致、RT-Thread节拍正常。串口已释放，WebGUI保持运行。固件与上位机未发布。",
+    "state": "MicroLink V4 + STM32F103RET6完成本轮GUI/AI共享流验证；恢复原始符号目录、10MHz/1ms采集，串口已释放。WebGUI运行，未发布。",
     "backups": ".build/reports/prerelease-hil-20260907、superwatch-write-20260907；保留其他芯片唯一备份。；本轮本地证据 .build/reports/peripheral-unification。；本轮 OTP 只读和浏览器证据 .build/reports/device-configuration。；STM32F103 唯一原始备份与本轮证据 .build/reports/stm32f103-options。",
     "installer": ".build/artifacts/release-0.2.1-20260915/Mklink-AI-Probe-v0.2.1-x64-Setup.exe"
   },

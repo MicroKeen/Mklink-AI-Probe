@@ -10,6 +10,24 @@ describe('SuperWatchTab', () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ profile: 'medium' }) })))
   })
   afterEach(() => vi.unstubAllGlobals())
+  it('follows external clock changes but preserves an unapplied user choice', async () => {
+    vi.useFakeTimers()
+    let profile = 'medium'
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ profile }) })))
+    const wrapper = mount(SuperWatchTab, {
+      props: { deviceConnected: true },
+      global: { stubs: { SymbolVariablePanel: true, PeripheralWatchPanel: true, WaveformViewer: true } },
+    })
+    await flushPromises()
+    profile = 'ultra'
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(wrapper.get<HTMLSelectElement>('#superwatch-speed').element.value).toBe('ultra')
+    await wrapper.get('#superwatch-speed').setValue('high')
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(wrapper.get<HTMLSelectElement>('#superwatch-speed').element.value).toBe('high')
+    wrapper.unmount()
+    vi.useRealTimers()
+  })
   it('restores ultra while retaining high as the existing 20 MHz choice', async () => {
     const fetchMock = vi.fn(async (_url: any, init?: RequestInit) => ({
       ok: true, json: async () => init ? { clock_hz: 30000000 } : { profile: 'ultra' },

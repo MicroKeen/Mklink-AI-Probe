@@ -603,7 +603,6 @@ async function doStop(): Promise<void> {
     await requestJson('/api/dash/serial/stop', { method: 'POST' })
     running.value = false
     portStatuses.value = {}
-    detachBinaryStreams()
     toast.info(tr('串口助手已停止', 'Serial Assistant stopped'))
   } catch (caught) {
     runtimeError.value = caught instanceof Error ? caught.message : String(caught)
@@ -614,10 +613,8 @@ async function doStop(): Promise<void> {
 }
 
 function syncBinaryStream(): void {
-  if (!running.value) {
-    detachBinaryStreams()
-    return
-  }
+  // Subscribe while idle as well: API-started sessions may emit their entire
+  // first response before the next status poll. This never opens the UART.
   if (attachedMode === viewMode.value) return
   if (attachedMode === 'log') logBinary.stop()
   else if (attachedMode === 'terminal') terminalBinary.stop()
@@ -722,6 +719,7 @@ function visibleAscii(value: string): string {
 }
 
 onMounted(async () => {
+  syncBinaryStream()
   await refreshPorts()
   await refreshStatus()
   void pollStatus()
