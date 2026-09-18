@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-09-18T14:39:59.0570460+08:00",
+  "updated_at": "2026-09-18T15:45:17.713916+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.2.2-development",
-    "head": "Development continues from cb0b6cb; SVD chip-switch selection fix.",
+    "head": "Development continues from ee673e6; V3 regression, shared-stream and online initialization fixes.",
     "remote_head": "Task branch to be pushed for PR review; no merge/release authorized in this task.",
     "working_tree": "Development changes and generated GUI assets; firmware changes are in separate local repositories."
   },
@@ -13,8 +13,8 @@
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "complete",
-    "current_task": "修复切换芯片后 SVD 下拉框为空；直接输入候选、过期搜索隔离、真实浏览器加载验证。"
+    "status": "in_progress",
+    "current_task": "V3 20/30 MHz采样已完成；修复在线30 MHz复位下初始化失败，继续真机烧录回归。"
   },
   "milestones": [
     {
@@ -54,7 +54,7 @@
     },
     {
       "area": "V2 narrow reads and shared RTT validation",
-      "result": "docs/verification/v0.2.2-rtt-narrow-alignment.md：V2 三档 172583 动态帧/1035498 窄值校验通过；8695 混合偏移帧通过；168-byte RTT边界实板、MCP动态RTT/SystemView及Chrome RTT通过；三代固件编译。V3/V4硬件未复测；客户8位毛刺未独立复现。 docs/verification/v0.2.2-superwatch-presentation.md：Python 83、GUI 109、生产构建通过；V2/STM32F103RET6 30M 双订阅约65秒891万样本，CRC/固件/分发丢点零，队列峰值6，曲线约20.5次/秒；非全平台长期认证。 docs/verification/v0.2.2-svd-selection.md：3 GUI 测试、生产构建；Chrome 复现并验证 C8→RE 切换及 4876 项目录加载，恢复变量采集；未做 APM 实板验证。"
+      "result": "docs/verification/v0.2.2-rtt-narrow-alignment.md：V2 三档 172583 动态帧/1035498 窄值校验通过；8695 混合偏移帧通过；168-byte RTT边界实板、MCP动态RTT/SystemView及Chrome RTT通过；三代固件编译。V3/V4硬件未复测；客户8位毛刺未独立复现。 docs/verification/v0.2.2-superwatch-presentation.md：Python 83、GUI 109、生产构建通过；V2/STM32F103RET6 30M 双订阅约65秒891万样本，CRC/固件/分发丢点零，队列峰值6，曲线约20.5次/秒；非全平台长期认证。 docs/verification/v0.2.2-svd-selection.md：3 GUI 测试、生产构建；Chrome 复现并验证 C8→RE 切换及 4876 项目录加载，恢复变量采集；未做 APM 实板验证。 docs/verification/v0.2.2-v3-regression.md：最终三档4B/4KiB/15region通过；RTT/UART/CLI/MCP/Chrome及LA频率验证。关闭WS压缩后GUI20/30多消费者零序号缺口/CRC/分发丢批次。脱机10M全片3次、30M普通10次/全片3次通过；在线30M复位下连接复现一次CPU初始化不完整，修复后的真机烧录验证待完成。软件42+141+150测试通过（定向套件）。"
     }
   ],
   "decisions": [
@@ -65,7 +65,7 @@
     "所有 PR 不再强制第二人审批；核对差异及相关验证、必需 CI 后，按明确合并授权和确切头提交整合。不得恢复旧审批门槛；发布仍需独立授权，其他保护保留。"
   ],
   "hardware": {
-    "state": "当前 V2 + STM32F103RET6；stage15 升级完成，临时 RAM/寄存器已恢复，节拍正常；串口已释放。V3/V4 本轮仅编译。",
+    "state": "当前 V3 + STM32F103RET6，V3.5.0开发固件已升级；采样/RTT/UART已复测，正在在线烧录回归。未发布固件。",
     "backups": ".build/reports/prerelease-hil-20260907、superwatch-write-20260907；保留其他芯片唯一备份。；本轮本地证据 .build/reports/peripheral-unification。；本轮 OTP 只读和浏览器证据 .build/reports/device-configuration。；STM32F103 唯一原始备份与本轮证据 .build/reports/stm32f103-options。",
     "installer": ".build/artifacts/release-0.2.1-20260915/Mklink-AI-Probe-v0.2.1-x64-Setup.exe"
   },
@@ -79,7 +79,7 @@
     "客户原始 ELF/程序不可用，不能认定其8位毛刺根因已复现；odd-address packed halfword 不保证原子性。远程文件测试12项受Windows symlink权限限制。"
   ],
   "next_actions": [
-    "审阅本轮开发 PR；换接 V3/V4 后对窄读取和非对齐访问做相同硬件矩阵。未经另行授权不合并或发布。 发布记录整合后，后续任务从最新 MicroKeen/main 建分支；PR 不强制第二人审批，但仍需必需 CI 和明确合并授权。应用及固件标签保持不可变。",
+    "完成V3在线初始化修复后的重复烧录、完整读回和启动验证；更新报告并推送开发PR，不合并或发布。V4窄读取回归仍待换板。",
     "换接HPM5301/HPM6E80回归pipe-r20批时间戳、USB和四档，不继承旧版硬件资格。ARM固化包已通过77源文件哈希对照。",
     "官网文档任务已收到四档Chrome真图和技术附件；保留公众号风格及技术附件分层，不自动发布。继续优化前先拆分批间组帧/调度开销；慢浏览器订阅需按队列背压评估，勿与USB字节故障混同。",
     "后续按原计划补STM32F103看门狗、STOP/STANDBY和WRP拒写行为及其他ARM实板；HPM永久编程未开放。",

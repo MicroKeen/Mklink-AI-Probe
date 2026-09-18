@@ -3800,6 +3800,8 @@ def run_server(
         or mklink_state.get("desktop_instance_id")
     )
 
+    # Binary sample streams are already compact. Per-client deflate can block
+    # fanout at high sample rates and overflow otherwise healthy consumers.
     if desktop_port_end is None:
         configure_stream_observation(
             app,
@@ -3811,9 +3813,9 @@ def run_server(
         set_backend_port(port)
         browser_sessions = getattr(app.state, "browser_sessions", None)
         if browser_sessions is None:
-            uvicorn.run(app, host=host, port=port, log_level="info")
+            uvicorn.run(app, host=host, port=port, log_level="info", ws_per_message_deflate=False)
             return
-        config = uvicorn.Config(app, host=host, port=port, log_level="info")
+        config = uvicorn.Config(app, host=host, port=port, log_level="info", ws_per_message_deflate=False)
         server = uvicorn.Server(config)
         app.state.request_browser_session_exit = lambda: setattr(
             server, "should_exit", True
@@ -3840,7 +3842,7 @@ def run_server(
             port=selected_port,
             instance_id=desktop_instance_id,
         )
-        config = uvicorn.Config(app, log_level="info")
+        config = uvicorn.Config(app, log_level="info", ws_per_message_deflate=False)
         server = uvicorn.Server(config)
         app.state.request_desktop_exit = lambda: setattr(server, "should_exit", True)
         server.run(sockets=[listener])
