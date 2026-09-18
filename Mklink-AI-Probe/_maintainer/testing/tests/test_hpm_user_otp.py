@@ -59,6 +59,31 @@ def test_locked_word_rejected():
     with pytest.raises(ValueError,match='locked'): otp.plan(d,69,1,3)
 
 
+@pytest.mark.parametrize('group', [0, 17, 20, 31, -1, True])
+def test_permanent_lock_excludes_non_user_groups(group):
+    d = device()
+    with pytest.raises(ValueError): otp.lock_program(d,group,0,True)
+    d._bridge.send_command.assert_not_called()
+
+
+def test_permanent_lock_requires_confirmation_and_fresh_snapshot():
+    d = device()
+    with pytest.raises(ValueError): otp.lock_program(d,19,0)
+    with pytest.raises(ValueError): otp.lock_program(d,19,1,True)
+    d._bridge.send_command.assert_not_called()
+
+
+def test_permanent_lock_has_bounded_delta_and_no_retry():
+    d = device()
+    d._bridge.send_command.return_value='OTP_USER v=1 word=0 before=00000000\n0\n'
+    plan = otp.lock_plan(d,19,0)
+    assert plan['delta']==1<<19 and plan['affected_words']==[76,77,78,79]
+    d._bridge.send_command.reset_mock()
+    d._bridge.send_command.side_effect=[d._bridge.send_command.return_value, TimeoutError('lost response')]
+    with pytest.raises(TimeoutError): otp.lock_program(d,19,0,True)
+    assert d._bridge.send_command.call_count==2
+
+
 def test_api_routes_confirmation_and_validation(tmp_path):
     from fastapi.testclient import TestClient
     from mklink.remote.api import create_app

@@ -48,7 +48,7 @@ def snapshot(device, part_number="HPM5301", model="V4"):
         rows.append(dict(word=word, current=_read(device, FUSE + word * 4),
                          shadow=_read(device, SHADOW + word * 4),
                          locked=bool(hard & (1 << (word // 4)) or fuse_lock & 1 or shadow_lock & 1)))
-    return dict(part_number=part_number, model=model, words=rows,
+    return dict(part_number=part_number, model=model, words=rows, hard_lock=hard,
                 irreversible=True, target_reset_required=True)
 
 
@@ -90,4 +90,37 @@ def program(device, word, expected, desired, confirm_irreversible=False,
     after = _read(device, FUSE + prepared["word"] * 4)
     if after != prepared["desired"]:
         raise RuntimeError("OTP readback mismatch: unknown outcome, do not retry")
+    return dict(**prepared, after=after, verified=True, response=response)
+
+
+def lock_plan(device, group, expected, part_number="HPM5301", model="V4"):
+    group, expected = _u32(group, "group"), _u32(expected, "expected")
+    if group not in (18, 19):
+        raise ValueError("Only complete user groups 18 (72..75) and 19 (76..79) can be permanently locked")
+    state = snapshot(device, part_number, model)
+    if state["hard_lock"] != expected:
+        raise ValueError("HARD_LOCK snapshot changed; read again")
+    response = device._bridge.send_command(f"hpm.otp_user_lock({group},{expected},0)", timeout=5)
+    _lock_result(response)
+    desired = expected | (1 << group)
+    return dict(word=0, group=group, expected=expected, desired=desired, delta=desired & ~expected,
+                affected_words=list(range(group*4, group*4+4)), irreversible=True,
+                script=f"# Permanent user group lock; no automatic retry.\nresult = hpm.otp_user_lock({group}, {expected}, 1)\nif result != 0:\n    raise Exception('OTP lock failed: inspect before retrying')\n")
+
+
+def _lock_result(response):
+    codes = re.findall(r"(?m)^\s*(-?\d+)\s*$", response)
+    if not codes or int(codes[-1]) != 0 or "OTP_USER v=1 word=0 " not in response:
+        raise RuntimeError(f"OTP lock failed or unsupported; read state, do not retry. {response}")
+
+
+def lock_program(device, group, expected, confirm_irreversible=False, part_number="HPM5301", model="V4"):
+    if confirm_irreversible is not True:
+        raise ValueError("Explicit permanent lock confirmation is required")
+    prepared = lock_plan(device, group, expected, part_number, model)
+    response = device._bridge.send_command(f"hpm.otp_user_lock({prepared['group']},{prepared['expected']},1)", timeout=5)
+    _lock_result(response)
+    after = _read(device, FUSE)
+    if after != prepared["desired"]:
+        raise RuntimeError("HARD_LOCK readback mismatch; do not retry")
     return dict(**prepared, after=after, verified=True, response=response)

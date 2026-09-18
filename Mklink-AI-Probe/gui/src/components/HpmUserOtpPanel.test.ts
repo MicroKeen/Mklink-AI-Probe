@@ -2,6 +2,26 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, expect, it, vi } from 'vitest'
 import HpmUserOtpPanel from './HpmUserOtpPanel.vue'
 afterEach(() => vi.unstubAllGlobals())
+it('previews the exact permanent group and invalidates confirmation when it changes', async () => {
+  const fetch = vi.fn()
+    .mockResolvedValueOnce({ok:true,json:async()=>({words:[],hard_lock:0x30400016})})
+    .mockResolvedValueOnce({ok:true,json:async()=>({word:0,group:19,expected:0x30400016,desired:0x30480016,delta:0x80000,script:'lock group 19'})})
+  vi.stubGlobal('fetch',fetch)
+  const w=mount(HpmUserOtpPanel,{props:{partNumber:'HPM5301',model:'V4'}})
+  await w.get('[aria-label="OTP operation"]').setValue('lock')
+  expect(w.get('[data-testid=otp-plan]').attributes('disabled')).toBeDefined()
+  await w.get('[data-testid=otp-read]').trigger('click');await flushPromises()
+  await w.get('[data-testid=otp-plan]').trigger('click');await flushPromises()
+  expect(fetch.mock.calls[1]![0]).toContain('/lock-plan')
+  expect(JSON.parse(fetch.mock.calls[1]![1].body)).toMatchObject({word:19,expected:0x30400016})
+  expect(w.text()).toContain('76–79')
+  await w.get('[data-testid=otp-confirm]').setValue(true)
+  await w.get('[aria-label="OTP lock group"]').setValue('18')
+  expect(w.find('[data-testid=otp-program]').exists()).toBe(false)
+  expect(fetch).toHaveBeenCalledTimes(2)
+  w.unmount()
+})
+
 it('requires read, preview and explicit confirmation; edits invalidate the plan', async () => {
   const fetch = vi.fn().mockResolvedValueOnce({ ok: true, json: async () => ({ words: [{ word: 69, current: 1, shadow: 1, locked: false }] }) })
     .mockResolvedValueOnce({ ok: true, json: async () => ({ word:69, expected:1, desired:3, delta:2, script:'guarded script' }) })

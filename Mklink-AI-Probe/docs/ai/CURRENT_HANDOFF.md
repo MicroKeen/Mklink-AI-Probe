@@ -4,12 +4,12 @@
 
 ## 当前断点
 
-- 更新时间：`2026-09-18T21:01:28.9598436+08:00`
+- 更新时间：`2026-09-18T22:39:14.2736544+08:00`
 - 分支：`codex/v0.2.2-development`
 - HEAD：`Development continues from e2cba62; v0.2.2 GUI session synchronization and draggable long paths verified.`
 - 远端 HEAD：`Task branch to be pushed for PR review; no merge/release authorized in this task.`
 - 工作树：Development changes and generated GUI assets; firmware changes are in separate local repositories.
-- 当前任务：第二颗HPM5301：测试程序重新下载全回读通过；Chrome用户OTP word79=0x80000003、邻字与Flash保持、tick正常。安全字段未烧写。
+- 当前任务：HPM5301永久用户组19锁验证完成：Chrome烧HARD_LOCK bit19，目标ROM直写被硬件阻止、组外word75写1成功，UART0独立计数连续。调试禁用及其他安全字段未测试。
 - 状态：`complete`
 
 ## 里程碑
@@ -25,7 +25,7 @@
 - **STM32F103 选项字节与 ARM mem_dump**：docs/verification/v0.2.1-stm32f103-options-stage2.md：Python 99、GUI 29、生产构建通过；CLI/MCP stdio/Chrome 10 字段一致，DATA、两项低功耗复位位及 WRP3 写入/复位/回读/恢复通过；组合下载通过，最终全部 512 KiB Flash 与原始备份一致。未测试 RDP 转换及看门狗/低功耗/WRP 拒写行为。 docs/verification/v0.2.1-stm32f103-mem-dump.md：27软件测试、14项稳定矩阵、LA3.904/10.549MHz测量、CLI/MCP/Chrome低中档通过；20/30电气试验失败保留。单RAM60s约603万点101.293kSa/s，4KB630.34KiB/s；GUI功能素材和RTT双消费者修复分别记录A/B演示构建，未做多小时认证。 docs/verification/v0.2.1-stm32-clock-calibration.md：117相关Python测试通过；Keil/在线/脱机频率实测、RTT/SystemView短时复测通过，20/30M不合格。GUI同一API改频与LA通过，RTT修复后14项mem_dump通过；最终Chrome截图尚未完成。 本轮更新（旧失败仅属旧板/旧固件）：docs/verification/v0.2.1-stm32-four-profile-freeze.md。pipe-r20四档20项完整矩阵通过，持续59.598/111.956/157.770/187.636kSa/s；20M60秒/30M120秒。Keil1/2/5/10M，Chrome配置四档和SuperWatch四档，在线/脱机各四档LA通过。USB暂停/启停20、CDC12、RTT/SV32次启动及功能/CLI/MCP通过。入口Python405、间隔66、GUI144/29（重叠）/95、生产构建与2460文件本地Skill安装审计通过。Chrome真图已交文档任务，发布渠道不变。
 - **mem_dump 四档与 HPM 实板稳定性**：docs/verification/v0.2.1-mem-dump-four-speeds.md：143 Python、3 GUI、生产构建、72打包/更新/边界通过；CLI/MCP stdio及Chrome四档切换/曲线实板通过。旧7510单变量两档各30min，旧20M 4KB失败保留；新2927修复版48用例通过，20M 4KB600s/30M300s及小块、动态RAM、10轮四档重连。SBA忙冲突按报告计数恢复，不称零冲突。 HPM6E80独立记录v0.2.1-hpm6e80-mem-dump.md：21软件测试、304候选28矩阵/30长测重连、cbd最终28回归、CLI/MCP24和Chrome通过；共享ID不识别精确型号。
 - **SuperWatch 与 SystemView 文档实测修复**：docs/verification/v0.2.1-hpm-gui-acceptance.md：172+159+158 Python、95 GUI/构建；HPM脱机78464B全回读、数组index0..15/16pts通过。新9a338046探针+Web codec两轮Chrome16449/16577事件、3任务、RuntimeDrop0，已断开。原生CSV/PNG保存未验证。 Web修复：docs/verification/v0.2.1-hex-preview.md，159 Python、121 GUI、生产构建；Chrome 无芯片 FLM+25.5MiB HEX、IAP越界提示与预览、默认折叠通过。
-- **V2 narrow reads and shared RTT validation**：0.2.2证据：v0.2.2-rtt-narrow-alignment.md（V2窄值/RTT及三代编译）；v0.2.2-superwatch-presentation.md（V2共享流891万样本）；v0.2.2-svd-selection.md（Chrome芯片切换）；v0.2.2-v3-regression.md（V3四档、UART/RTT/CLI/MCP/LA；在线30M两模式各10次修复后通过，脱机17次）；v0.2.2-gui-session-layout.md（176 Python/706 GUI，V4共享流734万样本、长路径拖动及SV/UART）；v0.2.2-v4-narrow-stream.md（三档静态8通道/动态6通道30秒通过，SansIO断流修复223项回归，清理超时后手动恢复）；v0.2.2-offline-installer.md（完整离线包304654762字节，7059/2224及SansIO入包通过；UAC取消，覆盖安装未验收）。报告均在docs/verification。未发布。 HPM用户OTP: v0.2.2-hpm5301-user-otp.md，24 Python/6 GUI/编译通过；word69两次烧位0→1→3，Chrome写入与影子回读一致、邻字不变、同值跳过、LDO关闭、LOCK及目标tick增长；修复复位后OTP访问临时4MHz并恢复档位。危险字段未烧写。
+- **V2 narrow reads and shared RTT validation**：0.2.2证据：v0.2.2-rtt-narrow-alignment.md（V2窄值/RTT及三代编译）；v0.2.2-superwatch-presentation.md（V2共享流891万样本）；v0.2.2-svd-selection.md（Chrome芯片切换）；v0.2.2-v3-regression.md（V3四档、UART/RTT/CLI/MCP/LA；在线30M两模式各10次修复后通过，脱机17次）；v0.2.2-gui-session-layout.md（176 Python/706 GUI，V4共享流734万样本、长路径拖动及SV/UART）；v0.2.2-v4-narrow-stream.md（三档静态8通道/动态6通道30秒通过，SansIO断流修复223项回归，清理超时后手动恢复）；v0.2.2-offline-installer.md（完整离线包304654762字节，7059/2224及SansIO入包通过；UAC取消，覆盖安装未验收）。报告均在docs/verification。未发布。 HPM用户OTP: v0.2.2-hpm5301-user-otp.md，24 Python/6 GUI/编译通过；word69两次烧位0→1→3，Chrome写入与影子回读一致、邻字不变、同值跳过、LDO关闭、LOCK及目标tick增长；修复复位后OTP访问临时4MHz并恢复档位。组19永久锁已实测：HARD_LOCK=0x30480016；word75=1/word79=0x80000003；目标ROM锁区写回读不变，UART连续。调试禁用未测。
 
 ## 架构决策
 
