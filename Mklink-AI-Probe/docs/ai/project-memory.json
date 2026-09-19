@@ -1,20 +1,20 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-09-19T09:39:30.0276834+08:00",
+  "updated_at": "2026-09-19T10:23:44.5963542+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.2.2-development",
-    "head": "Development continues from e2cba62; v0.2.2 GUI session synchronization and draggable long paths verified.",
-    "remote_head": "Task branch to be pushed for PR review; no merge/release authorized in this task.",
-    "working_tree": "Development changes and generated GUI assets; firmware changes are in separate local repositories."
+    "head": "HPM offline OTP handoff based on a2566e4; new recipe code is unvalidated development draft.",
+    "remote_head": "codex/v0.2.2-development; handoff commit to be pushed, no merge or release.",
+    "working_tree": "Handoff includes offline OTP draft source and documentation; separate firmware and MicroBoot work remain outside this repository."
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
     "status": "in_progress",
-    "current_task": "第四颗完成用户字/组锁断电保持、签名SECURE→RETURN、GUI保护拒绝和恢复写入、ROM拒写，最后SCRIBE复位无应用心跳。MicroBoot教程和报告已更新；未宣称密钥销毁/加解密/鉴权验证。"
+    "current_task": "交接 HPM 脱机下载后用户 OTP 配方草稿，见 docs/ai/hpm-offline-otp-handoff.md。尚无专项软件/浏览器/真机验收；用户暂无新芯片，先做软件，后补真机。优先解决 hpm.program 成功不等于 Flash 回读校验及 malloc 失败返回0的问题。"
   },
   "milestones": [
     {
@@ -54,7 +54,7 @@
     },
     {
       "area": "V2 narrow reads and shared RTT validation",
-      "result": "0.2.2报告位于docs/verification：rtt-narrow-alignment（窄值/RTT/三代编译）、superwatch-presentation（共享流）、svd-selection、v3-regression（UART/RTT/CLI/MCP/LA，在线30M修复后通过）、gui-session-layout、v4-narrow-stream、offline-installer（UAC取消覆盖未验收）。HPM: v0.2.2-hpm5301-user-otp.md 与 v0.2.2-hpm5301-security.md。第一颗用户字、组19永久锁/拒写、SW_VER、DEBUG/JTAG禁用及独立UART通过；第二颗实验根哈希/签名启动、SECURE→RETURN、GUI字写入通过。修复保护后SBA全零/固定20150407伪配置、短读、连接旧计划、锁控制字预检，52/38 Python、8 GUI及构建通过。第三颗NONRET B/B，撤销根0后根1签名应用启动，撤销根1后复位15.12秒无UART心跳；Chrome word79=5及组19锁通过。探针OTP新增haltreq有界等待，UF2升级后定向回归。MicroBoot新增GUI OTP章节、真图，构建审计通过。10份SDK表审计发现基址及密钥长度不同，不代表跨系列实测。物理断电、SCRIBE、DEBUG_KEY、EXIP/MASTER_KEY和撤销后的恢复未验证。"
+      "result": "0.2.2报告位于docs/verification：rtt-narrow-alignment（窄值/RTT/三代编译）、superwatch-presentation（共享流）、svd-selection、v3-regression（UART/RTT/CLI/MCP/LA，在线30M修复后通过）、gui-session-layout、v4-narrow-stream、offline-installer（UAC取消覆盖未验收）。HPM: v0.2.2-hpm5301-user-otp.md 与 v0.2.2-hpm5301-security.md。第一颗用户字、组19永久锁/拒写、SW_VER、DEBUG/JTAG禁用及独立UART通过；第二颗实验根哈希/签名启动、SECURE→RETURN、GUI字写入通过。修复保护后SBA全零/固定20150407伪配置、短读、连接旧计划、锁控制字预检，52/38 Python、8 GUI及构建通过。第三颗NONRET B/B，撤销根0后根1签名应用启动，撤销根1后复位15.12秒无UART心跳；Chrome word79=5及组19锁通过。探针OTP新增haltreq有界等待，UF2升级后定向回归。MicroBoot新增GUI OTP章节、真图，构建审计通过。10份SDK表审计发现基址及密钥长度不同，不代表跨系列实测。第四颗Word79=7/组19锁实际断电保持、SECURE→RETURN、ROM锁区拒写与SCRIBE复位无心跳详见安全报告末节。DEBUG_KEY、EXIP/MASTER_KEY等仍未验证。新脱机OTP草稿未验收。"
     }
   ],
   "decisions": [
@@ -79,7 +79,7 @@
     "客户原始 ELF/程序不可用，不能认定其8位毛刺根因已复现；odd-address packed halfword 不保证原子性。远程文件测试12项受Windows symlink权限限制。"
   ],
   "next_actions": [
-    "第四颗已到SCRIBE终态，后续必须另用芯片。剩余DEBUG_KEY鉴权、EXIP/MASTER_KEY实际加解密、安全态物理断电及跨系列真机；需先准备相应测试向量，不能仅靠烧写回读。",
+    "优先按 docs/ai/hpm-offline-otp-handoff.md 完成脱机OTP失败门槛、脚本故障注入、GUI测试/构建和Chrome验证。第四颗已到SCRIBE，用户无新芯片；真机需等待新芯片，不声明脱机OTP通过。",
     "换接HPM5301/HPM6E80回归pipe-r20批时间戳、USB和四档，不继承旧版硬件资格。ARM固化包已通过77源文件哈希对照。",
     "官网文档任务已收到四档Chrome真图和技术附件；保留公众号风格及技术附件分层，不自动发布。继续优化前先拆分批间组帧/调度开销；慢浏览器订阅需按队列背压评估，勿与USB字节故障混同。",
     "后续补STM32F103看门狗、STOP/STANDBY、WRP拒写及其他ARM实板。HPM用户OTP开放限定型号，安全字段仍为实验路径；其他系列按报告OTP基址和EXIP长度分别适配。",

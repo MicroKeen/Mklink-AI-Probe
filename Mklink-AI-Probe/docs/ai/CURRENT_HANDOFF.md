@@ -4,12 +4,12 @@
 
 ## 当前断点
 
-- 更新时间：`2026-09-19T09:39:30.0276834+08:00`
+- 更新时间：`2026-09-19T10:23:44.5963542+08:00`
 - 分支：`codex/v0.2.2-development`
-- HEAD：`Development continues from e2cba62; v0.2.2 GUI session synchronization and draggable long paths verified.`
-- 远端 HEAD：`Task branch to be pushed for PR review; no merge/release authorized in this task.`
-- 工作树：Development changes and generated GUI assets; firmware changes are in separate local repositories.
-- 当前任务：第四颗完成用户字/组锁断电保持、签名SECURE→RETURN、GUI保护拒绝和恢复写入、ROM拒写，最后SCRIBE复位无应用心跳。MicroBoot教程和报告已更新；未宣称密钥销毁/加解密/鉴权验证。
+- HEAD：`HPM offline OTP handoff based on a2566e4; new recipe code is unvalidated development draft.`
+- 远端 HEAD：`codex/v0.2.2-development; handoff commit to be pushed, no merge or release.`
+- 工作树：Handoff includes offline OTP draft source and documentation; separate firmware and MicroBoot work remain outside this repository.
+- 当前任务：交接 HPM 脱机下载后用户 OTP 配方草稿，见 docs/ai/hpm-offline-otp-handoff.md。尚无专项软件/浏览器/真机验收；用户暂无新芯片，先做软件，后补真机。优先解决 hpm.program 成功不等于 Flash 回读校验及 malloc 失败返回0的问题。
 - 状态：`in_progress`
 
 ## 里程碑
@@ -25,7 +25,7 @@
 - **STM32F103 选项字节与 ARM mem_dump**：docs/verification/v0.2.1-stm32f103-options-stage2.md：Python 99、GUI 29、生产构建通过；CLI/MCP stdio/Chrome 10 字段一致，DATA、两项低功耗复位位及 WRP3 写入/复位/回读/恢复通过；组合下载通过，最终全部 512 KiB Flash 与原始备份一致。未测试 RDP 转换及看门狗/低功耗/WRP 拒写行为。 docs/verification/v0.2.1-stm32f103-mem-dump.md：27软件测试、14项稳定矩阵、LA3.904/10.549MHz测量、CLI/MCP/Chrome低中档通过；20/30电气试验失败保留。单RAM60s约603万点101.293kSa/s，4KB630.34KiB/s；GUI功能素材和RTT双消费者修复分别记录A/B演示构建，未做多小时认证。 docs/verification/v0.2.1-stm32-clock-calibration.md：117相关Python测试通过；Keil/在线/脱机频率实测、RTT/SystemView短时复测通过，20/30M不合格。GUI同一API改频与LA通过，RTT修复后14项mem_dump通过；最终Chrome截图尚未完成。 本轮更新（旧失败仅属旧板/旧固件）：docs/verification/v0.2.1-stm32-four-profile-freeze.md。pipe-r20四档20项完整矩阵通过，持续59.598/111.956/157.770/187.636kSa/s；20M60秒/30M120秒。Keil1/2/5/10M，Chrome配置四档和SuperWatch四档，在线/脱机各四档LA通过。USB暂停/启停20、CDC12、RTT/SV32次启动及功能/CLI/MCP通过。入口Python405、间隔66、GUI144/29（重叠）/95、生产构建与2460文件本地Skill安装审计通过。Chrome真图已交文档任务，发布渠道不变。
 - **mem_dump 四档与 HPM 实板稳定性**：docs/verification/v0.2.1-mem-dump-four-speeds.md：143 Python、3 GUI、生产构建、72打包/更新/边界通过；CLI/MCP stdio及Chrome四档切换/曲线实板通过。旧7510单变量两档各30min，旧20M 4KB失败保留；新2927修复版48用例通过，20M 4KB600s/30M300s及小块、动态RAM、10轮四档重连。SBA忙冲突按报告计数恢复，不称零冲突。 HPM6E80独立记录v0.2.1-hpm6e80-mem-dump.md：21软件测试、304候选28矩阵/30长测重连、cbd最终28回归、CLI/MCP24和Chrome通过；共享ID不识别精确型号。
 - **SuperWatch 与 SystemView 文档实测修复**：docs/verification/v0.2.1-hpm-gui-acceptance.md：172+159+158 Python、95 GUI/构建；HPM脱机78464B全回读、数组index0..15/16pts通过。新9a338046探针+Web codec两轮Chrome16449/16577事件、3任务、RuntimeDrop0，已断开。原生CSV/PNG保存未验证。 Web修复：docs/verification/v0.2.1-hex-preview.md，159 Python、121 GUI、生产构建；Chrome 无芯片 FLM+25.5MiB HEX、IAP越界提示与预览、默认折叠通过。
-- **V2 narrow reads and shared RTT validation**：0.2.2报告位于docs/verification：rtt-narrow-alignment（窄值/RTT/三代编译）、superwatch-presentation（共享流）、svd-selection、v3-regression（UART/RTT/CLI/MCP/LA，在线30M修复后通过）、gui-session-layout、v4-narrow-stream、offline-installer（UAC取消覆盖未验收）。HPM: v0.2.2-hpm5301-user-otp.md 与 v0.2.2-hpm5301-security.md。第一颗用户字、组19永久锁/拒写、SW_VER、DEBUG/JTAG禁用及独立UART通过；第二颗实验根哈希/签名启动、SECURE→RETURN、GUI字写入通过。修复保护后SBA全零/固定20150407伪配置、短读、连接旧计划、锁控制字预检，52/38 Python、8 GUI及构建通过。第三颗NONRET B/B，撤销根0后根1签名应用启动，撤销根1后复位15.12秒无UART心跳；Chrome word79=5及组19锁通过。探针OTP新增haltreq有界等待，UF2升级后定向回归。MicroBoot新增GUI OTP章节、真图，构建审计通过。10份SDK表审计发现基址及密钥长度不同，不代表跨系列实测。物理断电、SCRIBE、DEBUG_KEY、EXIP/MASTER_KEY和撤销后的恢复未验证。
+- **V2 narrow reads and shared RTT validation**：0.2.2报告位于docs/verification：rtt-narrow-alignment（窄值/RTT/三代编译）、superwatch-presentation（共享流）、svd-selection、v3-regression（UART/RTT/CLI/MCP/LA，在线30M修复后通过）、gui-session-layout、v4-narrow-stream、offline-installer（UAC取消覆盖未验收）。HPM: v0.2.2-hpm5301-user-otp.md 与 v0.2.2-hpm5301-security.md。第一颗用户字、组19永久锁/拒写、SW_VER、DEBUG/JTAG禁用及独立UART通过；第二颗实验根哈希/签名启动、SECURE→RETURN、GUI字写入通过。修复保护后SBA全零/固定20150407伪配置、短读、连接旧计划、锁控制字预检，52/38 Python、8 GUI及构建通过。第三颗NONRET B/B，撤销根0后根1签名应用启动，撤销根1后复位15.12秒无UART心跳；Chrome word79=5及组19锁通过。探针OTP新增haltreq有界等待，UF2升级后定向回归。MicroBoot新增GUI OTP章节、真图，构建审计通过。10份SDK表审计发现基址及密钥长度不同，不代表跨系列实测。第四颗Word79=7/组19锁实际断电保持、SECURE→RETURN、ROM锁区拒写与SCRIBE复位无心跳详见安全报告末节。DEBUG_KEY、EXIP/MASTER_KEY等仍未验证。新脱机OTP草稿未验收。
 
 ## 架构决策
 
@@ -43,7 +43,7 @@
 
 ## 下一动作
 
-1. 第四颗已到SCRIBE终态，后续必须另用芯片。剩余DEBUG_KEY鉴权、EXIP/MASTER_KEY实际加解密、安全态物理断电及跨系列真机；需先准备相应测试向量，不能仅靠烧写回读。
+1. 优先按 docs/ai/hpm-offline-otp-handoff.md 完成脱机OTP失败门槛、脚本故障注入、GUI测试/构建和Chrome验证。第四颗已到SCRIBE，用户无新芯片；真机需等待新芯片，不声明脱机OTP通过。
 2. 换接HPM5301/HPM6E80回归pipe-r20批时间戳、USB和四档，不继承旧版硬件资格。ARM固化包已通过77源文件哈希对照。
 3. 官网文档任务已收到四档Chrome真图和技术附件；保留公众号风格及技术附件分层，不自动发布。继续优化前先拆分批间组帧/调度开销；慢浏览器订阅需按队列背压评估，勿与USB字节故障混同。
 4. 后续补STM32F103看门狗、STOP/STANDBY、WRP拒写及其他ARM实板。HPM用户OTP开放限定型号，安全字段仍为实验路径；其他系列按报告OTP基址和EXIP长度分别适配。

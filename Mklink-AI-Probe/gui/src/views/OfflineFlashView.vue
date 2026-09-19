@@ -2,6 +2,8 @@
 import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
 import ConfirmationDialog from '../components/ConfirmationDialog.vue'
 import DeviceConfigurationPanel from '../components/DeviceConfigurationPanel.vue'
+import HpmOfflineOtpPanel from '../components/HpmOfflineOtpPanel.vue'
+import type { HpmOfflineOtp } from '../types/offlineFlash'
 import { provideConfirmation } from '../composables/useConfirmation'
 import { useOfflineFlashApi } from '../composables/useOfflineFlashApi'
 import { useOnlineFlashApi } from '../composables/useOnlineFlashApi'
@@ -137,6 +139,8 @@ const selectionWarning = computed(() => unavailableSelectedAlgorithms.value.leng
   )
   : '')
 const optionByteChanges = ref<Record<string, number | string>>({})
+const hpmOfflineOtp = ref<HpmOfflineOtp>()
+watch([targetPart, model], () => { hpmOfflineOtp.value = undefined })
 const securityRequested = computed(() => unlockBeforeDownload.value || lockAfterDownload.value)
 const securityReady = computed(() => (
   !securityRequested.value
@@ -165,7 +169,7 @@ const canTrigger = computed(() => (
 ))
 
 watch(
-  [model, scriptName, automaticCount, idcodeTimeout, swdClock, targetPart, hpmBoard, algorithms, firmwares, eraseAllBeforeDownload, unlockBeforeDownload, lockAfterDownload, securityVoltageMv, optionByteChanges],
+  [model, scriptName, automaticCount, idcodeTimeout, swdClock, targetPart, hpmBoard, algorithms, firmwares, eraseAllBeforeDownload, unlockBeforeDownload, lockAfterDownload, securityVoltageMv, optionByteChanges, hpmOfflineOtp],
   () => {
     preview.value = null
     deployedScriptName.value = ''
@@ -687,6 +691,7 @@ function buildRequest(): {
       lock_after_download: lockAfterDownload.value,
       security_voltage_mv: securityRequested.value ? securityVoltageMv.value : null,
       option_bytes: optionByteChanges.value,
+      hpm_user_otp: hpmOfflineOtp.value,
       algorithms: algorithmPayload,
       firmwares: firmwarePayload,
     },
@@ -875,6 +880,7 @@ onBeforeUnmount(() => {
           <p v-else-if="securityCapability?.supported" class="security-reason">{{ tr('加锁与解锁只对已真机验证的器件开放；配置、器件 ID、容量和 FLM 均会严格校验。', 'Lock and unlock are enabled only for hardware-validated targets; configuration, device ID, density, and FLM are strictly verified.') }}</p>
         </details>
         </DeviceConfigurationPanel>
+        <HpmOfflineOtpPanel v-if="model === 'V4' && ['HPM5301','HPM5301XEGX'].includes(targetPart.toUpperCase())" :key="`${model}:${targetPart}`" @change="hpmOfflineOtp = $event" />
         <div class="deploy-actions">
           <button class="btn" :disabled="operationBusy || !canBuild" @click="generatePreview">{{ tr('生成预览', 'Generate Preview') }}</button>
           <button class="btn btn-primary" data-testid="offline-deploy" :disabled="operationBusy || !canBuild" @click="deploy">{{ tr('部署到 U 盘', 'Deploy to USB Drive') }}</button>
