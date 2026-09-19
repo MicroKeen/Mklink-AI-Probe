@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-09-19T01:08:36.0320714+08:00",
+  "updated_at": "2026-09-19T09:09:46.4224472+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
@@ -14,7 +14,7 @@
   },
   "current_session": {
     "status": "in_progress",
-    "current_task": "HPM5301第二颗完成实验根哈希、签名启动正例、SECURE→RETURN及Chrome读写；修复SECURE伪数据配置解析与连接切换旧OTP计划。等待新芯片继续NONRET等未验证分支。"
+    "current_task": "第三颗HPM5301完成NONRET及根0/1撤销对照、Chrome用户字和组19锁；修复探针OTP暂停等待。MicroBoot新增GUI OTP章节与真图。"
   },
   "milestones": [
     {
@@ -54,7 +54,7 @@
     },
     {
       "area": "V2 narrow reads and shared RTT validation",
-      "result": "0.2.2证据：v0.2.2-rtt-narrow-alignment.md（V2窄值/RTT及三代编译）；v0.2.2-superwatch-presentation.md（V2共享流891万样本）；v0.2.2-svd-selection.md（Chrome芯片切换）；v0.2.2-v3-regression.md（V3四档、UART/RTT/CLI/MCP/LA；在线30M两模式各10次修复后通过，脱机17次）；v0.2.2-gui-session-layout.md（176 Python/706 GUI，V4共享流734万样本、长路径拖动及SV/UART）；v0.2.2-v4-narrow-stream.md（三档静态8通道/动态6通道30秒通过，SansIO断流修复223项回归，清理超时后手动恢复）；v0.2.2-offline-installer.md（完整离线包304654762字节，7059/2224及SansIO入包通过；UAC取消，覆盖安装未验收）。报告均在docs/verification。未发布。 HPM用户OTP: v0.2.2-hpm5301-user-otp.md，24 Python/6 GUI/编译通过；word69两次烧位0→1→3，Chrome写入与影子回读一致、邻字不变、同值跳过、LDO关闭、LOCK及目标tick增长；修复复位后OTP访问临时4MHz并恢复档位。组19永久锁已实测：HARD_LOCK=0x30480016；word75=1/word79=0x80000003；目标ROM锁区写回读不变，UART连续。调试禁用后续结果见独立安全报告。 docs/verification/v0.2.2-hpm5301-security.md：SW_VER=1拒绝旧启动头、更新启动头后启动通过；TCU熔丝保持、DEBUG禁止SBA且保留ID、JTAG禁止ID且UART继续启动。修复SBA不可用误报全零和Device短读成功，52项Python通过。未锁目标回归、物理断电、生命周期、签名/密钥功能待测；不宣称全部安全验收。 2026-09-19第二颗：38,132B正常ROM下载/校验、256位根哈希、38,144B签名启动、SECURE→RETURN、RETURN未签名运行及Chrome word69/79写入通过；SECURE全地址固定20150407，由实时CHIP_ID校验拒绝配置解析；RETURN控制字写锁预检拒绝。38 Python、8 GUI及生产构建通过。10份SDK OTP表审计发现基址/EXIP长度差异，非全系列硬件资格。详见同报告。"
+      "result": "0.2.2报告位于docs/verification：rtt-narrow-alignment（窄值/RTT/三代编译）、superwatch-presentation（共享流）、svd-selection、v3-regression（UART/RTT/CLI/MCP/LA，在线30M修复后通过）、gui-session-layout、v4-narrow-stream、offline-installer（UAC取消覆盖未验收）。HPM: v0.2.2-hpm5301-user-otp.md 与 v0.2.2-hpm5301-security.md。第一颗用户字、组19永久锁/拒写、SW_VER、DEBUG/JTAG禁用及独立UART通过；第二颗实验根哈希/签名启动、SECURE→RETURN、GUI字写入通过。修复保护后SBA全零/固定20150407伪配置、短读、连接旧计划、锁控制字预检，52/38 Python、8 GUI及构建通过。第三颗NONRET B/B，撤销根0后根1签名应用启动，撤销根1后复位15.12秒无UART心跳；Chrome word79=5及组19锁通过。探针OTP新增haltreq有界等待，UF2升级后定向回归。MicroBoot新增GUI OTP章节、真图，构建审计通过。10份SDK表审计发现基址及密钥长度不同，不代表跨系列实测。物理断电、SCRIBE、DEBUG_KEY、EXIP/MASTER_KEY和撤销后的恢复未验证。"
     }
   ],
   "decisions": [
@@ -65,7 +65,7 @@
     "所有 PR 不再强制第二人审批；核对差异及相关验证、必需 CI 后，按明确合并授权和确切头提交整合。不得恢复旧审批门槛；发布仍需独立授权，其他保护保留。"
   ],
   "hardware": {
-    "state": "V4 HPMLink + HPM5301：当前芯片永久禁用DEBUG/JTAG，IDCODE=0；UART0仍持续运行。请保留用于物理断电复测，待用户确认换空白芯片再继续。",
+    "state": "第三颗HPM5301为NONRET，根0/1已撤销，当前根1签名镜像复位无UART心跳，普通ID读取0；不再盲目写入。根2/3恢复未验证。",
     "backups": ".build/reports/prerelease-hil-20260907、superwatch-write-20260907；保留其他芯片唯一备份。；本轮本地证据 .build/reports/peripheral-unification。；本轮 OTP 只读和浏览器证据 .build/reports/device-configuration。；STM32F103 唯一原始备份与本轮证据 .build/reports/stm32f103-options。",
     "installer": ".build/artifacts/release-0.2.1-20260915/Mklink-AI-Probe-v0.2.1-x64-Setup.exe"
   },
@@ -79,7 +79,7 @@
     "客户原始 ELF/程序不可用，不能认定其8位毛刺根因已复现；odd-address packed halfword 不保证原子性。远程文件测试12项受Windows symlink权限限制。"
   ],
   "next_actions": [
-    "第二颗HPM5301已为RETURN，不能回退SECURE；用户换新后继续NONRET、签名失败/撤销、密钥功能验证。保留两颗已测试芯片作物理断电复测。上位机修复仅开发分支，未经新授权不合并发布。",
+    "HPM安全剩余：物理断电、SCRIBE、DEBUG_KEY及EXIP/MASTER_KEY需独立测试条件；当前芯片已撤销镜像签名根，不能继续应用UART测试。保留三颗芯片和本地证据；未经授权不合并发布。",
     "换接HPM5301/HPM6E80回归pipe-r20批时间戳、USB和四档，不继承旧版硬件资格。ARM固化包已通过77源文件哈希对照。",
     "官网文档任务已收到四档Chrome真图和技术附件；保留公众号风格及技术附件分层，不自动发布。继续优化前先拆分批间组帧/调度开销；慢浏览器订阅需按队列背压评估，勿与USB字节故障混同。",
     "后续补STM32F103看门狗、STOP/STANDBY、WRP拒写及其他ARM实板。HPM用户OTP开放限定型号，安全字段仍为实验路径；其他系列按报告OTP基址和EXIP长度分别适配。",
