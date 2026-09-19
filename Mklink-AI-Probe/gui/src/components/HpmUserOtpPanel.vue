@@ -41,12 +41,22 @@ async function request(action: 'read' | 'plan' | 'program') {
     if (action === 'read') { rows.value = body.words; hardLock.value = body.hard_lock ?? null }
     else if (action === 'plan') prepared.value = body
     else {
-      result.value = `${tr('写入并校验通过', 'Written and verified')}: word ${body.word} = ${hex(body.after)}`
+      result.value = plan?.group
+        ? `${tr('永久写保护校验通过', 'Permanent write protection verified')}: Word ${plan.group * 4}–${plan.group * 4 + 3} · HARD_LOCK = ${hex(body.after)}`
+        : `${tr('写入并校验通过', 'Written and verified')}: word ${body.word} = ${hex(body.after)}`
       rows.value = []; hardLock.value = null; invalidate()
     }
   } catch (e) {
     if (requestRevision === revision) {
-      error.value = `${e instanceof Error ? e.message : String(e)}${action === 'program' ? tr('。请重新读取确认结果，不要重试写入。', '. Read the result again; do not retry programming.') : ''}`
+      const message = e instanceof Error ? e.message : String(e)
+      const explanation = message.includes('bits cannot be cleared')
+        ? tr('目标值试图把已烧写的1改回0；OTP不能擦除。请重新读取，并保留旧值中所有为1的位。', 'The desired value clears existing bits. OTP cannot be erased. Read again and keep all existing 1 bits.')
+        : message.includes('snapshot changed')
+          ? tr('芯片数据与旧快照不一致，请重新读取后生成计划。', 'The chip no longer matches the snapshot. Read again and prepare a new plan.')
+          : message.includes('OTP word is locked')
+            ? tr('该Word已锁定，不能再写入。请选择未锁定的用户Word。', 'This word is locked. Choose an unlocked user word.')
+            : message
+      error.value = `${explanation}${action === 'program' ? tr('。请重新读取确认结果，不要重试写入。', '. Read the result again; do not retry programming.') : ''}`
       rows.value = []; hardLock.value = null; invalidate()
     }
   } finally { busy.value = false }
@@ -56,6 +66,12 @@ async function request(action: 'read' | 'plan' | 'program') {
   <section class="user-otp" data-testid="hpm-user-otp" :aria-busy="busy">
     <h4>{{ tr('HPM5301 用户 OTP', 'HPM5301 User OTP') }}</h4>
     <p>{{ tr('仅开放用户 word 69–79。熔丝只能从 0 写为 1，无法擦除；写入会重启目标程序。', 'Only user words 69–79 are available. Fuses only change from 0 to 1 and cannot be erased. Programming restarts the target.') }}</p>
+    <ol class="otp-steps" data-testid="otp-steps">
+      <li>{{ tr('读取用户 OTP，确认当前芯片的旧值和锁定状态。', 'Read user OTP to check this chip’s existing values and locks.') }}</li>
+      <li>{{ tr('选择用途和目标值，生成脚本后核对新增位；此时尚未写入。', 'Choose the operation and desired value, then generate the script and review new bits. Nothing has been programmed yet.') }}</li>
+      <li>{{ tr('确认后“写入并校验”会立即烧写并重启目标。完成后重新读取。', 'After confirmation, Program and Verify burns the fuses immediately and restarts the target. Read again afterwards.') }}</li>
+    </ol>
+    <p v-if="operation === 'data'" data-testid="otp-value-help">{{ tr('Word是编号，每个保存32位（4字节），可由应用定义为设备编号或配置标志。目标值是写入后的完整数值，不是本次新增位。例如旧值0x5，再置bit1，应填0x7；不能改回0x1。尚未规划用途时不要写入。', 'Each word holds 32 bits (4 bytes) for application-defined IDs or flags. Enter the complete final value, not just new bits: to add bit1 to 0x5 enter 0x7. Changing it to 0x1 is impossible. Plan its application use before programming.') }}</p>
     <button class="btn" :disabled="busy" data-testid="otp-read" @click="request('read')">{{ tr('读取用户 OTP', 'Read User OTP') }}</button>
     <p v-if="error" role="alert" class="error">{{ error }}</p><p v-if="result" role="status">{{ result }}</p>
     <div v-if="rows.length" class="table-wrap"><table>
@@ -84,6 +100,7 @@ async function request(action: 'read' | 'plan' | 'program') {
 <style scoped>
 .user-otp{margin-top:12px;padding:12px;border:1px solid var(--border);border-radius:6px;font-size:12px}h4{margin:0 0 8px}p{line-height:1.6;color:var(--muted)}.error{color:var(--danger);overflow-wrap:anywhere}
 .table-wrap{overflow:auto;max-height:230px;margin:10px 0}table{width:100%;border-collapse:collapse;font-family:var(--font-mono);font-size:11px}th,td{text-align:left;padding:5px;white-space:nowrap;border-bottom:1px solid var(--border)}
+.otp-steps{padding-left:20px;line-height:1.65;color:var(--muted)}.otp-steps li+li{margin-top:4px}
 .inputs{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0;align-items:end}.inputs label{display:flex;flex-direction:column;gap:4px}select,input:not([type=checkbox]){padding:6px;background:var(--surface);color:var(--fg);border:1px solid var(--border);border-radius:4px;max-width:160px}
 pre{white-space:pre-wrap;overflow-wrap:anywhere;padding:10px;background:var(--bg);border-radius:4px;font-size:11px}.confirmation{display:flex;gap:6px;align-items:start;margin:10px 0}
 </style>
