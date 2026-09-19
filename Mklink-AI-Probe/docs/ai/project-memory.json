@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-09-19T10:23:44.5963542+08:00",
+  "updated_at": "2026-09-19T12:36:34.553187+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.2.2-development",
-    "head": "HPM offline OTP handoff based on a2566e4; new recipe code is unvalidated development draft.",
-    "remote_head": "codex/v0.2.2-development; handoff commit to be pushed, no merge or release.",
+    "head": "HPM6E80 ROM target catalog follow-up to e119bd9; earlier offline OTP draft remains unvalidated.",
+    "remote_head": "codex/v0.2.2-development; catalog follow-up to be pushed to existing PR #5; no merge/release.",
     "working_tree": "Handoff includes offline OTP draft source and documentation; separate firmware and MicroBoot work remain outside this repository."
   },
   "mission": {
@@ -54,7 +54,7 @@
     },
     {
       "area": "V2 narrow reads and shared RTT validation",
-      "result": "0.2.2报告位于docs/verification：rtt-narrow-alignment（窄值/RTT/三代编译）、superwatch-presentation（共享流）、svd-selection、v3-regression（UART/RTT/CLI/MCP/LA，在线30M修复后通过）、gui-session-layout、v4-narrow-stream、offline-installer（UAC取消覆盖未验收）。HPM: v0.2.2-hpm5301-user-otp.md 与 v0.2.2-hpm5301-security.md。第一颗用户字、组19永久锁/拒写、SW_VER、DEBUG/JTAG禁用及独立UART通过；第二颗实验根哈希/签名启动、SECURE→RETURN、GUI字写入通过。修复保护后SBA全零/固定20150407伪配置、短读、连接旧计划、锁控制字预检，52/38 Python、8 GUI及构建通过。第三颗NONRET B/B，撤销根0后根1签名应用启动，撤销根1后复位15.12秒无UART心跳；Chrome word79=5及组19锁通过。探针OTP新增haltreq有界等待，UF2升级后定向回归。MicroBoot新增GUI OTP章节、真图，构建审计通过。10份SDK表审计发现基址及密钥长度不同，不代表跨系列实测。第四颗Word79=7/组19锁实际断电保持、SECURE→RETURN、ROM锁区拒写与SCRIBE复位无心跳详见安全报告末节。DEBUG_KEY、EXIP/MASTER_KEY等仍未验证。新脱机OTP草稿未验收。"
+      "result": "0.2.2报告位于docs/verification：rtt-narrow-alignment（窄值/RTT/三代编译）、superwatch-presentation（共享流）、svd-selection、v3-regression（UART/RTT/CLI/MCP/LA，在线30M修复后通过）、gui-session-layout、v4-narrow-stream、offline-installer（UAC取消覆盖未验收）。HPM: v0.2.2-hpm5301-user-otp.md 与 v0.2.2-hpm5301-security.md。第一颗用户字、组19永久锁/拒写、SW_VER、DEBUG/JTAG禁用及独立UART通过；第二颗实验根哈希/签名启动、SECURE→RETURN、GUI字写入通过。修复保护后SBA全零/固定20150407伪配置、短读、连接旧计划、锁控制字预检，52/38 Python、8 GUI及构建通过。第三颗NONRET B/B，撤销根0后根1签名应用启动，撤销根1后复位15.12秒无UART心跳；Chrome word79=5及组19锁通过。探针OTP新增haltreq有界等待，UF2升级后定向回归。MicroBoot新增GUI OTP章节、真图，构建审计通过。10份SDK表审计发现基址及密钥长度不同，不代表跨系列实测。第四颗Word79=7/组19锁实际断电保持、SECURE→RETURN、ROM锁区拒写与SCRIBE复位无心跳详见安全报告末节。DEBUG_KEY、EXIP/MASTER_KEY等仍未验证。新脱机OTP草稿未验收。 2026-09-19: add HPM6E80 ROM target alongside HPM6E00 series alias; 36 catalog tests passed. Chrome selects exact part, 30 MHz online 51072-byte download plus full verification succeeded. GUI-deployed 8 MiB offline image completed in 89.890 s erase+write and complete byte/SHA-256 readback matched. Separate HPMLink firmware changes and MicroBoot article are outside this repository; no OTP or release qualification inferred."
     }
   ],
   "decisions": [
