@@ -48,6 +48,7 @@ def test_hpm_rom_targets_are_builtin_without_pack_paths():
     records = _hpm_rom_records()
 
     assert any(record.part_number == "HPM5301xEGx" for record in records)
+    assert any(record.part_number == "HPM6E80" for record in records)
     assert all(record.installed and record.source == "hpm-rom-api" for record in records)
     assert all(record.pack_path is None for record in records)
 

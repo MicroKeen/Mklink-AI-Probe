@@ -18,14 +18,14 @@ def _profile(part: str, model: str):
     if part in ("HPM5301", "HPM5301XEGX"):
         # SDK 1.11.0 HPM5301: hpm_otp_table.h and hpm_soc_ip.h.
         rows = [
-            ("HARD_LOCK", "永久锁定位", 0, 0, 32, "锁定位仅解释原始位图，不修改"),
-            ("LIFECYCLE_A", "生命周期 A", 1, 0, 4, "原始编码；生命周期转换需专用流程"),
-            ("LIFECYCLE_B", "生命周期 B", 1, 28, 4, "原始编码；不推断可逆状态"),
-            ("JTAG_DISABLE", "JTAG 禁用位", 1, 16, 1, "永久禁用可能阻断调试访问"),
-            ("DEBUG_DISABLE", "调试禁用位", 1, 17, 1, "永久禁用可能阻断调试访问"),
-            ("SW_VER", "软件版本字段", 3, 0, 32, "原始版本位图，不解释为普通版本序号"),
-            ("USB_VID", "USB VID", 68, 16, 16, "USB 厂商标识"),
-            ("USB_PID", "USB PID", 68, 0, 16, "USB 产品标识"),
+            ("HARD_LOCK", "永久写保护位图", 0, 0, 32, "位为1表示对应组已永久禁止烧写。用户组18保护Word72–75，组19保护Word76–79。请在下方选择组，不要手工修改整个位图。"),
+            ("LIFECYCLE_A", "安全生命周期 A", 1, 0, 4, "与B一起表示芯片安全状态：0x1普通开发，0x3安全启动，0x7返厂，0xB不可返厂。不是可自由切换的模式；安全启动前须准备匹配的签名镜像。此处只读。"),
+            ("LIFECYCLE_B", "安全生命周期 B", 1, 28, 4, "应与A一起核对。A/B不一致时不要自行补写。返厂和不可返厂是不同的不可逆分支；当前GUI不执行生命周期转换。"),
+            ("JTAG_DISABLE", "关闭 JTAG 接口", 1, 16, 1, "0：本位未禁用；1：永久禁用JTAG，可能无法再识别芯片或下载程序。0也不保证可调试，其他保护仍可能生效。仅显示，不能在此修改。"),
+            ("DEBUG_DISABLE", "关闭调试访问", 1, 17, 1, "0：本位未禁用；1：永久限制调试访问。可能仍读到IDCODE但不能读写内存。普通开发请保持现状；此处只读。"),
+            ("SW_VER", "启动版本限制", 3, 0, 32, "用于启动镜像版本检查，不是应用显示的版本号。改动可能使旧镜像无法启动；需要与签名/启动头配套验证。当前显示原始位图，不在此配置。"),
+            ("USB_VID", "芯片 ROM USB 厂商标识", 68, 16, 16, "16位厂商标识，与PID配合使用。属于目标芯片ROM USB配置，不是修改MKLink下载器或应用USB描述符。当前只读。"),
+            ("USB_PID", "芯片 ROM USB 产品标识", 68, 0, 16, "16位产品标识，与VID配合使用。不是串口号；修改不会直接改变应用程序自己定义的USB设备信息。当前只读。"),
         ]
         fields = [
             dict(
@@ -49,7 +49,7 @@ def _profile(part: str, model: str):
             read_supported=True,
             fields=fields,
             source="HPM SDK 1.11.0 / HPM5301",
-            reason="公开 OTP 配置只读；熔丝值与影子值分别显示，永久写入暂不支持。",
+            reason="安全配置只读；熔丝值与影子值分别显示。V4 HPMLink 可在下方单独配置已验证型号的用户 OTP。",
             security=None,
         ), None
     capability = offline_security_capability(model, part)
@@ -123,8 +123,12 @@ def read_configuration(device, part_number: str, model: str = "V4") -> dict:
 
     name = device.mcu_name.upper()
     if result["kind"] == "otp":
-        if not re.search(r"\bHPM5301\b", name) or device.idcode != 0x1000563D:
+        if device.idcode != 0x1000563D or (name and not re.search(r"\bHPM5301\b", name)):
             raise ValueError("Connected target does not match the HPM5301 description")
+        # A cached MCU name and readable TAP ID do not prove SBA access.
+        # SECURE hardware can return a fixed word for every protected address.
+        if word(0xF3050500) != 0x11705142:
+            raise ValueError("HPM5301 CHIP_ID is unreadable or does not match; debug access may be protected. No OTP snapshot is valid.")
         snapshots = {}
         for index in sorted({field["word"] for field in result["fields"]}):
             # Read only the explicit public configuration words, never a bulk OTP dump.

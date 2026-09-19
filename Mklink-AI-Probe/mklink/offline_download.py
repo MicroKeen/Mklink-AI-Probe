@@ -11,6 +11,7 @@ import tempfile
 from typing import Mapping, Optional, Sequence, Union
 
 from mklink.offline_security import OfflineSecurityPlan, resolve_offline_security
+from mklink.hpm_offline_otp import OfflineOtp, resolve as resolve_hpm_otp, script_lines as otp_script_lines
 from mklink.stm32f1_options import (
     OptionPlan,
     resolve_plan as resolve_option_plan,
@@ -65,6 +66,7 @@ class OfflineDownloadConfig:
     firmwares: tuple[OfflineFirmware, ...]
     security: Optional[OfflineSecurityPlan]
     option_bytes: Optional[OptionPlan] = None
+    hpm_user_otp: Optional[OfflineOtp] = None
 
     @property
     def script_name(self) -> str:
@@ -166,7 +168,7 @@ def parse_offline_config(
         payload.get("swd_clock_hz", 10000000),
         "SWD clock",
         100000,
-        30000000 if model == "V4" else 10000000,
+        30000000,
     )
     from mklink.debug_speed import validate_clock_hz
     try:
@@ -175,6 +177,7 @@ def parse_offline_config(
         raise OfflineDownloadError("SWD " + str(error)) from error
     target_part = str(payload.get("target_part") or "").strip() or None
     try:
+        hpm_user_otp = resolve_hpm_otp(payload.get("hpm_user_otp"), target_part or '', model)
         option_bytes = resolve_option_plan(
             target_part or "", model, payload.get("option_bytes", {})
         )
@@ -344,6 +347,7 @@ def parse_offline_config(
         firmwares=tuple(firmwares),
         security=security,
         option_bytes=option_bytes,
+        hpm_user_otp=hpm_user_otp,
     )
 
 
@@ -525,6 +529,8 @@ def generate_offline_script(config: OfflineDownloadConfig) -> str:
         lines[insert_at:insert_at] = _security_api_preflight_lines("    ")
     if config.security is not None and config.security.unlock_before_download:
         lines.extend(_security_lines(config.security, action="unlock", indent="    "))
+    if config.hpm_user_otp is not None:
+        lines.extend(otp_script_lines(config.hpm_user_otp, commit=False))
     if config.option_bytes is not None:
         lines.extend(
             script_block(
@@ -541,6 +547,8 @@ def generate_offline_script(config: OfflineDownloadConfig) -> str:
         )
     else:
         lines.extend(_program_lines(config, "    "))
+    if config.hpm_user_otp is not None:
+        lines.extend(otp_script_lines(config.hpm_user_otp, commit=True))
     if config.security is not None and config.security.lock_after_download:
         lines.extend(_security_lines(config.security, action="lock", indent="    "))
     lines.extend(

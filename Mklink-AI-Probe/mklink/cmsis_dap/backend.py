@@ -1170,9 +1170,13 @@ class PyOcdBackend:
                     )
                     if str(target).casefold() not in known:
                         session_target = "cortex_m"
+                # CoreSight enumeration runs while reset is asserted. Some
+                # targets cannot reliably acknowledge the normal high-speed
+                # clock in this state. Restore the requested rate after init.
+                connect_frequency = min(frequency, 4_000_000) if connect_mode == "under-reset" else frequency
                 options = {
                     "target_override": session_target,
-                    "frequency": frequency,
+                    "frequency": connect_frequency,
                     "connect_mode": connect_mode,
                     "auto_unlock": False,
                 }
@@ -1203,6 +1207,17 @@ class PyOcdBackend:
                     )
                 session.delegate = _TraceStateDelegate(delegate)
                 session.open()
+                core = getattr(session.target, "selected_core", None)
+                if core is not None and "xpsr" not in core.core_registers.by_name:
+                    # pyOCD can log and swallow component initialization errors.
+                    # Do not let a partial CPU description reach flash erase.
+                    raise FlashError(
+                        FlashErrorCode.CONNECT_FAIL,
+                        "CPU initialization is incomplete; reconnect at a lower SWD frequency",
+                    )
+                if connect_frequency != frequency:
+                    resolved_probe.set_clock(frequency)
+                    session.options["frequency"] = frequency
                 if resolved_flms or security_payload is not None:
                     _mask_custom_flm_interrupts(session.target)
                 self._session = session

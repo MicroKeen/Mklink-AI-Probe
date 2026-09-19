@@ -22,7 +22,7 @@
     <div class="waveform-pane">
       <div class="speed-controls">
         <label for="superwatch-speed">{{ tr('采样调试速率', 'Memory sampling clock') }}</label>
-        <select id="superwatch-speed" v-model="speedProfile" data-testid="superwatch-speed" class="form-select" :disabled="applyingSpeed">
+        <select id="superwatch-speed" v-model="speedProfile" @change="speedDirty = true" data-testid="superwatch-speed" class="form-select" :disabled="applyingSpeed">
           <option value="low">{{ tr('低速 · 4 MHz', 'Low · 4 MHz') }}</option>
           <option value="medium">{{ tr('中速 · 10 MHz（默认）', 'Medium · 10 MHz (default)') }}</option>
           <option value="high">{{ tr('高速 · 20 MHz', 'High · 20 MHz') }}</option>
@@ -67,12 +67,21 @@ const snapshotPath = ref<string | null>(null)
 const speedProfile = ref('medium')
 const applyingSpeed = ref(false)
 const speedMessage = ref('')
+const speedDirty = ref(false)
+let speedTimer: ReturnType<typeof setTimeout> | null = null
+let speedDisposed = false
+async function pollSpeed() {
+  if (!speedDirty.value && !applyingSpeed.value) await loadSpeed()
+  if (!speedDisposed) speedTimer = setTimeout(pollSpeed, 1000)
+}
+onUnmounted(() => { speedDisposed = true; if (speedTimer !== null) clearTimeout(speedTimer) })
 
 async function loadSpeed(): Promise<void> {
   try {
     const response = await fetch(`${API_BASE}/api/device/debug-speed`)
     if (!response.ok) return
     const payload = await response.json()
+    if (speedDisposed || speedDirty.value || applyingSpeed.value) return
     if (['low', 'medium', 'high', 'ultra'].includes(payload.profile)) speedProfile.value = payload.profile
   } catch { /* The backend can still be starting. */ }
 }
@@ -87,6 +96,7 @@ async function applySpeed(): Promise<void> {
     })
     const payload = await response.json()
     if (!response.ok) throw new Error(typeof payload.detail === 'string' ? payload.detail : response.statusText)
+    speedDirty.value = false
     speedMessage.value = tr('已应用；可开始采样', 'Applied; ready to sample')
   } catch (error: any) {
     speedMessage.value = error.message
@@ -148,7 +158,7 @@ async function loadSnapshotSelection(): Promise<void> {
 
 onMounted(loadSnapshotSelection)
 watch(() => props.deviceConnected, loadSnapshotSelection)
-onMounted(loadSpeed)
+onMounted(pollSpeed)
 watch(() => props.deviceConnected, loadSpeed)
 </script>
 

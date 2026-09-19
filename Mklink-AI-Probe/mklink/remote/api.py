@@ -2113,7 +2113,7 @@ def create_app(
         addr: str | None = Body(default=None),
         channel: Annotated[StrictInt, Body()] = 0,
         mode: Annotated[StrictInt, Body()] = 0,
-        search_size: Annotated[StrictInt, Body()] = 1024,
+        search_size: Annotated[StrictInt, Body()] = 0,
         encoding: str = Body(default="utf-8"),
     ):
         from mklink.remote.dashboards import normalize_rtt_encoding
@@ -2255,7 +2255,7 @@ def create_app(
         addr: str | None = Body(default=None),
         channel: Annotated[StrictInt, Body()] = 1,
         mode: Annotated[StrictInt, Body()] = 0,
-        search_size: Annotated[StrictInt, Body()] = 1024,
+        search_size: Annotated[StrictInt, Body()] = 0,
     ):
         if mode not in (0, 1):
             raise HTTPException(
@@ -3236,6 +3236,32 @@ def create_app(
             except (ValueError, RuntimeError, OSError) as error:
                 raise HTTPException(status_code=422, detail=str(error)) from error
 
+    @app.post("/api/device/configuration/hpm-user-otp/{action}")
+    async def hpm_user_otp(action: str, part_number: str = Body(...), model: str = Body("V4"),
+                           word: int = Body(69, strict=True), expected: int | str = Body(0),
+                           desired: int | str = Body(0), confirm_irreversible: bool = Body(False, strict=True)):
+        from mklink import hpm_otp
+        if action not in ("read", "plan", "program", "lock-plan", "lock-program"):
+            raise HTTPException(status_code=422, detail="Unsupported OTP action")
+        if not _state["device"] or not _state["device"].connected:
+            raise HTTPException(status_code=400, detail="Connect the target device first")
+        async with async_target_debug_lease(_state, "hpm-user-otp"):
+            try:
+                device = _state["device"]
+                if action == "read":
+                    return await run_in_threadpool(hpm_otp.snapshot, device, part_number, model)
+                if action == "lock-plan":
+                    return await run_in_threadpool(hpm_otp.lock_plan, device, word, expected, part_number, model)
+                if action == "lock-program":
+                    return await run_in_threadpool(hpm_otp.lock_program, device, word, expected,
+                                                   confirm_irreversible, part_number, model)
+                if action == "plan":
+                    return await run_in_threadpool(hpm_otp.plan, device, word, expected, desired, part_number, model)
+                return await run_in_threadpool(hpm_otp.program, device, word, expected, desired,
+                                               confirm_irreversible, part_number, model)
+            except (ValueError, RuntimeError, OSError) as error:
+                raise HTTPException(status_code=422, detail=str(error)) from error
+
     @app.post("/api/device/read-register")
     async def read_register(name: str = Body(..., embed=True)):
         if not _state["device"] or not _state["device"].connected:
@@ -3800,6 +3826,10 @@ def run_server(
         or mklink_state.get("desktop_instance_id")
     )
 
+    # SansIO avoids legacy concurrent-drain failures between heartbeat and
+    # binary sends under backpressure. Keep heartbeat liveness checks enabled.
+    # Binary sample streams are already compact. Per-client deflate can block
+    # fanout at high sample rates and overflow otherwise healthy consumers.
     if desktop_port_end is None:
         configure_stream_observation(
             app,
@@ -3811,9 +3841,9 @@ def run_server(
         set_backend_port(port)
         browser_sessions = getattr(app.state, "browser_sessions", None)
         if browser_sessions is None:
-            uvicorn.run(app, host=host, port=port, log_level="info")
+            uvicorn.run(app, host=host, port=port, log_level="info", ws_per_message_deflate=False, ws="websockets-sansio")
             return
-        config = uvicorn.Config(app, host=host, port=port, log_level="info")
+        config = uvicorn.Config(app, host=host, port=port, log_level="info", ws_per_message_deflate=False, ws="websockets-sansio")
         server = uvicorn.Server(config)
         app.state.request_browser_session_exit = lambda: setattr(
             server, "should_exit", True
@@ -3840,7 +3870,7 @@ def run_server(
             port=selected_port,
             instance_id=desktop_instance_id,
         )
-        config = uvicorn.Config(app, log_level="info")
+        config = uvicorn.Config(app, log_level="info", ws_per_message_deflate=False, ws="websockets-sansio")
         server = uvicorn.Server(config)
         app.state.request_desktop_exit = lambda: setattr(server, "should_exit", True)
         server.run(sockets=[listener])

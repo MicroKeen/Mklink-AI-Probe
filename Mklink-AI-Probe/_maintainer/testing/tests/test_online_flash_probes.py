@@ -2111,3 +2111,11 @@ def test_rtt_start_failure_callback_runs_after_worker_cleanup():
     manager._thread.join(timeout=1)
     assert callback_observations == [(True, False)]
     assert resource_manager.get_status() == {}
+
+def test_run_server_uses_sansio_websocket_flow_control():
+    from mklink.remote.api import create_app, run_server
+    app = create_app(auth_token=None, project_root=".")
+    with patch("uvicorn.run") as serve:
+        run_server(app)
+    assert serve.call_args.kwargs["ws"] == "websockets-sansio"
+    assert serve.call_args.kwargs["ws_per_message_deflate"] is False

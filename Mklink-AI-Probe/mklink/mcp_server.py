@@ -1195,7 +1195,7 @@ def _register_rtt_tools(mcp: Any) -> None:
     def rtt_start(
         addr: str | None = None,
         channel: StrictInt = 0,
-        search_size: StrictInt = 1024,
+        search_size: StrictInt = 0,
         mode: str = "auto",
     ) -> dict:
         """Start an RTT session to capture target printf/log output.
@@ -1204,7 +1204,7 @@ def _register_rtt_tools(mcp: Any) -> None:
             addr: RTT control-block address. Required when mode="static";
                 otherwise resolved from .mklink/rtt_config.json.
             channel: RTT channel number, 0..2 on V4 firmware (default 0).
-            search_size: Probe scan window in bytes (default 1024). Only
+            search_size: Scan window in bytes; 0 (default) scans up to 1024 bytes within trusted RAM. Only
                 used in dynamic mode.
             mode: RTT control-block storage strategy — **decision encoded
                 here** (see references/rtt-static-mode.md):
@@ -1368,7 +1368,7 @@ def _register_systemview_tools(mcp: Any) -> None:
     def systemview_start(
         addr: str | None = None,
         channel: StrictInt = 1,
-        search_size: StrictInt = 1024,
+        search_size: StrictInt = 0,
         mode: str = "auto",
     ) -> dict:
         """Start a SystemView RTOS-trace capture from RTT channel 1.
@@ -1383,7 +1383,7 @@ def _register_systemview_tools(mcp: Any) -> None:
             addr: RTT control-block address (resolved from
                 .mklink/rtt_config.json when omitted, shared with RTT).
             channel: SystemView up-channel, 0..2 on V4 firmware (default 1).
-            search_size: Probe scan window in bytes (default 1024).
+            search_size: Scan window in bytes; 0 (default) scans up to 1024 bytes within trusted RAM.
             mode: "auto"/"dynamic"/"static" — same semantics as rtt_start.
         """
         if type(channel) is not int or not 0 <= channel < 3:

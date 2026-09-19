@@ -1,4 +1,4 @@
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { shallowRef } from 'vue'
 import SerialMonitorTab from './SerialMonitorTab.vue'
@@ -162,11 +162,14 @@ describe('SerialMonitorTab', () => {
     const wrapper = mount(SerialMonitorTab)
     await vi.waitFor(() => expect(wrapper.text()).toContain('USB UART'))
 
+    expect(mocks.terminalBinary.start).toHaveBeenCalledOnce()
+    expect(fetchMock.mock.calls.some(call => String(call[0]).endsWith('/api/dash/serial/start'))).toBe(false)
     expect(wrapper.text()).not.toContain('请先连接设备')
     expect(wrapper.findComponent({ name: 'VirtualLogPanel' }).exists()).toBe(false)
     expect(wrapper.find('[data-testid="serial-save-log"]').exists()).toBe(false)
     await wrapper.get('.btn-primary').trigger('click')
     await vi.waitFor(() => expect(mocks.terminalBinary.start).toHaveBeenCalledTimes(1))
+    await flushPromises()
     expect(mocks.logBinary.start).not.toHaveBeenCalled()
 
     mocks.terminalBinary.serialTerminal.value = {
@@ -260,6 +263,7 @@ describe('SerialMonitorTab', () => {
     vi.stubGlobal('fetch', fetchMock)
     const wrapper = mount(SerialMonitorTab)
     await vi.waitFor(() => expect(mocks.terminalBinary.start).toHaveBeenCalledTimes(1))
+    await flushPromises()
 
     const baudrateInput = wrapper.get('[data-testid="serial-baudrate"]')
     expect((baudrateInput.element as HTMLInputElement).value).toBe('250000')
@@ -329,6 +333,7 @@ describe('SerialMonitorTab', () => {
     vi.stubGlobal('fetch', fetchMock)
     const wrapper = mount(SerialMonitorTab)
     await vi.waitFor(() => expect(mocks.terminalBinary.start).toHaveBeenCalledTimes(1))
+    await flushPromises()
 
     const file = new File([new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8])], 'rtthread.bin')
     const input = wrapper.get('[data-testid="serial-ymodem-file"]')

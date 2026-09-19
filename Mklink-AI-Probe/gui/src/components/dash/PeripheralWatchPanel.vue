@@ -7,12 +7,13 @@
         <button v-for="(target, index) in targets" :id="`peripheral-chip-option-${index}`" :key="target.id" type="button" role="option" :aria-selected="index === activeSuggestion" class="chip-suggestion" @mousedown.prevent @click="chooseTarget(target)"><strong>{{ target.target }}</strong><small>{{ target.pack }}</small></button>
       </div>
     </div>
-    <select v-model="targetId" class="form-input" data-testid="peripheral-svd" :aria-label="tr('SVD 文件', 'SVD file')">
-      <option value="">{{ tr('匹配的 SVD 文件', 'Matching SVD file') }}</option>
-      <option v-for="target in matchingSvds" :key="target.id" :value="target.id" :title="target.pack">{{ target.svd.split(/[\\/]/).pop() }}</option>
+    <select v-model="targetId" class="form-input" data-testid="peripheral-svd" :aria-label="tr('SVD 文件', 'SVD file')" @change="chooseSvd">
+      <option value="">{{ searching ? tr('正在匹配 SVD…', 'Finding SVD…') : tr('匹配的 SVD 文件', 'Matching SVD file') }}</option>
+      <option v-for="target in matchingSvds" :key="target.id" :value="target.id" :title="target.pack">{{ target.target }} · {{ target.svd.split(/[\\/]/).pop() }} · {{ target.pack }}</option>
     </select>
+    <p v-if="chipQuery.trim() && !searching && !matchingSvds.length" data-testid="peripheral-no-match">{{ tr('已安装的芯片包中没有匹配的 SVD，请检查型号或安装对应 Pack。', 'No matching SVD in installed packs. Check the model or install its Pack.') }}</p>
     <button class="btn btn-primary" data-testid="peripheral-load" :disabled="!deviceConnected || !targetId || busy" @click="loadChip">{{ tr('加载外设', 'Load peripherals') }}</button>
-    <p v-if="selection" data-testid="peripheral-source">{{ selection.target }} · {{ selection.pack }} · {{ selection.svd }} · {{ items.length }} {{ tr('项（只读）', 'items (read only)') }}</p>
+    <p v-if="selection" data-testid="peripheral-source">{{ tr('当前已加载：', 'Currently loaded: ') }}{{ selection.target }} · {{ selection.pack }} · {{ selection.svd }} · {{ items.length }} {{ tr('项（只读）', 'items (read only)') }}</p>
     <p>{{ tr('GPIO 引脚读取 IDR 电平；ODR 为输出锁存值。采样可能漏掉短脉冲，GPIO 时钟须由程序开启。', 'GPIO pins sample IDR levels; ODR is the output latch. Short pulses may be missed. Firmware must enable the GPIO clock.') }}</p>
     <select v-model="group" class="form-input" data-testid="peripheral-group"><option value="">{{ tr('所有外设', 'All peripherals') }}</option><option v-for="name in groups" :key="name">{{ name }}</option></select>
     <input v-model="query" class="form-input" data-testid="peripheral-search" :placeholder="tr('搜索，如 GPIOB.12', 'Search, e.g. GPIOB.12')" />
@@ -46,7 +47,10 @@ const targets = ref<Target[]>([])
 const targetId = ref('')
 const chipQuery = ref('')
 const chosenModel = ref('')
-const matchingSvds = computed(() => targets.value.filter(target => target.target === chosenModel.value))
+const searching = ref(false)
+const matchingSvds = computed(() => chosenModel.value
+  ? targets.value.filter(target => target.target === chosenModel.value)
+  : chipQuery.value.trim() ? targets.value : [])
 const searchBox = ref<HTMLElement | null>(null)
 const suggestionsOpen = ref(false)
 const activeSuggestion = ref(-1)
@@ -62,13 +66,15 @@ const filtered = computed(() => items.value.filter(item => (!group.value || item
 
 async function loadTargets() {
   const epoch = ++targetRequest
+  searching.value = true
   try {
-    const payload = await request('peripherals/targets?q=' + encodeURIComponent(chipQuery.value))
+    const payload = await request('peripherals/targets?q=' + encodeURIComponent(chipQuery.value.trim()))
     if (epoch === targetRequest) {
       targets.value = payload.targets ?? []
       activeSuggestion.value = targets.value.length ? 0 : -1
     }
   } catch (cause) { if (epoch === targetRequest) error.value = String(cause) }
+  finally { if (epoch === targetRequest) searching.value = false }
 }
 function applyCatalog(payload: any) {
   items.value = payload.items ?? []
@@ -90,15 +96,24 @@ async function loadChip() {
 function chooseTarget(target: Target) {
   clearTimeout(searchTimer)
   targetRequest++
+  searching.value = false
   chipQuery.value = target.target
   chosenModel.value = target.target
   targetId.value = target.id
   suggestionsOpen.value = false
 }
+function chooseSvd() {
+  const target = targets.value.find(candidate => candidate.id === targetId.value)
+  if (target) chooseTarget(target)
+}
 function searchInput() {
   chosenModel.value = ''
   targetId.value = ''
   targetRequest++
+  targets.value = []
+  activeSuggestion.value = -1
+  searching.value = true
+  error.value = ''
   suggestionsOpen.value = true
   clearTimeout(searchTimer)
   searchTimer = setTimeout(loadTargets, 150)

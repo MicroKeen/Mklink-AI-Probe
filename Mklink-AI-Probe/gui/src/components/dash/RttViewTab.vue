@@ -218,7 +218,8 @@ const hasChartData = ref(false)
 const renderPaused = ref(false)
 const runtimeError = ref<string | null>(null)
 const RTT_CHANNEL = 0
-const RTT_SEARCH_SIZE = 1024
+// Zero lets the host bound the default scan to the actual RAM map.
+const RTT_SEARCH_SIZE = 0
 const effectiveRunning = computed(() => (
   statusKnown.value ? statusRunning.value : dash.state.value === 'running'
 ))

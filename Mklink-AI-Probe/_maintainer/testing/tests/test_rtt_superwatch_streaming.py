@@ -162,6 +162,19 @@ def test_superwatch_binary_batch_uses_sample_byte_and_latency_limits():
     assert sample_calls[0].kwargs["item_count"] == 15
 
 
+def test_superwatch_default_batches_high_rate_samples_without_discarding_rows():
+    hub = Mock()
+    manager = SuperWatchStreamManager(stream_hub=hub, clock=lambda: 0.0)
+    manager._runtime = SimpleNamespace(items=[SimpleNamespace(name="a")])
+    manager.set_interval(0.000001)
+    for sample in range(4096):
+        assert manager.publish_sample_points([{"_t": sample / 200000, "a": float(sample)}])
+    calls = [call for call in hub.publish.call_args_list if call.kwargs.get("item_count")]
+    assert len(calls) == 1
+    assert calls[0].kwargs["item_count"] == 4096
+    assert len(calls[0].args[0]) == 4096 * 12
+
+
 def test_superwatch_low_rate_sample_flushes_immediately():
     hub = Mock()
     manager = SuperWatchStreamManager(
@@ -1771,3 +1784,37 @@ def test_superwatch_applies_c_layout_and_restores_paused_collection(tmp_path, mo
     assert manager._runtime.symbol_catalog is new_catalog
     assert manager.running is True
     assert manager._collecting.is_set() is False
+
+
+@pytest.mark.parametrize("offset", range(4))
+@pytest.mark.parametrize("type_name,size,kind,value", [
+    ("uint8_t", 1, "unsigned", 255), ("int8_t", 1, "signed", -128),
+    ("uint16_t", 2, "unsigned", 65535), ("int16_t", 2, "signed", -32768),
+])
+def test_narrow_superwatch_decode_preserves_offset_width_and_sign(offset, type_name, size, kind, value):
+    base = 0x20000000
+    item = WatchItem("narrow", base + offset, type_name, size, scalar_kind=kind)
+    block = ReadBlock(base, offset + size + 1, [item])
+    decoder = compile_frame_decoder([item], [block])
+    payload = bytes([0xA5]) * offset + value.to_bytes(size, "little", signed=kind == "signed") + b"\x5a"
+    assert decoder.decode({"regions": [(0, payload)]}) == [float(value)]
+
+
+def test_restart_publishes_new_timeline_metadata_after_flushing_old_samples(monkeypatch):
+    hub = _RecordingHub()
+    manager = SuperWatchStreamManager(stream_hub=hub, batch_samples=8)
+    manager._runtime = _MutableWatchRuntime()
+    manager.publish_metadata(force=True)
+    old_version = manager.get_status()["metadata_version"]
+    manager.publish_sample_points([{"a": 1.0, "_t": 10.0}])
+    # Exercise start's synchronous boundary without a hardware worker.
+    thread = Mock()
+    thread.is_alive.return_value = False
+    monkeypatch.setattr(threading, "Thread", Mock(return_value=thread))
+    manager.start(SimpleNamespace(_bridge=object()))
+    batches = hub.snapshot()
+    old_sample = next(i for i, b in enumerate(batches) if b.flags == SUPERWATCH_TIMESTAMPED_FLOAT32)
+    new_metadata = [i for i, b in enumerate(batches) if b.flags == SUPERWATCH_METADATA_JSON][-1]
+    assert old_sample < new_metadata
+    assert decode_superwatch_metadata(batches[new_metadata].payload)["version"] > old_version
+    manager.stop()

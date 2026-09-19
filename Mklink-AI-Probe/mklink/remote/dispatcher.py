@@ -495,7 +495,7 @@ def _dispatch_device(
                 device.rtt_start(
                     params.get("addr"),
                     channel=_integer(params.get("channel", 0), "channel"),
-                    search_size=_integer(params.get("search_size", 1024), "search_size", minimum=1),
+                    search_size=_integer(params.get("search_size", 0), "search_size", minimum=0),
                     mode=params.get("mode"),
                 )
             )
@@ -513,7 +513,7 @@ def _dispatch_device(
                 device.systemview_start(
                     params.get("addr"),
                     channel=_integer(params.get("channel", 1), "channel"),
-                    search_size=_integer(params.get("search_size", 1024), "search_size", minimum=1),
+                    search_size=_integer(params.get("search_size", 0), "search_size", minimum=0),
                     mode=params.get("mode"),
                 )
             )

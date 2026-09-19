@@ -2,6 +2,8 @@
 import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
 import ConfirmationDialog from '../components/ConfirmationDialog.vue'
 import DeviceConfigurationPanel from '../components/DeviceConfigurationPanel.vue'
+import HpmOfflineOtpPanel from '../components/HpmOfflineOtpPanel.vue'
+import type { HpmOfflineOtp } from '../types/offlineFlash'
 import { provideConfirmation } from '../composables/useConfirmation'
 import { useOfflineFlashApi } from '../composables/useOfflineFlashApi'
 import { useOnlineFlashApi } from '../composables/useOnlineFlashApi'
@@ -137,6 +139,8 @@ const selectionWarning = computed(() => unavailableSelectedAlgorithms.value.leng
   )
   : '')
 const optionByteChanges = ref<Record<string, number | string>>({})
+const hpmOfflineOtp = ref<HpmOfflineOtp>()
+watch([targetPart, model], () => { hpmOfflineOtp.value = undefined })
 const securityRequested = computed(() => unlockBeforeDownload.value || lockAfterDownload.value)
 const securityReady = computed(() => (
   !securityRequested.value
@@ -165,7 +169,7 @@ const canTrigger = computed(() => (
 ))
 
 watch(
-  [model, scriptName, automaticCount, idcodeTimeout, swdClock, targetPart, hpmBoard, algorithms, firmwares, eraseAllBeforeDownload, unlockBeforeDownload, lockAfterDownload, securityVoltageMv, optionByteChanges],
+  [model, scriptName, automaticCount, idcodeTimeout, swdClock, targetPart, hpmBoard, algorithms, firmwares, eraseAllBeforeDownload, unlockBeforeDownload, lockAfterDownload, securityVoltageMv, optionByteChanges, hpmOfflineOtp],
   () => {
     preview.value = null
     deployedScriptName.value = ''
@@ -259,7 +263,9 @@ async function refreshDisk(): Promise<void> {
 
 function modelChanged(): void {
   preview.value = null
-  if (effectiveModel.value === 'V2') automaticCount.value = 1
+  if (effectiveModel.value === 'V2') {
+    automaticCount.value = 1
+  }
 }
 
 async function refreshSecurityCapability(): Promise<void> {
@@ -685,6 +691,7 @@ function buildRequest(): {
       lock_after_download: lockAfterDownload.value,
       security_voltage_mv: securityRequested.value ? securityVoltageMv.value : null,
       option_bytes: optionByteChanges.value,
+      hpm_user_otp: hpmOfflineOtp.value,
       algorithms: algorithmPayload,
       firmwares: firmwarePayload,
     },
@@ -845,7 +852,8 @@ onBeforeUnmount(() => {
         <label class="setting-row"><span>{{ tr('脚本文件名', 'Script File Name') }}</span><input v-model="scriptFieldName" class="form-input mono" data-testid="offline-script-name" :disabled="effectiveModel !== 'V4'"></label>
         <label class="setting-row"><span>{{ tr('自动烧录次数', 'Automatic Flash Count') }}</span><input v-model.number="automaticCount" type="number" min="1" max="9999" class="form-input" :disabled="effectiveModel === 'V2'"></label>
         <label class="setting-row"><span>{{ tr('IDCODE 超时', 'IDCODE Timeout') }}</span><input v-model.number="idcodeTimeout" type="number" min="500" max="600000" step="500" class="form-input"><em>ms</em></label>
-        <label class="setting-row"><span>{{ tr('SWD 速率', 'SWD Rate') }}</span><select v-model.number="swdClock" class="form-select"><option :value="1000000">1 MHz</option><option :value="4000000">4 MHz</option><option :value="5000000">5 MHz</option><option :value="8000000">8 MHz</option><option :value="10000000">10 MHz</option><option v-if="effectiveModel === 'V4'" :value="20000000">20 MHz</option><option v-if="effectiveModel === 'V4'" :value="30000000">30 MHz</option></select></label>
+        <label class="setting-row"><span>{{ tr('SWD 速率', 'SWD Rate') }}</span><select v-model.number="swdClock" class="form-select" data-testid="offline-clock"><option :value="1000000">1 MHz</option><option :value="4000000">4 MHz</option><option :value="5000000">5 MHz</option><option :value="8000000">8 MHz</option><option :value="10000000">10 MHz</option><option :value="20000000">20 MHz</option><option :value="30000000">30 MHz</option></select></label>
+        <p v-if="effectiveModel === 'V2' && swdClock > 10000000" class="muted">{{ tr('V2 的 20/30 MHz 需要支持高速时序的新版固件。', 'V2 20/30 MHz requires updated firmware with high-speed timing support.') }}</p>
         <DeviceConfigurationPanel v-model:changes="optionByteChanges" :has-firmware="firmwares.length > 0" :part-number="targetPart" :model="model" :unlock-before-download="unlockBeforeDownload" :lock-after-download="lockAfterDownload">
         <details class="security-settings">
           <summary class="security-title">
@@ -872,6 +880,7 @@ onBeforeUnmount(() => {
           <p v-else-if="securityCapability?.supported" class="security-reason">{{ tr('加锁与解锁只对已真机验证的器件开放；配置、器件 ID、容量和 FLM 均会严格校验。', 'Lock and unlock are enabled only for hardware-validated targets; configuration, device ID, density, and FLM are strictly verified.') }}</p>
         </details>
         </DeviceConfigurationPanel>
+        <HpmOfflineOtpPanel v-if="model === 'V4' && ['HPM5301','HPM5301XEGX'].includes(targetPart.toUpperCase())" :key="`${model}:${targetPart}`" @change="hpmOfflineOtp = $event" />
         <div class="deploy-actions">
           <button class="btn" :disabled="operationBusy || !canBuild" @click="generatePreview">{{ tr('生成预览', 'Generate Preview') }}</button>
           <button class="btn btn-primary" data-testid="offline-deploy" :disabled="operationBusy || !canBuild" @click="deploy">{{ tr('部署到 U 盘', 'Deploy to USB Drive') }}</button>

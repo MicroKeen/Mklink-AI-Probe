@@ -502,18 +502,17 @@ def _copy_upload(upload: UploadFile, destination: Path, total: list[int]) -> Pat
     return destination
 
 
-def _redact_trigger_line(raw: str) -> str:
-    return re.sub(
-        r"(?i)(IDCODE\s*:\s*)0x[0-9a-f]+",
-        r"\1<masked>",
-        str(raw).strip(),
-    )[:500]
+def _format_trigger_line(raw: str) -> str:
+    # Debug-port IDCODE identifies a device type, not an individual unit.
+    # Keep it visible so operators can distinguish successful identification
+    # from a zero/invalid response. Retain the bounded log output.
+    return str(raw).strip()[:500]
 
 
-def _redact_trigger_output(response: str) -> list[str]:
+def _format_trigger_output(response: str) -> list[str]:
     return [
         line
-        for line in (_redact_trigger_line(raw) for raw in response.splitlines()[-100:])
+        for line in (_format_trigger_line(raw) for raw in response.splitlines()[-100:])
         if line
     ]
 
@@ -583,7 +582,7 @@ def create_offline_download_router(
             def emit(raw: str) -> None:
                 if not accepting_output:
                     return
-                line = _redact_trigger_line(raw)
+                line = _format_trigger_line(raw)
                 if line:
                     loop.call_soon_threadsafe(
                         queue.put_nowait,
@@ -605,7 +604,7 @@ def create_offline_download_router(
                         resolved_port,
                         emit,
                     )
-                    lines = _redact_trigger_output(response)
+                    lines = _format_trigger_output(response)
                     text = "\n".join(lines).casefold()
                     await queue.put({
                         "type": "result",
@@ -850,7 +849,7 @@ def create_offline_download_router(
             raise HTTPException(status_code=409, detail=str(error))
         finally:
             resource_manager.release(owner)
-        lines = _redact_trigger_output(response)
+        lines = _format_trigger_output(response)
         text = "\n".join(lines).casefold()
         return {
             "status": "completed" if "finished" in text and "aborted" not in text else "failed",
