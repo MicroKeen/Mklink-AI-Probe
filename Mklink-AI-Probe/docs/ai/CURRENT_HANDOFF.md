@@ -4,12 +4,12 @@
 
 ## 当前断点
 
-- 更新时间：`2026-09-19T09:27:42.1551601+08:00`
+- 更新时间：`2026-09-19T09:36:05.3394414+08:00`
 - 分支：`codex/v0.2.2-development`
 - HEAD：`Development continues from e2cba62; v0.2.2 GUI session synchronization and draggable long paths verified.`
 - 远端 HEAD：`Task branch to be pushed for PR review; no merge/release authorized in this task.`
 - 工作树：Development changes and generated GUI assets; firmware changes are in separate local repositories.
-- 当前任务：第四颗HPM5301完成下载/GUI读写0→5→7、拒绝清位、组19锁；新增初学者字段注释和步骤，MicroBoot教程更新截图。等待独立UART恢复后继续安全分支和断电验证。
+- 当前任务：第四颗完成用户字/组锁真实断电保持、签名启动SECURE、GUI保护读数拒绝、RETURN恢复未签名下载和Chrome word69写入。记录两次暂停等待后回退成功。密钥及SCRIBE等仍待独立资格。
 - 状态：`in_progress`
 
 ## 里程碑
@@ -37,13 +37,13 @@
 
 ## 真机环境
 
-- **state**：第四颗HPM5301仍可调试，Word79=7，组19锁(HARD_LOCK30480016)，其余用户字0；COM488命令/COM487探针UART，独立CH340未枚举。后台8770已连接，避免另开命令口。
+- **state**：第四颗HPM5301为RETURN70000007，未签名应用下载/校验运行正常；Word69=1/79=7，组19锁30480016。UART0 COM743已恢复，COM488后台8770连接中。FUSE_LOCK0=1。
 - **backups**：.build/reports/prerelease-hil-20260907、superwatch-write-20260907；保留其他芯片唯一备份。；本轮本地证据 .build/reports/peripheral-unification。；本轮 OTP 只读和浏览器证据 .build/reports/device-configuration。；STM32F103 唯一原始备份与本轮证据 .build/reports/stm32f103-options。
 - **installer**：.build/artifacts/release-0.2.1-20260915/Mklink-AI-Probe-v0.2.1-x64-Setup.exe
 
 ## 下一动作
 
-1. 用户接回独立UART0后确认心跳，再继续第四颗安全测试；物理断电需用户配合。已验证0→5→7与永久组19锁，不能重放初始烧写。SCRIBE/密钥/跨型号仍待验证。
+1. 第四颗已为RETURN，不能转NONRET重测。已完成用户字及组锁真实断电；安全态物理断电、SCRIBE、DEBUG_KEY/EXIP/MASTER_KEY仍待独立方案与芯片，不宣称全安全认证。UART0恢复COM743。
 2. 换接HPM5301/HPM6E80回归pipe-r20批时间戳、USB和四档，不继承旧版硬件资格。ARM固化包已通过77源文件哈希对照。
 3. 官网文档任务已收到四档Chrome真图和技术附件；保留公众号风格及技术附件分层，不自动发布。继续优化前先拆分批间组帧/调度开销；慢浏览器订阅需按队列背压评估，勿与USB字节故障混同。
 4. 后续补STM32F103看门狗、STOP/STANDBY、WRP拒写及其他ARM实板。HPM用户OTP开放限定型号，安全字段仍为实验路径；其他系列按报告OTP基址和EXIP长度分别适配。
