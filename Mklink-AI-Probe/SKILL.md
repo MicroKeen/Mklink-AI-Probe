@@ -17,7 +17,11 @@ description: 使用 MKLink/MicroLink 操作目标 MCU：固件烧录、内存与
   不等到首次设备操作，不使用上次会话的 24 小时缓存；本会话后续调用不重复检查。
   离线继续任务，发现新版本时简要提示；安装仍须用户同意，按需读
   [安装与更新](references/install.md)。
-- 有 MKLink MCP tool 时优先使用；能力未覆盖时用 `python -m mklink <command>`。
+- **下载固件先选后端**：除 HPM ROM 路径或用户明确指定方式外，优先使用用户
+  工程已配置的 IDE（Keil 等）编译下载，其次 pyOCD 在线下载，最后脱机下载。
+  执行前读取[下载优先级](references/firmware-download-priority.md)。用户已确认
+  Keil 能下载时，优先复用该工程配置，不继续盲试脱机 FLM。
+- 其他设备操作有 MKLink MCP tool 时优先使用；能力未覆盖时用 `python -m mklink <command>`。
   参数以 tool schema/`--help` 为准，找不到入口再读[操作速查](references/tool-index.md)。
 - 首次需要生成脚本、日志、采集或报告时，工作根目录固定为用户指定的非系统盘
   目录；用户未指定时使用目标项目 `.mklink/`。项目在系统盘或没有项目时先询问，
@@ -47,8 +51,10 @@ description: 使用 MKLink/MicroLink 操作目标 MCU：固件烧录、内存与
   超时原调用，也禁止循环发送 stop、`reboot_probe` 或 `reboot()`。
 - **AXF/ELF**：默认使用内置 pyelftools；`readelf_available:false` 不阻塞操作。
   只有用户明确指定 `elf_backend=external` 才调用外部 readelf/addr2line。
-- **未知 MCU**：先 `detect_mcu_profile` / `mcu-detect`；不能改成 `custom` 绕过匹配。
-  多个内部算法候选时请用户选择，缺少算法时停止并说明所需 Pack。
+- **未知 MCU / 共享算法**：原生或脱机路径先 `detect_mcu_profile` / `mcu-detect`；
+  不能改成 `custom` 绕过匹配。缺少精确型号名称不等于没有兼容算法：先按
+  [FLM 兼容性规则](references/firmware-download-priority.md#flm-兼容性)核对工程与 Pack。
+  能确定唯一兼容项时显式指定；确有歧义再请用户选择，均不兼容或缺文件才停止。
 - **HPM**：`HPM*` 只用设备端 ROM API，不找 Pack、不加载 FLM、不追加通用 SWD
   reset；传 `.bin`、精确 `target_part`、`base_address` 及 `board` 或四字
   `hpm_flash_cfg`。
