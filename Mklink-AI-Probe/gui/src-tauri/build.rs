@@ -7,5 +7,8 @@ fn main() {
         // TaskDialogIndirect requires Common Controls v6 at process startup.
         println!("cargo:rustc-link-arg=/MANIFEST:EMBED");
         println!("cargo:rustc-link-arg=/MANIFESTDEPENDENCY:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'");
+        // The application already embeds Tauri's complete manifest in resource.lib.
+        // Do not generate a second resource with the same ID for that binary.
+        println!("cargo:rustc-link-arg-bin=mklink-ai-probe=/MANIFEST:NO");
     }
 }

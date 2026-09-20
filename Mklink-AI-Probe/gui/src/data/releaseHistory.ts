@@ -20,6 +20,8 @@ export const releaseHistory: ReleaseHistoryEntry[] = [
       '优化高频采集显示与共享数据流；修复切换芯片后的 SVD 候选选择。',
       '完善 RTT 搜索边界和窄变量、非对齐读取；相关探针修复需配套固件。',
       '改善高速在线烧录的复位初始化，修复脱机 IDCODE 日志被误隐藏。',
+      '优化 ARM/HPM 在线烧录校验；Skill 优先复用工程 IDE 下载，其次在线烧录，最后脱机烧录。',
+      '新增 HPM5301 用户 OTP 在线配置与下载后脱机配置；全部固件校验成功后才写用户数据，永久组锁最后执行，需配套 HPMLink 固件。',
     ],
     changesEn: [
       'Default WebGUI and desktop to Dark, retain saved Light/Dark/System preferences, and match SuperWatch plots and PNG export to the theme.',
@@ -29,6 +31,8 @@ export const releaseHistory: ReleaseHistoryEntry[] = [
       'Improve high-rate shared streams and SVD selection after changing chips.',
       'Improve RTT search bounds and narrow/unaligned reads; probe-side fixes require compatible firmware.',
       'Improve reset initialization during fast online flashing and preserve offline IDCODE logs.',
+      'Optimize ARM/HPM online verification; prefer the project IDE for Skill-driven downloads, then online flashing, then offline flashing.',
+      'Add HPM5301 user OTP configuration online and after offline downloads. Verify all firmware before writing user data, apply permanent group locks last, and require compatible HPMLink firmware.',
     ],
   },
   {
