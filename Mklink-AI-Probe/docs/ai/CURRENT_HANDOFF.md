@@ -4,12 +4,12 @@
 
 ## 当前断点
 
-- 更新时间：`2026-09-20T19:55:09.9360852+08:00`
+- 更新时间：`2026-09-20T20:03:48.8762431+08:00`
 - 分支：`codex/v0.2.2-development`
 - HEAD：`0.2.2 shared light/dark/system themes, RTT transmit surround, canvas redraw and consistent package metadata.`
 - 远端 HEAD：`codex/v0.2.2-development / PR #5; regression follow-up, no merge or release.`
 - 工作树：Handoff includes offline OTP draft source and documentation; separate firmware and MicroBoot work remain outside this repository.
-- 当前任务：新 HPM5301 完成脱机下载后用户 OTP 的软件修复和 GUI 实板写入/锁定，等待用户真正断电后复核，再继续0.2.2标准安装包准备；尚未发布。
+- 当前任务：HPM5301脱机OTP写入/两组锁及真正断电保持验收完成，准备0.2.2标准NSIS候选；12项符号链接测试待Windows权限补跑，尚未发布。
 - 状态：`in_progress`
 
 ## 里程碑
@@ -25,7 +25,7 @@
 - **STM32F103 选项字节与 ARM mem_dump**：docs/verification/v0.2.1-stm32f103-options-stage2.md：Python 99、GUI 29、生产构建通过；CLI/MCP stdio/Chrome 10 字段一致，DATA、两项低功耗复位位及 WRP3 写入/复位/回读/恢复通过；组合下载通过，最终全部 512 KiB Flash 与原始备份一致。未测试 RDP 转换及看门狗/低功耗/WRP 拒写行为。 docs/verification/v0.2.1-stm32f103-mem-dump.md：27软件测试、14项稳定矩阵、LA3.904/10.549MHz测量、CLI/MCP/Chrome低中档通过；20/30电气试验失败保留。单RAM60s约603万点101.293kSa/s，4KB630.34KiB/s；GUI功能素材和RTT双消费者修复分别记录A/B演示构建，未做多小时认证。 docs/verification/v0.2.1-stm32-clock-calibration.md：117相关Python测试通过；Keil/在线/脱机频率实测、RTT/SystemView短时复测通过，20/30M不合格。GUI同一API改频与LA通过，RTT修复后14项mem_dump通过；最终Chrome截图尚未完成。 本轮更新（旧失败仅属旧板/旧固件）：docs/verification/v0.2.1-stm32-four-profile-freeze.md。pipe-r20四档20项完整矩阵通过，持续59.598/111.956/157.770/187.636kSa/s；20M60秒/30M120秒。Keil1/2/5/10M，Chrome配置四档和SuperWatch四档，在线/脱机各四档LA通过。USB暂停/启停20、CDC12、RTT/SV32次启动及功能/CLI/MCP通过。入口Python405、间隔66、GUI144/29（重叠）/95、生产构建与2460文件本地Skill安装审计通过。Chrome真图已交文档任务，发布渠道不变。
 - **mem_dump 四档与 HPM 实板稳定性**：docs/verification/v0.2.1-mem-dump-four-speeds.md：143 Python、3 GUI、生产构建、72打包/更新/边界通过；CLI/MCP stdio及Chrome四档切换/曲线实板通过。旧7510单变量两档各30min，旧20M 4KB失败保留；新2927修复版48用例通过，20M 4KB600s/30M300s及小块、动态RAM、10轮四档重连。SBA忙冲突按报告计数恢复，不称零冲突。 HPM6E80独立记录v0.2.1-hpm6e80-mem-dump.md：21软件测试、304候选28矩阵/30长测重连、cbd最终28回归、CLI/MCP24和Chrome通过；共享ID不识别精确型号。
 - **SuperWatch 与 SystemView 文档实测修复**：docs/verification/v0.2.1-hpm-gui-acceptance.md：172+159+158 Python、95 GUI/构建；HPM脱机78464B全回读、数组index0..15/16pts通过。新9a338046探针+Web codec两轮Chrome16449/16577事件、3任务、RuntimeDrop0，已断开。原生CSV/PNG保存未验证。 Web修复：docs/verification/v0.2.1-hex-preview.md，159 Python、121 GUI、生产构建；Chrome 无芯片 FLM+25.5MiB HEX、IAP越界提示与预览、默认折叠通过。
-- **V2 narrow reads and shared RTT validation**：历史0.2.2资格见docs/verification下对应报告，不外推其他芯片。20260920 V4 STM32F103见v0.2.2-v4-stm32-regression-20260920.md：在线6/脱机6、窄值/非对齐、UART/RTT/SystemView/CLI/MCP、Chrome120秒通过，Boot保留。HPM6E80见v0.2.2-v4-hpm6e80-regression-20260920.md：四档窄值/非对齐、RTT/SV、在线3/脱机3、Chrome共享120秒通过；UART未接，OTP未测。Theme见v0.2.2-theme-desktop-20260920.md：旧离线候选包真实覆盖安装/受限PATH启动/暗色持久化通过。最新标准候选见v0.2.2-standard-candidate-20260920.md：原生GUI HPM HardFault架构保护已实点截图；717 GUI通过；Python2266通过2跳过，12项symlink权限失败经提升权限独立重跑全通过。Rust测试exe启动失败0xc0000139，打包链未执行，无新标准安装包。Skill入口明确IDE→pyOCD→脱机；STM32共享FLM须工程/Pack兼容证据，不盲选1024。源码与本机Skill结构/链接/规则检查通过，保留共享流定制；客户ELF错误由加密导致，不改解析器。HPM脱机OTP保留未验收草稿，正式发布暂停。 本轮校验/主题/清空器件见v0.2.2-online-verify-theme-20260920.md：178Python、718全量GUI/生产构建；HPM30M校验51,252B从3.751s到0.817–0.857s，负例地址检出通过。STM32F103RE实板三档新旧各3次校验、三档BIN/HEX6次擦写校验通过；新均值235/170/210ms，负例0x08015001准确检出，Boot与节拍正常。带Verify导出的FLM仍仅软件验证。所有弹窗视觉复测受浏览器URL检查阻塞。 docs/verification/v0.2.2-hpm-offline-otp-20260920.md：126定向Python、26GUI和生产构建通过；旧API/旧值/缺文件停止，真实Chrome两次写入与组18/19锁通过；完整BIN独立回读、锁后预检拒写、UART心跳通过。真实断电保持待复核。BrowserAct Chrome已恢复可用。
+- **V2 narrow reads and shared RTT validation**：历史V2/V3/V4和四档实板资格见docs/verification各报告，不外推芯片。20260920 STM32F103在线6/脱机6、窄值/非对齐、UART/RTT/SystemView/CLI/MCP与Chrome通过；HPM6E80四档、在线3/脱机3及共享流通过，UART未接。主题与在线校验见v0.2.2-online-verify-theme-20260920.md：HPM校验约4.4倍提升，ARM三档BIN/HEX6次通过、Boot保留；带Verify导出FLM仅软件验证。本轮HPM5301脱机OTP详见v0.2.2-hpm-offline-otp-20260920.md：旧API/旧值/缺文件停止；真实Chrome写Word72=1、79=3和组18/19锁，完整BIN回读及UART通过，真正断电后值/锁、固件和UART/GUI复核通过。Python2294通过2跳过、12项符号链接权限失败；GUI720通过、生产构建通过。Rust测试缺Common Controls v6清单已修复，19项通过。BrowserAct Chrome恢复可用。标准NSIS尚待重新构建/覆盖安装，正式渠道未更新。
 
 ## 架构决策
 
@@ -37,13 +37,13 @@
 
 ## 真机环境
 
-- **state**：HPMLink V4 + HPM5301。Word72=1、Word79=3、HARD_LOCK=0x304C0016；38,364字节固件独立回读一致，UART0心跳递增。组18/19已永久锁定，禁止重放原配方。等待实际断电回复，不进行安全生命周期操作。
+- **state**：HPMLink V4 + HPM5301。Word72=1、Word79=3、HARD_LOCK=0x304C0016；38,364字节固件独立回读一致，UART0心跳递增。组18/19已永久锁定，禁止重放原配方。实际断电后GUI/独立回读和UART复核通过，不进行安全生命周期操作。
 - **backups**：.build/reports/prerelease-hil-20260907、superwatch-write-20260907；保留其他芯片唯一备份。；本轮本地证据 .build/reports/peripheral-unification。；本轮 OTP 只读和浏览器证据 .build/reports/device-configuration。；STM32F103 唯一原始备份与本轮证据 .build/reports/stm32f103-options。
 - **installer**：.build/artifacts/theme-022-20260920/Mklink-AI-Probe-v0.2.2-cdbf08051a53-x64-Offline-Setup.exe
 
 ## 下一动作
 
-1. 收到用户真实断电重上电回复后，只读核对Word72=1、Word79=3、HARD_LOCK=0x304C0016及UART；更新v0.2.2-hpm-offline-otp-20260920.md。全量Python回归正在运行，继续GUI/Rust和标准NSIS候选验收。
+1. HPM5301脱机OTP本轮验收完成。用户已被告知启用Windows开发人员模式以补跑12项symlink权限测试；继续标准NSIS构建和覆盖安装资格，不直接发布渠道。
 2. ARM在线普通回读校验真机完成；带Verify导出的FLM待适合实板；弹窗主题需浏览器恢复后视觉验收，修改尚未重新打包安装。
 3. 官网文档任务已收到四档Chrome真图和技术附件；保留公众号风格及技术附件分层，不自动发布。继续优化前先拆分批间组帧/调度开销；慢浏览器订阅需按队列背压评估，勿与USB字节故障混同。
 4. 后续补STM32F103看门狗、STOP/STANDBY、WRP拒写及其他ARM实板。HPM用户OTP开放限定型号，安全字段仍为实验路径；其他系列按报告OTP基址和EXIP长度分别适配。
