@@ -54,7 +54,7 @@
     },
     {
       "area": "V2 narrow reads and shared RTT validation",
-      "result": "历史0.2.2资格见docs/verification下对应报告，不外推其他芯片。20260920 V4 STM32F103见v0.2.2-v4-stm32-regression-20260920.md：在线6/脱机6、窄值/非对齐、UART/RTT/SystemView/CLI/MCP、Chrome120秒通过，Boot保留。HPM6E80见v0.2.2-v4-hpm6e80-regression-20260920.md：四档窄值/非对齐、RTT/SV、在线3/脱机3、Chrome共享120秒通过；UART未接，OTP未测。Theme见v0.2.2-theme-desktop-20260920.md：旧离线候选包真实覆盖安装/受限PATH启动/暗色持久化通过。最新标准候选见v0.2.2-standard-candidate-20260920.md：原生GUI HPM HardFault架构保护已实点截图；717 GUI通过；Python2266通过2跳过，12项symlink权限失败经提升权限独立重跑全通过。Rust测试exe启动失败0xc0000139，打包链未执行，无新标准安装包。Skill入口明确IDE→pyOCD→脱机；STM32共享FLM须工程/Pack兼容证据，不盲选1024。源码与本机Skill结构/链接/规则检查通过，保留共享流定制；客户ELF错误由加密导致，不改解析器。HPM脱机OTP保留未验收草稿，正式发布暂停。"
+      "result": "历史0.2.2资格见docs/verification下对应报告，不外推其他芯片。20260920 V4 STM32F103见v0.2.2-v4-stm32-regression-20260920.md：在线6/脱机6、窄值/非对齐、UART/RTT/SystemView/CLI/MCP、Chrome120秒通过，Boot保留。HPM6E80见v0.2.2-v4-hpm6e80-regression-20260920.md：四档窄值/非对齐、RTT/SV、在线3/脱机3、Chrome共享120秒通过；UART未接，OTP未测。Theme见v0.2.2-theme-desktop-20260920.md：旧离线候选包真实覆盖安装/受限PATH启动/暗色持久化通过。最新标准候选见v0.2.2-standard-candidate-20260920.md：原生GUI HPM HardFault架构保护已实点截图；717 GUI通过；Python2266通过2跳过，12项symlink权限失败经提升权限独立重跑全通过。Rust测试exe启动失败0xc0000139，打包链未执行，无新标准安装包。Skill入口明确IDE→pyOCD→脱机；STM32共享FLM须工程/Pack兼容证据，不盲选1024。源码与本机Skill结构/链接/规则检查通过，保留共享流定制；客户ELF错误由加密导致，不改解析器。HPM脱机OTP保留未验收草稿，正式发布暂停。 本轮校验/主题/清空器件见v0.2.2-online-verify-theme-20260920.md：178Python、718全量GUI/生产构建；HPM30M校验51,252B从3.751s到0.817–0.857s，负例地址检出通过。ARM优化未实板验证，待换板。所有弹窗视觉复测受浏览器URL检查阻塞。"
     }
   ],
   "decisions": [
@@ -65,7 +65,7 @@
     "所有 PR 不再强制第二人审批；核对差异及相关验证、必需 CI 后，按明确合并授权和确切头提交整合。不得恢复旧审批门槛；发布仍需独立授权，其他保护保留。"
   ],
   "hardware": {
-    "state": "HPMLink V4 + HPM6E80, UART disconnected. Installed 0.2.2 desktop owns probe on backend 8765, dark three-variable 30 MHz SuperWatch visible. Development backend 8770 is disconnected and still uses old imported backend code.",
+    "state": "HPMLink V4 + HPM6E80 confirmed by matching hello_world BIN, command port changed to COM225. GUI backends disconnected for read-only verification benchmark; probe closed afterward. UART not connected.",
     "backups": ".build/reports/prerelease-hil-20260907、superwatch-write-20260907；保留其他芯片唯一备份。；本轮本地证据 .build/reports/peripheral-unification。；本轮 OTP 只读和浏览器证据 .build/reports/device-configuration。；STM32F103 唯一原始备份与本轮证据 .build/reports/stm32f103-options。",
     "installer": ".build/artifacts/theme-022-20260920/Mklink-AI-Probe-v0.2.2-cdbf08051a53-x64-Offline-Setup.exe"
   },
@@ -80,7 +80,7 @@
   ],
   "next_actions": [
     "正式0.2.2发布按用户2026-09-20要求暂停；保留HPM脱机OTP草稿，按hpm-offline-otp-handoff.md补软件/新HPM5301真机验收后再决定发布。继续标准NSIS候选包和默认暗黑回归。",
-    "已在原生桌面GUI实点HardFault核对HPM架构拒绝提示并截图。开发8770仍为旧导入后端；当前桌面8765使用新版。",
+    "ARM在线校验优化待用户换回STM32F103实板验证；弹窗主题需浏览器恢复后视觉验收，修改尚未重新打包安装。",
     "官网文档任务已收到四档Chrome真图和技术附件；保留公众号风格及技术附件分层，不自动发布。继续优化前先拆分批间组帧/调度开销；慢浏览器订阅需按队列背压评估，勿与USB字节故障混同。",
     "后续补STM32F103看门狗、STOP/STANDBY、WRP拒写及其他ARM实板。HPM用户OTP开放限定型号，安全字段仍为实验路径；其他系列按报告OTP基址和EXIP长度分别适配。",
     "本机桌面已覆盖安装本地0.2.2离线包；正式发布渠道和Skill仍为0.2.1，定时任务维持暂停。"

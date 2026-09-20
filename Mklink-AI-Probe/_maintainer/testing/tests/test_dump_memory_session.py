@@ -1022,3 +1022,21 @@ def test_cli_dump_limits_complete_samples_inside_one_usb_read(monkeypatch, tmp_p
                                   period=.001, frames=1, duration=1, save=str(output))
     assert result == 0
     assert output.read_bytes() == expected
+
+
+def test_range_read_uses_acknowledged_stop_without_fixed_delay(monkeypatch):
+    bridge = FakeBridge([_old_frame(1, b"abcd")])
+    stopped = []
+    bridge._stop_stream_and_sync = lambda command: stopped.append(command) or True
+    monkeypatch.setattr("mklink.dump_memory.time.sleep", lambda _: pytest.fail("fixed sleep"))
+    assert read_dump_memory_range_once(bridge, 0x80000000, 4, poll_interval=0) == b"abcd"
+    assert stopped == [b"cmd.dump_memory(0x80000000, 1, -1.0)\n"]
+    assert ("exit",) not in bridge.calls
+
+
+def test_range_read_rejects_failed_command_resynchronization():
+    bridge = FakeBridge([_old_frame(1, b"abcd")])
+    bridge._stop_stream_and_sync = lambda command: False
+    with pytest.raises(TimeoutError, match="restore command mode"):
+        read_dump_memory_range_once(bridge, 0x80000000, 4, poll_interval=0)
+    assert ("exit",) not in bridge.calls

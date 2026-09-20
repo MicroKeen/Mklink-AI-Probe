@@ -137,14 +137,7 @@ def test_hpm_rom_backend_reads_via_dump_memory(monkeypatch) -> None:
         (0x80000000 + index) & 0xFF for index in range(0x8001)
     )
     assert [item[1:3] for item in calls] == [
-        (0x80000000, 0x1000),
-        (0x80001000, 0x1000),
-        (0x80002000, 0x1000),
-        (0x80003000, 0x1000),
-        (0x80004000, 0x1000),
-        (0x80005000, 0x1000),
-        (0x80006000, 0x1000),
-        (0x80007000, 0x1000),
+        (0x80000000, 0x8000),
         (0x80008000, 1),
     ]
     assert backend.memory_regions()[0].start == 0x80000000
@@ -1034,6 +1027,7 @@ def test_hpm_rom_backend_programs_without_flm_and_verifies_by_readback(
         "image", file_path=str(firmware), format="bin", base_address=0x80000400
     )
 
+    backend.read_memory = device.read_memory
     backend.erase_chip()
     backend.erase_sectors([0x80000000])
     backend.program(image)
@@ -1117,6 +1111,7 @@ def test_hpm_rom_backend_rejects_hex_and_reports_verify_mismatch(tmp_path: Path)
     )
     backend.connect("probe", "HPM5300", 1_000_000, board="hpm5300evk")
 
+    backend.read_memory = backend._device.read_memory
     mismatch = assert_error(
         FlashErrorCode.VERIFY_FAIL,
         lambda: backend.verify(ImageInspection(
@@ -1148,6 +1143,7 @@ def test_hpm_rom_backend_verify_reports_progress(tmp_path: Path) -> None:
         verify_chunk_size=4,
     )
     backend.connect("probe", "HPM5300", 1_000_000, board="hpm5300evk")
+    backend.read_memory = backend._device.read_memory
     backend.verify(
         ImageInspection(
             "image",
@@ -2435,7 +2431,7 @@ def ihex_record(address: int, record_type: int, data: bytes = b"") -> str:
 def test_verify_bin_reads_in_bounded_chunks_and_reports_first_mismatch(
     tmp_path: Path,
 ) -> None:
-    payload = bytes(range(256)) * 20
+    payload = bytes(range(256)) * 300
     base = 0x80000000
     firmware = tmp_path / "firmware.bin"
     firmware.write_bytes(payload)
@@ -2454,7 +2450,7 @@ def test_verify_bin_reads_in_bounded_chunks_and_reports_first_mismatch(
 
     backend.verify(image)
 
-    assert target.read_calls == [(base, 4096), (base + 4096, len(payload) - 4096)]
+    assert target.read_calls == [(base, 65536), (base + 65536, len(payload) - 65536)]
     target.data[base + 4100] ^= 0xFF
     error = assert_error(FlashErrorCode.VERIFY_FAIL, lambda: backend.verify(image))
     assert "0x80001004" in error.message
@@ -2942,3 +2938,35 @@ def test_erase_does_not_treat_generic_security_words_as_locked(message) -> None:
 
     assert_error(FlashErrorCode.ERASE_FAIL, backend.erase_chip)
     backend.disconnect()
+
+
+@pytest.mark.parametrize("fail", [False, True])
+def test_verify_reuses_flm_context_and_always_uninitializes(fail):
+    events = []
+    class Flash:
+        Operation = SimpleNamespace(VERIFY="verify")
+        TIMEOUT_ERROR = -1
+        page_buffers = [0x20000000]
+        flash_algo = {"mklink_custom_verify": True, "pc_verify": 0x20000001}
+        target = SimpleNamespace(
+            session=SimpleNamespace(options={"flash.timeout.program": 1}),
+            write_memory_block8=lambda address, data: events.append(("buffer", bytes(data))),
+        )
+        def init(self, operation): events.append(("init", operation))
+        def uninit(self): events.append(("uninit",))
+        def _call_function_and_wait(self, pc, address, size, buffer, timeout):
+            events.append(("verify", address, size))
+            return address if fail and address == 0x90000004 else address + size
+    region = FakeRegion(0x90000000, 0x1000)
+    region.page_size = 4
+    region.flash = Flash()
+    target = FakeTarget((region,))
+    if fail:
+        with pytest.raises(FlashError, match="0x90000004"):
+            PyOcdBackend._verify_expected_bytes(target, 0x90000000, b"abcdefghij")
+    else:
+        PyOcdBackend._verify_expected_bytes(target, 0x90000000, b"abcdefghij")
+        assert [e[1] for e in events if e[0] == "buffer"] == [b"abcd", b"efgh", b"ij"]
+    assert events.count(("init", "verify")) == 1
+    assert events.count(("uninit",)) == 1
+    assert events[-1] == ("uninit",)

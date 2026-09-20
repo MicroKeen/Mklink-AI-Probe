@@ -25,7 +25,7 @@
 - **STM32F103 选项字节与 ARM mem_dump**：docs/verification/v0.2.1-stm32f103-options-stage2.md：Python 99、GUI 29、生产构建通过；CLI/MCP stdio/Chrome 10 字段一致，DATA、两项低功耗复位位及 WRP3 写入/复位/回读/恢复通过；组合下载通过，最终全部 512 KiB Flash 与原始备份一致。未测试 RDP 转换及看门狗/低功耗/WRP 拒写行为。 docs/verification/v0.2.1-stm32f103-mem-dump.md：27软件测试、14项稳定矩阵、LA3.904/10.549MHz测量、CLI/MCP/Chrome低中档通过；20/30电气试验失败保留。单RAM60s约603万点101.293kSa/s，4KB630.34KiB/s；GUI功能素材和RTT双消费者修复分别记录A/B演示构建，未做多小时认证。 docs/verification/v0.2.1-stm32-clock-calibration.md：117相关Python测试通过；Keil/在线/脱机频率实测、RTT/SystemView短时复测通过，20/30M不合格。GUI同一API改频与LA通过，RTT修复后14项mem_dump通过；最终Chrome截图尚未完成。 本轮更新（旧失败仅属旧板/旧固件）：docs/verification/v0.2.1-stm32-four-profile-freeze.md。pipe-r20四档20项完整矩阵通过，持续59.598/111.956/157.770/187.636kSa/s；20M60秒/30M120秒。Keil1/2/5/10M，Chrome配置四档和SuperWatch四档，在线/脱机各四档LA通过。USB暂停/启停20、CDC12、RTT/SV32次启动及功能/CLI/MCP通过。入口Python405、间隔66、GUI144/29（重叠）/95、生产构建与2460文件本地Skill安装审计通过。Chrome真图已交文档任务，发布渠道不变。
 - **mem_dump 四档与 HPM 实板稳定性**：docs/verification/v0.2.1-mem-dump-four-speeds.md：143 Python、3 GUI、生产构建、72打包/更新/边界通过；CLI/MCP stdio及Chrome四档切换/曲线实板通过。旧7510单变量两档各30min，旧20M 4KB失败保留；新2927修复版48用例通过，20M 4KB600s/30M300s及小块、动态RAM、10轮四档重连。SBA忙冲突按报告计数恢复，不称零冲突。 HPM6E80独立记录v0.2.1-hpm6e80-mem-dump.md：21软件测试、304候选28矩阵/30长测重连、cbd最终28回归、CLI/MCP24和Chrome通过；共享ID不识别精确型号。
 - **SuperWatch 与 SystemView 文档实测修复**：docs/verification/v0.2.1-hpm-gui-acceptance.md：172+159+158 Python、95 GUI/构建；HPM脱机78464B全回读、数组index0..15/16pts通过。新9a338046探针+Web codec两轮Chrome16449/16577事件、3任务、RuntimeDrop0，已断开。原生CSV/PNG保存未验证。 Web修复：docs/verification/v0.2.1-hex-preview.md，159 Python、121 GUI、生产构建；Chrome 无芯片 FLM+25.5MiB HEX、IAP越界提示与预览、默认折叠通过。
-- **V2 narrow reads and shared RTT validation**：历史0.2.2资格见docs/verification下对应报告，不外推其他芯片。20260920 V4 STM32F103见v0.2.2-v4-stm32-regression-20260920.md：在线6/脱机6、窄值/非对齐、UART/RTT/SystemView/CLI/MCP、Chrome120秒通过，Boot保留。HPM6E80见v0.2.2-v4-hpm6e80-regression-20260920.md：四档窄值/非对齐、RTT/SV、在线3/脱机3、Chrome共享120秒通过；UART未接，OTP未测。Theme见v0.2.2-theme-desktop-20260920.md：旧离线候选包真实覆盖安装/受限PATH启动/暗色持久化通过。最新标准候选见v0.2.2-standard-candidate-20260920.md：原生GUI HPM HardFault架构保护已实点截图；717 GUI通过；Python2266通过2跳过，12项symlink权限失败经提升权限独立重跑全通过。Rust测试exe启动失败0xc0000139，打包链未执行，无新标准安装包。Skill入口明确IDE→pyOCD→脱机；STM32共享FLM须工程/Pack兼容证据，不盲选1024。源码与本机Skill结构/链接/规则检查通过，保留共享流定制；客户ELF错误由加密导致，不改解析器。HPM脱机OTP保留未验收草稿，正式发布暂停。
+- **V2 narrow reads and shared RTT validation**：历史0.2.2资格见docs/verification下对应报告，不外推其他芯片。20260920 V4 STM32F103见v0.2.2-v4-stm32-regression-20260920.md：在线6/脱机6、窄值/非对齐、UART/RTT/SystemView/CLI/MCP、Chrome120秒通过，Boot保留。HPM6E80见v0.2.2-v4-hpm6e80-regression-20260920.md：四档窄值/非对齐、RTT/SV、在线3/脱机3、Chrome共享120秒通过；UART未接，OTP未测。Theme见v0.2.2-theme-desktop-20260920.md：旧离线候选包真实覆盖安装/受限PATH启动/暗色持久化通过。最新标准候选见v0.2.2-standard-candidate-20260920.md：原生GUI HPM HardFault架构保护已实点截图；717 GUI通过；Python2266通过2跳过，12项symlink权限失败经提升权限独立重跑全通过。Rust测试exe启动失败0xc0000139，打包链未执行，无新标准安装包。Skill入口明确IDE→pyOCD→脱机；STM32共享FLM须工程/Pack兼容证据，不盲选1024。源码与本机Skill结构/链接/规则检查通过，保留共享流定制；客户ELF错误由加密导致，不改解析器。HPM脱机OTP保留未验收草稿，正式发布暂停。 本轮校验/主题/清空器件见v0.2.2-online-verify-theme-20260920.md：178Python、718全量GUI/生产构建；HPM30M校验51,252B从3.751s到0.817–0.857s，负例地址检出通过。ARM优化未实板验证，待换板。所有弹窗视觉复测受浏览器URL检查阻塞。
 
 ## 架构决策
 
@@ -37,14 +37,14 @@
 
 ## 真机环境
 
-- **state**：HPMLink V4 + HPM6E80, UART disconnected. Installed 0.2.2 desktop owns probe on backend 8765, dark three-variable 30 MHz SuperWatch visible. Development backend 8770 is disconnected and still uses old imported backend code.
+- **state**：HPMLink V4 + HPM6E80 confirmed by matching hello_world BIN, command port changed to COM225. GUI backends disconnected for read-only verification benchmark; probe closed afterward. UART not connected.
 - **backups**：.build/reports/prerelease-hil-20260907、superwatch-write-20260907；保留其他芯片唯一备份。；本轮本地证据 .build/reports/peripheral-unification。；本轮 OTP 只读和浏览器证据 .build/reports/device-configuration。；STM32F103 唯一原始备份与本轮证据 .build/reports/stm32f103-options。
 - **installer**：.build/artifacts/theme-022-20260920/Mklink-AI-Probe-v0.2.2-cdbf08051a53-x64-Offline-Setup.exe
 
 ## 下一动作
 
 1. 正式0.2.2发布按用户2026-09-20要求暂停；保留HPM脱机OTP草稿，按hpm-offline-otp-handoff.md补软件/新HPM5301真机验收后再决定发布。继续标准NSIS候选包和默认暗黑回归。
-2. 已在原生桌面GUI实点HardFault核对HPM架构拒绝提示并截图。开发8770仍为旧导入后端；当前桌面8765使用新版。
+2. ARM在线校验优化待用户换回STM32F103实板验证；弹窗主题需浏览器恢复后视觉验收，修改尚未重新打包安装。
 3. 官网文档任务已收到四档Chrome真图和技术附件；保留公众号风格及技术附件分层，不自动发布。继续优化前先拆分批间组帧/调度开销；慢浏览器订阅需按队列背压评估，勿与USB字节故障混同。
 4. 后续补STM32F103看门狗、STOP/STANDBY、WRP拒写及其他ARM实板。HPM用户OTP开放限定型号，安全字段仍为实验路径；其他系列按报告OTP基址和EXIP长度分别适配。
 5. 本机桌面已覆盖安装本地0.2.2离线包；正式发布渠道和Skill仍为0.2.1，定时任务维持暂停。
