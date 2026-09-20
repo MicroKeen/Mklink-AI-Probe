@@ -366,7 +366,8 @@ def _program_lines(config: OfflineDownloadConfig, indent: str) -> list[str]:
             f"{indent}    break",
         ))
         for firmware in config.firmwares:
-            call = f'hpm.program("{firmware.file_name}", 0x{firmware.base_address:08X})'
+            method = "program_verified" if config.hpm_user_otp is not None else "program"
+            call = f'hpm.{method}("{firmware.file_name}", 0x{firmware.base_address:08X})'
             lines.extend((
                 f"{indent}if {call} != 0:",
                 f'{indent}    print("HPM program failed: {firmware.file_name}")',
@@ -530,6 +531,13 @@ def generate_offline_script(config: OfflineDownloadConfig) -> str:
     if config.security is not None and config.security.unlock_before_download:
         lines.extend(_security_lines(config.security, action="unlock", indent="    "))
     if config.hpm_user_otp is not None:
+        lines.extend([
+            '    # Capability probe: no file/target access, signed failure required.',
+            '    if hpm.program_verified() != -1:',
+            '        print("Upgrade HPMLink: verified offline programming required for OTP")',
+            '        abort = True',
+            '        break',
+        ])
         lines.extend(otp_script_lines(config.hpm_user_otp, commit=False))
     if config.option_bytes is not None:
         lines.extend(
