@@ -1227,7 +1227,12 @@ class PyOcdBackend:
                     getattr(resolved_probe, "unique_id", None) or probe or ""
                 ).strip()
                 self._security_family = security_family or ""
-                self._algorithm_reset_required = bool(resolved_flms) or security_family == "stm32f103-rdp1"
+                # Pack FLMs need the same reset context as imported FLMs. A
+                # Pack connect sequence may leave the application running even
+                # with under-reset selected. For example, STM32F1's algorithm
+                # clears Flash latency and assumes reset clocks; running it
+                # after a 72 MHz application can make Flash read back as FF.
+                self._algorithm_reset_required = bool(resolved_flms or resolved_pack) or security_family == "stm32f103-rdp1"
                 self._algorithm_reset_done = False
                 self._connection_arguments = {
                     "probe": probe,
@@ -2444,7 +2449,7 @@ class PyOcdBackend:
                 raise self._mapped_error(exc, FlashErrorCode.PROGRAM_FAIL) from None
 
     def _prepare_algorithm_execution(self, target: Any) -> None:
-        """Reset custom-FLM targets once, immediately before destructive work.
+        """Reset Pack/imported-FLM targets once before destructive work.
 
         Attaching to a running RTOS can retain exception/stack/MPU state that
         is unsuitable for a RAM algorithm. Connection and read-only operations

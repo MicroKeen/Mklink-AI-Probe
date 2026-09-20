@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-09-19T12:36:34.553187+08:00",
+  "updated_at": "2026-09-20T12:33:22.379740+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.2.2-development",
-    "head": "HPM6E80 ROM target catalog follow-up to e119bd9; earlier offline OTP draft remains unvalidated.",
-    "remote_head": "codex/v0.2.2-development; catalog follow-up to be pushed to existing PR #5; no merge/release.",
+    "head": "V4 STM32 regression: Pack FLM reset context and SVD-independent HardFault fixes; prior HPM work preserved.",
+    "remote_head": "codex/v0.2.2-development / PR #5; this regression fix to be pushed; no merge or release.",
     "working_tree": "Handoff includes offline OTP draft source and documentation; separate firmware and MicroBoot work remain outside this repository."
   },
   "mission": {
@@ -14,7 +14,7 @@
   },
   "current_session": {
     "status": "in_progress",
-    "current_task": "交接 HPM 脱机下载后用户 OTP 配方草稿，见 docs/ai/hpm-offline-otp-handoff.md。尚无专项软件/浏览器/真机验收；用户暂无新芯片，先做软件，后补真机。优先解决 hpm.program 成功不等于 Flash 回读校验及 malloc 失败返回0的问题。"
+    "current_task": "V4 + STM32F103 functional regression; Pack FLM and HardFault fixes verified on hardware. HardFault GUI final check awaits local backend restart blocked by automatic approval. HPM board switch pending. See docs/verification/v0.2.2-v4-stm32-regression-20260920.md. Prior HPM offline OTP draft remains unqualified."
   },
   "milestones": [
     {
@@ -54,7 +54,7 @@
     },
     {
       "area": "V2 narrow reads and shared RTT validation",
-      "result": "0.2.2报告位于docs/verification：rtt-narrow-alignment（窄值/RTT/三代编译）、superwatch-presentation（共享流）、svd-selection、v3-regression（UART/RTT/CLI/MCP/LA，在线30M修复后通过）、gui-session-layout、v4-narrow-stream、offline-installer（UAC取消覆盖未验收）。HPM: v0.2.2-hpm5301-user-otp.md 与 v0.2.2-hpm5301-security.md。第一颗用户字、组19永久锁/拒写、SW_VER、DEBUG/JTAG禁用及独立UART通过；第二颗实验根哈希/签名启动、SECURE→RETURN、GUI字写入通过。修复保护后SBA全零/固定20150407伪配置、短读、连接旧计划、锁控制字预检，52/38 Python、8 GUI及构建通过。第三颗NONRET B/B，撤销根0后根1签名应用启动，撤销根1后复位15.12秒无UART心跳；Chrome word79=5及组19锁通过。探针OTP新增haltreq有界等待，UF2升级后定向回归。MicroBoot新增GUI OTP章节、真图，构建审计通过。10份SDK表审计发现基址及密钥长度不同，不代表跨系列实测。第四颗Word79=7/组19锁实际断电保持、SECURE→RETURN、ROM锁区拒写与SCRIBE复位无心跳详见安全报告末节。DEBUG_KEY、EXIP/MASTER_KEY等仍未验证。新脱机OTP草稿未验收。 2026-09-19: add HPM6E80 ROM target alongside HPM6E00 series alias; 36 catalog tests passed. Chrome selects exact part, 30 MHz online 51072-byte download plus full verification succeeded. GUI-deployed 8 MiB offline image completed in 89.890 s erase+write and complete byte/SHA-256 readback matched. Separate HPMLink firmware changes and MicroBoot article are outside this repository; no OTP or release qualification inferred."
+      "result": "0.2.2 历史资格见 docs/verification 下 rtt-narrow-alignment、superwatch-presentation、svd-selection、v3-regression、gui-session-layout、v4-narrow-stream、offline-installer 报告；安装覆盖曾因 UAC 取消未验收。HPM5301 用户区/组锁、安全生命周期与 UART 证据见 v0.2.2-hpm5301-user-otp.md 和 v0.2.2-hpm5301-security.md；其他型号不可外推，新脱机 OTP 草稿未验收。HPM6E80 ROM catalog 36 测试、30 MHz 在线51072B与8MiB脱机完整回读通过；非本轮资格。2026-09-20 V4 STM32F103：见 v0.2.2-v4-stm32-regression-20260920.md。Pack FLM 烧录前复位与 SVD 无关的 HardFault 检测修复，156 Python 测试。在线6/脱机6次，Boot保留；四档窄值与非对齐、UART100次、RTT四档50x256B和三档5x8191B、CLI/MCP/SystemView/Chrome共享120秒通过。受控UDF成功定位main.c:145并恢复。HardFault修复后GUI尚待后端重启（自动审批拦截），HPM换板未测。"
     }
   ],
   "decisions": [
@@ -65,7 +65,7 @@
     "所有 PR 不再强制第二人审批；核对差异及相关验证、必需 CI 后，按明确合并授权和确切头提交整合。不得恢复旧审批门槛；发布仍需独立授权，其他保护保留。"
   ],
   "hardware": {
-    "state": "第四颗HPM5301最终SCRIBE F000000F，复位后15.119秒UART无数据。此前RETURN下ROM锁区拒写通过(79保持7/ROM返回0)。后台8770断开；COM743 UART已恢复。不能再正常下载此芯片。",
+    "state": "V4/STM32F103RET6, app 0x08005000 and Boot preserved; UART and LA connected. Target recovered after controlled UDF, runtime tick advancing. GUI disconnected pending backend restart; HPM not connected.",
     "backups": ".build/reports/prerelease-hil-20260907、superwatch-write-20260907；保留其他芯片唯一备份。；本轮本地证据 .build/reports/peripheral-unification。；本轮 OTP 只读和浏览器证据 .build/reports/device-configuration。；STM32F103 唯一原始备份与本轮证据 .build/reports/stm32f103-options。",
     "installer": ".build/artifacts/release-0.2.1-20260915/Mklink-AI-Probe-v0.2.1-x64-Setup.exe"
   },

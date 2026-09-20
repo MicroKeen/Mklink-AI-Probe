@@ -2051,8 +2051,10 @@ def test_chip_and_sector_erase_use_exact_modes_and_sorted_unique_addresses() -> 
     backend.disconnect()
 
 
-def test_custom_flm_resets_and_halts_once_before_erase_and_program(
+@pytest.mark.parametrize("source", ["custom", "pack"])
+def test_flm_resets_and_halts_once_before_erase_and_program(
     tmp_path: Path,
+    source: str,
 ) -> None:
     events = []
 
@@ -2078,7 +2080,13 @@ def test_custom_flm_resets_and_halts_once_before_erase_and_program(
         programmer_factory=Programmer,
         eraser_factory=Eraser,
     )
-    backend._algorithm_reset_required = True
+    if source == "pack":
+        pack = tmp_path / "Vendor.Device.pack"
+        pack.write_bytes(b"pack contents handled by fake session")
+        backend.connect(object(), "STM32F103RE", 1_000_000, pack=str(pack))
+        assert target.reset_and_halt_calls == 0  # Read-only attach is unchanged.
+    else:
+        backend._algorithm_reset_required = True
 
     backend.erase_sectors([0x08000000])
     backend.program(ImageInspection(

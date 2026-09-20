@@ -2365,14 +2365,18 @@ class Device:
     def check_hardfault(self) -> dict[str, int] | None:
         """Read fault registers and return them if a fault occurred."""
         self._require_connected()
-        try:
-            cfsr = self.read_register("SCB.CFSR")
-            hfsr = self.read_register("SCB.HFSR")
-            if cfsr == 0 and hfsr == 0:
-                return None
-            return {"SCB.CFSR": cfsr, "SCB.HFSR": hfsr}
-        except Exception:
+        if "HPM" in self.mcu_name.upper():
+            raise ValueError("HardFault decoding requires a Cortex-M target")
+        # Core fault registers are architectural, not peripheral-SVD entries.
+        # An explicitly selected vendor SVD may omit SCB entirely. Do not
+        # report 'no fault' when catalog lookup or target access has failed.
+        raw = self.read_memory(0xE000ED28, 8)
+        if len(raw) != 8:
+            raise DeviceError("Incomplete Cortex-M fault register read")
+        cfsr, hfsr = struct.unpack("<II", raw)
+        if cfsr == 0 and hfsr == 0:
             return None
+        return {"SCB.CFSR": cfsr, "SCB.HFSR": hfsr}
 
     def decode_hardfault(
         self, fault_regs: dict[str, int] | None = None
