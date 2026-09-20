@@ -1,4 +1,8 @@
 import { createApp } from 'vue'
+import { initializeTheme } from './composables/useTheme'
+import './assets/theme.css'
+
+initializeTheme()
 import { initializeRuntimeEndpoint } from './lib/runtimeEndpoint'
 
 type StartupController = {

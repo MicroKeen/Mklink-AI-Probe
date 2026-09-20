@@ -72,11 +72,11 @@ body, .waveform-viewer {
   border-radius: 100px;
   letter-spacing: 0.02em;
 }
-.badge-ok    { background: #e6f2ea; color: var(--success); }
-.badge-warn  { background: #f5f0e1; color: var(--warn); }
-.badge-info  { background: #e6eef5; color: var(--info); }
-.badge-err   { background: #f5e6e6; color: var(--danger); }
-.badge-mode  { background: #f3ece6; color: var(--accent); font-weight: 600; }
+.badge-ok    { background: var(--success-bg); color: var(--success); }
+.badge-warn  { background: var(--warn-bg); color: var(--warn); }
+.badge-info  { background: var(--info-bg); color: var(--info); }
+.badge-err   { background: var(--danger-bg); color: var(--danger); }
+.badge-mode  { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
 
 #var-selector {
   display: none;
@@ -97,7 +97,7 @@ body, .waveform-viewer {
 .chip.active {
   border-color: var(--accent);
   color: var(--accent);
-  background: #f5ece6;
+  background: var(--accent-bg);
 }
 
 /* main layout: grid with chart+watch split + collapsible bottom panel */
@@ -739,7 +739,7 @@ tr.watch-child-row td[data-col="value"] {
   font-family: var(--font-mono);
   font-size: 12px;
   text-align: right;
-  background: #fff;
+  background: var(--input-bg, #fff);
   outline: none;
 }
 .watch-val-written {
@@ -1057,9 +1057,9 @@ tr.watch-child-row td[data-col="value"] {
   border-radius: 100px;
   letter-spacing: 0.02em;
 }
-.status-running { background: #e6f2ea; color: var(--success); }
-.status-paused  { background: #f5f0e1; color: var(--warn); }
-.status-stopped { background: #f5e1e1; color: var(--danger); }
+.status-running { background: var(--success-bg); color: var(--success); }
+.status-paused  { background: var(--warn-bg); color: var(--warn); }
+.status-stopped { background: var(--danger-bg); color: var(--danger); }
 #interval-input,
 #buffer-input {
   height: 26px;
@@ -1222,10 +1222,10 @@ tr.watch-child-row td[data-col="value"] {
   border-radius: 100px;
   letter-spacing: 0.02em;
 }
-.trigger-state-idle { background: #f0eee6; color: var(--muted); }
-.trigger-state-armed { background: #f5f0e1; color: var(--warn); }
-.trigger-state-triggered { background: #e6f2ea; color: var(--success); }
-.trigger-state-done { background: #e6eef5; color: var(--info); }
+.trigger-state-idle { background: var(--border-subtle); color: var(--muted); }
+.trigger-state-armed { background: var(--warn-bg); color: var(--warn); }
+.trigger-state-triggered { background: var(--success-bg); color: var(--success); }
+.trigger-state-done { background: var(--info-bg); color: var(--info); }
 
 #trigger-force-btn {
   height: 26px;

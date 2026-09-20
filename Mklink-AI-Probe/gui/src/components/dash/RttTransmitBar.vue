@@ -188,7 +188,7 @@ function onKeydown(event: KeyboardEvent): void {
 </script>
 
 <style scoped>
-.rtt-transmit-wrapper { border-top: 1px solid var(--border, #d8dde6); background: var(--panel, #fff); }
+.rtt-transmit-wrapper { border-top: 1px solid var(--border, #d8dde6); background: var(--surface); }
 .rtt-transmit-bar { min-height: 40px; display: grid; grid-template-columns: 42px 20px minmax(120px, 1fr) 32px 32px 66px 78px; align-items: center; gap: 4px; padding: 5px 8px; }
 button, select, input { font: inherit; }
 .format-toggle, .icon-button, .send-button { height: 30px; border: 1px solid var(--border, #cbd2dc); background: var(--surface, #fff); color: inherit; cursor: pointer; }

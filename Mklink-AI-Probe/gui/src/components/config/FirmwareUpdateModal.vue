@@ -82,7 +82,7 @@ function fwLabel(fw: FirmwareInfo): string {
 }
 
 .firmware-modal {
-  background: var(--color-bg-elevated, #fff);
+  background: var(--color-bg-elevated, var(--surface));
   border-radius: 8px;
   width: min(800px, 90vw);
   max-height: 85vh;

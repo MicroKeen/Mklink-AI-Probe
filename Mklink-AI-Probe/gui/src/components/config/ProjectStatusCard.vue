@@ -93,7 +93,7 @@ const hasData = computed(() => {
 .alert ul { margin: 4px 0 0 16px; padding: 0; }
 .alert li { margin: 2px 0; font-size: 12px; }
 .badge-warn {
-  background: #f5f0e1;
+  background: var(--warn-bg);
   color: var(--warn);
 }
 </style>

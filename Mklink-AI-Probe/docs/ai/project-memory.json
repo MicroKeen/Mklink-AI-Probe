@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-09-20T16:20:33.550900+08:00",
+  "updated_at": "2026-09-20T16:40:52.756658+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.2.2-development",
-    "head": "V4 HPM6E80 regression: reject Cortex-M debug accesses on HPM; probe-local unaligned RAM access fixed in separate firmware tree.",
+    "head": "0.2.2 shared light/dark/system themes, RTT transmit surround, canvas redraw and consistent package metadata.",
     "remote_head": "codex/v0.2.2-development / PR #5; regression follow-up, no merge or release.",
     "working_tree": "Handoff includes offline OTP draft source and documentation; separate firmware and MicroBoot work remain outside this repository."
   },
@@ -14,7 +14,7 @@
   },
   "current_session": {
     "status": "in_progress",
-    "current_task": "V4 HPM6E80 regression completed on connected JTAG surfaces. 49 Python tests; final firmware four-profile sampling, 128 unaligned write cases, RTT/SystemView, real CLI/MCP, online/offline and Chrome shared stream. New host guard GUI verification pending backend restart. See docs/verification/v0.2.2-v4-hpm6e80-regression-20260920.md."
+    "current_task": "Theme implementation and Chrome verification complete; local 0.2.2 installer preparation. See docs/verification/v0.2.2-theme-desktop-20260920.md. Full Python run exposed legacy fixture/version issues and unavailable Windows symlink privilege; repairs under verification."
   },
   "milestones": [
     {
@@ -54,7 +54,7 @@
     },
     {
       "area": "V2 narrow reads and shared RTT validation",
-      "result": "0.2.2 历史资格见 docs/verification 下 rtt-narrow-alignment、superwatch-presentation、svd-selection、v3-regression、gui-session-layout、v4-narrow-stream、offline-installer 报告；安装覆盖曾因 UAC 取消未验收。HPM5301 用户区/组锁、安全生命周期与 UART 证据见 v0.2.2-hpm5301-user-otp.md 和 v0.2.2-hpm5301-security.md；其他型号不可外推，新脱机 OTP 草稿未验收。HPM6E80 ROM catalog 36 测试、30 MHz 在线51072B与8MiB脱机完整回读通过；非本轮资格。2026-09-20 V4 STM32F103：见 v0.2.2-v4-stm32-regression-20260920.md。Pack FLM 烧录前复位与 SVD 无关的 HardFault 检测修复，156 Python 测试。在线6/脱机6次，Boot保留；四档窄值与非对齐、UART100次、RTT四档50x256B和三档5x8191B、CLI/MCP/SystemView/Chrome共享120秒通过。受控UDF成功定位main.c:145并恢复。HardFault修复后GUI尚待后端重启（自动审批拦截），HPM换板未测。 HPM6E80 本轮见 v0.2.2-v4-hpm6e80-regression-20260920.md：探针内部非对齐访问已修复升级，四档16采样/128写回恢复通过；RTT80回显、SV四档、CLI/MCP、在线3/脱机3通过。Chrome共享120秒5295918组三变量，CRC/帧丢失/队列丢弃无新增；RTT及SV网页通过。49 Python。新架构保护GUI待后端重启；UART未接，OTP未测。"
+      "result": "0.2.2 历史资格见 docs/verification 下 rtt-narrow-alignment、superwatch-presentation、svd-selection、v3-regression、gui-session-layout、v4-narrow-stream、offline-installer 报告；安装覆盖曾因 UAC 取消未验收。HPM5301 用户区/组锁、安全生命周期与 UART 证据见 v0.2.2-hpm5301-user-otp.md 和 v0.2.2-hpm5301-security.md；其他型号不可外推，新脱机 OTP 草稿未验收。HPM6E80 ROM catalog 36 测试、30 MHz 在线51072B与8MiB脱机完整回读通过；非本轮资格。2026-09-20 V4 STM32F103：见 v0.2.2-v4-stm32-regression-20260920.md。Pack FLM 烧录前复位与 SVD 无关的 HardFault 检测修复，156 Python 测试。在线6/脱机6次，Boot保留；四档窄值与非对齐、UART100次、RTT四档50x256B和三档5x8191B、CLI/MCP/SystemView/Chrome共享120秒通过。受控UDF成功定位main.c:145并恢复。HardFault修复后GUI尚待后端重启（自动审批拦截），HPM换板未测。 HPM6E80 本轮见 v0.2.2-v4-hpm6e80-regression-20260920.md：探针内部非对齐访问已修复升级，四档16采样/128写回恢复通过；RTT80回显、SV四档、CLI/MCP、在线3/脱机3通过。Chrome共享120秒5295918组三变量，CRC/帧丢失/队列丢弃无新增；RTT及SV网页通过。49 Python。新架构保护GUI待后端重启；UART未接，OTP未测。 Theme: 716 frontend tests, production build, Chrome dark/light live HPM SuperWatch and persistent theme passed. RTT/serial transmit surround fixed. Native overwrite install pending; local evidence .build/reports/theme-022."
     }
   ],
   "decisions": [

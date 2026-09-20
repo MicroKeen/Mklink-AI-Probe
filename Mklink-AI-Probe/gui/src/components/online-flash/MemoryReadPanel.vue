@@ -324,7 +324,7 @@ defineExpose({ clearMemory: () => clearMemory(false), openReadDialog, saveMemory
 .memory-read-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 2px; padding-top: 14px; border-top: 1px solid var(--memory-dialog-border); }
 .memory-read-dialog-actions .btn { min-width: 96px; min-height: 36px; border: 1px solid var(--memory-dialog-border); border-radius: 5px; cursor: pointer; }
 .memory-read-dialog-actions .btn:not(.btn-primary) { background: #eef1f4; color: #20262d; }
-.memory-read-dialog-actions .btn:not(.btn-primary):hover { background: #fff; }
+.memory-read-dialog-actions .btn:not(.btn-primary):hover { background: var(--input-bg, #fff); }
 .memory-read-dialog-actions .btn.btn-primary { border-color: #e58a3a; background: #e58a3a; color: #fff; }
 .memory-read-dialog-actions .btn.btn-primary:hover:not(:disabled) { background: #f09a4d; border-color: #f09a4d; }
 .memory-read-dialog-actions .btn:disabled { cursor: not-allowed; opacity: .45; }

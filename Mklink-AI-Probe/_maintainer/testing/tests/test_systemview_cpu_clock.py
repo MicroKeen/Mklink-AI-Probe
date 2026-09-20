@@ -7,6 +7,7 @@ from mklink.remote.dashboards import SystemViewStreamManager
 def _prime_validated_rtt_control_block(device, address):
     """Keep clock-order tests focused on pre-stream symbol reads."""
     device.validate_rtt_stream_request = lambda *_args, **_kwargs: None
+    device._target_writable_ram_ranges = lambda: [(address, address + 4096)]
     device._find_rtt_control_block = lambda *_args, **_kwargs: address
     device._read_rtt_control_block = lambda _addr: {
         "up_buffers": [],
@@ -53,7 +54,7 @@ def test_systemview_start_reads_system_core_clock_before_stream(monkeypatch):
 
     monkeypatch.setattr(dev, "read_variable", read_variable)
 
-    result = dev.systemview_start()
+    result = dev.systemview_start(addr=0x20000000)
 
     assert result["cpu_freq_hint"] == 72_000_000
     assert dev._systemview_parser.cpu_freq == 72_000_000
@@ -106,7 +107,7 @@ def test_systemview_start_reads_hpm_core_clock_before_project_default(tmp_path, 
 
     monkeypatch.setattr(dev, "read_variable", read_variable)
 
-    result = dev.systemview_start()
+    result = dev.systemview_start(addr=0x0008E488)
 
     assert result["cpu_freq_hint"] == 360_000_000
     assert result["cpu_freq_source"] == "hpm_core_clock"
@@ -157,7 +158,7 @@ def test_hpm_project_seeds_systemview_id_base_without_guessing_clock(tmp_path, m
     dev._connected = True
     _prime_validated_rtt_control_block(dev, 0x0008E488)
 
-    result = dev.systemview_start()
+    result = dev.systemview_start(addr=0x0008E488)
 
     assert "cpu_freq_hint" not in result
     assert result["systemview_ram_base"] == "0x10000000"

@@ -84,6 +84,11 @@ export class SvTimeline {
     this._bind();
     this._resize();
     window.addEventListener('resize', this._resize);
+    this._themeChanged = () => {
+      const paused = this._renderPaused; this._renderPaused = false;
+      this._draw(); this._renderPaused = paused;
+    };
+    window.addEventListener('mklink-theme-change', this._themeChanged);
   }
 
   setData(intervals) {
@@ -548,6 +553,10 @@ export class SvTimeline {
     return width;
   }
 
+  _themeColor(light, dark) {
+    return this.canvas?.ownerDocument?.documentElement?.dataset?.theme === 'dark' ? dark : light;
+  }
+
   _draw() {
     if (this._renderPaused) return;
     const ctx = this.ctx;
@@ -557,7 +566,7 @@ export class SvTimeline {
     this._drawRuler();
     this.lanes.forEach((task, i) => {
       const y = this.rulerH + i * this.laneH;
-      ctx.fillStyle = '#343a43'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+      ctx.fillStyle = this._themeColor('#343a43', '#dce4ef'); ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
       ctx.font = task.type === 'ISR'
         ? '600 11px -apple-system,Segoe UI,Roboto,sans-serif'
         : '11px -apple-system,Segoe UI,Roboto,sans-serif';
@@ -579,8 +588,8 @@ export class SvTimeline {
       const y = this.rulerH + laneIdx * this.laneH + 3;
       const w = Math.max(x1 - x0, 0.8);
       const h = this.laneH - 6;
-      ctx.fillStyle = task.type === 'Scheduler' ? '#eef0f3'
-        : task.type === 'Idle' ? '#f7f8fa' : task.color;
+      ctx.fillStyle = task.type === 'Scheduler' ? this._themeColor('#eef0f3', '#323b48')
+        : task.type === 'Idle' ? this._themeColor('#f7f8fa', '#242b35') : task.color;
       ctx.fillRect(x0, y, w, h);
       if (w >= MIN_INTERVAL_STROKE_WIDTH) {
         ctx.strokeStyle = task.type === 'Scheduler' || task.type === 'Idle'
@@ -609,7 +618,7 @@ export class SvTimeline {
         const x0 = Math.max(this._t2x(this.hover.start), this.plotX0);
         const x1 = Math.min(this._t2x(this.hover.end), this.plotX1);
         const y = this.rulerH + laneIdx * this.laneH + 2;
-        ctx.strokeStyle = '#111827'; ctx.lineWidth = 1.25;
+        ctx.strokeStyle = this._themeColor('#111827', '#e5eaf2'); ctx.lineWidth = 1.25;
         ctx.strokeRect(x0 - 0.5, y - 0.5, Math.max(x1 - x0, 1.5) + 1, this.laneH - 4);
         ctx.setLineDash([3, 2]);
         ctx.strokeStyle = 'rgba(17, 24, 39, .55)';
@@ -624,29 +633,29 @@ export class SvTimeline {
 
   _drawLaneBackgrounds() {
     const ctx = this.ctx;
-    ctx.fillStyle = '#f1f3f5';
+    ctx.fillStyle = this._themeColor('#f1f3f5', '#191f28');
     ctx.fillRect(0, this.rulerH, this.nameColW, this.H - this.rulerH);
     this.lanes.forEach((_task, index) => {
       const y = this.rulerH + index * this.laneH;
-      ctx.fillStyle = index % 2 ? '#f4f7f4' : '#f8faf8';
+      ctx.fillStyle = index % 2 ? this._themeColor('#f4f7f4', '#11161e') : this._themeColor('#f8faf8', '#151c25');
       ctx.fillRect(this.plotX0, y, this.plotW, this.laneH);
-      ctx.fillStyle = '#d9dde2';
+      ctx.fillStyle = this._themeColor('#d9dde2', '#303b49');
       ctx.fillRect(0, y + this.laneH - 1, this.W, 1);
     });
-    ctx.fillStyle = '#bfc5cc';
+    ctx.fillStyle = this._themeColor('#bfc5cc', '#435166');
     ctx.fillRect(this.nameColW - 1, this.rulerH, 1, this.H - this.rulerH);
   }
 
   _drawRuler() {
     const ctx = this.ctx;
-    ctx.fillStyle = '#eceff2'; ctx.fillRect(0, 0, this.W, this.rulerH);
-    ctx.fillStyle = '#d2d7dd'; ctx.fillRect(0, this.rulerH - 1, this.W, 1);
-    ctx.fillStyle = '#343a43';
+    ctx.fillStyle = this._themeColor('#eceff2', '#202935'); ctx.fillRect(0, 0, this.W, this.rulerH);
+    ctx.fillStyle = this._themeColor('#d2d7dd', '#3e4b5e'); ctx.fillRect(0, this.rulerH - 1, this.W, 1);
+    ctx.fillStyle = this._themeColor('#343a43', '#dce4ef');
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'left';
     ctx.font = '600 11px -apple-system,Segoe UI,Roboto,sans-serif';
     ctx.fillText('Core 0', 17, this.rulerH / 2 + 1);
-    ctx.fillStyle = '#bfc5cc';
+    ctx.fillStyle = this._themeColor('#bfc5cc', '#435166');
     ctx.fillRect(this.nameColW - 1, 0, 1, this.rulerH);
 
     const span = this.viewEnd - this.viewStart;
@@ -659,13 +668,13 @@ export class SvTimeline {
       const x = this._t2x(t);
       if (x < this.plotX0 || x > this.plotX1) continue;
       const major = Math.abs(t / step - Math.round(t / step)) < 1e-6;
-      ctx.strokeStyle = major ? '#cbd1d7' : '#e5e8eb';
+      ctx.strokeStyle = major ? this._themeColor('#cbd1d7', '#394555') : this._themeColor('#e5e8eb', '#252e3b');
       ctx.beginPath();
       ctx.moveTo(x, major ? 24 : 32);
       ctx.lineTo(x, this.H);
       ctx.stroke();
     }
-    ctx.fillStyle = '#636b75'; ctx.textBaseline = 'middle'; ctx.textAlign = 'center';
+    ctx.fillStyle = this._themeColor('#636b75', '#aab6c8'); ctx.textBaseline = 'middle'; ctx.textAlign = 'center';
     ctx.font = '10px ui-monospace,SFMono-Regular,Consolas,monospace';
     const t0 = Math.ceil(this.viewStart / step) * step;
     let lastLabelRight = -Infinity;
@@ -700,9 +709,9 @@ export class SvTimeline {
     ctx.font = '600 10px ui-monospace,SFMono-Regular,Consolas,monospace';
     const width = this._labelWidth(label) + 8;
     const labelX = Math.min(Math.max(x, this.plotX0 + width / 2), this.plotX1 - width / 2);
-    ctx.fillStyle = '#eceff2';
+    ctx.fillStyle = this._themeColor('#eceff2', '#202935');
     ctx.fillRect(labelX - width / 2, 22, width, 17);
-    ctx.fillStyle = '#174ea6';
+    ctx.fillStyle = this._themeColor('#174ea6', '#83b6ff');
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(label, labelX, 30.5);
   }
@@ -886,6 +895,7 @@ export class SvTimeline {
 
   destroy() {
     window.removeEventListener('resize', this._resize);
+    window.removeEventListener('mklink-theme-change', this._themeChanged);
     if (this._listenersBound) {
       this.canvas.removeEventListener('wheel', this._onWheel);
       this.canvas.removeEventListener('mousedown', this._onMouseDown);
