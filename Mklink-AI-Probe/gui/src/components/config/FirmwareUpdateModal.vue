@@ -82,7 +82,7 @@ function fwLabel(fw: FirmwareInfo): string {
 }
 
 .firmware-modal {
-  background: var(--color-bg-elevated, var(--surface));
+  background: var(--surface);
   border-radius: 8px;
   width: min(800px, 90vw);
   max-height: 85vh;
@@ -95,7 +95,7 @@ function fwLabel(fw: FirmwareInfo): string {
   justify-content: space-between;
   align-items: center;
   padding: 16px 24px;
-  border-bottom: 1px solid var(--color-border, #ddd);
+  border-bottom: 1px solid var(--border);
 }
 
 .modal-body {
@@ -108,28 +108,28 @@ function fwLabel(fw: FirmwareInfo): string {
 
 .modal-footer {
   padding: 12px 24px;
-  border-top: 1px solid var(--color-border, #ddd);
+  border-top: 1px solid var(--border);
   display: flex;
   justify-content: flex-end;
   gap: 8px;
 }
 
 .fw-card {
-  background: var(--color-bg, #f7f7f7);
-  border: 1px solid var(--color-border, #ddd);
+  background: var(--bg);
+  border: 1px solid var(--border);
   border-radius: 4px;
   padding: 8px 12px;
   margin: 6px 0;
 }
 
 .fw-card.recommended {
-  border-color: var(--color-primary, #3b82f6);
+  border-color: var(--accent);
 }
 
 .fw-path {
   font-family: monospace;
   font-size: 0.85em;
-  color: var(--color-text-muted, #666);
+  color: var(--muted);
   margin-top: 4px;
   word-break: break-all;
 }
@@ -149,6 +149,7 @@ function fwLabel(fw: FirmwareInfo): string {
 
 .close-btn {
   background: none;
+  color: var(--fg);
   border: 0;
   font-size: 1.5em;
   cursor: pointer;

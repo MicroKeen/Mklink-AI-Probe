@@ -3,8 +3,8 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import type { CustomFlmRecord, FlashAlgorithmRecord, PackStatus, TargetRecord } from '../../types/onlineFlash'
 import { tr } from '../../composables/useLanguage'
 
-const props = defineProps<{ targets: TargetRecord[]; query: string; selectedPart: string; selectedInstalled: boolean; status: PackStatus | null; busy: boolean; cancelPending: boolean; progress: number; phase: string; error: string; algorithms: CustomFlmRecord[]; flashAlgorithms?: FlashAlgorithmRecord[]; algorithmBusy: boolean; algorithmError: string; canManageAlgorithms: boolean; algorithmNotRequired: boolean }>()
-const emit = defineEmits<{ search: [value: string]; 'update:query': [value: string]; select: [target: TargetRecord]; clearTarget: []; updateIndex: []; importPack: [file: File]; cancel: []; addAlgorithm: [file: File]; removeAlgorithm: [algorithmId: string] }>()
+const props = defineProps<{ targets: TargetRecord[]; query: string; selectedPart: string; selectedInstalled: boolean; status: PackStatus | null; busy: boolean; cancelPending: boolean; progress: number; phase: string; error: string; algorithms: CustomFlmRecord[]; flashAlgorithms?: FlashAlgorithmRecord[]; algorithmBusy: boolean; algorithmError: string; canManageAlgorithms: boolean; algorithmNotRequired: boolean; selectionLocked?: boolean }>()
+const emit = defineEmits<{ search: [value: string]; 'update:query': [value: string]; select: [target: TargetRecord]; updateIndex: []; importPack: [file: File]; cancel: []; addAlgorithm: [file: File]; removeAlgorithm: [algorithmId: string] }>()
 const query = ref(props.query)
 const searchBox = ref<HTMLElement | null>(null)
 const suggestionsOpen = ref(false)
@@ -129,10 +129,9 @@ const phaseLabel = computed(() => ({
 
 <template>
   <section class="target-panel">
-    <button v-if="selectedPart" class="btn" :disabled="busy" @click="emit('clearTarget')">{{ tr('取消器件选择', 'Clear target selection') }}</button>
     <div class="title-row"><h3>{{ tr('器件选择', 'Target Selection') }}</h3><span data-testid="pack-status" class="badge" :class="selectedPart && selectedInstalled ? 'ok' : ''">{{ selectedPart && selectedInstalled ? tr('已安装', 'Installed') : tr('未就绪', 'Not ready') }}</span></div>
     <div ref="searchBox" class="target-combobox" @focusout="onSearchFocusOut">
-      <input v-model="query" data-testid="target-search" type="search" role="combobox" aria-autocomplete="list" aria-controls="target-suggestions" :aria-expanded="suggestionsOpen" :aria-activedescendant="suggestionsOpen && activeSuggestion >= 0 ? `target-option-${activeSuggestion}` : undefined" :placeholder="tr('搜索型号 / 厂商 / 系列', 'Search model / vendor / family / series')" :aria-label="tr('搜索器件', 'Search targets')" @input="onSearchInput" @focus="onSearchFocus" @keydown="onSearchKeydown">
+      <input v-model="query" data-testid="target-search" :disabled="selectionLocked" type="search" role="combobox" aria-autocomplete="list" aria-controls="target-suggestions" :aria-expanded="suggestionsOpen" :aria-activedescendant="suggestionsOpen && activeSuggestion >= 0 ? `target-option-${activeSuggestion}` : undefined" :placeholder="tr('搜索型号 / 厂商 / 系列', 'Search model / vendor / family / series')" :aria-label="tr('搜索器件', 'Search targets')" @input="onSearchInput" @focus="onSearchFocus" @keydown="onSearchKeydown">
       <div v-show="suggestionsOpen && targets.length" id="target-suggestions" class="target-list" role="listbox">
         <button v-for="(target, index) in targets" :id="`target-option-${index}`" :key="target.part_number" :data-testid="`target-${target.part_number}`" type="button" role="option" :aria-selected="selectedPart === target.part_number" :disabled="busy || algorithmBusy" :class="{ active: index === activeSuggestion || selectedPart === target.part_number }" @mouseenter="activeSuggestion = index" @click="selectTarget(target)">
           <strong>{{ target.part_number }}</strong><small>{{ target.vendor }} · {{ target.pack_id || tr('内置', 'Built-in') }}</small><span>{{ targetAvailability(target) }}</span>

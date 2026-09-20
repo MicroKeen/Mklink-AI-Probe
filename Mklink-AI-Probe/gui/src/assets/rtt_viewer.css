@@ -1328,7 +1328,7 @@ tr.watch-child-row td[data-col="value"] {
   position: absolute;
   top: 8px;
   right: 8px;
-  background: rgba(250, 249, 245, 0.92);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 6px 10px;

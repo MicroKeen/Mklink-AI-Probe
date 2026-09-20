@@ -70,7 +70,7 @@ const targetMemoryRegions = ref<TargetMemoryRegion[]>([])
 const targetMemoryMapBusy = ref(false)
 const security = ref<SecurityCapability>({ part_number: '', supported: false, unlock_supported: false, lock_supported: false, family: '', reason: tr('请选择已验证的目标器件', 'Select a hardware-validated target'), unlock_erases_flash: false, unlock_erases_eeprom: false, unlock_erases_backup_registers: false, reversible_lock: false })
 const desiredPart = ref(saved.targetPart ?? '')
-const targetQuery = ref('')
+const targetQuery = ref(saved.targetPart ?? '')
 const packStatus = ref<PackStatus | null>(null)
 const packBusy = ref(false)
 const packCancelPending = ref(false)
@@ -330,11 +330,20 @@ function applyPackEvent(event: Awaited<ReturnType<typeof api.installPack>>['even
   }
 }
 
+function updateTargetQuery(value: string): void {
+  if (active.value) return
+  targetQuery.value = value
+  if (!value.trim()) clearTarget()
+}
+
 function clearTarget(): void {
   if (active.value || packBusy.value) return
+  ++targetSearchGeneration
+  targetSearchController?.abort()
   selectedTarget.value = null
   desiredPart.value = ''
   targetQuery.value = ''
+  baseAddress.value = ''
   hpmBoard.value = ''
   resetInspection()
   clearMemoryWindow()
@@ -903,7 +912,7 @@ onBeforeUnmount(() => {
   <div class="online-flash-grid" :inert="confirmationMessage !== null">
     <aside class="workspace-zone settings-zone" data-zone="settings">
       <ProbeSettingsPanel :probes="probes" :selected-id="probeId" :frequency="frequency" :connect-mode="connectMode" :reset-mode="resetMode" :reset-voltage-mv="resetVoltageMv" :busy="probeBusy || active" :error="probeError" @refresh="refreshProbes" @update:selected-id="probeId = $event" @update:frequency="frequency = $event" @update:connect-mode="connectMode = $event" @update:reset-mode="resetMode = $event" @update:reset-voltage-mv="resetVoltageMv = $event" />
-      <TargetPackPanel :targets="targets" :query="targetQuery" :selected-part="selectedTarget?.part_number || ''" :selected-installed="!!selectedTarget?.installed" :status="packStatus" :busy="packBusy" :cancel-pending="packCancelPending" :progress="packProgress" :phase="packPhase" :error="packError" :algorithms="customFlms" :flash-algorithms="flashAlgorithms" :algorithm-busy="customFlmBusy" :algorithm-error="customFlmError" :can-manage-algorithms="!active && !hpmAlgorithmNotRequired" :algorithm-not-required="hpmAlgorithmNotRequired" @search="searchTargets" @update:query="targetQuery = $event" @select="selectTarget" @clear-target="clearTarget" @update-index="updatePackIndex" @import-pack="importPack" @cancel="cancelPack" @add-algorithm="addCustomFlm" @remove-algorithm="removeCustomFlm" />
+      <TargetPackPanel :targets="targets" :query="targetQuery" :selected-part="selectedTarget?.part_number || ''" :selected-installed="!!selectedTarget?.installed" :selection-locked="active" :status="packStatus" :busy="packBusy" :cancel-pending="packCancelPending" :progress="packProgress" :phase="packPhase" :error="packError" :algorithms="customFlms" :flash-algorithms="flashAlgorithms" :algorithm-busy="customFlmBusy" :algorithm-error="customFlmError" :can-manage-algorithms="!active && !hpmAlgorithmNotRequired" :algorithm-not-required="hpmAlgorithmNotRequired" @search="searchTargets" @update:query="updateTargetQuery" @select="selectTarget" @update-index="updatePackIndex" @import-pack="importPack" @cancel="cancelPack" @add-algorithm="addCustomFlm" @remove-algorithm="removeCustomFlm" />
       <label v-if="hpmMode" class="hpm-setting"><span>{{ tr('HPM 板卡', 'HPM Board') }}</span><select v-model="hpmBoard" data-testid="hpm-board"><option v-for="item in hpmBoards" :key="item" :value="item">{{ item }}</option></select></label>
     </aside>
     <main class="workspace-zone firmware-zone" data-zone="firmware">
@@ -933,7 +942,7 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.online-flash-grid{--of-bg:#11151a;--of-surface:#1d2229;--of-input:#252b33;--of-border:#343c46;--of-text:#e6e9ed;--of-muted:#929ba7;--of-accent:#58a6d6;--of-danger:#f07178;--of-danger-bg:#3b2428;--of-ok:#65c18c;--of-ok-bg:#20372d;--of-warn:#d8ad62;--of-mono:var(--mono,ui-monospace,Consolas,monospace);box-sizing:border-box;height:calc(100dvh - 92px);min-height:0;display:grid;grid-template-columns:minmax(230px,.85fr) minmax(0,1.9fr) minmax(240px,.9fr);grid-template-rows:minmax(0,1fr) minmax(130px,185px);gap:10px;padding:10px;border-radius:var(--radius,7px);background:var(--of-bg);color:var(--of-text);text-align:left;font-size:12px}.workspace-zone{min-width:0;min-height:0;overflow:hidden;border:1px solid var(--of-border);border-radius:7px;background:var(--of-surface)}.settings-zone,.flash-map-zone{overflow:auto}.firmware-zone{min-height:0;display:flex;flex-direction:column}.firmware-zone :deep(.hex-scroll){min-height:0;flex:1}.logs-zone{grid-column:1/-1;font-family:var(--of-mono)}@media(max-width:1050px){.online-flash-grid{height:auto;min-height:660px;grid-template-columns:minmax(220px,.8fr) minmax(0,1.6fr);grid-template-rows:auto}.flash-map-zone{grid-column:1/-1}.logs-zone{grid-column:1/-1}}@media(max-width:760px){.online-flash-grid{grid-template-columns:1fr;grid-template-rows:none}.flash-map-zone,.logs-zone{grid-column:auto}.firmware-zone{min-height:560px}}
+.online-flash-grid{box-sizing:border-box;height:calc(100dvh - 92px);min-height:0;display:grid;grid-template-columns:minmax(230px,.85fr) minmax(0,1.9fr) minmax(240px,.9fr);grid-template-rows:minmax(0,1fr) minmax(130px,185px);gap:10px;padding:10px;border-radius:var(--radius,7px);background:var(--of-bg);color:var(--of-text);text-align:left;font-size:12px}.workspace-zone{min-width:0;min-height:0;overflow:hidden;border:1px solid var(--of-border);border-radius:7px;background:var(--of-surface)}.settings-zone,.flash-map-zone{overflow:auto}.firmware-zone{min-height:0;display:flex;flex-direction:column}.firmware-zone :deep(.hex-scroll){min-height:0;flex:1}.logs-zone{grid-column:1/-1;font-family:var(--of-mono)}@media(max-width:1050px){.online-flash-grid{height:auto;min-height:660px;grid-template-columns:minmax(220px,.8fr) minmax(0,1.6fr);grid-template-rows:auto}.flash-map-zone{grid-column:1/-1}.logs-zone{grid-column:1/-1}}@media(max-width:760px){.online-flash-grid{grid-template-columns:1fr;grid-template-rows:none}.flash-map-zone,.logs-zone{grid-column:auto}.firmware-zone{min-height:560px}}
 .hpm-setting{display:grid;gap:5px;padding:10px;border-top:1px solid var(--of-border);color:var(--of-muted)}.hpm-setting select{min-width:0;width:100%;height:30px;border:1px solid var(--of-border);border-radius:5px;background:var(--of-input);color:var(--of-text);padding:0 8px}
 .bin-address-backdrop{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,.58)}.bin-address-dialog{width:min(420px,100%);padding:20px;border:1px solid var(--of-border);border-radius:7px;background:var(--of-surface);box-shadow:0 18px 50px rgba(0,0,0,.35)}.bin-address-dialog h2{margin:0 0 8px;font-size:17px;letter-spacing:0}.bin-address-dialog>p{margin:0 0 16px;color:var(--of-muted);line-height:1.5}.bin-address-dialog label{display:grid;gap:6px;color:var(--of-muted)}.bin-address-dialog input{height:36px;padding:0 10px;border:1px solid var(--of-border);border-radius:5px;background:var(--of-input);color:var(--of-text);font-family:var(--of-mono);font-size:14px}.bin-address-dialog input:focus{outline:2px solid var(--of-accent);outline-offset:1px}.bin-address-dialog .bin-address-error{margin:8px 0 0;color:var(--of-danger);font-size:11px}.bin-address-dialog footer{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}.bin-address-dialog button{min-width:72px;height:32px;border:1px solid var(--of-border);border-radius:5px;cursor:pointer}.bin-address-cancel{background:var(--of-input);color:var(--of-text)}.bin-address-confirm{border-color:var(--of-accent)!important;background:var(--of-accent);color:#0d1720}.bin-address-confirm:disabled{cursor:not-allowed;opacity:.45}
 </style>

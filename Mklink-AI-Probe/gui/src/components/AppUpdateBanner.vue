@@ -79,14 +79,14 @@ defineEmits<{
   align-items: center;
   gap: 8px;
   padding: 0 20px;
-  border-bottom: 1px solid #cbddea;
-  background: #edf5fa;
-  color: #245b78;
+  border-bottom: 1px solid var(--border);
+  background: var(--info-bg);
+  color: var(--info);
   font-size: 12px;
 }
 .update-error {
-  border-bottom-color: #e6caca;
-  background: #f8eeee;
+  border-bottom-color: var(--border);
+  background: var(--danger-bg);
   color: var(--danger);
 }
 .update-banner span {
