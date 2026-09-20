@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-09-20T20:06:15.2058251+08:00",
+  "updated_at": "2026-09-20T20:17:24.5820836+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
@@ -14,7 +14,7 @@
   },
   "current_session": {
     "status": "in_progress",
-    "current_task": "HPM5301脱机OTP和断电保持验收完成；用户授权启用Windows开发模式后12项符号链接测试补跑全部通过，继续标准NSIS候选构建，尚未发布。"
+    "current_task": "HPM5301脱机OTP和真实断电保持验收完成，标准0.2.2 NSIS已生成并覆盖安装通过；开发分支待审阅，未正式签名/合并/发布。"
   },
   "milestones": [
     {
@@ -54,7 +54,7 @@
     },
     {
       "area": "V2 narrow reads and shared RTT validation",
-      "result": "历史V2/V3/V4和四档实板资格见docs/verification各报告，不外推芯片。20260920 STM32F103在线6/脱机6、窄值/非对齐、UART/RTT/SystemView/CLI/MCP与Chrome通过；HPM6E80四档、在线3/脱机3及共享流通过，UART未接。主题与在线校验见v0.2.2-online-verify-theme-20260920.md：HPM校验约4.4倍提升，ARM三档BIN/HEX6次通过、Boot保留；带Verify导出FLM仅软件验证。本轮HPM5301脱机OTP详见v0.2.2-hpm-offline-otp-20260920.md：旧API/旧值/缺文件停止；真实Chrome写Word72=1、79=3和组18/19锁，完整BIN回读及UART通过，真正断电后值/锁、固件和UART/GUI复核通过。Python2294通过2跳过、12项符号链接权限失败经用户授权启用开发模式后补跑全通过（合计2306通过）；GUI720通过、生产构建通过。Rust测试缺Common Controls v6清单已修复，19项通过。BrowserAct Chrome恢复可用。标准NSIS尚待重新构建/覆盖安装，正式渠道未更新。"
+      "result": "历史V2/V3/V4和四档实板资格见docs/verification各报告，不外推芯片。20260920 STM32F103在线6/脱机6、窄值/非对齐、UART/RTT/SystemView/CLI/MCP与Chrome通过；HPM6E80四档、在线3/脱机3及共享流通过，UART未接。主题与在线校验见v0.2.2-online-verify-theme-20260920.md：HPM校验约4.4倍提升，ARM三档BIN/HEX6次通过、Boot保留；带Verify导出FLM仅软件验证。本轮HPM5301脱机OTP详见v0.2.2-hpm-offline-otp-20260920.md：旧API/旧值/缺文件停止；真实Chrome写Word72=1、79=3和组18/19锁，完整BIN回读及UART通过，真正断电后值/锁、固件和UART/GUI复核通过。Python2294通过2跳过、12项符号链接权限失败经用户授权启用开发模式后补跑全通过（合计2306通过）；GUI720通过、生产构建通过。Rust测试缺Common Controls v6清单已修复，19项通过。BrowserAct Chrome恢复可用。标准NSIS87.6MiB已构建/覆盖安装，受限PATH启动、内置后端、7059/2224资产哈希、退出释放及安装后HPM OTP回读通过；无签名、未发布。"
     }
   ],
   "decisions": [
@@ -67,7 +67,7 @@
   "hardware": {
     "state": "HPMLink V4 + HPM5301。Word72=1、Word79=3、HARD_LOCK=0x304C0016；38,364字节固件独立回读一致，UART0心跳递增。组18/19已永久锁定，禁止重放原配方。实际断电后GUI/独立回读和UART复核通过，不进行安全生命周期操作。",
     "backups": ".build/reports/prerelease-hil-20260907、superwatch-write-20260907；保留其他芯片唯一备份。；本轮本地证据 .build/reports/peripheral-unification。；本轮 OTP 只读和浏览器证据 .build/reports/device-configuration。；STM32F103 唯一原始备份与本轮证据 .build/reports/stm32f103-options。",
-    "installer": ".build/artifacts/theme-022-20260920/Mklink-AI-Probe-v0.2.2-cdbf08051a53-x64-Offline-Setup.exe"
+    "installer": ".build/artifacts/v0.2.2-hpm-otp-20260920/Mklink-AI-Probe-v0.2.2-fdf24c0-x64-Setup.exe"
   },
   "known_limits": [
     "本轮已复现的USB停读后32B缺失由独立对齐DMA槽修复，并修复RTT回执/描述符并发。有限缓存仍不保证无限暂停或物理断线无损；历史枚举异常未做全部场景认证。",
@@ -79,8 +79,8 @@
     "客户原始 ELF/程序不可用，不能认定其8位毛刺根因已复现；odd-address packed halfword 不保证原子性。远程文件测试12项受Windows symlink权限限制。"
   ],
   "next_actions": [
-    "HPM5301脱机OTP验收与软件全量回归通过；继续标准NSIS构建和覆盖安装资格，不直接发布渠道。Windows开发人员模式按用户授权已开启。",
-    "ARM在线普通回读校验真机完成；带Verify导出的FLM待适合实板；弹窗主题需浏览器恢复后视觉验收，修改尚未重新打包安装。",
+    "标准NSIS候选已完成，源fdf24c0，见HPM脱机OTP验收报告及本地artifacts/v0.2.2-hpm-otp-20260920。正式渠道未发布；按用户下一步指示审阅合并/签名发布。开发人员模式已按授权开启。",
+    "原生桌面视觉新一轮截图尚未补，本轮真实Chrome验证暗黑主题、OTP流程和更新记录。其他芯片OTP、带Verify导出FLM仍按报告限定资格。",
     "官网文档任务已收到四档Chrome真图和技术附件；保留公众号风格及技术附件分层，不自动发布。继续优化前先拆分批间组帧/调度开销；慢浏览器订阅需按队列背压评估，勿与USB字节故障混同。",
     "后续补STM32F103看门狗、STOP/STANDBY、WRP拒写及其他ARM实板。HPM用户OTP开放限定型号，安全字段仍为实验路径；其他系列按报告OTP基址和EXIP长度分别适配。",
     "本机桌面已覆盖安装本地0.2.2离线包；正式发布渠道和Skill仍为0.2.1，定时任务维持暂停。"
