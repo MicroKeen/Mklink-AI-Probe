@@ -2311,7 +2311,7 @@ class Device:
             return read_item(self, catalog.resolve(name))
         from mklink.registers import resolve_register
         reg = resolve_register(name)
-        if "HPM" in self.mcu_name.upper() and not name.strip().lower().startswith("0x"):
+        if ("HPM" in self.mcu_name.upper() or self._bridge.idcode == 0x1000563D) and not name.strip().lower().startswith("0x"):
             raise ValueError(
                 "Select the HPM peripheral catalog before using register names"
             )
@@ -2324,38 +2324,43 @@ class Device:
     # ------------------------------------------------------------------
     # Debug control
     # ------------------------------------------------------------------
-    def halt(self):
+    def _require_cortex_m_debug(self):
         self._require_connected()
+        if "HPM" in self.mcu_name.upper() or getattr(self._bridge, "idcode", None) == 0x1000563D:
+            raise ValueError("CPU debug control requires a Cortex-M target; HPM RISC-V control is not supported by this API")
+
+    def halt(self):
+        self._require_cortex_m_debug()
         from mklink.debug_control import halt_cpu
         return halt_cpu(self._bridge)
 
     def resume(self):
-        self._require_connected()
+        self._require_cortex_m_debug()
         from mklink.debug_control import resume_cpu
         return resume_cpu(self._bridge)
 
     def step(self):
-        self._require_connected()
+        self._require_cortex_m_debug()
         from mklink.debug_control import step_cpu
         return step_cpu(self._bridge)
 
     def set_breakpoint(self, address: int, slot: int | None = None) -> int:
-        self._require_connected()
+        self._require_cortex_m_debug()
         from mklink.debug_control import set_breakpoint
         return set_breakpoint(self._bridge, address, slot)
 
     def clear_breakpoint(self, slot: int) -> None:
-        self._require_connected()
+        self._require_cortex_m_debug()
         from mklink.debug_control import clear_breakpoint
         clear_breakpoint(self._bridge, slot)
 
     def clear_all_breakpoints(self) -> int:
-        self._require_connected()
+        self._require_cortex_m_debug()
         from mklink.debug_control import clear_all_breakpoints
         return clear_all_breakpoints(self._bridge)
 
     def read_core_registers(self) -> dict[str, int]:
-        self._require_connected()
+        self._require_cortex_m_debug()
         from mklink.debug_control import read_all_core_registers
         return read_all_core_registers(self._bridge)
 
@@ -2365,7 +2370,7 @@ class Device:
     def check_hardfault(self) -> dict[str, int] | None:
         """Read fault registers and return them if a fault occurred."""
         self._require_connected()
-        if "HPM" in self.mcu_name.upper():
+        if "HPM" in self.mcu_name.upper() or getattr(getattr(self, "_bridge", None), "idcode", None) == 0x1000563D:
             raise ValueError("HardFault decoding requires a Cortex-M target")
         # Core fault registers are architectural, not peripheral-SVD entries.
         # An explicitly selected vendor SVD may omit SCB entirely. Do not
