@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-09-20T16:52:19.6247085+08:00`
+- 更新时间：`2026-09-20T17:10:04.0736567+08:00`
 - 分支：`codex/v0.2.2-development`
 - HEAD：`0.2.2 shared light/dark/system themes, RTT transmit surround, canvas redraw and consistent package metadata.`
 - 远端 HEAD：`codex/v0.2.2-development / PR #5; regression follow-up, no merge or release.`
 - 工作树：Handoff includes offline OTP draft source and documentation; separate firmware and MicroBoot work remain outside this repository.
-- 当前任务：0.2.2 light/dark/system themes delivered in Chrome and desktop. White RTT/serial transmit surround fixed. Offline NSIS cdbf08051a53 built and overwrite-installed successfully; theme persistence, clean exit and HPM architecture guard checked on bundled backend. See docs/verification/v0.2.2-theme-desktop-20260920.md.
-- 状态：`complete`
+- 当前任务：User requested standard NSIS (no offline WebView2) and dark-by-default 0.2.2 candidate. Formal release explicitly deferred while retaining unverified HPM offline OTP draft. Run final software/build/install tests; native GUI HPM HardFault guard toast now observed and captured.
+- 状态：`in_progress`
 
 ## 里程碑
 
@@ -43,8 +43,8 @@
 
 ## 下一动作
 
-1. 优先按 docs/ai/hpm-offline-otp-handoff.md 完成脱机OTP失败门槛、脚本故障注入、GUI测试/构建和Chrome验证。第四颗已到SCRIBE，用户无新芯片；真机需等待新芯片，不声明脱机OTP通过。
-2. 新版桌面8765已实机核对HPM架构保护。开发WebGUI8770仍需用户真正重启服务以加载新后端；刷新仅更新前端。UART/物理Modbus未接，OTP不测。
+1. 正式0.2.2发布按用户2026-09-20要求暂停；保留HPM脱机OTP草稿，按hpm-offline-otp-handoff.md补软件/新HPM5301真机验收后再决定发布。继续标准NSIS候选包和默认暗黑回归。
+2. 已在原生桌面GUI实点HardFault核对HPM架构拒绝提示并截图。开发8770仍为旧导入后端；当前桌面8765使用新版。
 3. 官网文档任务已收到四档Chrome真图和技术附件；保留公众号风格及技术附件分层，不自动发布。继续优化前先拆分批间组帧/调度开销；慢浏览器订阅需按队列背压评估，勿与USB字节故障混同。
 4. 后续补STM32F103看门狗、STOP/STANDBY、WRP拒写及其他ARM实板。HPM用户OTP开放限定型号，安全字段仍为实验路径；其他系列按报告OTP基址和EXIP长度分别适配。
 5. 本机桌面已覆盖安装本地0.2.2离线包；正式发布渠道和Skill仍为0.2.1，定时任务维持暂停。

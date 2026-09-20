@@ -13,7 +13,7 @@ export const releaseHistory: ReleaseHistoryEntry[] = [
     summary: '改善实时采集共享、长变量显示与烧录稳定性',
     summaryEn: 'Improve shared capture, long variable paths and flashing reliability',
     changes: [
-      'WebGUI 与桌面版新增浅色、暗黑和跟随系统主题，自动记住选择；SuperWatch 支持黑底波形与主题同步导出。',
+      'WebGUI 与桌面版新增浅色、暗黑和跟随系统主题，默认暗黑并自动记住选择；SuperWatch 支持黑底波形与主题同步导出。',
       'SuperWatch 长变量支持原位横向拖动查看，悬停显示完整路径；窄侧栏数值与操作分行显示。',
       '同步 AI/API 修改的采集档位，SystemView 可接入外部启动的实时采集，不重复启动设备。',
       '修复 API 重启采集后的时间轴误丢帧及高吞吐 WebSocket 心跳并发断流；串口页面提前订阅，保留首段输出。',
@@ -22,7 +22,7 @@ export const releaseHistory: ReleaseHistoryEntry[] = [
       '改善高速在线烧录的复位初始化，修复脱机 IDCODE 日志被误隐藏。',
     ],
     changesEn: [
-      'Add persistent Light, Dark and System themes to WebGUI and desktop, with dark SuperWatch plots and matching PNG export.',
+      'Default WebGUI and desktop to Dark, retain saved Light/Dark/System preferences, and match SuperWatch plots and PNG export to the theme.',
       'Drag long variable paths horizontally in place, hover for the full path, and separate values and controls in narrow catalogs.',
       'Follow AI/API clock changes and attach to externally started SystemView sessions without restarting capture.',
       'Reset capture timeline epochs, avoid high-throughput WebSocket heartbeat drain failures, and preserve initial serial output.',

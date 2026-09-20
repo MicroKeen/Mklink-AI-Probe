@@ -2,8 +2,8 @@ import { readonly, ref } from 'vue'
 
 export type ThemePreference = 'light' | 'dark' | 'system'
 const KEY = 'mklink_theme'
-const preference = ref<ThemePreference>('system')
-const resolved = ref<'light' | 'dark'>('light')
+const preference = ref<ThemePreference>('dark')
+const resolved = ref<'light' | 'dark'>('dark')
 let stop: (() => void) | undefined
 let media: MediaQueryList | undefined
 const valid = (value: unknown): value is ThemePreference => ['light', 'dark', 'system'].includes(String(value))
@@ -19,13 +19,13 @@ export function initializeTheme(): () => void {
   stop?.()
   try {
     const saved = localStorage.getItem(KEY)
-    preference.value = valid(saved) ? saved : 'system'
-  } catch { preference.value = 'system' }
+    preference.value = valid(saved) ? saved : 'dark'
+  } catch { preference.value = 'dark' }
   media = window.matchMedia?.('(prefers-color-scheme: dark)')
   const changed = () => { if (preference.value === 'system') apply() }
   const storage = (event: StorageEvent) => {
     if (event.key !== KEY && event.key !== null) return
-    preference.value = valid(event.newValue) ? event.newValue : 'system'
+    preference.value = valid(event.newValue) ? event.newValue : 'dark'
     apply()
   }
   media?.addEventListener('change', changed)
