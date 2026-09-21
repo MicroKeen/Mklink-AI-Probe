@@ -36,6 +36,15 @@
         </details>
       </nav>
       <div class="header-right">
+        <label class="theme-setting">
+          <span>{{ tr('主题', 'Theme') }}</span>
+          <select data-testid="theme-select" :aria-label="tr('界面主题', 'Appearance theme')"
+            :value="themePreference" @change="setTheme(($event.target as HTMLSelectElement).value as ThemePreference)">
+            <option value="system">{{ tr('跟随系统', 'System') }}</option>
+            <option value="light">{{ tr('浅色', 'Light') }}</option>
+            <option value="dark">{{ tr('暗黑', 'Dark') }}</option>
+          </select>
+        </label>
         <button
           class="language-toggle"
           type="button"
@@ -95,6 +104,7 @@ import { useMklinkApi } from './composables/useMklinkApi'
 import { useBackendHealth } from './composables/useBackendHealth'
 import { useAppUpdater } from './composables/useAppUpdater'
 import { language, toggleLanguage, tr } from './composables/useLanguage'
+import { themePreference, setTheme, type ThemePreference } from './composables/useTheme'
 import { startBrowserSessionLease } from './lib/browserSessionLease'
 
 const router = useRouter()
@@ -389,11 +399,11 @@ body {
   letter-spacing: 0.02em;
   display: inline-block;
 }
-.badge-ok    { background: #e6f2ea; color: var(--success); }
-.badge-warn  { background: #f5f0e1; color: var(--warn); }
-.badge-info  { background: #e6eef5; color: var(--info); }
-.badge-err   { background: #f5e6e6; color: var(--danger); }
-.badge-accent { background: #f3ece6; color: var(--accent); font-weight: 600; }
+.badge-ok    { background: var(--success-bg); color: var(--success); }
+.badge-warn  { background: var(--warn-bg); color: var(--warn); }
+.badge-info  { background: var(--info-bg); color: var(--info); }
+.badge-err   { background: var(--danger-bg); color: var(--danger); }
+.badge-accent { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
 
 .card {
   background: var(--surface);
@@ -428,7 +438,7 @@ body {
   padding: 0 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: #fff;
+  background: var(--input-bg, #fff);
   font-size: 13px;
   color: var(--fg);
   font-family: var(--font-body);
@@ -472,10 +482,10 @@ body {
   font-size: 13px;
   margin-bottom: 12px;
 }
-.alert-success { background: #e6f2ea; color: var(--success); }
-.alert-warn    { background: #f5f0e1; color: var(--warn); }
-.alert-error   { background: #f5e6e6; color: var(--danger); }
-.alert-info    { background: #e6eef5; color: var(--info); }
+.alert-success { background: var(--success-bg); color: var(--success); }
+.alert-warn    { background: var(--warn-bg); color: var(--warn); }
+.alert-error   { background: var(--danger-bg); color: var(--danger); }
+.alert-info    { background: var(--info-bg); color: var(--info); }
 
 .grid-2 {
   display: grid;

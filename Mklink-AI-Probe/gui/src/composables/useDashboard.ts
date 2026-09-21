@@ -91,6 +91,7 @@ export function useDashboard(type: string) {
     stop,
     pause,
     resume,
+    syncState(running: boolean) { state.value = running ? 'running' : 'idle' },
     getStatus,
     getHistory,
   }

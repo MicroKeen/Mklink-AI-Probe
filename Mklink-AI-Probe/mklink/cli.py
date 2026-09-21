@@ -1912,6 +1912,8 @@ def _cli_dump_memory(
             if len(raw_seen) < 4096:
                 raw_seen.extend(raw[: 4096 - len(raw_seen)])
             for frame in parser.feed(raw):
+                if frames and sample_count >= frames:
+                    break
                 collected_frames.append(frame)
                 saved_payload.extend(_dump_frame_payload(frame))
                 if _is_complete_sample(frame):

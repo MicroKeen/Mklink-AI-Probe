@@ -1,5 +1,6 @@
 import struct
 from types import SimpleNamespace
+import pytest
 
 from mklink import mcp_server
 from mklink.device import Device
@@ -11,6 +12,35 @@ from mklink.hardfault import (
     format_hardfault_report,
     parse_exception_stack_frame,
 )
+
+
+def test_fault_detection_does_not_depend_on_selected_svd():
+    reads = []
+    device = SimpleNamespace(
+        _require_connected=lambda: None, mcu_name="STM32F103RE",
+        read_register=lambda name: (_ for _ in ()).throw(KeyError(name)),
+        read_memory=lambda address, size: (
+            reads.append((address, size)) or struct.pack("<II", 1 << 16, 1 << 30)
+        ),
+    )
+    assert Device.check_hardfault(device) == {
+        "SCB.CFSR": 1 << 16, "SCB.HFSR": 1 << 30,
+    }
+    assert reads == [(0xE000ED28, 8)]
+    device.read_memory = lambda *_: bytes(8)
+    assert Device.check_hardfault(device) is None
+
+
+def test_fault_read_failure_is_not_reported_as_no_fault():
+    device = SimpleNamespace(
+        _require_connected=lambda: None, mcu_name="STM32F103RE",
+        read_memory=lambda *_: (_ for _ in ()).throw(OSError("debug unavailable")),
+    )
+    with pytest.raises(OSError, match="debug unavailable"):
+        Device.check_hardfault(device)
+    device.mcu_name = "HPM5301"
+    with pytest.raises(ValueError, match="Cortex-M"):
+        Device.check_hardfault(device)
 
 
 def test_addr2line_uses_selected_elf_backend(monkeypatch):

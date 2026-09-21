@@ -254,7 +254,7 @@ def test_package_audit_covers_zip_manifest_and_recursive_archives(
     assert surfaces["bundle_files"] == len(manifest["files"])
     assert surfaces["bundle_files"] >= 90
     assert manifest["audit"]["removed_local_origin_metadata"] == [
-        "_internal/mklink-0.2.1.dist-info/direct_url.json"
+        f"_internal/mklink-{json.loads((ROOT / 'packaging/site_agent/build-provenance.json').read_text('utf-8'))['product_version']}.dist-info/direct_url.json"
     ]
     assert manifest["dependencies"]["in_process_stcp"] == {
         "frp_version": "0.69.1",

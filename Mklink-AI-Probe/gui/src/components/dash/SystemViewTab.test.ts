@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   dash: {
     state: { __v_isRef: true, value: 'idle' },
     error: { __v_isRef: true, value: null },
+    syncState: vi.fn((running: boolean) => { mocks.dash.state.value = running ? 'running' : 'idle' }),
     getStatus: vi.fn(), start: vi.fn(), stop: vi.fn(),
     pause: vi.fn(), resume: vi.fn(),
   },
@@ -145,6 +146,24 @@ describe('SystemViewTab asynchronous lifecycle', () => {
     mocks.scheduler.render = null
   })
 
+  it('observes API start and stop after the tab was opened', async () => {
+    vi.useFakeTimers()
+    const wrapper = mount(SystemViewTab, { props: { deviceConnected: true } })
+    await flushPromises()
+    mocks.dash.getStatus.mockResolvedValue({ running: true, cpu_freq: 72000000 })
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(mocks.binary.start).toHaveBeenCalledOnce()
+    expect(mocks.dash.start).not.toHaveBeenCalled()
+    mocks.dash.getStatus.mockResolvedValue({ running: false })
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(mocks.dash.syncState).toHaveBeenLastCalledWith(false)
+    expect(mocks.binary.stop).toHaveBeenCalled()
+    wrapper.unmount()
+    const calls = mocks.dash.getStatus.mock.calls.length
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(mocks.dash.getStatus).toHaveBeenCalledTimes(calls)
+    vi.useRealTimers()
+  })
   it('searches and persists an RTT address without visiting RTT View', async () => {
     localStorage.setItem(DESKTOP_SETTINGS_STORAGE_KEY, JSON.stringify(desktopSettings({
       symbolPath: 'D:\\project\\rtthread.elf',
@@ -226,7 +245,7 @@ describe('SystemViewTab asynchronous lifecycle', () => {
       addr: '0x0008E488',
       channel: 1,
       mode: 0,
-      search_size: 1024,
+      search_size: 0,
     })
     wrapper.unmount()
   })
@@ -446,20 +465,14 @@ describe('SystemViewTab asynchronous lifecycle', () => {
     wrapper.unmount()
   })
 
-  it('does not connect when a running-trace start resolves after unmount', async () => {
-    const started = deferred<void>()
+  it('attaches without issuing another start command', async () => {
     mocks.dash.getStatus.mockResolvedValue({ running: true })
-    mocks.dash.start.mockReturnValue(started.promise)
     const wrapper = mount(SystemViewTab, { props: { deviceConnected: true } })
     await flushPromises()
-    expect(mocks.dash.start).toHaveBeenCalledOnce()
-
+    expect(mocks.dash.start).not.toHaveBeenCalled()
+    expect(mocks.dash.syncState).toHaveBeenCalledWith(true)
+    expect(mocks.binary.start).toHaveBeenCalledOnce()
     wrapper.unmount()
-    started.resolve()
-    await flushPromises()
-
-    expect(mocks.status.connect).not.toHaveBeenCalled()
-    expect(mocks.binary.start).not.toHaveBeenCalled()
   })
 
   it('does not arm delayed transports when a user start resolves after unmount', async () => {

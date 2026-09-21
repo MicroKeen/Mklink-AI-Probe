@@ -48,10 +48,10 @@ const icons: Record<string, string> = {
   box-shadow: 0 2px 8px rgba(0,0,0,0.12);
   transition: opacity 0.2s, transform 0.2s;
 }
-.toast-success { background: #e6f2ea; color: var(--success); }
-.toast-error   { background: #f5e6e6; color: var(--danger); }
-.toast-warn    { background: #f5f0e1; color: var(--warn); }
-.toast-info    { background: #e6eef5; color: var(--info); }
+.toast-success { background: var(--success-bg); color: var(--success); }
+.toast-error   { background: var(--danger-bg); color: var(--danger); }
+.toast-warn    { background: var(--warn-bg); color: var(--warn); }
+.toast-info    { background: var(--info-bg); color: var(--info); }
 .toast-icon { font-weight: 700; flex-shrink: 0; }
 .toast-msg { flex: 1; line-height: 1.4; word-break: break-word; }
 

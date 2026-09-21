@@ -162,7 +162,7 @@ function copyReport() {
 <style scoped>
 .hardfault-tab { display: flex; flex-direction: column; gap: 12px; }
 .fault-report { margin-top: 8px; }
-.fault-focus { display: grid; gap: 4px; margin-bottom: 14px; padding: 12px; border-left: 3px solid var(--danger); background: #f5e6e6; }
+.fault-focus { display: grid; gap: 4px; margin-bottom: 14px; padding: 12px; border-left: 3px solid var(--danger); background: var(--danger-bg); }
 .fault-focus span { color: var(--dim); font-size: 11px; }
 .fault-focus strong { color: var(--danger); font-size: 16px; }
 .fault-focus code { overflow-wrap: anywhere; color: var(--fg); }
@@ -172,7 +172,7 @@ function copyReport() {
 .flag-list { display: flex; flex-wrap: wrap; gap: 4px; }
 .flag-badge {
   padding: 2px 8px; border-radius: 3px; font-size: 11px;
-  background: #f5e6e6; color: var(--danger); border: 1px solid rgba(181, 51, 51, 0.3);
+  background: var(--danger-bg); color: var(--danger); border: 1px solid rgba(181, 51, 51, 0.3);
 }
 .source-loc {
   display: flex; gap: 8px; font-family: var(--font-mono); font-size: 12px;
@@ -186,6 +186,6 @@ function copyReport() {
 .call-stack th, .call-stack td { padding: 6px 8px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
 .call-stack th { color: var(--dim); font-weight: 600; }
 .call-stack td:nth-child(4) { white-space: normal; overflow-wrap: anywhere; }
-.alert-ok { color: var(--success); padding: 8px; border: 1px solid var(--success); border-radius: 4px; background: #e6f2ea; }
+.alert-ok { color: var(--success); padding: 8px; border: 1px solid var(--success); border-radius: 4px; background: var(--success-bg); }
 .alert-warn { color: var(--warn); padding: 8px; border: 1px solid var(--warn); border-radius: 4px; }
 </style>

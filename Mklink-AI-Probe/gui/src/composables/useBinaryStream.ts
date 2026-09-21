@@ -75,7 +75,46 @@ export function useBinaryStream(
     if (next.error) error.value = next.error
   }
 
+  // Full samples remain in the Worker. Only coalesce UI summaries, preserving
+  // their sample counts so displayed acquisition rates do not depend on paint FPS.
+  let presentationTimer: ReturnType<typeof setTimeout> | null = null
+  let pendingSummary: WaveformSummary | null = null
+  let pendingTelemetry: StreamTelemetry | null = null
+  function flushPresentation(): void {
+    if (presentationTimer !== null) clearTimeout(presentationTimer)
+    presentationTimer = null
+    if (pendingSummary) waveformSummary.value = pendingSummary
+    if (pendingTelemetry) telemetry.value = pendingTelemetry
+    pendingSummary = null
+    pendingTelemetry = null
+  }
+  function clearPresentation(): void {
+    if (presentationTimer !== null) clearTimeout(presentationTimer)
+    presentationTimer = null
+    pendingSummary = null
+    pendingTelemetry = null
+  }
+  function schedulePresentation(): void {
+    if (presentationTimer === null) presentationTimer = setTimeout(flushPresentation, 33)
+  }
+
   function onWorkerMessage(message: WorkerOutput): void {
+    if (stream === 'superwatch') {
+      if (message.type === 'waveform-summary') {
+        pendingSummary = {
+          ...message,
+          collectedItemCount: message.collectedItemCount + (pendingSummary?.collectedItemCount ?? 0),
+        }
+        schedulePresentation()
+        return
+      }
+      if (message.type === 'telemetry') {
+        pendingTelemetry = message
+        schedulePresentation()
+        return
+      }
+      if (message.type === 'channels' || message.type === 'superwatch-metadata') flushPresentation()
+    }
     switch (message.type) {
       case 'telemetry':
         telemetry.value = message
@@ -138,10 +177,12 @@ export function useBinaryStream(
   }
 
   function stop(): void {
+    flushPresentation()
     client.stop()
   }
 
   function reset(): void {
+    clearPresentation()
     telemetry.value = null
     envelope.value = null
     systemViewVisible.value = null
@@ -158,6 +199,7 @@ export function useBinaryStream(
   }
 
   function configure(nextChannelCount: number): void {
+    clearPresentation()
     channelCount.value = nextChannelCount
     telemetry.value = null
     envelope.value = null
@@ -191,7 +233,7 @@ export function useBinaryStream(
 
   if (options.autoStart) start()
 
-  onUnmounted(() => client.dispose())
+  onUnmounted(() => { clearPresentation(); client.dispose() })
 
   return {
     state: readonly(state),

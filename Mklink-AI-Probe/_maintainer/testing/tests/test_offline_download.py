@@ -202,17 +202,20 @@ def test_offline_swd_clock_rejects_unnamed_high_clock():
 
 
 @pytest.mark.parametrize("hz", [4_000_000, 10_000_000, 20_000_000, 30_000_000])
-def test_v4_offline_four_clock_profiles(hz):
-    payload = _config("V4")
+@pytest.mark.parametrize("model", ["V2", "V3", "V4"])
+def test_offline_four_clock_profiles(hz, model):
+    payload = _config(model)
+    if model == "V2":
+        payload["auto_download_count"] = 1
     payload["swd_clock_hz"] = hz
     assert parse_offline_config(payload).swd_clock_hz == hz
 
 
-@pytest.mark.parametrize("model", ["V2", "V3"])
-def test_legacy_offline_models_keep_ten_mhz_limit(model):
+@pytest.mark.parametrize("model", ["V2"])
+def test_v2_offline_rejects_unnamed_high_clock(model):
     payload = _config(model)
     payload["auto_download_count"] = 1
-    payload["swd_clock_hz"] = 20_000_000
+    payload["swd_clock_hz"] = 25_000_000
     with pytest.raises(OfflineDownloadError, match="SWD clock"):
         parse_offline_config(payload)
 
@@ -1102,7 +1105,7 @@ def test_trigger_api_runs_the_configured_v4_script_with_both_resources_leased(mo
 
         def send_command(self, command, timeout, echo):
             calls.append(("send", command, timeout, echo))
-            return "offline download finished"
+            return "IDCODE: 0x2BA01477\noffline download finished"
 
         def close(self):
             calls.append(("close",))
@@ -1119,6 +1122,7 @@ def test_trigger_api_runs_the_configured_v4_script_with_both_resources_leased(mo
 
     assert response.status_code == 200, response.text
     assert response.json()["status"] == "completed"
+    assert "IDCODE: 0x2BA01477" in response.json()["lines"]
     assert calls == [
         ("init", "TEST_CDC"),
         ("connect",),
@@ -1222,6 +1226,7 @@ def test_trigger_api_streams_device_output_before_the_terminal_result(monkeypatc
             assert command == 'load.offline("Python/factory-line-a.py")'
             assert timeout == 600
             assert echo is False
+            on_output("IDCODE: 0x2BA01477")
             on_output("erase started")
             on_output("program finished")
             return "erase started\nprogram finished\noffline download finished"
@@ -1243,7 +1248,8 @@ def test_trigger_api_streams_device_output_before_the_terminal_result(monkeypatc
     assert response.status_code == 200, response.text
     assert response.headers["content-type"].startswith("application/x-ndjson")
     messages = [json.loads(line) for line in response.text.splitlines() if line]
-    assert messages[:2] == [
+    assert messages[:3] == [
+        {"type": "line", "line": "IDCODE: 0x2BA01477"},
         {"type": "line", "line": "erase started"},
         {"type": "line", "line": "program finished"},
     ]

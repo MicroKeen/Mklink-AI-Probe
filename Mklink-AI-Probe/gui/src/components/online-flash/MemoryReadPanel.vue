@@ -323,10 +323,10 @@ defineExpose({ clearMemory: () => clearMemory(false), openReadDialog, saveMemory
 .memory-read-dialog .icon-button:hover { border-color: var(--memory-dialog-accent); color: var(--memory-dialog-text); }
 .memory-read-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 2px; padding-top: 14px; border-top: 1px solid var(--memory-dialog-border); }
 .memory-read-dialog-actions .btn { min-width: 96px; min-height: 36px; border: 1px solid var(--memory-dialog-border); border-radius: 5px; cursor: pointer; }
-.memory-read-dialog-actions .btn:not(.btn-primary) { background: #eef1f4; color: #20262d; }
-.memory-read-dialog-actions .btn:not(.btn-primary):hover { background: #fff; }
-.memory-read-dialog-actions .btn.btn-primary { border-color: #e58a3a; background: #e58a3a; color: #fff; }
-.memory-read-dialog-actions .btn.btn-primary:hover:not(:disabled) { background: #f09a4d; border-color: #f09a4d; }
+.memory-read-dialog-actions .btn:not(.btn-primary) { background: var(--memory-dialog-input); color: var(--memory-dialog-text); }
+.memory-read-dialog-actions .btn:not(.btn-primary):hover { background: var(--input-bg, #fff); }
+.memory-read-dialog-actions .btn.btn-primary { border-color: var(--accent); background: var(--accent); color: var(--on-solid); }
+.memory-read-dialog-actions .btn.btn-primary:hover:not(:disabled) { background: var(--accent-light); border-color: var(--accent-light); }
 .memory-read-dialog-actions .btn:disabled { cursor: not-allowed; opacity: .45; }
 @media (max-width: 540px) { .memory-read-dialog { padding: 16px; } .memory-read-range-fields { grid-template-columns: 1fr; gap: 8px; } .memory-read-range-arrow { display: none; } .memory-read-summary { grid-template-columns: 1fr; gap: 3px; } .memory-read-summary em { justify-self: start; } }
 </style>

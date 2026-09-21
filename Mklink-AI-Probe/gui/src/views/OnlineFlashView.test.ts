@@ -751,6 +751,25 @@ describe('online flash task workspace behavior', () => {
     wrapper.unmount()
   })
 
+  it('clears the selected device when its input is emptied without a separate button', async () => {
+    vi.stubGlobal('fetch', viewFetch([installedTarget]))
+    const wrapper = mount(await onlineFlashView())
+    await flushPromises()
+    await wrapper.get(`[data-testid="target-${installedTarget.part_number}"]`).trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="pack-status"]').text()).toContain('已安装')
+    expect(wrapper.text()).not.toContain('取消器件选择')
+    await wrapper.get('[data-testid="target-search"]').setValue('   ')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="pack-status"]').text()).toContain('未就绪')
+    expect(wrapper.get('[data-testid="start-job"]').attributes('disabled')).toBeDefined()
+    expect(JSON.parse(localStorage.getItem('mklink.onlineFlash.settings')!).targetPart).toBe('')
+    await new Promise(resolve => setTimeout(resolve, 180))
+    await flushPromises()
+    expect(wrapper.get('[data-testid="pack-status"]').text()).toContain('未就绪')
+    wrapper.unmount()
+  })
+
   it('supports keyboard navigation in target suggestions', async () => {
     const first = { ...installedTarget, part_number: 'STM32F103x4' }
     const second = { ...installedTarget, part_number: 'STM32F103x6' }
@@ -895,7 +914,7 @@ describe('online flash task workspace behavior', () => {
     wrapper.unmount()
   })
 
-  it('keeps a saved exact selection ready when an empty visible search is refreshed after import', async () => {
+  it('shows a saved exact selection in the input and keeps it ready after import', async () => {
     const savedPart = 'ZZZ_SAVED_DEVICE'
     const savedTarget = { ...installedTarget, part_number: savedPart }
     const visibleTarget = { ...installedTarget, part_number: 'AAA_VISIBLE_DEVICE' }
@@ -928,8 +947,8 @@ describe('online flash task workspace behavior', () => {
     const wrapper = mount(await onlineFlashView())
     await vi.waitFor(() => expect(wrapper.get('[data-testid="pack-status"]').text()).toContain('已安装'))
 
-    expect(wrapper.get<HTMLInputElement>('[data-testid="target-search"]').element.value).toBe('')
-    expect(wrapper.find(`[data-testid="target-${savedPart}"]`).exists()).toBe(false)
+    expect(wrapper.get<HTMLInputElement>('[data-testid="target-search"]').element.value).toBe(savedPart)
+    expect(wrapper.find(`[data-testid="target-${savedPart}"]`).exists()).toBe(true)
     const callsBeforeImport = fetchMock.mock.calls.length
 
     await choosePack(wrapper)
@@ -939,10 +958,10 @@ describe('online flash task workspace behavior', () => {
       .map(([url]) => String(url))
       .filter(url => url.includes('/targets?'))
       .map(url => new URL(url, 'http://local').searchParams.get('q'))
-    expect(refreshedQueries).toContain('')
+    expect(refreshedQueries).toContain(savedPart)
     expect(refreshedQueries).toContain(savedPart)
     expect(wrapper.get('[data-testid="pack-status"]').text()).toContain('已安装')
-    expect(wrapper.get(`[data-testid="target-${visibleTarget.part_number}"]`).text()).toContain('本地 Pack')
+    expect(wrapper.get(`[data-testid="target-${savedPart}"]`).text()).toContain('本地 Pack')
     wrapper.unmount()
   })
 

@@ -250,7 +250,7 @@ defineExpose({ pushDataPoint, pushRawLine, clear, draw })
   position: relative;
   width: 100%;
   height: v-bind(height);
-  background: #fff;
+  background: var(--input-bg, #fff);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;

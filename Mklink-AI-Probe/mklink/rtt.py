@@ -270,7 +270,11 @@ class RTTSession:
 
         # 支持 "Addr = 0x..., wSize = ..., Channel = ..." 前缀格式
         alt_match = re.search(r'Addr\s*=\s*(0x[0-9a-fA-F]+)', output)
-        if alt_match and not result["control_block_addr"]:
+        # Old probes print the requested address before searching. That echo
+        # alone is not a successful start, particularly for unsupported static
+        # mode (zero search size). Require a discovered buffer descriptor.
+        if (alt_match and not result["control_block_addr"]
+                and re.search(r'UpBuffer\s+Channel\s+\d+\s+Size:', output)):
             result["control_block_addr"] = alt_match.group(1)
 
         # 动态解析 UpBuffer/DownBuffer 通道（不硬编码数量）

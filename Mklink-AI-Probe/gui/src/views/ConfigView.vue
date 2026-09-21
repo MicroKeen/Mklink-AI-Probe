@@ -678,8 +678,8 @@ onUnmounted(() => {
   margin-top: 4px;
   padding: 12px;
   border-left: 3px solid #f59e0b;
-  background: #fffbeb;
-  color: #7c4a03;
+  background: var(--warn-bg);
+  color: var(--warn);
 }
 
 .manual-firmware-download p {
@@ -755,8 +755,8 @@ onUnmounted(() => {
   padding: 8px 12px;
   border: 1px solid #f59e0b;
   border-radius: 4px;
-  background: #fef3c7;
-  color: #7c4a03;
+  background: var(--warn-bg);
+  color: var(--warn);
 }
 
 .firmware-banner span {

@@ -9,6 +9,47 @@ import type { StreamClientOptions, StreamClientState } from '../lib/stream/strea
 import type { WorkerOutput } from '../workers/streamDecoder.worker'
 
 describe('useBinaryStream', () => {
+  it('coalesces high-rate presentation without losing sample counts or leaking across reset', () => {
+    vi.useFakeTimers()
+    let options: StreamClientOptions | undefined
+    let api: ReturnType<typeof useBinaryStream> | undefined
+    const wrapper = mount(defineComponent({
+      setup() {
+        api = useBinaryStream('superwatch', {
+          capacity: 200000, channelCount: 1,
+          createClient: next => {
+            options = next
+            return { start: vi.fn(), stop: vi.fn(), reset: vi.fn(), configure: vi.fn(),
+              requestVisibleRange: vi.fn(), dispose: vi.fn() }
+          },
+        })
+        return () => null
+      },
+    }))
+    const summary = (n: number) => ({
+      type: 'waveform-summary', sequence: BigInt(n), timestampNs: BigInt(n * 1000),
+      collectedItemCount: 512, bufferedItemCount: n * 512, channelCount: 1,
+      bufferStartMs: 0, bufferEndMs: n, latestTimeMs: n,
+      latestValues: Float32Array.of(n).buffer,
+    } as const)
+    for (let n = 1; n <= 10; n++) options?.onWorkerMessage?.(summary(n))
+    expect(api?.waveformSummary.value).toBeNull()
+    vi.advanceTimersByTime(33)
+    expect(api?.waveformSummary.value?.collectedItemCount).toBe(5120)
+    expect(api?.waveformSummary.value?.sequence).toBe(10n)
+    options?.onWorkerMessage?.(summary(11))
+    api?.reset()
+    vi.advanceTimersByTime(33)
+    expect(api?.waveformSummary.value).toBeNull()
+    options?.onWorkerMessage?.(summary(1))
+    api?.stop()
+    expect(api?.waveformSummary.value?.collectedItemCount).toBe(512)
+    options?.onWorkerMessage?.(summary(2))
+    wrapper.unmount()
+    vi.advanceTimersByTime(100)
+    expect(api?.waveformSummary.value?.sequence).toBe(1n)
+    vi.useRealTimers()
+  })
   it('exposes stream state and disposes socket/worker ownership on unmount', async () => {
     let options: StreamClientOptions | undefined
     const client: BinaryStreamClient = {

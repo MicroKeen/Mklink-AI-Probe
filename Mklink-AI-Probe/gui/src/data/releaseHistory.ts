@@ -9,6 +9,33 @@ export interface ReleaseHistoryEntry {
 
 export const releaseHistory: ReleaseHistoryEntry[] = [
   {
+    version: '0.2.2', date: '2026-09-20',
+    summary: '改善实时采集共享、长变量显示与烧录稳定性',
+    summaryEn: 'Improve shared capture, long variable paths and flashing reliability',
+    changes: [
+      'WebGUI 与桌面版新增浅色、暗黑和跟随系统主题，默认暗黑并自动记住选择；SuperWatch 支持黑底波形与主题同步导出。',
+      'SuperWatch 长变量支持原位横向拖动查看，悬停显示完整路径；窄侧栏数值与操作分行显示。',
+      '同步 AI/API 修改的采集档位，SystemView 可接入外部启动的实时采集，不重复启动设备。',
+      '修复 API 重启采集后的时间轴误丢帧及高吞吐 WebSocket 心跳并发断流；串口页面提前订阅，保留首段输出。',
+      '优化高频采集显示与共享数据流；修复切换芯片后的 SVD 候选选择。',
+      '完善 RTT 搜索边界和窄变量、非对齐读取；相关探针修复需配套固件。',
+      '改善高速在线烧录的复位初始化，修复脱机 IDCODE 日志被误隐藏。',
+      '优化 ARM/HPM 在线烧录校验；Skill 优先复用工程 IDE 下载，其次在线烧录，最后脱机烧录。',
+      '新增 HPM5301 用户 OTP 在线配置与下载后脱机配置；全部固件校验成功后才写用户数据，永久组锁最后执行，需配套 HPMLink 固件。',
+    ],
+    changesEn: [
+      'Default WebGUI and desktop to Dark, retain saved Light/Dark/System preferences, and match SuperWatch plots and PNG export to the theme.',
+      'Drag long variable paths horizontally in place, hover for the full path, and separate values and controls in narrow catalogs.',
+      'Follow AI/API clock changes and attach to externally started SystemView sessions without restarting capture.',
+      'Reset capture timeline epochs, avoid high-throughput WebSocket heartbeat drain failures, and preserve initial serial output.',
+      'Improve high-rate shared streams and SVD selection after changing chips.',
+      'Improve RTT search bounds and narrow/unaligned reads; probe-side fixes require compatible firmware.',
+      'Improve reset initialization during fast online flashing and preserve offline IDCODE logs.',
+      'Optimize ARM/HPM online verification; prefer the project IDE for Skill-driven downloads, then online flashing, then offline flashing.',
+      'Add HPM5301 user OTP configuration online and after offline downloads. Verify all firmware before writing user data, apply permanent group locks last, and require compatible HPMLink firmware.',
+    ],
+  },
+  {
   "version": "0.2.1",
   "date": "2026-09-14",
   "summary": "统一高速采集、外设与选项字节配置，迁移官方更新仓库",

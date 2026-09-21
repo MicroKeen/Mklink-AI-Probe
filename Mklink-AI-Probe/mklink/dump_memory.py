@@ -619,18 +619,23 @@ def read_dump_memory_range_once(
             raise DumpMemoryUnsupported("cmd.dump_memory is not supported by the probe")
         raise TimeoutError("timed out waiting for one complete dump-memory range")
     finally:
-        try:
-            # Stop immediately instead of requesting another one-shot sample;
-            # the latter would leave a complete frame queued for the next
-            # operation on firmware that implements period=0 literally.
-            bridge._write_raw((stop_command + "\n").encode("utf-8"))
-            stop_deadline = time.monotonic() + 0.2
-            while time.monotonic() < stop_deadline:
-                bridge.drain_stream_bytes(max_bytes=1024 * 1024)
-                time.sleep(0.002)
-        except Exception:
-            pass
-        bridge._exit_stream()
+        synchronize = getattr(bridge, "_stop_stream_and_sync", None)
+        if callable(synchronize):
+            # A confirmed identity reply drains earlier stop prompts without
+            # imposing a fixed 200 ms delay on every verification block.
+            # Failure must leave the bridge in ERROR, not silently mark READY.
+            if not synchronize((stop_command + "\n").encode("utf-8")):
+                raise TimeoutError("dump-memory range stop did not restore command mode")
+        else:
+            # Compatibility with older bridge implementations.
+            try:
+                bridge._write_raw((stop_command + "\n").encode("utf-8"))
+                stop_deadline = time.monotonic() + 0.2
+                while time.monotonic() < stop_deadline:
+                    bridge.drain_stream_bytes(max_bytes=1024 * 1024)
+                    time.sleep(0.002)
+            finally:
+                bridge._exit_stream()
 
 
 def read_dump_memory_regions_once(

@@ -71,7 +71,7 @@ const sections = computed(() => [
 
 .section-button.active {
   color: var(--accent);
-  background: #f3ece6;
+  background: var(--accent-bg);
   border-color: var(--border);
   font-weight: 600;
 }

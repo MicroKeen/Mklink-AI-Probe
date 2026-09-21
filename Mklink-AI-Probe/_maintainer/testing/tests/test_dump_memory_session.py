@@ -992,3 +992,51 @@ def test_multi_region_timeout_without_frames_reports_missing_block_gap():
 
     assert raised.value.gap_fact == "missing_block_count"
     assert raised.value.gap_count == 1
+
+
+@pytest.mark.parametrize("blocked", [False, True])
+def test_cli_dump_limits_complete_samples_inside_one_usb_read(monkeypatch, tmp_path, blocked):
+    from mklink import bridge as bridge_module, cli
+    monkeypatch.setattr("mklink.debug_speed.apply_bridge_profile", lambda *a: {})
+    monkeypatch.setattr("mklink.project_config.load_config", lambda *a: {})
+    expected = b"A" * (4096 if blocked else 4)
+    if blocked:
+        raw = b"".join(
+            _b1_frame(t, value * 2048, block_index=i, block_count=2, total_size=4096)
+            for t, value, i in ((1, b"A", 0), (2, b"A", 1), (3, b"B", 0), (4, b"B", 1))
+        )
+    else:
+        raw = _old_frame(1, expected) + _old_frame(2, b"BBBB")
+    class CliBridge(FakeBridge):
+        def __init__(self, port):
+            super().__init__([raw])
+        def connect(self):
+            return True
+        def close(self):
+            pass
+    monkeypatch.setattr(bridge_module, "MKLinkSerialBridge", CliBridge)
+    monkeypatch.setattr(cli, "_resolve_port", lambda p: "TEST")
+    monkeypatch.setattr(cli, "_init_target_bridge", lambda b: None)
+    output = tmp_path / "sample.bin"
+    result = cli._cli_dump_memory(None, [f"0x20000000:{len(expected)}"],
+                                  period=.001, frames=1, duration=1, save=str(output))
+    assert result == 0
+    assert output.read_bytes() == expected
+
+
+def test_range_read_uses_acknowledged_stop_without_fixed_delay(monkeypatch):
+    bridge = FakeBridge([_old_frame(1, b"abcd")])
+    stopped = []
+    bridge._stop_stream_and_sync = lambda command: stopped.append(command) or True
+    monkeypatch.setattr("mklink.dump_memory.time.sleep", lambda _: pytest.fail("fixed sleep"))
+    assert read_dump_memory_range_once(bridge, 0x80000000, 4, poll_interval=0) == b"abcd"
+    assert stopped == [b"cmd.dump_memory(0x80000000, 1, -1.0)\n"]
+    assert ("exit",) not in bridge.calls
+
+
+def test_range_read_rejects_failed_command_resynchronization():
+    bridge = FakeBridge([_old_frame(1, b"abcd")])
+    bridge._stop_stream_and_sync = lambda command: False
+    with pytest.raises(TimeoutError, match="restore command mode"):
+        read_dump_memory_range_once(bridge, 0x80000000, 4, poll_interval=0)
+    assert ("exit",) not in bridge.calls

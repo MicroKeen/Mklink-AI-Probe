@@ -1347,7 +1347,7 @@ class Device:
         for start, end in catalog_ranges:
             ranges.append((int(start), int(end)))
 
-        if self._axf and Path(self._axf).exists() and not catalog_ranges:
+        if self._axf and Path(self._axf).exists():
             try:
                 from mklink.elf_backend import writable_memory_ranges
 
@@ -1464,6 +1464,21 @@ class Device:
                 f"{purpose} must stay inside known target writable RAM"
             )
 
+    def _rtt_bounded_search_size(self, address: int, search_size: int) -> int:
+        """Clip only the implicit scan to the containing trusted RAM range.
+
+        An ELF symbol may sit near the end of an allocated writable section.
+        Its control block can be valid even though the default 1 KiB search
+        would cross that boundary. Explicit search windows remain strict.
+        """
+        if search_size:
+            return search_size
+        self._require_target_ram_range(address, 24, purpose="RTT control block")
+        limit = max(end for start, end in self._target_writable_ram_ranges()
+                    if start <= address < end)
+        return min(_RTT_DEFAULT_SEARCH_SIZE,
+                   limit - address - len(_RTT_SIGNATURE) + 1)
+
     def validate_rtt_stream_request(
         self,
         addr: str | int,
@@ -1479,7 +1494,7 @@ class Device:
         if address % 4:
             raise ValueError("addr must be 4-byte aligned")
         if mode == 0:
-            span = (search_size or _RTT_DEFAULT_SEARCH_SIZE) + len(_RTT_SIGNATURE) - 1
+            span = self._rtt_bounded_search_size(address, search_size) + len(_RTT_SIGNATURE) - 1
             purpose = "RTT scan window"
         else:
             span = 24
@@ -1666,7 +1681,7 @@ class Device:
         addr: str | int | None = None,
         *,
         channel: int = 0,
-        search_size: int = 1024,
+        search_size: int = 0,
         mode: int | None = None,
     ) -> dict:
         """启动 RTT 会话。
@@ -1697,7 +1712,7 @@ class Device:
             addr, search_size=search_size, mode=mode,
         )
         if mode == 0:
-            host_search_size = search_size or _RTT_DEFAULT_SEARCH_SIZE
+            host_search_size = self._rtt_bounded_search_size(requested_addr, search_size)
             control_block_addr = self._find_rtt_control_block(
                 requested_addr, host_search_size,
             )
@@ -1866,7 +1881,7 @@ class Device:
         addr: str | int | None = None,
         *,
         channel: int = 1,
-        search_size: int = 1024,
+        search_size: int = 0,
         mode: int | None = None,
     ) -> dict:
         """启动 SystemView 采集（RTT 通道 1，二进制）。
@@ -1908,7 +1923,7 @@ class Device:
             addr, search_size=search_size, mode=mode,
         )
         if mode == 0:
-            host_search_size = search_size or _RTT_DEFAULT_SEARCH_SIZE
+            host_search_size = self._rtt_bounded_search_size(requested_addr, search_size)
             control_block_addr = self._find_rtt_control_block(
                 requested_addr, host_search_size,
             )
@@ -2110,7 +2125,13 @@ class Device:
         from mklink.memory_access import parse_read_ram_response
         cmd = f"cmd.read_ram(0x{address:08X}, {size})"
         raw = self._bridge.send_command(cmd, timeout=10.0)
-        return parse_read_ram_response(raw)
+        payload = parse_read_ram_response(raw)
+        if len(payload) != size:
+            raise DeviceError(
+                f"Memory read at 0x{address:08X} returned {len(payload)} bytes, expected {size}; "
+                "target debug access may be disabled or unavailable"
+            )
+        return payload
 
     def read_memory_regions(self, regions: list[tuple[int, int]]) -> list[bytes]:
         """Read several regions while coalescing contiguous target ranges.
@@ -2290,7 +2311,7 @@ class Device:
             return read_item(self, catalog.resolve(name))
         from mklink.registers import resolve_register
         reg = resolve_register(name)
-        if "HPM" in self.mcu_name.upper() and not name.strip().lower().startswith("0x"):
+        if ("HPM" in self.mcu_name.upper() or self._bridge.idcode == 0x1000563D) and not name.strip().lower().startswith("0x"):
             raise ValueError(
                 "Select the HPM peripheral catalog before using register names"
             )
@@ -2303,38 +2324,43 @@ class Device:
     # ------------------------------------------------------------------
     # Debug control
     # ------------------------------------------------------------------
-    def halt(self):
+    def _require_cortex_m_debug(self):
         self._require_connected()
+        if "HPM" in self.mcu_name.upper() or getattr(self._bridge, "idcode", None) == 0x1000563D:
+            raise ValueError("CPU debug control requires a Cortex-M target; HPM RISC-V control is not supported by this API")
+
+    def halt(self):
+        self._require_cortex_m_debug()
         from mklink.debug_control import halt_cpu
         return halt_cpu(self._bridge)
 
     def resume(self):
-        self._require_connected()
+        self._require_cortex_m_debug()
         from mklink.debug_control import resume_cpu
         return resume_cpu(self._bridge)
 
     def step(self):
-        self._require_connected()
+        self._require_cortex_m_debug()
         from mklink.debug_control import step_cpu
         return step_cpu(self._bridge)
 
     def set_breakpoint(self, address: int, slot: int | None = None) -> int:
-        self._require_connected()
+        self._require_cortex_m_debug()
         from mklink.debug_control import set_breakpoint
         return set_breakpoint(self._bridge, address, slot)
 
     def clear_breakpoint(self, slot: int) -> None:
-        self._require_connected()
+        self._require_cortex_m_debug()
         from mklink.debug_control import clear_breakpoint
         clear_breakpoint(self._bridge, slot)
 
     def clear_all_breakpoints(self) -> int:
-        self._require_connected()
+        self._require_cortex_m_debug()
         from mklink.debug_control import clear_all_breakpoints
         return clear_all_breakpoints(self._bridge)
 
     def read_core_registers(self) -> dict[str, int]:
-        self._require_connected()
+        self._require_cortex_m_debug()
         from mklink.debug_control import read_all_core_registers
         return read_all_core_registers(self._bridge)
 
@@ -2344,14 +2370,18 @@ class Device:
     def check_hardfault(self) -> dict[str, int] | None:
         """Read fault registers and return them if a fault occurred."""
         self._require_connected()
-        try:
-            cfsr = self.read_register("SCB.CFSR")
-            hfsr = self.read_register("SCB.HFSR")
-            if cfsr == 0 and hfsr == 0:
-                return None
-            return {"SCB.CFSR": cfsr, "SCB.HFSR": hfsr}
-        except Exception:
+        if "HPM" in self.mcu_name.upper() or getattr(getattr(self, "_bridge", None), "idcode", None) == 0x1000563D:
+            raise ValueError("HardFault decoding requires a Cortex-M target")
+        # Core fault registers are architectural, not peripheral-SVD entries.
+        # An explicitly selected vendor SVD may omit SCB entirely. Do not
+        # report 'no fault' when catalog lookup or target access has failed.
+        raw = self.read_memory(0xE000ED28, 8)
+        if len(raw) != 8:
+            raise DeviceError("Incomplete Cortex-M fault register read")
+        cfsr, hfsr = struct.unpack("<II", raw)
+        if cfsr == 0 and hfsr == 0:
             return None
+        return {"SCB.CFSR": cfsr, "SCB.HFSR": hfsr}
 
     def decode_hardfault(
         self, fault_regs: dict[str, int] | None = None

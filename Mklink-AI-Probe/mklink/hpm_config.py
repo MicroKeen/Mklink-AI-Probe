@@ -36,7 +36,7 @@ HPM_TARGET_DEFAULT_BOARD: tuple[tuple[str, str], ...] = (
 
 HPM_ROM_TARGETS: tuple[str, ...] = (
     "HPM5300", "HPM5301", "HPM5301xEGx", "HPM5E00", "HPM6200",
-    "HPM6300", "HPM6750", "HPM6800", "HPM6E00", "HPM6P00",
+    "HPM6300", "HPM6750", "HPM6800", "HPM6E00", "HPM6E80", "HPM6P00",
 )
 
 

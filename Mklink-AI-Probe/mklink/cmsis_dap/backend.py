@@ -545,14 +545,14 @@ class HpmRomBackend:
     # job manager uses this marker to keep the erase stage pending until the
     # programming stage starts.
     erase_deferred = True
-    READ_CHUNK_SIZE = 4 * 1024
+    READ_CHUNK_SIZE = 32 * 1024
 
     def __init__(
         self,
         device_factory: Optional[Callable[..., Any]] = None,
         port_resolver: Optional[Callable[[Any], Optional[str]]] = None,
         *,
-        verify_chunk_size: int = 4096,
+        verify_chunk_size: int = 32 * 1024,
     ) -> None:
         if not isinstance(verify_chunk_size, int) or verify_chunk_size <= 0:
             raise ValueError("verify_chunk_size must be a positive integer")
@@ -711,7 +711,7 @@ class HpmRomBackend:
                         expected = stream.read(self._verify_chunk_size)
                         if not expected:
                             break
-                        actual = bytes(device.read_memory(base + offset, len(expected)))
+                        actual = self.read_memory(base + offset, len(expected))
                         if actual != expected:
                             mismatch = next(
                                 (index for index, pair in enumerate(zip(expected, actual)) if pair[0] != pair[1]),
@@ -756,8 +756,8 @@ class HpmRomBackend:
         )
 
         try:
-            # HPM XPI Flash is organized in 4 KiB sectors. Keep host requests
-            # sector-sized while the dump protocol handles its 2 KiB frames.
+            # Reads do not need erase-sector boundaries. Batch up to the safe
+            # 32 KiB dump limit; the protocol still validates every 2 KiB frame.
             parts = []
             for offset in range(0, size, self.READ_CHUNK_SIZE):
                 part_size = min(self.READ_CHUNK_SIZE, size - offset)
@@ -1170,9 +1170,13 @@ class PyOcdBackend:
                     )
                     if str(target).casefold() not in known:
                         session_target = "cortex_m"
+                # CoreSight enumeration runs while reset is asserted. Some
+                # targets cannot reliably acknowledge the normal high-speed
+                # clock in this state. Restore the requested rate after init.
+                connect_frequency = min(frequency, 4_000_000) if connect_mode == "under-reset" else frequency
                 options = {
                     "target_override": session_target,
-                    "frequency": frequency,
+                    "frequency": connect_frequency,
                     "connect_mode": connect_mode,
                     "auto_unlock": False,
                 }
@@ -1203,6 +1207,17 @@ class PyOcdBackend:
                     )
                 session.delegate = _TraceStateDelegate(delegate)
                 session.open()
+                core = getattr(session.target, "selected_core", None)
+                if core is not None and "xpsr" not in core.core_registers.by_name:
+                    # pyOCD can log and swallow component initialization errors.
+                    # Do not let a partial CPU description reach flash erase.
+                    raise FlashError(
+                        FlashErrorCode.CONNECT_FAIL,
+                        "CPU initialization is incomplete; reconnect at a lower SWD frequency",
+                    )
+                if connect_frequency != frequency:
+                    resolved_probe.set_clock(frequency)
+                    session.options["frequency"] = frequency
                 if resolved_flms or security_payload is not None:
                     _mask_custom_flm_interrupts(session.target)
                 self._session = session
@@ -1212,7 +1227,12 @@ class PyOcdBackend:
                     getattr(resolved_probe, "unique_id", None) or probe or ""
                 ).strip()
                 self._security_family = security_family or ""
-                self._algorithm_reset_required = bool(resolved_flms) or security_family == "stm32f103-rdp1"
+                # Pack FLMs need the same reset context as imported FLMs. A
+                # Pack connect sequence may leave the application running even
+                # with under-reset selected. For example, STM32F1's algorithm
+                # clears Flash latency and assumes reset clocks; running it
+                # after a 72 MHz application can make Flash read back as FF.
+                self._algorithm_reset_required = bool(resolved_flms or resolved_pack) or security_family == "stm32f103-rdp1"
                 self._algorithm_reset_done = False
                 self._connection_arguments = {
                     "probe": probe,
@@ -2429,7 +2449,7 @@ class PyOcdBackend:
                 raise self._mapped_error(exc, FlashErrorCode.PROGRAM_FAIL) from None
 
     def _prepare_algorithm_execution(self, target: Any) -> None:
-        """Reset custom-FLM targets once, immediately before destructive work.
+        """Reset Pack/imported-FLM targets once before destructive work.
 
         Attaching to a running RTOS can retain exception/stack/MPU state that
         is unsuitable for a RAM algorithm. Connection and read-only operations
@@ -2486,63 +2506,81 @@ class PyOcdBackend:
         cls, target: Any, address: int, expected: bytes
     ) -> None:
         offset = 0
-        while offset < len(expected):
-            current = address + offset
-            region = cls._flash_region_for_address(target, current)
-            size = len(expected) - offset
-            if region is not None:
-                size = min(size, int(region.start) + int(region.length) - current)
-            flash = getattr(region, "flash", None) if region is not None else None
-            custom_verify = callable(getattr(flash, "verify_data", None))
-            flash_algo = getattr(flash, "flash_algo", None)
-            custom_verify = custom_verify or (
-                isinstance(flash_algo, dict)
-                and flash_algo.get("mklink_custom_verify") is True
-            )
-            if custom_verify:
-                page_size = getattr(region, "page_size", None)
-                if (
-                    not isinstance(page_size, int)
-                    or isinstance(page_size, bool)
-                    or page_size <= 0
-                ):
-                    raise RuntimeError("custom FLM has no valid verification buffer size")
-                size = min(size, page_size)
-                result = cls._verify_with_flash_algorithm(
-                    flash, current, expected[offset : offset + size]
+        active_flash = None
+        try:
+            while offset < len(expected):
+                current = address + offset
+                region = cls._flash_region_for_address(target, current)
+                size = len(expected) - offset
+                if region is not None:
+                    size = min(size, int(region.start) + int(region.length) - current)
+                flash = getattr(region, "flash", None) if region is not None else None
+                if active_flash is not None and flash is not active_flash:
+                    previous, active_flash = active_flash, None
+                    previous.uninit()
+                custom_verify = callable(getattr(flash, "verify_data", None))
+                flash_algo = getattr(flash, "flash_algo", None)
+                custom_verify = custom_verify or (
+                    isinstance(flash_algo, dict)
+                    and flash_algo.get("mklink_custom_verify") is True
                 )
-                success = current + size
-                if result != success:
-                    mismatch = (
-                        result
-                        if isinstance(result, int)
-                        and not isinstance(result, bool)
-                        and current <= result < success
-                        else current
+                if custom_verify:
+                    page_size = getattr(region, "page_size", None)
+                    if (
+                        not isinstance(page_size, int)
+                        or isinstance(page_size, bool)
+                        or page_size <= 0
+                    ):
+                        raise RuntimeError("custom FLM has no valid verification buffer size")
+                    size = min(size, page_size)
+                    # Reuse the FLM VERIFY context across pages in this chunk.
+                    # Never enlarge the target RAM buffer or bypass custom Verify.
+                    if not callable(getattr(flash, "verify_data", None)) and active_flash is None:
+                        flash.init(flash.Operation.VERIFY)
+                        active_flash = flash
+                    result = cls._verify_with_flash_algorithm(
+                        flash, current, expected[offset : offset + size],
+                        initialized=flash is active_flash,
                     )
-                    raise FlashError(
-                        FlashErrorCode.VERIFY_FAIL,
-                        f"verification mismatch at 0x{mismatch:X}",
+                    success = current + size
+                    if result != success:
+                        mismatch = (
+                            result
+                            if isinstance(result, int)
+                            and not isinstance(result, bool)
+                            and current <= result < success
+                            else current
+                        )
+                        raise FlashError(
+                            FlashErrorCode.VERIFY_FAIL,
+                            f"verification mismatch at 0x{mismatch:X}",
+                        )
+                else:
+                    actual = cls._read_target_bytes(target, current, size)
+                    if actual == expected[offset : offset + size]:
+                        offset += size
+                        continue
+                    common = min(len(actual), size)
+                    mismatch = next(
+                        (
+                            index
+                            for index in range(common)
+                            if actual[index] != expected[offset + index]
+                        ),
+                        None,
                     )
-            else:
-                actual = cls._read_target_bytes(target, current, size)
-                common = min(len(actual), size)
-                mismatch = next(
-                    (
-                        index
-                        for index in range(common)
-                        if actual[index] != expected[offset + index]
-                    ),
-                    None,
-                )
-                if mismatch is None and len(actual) != size:
-                    mismatch = common
-                if mismatch is not None:
-                    raise FlashError(
-                        FlashErrorCode.VERIFY_FAIL,
-                        f"verification mismatch at 0x{current + mismatch:X}",
-                    )
-            offset += size
+                    if mismatch is None and len(actual) != size:
+                        mismatch = common
+                    if mismatch is not None:
+                        raise FlashError(
+                            FlashErrorCode.VERIFY_FAIL,
+                            f"verification mismatch at 0x{current + mismatch:X}",
+                        )
+                offset += size
+
+        finally:
+            if active_flash is not None:
+                active_flash.uninit()
 
     @staticmethod
     def _flash_region_for_address(target: Any, address: int) -> Any:
@@ -2561,7 +2599,9 @@ class PyOcdBackend:
         return None
 
     @staticmethod
-    def _verify_with_flash_algorithm(flash: Any, address: int, data: bytes) -> Any:
+    def _verify_with_flash_algorithm(
+        flash: Any, address: int, data: bytes, *, initialized: bool = False
+    ) -> Any:
         verifier = getattr(flash, "verify_data", None)
         if callable(verifier):
             return verifier(address, data)
@@ -2581,7 +2621,8 @@ class PyOcdBackend:
         ):
             raise RuntimeError("custom FLM verification entry is invalid")
 
-        flash.init(flash.Operation.VERIFY)
+        if not initialized:
+            flash.init(flash.Operation.VERIFY)
         try:
             flash.target.write_memory_block8(page_buffers[0], data)
             timeout = flash.target.session.options.get("flash.timeout.program")
@@ -2596,7 +2637,8 @@ class PyOcdBackend:
                 raise RuntimeError("custom FLM verification timed out")
             return result
         finally:
-            flash.uninit()
+            if not initialized:
+                flash.uninit()
 
     def reset_run(self, reset_mode: Optional[str] = None) -> None:
         with self._lock:
@@ -2829,7 +2871,7 @@ class PyOcdBackend:
             remaining = image.size
             with path.open("rb") as stream:
                 while remaining:
-                    requested = min(4096, remaining)
+                    requested = min(64 * 1024, remaining)
                     payload = stream.read(requested)
                     if len(payload) != requested:
                         raise FlashError(
@@ -2847,8 +2889,8 @@ class PyOcdBackend:
             return
 
         for segment, payload in PyOcdBackend._decode_hex_image(image):
-            for offset in range(0, len(payload), 4096):
-                yield segment.start + offset, payload[offset:offset + 4096]
+            for offset in range(0, len(payload), 64 * 1024):
+                yield segment.start + offset, payload[offset:offset + 64 * 1024]
 
     @staticmethod
     def _decode_hex_image(

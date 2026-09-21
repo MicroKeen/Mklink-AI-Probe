@@ -14,6 +14,16 @@ from mklink.device import Device, DeviceError
 from mklink.rtt import RTTSession
 
 
+def test_startup_request_echo_is_not_discovery():
+    response = "Addr = 0x20000b80,wSize = 0,Channel = 0\nno find _SEGGER_RTT addr\n"
+    assert RTTSession._parse_rtt_startup(response)["control_block_addr"] == ""
+
+
+def test_startup_alternate_address_requires_buffer_descriptor():
+    response = "Addr = 0x20000b80,wSize = 4,Channel = 0\nUpBuffer Channel 0 Size: 8192 Mode: 0\n"
+    assert RTTSession._parse_rtt_startup(response)["control_block_addr"] == "0x20000b80"
+
+
 @pytest.fixture(autouse=True)
 def _default_trusted_rtt_test_ram(monkeypatch):
     monkeypatch.setattr(
@@ -1203,3 +1213,44 @@ def test_device_recovers_and_clears_session_when_start_reply_parsing_fails(
     assert bridge.state is DeviceState.READY
     assert device._rtt_session is None
     assert bridge.send_command("next()") == "NEXT_OK"
+
+
+@pytest.mark.parametrize("base", [0x20000000, 0x0001D850])
+def test_implicit_rtt_scan_clips_at_trusted_ram_boundary(base):
+    header, descriptors = _rtt_control_block_memory(max_down=0)
+    device, _bridge = _device_with_rtt_memory(header, descriptors)
+    device._target_writable_ram_ranges = lambda: [(base, base + 96)]
+    reads = []
+
+    def read(address, size):
+        assert base <= address and address + size <= base + 96
+        reads.append((address, size))
+        return (header + bytes(96))[address - base:address - base + size]
+
+    device.read_memory = read
+    device.validate_rtt_stream_request(base, search_size=0, mode=0)
+    span = device._rtt_bounded_search_size(base, 0)
+    assert device._find_rtt_control_block(base, span) == base
+    assert reads == [(base, 96)]
+    with pytest.raises(DeviceError, match="scan window"):
+        device.validate_rtt_stream_request(base, search_size=1024, mode=0)
+
+
+def test_implicit_rtt_scan_still_rejects_short_control_block():
+    device, _bridge = _device_with_rtt_memory(b"", b"")
+    device._target_writable_ram_ranges = lambda: [(0x20000000, 0x20000010)]
+    with pytest.raises(DeviceError, match="control block"):
+        device.validate_rtt_stream_request(0x20000000, search_size=0, mode=0)
+
+
+def test_rtt_ram_map_includes_elf_sections_with_existing_catalog(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from mklink import elf_backend
+    device, _bridge = _device_with_rtt_memory(b"", b"")
+    elf = tmp_path / "target.elf"
+    elf.write_bytes(b"test placeholder")
+    device._axf = str(elf)
+    device._symbol_catalog = SimpleNamespace(_ram_ranges=((0x20000000, 0x20000100),))
+    monkeypatch.setattr(elf_backend, "writable_memory_ranges",
+                        lambda *_args, **_kwargs: ((0x1D850, 0x1D950),))
+    assert device._target_ram_contains(0x1D850, 24)
