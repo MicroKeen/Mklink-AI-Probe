@@ -1,0 +1,20 @@
+{
+  "version": "0.2.2",
+  "notes": "# Mklink AI Probe 0.2.2\n\n- WebGUI \u4e0e\u684c\u9762\u7248\u7edf\u4e00\u652f\u6301\u6697\u9ed1\u3001\u6d45\u8272\u548c\u8ddf\u968f\u7cfb\u7edf\u4e3b\u9898\uff0c\u9ed8\u8ba4\u6697\u9ed1\uff0c\u8bb0\u4f4f\u7528\u6237\u9009\u62e9\u3002\n- \u6539\u5584 SuperWatch \u9ad8\u9891\u663e\u793a\u3001AI \u4e0e GUI \u5171\u4eab\u5b9e\u65f6\u6570\u636e\u6d41\u3001\u957f\u53d8\u91cf\u8def\u5f84\u62d6\u52a8\u67e5\u770b\uff1b\u4fee\u590d\u91cd\u542f\u91c7\u96c6\u540e\u7684\u65f6\u95f4\u8f74\u4e0e WebSocket \u65ad\u6d41\u95ee\u9898\u3002\n- \u4fee\u590d\u5207\u6362\u82af\u7247\u540e\u7684 SVD \u9009\u62e9\uff0c\u5b8c\u5584 RTT \u641c\u7d22\u8fb9\u754c\u30018/16 \u4f4d\u53ca\u975e\u5bf9\u9f50\u53d8\u91cf\u8bfb\u53d6\uff1b\u76f8\u5173\u63a2\u9488\u4fee\u590d\u9700\u914d\u5957\u56fa\u4ef6\u3002\n- \u4f18\u5316 ARM/HPM \u5728\u7ebf\u70e7\u5f55\u6821\u9a8c\u548c\u9ad8\u901f\u590d\u4f4d\u521d\u59cb\u5316\uff0c\u6062\u590d\u8131\u673a IDCODE \u65e5\u5fd7\uff0c\u7cbe\u7b80\u70e7\u5f55\u8c03\u8bd5\u8f93\u51fa\u3002\n- \u65b0\u589e HPM5301 \u7528\u6237 OTP \u5728\u7ebf\u914d\u7f6e\u53ca\u4e0b\u8f7d\u540e\u8131\u673a\u914d\u7f6e\uff1a\u5168\u90e8\u56fa\u4ef6\u6821\u9a8c\u6210\u529f\u540e\u5199\u5165\u7528\u6237\u6570\u636e\uff0c\u6c38\u4e45\u7ec4\u9501\u6700\u540e\u6267\u884c\u3002\u8be5\u529f\u80fd\u9700\u8981\u914d\u5957 HPMLink \u56fa\u4ef6\uff1b\u65e7\u56fa\u4ef6\u4f1a\u88ab\u80fd\u529b\u68c0\u67e5\u963b\u6b62\u3002\n- \u6539\u5584 SystemView \u5171\u4eab\u91c7\u96c6\u4e0e\u4e32\u53e3\u9996\u6bb5\u8f93\u51fa\u3002Skill \u4e0b\u8f7d\u7a0b\u5e8f\u4f18\u5148\u590d\u7528\u5de5\u7a0b IDE\uff0c\u5176\u6b21\u5728\u7ebf\u70e7\u5f55\uff0c\u6700\u540e\u8131\u673a\u70e7\u5f55\u3002\n\n\u672c\u6b21\u63d0\u4f9b\u6807\u51c6 Windows x64 \u5b89\u88c5\u5305\u3001Skill \u5305\u53ca\u4fbf\u643a Site Agent\u3002\u5b89\u88c5\u5305\u5305\u542b\u5e94\u7528\u8fd0\u884c\u73af\u5883\uff1bWebView2 \u7f3a\u5931\u65f6\u9700\u8054\u7f51\u5b89\u88c5\u3002Windows \u5b89\u88c5\u5305\u672a\u8fdb\u884c\u4ee3\u7801\u7b7e\u540d\uff0c\u7cfb\u7edf\u53ef\u80fd\u663e\u793a\u672a\u77e5\u53d1\u5e03\u8005\uff1b\u81ea\u52a8\u66f4\u65b0\u8d44\u4ea7\u5df2\u4f7f\u7528\u73b0\u6709\u66f4\u65b0\u5bc6\u94a5\u7b7e\u540d\u3002\n\nGitHub \u4e3b\u4ed3\u5e93\u4e3a MicroKeen/Mklink-AI-Probe\uff0c\u65e7 GitHub \u66f4\u65b0\u5165\u53e3\u7ee7\u7eed\u517c\u5bb9\uff0cGitee \u5907\u7528\u5165\u53e3\u4fdd\u6301\u4e0d\u53d8\u3002\n",
+  "pub_date": "2026-09-21T01:19:12Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWkJ5dmZ4MnVLVVNJNE0wR3ZwMm9IckNITkZDdmZHUjNtb0Q5aEE0bXdNQUxLQWs1cUpVc0ovQWErUE94TE5ZVjNpMTZWYnEyQ0pwSlU5QTJ2SjZMTDk0Qm4yYXlOZmdBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg5OTUyNjc0CWZpbGU6TWtsaW5rIEFJIFByb2JlXzAuMi4yX3g2NC1zZXR1cC5leGUKd3JpaDY3ay9jWlNtcXZVZlhodFYyYVhGR3NaNkhRL3dNNUovSGd0VFg4dHNZTWNJdCtqMVJJVGVRcTdEc3JLcm9TMjAwVjBHOEMyN0FvOUZEbzFMQ2c9PQo=",
+      "url": "https://gitee.com/Aladdin-Wang/Mklink-AI-Probe/releases/download/v0.2.2/Mklink-AI-Probe-v0.2.2-x64-Setup.exe",
+      "sha256": "8739a4a338d52018c7fd23878f826c9c623363db60b022f9fb13377ffeb1d22d",
+      "size": 91826809
+    }
+  },
+  "skill": {
+    "version": "0.2.2",
+    "url": "https://gitee.com/Aladdin-Wang/Mklink-AI-Probe/releases/download/v0.2.2/Mklink-AI-Probe-v0.2.2-Skill.zip",
+    "sha256": "8739c81fe4bd7c8b08fa69464eb45640d3d6c99c1ed18f35ae8ef12ea53d105b",
+    "size": 19467637,
+    "source_commit": "424f4700a4d9726db1e9e1a7cfbadaee68a737e6"
+  }
+}
