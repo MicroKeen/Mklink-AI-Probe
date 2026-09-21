@@ -9,6 +9,21 @@ export interface ReleaseHistoryEntry {
 
 export const releaseHistory: ReleaseHistoryEntry[] = [
   {
+    version: '0.2.3', date: '2026-09-21',
+    summary: '统一 nRF54L 在线与脱机下载算法发现，修复高速烧录初始化',
+    summaryEn: 'Unify nRF54L algorithm discovery and stabilize high-speed flashing',
+    changes: [
+      '脱机烧录复用在线下载器可用的 nRF54L15 FLM 配置，自动识别探针 U 盘中的 nRF54L15.FLM。',
+      '修复 nRF54L 内置算法开始烧录前未复位暂停导致的 flash init timed out。',
+      '本地 FLM 加载后清除残留的算法未找到提示，完善 0.2.3 脱机烧录流程。',
+    ],
+    changesEn: [
+      'Reuse the online nRF54L15 FLM profile for offline flashing and detect nRF54L15.FLM on the probe drive.',
+      'Reset and halt nRF54L before the built-in algorithm to prevent flash-init timeouts.',
+      'Clear stale missing-algorithm errors after a local FLM is supplied and complete the 0.2.3 offline workflow.',
+    ],
+  },
+  {
     version: '0.2.2', date: '2026-09-20',
     summary: '改善实时采集共享、长变量显示与烧录稳定性',
     summaryEn: 'Improve shared capture, long variable paths and flashing reliability',
