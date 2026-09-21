@@ -502,6 +502,11 @@ function addManualFlmSource(source: string | File): void {
   if (algorithms.value.length === 1) {
     firmwares.value.forEach(item => { item.algorithm_id = id })
   }
+  // A missing-catalog warning can be raised before the user supplies a local
+  // FLM.  Once that replacement is present, the old warning must not keep
+  // blocking the offline workflow or remain visible as if discovery failed.
+  clearError()
+  preview.value = null
 }
 
 async function browseManualFlm(): Promise<void> {

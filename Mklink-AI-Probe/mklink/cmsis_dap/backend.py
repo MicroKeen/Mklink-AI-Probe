@@ -1232,7 +1232,21 @@ class PyOcdBackend:
                 # with under-reset selected. For example, STM32F1's algorithm
                 # clears Flash latency and assumes reset clocks; running it
                 # after a 72 MHz application can make Flash read back as FF.
-                self._algorithm_reset_required = bool(resolved_flms or resolved_pack) or security_family == "stm32f103-rdp1"
+                # The built-in nRF54L algorithm has the same execution-state
+                # assumptions as an imported FLM.  If the application is
+                # running when an online job starts, invoking Init directly
+                # can leave the target in a stale context and pyOCD reports
+                # ``flash init timed out``.  Reset and halt once before any
+                # destructive operation, just as we already do for FLMs.
+                nrf54_builtin = str(session_target).casefold() in {
+                    "nrf54l",
+                    "nrf54lm20a",
+                }
+                self._algorithm_reset_required = (
+                    bool(resolved_flms or resolved_pack)
+                    or security_family == "stm32f103-rdp1"
+                    or nrf54_builtin
+                )
                 self._algorithm_reset_done = False
                 self._connection_arguments = {
                     "probe": probe,
