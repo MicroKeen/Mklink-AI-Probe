@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-09-21T15:15:15.4137261+08:00",
+  "updated_at": "2026-09-21T22:13:22.0659933+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
-    "branch": "codex/release-022-handoff",
+    "branch": "codex/0.2.3-nrf54l15-offline",
     "head": "基于已发布 main 424f470；本分支整理交接并将MK-Firmware同步为已发布的四份新固件。",
     "remote_head": "PR #5 已合并；v0.2.2 固定在 424f4700a4d9726db1e9e1a7cfbadaee68a737e6。",
     "working_tree": "正式发布附件与MK-Firmware四份新固件SHA-256一致。原主工作区及其他仓库修改保留。"
@@ -13,8 +13,8 @@
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "complete",
-    "current_task": "将已发布的四份固件同步到主线MK-Firmware目录，并按维护者授权核对检查后合并PR #6。"
+    "status": "active",
+    "current_task": "0.2.3 开发：将 nRF54L15 脱机烧录前解锁改为 Python CTRL-AP 配方，固件保持通用并验证高速读写。"
   },
   "milestones": [
     {
@@ -63,14 +63,12 @@
     "HPM OTP仅按报告限定型号和字段；当前HPM5301组18/19永久锁定，禁止重放配方。其他安全GUI写入口未开放。",
     "PY32F030保护后恢复、物理Modbus、所有板卡、Mac/Linux与跨主机Agent未完整认证；STM32看门狗、STOP/STANDBY、WRP拒写仍待专测。",
     "Windows安装器无Authenticode签名（未知发布者），自动更新签名已验证；标准包不含离线WebView2。原生桌面本轮无新增视觉截图，Chrome截图不替代桌面视觉验收。",
-    "HPM6E80回归有限时长且无UART；本次用户更新的四份固件只做格式/CRC/公开发布验证，不把历史实测外推到新二进制。"
+    "HPM6E80回归有限时长且无UART；本次用户更新的四份固件只做格式/CRC/公开发布验证，不把历史实测外推到新二进制。",
+    "nRF54L15 CTRL-AP 解锁已在 V4.5.1 真机验证：脚本恢复后客户 HEX 脱机烧录、全量回读和运行后保护状态通过；未在固件中写入 nRF54L15 型号。"
   ],
   "next_actions": [
-    "先读取本交接与docs/verification/v0.2.2-release-final.md；根据用户新任务选取具体历史报告，不重复已完成发布。",
-    "PR #6包含精简交接和已发布固件目录同步；从主工作区更新源码前核对用户修改，勿reset/stash未知修改。",
-    "如需V2自动升级，单独实现RBL类型、校验与升级路径并回归；当前只提供手动RBL下载。",
-    "Cargo debug/release生成物已清理，后续构建自动重建；STM32测试.mklink历史capture.csv已转为相邻capture.csv.gz，旧分析脚本使用前按需解压。审计见.build/reports/disk-cleanup-20260921；其他E:/PHDZ由维护者处理。",
-    "MicroBoot文档及固件源码各有独立修改，接手先检查各仓库状态；硬件操作先枚举当前连接，勿重复OTP烧写。"
+    "在 0.2.3 分支完成 GUI 脱机部署回归，确认 Python/CFG 路径和复选框。",
+    "完成分支测试后推送 PR，未授权合并或发布。"
   ],
   "continuation_protocol": [
     "先核对 Git、任务和设备状态；仅按需读相关验证报告，不加载历史流水账。"
