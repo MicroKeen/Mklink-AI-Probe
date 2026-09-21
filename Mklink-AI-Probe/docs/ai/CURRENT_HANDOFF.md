@@ -4,7 +4,7 @@
 
 ## 当前断点
 
-- 更新时间：`2026-09-21T15:07:20.4759451+08:00`
+- 更新时间：`2026-09-21T15:15:15.4137261+08:00`
 - 分支：`codex/release-022-handoff`
 - HEAD：`基于已发布 main 424f470；本分支整理交接并将MK-Firmware同步为已发布的四份新固件。`
 - 远端 HEAD：`PR #5 已合并；v0.2.2 固定在 424f4700a4d9726db1e9e1a7cfbadaee68a737e6。`
@@ -21,7 +21,7 @@
 - **发布与安装**：docs/verification/v0.2.2-release-final.md：Python2306通过/2跳过，GUI720、Rust19通过；正式NSIS87.6MiB，覆盖安装、内置后端、7059型号/2224FLM哈希、退出释放、更新签名及三端公开索引通过。
 - **STM32与HPM功能回归**：按目标和功能查阅 v0.2.2-v4-stm32-regression-20260920.md、v0.2.2-v4-hpm6e80-regression-20260920.md、v0.2.2-online-verify-theme-20260920.md（均位于docs/verification）。包含高速档、烧录、窄值/非对齐、共享流、CLI/MCP/GUI；HPM6E80本轮UART未接。
 - **HPM5301用户OTP**：docs/verification/v0.2.2-hpm-offline-otp-20260920.md：独立Flash回读门槛、旧API/旧值/缺文件停止、用户字和组18/19永久锁、真实Chrome/UART及断电保持通过。不能外推其他型号或安全生命周期字段。
-- **固件发布**：HPMLinkV4.5.1、MicroLinkV4.5.1/V3.5.0/V2.8.0已公开下载校验；25项发布/升级测试通过。V2 RBL头/体CRC、长度及程序版本验证，打包头V1.0.0保留原件。此发布轮未刷机，不新增硬件认证。
+- **固件发布**：HPMLinkV4.5.1、MicroLinkV4.5.1/V3.5.0/V2.8.0已公开下载校验；25项发布/升级测试通过。V2 RBL头/体CRC、长度及程序版本验证，打包头V1.0.0保留原件。此发布轮未刷机，不新增硬件认证。 PR #6同步四份固件至源码目录，合并前Python2306/2跳过、GUI720及生产构建通过。
 - **历史证据**：旧版测试保留在docs/verification，按需查阅；旧失败或曾经待测项目不再逐项重复载入当前交接。
 
 ## 架构决策
