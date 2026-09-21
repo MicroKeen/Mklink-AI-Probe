@@ -1,0 +1,45 @@
+{
+  "schema": "mklink-firmware-v1",
+  "published_at": "2026-09-21T01:38:21Z",
+  "firmwares": [
+    {
+      "family": "hpmlink",
+      "model": "V4",
+      "version": "V4.5.1",
+      "name": "HPMLink_V4.5.1.uf2",
+      "size": 1596928,
+      "sha256": "e2636a8695344f357af474a57b5910d60d1c450fcb331bce7920a765b89b881b",
+      "uf2_blocks": 3119,
+      "urls": {
+        "github": "https://github.com/Aladdin-Wang/Mklink-AI-Probe/releases/download/firmware-assets/HPMLink_V4.5.1.uf2",
+        "gitee": "https://gitee.com/Aladdin-Wang/Mklink-AI-Probe/releases/download/firmware-assets/HPMLink_V4.5.1.uf2"
+      }
+    },
+    {
+      "family": "microlink",
+      "model": "V3",
+      "version": "V3.5.0",
+      "name": "MicroLink_V3.5.0.uf2",
+      "size": 765952,
+      "sha256": "b37e5da6ba25ffe08ec42d436de883c64cecc89eb10d4fc67b5be0d78a1fd696",
+      "uf2_blocks": 1496,
+      "urls": {
+        "github": "https://github.com/Aladdin-Wang/Mklink-AI-Probe/releases/download/firmware-assets/MicroLink_V3.5.0.uf2",
+        "gitee": "https://gitee.com/Aladdin-Wang/Mklink-AI-Probe/releases/download/firmware-assets/MicroLink_V3.5.0.uf2"
+      }
+    },
+    {
+      "family": "microlink",
+      "model": "V4",
+      "version": "V4.5.1",
+      "name": "MicroLink_V4.5.1.uf2",
+      "size": 1596928,
+      "sha256": "58a7d313342b7d81763b178bcdf6f445155bc7f2a158d893184c36c9559e2f92",
+      "uf2_blocks": 3119,
+      "urls": {
+        "github": "https://github.com/Aladdin-Wang/Mklink-AI-Probe/releases/download/firmware-assets/MicroLink_V4.5.1.uf2",
+        "gitee": "https://gitee.com/Aladdin-Wang/Mklink-AI-Probe/releases/download/firmware-assets/MicroLink_V4.5.1.uf2"
+      }
+    }
+  ]
+}
