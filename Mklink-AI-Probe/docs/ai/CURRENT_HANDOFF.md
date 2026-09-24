@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-09-21T15:15:15.4137261+08:00`
-- 分支：`codex/release-022-handoff`
-- HEAD：`基于已发布 main 424f470；本分支整理交接并将MK-Firmware同步为已发布的四份新固件。`
-- 远端 HEAD：`PR #5 已合并；v0.2.2 固定在 424f4700a4d9726db1e9e1a7cfbadaee68a737e6。`
-- 工作树：正式发布附件与MK-Firmware四份新固件SHA-256一致。原主工作区及其他仓库修改保留。
-- 当前任务：将已发布的四份固件同步到主线MK-Firmware目录，并按维护者授权核对检查后合并PR #6。
-- 状态：`complete`
+- 更新时间：`2026-09-24T17:50:44.6605349+08:00`
+- 分支：`codex/0.2.3-dev`
+- HEAD：`扇区几何修复代码 7796cec；交接记忆随后单独提交，真机擦写仍待验证`
+- 远端 HEAD：`扇区几何修复代码 7796cec 已推送至 microkeen/codex/0.2.3-dev；草稿 PR #9 指向 main，交接记忆随后单独提交推送`
+- 工作树：扇区几何代码、测试、生产 Web 资源及验证记录已提交；主工作区固件改动保留，未触碰固件仓库。
+- 当前任务：接续 0.2.3 开发：已修复在线烧录中重叠 FLM 扇区几何不可验证的问题，按所选 FLM 统一镜像检查、扇区映射和任务算法，开发分支验证通过；STM32F767xG 真机擦写未测。此前 nRF54L15 在线安全 GUI 已接入，真机破坏性闭环待用户明确授权；脱机下载后加锁仍待开发。当前安装候选包不含本轮新代码。
+- 状态：`active`
 
 ## 里程碑
 
@@ -22,7 +22,10 @@
 - **STM32与HPM功能回归**：按目标和功能查阅 v0.2.2-v4-stm32-regression-20260920.md、v0.2.2-v4-hpm6e80-regression-20260920.md、v0.2.2-online-verify-theme-20260920.md（均位于docs/verification）。包含高速档、烧录、窄值/非对齐、共享流、CLI/MCP/GUI；HPM6E80本轮UART未接。
 - **HPM5301用户OTP**：docs/verification/v0.2.2-hpm-offline-otp-20260920.md：独立Flash回读门槛、旧API/旧值/缺文件停止、用户字和组18/19永久锁、真实Chrome/UART及断电保持通过。不能外推其他型号或安全生命周期字段。
 - **固件发布**：HPMLinkV4.5.1、MicroLinkV4.5.1/V3.5.0/V2.8.0已公开下载校验；25项发布/升级测试通过。V2 RBL头/体CRC、长度及程序版本验证，打包头V1.0.0保留原件。此发布轮未刷机，不新增硬件认证。 PR #6同步四份固件至源码目录，合并前Python2306/2跳过、GUI720及生产构建通过。
-- **历史证据**：旧版测试保留在docs/verification，按需查阅；旧失败或曾经待测项目不再逐项重复载入当前交接。
+- **nRF54L15保护**：Python真机 APPROTECT/SECUREAPPROTECT 写入、复位保护状态3、AHB关闭、CTRL-AP恢复0.923秒、1560576字节全空检查、客户HEX恢复校验通过。原始证据保存在用户测试目录 .mklink/security_roundtrip_20260924.json。别名与算法目录回归19项通过。
+- **0.2.3本地安装交接**：标准builder成功，覆盖安装退出0；Skill升级至0.2.3，插件版本及安装清单、安装包SHA256、D盘ProductVersion=0.2.3均核对。用户启动后8765 health=ok、探针枚举正常；nrf54l/V4 unlock_supported=true、lock_supported=false。sidecar SHA256=925C353519384C6EADE1D8C9467218D212C69A6904B4C42CCF6AA8B1E62221DF，与构建产物一致；无Python回退，正常退出后主进程/sidecar及8765监听均清零。
+- **0.2.3在线nRF54L安全操作阶段验证**：docs/verification/v0.2.3-nrf54l-online-security.md：新配方9项、在线API/CLI相关155项、GUI相关101项通过；生产前端构建成功。全量Python2320通过/2跳过、GUI721通过，各有1项既有版本断言失效，修正后单项复测通过。真实Chrome的V4探针/目标选择和两项确认弹窗通过，弹窗取消；未执行真机安全写入。
+- **0.2.3在线烧录扇区几何修复**：docs/verification/v0.2.3-sector-geometry-20260924.md：审计7059型号，27个存在地址重叠且扇区声明冲突，STM32F767xG 双Bank/单Bank分别16/32KiB。按所选FLM绑定检查、映射和任务，未选择或冲突自定义FLM时拒绝；Pack优先使用FLM可变扇区范围，缺口和不完整尾部保持不可验证。Python全量2326通过/2跳过，最后冲突保护定向1项通过；GUI全量723、最后按钮门禁定向97项通过，生产Web构建与真实Chrome入口检查通过。未执行真机擦写。
 
 ## 架构决策
 
@@ -34,17 +37,17 @@
 
 ## 真机环境
 
-- **state**：HPMLink V4 + HPM5301。Word72=1、Word79=3、HARD_LOCK=0x304C0016；38,364字节固件独立回读一致，UART0心跳递增。组18/19已永久锁定，禁止重放原配方。实际断电后GUI/独立回读和UART复核通过，不进行安全生命周期操作。
+- **state**：2026-09-24：MKLink V4 + nRF54L15，Python 真机加锁/CTRL-AP 解锁闭环通过。已恢复客户 HEX，460524 字节回读一致；复位运行 5 秒后未加锁。未启用 ERASEPROTECT。
 - **backups**：本地.build/reports保留原始HIL证据；Gitee历史备份与清理记录在.build/artifacts/gitee-historical-backup-20260921。
-- **installer**：.build/artifacts/v0.2.2-official/Mklink-AI-Probe-v0.2.2-x64-Setup.exe（正式签名更新包，已覆盖安装）。
+- **installer**：.build/artifacts/v0.2.3-local-20260924/Mklink-AI-Probe-v0.2.3-x64-Setup.exe；SHA256 552EB646504C162AE4E5738280A054063704A88DA97F9EEC8202C69017BDD6D0。标准NSIS，自带后端与7059型号/2224算法，安装/S退出0；未正式发布，无更新签名。 实际安装目录 D:/Program Files/Mklink AI Probe，ProductVersion=0.2.3。
 
 ## 下一动作
 
-1. 先读取本交接与docs/verification/v0.2.2-release-final.md；根据用户新任务选取具体历史报告，不重复已完成发布。
-2. PR #6包含精简交接和已发布固件目录同步；从主工作区更新源码前核对用户修改，勿reset/stash未知修改。
-3. 如需V2自动升级，单独实现RBL类型、校验与升级路径并回归；当前只提供手动RBL下载。
-4. Cargo debug/release生成物已清理，后续构建自动重建；STM32测试.mklink历史capture.csv已转为相邻capture.csv.gz，旧分析脚本使用前按需解压。审计见.build/reports/disk-cleanup-20260921；其他E:/PHDZ由维护者处理。
-5. MicroBoot文档及固件源码各有独立修改，接手先检查各仓库状态；硬件操作先枚举当前连接，勿重复OTP烧写。
+1. 用户若明确授权，按当前目标与已验证客户HEX执行在线GUI加锁、复位核对、CTRL-AP解锁、重烧和全量回读；记录证据。未经授权不执行擦除或安全写入。
+2. 若有STM32F767xG板卡，先确认实际Bank模式，再用对应FLM执行真机检查与独立回读；对26个缺扇区表FLM取得可信Pack/厂商资料后补齐。
+3. 后续补齐nRF54L脱机GUI下载后加锁，使用Python配方，不在下载器固件中硬编码型号。完成两条GUI真机验证后重新打包，不能沿用当前安装包验收结论。
+4. 手动清理移交：旧候选.build/artifacts/v0.2.3-dev和v0.2.3-nrf54l-offline此前删除被自动审批拦截，路径已给用户；未核实用户是否删除，不重试绕过。保留v0.2.3-local-20260924、正式0.2.2及唯一真机证据。
+5. 新会话继续codex/0.2.3-dev，先读取本文件并重新加载本地0.2.3 Skill。用户安装版位于D:/Program Files/Mklink AI Probe；开发WebGUI此前使用8785，操作前重新核对进程、设备和端口。0.2.3尚未正式发布。
 
 ## 已知限制
 
@@ -54,6 +57,8 @@
 - PY32F030保护后恢复、物理Modbus、所有板卡、Mac/Linux与跨主机Agent未完整认证；STM32看门狗、STOP/STANDBY、WRP拒写仍待专测。
 - Windows安装器无Authenticode签名（未知发布者），自动更新签名已验证；标准包不含离线WebView2。原生桌面本轮无新增视觉截图，Chrome截图不替代桌面视觉验收。
 - HPM6E80回归有限时长且无UART；本次用户更新的四份固件只做格式/CRC/公开发布验证，不把历史实测外推到新二进制。
+- nRF54L15 CTRL-AP 解锁已在 V4.5.1 真机验证：脚本恢复后客户 HEX 脱机烧录、全量回读和运行后保护状态通过；未在固件中写入 nRF54L15 型号。在线GUI已接入安全操作，但尚未做本轮真机加锁/CTRL-AP解锁闭环；脱机GUI仍仅解锁配方。此前Python真机配方通过不能外推为本轮GUI验收。
+- STM32F767xG等重叠FLM型号需用户核对实际Bank模式并选择对应算法；本轮仅验证元数据、API和真实浏览器，未连接STM32F767xG真机擦写。另有26个内置FLM无扇区表且当前解析器无法解析，扇区操作继续禁用，需可信Pack或厂商几何资料。
 
 ## 延续协议
 
