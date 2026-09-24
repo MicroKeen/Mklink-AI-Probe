@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-09-24T16:08:22.2504881+08:00`
+- 更新时间：`2026-09-24T16:20:54.6946529+08:00`
 - 分支：`codex/0.2.3-dev`
-- HEAD：`本次交接提交包含安装后启动与退出验收`
-- 远端 HEAD：`codex/0.2.3-dev，本轮交接提交后推送并核对`
-- 工作树：0.2.3本地安装候选及Skill已生成；维护交接随本轮提交。固件main为ae21b4e，两个子模块未动。
-- 当前任务：0.2.3标准NSIS重建、覆盖安装、本地Skill更新及安装后验收完成。旧候选清理因自动审批拦截未执行，交接保留明确路径。
-- 状态：`active`
+- HEAD：`34efb48（本轮交接整理前的已验收提交；最终交接提交见 git log -1）`
+- 远端 HEAD：`microkeen/codex/0.2.3-dev；收尾提交推送后核对远端`
+- 工作树：应用代码及构建产物已提交；本轮仅整理交接文档。固件main=ae21b4e，Arm-2D/MicroBoot保持原有状态。
+- 当前任务：本轮0.2.3标准安装候选包、覆盖安装、本地Skill更新及安装后验收已收尾。不是正式发布或全部功能完成；nRF54L GUI安全操作缺项明确移交后续开发。
+- 状态：`handoff_ready`
 
 ## 里程碑
 
@@ -24,7 +24,7 @@
 - **固件发布**：HPMLinkV4.5.1、MicroLinkV4.5.1/V3.5.0/V2.8.0已公开下载校验；25项发布/升级测试通过。V2 RBL头/体CRC、长度及程序版本验证，打包头V1.0.0保留原件。此发布轮未刷机，不新增硬件认证。 PR #6同步四份固件至源码目录，合并前Python2306/2跳过、GUI720及生产构建通过。
 - **历史证据**：旧版测试保留在docs/verification，按需查阅；旧失败或曾经待测项目不再逐项重复载入当前交接。
 - **nRF54L15保护**：Python真机 APPROTECT/SECUREAPPROTECT 写入、复位保护状态3、AHB关闭、CTRL-AP恢复0.923秒、1560576字节全空检查、客户HEX恢复校验通过。原始证据保存在用户测试目录 .mklink/security_roundtrip_20260924.json。别名与算法目录回归19项通过。
-- **0.2.3本地安装交接**：2026-09-24：标准builder成功，系统PATH下覆盖安装退出0；Skill从0.2.2升级0.2.3，插件版本已修正，安装清单和旧版备份生成。启动桌面程序遭自动审批blocked by policy，未验证本次安装后的health/退出。旧候选目录删除同样被拦截，未执行。
+- **0.2.3本地安装交接**：标准builder成功，覆盖安装退出0；Skill升级至0.2.3，插件版本及安装清单核对完成。收尾再次核对安装包SHA256及D盘程序ProductVersion=0.2.3。安装后启动、health与退出验收见下一项，无待补启动检查。
 - **0.2.3安装后验收**：用户启动D盘安装版后，8765 health=ok，探针枚举接口正常；nrf54l/V4 unlock_supported=true、lock_supported=false。sidecar SHA256=925C353519384C6EADE1D8C9467218D212C69A6904B4C42CCF6AA8B1E62221DF，与构建产物一致。进程树无Python回退。CloseMainWindow正常退出后主进程及两层sidecar均退出，8765监听数0。
 
 ## 架构决策
@@ -39,13 +39,13 @@
 
 - **state**：2026-09-24：MKLink V4 + nRF54L15，Python 真机加锁/CTRL-AP 解锁闭环通过。已恢复客户 HEX，460524 字节回读一致；复位运行 5 秒后未加锁。未启用 ERASEPROTECT。
 - **backups**：本地.build/reports保留原始HIL证据；Gitee历史备份与清理记录在.build/artifacts/gitee-historical-backup-20260921。
-- **installer**：.build/artifacts/v0.2.3-local-20260924/Mklink-AI-Probe-v0.2.3-x64-Setup.exe；SHA256 552EB646504C162AE4E5738280A054063704A88DA97F9EEC8202C69017BDD6D0。标准NSIS，自带后端与7059型号/2224算法，安装/S退出0；未正式发布，无更新签名。 实际安装目录 D:/Program Files/Mklink AI Probe，ProductVersion=0.2.3；C盘同名目录为0.1.8旧安装未动。
+- **installer**：.build/artifacts/v0.2.3-local-20260924/Mklink-AI-Probe-v0.2.3-x64-Setup.exe；SHA256 552EB646504C162AE4E5738280A054063704A88DA97F9EEC8202C69017BDD6D0。标准NSIS，自带后端与7059型号/2224算法，安装/S退出0；未正式发布，无更新签名。 实际安装目录 D:/Program Files/Mklink AI Probe，ProductVersion=0.2.3。
 
 ## 下一动作
 
-1. 在线安全操作与脱机加锁仍需实现与GUI真机回归，不可仅放开复选框。新会话重新加载已更新的本地Skill。
-2. 旧候选清理被自动审批拒绝，未执行：.build/artifacts/v0.2.3-dev、v0.2.3-nrf54l-offline。保留v0.2.3-local-20260924、正式0.2.2及原始真机证据。
-3. 桌面正确路径为D:/Program Files/Mklink AI Probe；C盘另有0.1.8旧安装，未授权专项卸载，本轮保留。
+1. 后续开发：补齐nRF54L在线GUI加锁/解锁与脱机GUI加锁，使用Python配方实现，不在下载器固件中硬编码型号；当前仅脱机解锁入口支持。完成后分别通过真实GUI验证，重新打包，不能沿用当前安装包验收结论。
+2. 手动清理移交：旧候选.build/artifacts/v0.2.3-dev和v0.2.3-nrf54l-offline此前删除被自动审批拦截，路径已给用户；未核实用户是否删除，不重试绕过。保留v0.2.3-local-20260924、正式0.2.2及唯一真机证据。
+3. 新会话继续codex/0.2.3-dev，先读取本文件并重新加载本地0.2.3 Skill。用户安装版位于D:/Program Files/Mklink AI Probe；开发WebGUI此前使用8785，操作前重新核对进程、设备和端口。0.2.3尚未正式发布。
 
 ## 已知限制
 
