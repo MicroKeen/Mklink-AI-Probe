@@ -582,12 +582,15 @@ function viewFetch(targets = [installedTarget]) {
     if (url.includes('/targets/') && url.endsWith('/security')) {
       const targetPart = decodeURIComponent(url.split('/targets/')[1].split('/security')[0])
       const supported = targetPart.startsWith('STM32F103')
+        || targetPart === 'nrf54l'
         || targetPart.startsWith('STM32G474')
         || targetPart.startsWith('STM32H743')
         || targetPart.startsWith('STM32L010')
         || targetPart.startsWith('GD32F303')
         || targetPart.startsWith('PY32F030')
-      const family = targetPart.startsWith('GD32F303')
+      const family = targetPart === 'nrf54l'
+        ? 'nrf54l15-ctrl-ap'
+        : targetPart.startsWith('GD32F303')
         ? 'gd32f303xe-spc'
         : targetPart.startsWith('PY32F030')
           ? 'py32f030x8-rdp1'
@@ -1042,6 +1045,28 @@ describe('online flash task workspace behavior', () => {
     expect(JSON.parse(String(call?.[1]?.body)).actions).toEqual([
       'connect', 'unlock', 'erase', 'program', 'verify', 'lock', 'reset', 'disconnect',
     ])
+    wrapper.unmount()
+  })
+
+  it('selects CTRL-AP attach and warns that nRF54L recovery erases UICR', async () => {
+    const target = { ...installedTarget, part_number: 'nrf54l' }
+    vi.stubGlobal('fetch', viewFetch([target]))
+    const wrapper = mount(await onlineFlashView())
+    await vi.waitFor(() => expect(wrapper.find('[data-testid="target-nrf54l"]').exists()).toBe(true))
+    await wrapper.get('[data-testid="target-nrf54l"]').trigger('click')
+    await vi.waitFor(() => expect(wrapper.get('[data-testid="action-unlock"]').attributes('disabled')).toBeUndefined())
+
+    await wrapper.get('[data-testid="action-unlock"]').setValue(true)
+    expect(wrapper.get('[role="alertdialog"]').text()).toContain('擦除程序和 UICR')
+    await wrapper.get('[data-testid="confirmation-accept"]').trigger('click')
+    expect(wrapper.get<HTMLSelectElement>('[data-testid="connect-mode"]').element.value).toBe('attach')
+    expect(wrapper.get<HTMLSelectElement>('[data-testid="reset-mode"]').element.value).toBe('default')
+
+    await wrapper.get('[data-testid="action-lock"]').setValue(true)
+    expect(wrapper.get('[role="alertdialog"]').text()).toContain('APPROTECT 和 SECUREAPPROTECT')
+    await wrapper.get('[data-testid="confirmation-accept"]').trigger('click')
+    expect(wrapper.get<HTMLInputElement>('[data-testid="action-verify"]').element.checked).toBe(true)
+    expect(wrapper.get<HTMLInputElement>('[data-testid="action-reset"]').element.checked).toBe(true)
     wrapper.unmount()
   })
 

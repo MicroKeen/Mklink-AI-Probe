@@ -1080,11 +1080,27 @@ def _start_job_with_configuration(
             from mklink.cmsis_dap.security import require_security_capability
 
             security = require_security_capability(target.part_number)
-            assert security.algorithm_path is not None
             security_family = security.family
-            security_flm_path = str(security.algorithm_path)
-            security_flm_digest = security.algorithm_sha256
-            security_flm_region = (security.option_address, security.option_size)
+            if security.algorithm_path is not None:
+                security_flm_path = str(security.algorithm_path)
+                security_flm_digest = security.algorithm_sha256
+                security_flm_region = (security.option_address, security.option_size)
+            if security.family == "nrf54l15-ctrl-ap":
+                if "unlock" in body.actions and body.connect_mode != "attach":
+                    raise FlashError(
+                        FlashErrorCode.SECURITY_NOT_SUPPORTED,
+                        "nRF54L15 CTRL-AP 解锁必须选择附加连接",
+                    )
+                if "lock" in body.actions and "unlock" not in body.actions and body.connect_mode != "halt":
+                    raise FlashError(
+                        FlashErrorCode.SECURITY_NOT_SUPPORTED,
+                        "nRF54L15 加锁必须选择暂停连接",
+                    )
+                if body.reset_mode != "default" or body.reset_voltage_mv is not None:
+                    raise FlashError(
+                        FlashErrorCode.SECURITY_NOT_SUPPORTED,
+                        "nRF54L15 安全操作使用 CTRL-AP 复位，不切换目标电压",
+                    )
             power_cycle_security = {
                 "gd32f303xe-spc",
                 "py32f030x8-rdp1",

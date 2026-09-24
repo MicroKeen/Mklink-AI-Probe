@@ -65,10 +65,12 @@ def _cli_security(args: argparse.Namespace) -> int:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
         action = "解锁" if args.security_command == "unlock" else "加锁"
-        print(
-            f"[OK] {result['target_part']} {action}完成，"
-            f"已按 {result['voltage_mv']} mV 断电复位"
+        reset = (
+            "已完成 CTRL-AP 复位，未切换 VCC"
+            if result["reset_mode"] == "default" and result["voltage_mv"] is None
+            else f"已按 {result['voltage_mv']} mV 断电复位"
         )
+        print(f"[OK] {result['target_part']} {action}完成，{reset}")
     return 0
 
 
@@ -4373,16 +4375,15 @@ def main():
         command_parser.add_argument("--target-part", required=True, help="精确器件型号")
         command_parser.add_argument(
             "--voltage-mv",
-            required=True,
             type=int,
             choices=(1800, 3300, 5000),
-            help="安全操作后恢复的 VCC 电压",
+            help="非 nRF54L15 安全操作后恢复的 VCC 电压；nRF54L15 请省略",
         )
         command_parser.add_argument(
             "--confirm",
             required=True,
             action="store_true",
-            help="确认本次安全操作及指定的 VCC 恢复电压",
+            help="确认本次安全操作；非 nRF54L15 还需确认指定的 VCC 恢复电压",
         )
         if unlock:
             command_parser.add_argument(

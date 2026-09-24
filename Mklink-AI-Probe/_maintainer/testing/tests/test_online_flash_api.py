@@ -578,6 +578,39 @@ def test_security_job_is_rejected_server_side_for_unvalidated_device(app):
     assert response.json()["detail"]["code"] == "SECURITY_NOT_SUPPORTED"
 
 
+def test_nrf54l_ctrl_ap_job_requires_attach_without_voltage_change(app, services, monkeypatch):
+    monkeypatch.setattr(
+        services.catalog, "search",
+        lambda query, **_kwargs: [TargetRecord("nrf54l", "Nordic", installed=True)]
+        if query.casefold() == "nrf54l" else [],
+    )
+    capability = request(app, "GET", "/api/online-flash/targets/nrf54l/security")
+    assert capability.status_code == 200
+    assert capability.json()["unlock_supported"]
+    assert capability.json()["lock_supported"]
+
+    payload = {
+        "actions": ["connect", "unlock", "reset", "disconnect"],
+        "probe_id": "mk", "target_part": "nrf54l",
+        "connect_mode": "attach", "reset_mode": "default",
+    }
+    accepted = request(app, "POST", "/api/online-flash/jobs", json=payload)
+    assert accepted.status_code == 200, accepted.text
+    started = services.job_manager.started[-1]
+    assert started.security_family == "nrf54l15-ctrl-ap"
+    assert started.security_flm_path is None
+    assert started.reset_voltage_mv is None
+
+    wrong_connect = request(app, "POST", "/api/online-flash/jobs", json={
+        **payload, "connect_mode": "halt",
+    })
+    assert wrong_connect.status_code == 422
+    changed_voltage = request(app, "POST", "/api/online-flash/jobs", json={
+        **payload, "reset_mode": "power-cycle", "reset_voltage_mv": 3300,
+    })
+    assert changed_voltage.status_code == 422
+
+
 @pytest.mark.parametrize(
     ("family", "option_address", "option_size"),
     [

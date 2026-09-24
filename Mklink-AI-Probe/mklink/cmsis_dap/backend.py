@@ -902,6 +902,7 @@ class PyOcdBackend:
         self._algorithm_reset_done = False
         self._connection_arguments: Optional[dict[str, Any]] = None
         self._py32f030_unlock_transition_pending = False
+        self._nrf54l_lock_pending = False
         self._lock = threading.RLock()
 
     def connect(
@@ -1033,7 +1034,17 @@ class PyOcdBackend:
                     )
                 resolved_flms.append(payload)
             security_payload = None
-            if security_family is not None:
+            if security_family == "nrf54l15-ctrl-ap":
+                if str(target).casefold() not in {"nrf54l", "nrf54l15"} or any(
+                    value is not None for value in (
+                        security_flm_path, security_flm_digest, security_flm_region
+                    )
+                ):
+                    raise FlashError(
+                        FlashErrorCode.SECURITY_NOT_SUPPORTED,
+                        "nRF54L15 CTRL-AP configuration is not in the safety whitelist",
+                    )
+            elif security_family is not None:
                 from .security import (
                     GD32F30X_OPTION_ADDRESS,
                     GD32F30X_OPTION_FLM_SHA256,
@@ -1206,9 +1217,18 @@ class PyOcdBackend:
                         security_flm_region,
                     )
                 session.delegate = _TraceStateDelegate(delegate)
-                session.open()
+                nrf54l_recovery_connect = (
+                    security_family == "nrf54l15-ctrl-ap" and connect_mode == "attach"
+                )
+                if nrf54l_recovery_connect:
+                    # Protected devices have no AHB access. Discover only the
+                    # debug port until the explicit unlock action is reached.
+                    session.open(init_board=False)
+                    session.target.dp.connect()
+                else:
+                    session.open()
                 core = getattr(session.target, "selected_core", None)
-                if core is not None and "xpsr" not in core.core_registers.by_name:
+                if not nrf54l_recovery_connect and core is not None and "xpsr" not in core.core_registers.by_name:
                     # pyOCD can log and swallow component initialization errors.
                     # Do not let a partial CPU description reach flash erase.
                     raise FlashError(
@@ -1227,6 +1247,7 @@ class PyOcdBackend:
                     getattr(resolved_probe, "unique_id", None) or probe or ""
                 ).strip()
                 self._security_family = security_family or ""
+                self._nrf54l_lock_pending = False
                 # Pack FLMs need the same reset context as imported FLMs. A
                 # Pack connect sequence may leave the application running even
                 # with under-reset selected. For example, STM32F1's algorithm
@@ -1287,6 +1308,8 @@ class PyOcdBackend:
 
         with self._lock:
             try:
+                if self._security_family == "nrf54l15-ctrl-ap":
+                    return self._unlock_nrf54l15()
                 if self._security_family == "gd32f303xe-spc":
                     changed, _desired = self._write_gd32f303_spc(0xA5)
                     return (
@@ -1371,6 +1394,8 @@ class PyOcdBackend:
 
         with self._lock:
             try:
+                if self._security_family == "nrf54l15-ctrl-ap":
+                    return self._lock_nrf54l15()
                 if self._security_family == "gd32f303xe-spc":
                     changed, _desired = self._write_gd32f303_spc(0x00)
                     return (
@@ -1453,6 +1478,39 @@ class PyOcdBackend:
                 raise
             except Exception as exc:
                 raise self._mapped_error(exc, FlashErrorCode.LOCK_FAIL) from None
+
+    def _unlock_nrf54l15(self) -> str:
+        from . import nrf54l_security
+
+        session = self._require_session()
+        reconnect = self._connection_arguments
+        if reconnect is None or reconnect.get("connect_mode") != "attach":
+            raise RuntimeError("nRF54L15 recovery requires a CTRL-AP attach session")
+        changed = nrf54l_security.recover(session.target.dp)
+        reconnect = dict(reconnect)
+        reconnect["connect_mode"] = "halt"
+        session.options["resume_on_disconnect"] = False
+        self.connect(**reconnect)
+        target = self._require_session().target
+        if changed:
+            nrf54l_security.verify_blank(target)
+            return "nRF54L15 CTRL-AP recovery erased and verified main Flash and UICR"
+        if int(target.read32(0x00FFC31C)) != nrf54l_security.PART_ID:
+            raise RuntimeError("nRF54L15 PARTID mismatch after reconnect")
+        return "nRF54L15 debug access was already unprotected"
+
+    def _lock_nrf54l15(self) -> str:
+        from . import nrf54l_security
+
+        session = self._require_session()
+        changed = nrf54l_security.write_approtect(session.target)
+        self._nrf54l_lock_pending = True
+        return (
+            "nRF54L15 APPROTECT and SECUREAPPROTECT UICR were verified; "
+            "CTRL-AP reset will activate protection"
+            if changed else
+            "nRF54L15 APPROTECT UICR was already written; CTRL-AP reset will activate protection"
+        )
 
     _STM32L010_OPTION_ADDRESS = 0x1FF80000
     _STM32L010_OPTION_SIZE = 20
@@ -2358,6 +2416,7 @@ class PyOcdBackend:
             self._algorithm_reset_done = False
             self._connection_arguments = None
             self._py32f030_unlock_transition_pending = False
+            self._nrf54l_lock_pending = False
             if session is not None:
                 try:
                     session.close()
@@ -2666,6 +2725,15 @@ class PyOcdBackend:
             }:
                 raise ValueError(f"unknown reset mode: {mode}")
             try:
+                if self._nrf54l_lock_pending:
+                    if mode != "default":
+                        raise ValueError("nRF54L15 lock requires CTRL-AP reset")
+                    from . import nrf54l_security
+
+                    nrf54l_security.activate_and_verify_lock(session.target.dp)
+                    self._nrf54l_lock_pending = False
+                    session.options["resume_on_disconnect"] = False
+                    return
                 if mode == "power-cycle":
                     if self._reset_voltage_mv not in _POWER_CYCLE_VOLTAGES_MV:
                         raise ValueError(
