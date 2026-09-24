@@ -4,12 +4,12 @@
 
 ## 当前断点
 
-- 更新时间：`2026-09-21T22:13:22.0659933+08:00`
-- 分支：`codex/0.2.3-nrf54l15-offline`
-- HEAD：`基于已发布 main 424f470；本分支整理交接并将MK-Firmware同步为已发布的四份新固件。`
-- 远端 HEAD：`PR #5 已合并；v0.2.2 固定在 424f4700a4d9726db1e9e1a7cfbadaee68a737e6。`
+- 更新时间：`2026-09-24T15:40:58.4590517+08:00`
+- 分支：`codex/0.2.3-dev`
+- HEAD：`197ea28：修复 nrf54l 别名导致脱机解锁置灰；含 0.2.3 版本信息和算法发现修复。`
+- 远端 HEAD：`推送前远端 99e302c；本轮提交修复与交接，不发布正式版本。`
 - 工作树：正式发布附件与MK-Firmware四份新固件SHA-256一致。原主工作区及其他仓库修改保留。
-- 当前任务：0.2.3 开发：将 nRF54L15 脱机烧录前解锁改为 Python CTRL-AP 配方，固件保持通用并验证高速读写。
+- 当前任务：0.2.3 开发交接及分支推送；安装包重建、覆盖安装、本地 Skill 更新和临时文件清理尚待完成。
 - 状态：`active`
 
 ## 里程碑
@@ -23,6 +23,7 @@
 - **HPM5301用户OTP**：docs/verification/v0.2.2-hpm-offline-otp-20260920.md：独立Flash回读门槛、旧API/旧值/缺文件停止、用户字和组18/19永久锁、真实Chrome/UART及断电保持通过。不能外推其他型号或安全生命周期字段。
 - **固件发布**：HPMLinkV4.5.1、MicroLinkV4.5.1/V3.5.0/V2.8.0已公开下载校验；25项发布/升级测试通过。V2 RBL头/体CRC、长度及程序版本验证，打包头V1.0.0保留原件。此发布轮未刷机，不新增硬件认证。 PR #6同步四份固件至源码目录，合并前Python2306/2跳过、GUI720及生产构建通过。
 - **历史证据**：旧版测试保留在docs/verification，按需查阅；旧失败或曾经待测项目不再逐项重复载入当前交接。
+- **nRF54L15保护**：Python真机 APPROTECT/SECUREAPPROTECT 写入、复位保护状态3、AHB关闭、CTRL-AP恢复0.923秒、1560576字节全空检查、客户HEX恢复校验通过。原始证据保存在用户测试目录 .mklink/security_roundtrip_20260924.json。别名与算法目录回归19项通过。
 
 ## 架构决策
 
@@ -34,14 +35,14 @@
 
 ## 真机环境
 
-- **state**：HPMLink V4 + HPM5301。Word72=1、Word79=3、HARD_LOCK=0x304C0016；38,364字节固件独立回读一致，UART0心跳递增。组18/19已永久锁定，禁止重放原配方。实际断电后GUI/独立回读和UART复核通过，不进行安全生命周期操作。
+- **state**：2026-09-24：MKLink V4 + nRF54L15，Python 真机加锁/CTRL-AP 解锁闭环通过。已恢复客户 HEX，460524 字节回读一致；复位运行 5 秒后未加锁。未启用 ERASEPROTECT。
 - **backups**：本地.build/reports保留原始HIL证据；Gitee历史备份与清理记录在.build/artifacts/gitee-historical-backup-20260921。
-- **installer**：.build/artifacts/v0.2.2-official/Mklink-AI-Probe-v0.2.2-x64-Setup.exe（正式签名更新包，已覆盖安装）。
+- **installer**：.build/artifacts/v0.2.3-nrf54l-offline/Mklink-AI-Probe-v0.2.3-x64-Setup.exe：旧候选不包含 197ea28 别名修复，不能作为最终修复安装包。
 
 ## 下一动作
 
-1. 在 0.2.3 分支完成 GUI 脱机部署回归，确认 Python/CFG 路径和复选框。
-2. 完成分支测试后推送 PR，未授权合并或发布。
+1. 按用户更正保持0.2.3，重建标准NSIS并覆盖安装，更新本地运行时Skill，清理可确认临时产物。
+2. 在线安全操作与脱机加锁仍需实现与GUI真机回归，不可仅放开复选框。
 
 ## 已知限制
 
@@ -52,6 +53,7 @@
 - Windows安装器无Authenticode签名（未知发布者），自动更新签名已验证；标准包不含离线WebView2。原生桌面本轮无新增视觉截图，Chrome截图不替代桌面视觉验收。
 - HPM6E80回归有限时长且无UART；本次用户更新的四份固件只做格式/CRC/公开发布验证，不把历史实测外推到新二进制。
 - nRF54L15 CTRL-AP 解锁已在 V4.5.1 真机验证：脚本恢复后客户 HEX 脱机烧录、全量回读和运行后保护状态通过；未在固件中写入 nRF54L15 型号。
+- 在线GUI尚未接入nRF54L安全操作，脱机GUI仅解锁配方；加锁Python真机通过不等于GUI验收通过。
 
 ## 延续协议
 

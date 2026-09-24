@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-09-21T22:13:22.0659933+08:00",
+  "updated_at": "2026-09-24T15:40:58.4590517+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
-    "branch": "codex/0.2.3-nrf54l15-offline",
-    "head": "基于已发布 main 424f470；本分支整理交接并将MK-Firmware同步为已发布的四份新固件。",
-    "remote_head": "PR #5 已合并；v0.2.2 固定在 424f4700a4d9726db1e9e1a7cfbadaee68a737e6。",
+    "branch": "codex/0.2.3-dev",
+    "head": "197ea28：修复 nrf54l 别名导致脱机解锁置灰；含 0.2.3 版本信息和算法发现修复。",
+    "remote_head": "推送前远端 99e302c；本轮提交修复与交接，不发布正式版本。",
     "working_tree": "正式发布附件与MK-Firmware四份新固件SHA-256一致。原主工作区及其他仓库修改保留。"
   },
   "mission": {
@@ -14,7 +14,7 @@
   },
   "current_session": {
     "status": "active",
-    "current_task": "0.2.3 开发：将 nRF54L15 脱机烧录前解锁改为 Python CTRL-AP 配方，固件保持通用并验证高速读写。"
+    "current_task": "0.2.3 开发交接及分支推送；安装包重建、覆盖安装、本地 Skill 更新和临时文件清理尚待完成。"
   },
   "milestones": [
     {
@@ -43,6 +43,10 @@
     {
       "area": "历史证据",
       "result": "旧版测试保留在docs/verification，按需查阅；旧失败或曾经待测项目不再逐项重复载入当前交接。"
+    },
+    {
+      "area": "nRF54L15保护",
+      "result": "Python真机 APPROTECT/SECUREAPPROTECT 写入、复位保护状态3、AHB关闭、CTRL-AP恢复0.923秒、1560576字节全空检查、客户HEX恢复校验通过。原始证据保存在用户测试目录 .mklink/security_roundtrip_20260924.json。别名与算法目录回归19项通过。"
     }
   ],
   "decisions": [
@@ -53,9 +57,9 @@
     "保留正式包、唯一备份、依赖缓存和必要HIL证据。原主工作区用户固件替换不得reset。mklink-issues-pr自动任务维持暂停。"
   ],
   "hardware": {
-    "state": "HPMLink V4 + HPM5301。Word72=1、Word79=3、HARD_LOCK=0x304C0016；38,364字节固件独立回读一致，UART0心跳递增。组18/19已永久锁定，禁止重放原配方。实际断电后GUI/独立回读和UART复核通过，不进行安全生命周期操作。",
+    "state": "2026-09-24：MKLink V4 + nRF54L15，Python 真机加锁/CTRL-AP 解锁闭环通过。已恢复客户 HEX，460524 字节回读一致；复位运行 5 秒后未加锁。未启用 ERASEPROTECT。",
     "backups": "本地.build/reports保留原始HIL证据；Gitee历史备份与清理记录在.build/artifacts/gitee-historical-backup-20260921。",
-    "installer": ".build/artifacts/v0.2.2-official/Mklink-AI-Probe-v0.2.2-x64-Setup.exe（正式签名更新包，已覆盖安装）。"
+    "installer": ".build/artifacts/v0.2.3-nrf54l-offline/Mklink-AI-Probe-v0.2.3-x64-Setup.exe：旧候选不包含 197ea28 别名修复，不能作为最终修复安装包。"
   },
   "known_limits": [
     "有限缓冲不保证无限暂停/物理断线无损；外设轮询可能漏短脉冲，多变量不是原子快照。",
@@ -64,11 +68,12 @@
     "PY32F030保护后恢复、物理Modbus、所有板卡、Mac/Linux与跨主机Agent未完整认证；STM32看门狗、STOP/STANDBY、WRP拒写仍待专测。",
     "Windows安装器无Authenticode签名（未知发布者），自动更新签名已验证；标准包不含离线WebView2。原生桌面本轮无新增视觉截图，Chrome截图不替代桌面视觉验收。",
     "HPM6E80回归有限时长且无UART；本次用户更新的四份固件只做格式/CRC/公开发布验证，不把历史实测外推到新二进制。",
-    "nRF54L15 CTRL-AP 解锁已在 V4.5.1 真机验证：脚本恢复后客户 HEX 脱机烧录、全量回读和运行后保护状态通过；未在固件中写入 nRF54L15 型号。"
+    "nRF54L15 CTRL-AP 解锁已在 V4.5.1 真机验证：脚本恢复后客户 HEX 脱机烧录、全量回读和运行后保护状态通过；未在固件中写入 nRF54L15 型号。",
+    "在线GUI尚未接入nRF54L安全操作，脱机GUI仅解锁配方；加锁Python真机通过不等于GUI验收通过。"
   ],
   "next_actions": [
-    "在 0.2.3 分支完成 GUI 脱机部署回归，确认 Python/CFG 路径和复选框。",
-    "完成分支测试后推送 PR，未授权合并或发布。"
+    "按用户更正保持0.2.3，重建标准NSIS并覆盖安装，更新本地运行时Skill，清理可确认临时产物。",
+    "在线安全操作与脱机加锁仍需实现与GUI真机回归，不可仅放开复选框。"
   ],
   "continuation_protocol": [
     "先核对 Git、任务和设备状态；仅按需读相关验证报告，不加载历史流水账。"
