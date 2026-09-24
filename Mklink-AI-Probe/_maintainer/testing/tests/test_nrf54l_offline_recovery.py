@@ -23,6 +23,13 @@ def test_recovery_has_no_power_or_option_algorithm_and_is_unlock_only():
     assert 'abort = True' in script
 
 
+def test_catalog_alias_exposes_ctrl_ap_unlock():
+    capability = offline_security_capability('V4', 'nrf54l')
+    assert capability['part_number'] == 'nRF54L15'
+    assert capability['unlock_supported']
+    assert not capability['lock_supported']
+
+
 @pytest.mark.parametrize('model,part,payload', [
     ('V3', 'nRF54L15', {'unlock_before_download': True}),
     ('V4', 'nRF54L10', {'unlock_before_download': True}),

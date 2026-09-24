@@ -402,7 +402,11 @@ def offline_security_capability(model: str, part_number: str) -> dict[str, objec
 
     normalized_model = str(model or "").strip().upper()
     part = str(part_number or "").strip()
-    if part.casefold() == "nrf54l15":
+    # The catalog exposes the compact ``nrf54l`` alias, while the CTRL-AP
+    # recovery recipe is pinned to the concrete nRF54L15 device.  Resolve the
+    # alias here so the offline UI uses the same capability as online flash.
+    if part.casefold() in {"nrf54l", "nrf54l15"}:
+        part = "nRF54L15"
         supported = normalized_model == "V4"
         return {
             "model": normalized_model, "part_number": part,
