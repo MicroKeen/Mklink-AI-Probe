@@ -1,20 +1,20 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-02T23:46:32.656934+08:00",
+  "updated_at": "2026-10-03T00:03:29.101396+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
-    "branch": "codex/superwatch-inline-names",
-    "head": "Inline group and signal name editor based on main 11d698a.",
-    "remote_head": "main 11d698a; PR21 retains previous installation evidence.",
+    "branch": "codex/v023-inline-install",
+    "head": "Installed merged main 391918f; installation evidence and current dist.",
+    "remote_head": "main391918f; PR22 merged.",
     "working_tree": "Isolated task worktree; original main user firmware preserved."
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "in_progress",
-    "current_task": "用户授权PR22合并并覆盖安装；已删除版本更新中的nRF54L15在线安全操作中英文条目，正在执行合并验证。"
+    "status": "complete",
+    "current_task": "删除指定中英文更新条目，PR22合并、0.2.3/391918f覆盖安装及本地Skill更新完成；桌面/Web原位命名和更新面板验证通过。"
   },
   "milestones": [
     {
@@ -34,7 +34,7 @@
     },
     {
       "area": "SuperWatch界面及恢复",
-      "result": "PR20/main11d698a已安装，V4/F103127471次零错误丢样记录在PR21。本轮原位命名：5个组件用例通过（含IME、取消、失败保留、清空别名和拖拽）；生产构建及真实Chrome340px侧栏通过。详见superwatch-inline-names-20261002.md；本轮未重新安装。"
+      "result": "superwatch-inline-names-20261002.md：Python2458/2跳过、GUI762、生产及NSIS构建通过。PR22合并391918f已覆盖安装及更新Skill；中英文指定更新条目移除，真实桌面/Web中文原位命名、Escape取消、单行布局通过；退出释放通过。前版采集性能记录PR21。"
     },
     {
       "area": "0.2.2 发布、安装与固件",
@@ -65,9 +65,9 @@
     "保留正式包、唯一备份、依赖缓存和必要HIL证据。原主工作区用户固件替换不得reset。mklink-issues-pr自动任务维持暂停。"
   ],
   "hardware": {
-    "state": "本轮仅浏览器合成信号及配置API验证，未操作硬件。",
+    "state": "本轮连接设备加载符号并验证显示配置；无刷机，无新增采集性能认证；已正常关闭应用释放资源。",
     "backups": "本地.build/reports保留原始HIL证据；Gitee历史备份与清理记录在.build/artifacts/gitee-historical-backup-20260921。",
-    "installer": "当前安装版0.2.3/11d698a及本地Skill保持上轮已验证状态；原位命名尚未打包安装。"
+    "installer": "0.2.3/391918f已覆盖安装、本地Skill已同步更新；冻结资源及桌面/Web通过。"
   },
   "known_limits": [
     "有限缓冲不保证无限暂停/物理断线无损；外设轮询可能漏短脉冲，多变量不是原子快照。 VCC遥测需要配套新固件；V3仅电压，V4功率为滤波电压电流乘积，未新增校准。135项测试和固件编译不能替代真实负载精度验证。Web静态资源遗漏已修复并覆盖验收。",
@@ -80,8 +80,8 @@
     "STM32F767xG等重叠FLM型号需用户核对实际Bank模式并选择对应算法；本轮仅验证元数据、API和真实浏览器，未连接STM32F767xG真机擦写。另有26个内置FLM无扇区表且当前解析器无法解析，扇区操作继续禁用，需可信Pack或厂商几何资料。"
   ],
   "next_actions": [
-    "完成PR22全量门禁，合并后从合并提交构建本地NSIS、覆盖安装并验证原位命名。",
-    "内部保留既有nRF54L15 GUI验收边界；仅删除面向用户的指定更新条目。"
+    "本轮功能及本地安装完成，验收记录通过独立PR留档。",
+    "保留历史硬件验收边界及nRF54L15 GUI豁免；正式发布/更新渠道未变。"
   ],
   "continuation_protocol": [
     "先核对 Git、任务和设备状态；仅按需读相关验证报告，不加载历史流水账。"
