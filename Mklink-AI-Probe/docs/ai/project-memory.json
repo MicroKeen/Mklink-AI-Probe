@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-02T22:20:14.657711+08:00",
+  "updated_at": "2026-10-02T22:42:42.849704+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
-    "branch": "codex/superwatch-group-plots",
-    "head": "SuperWatch unified groups and point rendering based on main ef8955d; ready for PR.",
-    "remote_head": "main ef8955dc71df; PR16 merged; PR17 release-verification records remain separate.",
+    "branch": "codex/v023-group-plots-install",
+    "head": "Install evidence and fresh production assets from merged main 1a44c92.",
+    "remote_head": "main 1a44c92: PR18 merged; PR17 remains separate.",
     "working_tree": "Isolated task worktree; original main user firmware preserved."
   },
   "mission": {
@@ -14,7 +14,7 @@
   },
   "current_session": {
     "status": "complete",
-    "current_task": "统一 SuperWatch 分组与波形区、可复制组名、采样点显示，并精简0.2.3更新说明；已验证，待PR整合。"
+    "current_task": "PR18已合并，1a44c92本地0.2.3覆盖安装及Skill更新完成；Web/桌面和三路实测通过。"
   },
   "milestones": [
     {
@@ -34,7 +34,7 @@
     },
     {
       "area": "SuperWatch界面及恢复",
-      "result": "superwatch-group-plots-20261002.md：Python8、GUI全量759及最后定向103、生产构建通过。真实Chrome+合成信号验证三个分组/波形区、同组多信号、别名、点模式与加粗、折叠和刷新恢复。未操作当前用户设备；未重装。 历史实机及桌面工作区记录见superwatch-workspace-20261002.md。"
+      "result": "superwatch-group-plots-20261002.md：合并前Python2457/2跳过、GUI759；1a44c92 NSIS覆盖安装、系统PATH/冻结资源、Web/桌面页脚与三路110693次采集零错误/丢样通过。旧配置迁移、采样点与强调通过；用户正在操作，未完成新版最终退出端口释放检查。"
     },
     {
       "area": "0.2.2 发布、安装与固件",
@@ -65,9 +65,9 @@
     "保留正式包、唯一备份、依赖缓存和必要HIL证据。原主工作区用户固件替换不得reset。mklink-issues-pr自动任务维持暂停。"
   ],
   "hardware": {
-    "state": "本轮仅显示配置验证：独立服务及合成信号；用户8765服务未干预，未操作下载器/目标固件。",
+    "state": "本轮安装后三路vofa_test信号110693次读取零错误/丢样；停止采集并断开设备，浏览器退出，原生窗口因用户操作保留。无固件/目标变量写入。",
     "backups": "本地.build/reports保留原始HIL证据；Gitee历史备份与清理记录在.build/artifacts/gitee-historical-backup-20260921。",
-    "installer": "上轮已覆盖安装ef8955d本地0.2.3候选并更新本地Skill；验收记录PR17。本轮分组/点模式尚未打包覆盖安装。"
+    "installer": "已覆盖安装1a44c92本地0.2.3 NSIS；SHA256 0f7d1c6371fb1bc724f77b8f7febc70f781038d275d1fbe83f822f1b41e5fd0f。本地Skill同源更新，ZIP d6ef06dcd07647ed299fd22d6f3d7799952d69746e00ca16e957f02a7872143e。"
   },
   "known_limits": [
     "有限缓冲不保证无限暂停/物理断线无损；外设轮询可能漏短脉冲，多变量不是原子快照。 VCC遥测需要配套新固件；V3仅电压，V4功率为滤波电压电流乘积，未新增校准。135项测试和固件编译不能替代真实负载精度验证。Web静态资源遗漏已修复并覆盖验收。",
@@ -80,8 +80,8 @@
     "STM32F767xG等重叠FLM型号需用户核对实际Bank模式并选择对应算法；本轮仅验证元数据、API和真实浏览器，未连接STM32F767xG真机擦写。另有26个内置FLM无扇区表且当前解析器无法解析，扇区操作继续禁用，需可信Pack或厂商几何资料。"
   ],
   "next_actions": [
-    "推送统一分组/采样点及精简更新说明PR；等待新的合并与覆盖安装授权。PR17上轮发布验证记录仍独立待整合。",
-    "保留nRF54L15 GUI豁免及既有硬件验收边界；客户原始ELF仍待提供。"
+    "提交本轮覆盖安装验收记录和对应Web构建资产；PR17上轮验收记录仍独立待整合。",
+    "保留nRF54L15 GUI豁免和本轮最终退出未验证边界；未公开发布0.2.3。"
   ],
   "continuation_protocol": [
     "先核对 Git、任务和设备状态；仅按需读相关验证报告，不加载历史流水账。"
