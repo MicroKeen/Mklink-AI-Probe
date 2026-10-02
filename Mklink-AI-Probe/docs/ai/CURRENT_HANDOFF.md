@@ -4,12 +4,12 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-02T20:13:00.1512261+08:00`
-- 分支：`codex/superwatch-workspace`
-- HEAD：`SuperWatch workspace feature based on main 0cee0fae294a; awaiting PR integration.`
-- 远端 HEAD：`main 0cee0fae294a; original PRs #9–#15 integrated.`
-- 工作树：Isolated feature worktree; original main user firmware preserved.
-- 当前任务：SuperWatch分组/强调/中文别名/专注/多波形区/空格AND搜索与深层bat_num搜索实现并验证；待PR合并及安装包安排。
+- 更新时间：`2026-10-02T20:59:28.8916059+08:00`
+- 分支：`codex/v023-workspace-release-validation`
+- HEAD：`Release validation report and production assets from merged main ef8955d.`
+- 远端 HEAD：`PR #16 merged; microkeen/main ef8955dc71df819ec81180584b4694229affcc29.`
+- 工作树：Only generated production assets and acceptance documentation; original main user firmware preserved.
+- 当前任务：PR16已合并；0.2.3 ef8955d NSIS覆盖安装与本地Skill同步完成，受限PATH、三端F103、工作区、实时写入、回放和退出释放验收通过。未签名或公开发布。
 - 状态：`complete`
 
 ## 里程碑
@@ -18,7 +18,7 @@
 
 ## 验证证据
 
-- **0.2.3集成验收**：docs/verification/v0.2.3-integration-20261002.md：集成Python2446/GUI755/Rust19；打包修复Python2449通过/2跳过、GUI755及生产/NSIS构建通过。安装版HPM RAM128项、ROM烧录51244字节回读、RTT/SystemView、Web/桌面实时写入、2648行CLI日志回放一致；新Skill CLI2714样本通过。修复包覆盖安装、受限PATH、Web入口、7059型号/2224算法及退出释放通过。
+- **0.2.3集成验收**：v0.2.3-workspace-installed-20261002.md：ef8955d新NSIS覆盖成功、health正常、无Python子进程、Web/原生同构建号、41Web文件及7059/2224算法完整；F103应用114840字节回读一致、双客户端194956采样零读取错误/丢样、live写入恢复、CLI2643行双端回放、RTT317行/SystemView18945事件，正常退出释放。此前HPM及安装集成见v0.2.3-integration-20261002.md。
 - **SuperWatch实时写入及回放**：superwatch-live-write-20261002.md、superwatch-live-write-v23-20261002.md、superwatch-live-write-hpm6e80-20261002.md和superwatch-replay-20261002.md记录各版本实机及浏览器验证。V4 HPM需DUMP_WRITE_HPM=1；本轮V2/V3未更新。
 - **SuperWatch界面及恢复**：superwatch-workspace-20261002.md：Python2454/2跳过，GUI759，生产前端及Tauri开发构建通过。V4+F103六通道三波形区，Web678438次/桌面572115次读取错误与丢样0；中文名称、分组折叠、专注、拖动分隔与20万行CSV跨端回放通过。深层bat_num夹具回归通过，客户原ELF未提供。历史界面恢复见issue-7-variable-panel-20261002.md、issue-8-superwatch-recovery-20261002.md。
 - **0.2.2 发布、安装与固件**：docs/verification/v0.2.2-release-final.md：Python2306通过/2跳过，GUI720、Rust19通过；正式NSIS87.6MiB，覆盖安装、内置后端、7059型号/2224FLM哈希、退出释放、更新签名及三端公开索引通过。 HPMLinkV4.5.1、MicroLinkV4.5.1/V3.5.0/V2.8.0已公开下载校验；25项发布/升级测试通过。V2 RBL头/体CRC、长度及程序版本验证，打包头V1.0.0保留原件。此发布轮未刷机，不新增硬件认证。 PR #6同步四份固件至源码目录，合并前Python2306/2跳过、GUI720及生产构建通过。
@@ -37,14 +37,14 @@
 
 ## 真机环境
 
-- **state**：V4 + STM32F103RET6工作区验证完成；本轮无目标变量/固件写入，CFSR/HFSR零、心跳递增，采集停止并释放，原项目目录恢复，测试桌面/浏览器退出。
+- **state**：V4+STM32F103RET6验收完成；比例系数及RAM测试区恢复，CFSR/HFSR零；设备断开、原项目目录恢复、测试浏览器/桌面退出、8765释放。本轮未更新固件。
 - **backups**：本地.build/reports保留原始HIL证据；Gitee历史备份与清理记录在.build/artifacts/gitee-historical-backup-20260921。
-- **installer**：已安装22669a7修复NSIS，89.2MiB，SHA256 db7481c25a5ef816d3a71780c4aa756d0574e7d7d0f307890ba946c60e686eea。本地Skill源码575f17f，ZIP SHA256 ff1a6c2cc7907f138ba1b9ef45d137d6dbf7f8ed0b1228c5a3eaa848894689e7。
+- **installer**：已安装0.2.3 ef8955d本地NSIS，SHA256 8bfb98da7c6c83ff519225546f93b49a772df8b7784e8c3a9a578d830f8916a8；本地Skill同源码及生产Web资源，ZIP SHA256 1cc6240a78828a2b8c1bd64d1c699b97d05f9ea7c5d369b348af6723d730601f。
 
 ## 下一动作
 
-1. 推送SuperWatch工作区功能PR，待明确合并授权；随后再安排NSIS覆盖安装。当前开发桌面验收不等于新安装包验收。
-2. 客户提供原始ELF后复核HouTai_data.Prama_Set.bat_num；保留nRF54L15 GUI豁免与既有实测边界。
+1. 整合本轮生产资源及安装验证报告PR。公开发布需明确授权后准备签名、Site Agent和公开下载/索引验证。
+2. 保留nRF54L15 GUI已确认豁免与其他验收边界；客户原始ELF未提供，bat_num仅有确定性回归用例。
 
 ## 已知限制
 
