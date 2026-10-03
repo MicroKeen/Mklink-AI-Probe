@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-03T00:21:04.7235043+08:00`
-- 分支：`codex/superwatch-drag-groups`
-- HEAD：`Pointer-based group drag fix based on main 391918f.`
-- 远端 HEAD：`main 391918f; PR23 retains installation evidence.`
+- 更新时间：`2026-10-03T09:28:31.0297632+08:00`
+- 分支：`codex/superwatch-drag-install`
+- HEAD：`Installation evidence based on merged main ae83a37.`
+- 远端 HEAD：`PR24 merged to main ae83a3774c60b4b03b754013ab4bb7604cb81bc6.`
 - 工作树：Isolated task worktree; original main user firmware preserved.
-- 当前任务：修复Windows桌面SuperWatch拖入分组失败；真实桌面与浏览器拖动通过，提交PR待合并。
-- 状态：`in_progress`
+- 当前任务：PR24已合并，0.2.3/ae83a37已覆盖安装；安装版桌面拖入分组及Web同步通过。
+- 状态：`complete`
 
 ## 里程碑
 
@@ -20,7 +20,7 @@
 
 - **0.2.3集成验收**：docs/verification/v0.2.3-integration-20261002.md：集成Python2446/GUI755/Rust19；打包修复Python2449通过/2跳过、GUI755及生产/NSIS构建通过。安装版HPM RAM128项、ROM烧录51244字节回读、RTT/SystemView、Web/桌面实时写入、2648行CLI日志回放一致；新Skill CLI2714样本通过。修复包覆盖安装、受限PATH、Web入口、7059型号/2224算法及退出释放通过。
 - **SuperWatch实时写入及回放**：superwatch-live-write-20261002.md、superwatch-live-write-v23-20261002.md、superwatch-live-write-hpm6e80-20261002.md和superwatch-replay-20261002.md记录各版本实机及浏览器验证。V4 HPM需DUMP_WRITE_HPM=1；本轮V2/V3未更新。
-- **SuperWatch界面及恢复**：PR22/main391918f已覆盖安装，安装记录保存在PR23。本轮改用Pointer Events修复Tauri拦截HTML5拖动；桌面真实鼠标移入普通组及折叠空组、浏览器合成信号拖动通过，GUI762项及生产/原生构建通过。详见superwatch-drag-groups-20261003.md；此修复尚未安装。
+- **SuperWatch界面及恢复**：PR24/main ae83a37修复Tauri拦截HTML5拖动；Python2458通过/2跳过，GUI762、生产/NSIS构建通过；覆盖安装后桌面真实鼠标移组、API持久化与Web同步通过。详见superwatch-drag-groups-20261003.md。
 - **0.2.2 发布、安装与固件**：docs/verification/v0.2.2-release-final.md：Python2306通过/2跳过，GUI720、Rust19通过；正式NSIS87.6MiB，覆盖安装、内置后端、7059型号/2224FLM哈希、退出释放、更新签名及三端公开索引通过。 HPMLinkV4.5.1、MicroLinkV4.5.1/V3.5.0/V2.8.0已公开下载校验；25项发布/升级测试通过。V2 RBL头/体CRC、长度及程序版本验证，打包头V1.0.0保留原件。此发布轮未刷机，不新增硬件认证。 PR #6同步四份固件至源码目录，合并前Python2306/2跳过、GUI720及生产构建通过。
 - **nRF54L15保护**：Python真机 APPROTECT/SECUREAPPROTECT 写入、复位保护状态3、AHB关闭、CTRL-AP恢复0.923秒、1560576字节全空检查、客户HEX恢复校验通过。原始证据保存在用户测试目录 .mklink/security_roundtrip_20260924.json。别名与算法目录回归19项通过。
 - **0.2.3在线烧录扇区几何修复**：docs/verification/v0.2.3-sector-geometry-20260924.md：审计7059型号，27个存在地址重叠且扇区声明冲突，STM32F767xG 双Bank/单Bank分别16/32KiB。按所选FLM绑定检查、映射和任务，未选择或冲突自定义FLM时拒绝；Pack优先使用FLM可变扇区范围，缺口和不完整尾部保持不可验证。Python全量2326通过/2跳过，最后冲突保护定向1项通过；GUI全量723、最后按钮门禁定向97项通过，生产Web构建与真实Chrome入口检查通过。未执行真机擦写。
@@ -37,14 +37,13 @@
 
 ## 真机环境
 
-- **state**：V4/F103已连接用于桌面信号分组验证，采样停止；本轮未写入目标内存或固件。
+- **state**：V4/F103连接进行安装版分组验证后已断开；未写入目标内存或固件。
 - **backups**：本地.build/reports保留原始HIL证据；Gitee历史备份与清理记录在.build/artifacts/gitee-historical-backup-20260921。
-- **installer**：当前安装版0.2.3/391918f及本地Skill已验证；拖动修复仅测试原生构建，尚未覆盖安装。
+- **installer**：本地NSIS 0.2.3/ae83a37覆盖安装成功；真实桌面拖动、Web入口与分组同步、内置算法检查通过。
 
 ## 下一动作
 
-1. 提交拖动修复PR；获授权合并时执行完整合并门禁及覆盖安装。
-2. 内部保留既有nRF54L15 GUI验收边界。
+1. 等待下一项开发任务；当前本地安装已包含拖入分组修复。
 
 ## 已知限制
 
