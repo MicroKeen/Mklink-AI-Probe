@@ -22,6 +22,7 @@ import type {
 import { toHexPayload } from '../lib/rttTransmit'
 import type { RttEncoding } from '../lib/desktopSettings'
 import { API_BASE } from '../lib/runtimeEndpoint'
+import { sharedRuntime } from './useBackendHealth'
 import { trackSymbolSource } from '../lib/trackedSymbolSource'
 import { refreshRttAddressForSymbol } from '../lib/rttSymbolAddress'
 
@@ -61,6 +62,24 @@ const deviceStatus = ref<DeviceStatus>({
 let statusInterval: ReturnType<typeof setInterval> | null = null
 
 export function useMklinkApi() {
+  async function exclusiveJob(action: string, args: object = {}) {
+    interface Job { job_id: string; state: string; result: unknown; error?: string }
+    const requestId = crypto.randomUUID()
+    let job: Job
+    try {
+      job = await api<Job>('/api/runtime/jobs/', { method: 'POST', body: JSON.stringify({
+        action, arguments: args, request_id: requestId, confirm: true,
+      }) })
+      while (job.state === 'running') {
+        await new Promise(resolve => setTimeout(resolve, 300))
+        job = await api<Job>(`/api/runtime/jobs/${job.job_id}`)
+      }
+    } catch (error) {
+      throw new Error(`${String(error)} · Request ${requestId}. Check backend jobs before starting again.`)
+    }
+    if (job.state !== 'succeeded') throw new Error(`${job.state}: ${job.error || JSON.stringify(job.result)} · ${job.job_id}`)
+    return job.result
+  }
   async function listPorts(): Promise<PortInfo[]> {
     return api('/api/ports')
   }
@@ -161,6 +180,19 @@ export function useMklinkApi() {
   }
 
   async function connectDevice(req: ConnectRequest): Promise<DeviceStatus> {
+    if (sharedRuntime.value) {
+      const selection = await api<{ same_runtime: boolean; runtime_url?: string; reload?: boolean }>('/api/runtime/select', {
+        method: 'POST', body: JSON.stringify({ port: req.port }),
+      })
+      if (selection.runtime_url) {
+        window.location.assign(selection.runtime_url)
+        return deviceStatus.value
+      }
+      if (selection.reload) {
+        window.location.reload()
+        return deviceStatus.value
+      }
+    }
     const result = await api<DeviceStatus>('/api/device/connect', {
       method: 'POST',
       body: JSON.stringify(req),
@@ -209,6 +241,7 @@ export function useMklinkApi() {
   }
 
   async function flashDevice(req: FlashRequest) {
+    if (sharedRuntime.value) return exclusiveJob('flash', req)
     return api('/api/device/flash', {
       method: 'POST',
       body: JSON.stringify(req),
@@ -216,6 +249,7 @@ export function useMklinkApi() {
   }
 
   async function resetDevice() {
+    if (sharedRuntime.value) return exclusiveJob('reset')
     return api('/api/device/reset', { method: 'POST' })
   }
 
@@ -236,6 +270,7 @@ export function useMklinkApi() {
   }
 
   async function eraseDevice() {
+    if (sharedRuntime.value) return exclusiveJob('erase')
     return api('/api/device/erase', { method: 'POST' })
   }
 
@@ -262,13 +297,6 @@ export function useMklinkApi() {
       clearInterval(statusInterval)
       statusInterval = null
     }
-  }
-
-  async function setProjectRoot(path: string): Promise<{ project_root: string }> {
-    return api('/api/project-root', {
-      method: 'PUT',
-      body: JSON.stringify({ path }),
-    })
   }
 
   async function getProjectRoot(): Promise<{ project_root: string }> {
@@ -353,7 +381,6 @@ export function useMklinkApi() {
     parseAxf,
     startStatusPolling,
     stopStatusPolling,
-    setProjectRoot,
     getProjectRoot,
     browseProjectRoot,
     findRtt,

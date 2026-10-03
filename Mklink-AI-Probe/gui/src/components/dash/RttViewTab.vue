@@ -33,10 +33,11 @@
         :busy="loadingSymbols"
         @primary="loadSymbolFile"
       />
+      <p v-if="sourceChangeNotice" data-testid="rtt-source-notice" role="status">{{ sourceChangeNotice }}</p>
       <div class="rtt-view-toolbar">
         <div class="rtt-primary-tools">
           <ControlToolbar
-            :state="toolbarState" :error="runtimeError || dash.error.value"
+            :state="toolbarState" :error="runtimeError || actionError || dash.error.value"
             :device-connected="deviceConnected && !searching"
             @start="onStart" @pause="onPauseRender" @resume="onResumeRender" @stop="onStop"
           />
@@ -217,6 +218,8 @@ const formatHelpOpen = ref(false)
 const hasChartData = ref(false)
 const renderPaused = ref(false)
 const runtimeError = ref<string | null>(null)
+const sourceChangeNotice = ref<string | null>(null)
+const actionError = ref<string | null>(null)
 const RTT_CHANNEL = 0
 // Zero lets the host bound the default scan to the actual RAM map.
 const RTT_SEARCH_SIZE = 0
@@ -734,14 +737,12 @@ async function refreshStatus(): Promise<Record<string, any> | null> {
       const changed = status.file_source_change
       if (changed && changed.sequence !== lastSourceChange) {
         lastSourceChange = changed.sequence
-        if (changed.rtt_addr && isRttAddress(changed.rtt_addr)) {
-          rttAddress.value = changed.rtt_addr
-          persistSettings({ ...settings.value, rttAddress: changed.rtt_addr })
-        } else {
-          rttAddress.value = ''
-          persistSettings({ ...settings.value, rttAddress: '' })
+        const message = changed.error || changed.message || tr('符号文件已变化，请重新检测地址', 'Symbol file changed. Detect the address again.')
+        sourceChangeNotice.value = message
+        if (!changed.pending) {
+          rttAddress.value = changed.rtt_addr && isRttAddress(changed.rtt_addr) ? changed.rtt_addr : ''
+          persistSettings({ ...settings.value, rttAddress: rttAddress.value })
         }
-        runtimeError.value = changed.error || changed.message || tr('符号文件已变化，请重新检测地址', 'Symbol file changed. Detect the address again.')
       }
       statusKnown.value = true
       statusRunning.value = status.running === true
@@ -834,6 +835,8 @@ async function onStart(): Promise<void> {
     resetChartData()
     renderPaused.value = false
     runtimeError.value = null
+    actionError.value = null
+    sourceChangeNotice.value = null
     scheduler.start()
     logBinary.reset()
     terminalBinary.reset()
@@ -867,14 +870,22 @@ function onResumeRender(): void {
 }
 
 async function onStop(): Promise<void> {
+  if (stopping.value) return
   stopping.value = true
-  renderPaused.value = false
-  statusRunning.value = false
-  downBuffers.value = []
-  detachBinary()
+  actionError.value = null
   try {
     const stopped = await dash.stop()
-    runtimeError.value = stopped ? null : (dash.error.value || tr('RTT 停止未完成，请再次停止', 'RTT did not stop completely. Stop it again.'))
+    if (stopped) {
+      renderPaused.value = false
+      statusRunning.value = false
+      downBuffers.value = []
+      detachBinary()
+      runtimeError.value = null
+    } else {
+      // A shared subscriber can refuse stop while the producer remains healthy.
+      // Preserve this window's stream and render state until stop is accepted.
+      actionError.value = dash.error.value || tr('RTT 停止未完成，请再次停止', 'RTT did not stop completely. Stop it again.')
+    }
   } finally {
     stopping.value = false
   }

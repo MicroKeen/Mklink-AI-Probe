@@ -27,7 +27,7 @@ from mklink._types import (
     MKLINK_IDENTITY_COMMAND,
     MKLINK_IDENTITY_TOKEN,
 )
-from mklink.serial._port import _PortLock
+from mklink.local_resources import _PortLock
 
 # SystemView 在二进制流中使用 0x02 停止帧；随后发送文本命令让固件状态机
 # 回到 Pika REPL。必须先独立尝试这一序列，避免后续 RTT/VOFA 命令在状态机
@@ -117,8 +117,9 @@ class MKLinkSerialBridge:
             for line in response.splitlines()
         )
 
-    def connect(self) -> bool:
+    def connect(self, *, recover_stream: bool = True) -> bool:
         """打开串口并同步设备状态（等待 >>> 提示符）。"""
+        from mklink.probes import require_runtime_port
         self._transport_error = None
         # 进程级互斥：获取文件锁
         if not self._port_lock.acquire():
@@ -127,14 +128,18 @@ class MKLinkSerialBridge:
             return False
 
         try:
+            require_runtime_port(self._port)
             # The bundled desktop/CLI/MCP Python runtime can pause all threads
             # during GC or native parsing. Keep Windows CDC draining elsewhere.
             isolated = (os.name == 'nt' and not getattr(sys, 'frozen', False)
                         and getattr(serial.Serial, '__module__', '') == 'serial.serialwin32')
             constructor = IsolatedSerial if isolated else serial.Serial
             self._serial = constructor(self._port, self._baudrate, timeout=0.01)
-        except serial.SerialException as e:
-            self._port_lock.release()
+            # Opening the Windows worker/serial handle can take time. Recheck
+            # before clearing buffers, starting a reader or sending sync/stop.
+            require_runtime_port(self._port)
+        except (serial.SerialException, ConnectionError) as e:
+            self.close()
             msg = str(e).lower()
             if "access" in msg or "denied" in msg or "already open" in msg or "in use" in msg:
                 print(f"[FAIL] 端口 {self._port} 被占用: {e}")
@@ -142,6 +147,9 @@ class MKLinkSerialBridge:
             else:
                 print(f"[FAIL] 无法打开端口 {self._port}: {e}")
             return False
+        except BaseException:
+            self.close()
+            raise
         self._ctx.state = DeviceState.CONNECTING
         self._running = True
 
@@ -177,6 +185,10 @@ class MKLinkSerialBridge:
             self._serial.reset_input_buffer()
             with self._buffer_lock:
                 self._response_buffer.clear()
+
+        if not recover_stream:
+            self.close()
+            return False
 
         # --- 正常握手失败，尝试流模式恢复 ---
         print("[WARN] 握手超时，设备可能处于流模式，尝试恢复...")

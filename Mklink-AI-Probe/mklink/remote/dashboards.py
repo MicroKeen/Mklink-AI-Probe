@@ -1595,6 +1595,8 @@ class SuperWatchStreamManager:
             empty_channels_json,
             1,
         )
+        self._latest_sample: dict | None = None
+        self._latest_sample_sequence = 0
         self._metadata_publish_lock = threading.Lock()
         self._last_metadata_publish_monotonic = 0.0
         self._config_generation = 0
@@ -2232,13 +2234,16 @@ class SuperWatchStreamManager:
                     except Exception as exc:
                         raise SuperWatchTransactionError("restore", exc) from exc
 
-    def select_peripherals(self, device, target) -> dict:
+    def select_peripherals(self, device, target=None, *, target_id=None, chip=None, svd=None) -> dict:
         from mklink.peripheral_watch import load_catalog, save_catalog_selection
 
         with self._operation_lock:
             if self.running or (self._thread and self._thread.is_alive()):
                 raise RuntimeError("Stop SuperWatch before changing the peripheral chip")
-            catalog = load_catalog(getattr(device, "_project_root", "."), target=target)
+            catalog = load_catalog(getattr(device, "_project_root", "."), target=target,
+                                   target_id=target_id, chip=chip, svd=svd)
+            if catalog is None:
+                raise ValueError("Select one target_id, chip or SVD")
             items, skipped = catalog.items, catalog.skipped
             self.prepare(device)
             save_catalog_selection(getattr(device, "_project_root", "."), catalog)
@@ -2250,15 +2255,16 @@ class SuperWatchStreamManager:
                 from mklink.superwatch import catalog_registers
 
                 self._runtime.svd_registers = catalog_registers(catalog)
-                self._peripheral_selection = {**target.public(), "skipped_registers": skipped}
+                self._peripheral_selection = {**catalog.selection, "skipped_registers": skipped}
                 self._rebuild_metadata_cache_locked(publish=True)
             return self.peripheral_catalog()
 
-    def peripheral_catalog(self) -> dict:
+    def peripheral_catalog(self, query: str = "") -> dict:
         from mklink.superwatch import make_channel_metadata
 
         with self._read_lock:
-            items = list(getattr(self._runtime, "peripheral_items", {}).values())
+            items = [item for item in getattr(self._runtime, "peripheral_items", {}).values()
+                     if query.casefold() in item.name.casefold()]
             metadata = make_channel_metadata(items)
             return {"selection": getattr(self, "_peripheral_selection", None),
                     "items": [{"name": item.name, **metadata[item.name]} for item in items]}
@@ -2544,6 +2550,16 @@ class SuperWatchStreamManager:
         times = self._pending_sample_times
         self._pending_sample_times = array("d")
         sample_count = self._pending_sample_count
+        channel_count = self._pending_channel_count
+        self._latest_sample_sequence += sample_count
+        self._latest_sample = {
+            "sequence": self._latest_sample_sequence,
+            "metadata_version": self._metadata_cache[2],
+            "channels": json.loads(self._metadata_cache[1]),
+            "values": [value if math.isfinite(value) else None for value in values[-channel_count:]],
+            "sample_time_ms": float(times[-1]) if times and math.isfinite(times[-1]) else None,
+            "received_monotonic": time.monotonic(),
+        }
         self._pending_sample_count = 0
         self._pending_channel_count = 0
         self._pending_started_at = None
@@ -2568,6 +2584,16 @@ class SuperWatchStreamManager:
             logger.warning("SuperWatch binary batch dropped: %s", exc)
             return False
         return True
+
+    def get_latest_sample(self) -> dict:
+        """Return the last acquisition row without starting another hardware read."""
+        with self._read_lock:
+            sample = self._latest_sample
+            if sample is None or sample["metadata_version"] != self._metadata_cache[2]:
+                return {"sample": None, "running": self.running}
+            return {"sample": {key: value for key, value in sample.items() if key != "received_monotonic"},
+                    "age_seconds": max(0.0, time.monotonic() - sample["received_monotonic"]),
+                    "running": self.running}
 
     def search(self, query: str) -> list[dict]:
         if self._runtime is None:
@@ -3858,6 +3884,12 @@ def get_managers() -> dict[str, Any]:
     if "systemview" not in _managers:
         _managers["systemview"] = SystemViewStreamManager()
     return _managers
+
+
+def active_bridge_dashboards() -> list[str]:
+    """Captures using the probe's CDC bridge, excluding independent UART/Modbus."""
+    managers = get_managers()
+    return [name for name in BRIDGE_DASHBOARD_TYPES if getattr(managers.get(name), 'running', False)]
 
 
 def stop_bridge_dashboards(

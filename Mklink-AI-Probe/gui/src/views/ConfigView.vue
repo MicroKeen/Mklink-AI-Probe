@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref, onMounted, onUnmounted } from 'vue'
+import { computed, reactive, ref, watch, onMounted, onUnmounted } from 'vue'
 import { Download, RefreshCw, RotateCcw, Tag, Unplug, Usb } from '@lucide/vue'
 import { invoke } from '@tauri-apps/api/core'
 import { useMklinkApi } from '../composables/useMklinkApi'
@@ -17,10 +17,12 @@ import {
 import { pickSymbolFile, type PickedFile } from '../lib/filePicker'
 import { saveBlobFile } from '../lib/downloadTextFile'
 import { refreshRttAddressForSymbol } from '../lib/rttSymbolAddress'
-import { IS_TAURI } from '../lib/runtimeEndpoint'
+import { API_BASE, IS_TAURI } from '../lib/runtimeEndpoint'
+import { sharedRuntime } from '../composables/useBackendHealth'
 import type { AxlStatus, FileSourceKind, PortInfo, ProbeFirmwareCheck, ProbeFirmwareUpgrade, ProjectConfig } from '../types/mklink'
 import ConfigSectionNav, { type ConfigSection } from '../components/config/ConfigSectionNav.vue'
 import FileSourcesPanel from '../components/config/FileSourcesPanel.vue'
+import RuntimePanel from '../components/config/RuntimePanel.vue'
 
 const {
   deviceStatus,
@@ -45,6 +47,32 @@ const config = ref<ProjectConfig>({})
 const localPort = ref('')
 const portOptions = ref<{ label: string; value: string }[]>([])
 const localPortExplicit = ref(false)
+const probePorts = ref<PortInfo[]>([])
+const probeAlias = ref('')
+const selectedProbe = computed(() => probePorts.value.find(port => port.device === localPort.value))
+watch(selectedProbe, probe => { probeAlias.value = probe?.alias || '' })
+
+async function saveProbeAlias() {
+  try {
+    const response = await fetch(`${API_BASE}/api/runtime/alias`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ probe: selectedProbe.value?.probe_id, alias: probeAlias.value }),
+    })
+    if (!response.ok) throw new Error((await response.json()).detail)
+    await refreshPorts()
+    toast.success(tr('本机别名已保存', 'Local alias saved'))
+  } catch (error: any) { toast.error(error.message) }
+}
+
+async function openProbeWindow() {
+  try {
+    const response = await fetch(`${API_BASE}/api/runtime/select`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ probe: selectedProbe.value?.probe_id, open_browser: true }),
+    })
+    if (!response.ok) throw new Error((await response.json()).detail)
+  } catch (error: any) { toast.error(error.message) }
+}
 const settings = ref<DesktopSettings>(loadDesktopSettings(window.localStorage))
 
 const portsLoading = ref(false)
@@ -55,7 +83,7 @@ const browsingFiles = ref(false)
 const parsingSymbols = ref(false)
 let symbolParseGeneration = 0
 let disposed = false
-const localSaveState = ref<'idle' | 'saving' | 'saved'>('idle')
+const localSaveState = ref<'idle' | 'saving' | 'saved' | 'unconfirmed'>('idle')
 
 const remoteUrl = ref('ws://127.0.0.1:8765')
 const remoteToken = ref('')
@@ -82,8 +110,9 @@ async function refreshPorts() {
   portsLoading.value = true
   try {
     const ports: PortInfo[] = await listPorts()
+    probePorts.value = ports
     portOptions.value = ports.map(port => ({
-      label: `${port.device} — ${port.description} (${port.manufacturer})`,
+      label: `${port.alias ? port.alias + ' · ' : ''}${port.device} — ${port.description} (${port.manufacturer})`,
       value: port.device,
     }))
   } catch (error: any) {
@@ -104,10 +133,12 @@ async function loadConfig() {
 }
 
 async function saveLocalConfig() {
+  if (savingLocal.value) return
   const rawClock = String(config.value.swd_clock ?? '').trim()
   if (rawClock) {
     const clock = Number(rawClock)
     if (!Number.isInteger(clock) || !(clock >= 1 && clock <= 10_000_000 || clock === 20_000_000 || clock === 30_000_000)) {
+      localSaveState.value = 'idle'
       toast.error(tr('SWD 时钟支持 1 Hz 至 10 MHz，或 20 MHz、30 MHz 档位', 'SWD clock supports 1 Hz to 10 MHz, or the 20 MHz / 30 MHz profiles'))
       return
     }
@@ -120,22 +151,10 @@ async function saveLocalConfig() {
     swd_clock: rawClock || undefined,
   }
   try {
-    let lastError: any
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      try {
-        config.value = await updateConfig(payload)
-        lastError = null
-        break
-      } catch (error: any) {
-        lastError = error
-        if (error?.message !== 'Failed to fetch' || attempt === 2) throw error
-        await new Promise(resolve => window.setTimeout(resolve, 200 * (attempt + 1)))
-      }
-    }
-    if (lastError) throw lastError
+    config.value = await updateConfig(payload)
     localSaveState.value = 'saved'
   } catch (error: any) {
-    localSaveState.value = 'idle'
+    localSaveState.value = 'unconfirmed'
     toast.error(tr('保存配置失败: ', 'Failed to save configuration: ') + error.message)
   } finally {
     savingLocal.value = false
@@ -144,6 +163,8 @@ async function saveLocalConfig() {
 
 async function selectLocalPort() {
   localPortExplicit.value = Boolean(localPort.value.trim())
+  probeAlias.value = selectedProbe.value?.alias || ''
+  if (sharedRuntime.value) return
   await saveLocalConfig()
 }
 
@@ -439,8 +460,9 @@ onUnmounted(() => {
     <ConfigSectionNav v-model="activeSection" />
 
     <main class="section-content">
+      <RuntimePanel v-if="activeSection === 'runtime'" />
       <section
-        v-if="activeSection === 'local'"
+        v-else-if="activeSection === 'local'"
         class="card local-panel"
         data-testid="local-device-panel"
         aria-labelledby="local-device-title"
@@ -457,7 +479,7 @@ onUnmounted(() => {
 
         <div class="form-row">
           <label class="form-label" for="local-port">{{ tr('串口', 'Serial Port') }}</label>
-          <select id="local-port" v-model="localPort" class="form-select" data-testid="local-port" @change="selectLocalPort">
+          <select id="local-port" v-model="localPort" class="form-select" data-testid="local-port" :disabled="savingLocal" @change="selectLocalPort">
             <option value="">{{ tr('自动搜索', 'Auto Search') }}</option>
             <option v-for="port in portOptions" :key="port.value" :value="port.value">
               {{ port.label }}
@@ -475,6 +497,16 @@ onUnmounted(() => {
           </button>
         </div>
 
+        <div v-if="sharedRuntime && selectedProbe?.probe_id" class="form-row">
+          <label class="form-label" for="probe-alias">{{ tr('本机别名', 'Local alias') }}</label>
+          <input id="probe-alias" v-model="probeAlias" class="form-input" data-testid="probe-alias" maxlength="64" :disabled="!selectedProbe.identity_stable" />
+          <button class="btn btn-sm" data-testid="save-probe-alias" :disabled="!selectedProbe.identity_stable" @click="saveProbeAlias">{{ tr('保存别名', 'Save alias') }}</button>
+          <button class="btn btn-sm" data-testid="open-probe-window" @click="openProbeWindow">{{ tr('打开独立窗口', 'Open separate window') }}</button>
+        </div>
+        <div v-if="sharedRuntime && selectedProbe?.probe_id" class="connection-detail" data-testid="selected-probe-id">
+          {{ selectedProbe.probe_id }} · {{ tr('别名保存在本机，不修改下载器固件', 'Alias is stored on this computer; probe firmware is unchanged') }}
+        </div>
+
         <div class="form-row">
           <label class="form-label" for="swd-clock">{{ tr('SWD 时钟', 'SWD Clock') }}</label>
           <input
@@ -486,6 +518,7 @@ onUnmounted(() => {
             step="1"
             class="form-input"
             data-testid="swd-clock"
+            :disabled="savingLocal"
             :placeholder="tr('如 1000000', 'e.g. 1000000')"
             @change="saveLocalConfig"
           />
@@ -493,7 +526,7 @@ onUnmounted(() => {
 
         <div class="local-actions">
           <span class="auto-save-state" data-testid="local-auto-save">
-            {{ localSaveState === 'saving' ? tr('自动保存中...', 'Saving...') : localSaveState === 'saved' ? tr('已自动保存', 'Saved') : tr('修改后自动保存', 'Changes save automatically') }}
+            {{ localSaveState === 'saving' ? tr('自动保存中...', 'Saving...') : localSaveState === 'saved' ? tr('已自动保存', 'Saved') : localSaveState === 'unconfirmed' ? tr('保存未确认，请刷新页面核对配置', 'Save unconfirmed; refresh the page to check configuration') : tr('修改后自动保存', 'Changes save automatically') }}
           </span>
           <button
             class="btn btn-primary icon-command"

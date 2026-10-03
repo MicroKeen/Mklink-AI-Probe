@@ -318,86 +318,26 @@ class Device:
     # ------------------------------------------------------------------
     def _connect(self) -> None:
         from mklink.bridge import MKLinkSerialBridge
-        from mklink.discovery import find_mklink_cdc_port, list_available_ports
-        from mklink.project_config import load_config, save_config
-        from mklink.serial._port import _PortLock
+        from mklink.discovery import find_mklink_cdc_port
+        from mklink.project_config import load_config
 
-        automatic = self._port is None
         config = load_config(self._project_root) or {}
-        saved_port = str(config.get("com_port") or "").strip() or None
-        candidate = self._port or self._preferred_port or saved_port
-        attempted: set[str] = set()
-        candidate_attempts: dict[str, int] = {}
-        discovery_lock = None
-
-        try:
-            while True:
-                if candidate is None:
-                    if discovery_lock is None:
-                        discovery_lock = _PortLock("mklink_auto_connect")
-                        deadline = time.monotonic() + 60.0
-                        while not discovery_lock.acquire():
-                            if time.monotonic() >= deadline:
-                                break
-                            time.sleep(0.05)
-                        else:
-                            deadline = None
-                        if deadline is not None:
-                            break
-
-                    candidate = find_mklink_cdc_port(exclude_ports=set(attempted))
-                    if candidate is None:
-                        break
-
-                candidate_key = candidate.strip().casefold()
-                attempt = candidate_attempts.get(candidate_key, 0)
-                bridge = MKLinkSerialBridge(candidate)
-                if bridge.connect():
-                    self._bridge = bridge
-                    self._port = candidate
-                    break
-                bridge.close()
-
-                # USB CDC ports can be visible a short moment before the
-                # firmware REPL is ready. Retry the same candidate once so a
-                # transient enumeration race does not require a second user
-                # click. Only exhausted candidates are excluded from the next
-                # discovery pass.
-                if attempt == 0:
-                    candidate_attempts[candidate_key] = 1
-                    time.sleep(0.15)
-                    continue
-
-                attempted.add(candidate_key)
-
-                if not automatic:
-                    break
-                candidate = None
-        finally:
-            if discovery_lock is not None:
-                discovery_lock.release()
-
-        if self._bridge is None:
-            ports = ", ".join(sorted(attempted)) or "none"
+        # COM numbers saved in a project are neither an identity nor permission
+        # to switch probes. Shared callers already supply the selected port.
+        candidate = self._port or self._preferred_port or find_mklink_cdc_port()
+        if candidate is None:
             raise DeviceNotConnectedError(
-                f"Failed to connect to an available MKLink port (tried: {ports})"
+                'No unique MKLink command port; run mklink probes list and select a probe or explicit port'
             )
-
-        if automatic and self._port != saved_port:
-            visible_ports = {
-                str(info.get("device") or "").strip().casefold()
-                for info in list_available_ports()
-            }
-            saved_port_is_present = (
-                saved_port is not None and saved_port.casefold() in visible_ports
-            )
-            if not saved_port_is_present:
-                updated = dict(config)
-                updated["com_port"] = self._port
-                try:
-                    save_config(self._project_root, updated)
-                except Exception:
-                    pass
+        bridge = MKLinkSerialBridge(candidate)
+        try:
+            if not bridge.connect():
+                raise DeviceNotConnectedError(f'Failed to connect to selected MKLink port {candidate}; no fallback attempted')
+        except BaseException:
+            bridge.close()
+            raise
+        self._bridge = bridge
+        self._port = candidate
         self._connected = True
 
         from mklink.flash import MKLinkFlash
@@ -572,6 +512,7 @@ class Device:
             info,
             axf_path=candidate,
             generation=generation,
+            project_root=self._project_root,
             ram_ranges=writable_memory_ranges(
                 candidate,
                 backend=effective_backend,
@@ -1297,20 +1238,6 @@ class Device:
                 defaults["cpu_freq_source"] = "project_info"
 
         return defaults
-
-    def _symbol_source_path(self) -> str | None:
-        if self._axf and Path(self._axf).exists():
-            return self._axf
-        try:
-            from mklink.project_config import load_project_info
-            project = load_project_info(self._project_root) or {}
-        except Exception:
-            project = {}
-        for key in ("elf_path", "axf_path", "bin_path", "hex_path"):
-            path = project.get(key) if isinstance(project, dict) else None
-            if path and Path(path).exists():
-                return str(path)
-        return None
 
     def _read_cpu_clock_hint(self) -> tuple[int, str]:
         for name in ("SystemCoreClock", "hpm_core_clock"):
@@ -2192,93 +2119,45 @@ class Device:
         self._require_connected()
         if not data:
             return
-        # cmd.write_ram 的逐字节参数在当前探针固件不稳定（写入不生效，回读为空）；
-        # 改用 cmd.flush_memory 的 bytes 表达式（与 MCP flush_memory 一致）：
-        # 全相同字节折叠为短表达式（单条可达 12 KiB），非重复数据按 30B 分块，
-        # 保证命令串 < 230（PIKA_LINE_BUFF 上限）。详见 references/flush-memory.md。
-        CHUNK = 30
-        i = 0
-        while i < len(data):
-            rest = data[i:]
-            if all(b == rest[0] for b in rest):
-                seg, step = rest, len(rest)
-                expr = f"bytes([0x{seg[0]:02X}])*{len(seg)}"
-            else:
-                seg, step = rest[:CHUNK], CHUNK
-                expr = "bytes([" + ", ".join(f"0x{b:02X}" for b in seg) + "])"
-            cmd = f"cmd.flush_memory([(0x{address + i:08X}, {expr})])"
-            self._bridge.send_command(cmd, timeout=10.0)
-            i += step
+        from mklink.memory_write import execute_flush, validate_writes
+        parsed = validate_writes([{'address': address, 'data_hex': data.hex()}])
+        result = execute_flush(self, parsed)
+        if not result['ok']:
+            raise DeviceError('Memory write failed; no remaining batches sent: ' + result['results'][-1]['message'])
 
     # ------------------------------------------------------------------
     # Variables
     # ------------------------------------------------------------------
     def read_variable(self, name: str) -> Any:
         self._require_connected()
-        if self.symbol_catalog is not None and self.symbol_catalog.is_stale():
-            self.reparse_axf_atomically()
-        if not self._dwarf_info:
-            return self._read_variable_from_map(name)
-        from mklink.watch import resolve_variable_path, decode_value
-        try:
-            addr, type_name, size, enum_values = resolve_variable_path(
-                self._dwarf_info, name
-            )
-        except KeyError:
-            descriptor = self.symbol_catalog.by_path(name) if self.symbol_catalog else None
-            if descriptor is None:
-                return self._read_variable_from_map(name)
-            from mklink.symbol_catalog import decode_descriptor
+        from mklink.symbol_catalog import SymbolCatalogError, decode_descriptor
+        catalog = self.symbol_catalog
+        if catalog is None:
+            raise SymbolCatalogError('Load an AXF/ELF catalog before variable access')
+        catalog.require_fresh_source()
+        descriptor = catalog.read_descriptor(name)
+        data = self.read_memory(descriptor.address, descriptor.size)
+        catalog.require_fresh_source()
+        if descriptor.source == 'map':
+            catalog.read_descriptor(name)
+        return decode_descriptor(descriptor, data)
 
-            return decode_descriptor(
-                descriptor, self.read_memory(descriptor.address, descriptor.size),
-            )
-        raw = self.read_memory(addr, size)
-        return decode_value(raw, type_name, enum_values, known_size=size)
-
-    def _read_variable_from_map(self, name: str) -> Any:
-        source = self._symbol_source_path()
-        if not source:
-            raise DeviceError(
-                "No AXF/ELF/MAP source available. Pass axf= to connect() for variable access."
-            )
-        from mklink.watch import resolve_map_source_variable, decode_value
-        resolved = resolve_map_source_variable(source, name)
-        if not resolved:
-            raise KeyError(f"variable '{name}' not found or has no address")
-        addr, type_name, size = resolved
-        if not size:
-            size = 4
-        raw = self.read_memory(addr, size)
-        return decode_value(raw, type_name, None, known_size=size)
+    def watch(self, names: list[str]) -> list[dict]:
+        self._require_connected()
+        from mklink.watch import read_watch_values
+        return read_watch_values(self, names)
 
     def write_variable(self, name: str, value: int) -> None:
         self._require_connected()
-        if self.symbol_catalog is not None and self.symbol_catalog.is_stale():
-            raise DeviceError("AXF content changed; reparse and confirm target firmware before writing")
-        if not self._dwarf_info:
+        catalog = self.symbol_catalog
+        if catalog is None:
             raise DeviceError(
-                "No AXF/ELF loaded. Pass axf= to connect() for variable access."
+                "No AXF symbol catalog loaded. Pass axf= to connect() for variable access."
             )
-        from mklink.watch import resolve_variable_path, TYPE_FORMATS
-        try:
-            addr, type_name, size, _ = resolve_variable_path(self._dwarf_info, name)
-        except KeyError:
-            descriptor = self.symbol_catalog.by_path(name) if self.symbol_catalog else None
-            if descriptor is None:
-                raise
-            from mklink.symbol_catalog import encode_descriptor
+        from mklink.symbol_catalog import encode_descriptor
 
-            self.write_memory(descriptor.address, encode_descriptor(descriptor, value))
-            return
-        key = type_name.strip().lower()
-        fmt_entry = TYPE_FORMATS.get(key)
-        if fmt_entry:
-            fmt, _ = fmt_entry
-        else:
-            fmt = {1: "<B", 2: "<H", 4: "<I", 8: "<Q"}.get(size, "<I")
-        data = struct.pack(fmt, value)
-        self.write_memory(addr, data)
+        descriptor = catalog.require(name, catalog.generation)
+        self.write_memory(descriptor.address, encode_descriptor(descriptor, value))
 
     # ------------------------------------------------------------------
     # Registers
@@ -2558,7 +2437,7 @@ def connect(
 
     Args:
         port: Explicit COM port. Auto-detected if not specified.
-        preferred_port: Soft preference used before automatic discovery.
+        preferred_port: Previously selected port; a failed connection never falls back.
         axf: Path to AXF/ELF file for symbol resolution.
         mcu: MCU profile hint (e.g. "stm32f4").
         project_root: Project root for .mklink/ config lookup.

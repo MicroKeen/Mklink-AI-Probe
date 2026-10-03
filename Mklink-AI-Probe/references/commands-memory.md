@@ -5,6 +5,18 @@
 
 ## 内存操作
 
+### 共享变量与 C 布局（0.3.0）
+
+变量访问使用后台当前符号目录。C 布局覆盖后，读取、写入、搜索及 SuperWatch 使用
+覆盖字段的地址和类型；删除的字段不再回退到原 DWARF。覆盖的一维标量数组可以
+分页浏览和选择快照范围。C 布局必须完整落在目录已识别的可写内存范围内。
+
+普通变量读取可读取已解析的 Flash 标量，但不会将它加入可写目录。变量写入复用
+目录的类型编码与范围检查；未知字段、不可写地址及不合法的类型值返回 422。
+共享 `write_variable` 仍接收整数参数；布尔、浮点和其他类型的 GUI/MCP 写入使用
+既有 SuperWatch 类型化写入。AXF 内容变化或丢失返回 409，不自动重解析或重放。
+
+
 ### 读取 RAM
 
 #### `python -m mklink read-ram --addr <地址> [--size <字节数>] [--port COM6] [--save <文件名>]`
@@ -142,90 +154,56 @@ python -m mklink dump-memory 0x08000000:256 --frames 0 --duration 1 --save flash
 - 单次 `cmd.dump_memory()` 总长度默认 **512 KiB**（固件 V4.3.3 实测整片 Flash 稳定，256 个 B1 块全 `flags=0x0000`）。**老固件**（pre-V4.3.3，BUG-5：>64 KiB 末块截尾 512B）请传 ≤32 KiB 的 `ADDR:SIZE` region 规避。
 - 如果没有解析到任何帧，CLI 会打印设备返回的可见文本，常见原因是固件未暴露 `cmd.dump_memory` 或设备仍处于异常流模式。
 
-#### `python -m mklink flush-memory <item> [<item> ...] [--verify] [--repeat N] [--interval-ms MS]`
-静默写 RAM,支持多地址多字节(内部调用 PikaScript `cmd.flush_memory()`)。与 `write-ram` 的关键区别:
+#### `python -m mklink dump-benchmark <ADDR:SIZE> ... [--probe ID] [--duration 3] [--period 0.000001] [--speed PROFILE]`
 
-- **成功无 ACK** — 设备只回显命令 + `>>>`,不输出 hexdump 预览。
-- **不得与流并发** — 虽然成功时没有 hexdump，仍必须先停止 dump/VOFA/RTT/SystemView、
-  释放连接，再在普通命令会话中写入。
-- **多字节 / 多地址** — 单次 PikaScript 调用提交多块写入,远比 `write-ram` 的循环高效。
-- **批写支持** — `--repeat N` + `--interval-ms MS` 实现周期写入(压力测试、抖动测试用)。
+通过共享后台测量完整 dump 样本的频率、有效载荷吞吐和采样间隔。
+活动 MCP 使用 `measure_dump_memory`，共享 SDK 使用同名 `call`；
+都复用既有采样会话和完整样本组装器。GUI 正在采集时返回忙，不抢停。
 
-`<item>` 格式:`ADDR:BYTE,BYTE,...` 或 `ADDR:0xBYTE 0xBYTE ...`(逗号/空格皆可,带不带 0x 前缀皆可)。
+- 1..15 个地址/大小区域，合计不超过 4096 字节；时长 0.5..30 秒，周期 1 微秒至 100 毫秒。
+- 首个完整样本最多等待 2 秒；之后开始计算时长，其中前 200 ms 为预热，
+  不计入统计。频率和分位数来自下载器时间戳，不代表主机界面刷新率。
+- B1 样本使用第一块的时间戳，所有块及区域完整后才计数；周期 `dump-memory`
+  也使用这一时间戳语义。CRC、区域、顺序或停止确认失败则整次请求失败，不重试。
+- 到时停止可能留下一个不完整样本，结果用 `incomplete_tail` 标记并排除该样本；
+  `integrity` 保留协议统计。`parser_dropped_bytes` 可包含命令回显，不能单独当作丢帧数。
+- 省略 `--speed` 保持后台当前时钟；显式指定会改变共享下载器的当前时钟，不写工程配置。
+  测量只保留间隔计数，不积累全部原始样本；完成后确认恢复命令模式再返回。
 
-##### PikaScript 函数同时支持两种调用协议(实测 2026-06)
+#### `python -m mklink flush-memory <item> [<item> ...] [--probe ID] [--no-verify] [--repeat N] [--interval-ms MS]`
 
-新固件的 `cmd.flush_memory` 同时支持两条路径,CLI 会根据 item 数自动选用:
+通过所选下载器的共享后台写 RAM。CLI、活动 MCP 的 `flush_memory` 和
+`SharedDevice.call('flush_memory', ...)` 使用同一校验、分包及执行实现。
+GUI 正在 RTT/VOFA/SuperWatch/SystemView 采集时返回忙；由采集方显式停止后再写，
+无需关闭 GUI 或 AI 会话。
 
-| CLI 形态 | 调用的 PikaScript | 稳定性 | 推荐场景 |
-|----------|-------------------|--------|----------|
-| 单 item (1 项) | `cmd.flush_memory(0x20010200, 0xA5, 0x5A, 0xDE, 0xAD)` <br> **旧协议**(位置参数) | **100% PASS** 实测 1~16 字节全通过 | **单地址多字节**(默认推荐) |
-| 多 item (≥2 项) | `cmd.flush_memory([(0x20010200, bytes([0x11])), (0x20010400, bytes([0x22]))])` <br> **新协议**(list-of-tuples) | 多数 PASS;某些活跃地址会被固件周期覆写 | 多地址写入(唯一选择) |
+- 单批最多 **12 KiB / 8 个地址项**；每次请求 1..8 个不重叠区域，
+  地址为 32 位整数，合计 1..12288 字节。
+- 所有输入先检查，非法后项不会导致前项先写。非重复数据自动拆成至多 30 字节，
+  每条命令不超过 230 字符；重复字节使用 `bytes([byte])*count`。
+- 默认逐批回读并逐字节比较，单次回读不超过 4096 字节。
+  `--no-verify` 只检查固件响应，不证明目标内容；MCP 对应 `verify=false`。
+- 硬件异常、非预期文本（包括裸 `flush fail`）、缺失回读或数据不符立即停止。
+  不重试、不发送剩余批次、不回滚；此前的批次可能已经写入。
+- `--repeat` 为 1..100，`--interval-ms` 为 0..30000；只在前次成功后发送下一次。
+  每次单独申请已有后台准入；间隔中 GUI 开始采集时，后续写会被拒绝。
 
-```
-# 单地址单字节(1 项,走旧协议)
-python -m mklink flush-memory 0x20010000:0x55
+item 支持 `ADDR:BYTE,BYTE` 或 `ADDR:BYTE*N`，地址/字节按十六进制解释，
+重复次数为十进制。PowerShell 中用单引号包裹 item。下面地址仅为格式示例，
+使用前必须根据目标工程确认专用、稳定且可写的区域。
 
-# 单地址多字节(1 项,走旧协议,1~16 字节稳定)
-python -m mklink flush-memory 0x20010000:0xDE,0xAD,0xBE,0xEF
-python -m mklink flush-memory 0x20010000:0xCA,0xFE,0xBA,0xBE,0x12,0x34,0x56,0x78,0x9A,0xBC,0xDE,0xF0,0x0F,0xED,0xCB,0xA9
-
-# 多地址多字节(≥2 项,走新协议)
-python -m mklink flush-memory \
-    0x20010000:0x11,0x22,0x33 \
-    0x20010100:0x44,0x55,0x66,0x77 \
-    0x20010200:0x88
-
-# 回读验证(强烈建议对多地址 / ≥2 字节使用)
-python -m mklink flush-memory 0x20010000:0xDE,0xAD,0xBE,0xEF --verify
-
-# 周期写 10 次,每次间隔 50ms
-python -m mklink flush-memory 0x20010000:0xA5 --repeat 10 --interval-ms 50
-```
-
-##### 已知固件 bug:首次调用 / 偶发裸 `flush fail`
-实测 PikaScript `cmd.flush_memory` 在 **同一连接的首次调用** 或某些时机会返回裸 `flush fail` (无 `:` 原因),但 **写入实际上已生效**(可通过 `read-ram` 验证)。**第二次起恢复正常静默成功**。CLI 已识别为 `WARN` 而非 `FAIL`,请用 `read-ram` / `cmd.read_ram(...)` 单独验证。
-
-##### 已知固件 bug:多地址的活跃地址会被周期覆写
-固件某些数据(`.bss`/GUI 回调表/heap 元数据/任务栈)会被后台线程周期性刷新。新协议多地址写入在 `0x20010A00` 等活跃地址上的写入**会立即被覆写**——这是固件问题,不是 flush_memory 的 bug。规避:
-1. 写入前用 `python -m mklink symbols --source <axf> --filter "heap|stack|GUI"` 排除活跃地址
-2. 写入活跃地址后,**不要回读**——读到的是覆写后的状态,不是你的写入
-3. 一次性写入 1 个稳定地址,然后立即用 PikaScript 表达式 `print(0x20010000)` 等读(若可用)做"原位验证"
-
-##### 响应解析规则
-| 响应 | CLI 判定 | 含义 |
-|------|---------|------|
-| 空(只回显命令) | OK | 静默成功 |
-| `TypeError/NameError/...` | FAIL | 真实异常(参数类型/拼写错) |
-| `flush fail: <原因>` | FAIL | 显式原因(如 `data must be bytes or int list` / `item must be (addr, data)`) |
-| 裸 `flush fail` | OK + WARN | 已知固件 bug,首次/偶发,写入实际生效 |
-| 其他非空 | OK + WARN | 非预期响应,保留原始文本供排查 |
-
-##### 旧拼写向后兼容
-旧名 `flush-memroy`(带拼写错误)作为 argparse alias 仍可工作,但会打印一行 deprecation WARN 提醒改用 `flush-memory`。**注意:PikaScript 端的旧函数名 `cmd.flush_memroy` 已被新代码移除**(`NameError`);任何直接调用旧函数名的脚本/工具都需要更新到 `cmd.flush_memory`。
-
-```
-# 仍可用(自动转发 + WARN)
-python -m mklink flush-memroy 0x20010000:0x55
-# → [WARN] 'flush-memroy' 是旧拼写,已自动转发到 'flush-memory',请改用新名
+```powershell
+python -m mklink flush-memory '0x20002000:DE,AD,BE,EF' --probe <probe-id>
+python -m mklink flush-memory '0x20002000:A5*64' --probe <probe-id> --repeat 2 --interval-ms 50
 ```
 
-##### 验证技巧
-PikaScript 端的 `cmd.read_ram` 显示屏对部分地址会**不显示数据行**(返回 `wRamAddr`/`wCount` 但缺第二行)——这是 read 显示 bug,与 flush_memory 无关。**解决方法**:
-- 用 `--verify`(CLI 自动 read_ram 每个地址),CLI 会同时打印 hex,数据行缺失也能在调用现场看出
-- 用 `cmd.write_ram(addr, byte)` 看它的"AFTER 回显"行(只对单字节有效)
-- 用 `python -m mklink vofa <addr> uint8_t --period 0.01`(连续采样)看实际值
+结果包含 `ok`、计划批次数 `batches`、请求字节数 `total_bytes`、
+已执行批次 `results`，启用回读时另有 `verified`。
+CLI 失败返回非零退出码；共享 MCP/SDK 调用方必须检查 `ok`/`verified`。
+没有接收到响应时，不能假定写入未发生；应先检查目标，不自动重放请求。
 
-##### 📌 边界与分块约束（三类边界务必区分）
-
-`flush-memory` 单批最多 **12 KiB / 8 个地址项**。更大输入必须串行分批并等待提示符。
-固件极限、命令串和 Windows 命令行限制见[静默写边界](flush-memory.md)；推荐边界不得
-用直接 SDK/Pika 调用绕过。
-
-- 非重复数据 CLI **不自动分块**，超 230B 直接 `FAIL`。
-- **重复字节**用紧凑语法 `ADDR:BYTE*N`（如 `flush-memory "0x20008000:0xAA*12288"`），CLI 自动转 `bytes([0xVV])*N` 短表达式，绕开 ②③；AI/MCP 单次最多写 12 KiB。
-- **PowerShell**：始终用单引号包裹整个 item（`'0x...:0xAA*N'`），否则逗号会被预处理改写参数。
-- 完整边界表与 host 端分块策略见 **[flush-memory.md](flush-memory.md)**。
+移除了旧拼写 `flush-memroy` 以及将错误响应降为成功 WARN 的兼容逻辑。
+详细固件约束见[静默写边界](flush-memory.md)。
 
 ### 读取 Flash
 
@@ -413,12 +391,16 @@ python -m mklink symbols --source path/to/firmware.axf
 python -m mklink symbols --source path/to/firmware.axf --filter "counter|sensor"
 ```
 
-#### `python -m mklink watch <变量1,变量2> --source <firmware.axf> [--period 秒]`
-一次性读取变量快照，支持基础类型和 `struct.field`。周期模式用 Ctrl+C 停止。
+#### `python -m mklink watch <变量1,变量2> --probe <设备ID或别名> [--source <firmware.axf>] [--period 秒]`
+通过共享后台批量读取 1..16 个标量，支持 typedef、`struct.field`、数组元素和当前 C 布局。
+未指定工程和符号文件时使用后台当前配置；多下载器必须明确选择。周期模式用 Ctrl+C
+停止并只解除自己的会话。采集冲突或读取失败会退出报错，不抢停 GUI、不重试或转为直连。
+多变量读取不保证目标原子快照；高速曲线仍使用 SuperWatch。`--profile` 接受仅含
+`{"variables": ["变量路径"]}` 的 JSON；原未实现的 `--struct` 参数已删除。
 
 ```
-python -m mklink watch g_counter,g_sensor --source path/to/firmware.axf
-python -m mklink watch g_config.setpoint --source path/to/firmware.axf --period 1
+python -m mklink watch g_counter,g_sensor --probe "电机板"
+python -m mklink watch g_config.setpoint,samples[1] --probe "电机板" --period 1
 ```
 
 #### `python -m mklink superwatch <变量/字段/寄存器...> [--source <firmware.axf>] [--svd <device.svd>] [--visualize]`

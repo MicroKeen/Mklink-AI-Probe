@@ -36,7 +36,7 @@ import time
 from typing import Annotated, Any
 import weakref
 
-from mklink.symbol_catalog import SymbolCatalogError
+from mklink.symbol_catalog import SymbolCatalogError, SymbolSourceChangedError
 
 logger = logging.getLogger(__name__)
 
@@ -428,8 +428,8 @@ def target_debug_lease(state: dict[str, Any], operation: str):
             manager.acquire(
                 ResourceGroup.TARGET_DEBUG,
                 owner,
-                preempt=True,
-                preempt_user_dashboard=True,
+                preempt=not state.get("shared_runtime", False),
+                preempt_user_dashboard=not state.get("shared_runtime", False),
             )
         stack.append((manager, lease_owner, not nested))
         try:
@@ -485,8 +485,8 @@ async def async_target_debug_lease(state: dict[str, Any], operation: str):
         manager.acquire(
             ResourceGroup.TARGET_DEBUG,
             owner,
-            preempt=True,
-            preempt_user_dashboard=True,
+            preempt=not state.get("shared_runtime", False),
+            preempt_user_dashboard=not state.get("shared_runtime", False),
         )
     except Exception:
         _NATIVE_TARGET_COORDINATOR.release()
@@ -820,6 +820,12 @@ def create_app(
 
         previous = _state.get("last_device_connection") or {}
         port = config.device_port or previous.get("port")
+        if _state.get("shared_runtime"):
+            from mklink.probes import select_probe
+            selected = select_probe(_state["shared_probe_id"])
+            if config.device_port and config.device_port.casefold() != selected["port"].casefold():
+                raise ValueError("Remote reconnect must use this runtime's physical probe")
+            port = selected["port"]
         axf = config.axf or previous.get("axf")
         mcu = previous.get("mcu")
         elf_backend = previous.get("elf_backend")
@@ -903,6 +909,9 @@ def create_app(
         *,
         error_status: int = 500,
     ) -> dict:
+        runtime = getattr(app.state, 'shared_runtime', None)
+        if runtime is not None:
+            runtime.require_symbol_change()
         device = _state.get("device")
         if not device or not device.connected:
             raise HTTPException(status_code=400, detail="Device not connected")
@@ -956,6 +965,8 @@ def create_app(
         prepare_connect=lambda request: prepare_online_flash_connect(_state, request),
     )
     app.state.online_flash = online_flash
+    from mklink.remote.debug_api import create_debug_router
+    app.include_router(create_debug_router(_state, async_target_debug_lease))
     app.include_router(online_flash_api.create_online_flash_router(online_flash))
     from mklink.remote import offline_download_api
     app.include_router(
@@ -1006,17 +1017,28 @@ def create_app(
             _state["file_source_change"] = None
         project = load_project_info(_state["project_root"]) or {}
         changed = await run_in_threadpool(source_monitor.changed, device, project)
-        if not changed or device is not _state.get("device"):
+        pending = dict(source_monitor.pending)
+        if not pending or device is not _state.get("device"):
             return
-        event = {"sequence": time.time_ns(), "files": [Path(path).name for path in changed]}
-        _state["file_source_change"] = event
-        try:
+        previous = _state['file_source_change'] or {}
+        # A failed parse is not retried every second against identical content.
+        # New content or a newly selected device permits another attempt.
+        if not changed and previous.get('state') == 'failed':
+            return
+        event = {'sequence': previous.get('sequence', time.time_ns()),
+                 'files': [Path(path).name for path in pending], 'pending': True}
+
+        async def reload_sources():
+            event['state'] = 'reloading'
             async with _exclusive_probe_control("reload-file-sources") as (active, stopped):
                 if active is not device:
                     return
                 event["stopped"] = stopped
                 if getattr(device, "_axf", None):
-                    await _reparse_active_symbols()
+                    catalog = getattr(device, 'symbol_catalog', None)
+                    # An explicit GUI parse may already have loaded the new content.
+                    if catalog is None or await run_in_threadpool(catalog.is_stale):
+                        await _reparse_active_symbols()
                 from mklink.project_config import ensure_rtt_config_updated
                 rtt = await run_in_threadpool(
                     ensure_rtt_config_updated, _state["project_root"],
@@ -1024,9 +1046,28 @@ def create_app(
                 )
                 event["rtt_addr"] = (rtt or {}).get("rtt_addr")
                 event["message"] = "AXF/MAP 内容已变化并重载；采集已停止，请确认目标固件后重新启动"
+                source_monitor.acknowledge(device, pending)
+                event.update(pending=False, state='applied')
+
+        try:
+            runtime = getattr(app.state, 'shared_runtime', None)
+            if runtime is not None:
+                await runtime.run_operation('reload-file-sources', reload_sources, configuration=True)
+            else:
+                await reload_sources()
+        except HTTPException as error:
+            if error.status_code != 409 or event.get('state') == 'reloading':
+                event.update(state='failed', error=str(error.detail))
+            else:
+                event.update(state='deferred', message='符号文件已变化，等待停止采集、结束客户端会话及当前任务后重载')
         except Exception as error:
-            event["error"] = str(error)
+            event.update(state='failed', error=str(error))
             logger.warning("File source reload failed: %s", error)
+        if device is not _state.get('device'):
+            return
+        if changed or previous.get('state') != event.get('state'):
+            event['sequence'] = time.time_ns()
+        _state['file_source_change'] = event
 
     app.state.check_file_sources = check_file_sources
 
@@ -1100,6 +1141,8 @@ def create_app(
         return JSONResponse(status_code=409, content={"detail": error.detail})
 
     async def dispatch_rpc(dispatcher, method: str, params: dict, req_id):
+        if _state.get("shared_runtime") and method not in {"idcode", "mcu_name"}:
+            return make_error(-32009, "Use shared runtime capabilities for hardware operations", req_id)
         loop = asyncio.get_event_loop()
         if method not in _TARGET_DEBUG_RPC_METHODS:
             return await loop.run_in_executor(
@@ -1144,19 +1187,6 @@ def create_app(
     @app.get("/api/project-root")
     async def get_project_root():
         return {"project_root": _state["project_root"]}
-
-    @app.put("/api/project-root")
-    async def set_project_root(path: str = Body(..., embed=True)):
-        import os
-        p = os.path.abspath(path)
-        if not os.path.isdir(p):
-            raise HTTPException(status_code=400, detail=f"目录不存在: {p}")
-        _state["project_root"] = p
-        if site_agent.settings.enabled and site_agent.project_root != p:
-            await site_agent.stop()
-            site_agent.project_root = p
-            await site_agent.start()
-        return {"project_root": p}
 
     @app.get("/api/project-root/browse")
     async def browse_project_root(path: str = ""):
@@ -1203,7 +1233,14 @@ def create_app(
 
     @app.get("/api/config")
     async def get_config():
-        config = load_config(_state["project_root"])
+        config = load_config(_state["project_root"]) or {}
+        if _state.get("shared_runtime"):
+            from mklink.probes import select_probe
+            from mklink.runtime import RuntimeErrorResponse
+            try:
+                config["com_port"] = select_probe(_state.get("shared_probe_id"))["port"]
+            except RuntimeErrorResponse:
+                config["com_port"] = ""
         return config or {}
 
     @app.put("/api/config")
@@ -1479,10 +1516,54 @@ def create_app(
     @app.get("/api/ports")
     async def list_ports():
         from mklink.discovery import list_available_ports
+        if _state.get("shared_runtime"):
+            from mklink.probes import inventory
+            return [{**probe, "device": probe["port"], "manufacturer": "MicroKeen",
+                     "vid": 0x0D28, "pid": 0x0202} for probe in inventory()]
         return list_available_ports()
+
+    @app.post("/api/runtime/alias")
+    async def runtime_alias(body: dict):
+        from mklink.probes import set_alias
+        from mklink.runtime import RuntimeErrorResponse
+        if not isinstance(body.get("probe"), str) or not isinstance(body.get("alias"), str):
+            raise HTTPException(422, "probe and alias must be strings")
+        try:
+            return await run_in_threadpool(set_alias, body["probe"], body["alias"])
+        except RuntimeErrorResponse as exc:
+            raise HTTPException(409, str(exc)) from exc
+
+    @app.post("/api/runtime/select")
+    async def runtime_select(body: dict):
+        if not _state.get("shared_runtime"):
+            return {"same_runtime": True}
+        from mklink.probes import select_probe
+        from mklink.runtime import RuntimeErrorResponse, browser_url, ensure_runtime
+        selector = body.get("probe") or body.get("port")
+        if selector is not None and not isinstance(selector, str):
+            raise HTTPException(422, "probe must be a string")
+        if not selector and _state.get("shared_probe_id") != "lobby":
+            return {"same_runtime": True}
+        try:
+            selected = select_probe(selector)
+            if selected["probe_id"] == _state.get("shared_probe_id") and not body.get("open_browser"):
+                return {"same_runtime": True}
+            target = await run_in_threadpool(ensure_runtime, project_root=_state["project_root"], probe=selected["probe_id"])
+            if body.get("open_browser") is True:
+                import webbrowser
+                await run_in_threadpool(webbrowser.open, browser_url(target))
+                return {"opened": True, "probe_id": selected["probe_id"]}
+            return {"same_runtime": False, "probe_id": selected["probe_id"], "runtime_url": browser_url(target)}
+        except RuntimeErrorResponse as exc:
+            raise HTTPException(409, str(exc)) from exc
 
     @app.get("/api/ports/discover")
     async def discover_mklink_port():
+        if _state.get("shared_runtime"):
+            from mklink.probes import inventory
+            candidates = inventory()
+            return {"port": candidates[0]["port"] if len(candidates) == 1 else None,
+                    "selection_required": len(candidates) > 1}
         from mklink.discovery import find_mklink_cdc_port
         loop = asyncio.get_running_loop()
         port = await loop.run_in_executor(None, find_mklink_cdc_port)
@@ -1500,8 +1581,8 @@ def create_app(
     @app.get("/api/microkeen")
     async def get_microkeen_info():
         from mklink.discovery import find_microkeen_disk, get_microkeen_flm_path
-        disk = find_microkeen_disk()
-        flm_dir = get_microkeen_flm_path()
+        disk = await run_in_threadpool(find_microkeen_disk)
+        flm_dir = await run_in_threadpool(get_microkeen_flm_path)
         return {
             "disk_path": disk,
             "flm_dir": flm_dir,
@@ -1574,6 +1655,28 @@ def create_app(
         elf_backend: str | None = Body(default=None),
         restore_last: bool = Body(default=False),
     ):
+        runtime = getattr(app.state, "shared_runtime", None)
+        if runtime is not None:
+            from mklink.probes import select_probe
+            from mklink.runtime import RuntimeErrorResponse
+            try:
+                selected = select_probe(port or _state["shared_probe_id"])
+                if selected["probe_id"] != _state["shared_probe_id"]:
+                    raise RuntimeErrorResponse("Select this probe in its own runtime window before connecting")
+                port = selected["port"]
+                # The resolved port stays authoritative; only non-port settings may be restored.
+            except RuntimeErrorResponse as exc:
+                raise HTTPException(409, str(exc)) from exc
+            runtime.prune()
+            current = _state.get("device")
+            if current and current.connected:
+                restore_last = False  # Reuse live symbols; never reparse on an implicit reconnect.
+            if current and runtime.sessions and not current.connected:
+                raise HTTPException(409, 'Detach stale clients before explicitly reconnecting the probe')
+            if current and current.connected and current.port.casefold() != port.casefold():
+                raise HTTPException(409, 'Probe port changed; release the old connection first')
+            if runtime.sessions and current and current.connected and any(value is not None for value in (axf, mcu, elf_backend)):
+                raise HTTPException(status_code=409, detail="Detach shared clients before changing device configuration or symbols")
         preferred_port = None
         if restore_last:
             previous = _state.get("last_device_connection") or {}
@@ -1718,10 +1821,11 @@ def create_app(
             if dev is not None and getattr(dev, "port", None):
                 port = dev.port
             root = _fc._resolve_firmware_root()
-            loop = asyncio.get_event_loop()
-            check = await loop.run_in_executor(
-                None, _fc.check_probe_firmware, port, root
-            )
+            if _state.get('shared_runtime'):
+                from mklink.runtime_probe import check_firmware
+                check = await run_in_threadpool(check_firmware, _state, root)
+            else:
+                check = await run_in_threadpool(_fc.check_probe_firmware, port, root)
             return check.to_dict()
         except Exception as e:
             return {"status": "skipped", "error": str(e)}
@@ -1886,7 +1990,7 @@ def create_app(
         return {"status": "ok", "stopped": stopped}
 
     @app.post("/api/device/debug-speed")
-    async def set_debug_speed(profile: str = Body(..., embed=True)):
+    async def set_debug_speed(profile: str = Body(..., embed=True), save: bool = Body(True, strict=True)):
         from mklink.debug_speed import profile_clock
         try:
             profile_clock(profile)
@@ -1894,10 +1998,11 @@ def create_app(
                 result = await run_in_threadpool(device.set_debug_speed, profile)
         except ValueError as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
-        config = load_config(_state["project_root"]) or {}
-        config["debug_speed"] = profile
-        save_config(_state["project_root"], config)
-        return {**result, "stopped": stopped}
+        if save:
+            config = load_config(_state["project_root"]) or {}
+            config["debug_speed"] = profile
+            save_config(_state["project_root"], config)
+        return {**result, "stopped": stopped, "saved": save}
 
     @app.get("/api/device/debug-speed")
     async def get_debug_speed():
@@ -1915,22 +2020,29 @@ def create_app(
     async def _exclusive_probe_control(operation: str):
         if not _state["device"] or not _state["device"].connected:
             raise HTTPException(status_code=400, detail="Device not connected")
-        from mklink.remote.dashboards import stop_bridge_dashboards
+        from mklink.remote.dashboards import BRIDGE_DASHBOARD_TYPES, stop_bridge_dashboards
 
         async with _dashboard_start_lock(_state):
-            try:
-                stopped = await run_in_threadpool(
-                    stop_bridge_dashboards,
-                    resource_manager=_state["resource_manager"],
-                )
-            except Exception as error:
-                raise HTTPException(
-                    status_code=409,
-                    detail={
-                        "code": "DASHBOARD_STOP_FAILED",
-                        "message": str(error),
-                    },
-                ) from error
+            if _state.get("shared_runtime"):
+                active = [name for name in BRIDGE_DASHBOARD_TYPES
+                          if _dashboard_worker_alive(get_managers().get(name))]
+                if active:
+                    raise HTTPException(409, {"busy": active, "hint": "Stop acquisition explicitly before changing probe configuration"})
+                stopped = []
+            else:
+                try:
+                    stopped = await run_in_threadpool(
+                        stop_bridge_dashboards,
+                        resource_manager=_state["resource_manager"],
+                    )
+                except Exception as error:
+                    raise HTTPException(
+                        status_code=409,
+                        detail={
+                            "code": "DASHBOARD_STOP_FAILED",
+                            "message": str(error),
+                        },
+                    ) from error
             async with async_target_debug_lease(_state, operation):
                 yield _state["device"], stopped
 
@@ -1975,7 +2087,7 @@ def create_app(
             raise HTTPException(status_code=400, detail="Device not connected")
         with target_debug_lease(_state, "erase"):
             try:
-                ok = _state["device"].erase_chip()
+                ok = await run_in_threadpool(_state["device"].erase_chip)
                 return {"success": ok}
             except Exception as e:
                 raise HTTPException(status_code=500, detail=str(e))
@@ -1984,16 +2096,24 @@ def create_app(
     async def halt_device():
         if not _state["device"] or not _state["device"].connected:
             raise HTTPException(status_code=400, detail="Device not connected")
-        with target_debug_lease(_state, "halt"):
-            s = _state["device"].halt()
+        async with async_target_debug_lease(_state, "halt"):
+            s = await run_in_threadpool(_state["device"].halt)
         return {"halted": s.halted}
 
     @app.post("/api/device/resume")
     async def resume_device():
         if not _state["device"] or not _state["device"].connected:
             raise HTTPException(status_code=400, detail="Device not connected")
-        with target_debug_lease(_state, "resume"):
-            s = _state["device"].resume()
+        async with async_target_debug_lease(_state, "resume"):
+            s = await run_in_threadpool(_state["device"].resume)
+        return {"halted": s.halted}
+
+    @app.post("/api/device/step")
+    async def step_device():
+        if not _state["device"] or not _state["device"].connected:
+            raise HTTPException(status_code=400, detail="Device not connected")
+        async with async_target_debug_lease(_state, "step"):
+            s = await run_in_threadpool(_state["device"].step)
         return {"halted": s.halted}
 
     @app.get("/api/device/hardfault")
@@ -2462,8 +2582,8 @@ def create_app(
             raise HTTPException(status_code=409, detail=exc.to_detail()) from exc
 
     @app.get("/api/dash/superwatch/peripherals")
-    async def superwatch_peripherals():
-        return await run_in_threadpool(get_managers()["superwatch"].peripheral_catalog)
+    async def superwatch_peripherals(q: str = ""):
+        return await run_in_threadpool(get_managers()["superwatch"].peripheral_catalog, q)
 
     _svd_targets = {}
     _svd_target_lock = asyncio.Lock()
@@ -2480,16 +2600,17 @@ def create_app(
         return {"targets": matches[:200], "total": len(matches)}
 
     @app.post("/api/dash/superwatch/peripherals/select")
-    async def peripheral_select(target_id: str = Body(..., embed=True)):
+    async def peripheral_select(target_id: str | None = Body(None), chip: str | None = Body(None),
+                                svd: str | None = Body(None)):
         device = _state.get("device")
         if not device or not device.connected:
             raise HTTPException(status_code=400, detail="Device not connected")
-        target = _svd_targets.get(target_id)
-        if target is None:
-            raise HTTPException(status_code=404, detail="Select a chip from the installed Pack list")
+        if sum(bool(value) for value in (target_id, chip, svd)) != 1:
+            raise HTTPException(422, "Select exactly one target_id, chip or SVD")
         try:
             async with _dashboard_start_lock(_state):
-                return await run_in_threadpool(get_managers()["superwatch"].select_peripherals, device, target)
+                return await run_in_threadpool(get_managers()["superwatch"].select_peripherals, device,
+                                              target_id=target_id, chip=chip, svd=svd)
         except RuntimeError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         except Exception as exc:
@@ -2638,6 +2759,10 @@ def create_app(
     async def superwatch_status():
         managers = get_managers()
         return await run_in_threadpool(managers["superwatch"].get_status)
+
+    @app.get("/api/dash/superwatch/latest")
+    async def superwatch_latest():
+        return await run_in_threadpool(get_managers()["superwatch"].get_latest_sample)
 
     # ===================================================================
     # Integrated Dashboard SSE — Serial Monitor
@@ -3184,6 +3309,7 @@ def create_app(
     async def write_memory(
         address: str = Body(...),
         data_hex: str = Body(...),
+        verify: bool = Body(default=False),
     ):
         if not _state["device"] or not _state["device"].connected:
             raise HTTPException(status_code=400, detail="Device not connected")
@@ -3195,7 +3321,11 @@ def create_app(
                 await loop.run_in_executor(
                     None, lambda: _state["device"].write_memory(addr, data)
                 )
-                return {"status": "ok", "address": hex(addr), "bytes_written": len(data)}
+                result = {"status": "ok", "address": hex(addr), "bytes_written": len(data)}
+                if verify:
+                    actual = await loop.run_in_executor(None, lambda: _state["device"].read_memory(addr, len(data)))
+                    result['verified'] = actual == data
+                return result
             except Exception as e:
                 raise HTTPException(status_code=500, detail=str(e))
 
@@ -3210,6 +3340,10 @@ def create_app(
                     None, lambda: _state["device"].read_variable(name)
                 )
                 return {"name": name, "value": value}
+            except SymbolSourceChangedError as e:
+                raise HTTPException(status_code=409, detail=str(e)) from e
+            except SymbolCatalogError as e:
+                raise HTTPException(status_code=422, detail=str(e)) from e
             except Exception as e:
                 raise HTTPException(status_code=500, detail=str(e))
 
@@ -3227,6 +3361,10 @@ def create_app(
                     None, lambda: _state["device"].write_variable(name, value)
                 )
                 return {"status": "ok", "name": name, "value": value}
+            except SymbolSourceChangedError as e:
+                raise HTTPException(status_code=409, detail=str(e)) from e
+            except SymbolCatalogError as e:
+                raise HTTPException(status_code=422, detail=str(e)) from e
             except Exception as e:
                 raise HTTPException(status_code=500, detail=str(e))
 
@@ -3502,6 +3640,7 @@ def create_app(
         payload = {
             "status": "ok",
             "device_connected": dev.connected if dev else False,
+            "shared_runtime": bool(_state.get("shared_runtime")),
             **elf_status(project_root=_state["project_root"]),
         }
         backend_port = _state.get("backend_port")
@@ -3532,7 +3671,7 @@ def create_app(
     # Static frontend (Vue 3 dist) — catch-all, lowest priority
     # Registered AFTER all /api/* and /ws routes so they take precedence.
     # ===================================================================
-    # AI Session Management
+    # Resource management and browser-owned server lifecycle
     # ===================================================================
 
     @app.get("/api/resources/status")
@@ -3633,60 +3772,12 @@ def create_app(
         finally:
             browser_sessions.release(client_id)
 
-    @app.post("/api/session/acquire")
-    async def session_acquire(
-        session_id: str = Body(...),
-        resources: list[str] = Body(default=["mklink_bridge"]),
-        ttl: float = Body(default=60.0),
-    ):
-        """AI agent acquires resource lease(s)."""
-        from mklink.remote.resource_manager import ResourceGroup, ResourceError as RErr
-        rm = _state["resource_manager"]
-        group_map = {
-            "mklink_bridge": ResourceGroup.MKLINK_BRIDGE,
-            "target_debug": ResourceGroup.TARGET_DEBUG,
-            "serial_port": ResourceGroup.SERIAL_PORT,
-            "modbus_port": ResourceGroup.MODBUS_PORT,
-        }
-        owner = f"ai:session:{session_id}"
-        requested = [(name, group_map[name]) for name in resources if name in group_map]
-        try:
-            rm.acquire_many(
-                [group for _name, group in requested],
-                owner,
-                ttl=ttl,
-                preempt=False,
-            )
-            return {
-                "status": "acquired",
-                "owner": owner,
-                "resources": [name for name, _group in requested],
-            }
-        except RErr as e:
-            raise HTTPException(
-                status_code=409,
-                detail={"conflict": e.conflict_owner, "resource": e.resource.value},
-            )
-
-    @app.post("/api/session/release")
-    async def session_release(session_id: str = Body(...)):
-        """AI agent releases its lease(s)."""
-        rm = _state["resource_manager"]
-        released = rm.release(f"ai:session:{session_id}")
-        return {"status": "released", "resources": [r.value for r in released]}
-
-    @app.get("/api/session/status")
-    async def session_status():
-        """Current resource allocation status."""
-        rm = _state["resource_manager"]
-        return rm.get_status()
-
     # ===================================================================
 
     from fastapi.responses import FileResponse
     from pathlib import Path as _Path
 
-    _gui_dist = _Path(__file__).resolve().parent.parent.parent / "gui" / "dist"
+    _gui_dist = _Path(os.environ["MKLINK_GUI_DIST"]).resolve() if os.environ.get("MKLINK_GUI_DIST") else _Path(__file__).resolve().parent.parent.parent / "gui" / "dist"
 
     if _gui_dist.is_dir():
         import mimetypes

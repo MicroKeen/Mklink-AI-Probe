@@ -153,6 +153,36 @@ describe('RttViewTab binary migration', () => {
     wrapper.unmount()
   })
 
+  it('keeps acquisition attached while a symbol reload waits and adopts the address only after applying', async () => {
+    vi.useFakeTimers()
+    mocks.status = { running: true, down_buffers: [], numeric_channels: [] }
+    const wrapper = mount(RttViewTab, { props: { deviceConnected: true } })
+    await flushPromises()
+    const stopped = mocks.terminalBinary.stop.mock.calls.length
+    mocks.status.file_source_change = { sequence: 1, pending: true, state: 'deferred', message: '等待停止采集后重载' }
+    await vi.advanceTimersByTimeAsync(1000)
+    await flushPromises()
+    expect(wrapper.get('[data-testid="rtt-address"]').element).toHaveProperty('value', '0x20000000')
+    expect(wrapper.get('[data-testid="rtt-source-notice"]').text()).toContain('等待停止采集')
+    expect(wrapper.get('.control-toolbar').text()).toContain('暂停')
+    expect(mocks.terminalBinary.stop.mock.calls.length).toBe(stopped)
+    mocks.status.running = false
+    mocks.status.file_source_change = { sequence: 2, pending: false, state: 'applied', rtt_addr: '0x20000040', message: '请确认目标固件后重新启动' }
+    await vi.advanceTimersByTimeAsync(1000)
+    await flushPromises()
+    expect(wrapper.get('[data-testid="rtt-address"]').element).toHaveProperty('value', '0x20000040')
+    expect(wrapper.get('[data-testid="rtt-source-notice"]').text()).toContain('请确认目标固件')
+    expect(wrapper.get('.control-toolbar').text()).toContain('开始')
+    expect(wrapper.get('.control-toolbar').text()).not.toContain('重试')
+    // A new viewer may see an earlier applied event while another client is running RTT.
+    wrapper.unmount()
+    mocks.status.running = true
+    const viewer = mount(RttViewTab, { props: { deviceConnected: true } })
+    await flushPromises()
+    expect(viewer.get('.control-toolbar').text()).toContain('暂停')
+    viewer.unmount()
+  })
+
   it('keeps RTT setup available while disconnected but requires an explicit connection', async () => {
     const wrapper = mount(RttViewTab, { props: { deviceConnected: false } })
 
@@ -317,6 +347,37 @@ describe('RttViewTab binary migration', () => {
     await nextTick()
     await wrapper.get('.btn-danger').trigger('click')
     expect(mocks.terminalBinary.stop).toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it.each([false, true])('keeps the viewer and render pause=%s when shared stop is refused', async (paused) => {
+    mocks.status = { running: true, numeric_channels: [], down_buffers: [{ channel: 0, active: true }] }
+    mocks.dash.state.value = 'running'
+    let finishStop!: (value: boolean) => void
+    mocks.dash.stop.mockReturnValueOnce(new Promise(resolve => { finishStop = resolve }))
+    const wrapper = mount(RttViewTab, { props: { deviceConnected: true } })
+    await flushPromises()
+    const toolbar = wrapper.findComponent({ name: 'ControlToolbar' })
+    if (paused) toolbar.vm.$emit('pause')
+    await nextTick()
+    const before = mocks.terminalBinary.stop.mock.calls.length
+    toolbar.vm.$emit('stop')
+    toolbar.vm.$emit('stop')
+    await nextTick()
+    expect(mocks.dash.stop).toHaveBeenCalledOnce()
+    expect(mocks.terminalBinary.stop).toHaveBeenCalledTimes(before)
+    mocks.dash.error.value = 'Other clients subscribe to this acquisition'
+    finishStop(false)
+    await flushPromises()
+    expect(toolbar.props('state')).toBe(paused ? 'paused' : 'running')
+    expect(toolbar.text()).toContain('Other clients subscribe')
+    expect(toolbar.text()).not.toContain('重试')
+    expect(mocks.terminalBinary.stop).toHaveBeenCalledTimes(before)
+    mocks.dash.stop.mockResolvedValueOnce(true)
+    toolbar.vm.$emit('stop')
+    await flushPromises()
+    expect(toolbar.props('state')).toBe('idle')
+    expect(mocks.terminalBinary.stop).toHaveBeenCalledTimes(before + 1)
     wrapper.unmount()
   })
 
