@@ -5,14 +5,14 @@
   "platforms": {
     "windows-x86_64": {
       "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWkJ5dmZ4MnVLVVZpcFBUM1FtY2xLOUVpT3hVNDFkUytRd25nemJoSS9Ya3VONGo0Q211RnpDd3piaW1SaDB6YW45NHBQd2tlTkxTdlQ2S3BjMnoxRlNvcFpFSUFUM2drPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwOTkzNzY2CWZpbGU6TWtsaW5rIEFJIFByb2JlXzAuMi4zX3g2NC1zZXR1cC5leGUKVjRPeUtoaG1GOGN0cFdBYTdSNGhsTWczYkVLRFkwMEdmSXFrUjJkcmhGNDJBRytDSEdqUy95ZWtYbGxDZFNvRnBJVGxzY3l3ZUh4NEQ1TWVwM250QkE9PQo=",
-      "url": "https://gitee.com/Aladdin-Wang/Mklink-AI-Probe/releases/download/v0.2.3/Mklink-AI-Probe-v0.2.3-x64-Setup.exe",
+      "url": "https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/v0.2.3/Mklink-AI-Probe-v0.2.3-x64-Setup.exe",
       "sha256": "67641c64b222e03102796a4731f7fc9125fec386fdd7a49c215cc7dab335e94b",
       "size": 93589962
     }
   },
   "skill": {
     "version": "0.2.3",
-    "url": "https://gitee.com/Aladdin-Wang/Mklink-AI-Probe/releases/download/v0.2.3/Mklink-AI-Probe-v0.2.3-Skill.zip",
+    "url": "https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/v0.2.3/Mklink-AI-Probe-v0.2.3-Skill.zip",
     "sha256": "207753a1bb76cdf3da6e233769ebf49901dfce60f42f09f35416351f50cfe5f8",
     "size": 19890162,
     "source_commit": "b0e0f61e0c8f51f548718bb8e670eda729db3698"
