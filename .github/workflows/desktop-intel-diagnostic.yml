@@ -1,5 +1,8 @@
 name: Intel desktop packaging diagnostics
 on:
+  push:
+    branches: [codex/v033-intel-dmg-diagnostics]
+    paths: ['.github/workflows/desktop-intel-diagnostic.yml']
   workflow_dispatch:
     inputs:
       source_commit:
@@ -19,11 +22,11 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source_commit }}
+          ref: ${{ inputs.source_commit || '11616f8077c469c83f0b82de0de5b0f12098c960' }}
           persist-credentials: false
       - name: Verify exact source identity
         env:
-          SOURCE_COMMIT: ${{ inputs.source_commit }}
+          SOURCE_COMMIT: ${{ inputs.source_commit || '11616f8077c469c83f0b82de0de5b0f12098c960' }}
         run: |
           if ($env:SOURCE_COMMIT -notmatch '^[0-9a-f]{40}$') { throw 'An exact source SHA is required' }
           if ((git rev-parse HEAD) -ne $env:SOURCE_COMMIT) { throw 'Source identity mismatch' }
