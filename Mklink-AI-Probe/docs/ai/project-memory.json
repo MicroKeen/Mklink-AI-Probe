@@ -1,22 +1,27 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-11T01:19:19+08:00",
+  "updated_at": "2026-10-11T02:01:27+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
-    "branch": "codex/v033-intel-dmg-diagnostics",
-    "head": "Formal application source: main 11616f8077c469c83f0b82de0de5b0f12098c960, merged PR38. Diagnostic workflow changes do not change application source.",
+    "branch": "main",
+    "head": "0.3.3 release: 11616f8077c469c83f0b82de0de5b0f12098c960; handoff PR39 follows without moving tag. Inspect Git for current main.",
     "remote_head": "microkeen/main; verify exact current tip with Git.",
-    "working_tree": "Original workspace is main. Existing startup-cdc worktree is temporarily used for Intel packaging diagnostics; remove after formal release and handoff."
+    "working_tree": "Original Mklink-AI-Probe is the maintenance workspace. Remove clean, merged startup-cdc worktree after handoff integration; actual cleanup record is in original .build/artifacts/v033-official/worktree-cleanup.json."
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "in_progress",
-    "current_task": "用户已授权合并、签名、正式发布0.3.3、更新本地Skill和回原工作空间交接清理。PR38已合并main 11616f80，原空间已同步。Windows签名NSIS、完整Skill和Site Agent已构建；正式包冻结CLI/MCP/SVD、35项Web资源、原生界面和正常退出通过。运行时代码与已实装77f56f20候选一致，保留此前实装和F103回归；本次正式包覆盖安装UAC取消，不计再次安装通过。原生CI38069170299的Apple Silicon/Linux通过；Intel连续两次DMG末步骤失败，增加精确源码SHA的verbose诊断工作流定位。尚未创建正式标签、Release或更新索引；发布完成后再更新Skill及清理临时工作树。"
+    "status": "complete",
+    "current_task": "维护者授权的0.3.3正式发布完成：PR38合入，正式源11616f80，三平台包、五份更新验签、两GitHub各17附件及三渠道回读通过；本地Skill更新并备份。正式包冻结CLI/MCP/SVD、Web与正常退出通过；正式再次覆盖安装UAC取消，实际安装/F103证据来自运行时代码相同的77f56f20候选。详见v033-release-handoff.md。PR39整合本交接与正式Web，之后删除已合入临时工作树，回原空间维护。"
   },
   "milestones": [
+    {
+      "name": "0.3.3正式版",
+      "status": "complete",
+      "notes": "源11616f80，PR38；Windows/ARM/Linux/Intel包、五份签名、三渠道核对和本地Skill更新完成。正式归档已回原工作空间；见v033-release-handoff.md。"
+    },
     {
       "name": "0.3.2正式版",
       "status": "complete",
@@ -39,6 +44,10 @@
     }
   ],
   "verification": [
+    {
+      "area": "0.3.3 正式发布",
+      "result": "精确main11616f80重建Windows/Skill/SiteAgent；ARM/Linux CI38069170299，Intel详细重跑38071279659成功。三个native清单及冻结CLI/MCP/退出通过，五份签名实际验签。正式Windows提取包Windows-only PATH、35Web资源、原生界面/区域高度/退出通过；不计本次UAC取消为重新安装。两GitHub各17公开附件与三渠道回读验证，本地Skill逐文件核对并验证CLI/SVD/MCP；详见v033-release-handoff.md。"
+    },
     {
       "area": "0.3.3 最终候选与补充回归",
       "result": "源码77f56f20/Web0c01a71b；GUI934通过，Python合计4747通过/2跳过（首次磁盘满项F盘重跑）。实装载荷摘要一致、最小PATH启动及冻结CLI/MCP/F407VE目录通过；F103RC全流程约10.25秒、AXF5909变量解析和实际搜索/拖动通过。三平台原生CI38067335470全成功。e90f6df1修测试本地偏好串扰，精确复现12失败后115波形用例及GUI CI38068369545通过；后台管理测试固定中文，不改产品运行时。见v033-release-readiness.md及本地v033-final证据。"
@@ -66,10 +75,6 @@
     {
       "area": "0.3.3 USB-only连接和时钟",
       "result": "源码ac542173/Web871b496f；Python十组316通过，后补USB断开用例所在文件10通过；GUI59与生产构建通过。用户确认断开目标板，本机V3.6.4/IDCODE0旧20/30MHz拒绝复现，修复后SDK4/10/20/30、实际MCP stdio30、CLI20保存、断开重连恢复20和实际浏览器30均通过。无固件/供电/目标修改，已释放后台。见v033-probe-only-connection.md，取代上一轮要求目标先识别的建议。旧NSIS不含本轮修复。"
-    },
-    {
-      "area": "0.3.3 启动/CDC第一轮修复",
-      "result": "源码2d033e77/Web92415bb3；Python177、GUI917、Rust22及标准NSIS构建通过。冻结CLI/MCP Windows-only PATH通过；默认环境原生启动、代理退出换端口恢复、真实Web状态通过。V3.6.4/STM32F103 30MHz/1µs候选90秒约2371万样本错误/丢弃0，接收worker退出注入停采断连及显式重连恢复通过。此前695秒源码诊断出现接收队列丢弃11754288字节，无CDC错误；不能称无损。实际安装获用户暂缓。见v033-startup-cdc-recovery.md。"
     }
   ],
   "decisions": [
@@ -78,15 +83,15 @@
     "应用MicroKeen/release主索引，旧GitHub/updates与Gitee/updates兼容；探针固件独立firmware索引。V2 RBL仅附件。",
     "用户授权正式发布0.3.2与V3.6.4/V4.6.8/HPMLink4.6.8；原MK-Firmware同步最新，旧用户固件仅归档备份，不恢复stash。",
     "用户接受30MHz并行目标读错留待下版，不写公开发布说明；Mac/Linux实机后验，Windows本轮已实际覆盖安装通过。",
-    "原空间是唯一维护入口。正式包/证据已回原.build/artifacts/v032-official和v032-handoff，F盘仅构建缓存；清理实录见cleanup.json。固件原V3/V4 main已核对，V4-fixes已清理，用户子模块改动保留。",
+    "原Mklink-AI-Probe是唯一维护入口。0.3.3正式包/证据已回原.build/artifacts/v033-official；F盘为构建缓存。交接PR合入后删除startup-cdc临时工作树并记录结果，保留共享依赖和必要客户证据。",
     "mklink及既有长期跟进维持暂停；不得因旧交接自动接管硬件或重复发布。",
-    "用户指定0.3.3修复分支；此会话仅修改应用分支，需要V3/V4固件修复时另开会话。连接下载器及设置时钟属于探针操作，不要求目标板；精确set clock回包可确认设置，profile_confirmed单列，不冒充目标稳定性验证。用户后续授权覆盖安装，77f56f20候选已完成；保留草稿PR。",
+    "用户明确授权合并0.3.3修复分支、签名正式发布、更新本地Skill及清理临时工作树；PR38已合入并发布。探针连接/时钟不要求目标板；固件需要改动时另开会话。Gitee缺失镜像沿用此前GitHub兜底，渠道最后写入。",
     "用户特别要求：锁相关修复必须结合整体共享架构，不能仅消除当前卡点。保留唯一串口所有权、USB身份绑定、会话/操作锁及未知结果不重放；审查读写控制顺序、epoch隔离、取消完成前缓冲寿命、背压错误传播和端口释放，再以跨客户端与真实进程/硬件验证。 父进程仅在worker真正退出后发布串口关闭，避免其他线程提前释放应用锁。"
   ],
   "hardware": {
     "state": "用户已接回V3.6.4与STM32F103RC并确认未占用，授权指定工程实际烧录。源码10/30MHz及最终77f56f20安装候选10MHz connect/erase/program/verify/reset/disconnect通过，最终约10.25秒；仅镜像覆盖扇区，不改供电或探针固件。客户F405原故障未复现，F103校验约0.30秒未测得显著加速。身份和路径只留本地证据。",
-    "installer": "已实际覆盖安装本地未签名0.3.3/77f56f20，NSIS SHA256 8ffd1bcf81ff57b1fd5b1f1a130a3f3c3eb37cfaed3ae89fb8b74e73a185aefd；安装文件与提取物一致，最小PATH启动/冻结CLI/MCP/SVD和F103任务通过。来源为0c01a71b的Skill SHA256 82bcbbc315f3ce76a67f5ff4f65e1d312a6e9b94b0b76d762ec44e079a0cc74f。最终77f56f20三平台原生CI38067335470全成功。0.3.2正式归档及渠道未改。",
-    "backups": "原Git根.build/artifacts/v032-official保存正式包、清单、安装/CI/签名/渠道证据，v032-handoff保存阶段HIL和旧用户备份；索引逐项SHA核验。固件原工程CURRENT_HANDOFF.md与firmware-releases保留必要记录。 本轮候选、哈希和诊断证据在原Git根.build/artifacts/v033-fixes；F盘复用构建缓存。 最新候选和验证在F盘专用构建目录artifacts/v033-final；旧791安装包及Skill转存artifacts/v033-previous。E盘空间紧张，含联接的测试目录按规则保留；旧8ea安装器进程4936占用文件，未强制清理。"
+    "installer": "实际安装及F103回归来自77f56f20候选；正式11616f80运行时代码相同，已重建签名NSIS并验证提取包CLI/MCP/SVD/Web/原生界面/退出。本次再次覆盖安装UAC取消，未计新安装通过。详见v033-release-handoff.md。",
+    "backups": "原Git根.build/artifacts/v033-official保存17正式文件、archive-manifest及qualification（含候选实装/F103、正式冻结/签名/渠道/Skill证据）；旧0.3.2正式归档及用户备份保持。F盘保留共享缓存；联接测试目录和旧安装器占用文件不强删。"
   },
   "known_limits": [
     "原始30MHz/1µs CDC失败、首次启动离线和客户F405 PROGRAM100%后读线程退出仍未复现；诊断与保护不等于根因闭环。客户Python3.12/受限AI/GD32仍待复测。F103校验约0.30秒无显著加速；外置Flash多FLM缺少实物验证。历史unknown任务不得改判或重放。最新候选已覆盖安装，取代此前暂缓安装记录。",
@@ -99,11 +104,11 @@
     "nRF54L15 GUI保护闭环、全部物理擦除/拔插/休眠/断电场景、电源外部精度校准未全部认证。VCC每次改动必须确认具体电压，HPM已锁定OTP不得重放。 已知无可靠扇区表的26个FLM禁用扇区操作；重叠算法需要匹配Bank模式。"
   ],
   "next_actions": [
-    "使用Intel诊断工作流从精确正式源码11616f80构建，定位DMG错误；通过后核对三平台清单并用既有更新密钥签名。",
-    "完成0.3.3正式附件及三端索引发布，Gitee配额不足按此前维护者确认的GitHub兜底策略处理并记录；更新本地0.3.1 Skill为完整0.3.3并验证。",
-    "发布后在原Mklink-AI-Probe工作空间完成交接PR、同步main、移除startup-cdc临时工作树并清理确认的垃圾；保留正式资产/必要证据/共享缓存，含测试链接和占用文件保留清单。",
-    "下一版排查30MHz并行目标读错/Flash偶发status5，区分固件目标访问与主机队列；保持偶发错误不断采、不误断的行为。",
-    "收集Mac/Linux正式包客户实机USB/MSC和原地升级反馈；完整SES、缺失夹具和全部芯片组合保持未验证，供电仍须逐次确认具体电压。"
+    "从原Mklink-AI-Probe/main继续维护；先核对Git与本地worktree-cleanup.json。正式v0.3.3标签和附件不可覆盖，不重复发布。已运行AI进程重启以加载更新后的Skill。",
+    "客户现场继续核实原始CDC停采、首次离线、F405读线程退出及受限AI/GD32；使用新增原因链与阶段日志，不把未复现项标为根因已修复。",
+    "检查Gitee镜像容量与可达性；当前缺失镜像沿用GitHub下载兜底，不能声称完整国内附件镜像。历史含联接/占用目录留人工处理。",
+    "下一版排查30MHz并行目标读错/Flash偶发status5，区分固件目标访问与主机队列；需要固件改动另开会话。",
+    "收集Mac/Linux正式包客户USB/MSC和原地升级反馈，以及外置Flash多算法实物验证。完整SES/所有芯片组合仍未全测；供电须逐次确认具体电压。"
   ],
   "continuation_protocol": [
     "交接只保存现状、关键限制和报告索引；详细历史留在docs/verification。"
