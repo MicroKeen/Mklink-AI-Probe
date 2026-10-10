@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-11T00:40:33+08:00`
-- 分支：`0.3.3修复分支`
-- HEAD：`0.3.3 source 77f56f20 / Web 0c01a71b; SVD/verify 8ea29231; installer/latest-firmware 791eef39. Based on microkeen/main 01b413ff. Inspect Git for documentation/PR tip.`
+- 更新时间：`2026-10-11T01:19:19+08:00`
+- 分支：`codex/v033-intel-dmg-diagnostics`
+- HEAD：`Formal application source: main 11616f8077c469c83f0b82de0de5b0f12098c960, merged PR38. Diagnostic workflow changes do not change application source.`
 - 远端 HEAD：`microkeen/main; verify exact current tip with Git.`
-- 工作树：Original workspace remains main; active isolated worktree Mklink-AI-Probe-startup-cdc holds user-named branch 0.3.3修复分支. Preserve it while diagnosis continues.
-- 当前任务：0.3.3修复分支/草稿PR38候选完成：SuperWatch拖动高度与记忆、删除隐藏配置/只看已选、SVD打包、校验诊断、安装文件占用保护和最新固件选择均纳入源码77f56f20/Web0c01a71b，并已覆盖安装。GUI934通过；Python合计4747通过/2跳过（磁盘满项F盘重跑）。安装态最小PATH、CLI/MCP/SVD、F103烧录约10.25秒、真实AXF5909变量及搜索通过。三平台原生CI38067335470全成功。e90f6df1仅修波形测试存储隔离，GUI CI38068369545已通过；本机同时启用原生存储全量检查，后台管理测试显式固定断言语言。详见v033-release-readiness.md；等待维护者验收，不签名、不合并、不发布。
-- 状态：`ready_for_review`
+- 工作树：Original workspace is main. Existing startup-cdc worktree is temporarily used for Intel packaging diagnostics; remove after formal release and handoff.
+- 当前任务：用户已授权合并、签名、正式发布0.3.3、更新本地Skill和回原工作空间交接清理。PR38已合并main 11616f80，原空间已同步。Windows签名NSIS、完整Skill和Site Agent已构建；正式包冻结CLI/MCP/SVD、35项Web资源、原生界面和正常退出通过。运行时代码与已实装77f56f20候选一致，保留此前实装和F103回归；本次正式包覆盖安装UAC取消，不计再次安装通过。原生CI38069170299的Apple Silicon/Linux通过；Intel连续两次DMG末步骤失败，增加精确源码SHA的verbose诊断工作流定位。尚未创建正式标签、Release或更新索引；发布完成后再更新Skill及清理临时工作树。
+- 状态：`in_progress`
 
 ## 里程碑
 
@@ -50,9 +50,9 @@
 
 ## 下一动作
 
-1. 维护者验收0.3.3候选与PR38：Windows/Skill已就绪并实装，77f56f20三平台原生CI38067335470全成功。e90f6df1 GUI合同已通过；最新测试/文档头的后台合同CI继续由GitHub运行，之前相同产品代码的后台合同已通过。按精确头核对PR全部检查后再决定发布；当前无合并、签名或渠道授权。
-2. 客户现场继续核实原始CDC停采、首次离线、F405读线程退出及受限AI/GD32；使用新增原因链与阶段日志，不把未复现项标为根因已修复。
-3. 保留0.3.3修复分支工作树和F盘v033-final候选；E盘空间需人工整理，含联接/被占用路径见本地cleanup-notes.txt，不强删。不得覆盖0.3.2正式包、标签、渠道或擅自合并。
+1. 使用Intel诊断工作流从精确正式源码11616f80构建，定位DMG错误；通过后核对三平台清单并用既有更新密钥签名。
+2. 完成0.3.3正式附件及三端索引发布，Gitee配额不足按此前维护者确认的GitHub兜底策略处理并记录；更新本地0.3.1 Skill为完整0.3.3并验证。
+3. 发布后在原Mklink-AI-Probe工作空间完成交接PR、同步main、移除startup-cdc临时工作树并清理确认的垃圾；保留正式资产/必要证据/共享缓存，含测试链接和占用文件保留清单。
 4. 下一版排查30MHz并行目标读错/Flash偶发status5，区分固件目标访问与主机队列；保持偶发错误不断采、不误断的行为。
 5. 收集Mac/Linux正式包客户实机USB/MSC和原地升级反馈；完整SES、缺失夹具和全部芯片组合保持未验证，供电仍须逐次确认具体电压。
 
