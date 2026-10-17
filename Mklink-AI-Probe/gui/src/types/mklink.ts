@@ -70,6 +70,7 @@ export interface AxlStatus {
 }
 
 export interface DeviceStatus {
+  connection_recovery?: { state: string; attempts: number; error?: string; errors?: string[]; restored_at?: number }
   device_generation?: number
   clock_hz?: number | null
   clock_warning?: string | null
@@ -234,6 +235,8 @@ export interface SymbolDescriptor {
   scalar_kind: SymbolScalarKind
   size: number
   writable: boolean
+  bit_offset?: number | null
+  bit_size?: number | null
   enum_values: Record<string, number>
   enum_signed?: boolean
   parent_path: string | null
@@ -304,6 +307,7 @@ export interface SymbolCatalogPage {
 }
 
 export interface SymbolCatalogStatus {
+  file_source_change?: { sequence: number, state?: string, error?: string } | null
   loaded: boolean
   generation: number
   axf_path: string
@@ -456,7 +460,7 @@ export interface ProbeFirmwareDownload {
   family: 'microlink' | 'hpmlink'
 }
 
-export type FileSourceKind = 'symbol' | 'map'
+export type FileSourceKind = 'symbol' | 'map' | 'svd'
 
 export interface UploadedFileSource {
   path: string
