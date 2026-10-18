@@ -4,12 +4,12 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-18T18:47:17+08:00`
-- 分支：`main（后续交接 PR：codex/0.3.5-release-handoff）`
-- HEAD：`0.3.5 不可变发布源 2f474f60372efdf1218211d4235f05343eab840e；交接/正式 Web 后续合入，实际 HEAD 以 git log 为准。`
-- 远端 HEAD：`microkeen/main；PR43已合并发布，后续交接 PR 不移动版本标签。新任务先 fetch 核对。`
-- 工作树：发布工作树 E:/software/HPM5300/mklink-0.3.5-fixes/Mklink-AI-Probe。原 E:/software/HPM5300/Mklink-AI-Probe 是历史0.3.4工作树；新开发从最新 main 建 codex/ 分支，不续改已发布标签。
-- 当前任务：0.3.5已正式发布，双GitHub各17附件、五签名、三个更新渠道和Gitee Skill回退验证完成；Windows实装/Skill已更新并正常退出。V3.6.5/V4.6.9原始UF2独立发布完成。未解决项保留v035-release-handoff.md；不要重复发布或升级固件。
+- 更新时间：`2026-10-18T19:20:22+08:00`
+- 分支：`main（工作区清理交接经独立 PR 合入）`
+- HEAD：`0.3.5 不可变发布源 2f474f60372efdf1218211d4235f05343eab840e；PR44交接/正式Web已合入cd2aba8d，实际HEAD以git log为准。`
+- 远端 HEAD：`microkeen/main；PR43、PR44已合并。本次仅清理工作区及更新交接，不移动版本标签。新任务先fetch核对。`
+- 工作树：仅保留 E:/software/HPM5300/Mklink-AI-Probe，源码在其 Mklink-AI-Probe 子目录；已同步最新main。mklink-0.3.5-fixes工作区已移除；新开发从最新main创建codex/分支。
+- 当前任务：0.3.5已正式发布，双GitHub各17附件、五签名、三个更新渠道和Gitee Skill回退验证完成；Windows实装/Skill已更新并正常退出。V3.6.5/V4.6.9原始UF2独立发布完成。未解决项保留v035-release-handoff.md；不要重复发布或升级固件。 发布后工作区已归并到原Mklink-AI-Probe，清理结果见v035-workspace-cleanup.md。
 - 状态：`complete`
 
 ## 里程碑
@@ -40,7 +40,7 @@
 - SuperWatch 变量写入只认写应答，不做自动回读；烧录/显式内存校验仍保留，真实写错误不得吞掉或重放。外设 ID 基于 Pack 版本/芯片/SVD 相对路径；失效选择不得阻断物理连接，无法迁移时重选。 在线型号提供脱机/外设默认值，各页可独立修改；Pack操作完成自动刷新。下载先预留唯一物理身份，不要求先连接目标；自身预留不重建下载表单，其他设备切换仍清理。
 - 应用主索引 MicroKeen/release，旧 GitHub/updates 和 Gitee/updates 兼容，固件使用独立索引。Gitee 仅要求 Windows 与 Skill；本次 Windows 超 100MB 被拒，索引指向 GitHub；Skill 已真实镜像，GitHub 不可达回退实测通过。其他平台仅 GitHub。
 - 测试直接使用用户原工程及 build/keil/Obj ELF，允许修改且无需备份还原，不复制工程；硬件路径只留本地。HPM 使用 ROM API，不使用 FLM/第二次通用 SWD reset；VCC 每次改动需确认具体电压，固件修改另开会话。
-- 构建使用scripts/build_workspace.ps1与F:/MKLink-Build，保留正式包、独有证据、依赖和缓存；联接或不可访问路径不强删。0.3.4清理已完成，不能沿用早期startup-cdc待删除任务。长期硬件跟进仍暂停，不因交接自动接管硬件或重复发布。
+- 构建使用scripts/build_workspace.ps1与F:/MKLink-Build，保留正式包、独有证据、依赖和缓存；联接或不可访问路径不强删。0.3.5清理已完成，仅保留原Mklink-AI-Probe工作区；历史联接run清单保存在构建根reports，不沿用旧清理任务。长期硬件跟进仍暂停，不因交接自动接管硬件或重复发布。
 - 工程上下文固定于后台生命周期；被动MI_04枚举不遍历占用设备，底层自动连接只接受唯一候选；本机别名不写固件。未知结果不重放，worker实际退出后才发布串口关闭，取消前保留缓冲寿命，背压错误不隐瞒。
 - 原MK-Firmware及用户固件工程改动保留，不自动恢复旧备份。2026-10-18授权的0.3.5、V3.6.5/V4.6.9发布已完成；未知操作不重放。用户要求未解决项保留交接，未扩大验收或宣称客户故障已闭环。
 - 编译完成不代表目标已下载：所有稳定文件变化（包括地址不变/仅时间戳）仅发待重载事件，不后台解析或应用。SuperWatch每次变化弹窗一次，稍后保留顶部醒目按钮。用户明确重新加载后才执行共享符号迁移和采集恢复；用户主动停止不恢复。
@@ -72,7 +72,7 @@
 
 ## 延续协议
 
-- 读取发布工作树AGENTS.md和本交接，validate并核对git状态/远端/工作树。0.3.5已经发布；新修复从最新main建codex/分支，不从历史0.3.4目录或旧发布分支重建。
+- 读取唯一Mklink-AI-Probe工作区AGENTS.md和本交接，validate并核对git状态/远端/工作树。原目录已同步最新main，修复工作区已移除；新修复从最新main建codex/分支，不续改已发布标签。
 - V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。
 - CDC 995根因仅保留待排查。恢复只允许同身份CDC故障5秒内；超时不自动接回或新建AI会话，主动断开立即生效，不重放未知写入。测试实例已经全部释放；见v035-transport-recovery.md，不寻找旧现场窗口。
 - 客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。
