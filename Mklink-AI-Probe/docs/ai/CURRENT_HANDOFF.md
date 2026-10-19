@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-19T16:01:30+08:00`
+- 更新时间：`2026-10-19T16:24:04+08:00`
 - 分支：`codex/0.3.6-fixes`
-- HEAD：`修复基线 bdc635331a422ad082c9135fe656a452fbc93715；交接及后续提交以 git log 为准。`
-- 远端 HEAD：`microkeen/main 已 fetch 至 bdc63533；本任务在 microkeen/codex/0.3.6-fixes 继续，不直接推送 main。`
+- HEAD：`RTT修复5bd50041；记忆提交以git log为准。`
+- 远端 HEAD：`microkeen/codex/0.3.6-fixes已推送修复5bd50041；PR46待审核，不直接推送main。`
 - 工作树：仅使用 E:/software/HPM5300/Mklink-AI-Probe，源码在其 Mklink-AI-Probe 子目录；当前为 codex/0.3.6-fixes。旧0.3.5修复工作区已移除，不重建。
-- 当前任务：2026-10-19维护者授权新会话在0.3.6修复分支解决RTT十六进制日志0C导致采集退出。已完成只读定位和离线复现，尚未修改产品代码；新会话继续实施修复、回归和PR。详见docs/verification/v036-rtt-hex-handoff.md。0.3.5发布与清理已完成，不重复发布。
-- 状态：`in_progress`
+- 当前任务：0.3.6 RTT HEX日志修复已实施并推送PR46。维护者要求终端不运行收发解析：前端按模式订阅，后端按通道订阅需求解析；CSV严格十进制与单行错误隔离已覆盖Web/CLI/MCP。生产Web、单元/生命周期与Chrome离线夹具通过，详见v036-rtt-hex-fix.md。待PR审核/CI与客户板复验；未合并、安装或发布。
+- 状态：`complete`
 
 ## 里程碑
 
@@ -23,6 +23,7 @@
 
 ## 验证证据
 
+- **0.3.6 RTT HEX日志与终端隔离**：5bd50041/PR46：相关Python376通过/1可选跳过，最终启动/重连/API组266通过（有重叠）；GUI5文件85通过，TS/Vite通过。Chrome生产Web+真实manager+FakeDevice：终端零行/曲线解析、CH1曲线独立、切回终端计数不增长、订阅释放且显式stop一次，浏览器无error。旧idle-reload测试隔离全局SuperWatch状态后复验通过。未实机/安装/发布，客户板待验证。详见v036-rtt-hex-fix.md；更早Pack证据仍见v035-peripheral-import.md。
 - **0.3.5正式发布**：Python全量4926通过/2跳过/1旧Skill断言失败，修正后相关68通过；GUI94文件985通过和生产构建通过。最终源2f474f60 Windows实装198Python/40Web/四载荷、全局Skill2605文件、冻结CLI/MCP/Web与原生退出通过；SiteAgent实际包2项通过。原生CI39116320413三平台资格/归档digest通过，5签名、双GitHub17附件匿名hash、3索引与真实Gitee Skill回退通过。安装后F103八路RTT连续及各256B下行、UART109条连续及256B下行、5034行按需记录通过。文件选择器超时边界及未解清单见v035-release-handoff.md。
 - **0.3.5 V2 RBL 自动升级**：V2独立索引双GitHub发布，旧UF2索引不变；用户回退后生产Web真实2.8→2.9升级。核心158/CLI相关127/V2专项29/GUI62及TS/Vite通过，组间重叠不相加。5be3dcf7 NSIS覆盖退出0，198Python/40Web/四载荷一致；Skill2605文件及CLI/SVD/MCP通过。安装Web、冻结/Skill实际MCP与CLI同版检查一致，F103 CPUID正确，已detach释放探针。原生正常关闭后进程/端点/端口全部释放；见v035-v2-rbl-update.md。
 - **0.3.5 五秒意外断链恢复**：925cadc8/生产Web cb1223d2：最终恢复/重连49项、共享运行时133项及GUI54项通过。NSIS实装退出0，197Python/40Web/四载荷一致，Skill2604文件及CLI/SVD/MCP通过。V3.6.5/F103快拔插约3.1秒恢复RTT/SuperWatch、原冻结MCP会话CPUID正确；超时约5秒进入expired，晚插回保持断开，旧MCP不重附着。显式Web连接后采集保持停止，Skill CLI读数正确；用户关闭后进程/端点/端口释放。见v035-transport-recovery.md；旧995根因仍待排查。
@@ -30,7 +31,6 @@
 - **0.3.5 串口文本续行**：100相关测试、TS/Vite通过；d9ac3a26 NSIS实装、196Python/40Web/四载荷一致，冻结CLI/SVD/MCP/HTTP通过；Skill 2d029f18的2603文件及CLI/SVD/MCP通过。Chrome实机周期文本完整，六段发送恢复三行，跨批次CRLF/UTF-8正确。原生导出49字节与输入逐字节一致。原生窗口正常关闭，全部MKLink进程、endpoint及8765/8766端口释放。2d029f18三个CI成功。详见v035-serial-lines.md。
 - **0.3.5 串口即时显示与 MSH 安装实测**：串口Worker/页面89、RTT页面/终端69、相关后端372通过，TS/Vite通过。NSIS提取/实装196Python/40Web、四载荷、Windows-only CLI/SVD/MCP/HTTP通过，Skill2603文件匹配。安装F103 ls三尾端15次与Chrome整条/逐键完整，CH1 256字节校验/120周期连续；UART115200下1000帧、38400下300帧序号CRC一致，两轮反向256字节一致。重新配置UART后首帧前各有一个额外字节单列保留；Chrome无换行7字节即时显示，最终导出文件恰好4f4b000a0dfeff共7字节；原生关闭后全部进程/endpoint及8765/8766释放。Skill/冻结CLI/MCP目标回显与UART累计校验一致。026b0bf3三CI通过。详见v035-serial-immediate.md。
 - **0.3.5 连接、RTT重载及下载流程**：拔插自动连接332 Python/89 GUI及用户实际换探针通过；RTT通道/显式符号重载490 Python/102 GUI及原工程Keil下载后实机通过，详见v035-auto-connect.md、v035-rtt-symbol-reload.md。最新下载免预连接/型号同步301 Python、185 GUI、TS/Vite通过；Chrome未连接时识别USB卷及算法，在线直接读取Flash64字节并保留结果；型号默认/独立修改及真实Pack导入后目录自动更新通过。未执行烧录，历史unknown仍保留。见v035-download-target-sync.md。
-- **0.3.5 Pack外设同步与手动SVD**：d5a65482：非空SVD索引随Pack状态/索引/工程配置变化刷新；当时支持聚焦重查/显式刷新（本次改为自动刷新并移除按钮）；浏览器SVD校验持久化、桌面本地路径。138Python、33GUI、生产构建通过；真实Edge+HTTP在线导入后原查询找到型号、手动文件选择显示12项、错误XML保留当前配置、重载恢复均通过。离线夹具不访问硬件；该专项当时未实装；后续已随0.3.5完成桌面覆盖安装和全局Skill更新，详见docs/verification/v035-peripheral-import.md。
 
 ## 架构决策
 
@@ -53,7 +53,7 @@
 
 ## 下一动作
 
-1. 新会话先读v036-rtt-hex-handoff.md并核对codex/0.3.6-fixes；修复数值识别/转换不一致和可选曲线解析异常导致RTT采集停止的问题，补充分块/多通道/终端及CLI/MCP相关回归，再提交推送PR。不要移动0.3.5标签或重复发布。
+1. 审核PR46（codex/0.3.6-fixes，修复5bd50041），核对最终CI及客户板复验。终端只收文本；共享窗口按通道订阅启用收发解析。合并/安装/发布另需授权，不移动0.3.5标签。详见v036-rtt-hex-fix.md。
 2. 收集两位 RTT 客户的上位机/下载器固件版本、目标 ELF/芯片及 IDE 占用，用启动阶段耗时和 MUX 请求身份复核。历史 unknown 操作不得重放；原始 CDC/F405/受限 AI/GD32 仍待现场闭环。
 3. 继续排查 30MHz 并行目标读错/Flash 偶发 status5，区分固件目标访问与主机队列；本次低负载 F103 结果不关闭该限制，需要固件改动另开会话。
 4. 保持Gitee真实Skill回退：0.3.5已验证；Windows超过100MB被拒使用GitHub链接，其余平台仅GitHub。保留唯一发布/验收证据和Skill备份，联接run仅人工处理，不强删。
@@ -72,7 +72,7 @@
 
 ## 延续协议
 
-- 读取唯一Mklink-AI-Probe工作区AGENTS.md、本交接及v036-rtt-hex-handoff.md，validate并核对git状态/远端/工作树。继续已创建的codex/0.3.6-fixes；旧修复工作区已清理。
+- 读取唯一工作区AGENTS.md、本交接及v036-rtt-hex-fix.md，validate并核对状态；PR46已推送，保留本分支。此次Chrome是离线设备夹具，不继承客户硬件结论；不重建旧工作区。
 - V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。
 - CDC 995根因仅保留待排查。恢复只允许同身份CDC故障5秒内；超时不自动接回或新建AI会话，主动断开立即生效，不重放未知写入。测试实例已经全部释放；见v035-transport-recovery.md，不寻找旧现场窗口。
 - 客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。
