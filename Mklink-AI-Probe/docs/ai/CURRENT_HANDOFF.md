@@ -4,12 +4,12 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-19T16:47:34+08:00`
+- 更新时间：`2026-10-19T17:05:15+08:00`
 - 分支：`codex/0.3.6-fixes`
-- HEAD：`SuperWatch修复1669348b；RTT修复5bd50041；记忆提交以git log为准。`
-- 远端 HEAD：`microkeen/codex/0.3.6-fixes已推送1669348b；PR46待审核，未合并main。`
+- HEAD：`安装证据/生产Web提交0136915d；冻结源码2b3d5528，含1669348b SuperWatch和5bd50041 RTT；记忆提交以git log为准。`
+- 远端 HEAD：`microkeen/codex/0.3.6-fixes已推送0136915d；PR46待审核，未合并main。`
 - 工作树：仅使用 E:/software/HPM5300/Mklink-AI-Probe，源码在其 Mklink-AI-Probe 子目录；当前为 codex/0.3.6-fixes。旧0.3.5修复工作区已移除，不重建。
-- 当前任务：0.3.6 RTT与SuperWatch改进已推送PR46。RTT终端按通道跳过收发解析、严格十进制CSV已完成。SuperWatch桌面本机直接原生选目录，允许采集前启用记录并显示等待数据；222 Python/138 GUI及原生构建通过。原生弹窗和取消已验证，完整确认目录链被QMCapture覆盖阻挡，需补验。详见v036-rtt-hex-fix.md和v036-superwatch-recording.md；未安装/合并/发布。
+- 当前任务：用户追加授权直接打包覆盖安装，已完成。2b3d5528本地NSIS安装退出0，198 Python/40 Web/四载荷一致，冻结CLI/MCP/SVD/HTTP及退出检查通过。安装版已打开、后台正常、未连接，交用户测试；界面仍v0.3.5。RTT终端隔离解析和SuperWatch原生目录/提前记录已实现；连接后实际记录链待用户确认。见v036-local-install.md及两份功能报告。全局Skill未改，未合并/发布。
 - 状态：`complete`
 
 ## 里程碑
@@ -23,7 +23,7 @@
 
 ## 验证证据
 
-- **0.3.6 RTT与SuperWatch日志**：1669348b/PR46：SuperWatch222 Python、4文件138 GUI、边界/记忆59通过，TS/Vite/Rust release exe成功。真实Windows源码候选直接弹出原生目录框，取消后idle；完整目录确认链被QMCapture64覆盖拦住，未碰截图工具，已仅结束测试实例。预先记录→真实manager采集→首样本落盘由DumpMemory夹具验证。RTT5bd50041：376通过/1跳过、扩展266通过（重叠），GUI85，Chrome终端零解析及多通道切换通过；旧头三个CI成功。新头CI待结果；未客户板/安装/发布。见两份v036验证报告，早前Pack见v035-peripheral-import.md。
+- **0.3.6 RTT与SuperWatch日志**：1669348b/PR46：SuperWatch222 Python、138 GUI、边界/记忆59通过；原生目录弹出/取消通过，完整确认链曾被QMCapture遮挡。真实manager预先记录首样本由DumpMemory夹具验证。RTT5bd50041：376通过/1跳过、扩展266（重叠）、GUI85及Chrome零解析/多通道通过。2b3d5528三个CI通过；用户授权本地NSIS覆盖成功，198 Python/40 Web/四载荷一致，冻结CLI/SVD/MCP/HTTP、无宿主Python及退出检查通过。原生/Chrome显示新构建且后台正常。未绑定探针recording/start仍409身份保护，连接后记录待用户测。详见三份v036报告；未硬件/发布。
 - **0.3.5正式发布**：Python全量4926通过/2跳过/1旧Skill断言失败，修正后相关68通过；GUI94文件985通过和生产构建通过。最终源2f474f60 Windows实装198Python/40Web/四载荷、全局Skill2605文件、冻结CLI/MCP/Web与原生退出通过；SiteAgent实际包2项通过。原生CI39116320413三平台资格/归档digest通过，5签名、双GitHub17附件匿名hash、3索引与真实Gitee Skill回退通过。安装后F103八路RTT连续及各256B下行、UART109条连续及256B下行、5034行按需记录通过。文件选择器超时边界及未解清单见v035-release-handoff.md。
 - **0.3.5 V2 RBL 自动升级**：V2独立索引双GitHub发布，旧UF2索引不变；用户回退后生产Web真实2.8→2.9升级。核心158/CLI相关127/V2专项29/GUI62及TS/Vite通过，组间重叠不相加。5be3dcf7 NSIS覆盖退出0，198Python/40Web/四载荷一致；Skill2605文件及CLI/SVD/MCP通过。安装Web、冻结/Skill实际MCP与CLI同版检查一致，F103 CPUID正确，已detach释放探针。原生正常关闭后进程/端点/端口全部释放；见v035-v2-rbl-update.md。
 - **0.3.5 五秒意外断链恢复**：925cadc8/生产Web cb1223d2：最终恢复/重连49项、共享运行时133项及GUI54项通过。NSIS实装退出0，197Python/40Web/四载荷一致，Skill2604文件及CLI/SVD/MCP通过。V3.6.5/F103快拔插约3.1秒恢复RTT/SuperWatch、原冻结MCP会话CPUID正确；超时约5秒进入expired，晚插回保持断开，旧MCP不重附着。显式Web连接后采集保持停止，Skill CLI读数正确；用户关闭后进程/端点/端口释放。见v035-transport-recovery.md；旧995根因仍待排查。
@@ -47,13 +47,13 @@
 
 ## 真机环境
 
-- **state**：最终安装版实机测试已停止，AI detach、设备释放；用户正常关闭原生窗口后进程/端点/监听端口均0。现为V2.9.0/F103八RTT通道测试程序，沿用板上固件并做AXF代码片段比对。
-- **installer**：正式2f474f60签名NSIS已覆盖安装；Skill2605文件与正式ZIP一致，CLI/SVD/MCP通过；需要重启AI加载更新。证据在MKLINK_BUILD_ROOT/artifacts/v035-official，旧Skill备份保留。
+- **state**：本轮新安装版已打开、后台正常、设备未连接，交用户测试。旧安装版正常关闭后资源释放，独立冻结验证后台也已退出；未连接或操作目标硬件，不继承历史板测结论。
+- **installer**：用户授权2b3d5528本地未签名NSIS覆盖安装成功，版本号仍0.3.5；证据在MKLINK_BUILD_ROOT/artifacts/v036-local-2b3d5528。全局Skill仍正式2f474f60，未更新；正式包和Skill备份保留。
 - **backups**：0.3.4正式包/安装/渠道/Skill/HIL在MKLINK_BUILD_ROOT/artifacts/v034-official，相邻v034-official-native保存完整原生CI ZIP；0.3.5本机包见上述构建根。原Git根.build/artifacts/v033-official、v032-official及用户备份保持；清理前快照/删除清单在构建根reports/v034-cleanup-*.json、v034-deleted-branches.json、v034-memory-before-cleanup.json。不能再把F盘仅视为可删缓存。
 
 ## 下一动作
 
-1. 审核PR46最终头及CI；补SuperWatch原生选目录确认→等待数据→停止完整链（弹窗/取消已过，QMCapture覆盖阻挡后续）。客户板RTT待复验；两修复见v036-rtt-hex-fix.md/v036-superwatch-recording.md。合并/安装/发布另需授权，不移动0.3.5标签。
+1. 用户测试已打开的2b3d5528安装版：连接后先原生选目录启用记录，再开始采集，以及RTT终端模式。审核PR46最终头/CI；完整原生确认链和客户板RTT尚待复验。安装已获授权并完成；合并/发布另需授权，不移动0.3.5标签。
 2. 收集两位 RTT 客户的上位机/下载器固件版本、目标 ELF/芯片及 IDE 占用，用启动阶段耗时和 MUX 请求身份复核。历史 unknown 操作不得重放；原始 CDC/F405/受限 AI/GD32 仍待现场闭环。
 3. 继续排查 30MHz 并行目标读错/Flash 偶发 status5，区分固件目标访问与主机队列；本次低负载 F103 结果不关闭该限制，需要固件改动另开会话。
 4. 保持Gitee真实Skill回退：0.3.5已验证；Windows超过100MB被拒使用GitHub链接，其余平台仅GitHub。保留唯一发布/验收证据和Skill备份，联接run仅人工处理，不强删。
@@ -72,7 +72,7 @@
 
 ## 延续协议
 
-- 读取唯一工作区AGENTS.md、本交接及两份v036报告，validate并核对状态；PR46已推送1669348b及记忆，保留本分支。现有安装版窗口未操作，测试候选已结束；离线夹具不继承硬件结论，不重建旧工作区。
+- 读取唯一工作区AGENTS.md及本交接，validate核对状态；PR46含0136915d安装证据及记忆，保留本分支。安装版2b3d5528已打开交用户测试，独立验证实例已退出；见三份v036报告。不要重复覆盖安装或自动接管硬件，不重建旧工作区。
 - V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。
 - CDC 995根因仅保留待排查。恢复只允许同身份CDC故障5秒内；超时不自动接回或新建AI会话，主动断开立即生效，不重放未知写入。测试实例已经全部释放；见v035-transport-recovery.md，不寻找旧现场窗口。
 - 客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。
