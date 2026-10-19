@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-18T19:20:22+08:00`
-- 分支：`main（工作区清理交接经独立 PR 合入）`
-- HEAD：`0.3.5 不可变发布源 2f474f60372efdf1218211d4235f05343eab840e；PR44交接/正式Web已合入cd2aba8d，实际HEAD以git log为准。`
-- 远端 HEAD：`microkeen/main；PR43、PR44已合并。本次仅清理工作区及更新交接，不移动版本标签。新任务先fetch核对。`
-- 工作树：仅保留 E:/software/HPM5300/Mklink-AI-Probe，源码在其 Mklink-AI-Probe 子目录；已同步最新main。mklink-0.3.5-fixes工作区已移除；新开发从最新main创建codex/分支。
-- 当前任务：0.3.5已正式发布，双GitHub各17附件、五签名、三个更新渠道和Gitee Skill回退验证完成；Windows实装/Skill已更新并正常退出。V3.6.5/V4.6.9原始UF2独立发布完成。未解决项保留v035-release-handoff.md；不要重复发布或升级固件。 发布后工作区已归并到原Mklink-AI-Probe，清理结果见v035-workspace-cleanup.md。
-- 状态：`complete`
+- 更新时间：`2026-10-19T16:01:30+08:00`
+- 分支：`codex/0.3.6-fixes`
+- HEAD：`修复基线 bdc635331a422ad082c9135fe656a452fbc93715；交接及后续提交以 git log 为准。`
+- 远端 HEAD：`microkeen/main 已 fetch 至 bdc63533；本任务在 microkeen/codex/0.3.6-fixes 继续，不直接推送 main。`
+- 工作树：仅使用 E:/software/HPM5300/Mklink-AI-Probe，源码在其 Mklink-AI-Probe 子目录；当前为 codex/0.3.6-fixes。旧0.3.5修复工作区已移除，不重建。
+- 当前任务：2026-10-19维护者授权新会话在0.3.6修复分支解决RTT十六进制日志0C导致采集退出。已完成只读定位和离线复现，尚未修改产品代码；新会话继续实施修复、回归和PR。详见docs/verification/v036-rtt-hex-handoff.md。0.3.5发布与清理已完成，不重复发布。
+- 状态：`in_progress`
 
 ## 里程碑
 
@@ -53,7 +53,7 @@
 
 ## 下一动作
 
-1. 0.3.5与V3.6.5/V4.6.9已发布，不重复发布、移动标签或重放V2升级。后续按用户新反馈定位遗留问题；交接见v035-release-handoff.md，源码先fetch最新main。
+1. 新会话先读v036-rtt-hex-handoff.md并核对codex/0.3.6-fixes；修复数值识别/转换不一致和可选曲线解析异常导致RTT采集停止的问题，补充分块/多通道/终端及CLI/MCP相关回归，再提交推送PR。不要移动0.3.5标签或重复发布。
 2. 收集两位 RTT 客户的上位机/下载器固件版本、目标 ELF/芯片及 IDE 占用，用启动阶段耗时和 MUX 请求身份复核。历史 unknown 操作不得重放；原始 CDC/F405/受限 AI/GD32 仍待现场闭环。
 3. 继续排查 30MHz 并行目标读错/Flash 偶发 status5，区分固件目标访问与主机队列；本次低负载 F103 结果不关闭该限制，需要固件改动另开会话。
 4. 保持Gitee真实Skill回退：0.3.5已验证；Windows超过100MB被拒使用GitHub链接，其余平台仅GitHub。保留唯一发布/验收证据和Skill备份，联接run仅人工处理，不强删。
@@ -72,7 +72,7 @@
 
 ## 延续协议
 
-- 读取唯一Mklink-AI-Probe工作区AGENTS.md和本交接，validate并核对git状态/远端/工作树。原目录已同步最新main，修复工作区已移除；新修复从最新main建codex/分支，不续改已发布标签。
+- 读取唯一Mklink-AI-Probe工作区AGENTS.md、本交接及v036-rtt-hex-handoff.md，validate并核对git状态/远端/工作树。继续已创建的codex/0.3.6-fixes；旧修复工作区已清理。
 - V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。
 - CDC 995根因仅保留待排查。恢复只允许同身份CDC故障5秒内；超时不自动接回或新建AI会话，主动断开立即生效，不重放未知写入。测试实例已经全部释放；见v035-transport-recovery.md，不寻找旧现场窗口。
 - 客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。
