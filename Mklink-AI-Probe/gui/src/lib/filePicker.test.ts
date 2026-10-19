@@ -16,6 +16,18 @@ async function loadPickerWithDialog(result: unknown) {
 }
 
 describe('file picker', () => {
+  it('selects one native directory and remembers its starting location', async () => {
+    const { open, picker } = await loadPickerWithDialog('F:/日志')
+    expect(await picker.pickDirectory('保存日志', 'F:/logs')).toBe('F:/日志')
+    expect(open).toHaveBeenCalledWith({ directory: true, multiple: false, title: '保存日志', defaultPath: 'F:/logs' })
+  })
+  it('cancels directory selection without a default and propagates dialog failures', async () => {
+    const { open, picker } = await loadPickerWithDialog(null)
+    expect(await picker.pickDirectory('保存日志')).toBeNull()
+    expect(open).toHaveBeenCalledWith({ directory: true, multiple: false, title: '保存日志' })
+    open.mockRejectedValueOnce(new Error('unavailable'))
+    await expect(picker.pickDirectory('保存日志')).rejects.toThrow('unavailable')
+  })
   it('opens a single SVD file in the desktop dialog', async () => {
     const { open, picker } = await loadPickerWithDialog('F:/chip.svd')
     expect(await picker.pickSvdFile()).toBe('F:/chip.svd')

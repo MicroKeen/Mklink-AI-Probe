@@ -2308,8 +2308,8 @@ class SuperWatchStreamManager:
         with self._recording_lock, self._read_lock:
             if self._recorder and self._recorder.status()['active']:
                 raise RuntimeError('SuperWatch recording is already active')
-            if not self.running or not json.loads(self._metadata_cache[1]):
-                raise RuntimeError('Start SuperWatch acquisition before recording')
+            if not self.running and self._thread is not None and self._thread.is_alive():
+                raise RuntimeError('SuperWatch acquisition is still stopping')
             # Exclude samples received before the user pressed Start recording.
             self._flush_binary_batch_locked()
             self._recorder = SuperWatchRecorder(directory)
