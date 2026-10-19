@@ -362,7 +362,7 @@ describe('RttViewTab binary migration', () => {
     expect(wrapper.findComponent({ name: 'VirtualLogPanel' }).exists()).toBe(true)
     expect(wrapper.findComponent({ name: 'RttTerminalPanel' }).exists()).toBe(true)
     expect(mocks.terminalBinary.start).toHaveBeenCalled()
-    expect(mocks.binary.start).toHaveBeenCalled()
+    expect(mocks.binary.start).not.toHaveBeenCalled()
 
     mocks.terminalBinary.rttTerminal.value = {
       type: 'rtt-terminal', sequence: 1n, text: '\x1b[31merror\x1b[0m\r',
@@ -379,6 +379,16 @@ describe('RttViewTab binary migration', () => {
     expect(mocks.binary.start).toHaveBeenCalled()
     expect(mocks.dash.start).not.toHaveBeenCalled()
     expect(mocks.dash.stop).not.toHaveBeenCalled()
+
+    mocks.binary.start.mockClear()
+    await wrapper.get('[data-testid="rtt-terminal-mode"]').trigger('click')
+    expect(mocks.binary.stop).toHaveBeenCalled()
+    expect(mocks.binary.start).not.toHaveBeenCalled()
+    expect(mocks.terminalBinary.start).toHaveBeenCalledTimes(2)
+    await wrapper.get('[data-testid="rtt-hex-mode"]').trigger('click')
+    expect(mocks.binary.start).not.toHaveBeenCalled()
+    expect(mocks.terminalBinary.stop).toHaveBeenCalled()
+    await wrapper.get('[data-testid="rtt-log-mode"]').trigger('click')
 
     await wrapper.get('[data-testid="rtt-clear-logs"]').trigger('click')
     expect(wrapper.get('[data-testid="rtt-clear-logs"]').attributes('aria-label')).toBe('清除日志')
@@ -671,7 +681,7 @@ describe('RttViewTab binary migration', () => {
     mocks.status = { running: true, control_block_addr: '0x20000108', down_buffers: [] }
     await vi.advanceTimersByTimeAsync(500)
     await flushPromises()
-    expect(mocks.binary.start).toHaveBeenCalled()
+    expect(mocks.terminalBinary.start).toHaveBeenCalled()
     expect(toolbar.props('state')).not.toBe('error')
     wrapper.unmount()
   })

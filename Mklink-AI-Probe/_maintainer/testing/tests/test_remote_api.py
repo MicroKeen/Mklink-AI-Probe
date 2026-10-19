@@ -268,13 +268,16 @@ def test_shared_source_reload_defers_without_losing_changes(tmp_path, monkeypatc
 
 def test_failed_source_reload_requires_explicit_retry(tmp_path):
     from unittest.mock import Mock
+    from mklink.remote.dashboards import get_managers
     device, axf = _connected_symbol_device(tmp_path)
     device._axf = str(axf)
     device.parse_axf = Mock(side_effect=ValueError('incomplete build'))
     app = create_app(auth_token=None, project_root=str(tmp_path))
     app.state.mklink_state['device'] = device
     axf.write_bytes(b'broken')
-    with patch('mklink.remote.dashboards.stop_bridge_dashboards', return_value=[]):
+    # Other suites may leave a SuperWatch runtime in the shared manager. This
+    # fixture models an idle reload and only implements parse_axf.
+    with patch('mklink.remote.dashboards.stop_bridge_dashboards', return_value=[]), patch.object(get_managers()['superwatch'], '_runtime', None):
         asyncio.run(app.state.check_file_sources(apply=True))
         asyncio.run(app.state.check_file_sources())
         assert device.parse_axf.call_count == 1, str(app.state.mklink_state['file_source_change'])
