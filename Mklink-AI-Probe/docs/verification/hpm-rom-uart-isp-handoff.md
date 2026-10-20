@@ -148,3 +148,15 @@ TypeScript/Vite 生产构建通过。Chrome 实际加载 `ecc65d6d73ae`：默认
 用户要求将本地安装版改为 0.3.6，并增加可见版本信息；源码 422cc533 已同步 Python/runtime、Tauri/Cargo 版本和中英文 USART ISP 更新说明。用户同时要求覆盖现有安装后检查界面及功能。PR47 保持独立功能集；本地安装须额外组合已安装 2b3d5528 的 RTT/SuperWatch 修复，避免回退已有功能，不因此合并 PR46。实际本地集成提交、覆盖安装、原生与安装后浏览器、5M 单轮实机结果另行记录。此前六档/五档测试在版本信息变更后不作为最终完整检查，0.3.6 重新执行全量。
 
 用户随后明确允许本次跳过管理员权限安装测试。按该授权不弹 UAC、不执行需要提权的本地覆盖安装；仍构建 0.3.6 NSIS，并验证其解包程序、原生界面/生产 Web 与已授权目标功能。解包验证不能写成已安装；本地现有安装保持原版本，安装后检查列为本次授权跳过。
+
+## 0.3.6 最终检查与本地包（2026-10-21）
+
+- PR47 功能版本 GUI 全量 94 文件 / 996 项通过。Python 全量 4993 项通过、2 项可选依赖跳过，1 项隐藏插件清单版本不一致已修正为 0.3.6；随后版本/更新及包元数据 17 项复验通过。未将中断的历史测试计为全量通过。
+- 用户既有 RTT 终端解析隔离与 SuperWatch 原生目录选择/采集前记录保存在 PR46。为本地升级不回退功能，单独的 `codex/v036-local-integration` 源码 `0673490b502a9fd656aeba569969e83b693bb5af` 组合这些已安装修复与 PR47；组合版 496 项相关 Python、94 文件 / 1002 项 GUI 及 TypeScript/Vite、NSIS 构建通过。PR46 不因此合并。
+- 本地包 `MKLINK_BUILD_ROOT/artifacts/v036-local-isp-0673490b/Mklink-AI-Probe-0.3.6-local-0673490b-Setup.exe`，SHA256 `c2be4e2297b7d3f82f6bae9cfb38524bea6ae5ed2dfe1256728f1ae011b9faae`。标准 NSIS，无签名，不是公开更新发布。组合版生产 Web 保存在 `3eac4a6d`。
+- 解包逐项核对 199 Python 文件、40 Web 资源；内置算法 7059 型号 / 2224 blobs、外设 4800 型号。仅 Windows 系统 PATH 下冻结 CLI/SVD/MCP、HTTP/生产资源、无宿主 Python 和正常退出通过。
+- 原生程序显示 `v0.3.6 · 0673490b502a`，中英文更新说明包含 USART ISP、RTT 和 SuperWatch。浏览器连接该冻结后台，实际确认五档、默认 2M、5M 刷新恢复，双 BIN 逆序添加后生成脚本按地址排序，完成动作设为无蜂鸣、不复位，执行 1 轮。
+- 实际从该打包程序部署至下载器 SD 并触发。两段 BIN 合计 95180 字节，重新合并 SHA256 与授权原 BIN 一致。最终任务 `60b9729462554632a1f8d6b10a165e86` 与已部署脚本一致，`code=0, rom_status=0, completed=1, total=1`。浏览器无控制台 error；本轮未另外测量波形耗时，不将之前约 0.7773 秒的测量冒充本轮计时。
+- 浏览器及原生程序正常关闭，候选进程与监听端口释放。现有安装的三个主要载荷哈希前后一致。按用户明确豁免未执行管理员覆盖安装，不能称为安装后验收；用户配置未清除，全局 Skill 未替换。
+- 测试隔离 Windows 用户目录最初导致原生 WebView2 启动失败；保留系统已安装 WebView2 的用户目录定位，仅隔离浏览器数据和任务目录后正常启动。不是靠宿主 Python 回退。
+- 本地证据：上述 artifact 目录内 `manifest.json`、`extracted-qualification.json`、`native-hardware-qualification.json`、`sd-deployment.json`、`actual-5m-result.log`、`native-version.png`、`actual-5m-result.png`。测试产生的联接 run 按存储规则保留，不强制清理。最终精确提交 CI 与合并状态见 PR47；未签名、未打标签或公开发版。
