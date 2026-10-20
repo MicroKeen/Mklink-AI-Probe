@@ -459,7 +459,7 @@ describe('OfflineFlashView', () => {
       'V4',
       'factory-download.py',
       expect.any(Function),
-      undefined, {},
+      undefined, {}, undefined,
     )
 
     await wrapper.get('[data-testid="offline-model"]').setValue('V3')
