@@ -36,7 +36,8 @@ def test_reject_inapplicable_protocol_configuration(change):
 
 
 @pytest.mark.parametrize("change", [
-    {"baud_rate": 921600}, {"baud_rate": 115201}, {"baud_rate": 2000001},
+    {"baud_rate": 0}, {"baud_rate": -1}, {"baud_rate": 0x100000000},
+    {"baud_rate": ""}, {"baud_rate": None}, {"baud_rate": "2M"},
     {"baud_rate": True}, {"baud_rate": 2000000.0}, {"connect_timeout_ms": 1.5},
     {"flash_size": "garbage"}, {"flash_size": 0}, {"flash_size": "0xFFFFFFFF"},
     {"sector_size": 1234}, {"memory_id": 0}, {"config_address": "0x1000"},
@@ -64,7 +65,11 @@ def test_explicit_addresses_and_bin_only():
         parse_offline_config(data)
 
 
-@pytest.mark.parametrize("baud", [115200, 2000000])
+def test_default_baud_is_2m():
+    assert parse_offline_config(payload()).hpm_isp.baud_rate == 2000000
+
+
+@pytest.mark.parametrize("baud", [1, 115200, 921600, 2000000, 4000000, 10000000, 1234567, 0xFFFFFFFF])
 def test_script_calls_contract_and_does_not_access_debug(monkeypatch, baud):
     data = payload()
     data["hpm_isp"]["baud_rate"] = baud

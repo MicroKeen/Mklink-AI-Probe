@@ -44,10 +44,14 @@ type ProbeModel = 'V2' | 'V3' | 'V4'
 defineOptions({ name: 'OfflineFlashView' })
 
 const OFFLINE_STORAGE_KEY = 'mklink.offlineFlash.settings'
-function savedSettings(): { model?: ProbeModel; scriptName?: string; automaticCount?: number; idcodeTimeout?: number; swdClock?: number } {
+function savedSettings(): { model?: ProbeModel; scriptName?: string; automaticCount?: number; idcodeTimeout?: number; swdClock?: number; ispBaudRate?: number } {
   try { return JSON.parse(localStorage.getItem(OFFLINE_STORAGE_KEY) || '{}') } catch { return {} }
 }
 const saved = savedSettings()
+function validIspBaud(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 && value <= 0xFFFFFFFF
+}
+let savedIspBaud = validIspBaud(saved.ispBaudRate) ? saved.ispBaudRate : 2000000
 
 const hpmBoards = [
   'hpm5300evk', 'hpm5301evklite', 'hpm5e00evk', 'hpm6e00evk',
@@ -91,7 +95,7 @@ const beepOnCompletion = ref(true)
 const resetAfterDownload = ref(true)
 const ispConnection = ref<'idle' | 'waiting' | 'connected'>('idle')
 const ispConfig = ref<HpmIspConfig>({
-  baud_rate: 115200, connect_timeout_ms: 30000, command_timeout_ms: 10000,
+  baud_rate: savedIspBaud, connect_timeout_ms: 30000, command_timeout_ms: 10000,
   memory_id: '0x10000', config_address: '0x200',
   nor_options: ['0xFCF90002', '0x6', '0x1000'],
   flash_base: '0x80000000', flash_size: '', sector_size: 4096,
@@ -192,7 +196,7 @@ const canBuild = computed(() => (
   && ((firmwares.value.length === 0 && Object.keys(optionByteChanges.value).length > 0
     && !securityRequested.value && !eraseAllBeforeDownload.value)
   || (firmwares.value.length > 0 && (hpmMode.value
-    ? (ispMode.value ? effectiveModel.value === 'V4' && !!ispConfig.value.flash_size
+    ? (ispMode.value ? effectiveModel.value === 'V4' && validIspBaud(ispConfig.value.baud_rate) && !!ispConfig.value.flash_size
         && firmwares.value.length <= 8 && firmwares.value.every(item => item.format === 'bin')
         && (ispConfig.value.completion.reset !== 'power_cycle' || !!ispConfig.value.completion.restore_voltage_mv)
       : !!hpmBoard.value) && firmwares.value.every(item => (item.file || item.source_path) && (item.format === 'hex' || !!item.base_address))
@@ -220,13 +224,15 @@ watch(
   { deep: true },
 )
 
-watch([model, scriptName, automaticCount, idcodeTimeout, swdClock], () => {
+watch([model, scriptName, automaticCount, idcodeTimeout, swdClock, () => ispConfig.value.baud_rate], () => {
+  if (validIspBaud(ispConfig.value.baud_rate)) savedIspBaud = ispConfig.value.baud_rate
   localStorage.setItem(OFFLINE_STORAGE_KEY, JSON.stringify({
     model: model.value || undefined,
     scriptName: scriptName.value,
     automaticCount: automaticCount.value,
     idcodeTimeout: idcodeTimeout.value,
     swdClock: swdClock.value,
+    ispBaudRate: savedIspBaud,
   }))
 })
 
