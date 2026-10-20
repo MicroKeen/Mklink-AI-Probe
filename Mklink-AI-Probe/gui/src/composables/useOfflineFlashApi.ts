@@ -119,6 +119,7 @@ export function useOfflineFlashApi() {
     onLine?: (line: string) => void,
     port?: string,
     identityHeaders: Record<string, string> = {},
+    programmingProtocol?: 'hpm_rom_isp_uart',
   ): Promise<OfflineTriggerResult> {
     const headers = new Headers({
       ...identityHeaders,
@@ -131,6 +132,7 @@ export function useOfflineFlashApi() {
       body: JSON.stringify({
         model,
         script_name: scriptName,
+        ...(programmingProtocol ? { programming_protocol: programmingProtocol } : {}),
         ...(port ? { port } : {}),
       }),
     })

@@ -93,6 +93,7 @@ jobs:
           $tests += 'test_gui_connect_handoff'
           $tests += 'test_peripheral_restore'
           $tests += 'test_runtime_switch'
+          $tests += 'test_hpm_isp_offline'
           $arguments = @('-m', 'pytest', '-q', '--tb=short', "--junitxml=$($paths.reports)/shared-runtime.xml")
           $arguments += $tests | ForEach-Object { "_maintainer/testing/tests/$_.py" }
           ./scripts/build_workspace.ps1 -Action run -Executable python -ArgumentList $arguments
@@ -124,6 +125,10 @@ jobs:
         run: |
           $paths = ./scripts/build_workspace.ps1 -Action paths | ConvertFrom-Json
           ./scripts/build_workspace.ps1 -Action run -WorkingDirectory ./gui -Executable npm -ArgumentList @('test', '--', 'src/App.test.ts', 'src/views/DashboardView.test.ts', 'src/views/RemoteDashboardReuse.test.ts', 'src/lib/remoteRuntimeEndpoint.test.ts', 'src/components/dash/WaveformViewer.test.ts', 'src/components/dash/SerialMonitorTab.test.ts', 'src/components/dash/SerialAutomationPanel.test.ts', 'src/components/dash/SerialRecordingPanel.test.ts', 'src/components/dash/SerialSequencePanel.test.ts', 'src/components/dash/SerialSendExtras.test.ts', 'src/components/dash/ModbusTab.test.ts', 'src/lib/sharedRuntimeView.test.ts', 'src/lib/runtimeEndpoint.test.ts', 'src/lib/runtimeEndpoint.startup.test.ts', 'src/composables/useBackendHealth.test.ts', 'src/composables/useResourceStatus.test.ts', 'src/components/config/RuntimePanel.test.ts', 'src/views/ConfigView.test.ts', 'src/views/SiteAgentView.test.ts', 'src/components/config/RemoteConnectPanel.test.ts', 'src/composables/useMklinkApi.test.ts', 'src/components/dash/PeripheralWatchPanel.test.ts', 'src/components/dash/SuperWatchTab.test.ts', 'src/components/dash/RttViewTab.test.ts', 'src/components/dash/RttRawView.test.ts', '--reporter=default', '--reporter=junit', "--outputFile.junit=$($paths.reports)/shared-gui.xml")
+      - name: Check offline USART ISP configuration
+        shell: pwsh
+        working-directory: Mklink-AI-Probe
+        run: ./scripts/build_workspace.ps1 -Action run -WorkingDirectory ./gui -Executable npm -ArgumentList @('test', '--', 'src/views/OfflineFlashView.test.ts', 'src/composables/useOfflineFlashApi.test.ts')
       - name: Check types and production bundle
         shell: pwsh
         working-directory: Mklink-AI-Probe

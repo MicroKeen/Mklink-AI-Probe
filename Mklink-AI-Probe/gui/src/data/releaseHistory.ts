@@ -9,6 +9,25 @@ export interface ReleaseHistoryEntry {
 
 export const releaseHistory: ReleaseHistoryEntry[] = [
   {
+    version: '0.3.6', date: '2026-10-21',
+    summary: '新增 HPM USART ISP 脱机烧录',
+    summaryEn: 'Add HPM USART ISP offline programming',
+    changes: [
+      'HPM5301 支持通过 HPMLINK V4 独立 UART 执行 ROM ISP 脱机烧录。',
+      '提供 115200、1M、2M、5M、10M 五档波特率，默认 2M，自动保存所选档位。',
+      '支持多个 BIN 按地址排序，部署前检查文件范围、重叠和擦除扇区。',
+      '可设置自动烧录次数、完成蜂鸣以及软件、硬件或断电复位。',
+      '显示握手、烧录进度及最终任务结果，结果未知时阻止重复触发。',
+    ],
+    changesEn: [
+      'Program HPM5301 through ROM ISP using the independent UART of HPMLINK V4.',
+      'Choose 115200, 1M, 2M, 5M or 10M baud; default to 2M and remember the selected rate.',
+      'Sort multiple BIN images by address and validate ranges, overlaps and erase sectors before deployment.',
+      'Configure automatic cycles, completion beeps, and software, hardware or power-cycle resets.',
+      'Show handshake, programming progress and final task results; prevent retriggering an unknown result.',
+    ],
+  },
+  {
     version: '0.3.5', date: '2026-10-18',
     summary: '优化调试、日志与下载体验',
     summaryEn: 'Improve debugging, logging and programming',

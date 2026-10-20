@@ -25,6 +25,7 @@ from mklink.offline_download import (
     generate_offline_script,
     offline_trigger_command,
     parse_offline_config,
+    script_filename,
 )
 from mklink.offline_security import offline_security_capability
 
@@ -585,6 +586,15 @@ def create_offline_download_router(
 ) -> APIRouter:
     router = APIRouter(prefix="/api/offline-download", tags=["offline-download"])
     background_trigger_tasks: set[asyncio.Task] = set()
+    from mklink.hpm_isp import CAPABILITY_COMMAND, require_capability, script_metadata, trigger_result
+
+    def _resources(isp_job=None):
+        from mklink.remote.resource_manager import ResourceGroup
+        result = [ResourceGroup.MKLINK_BRIDGE, ResourceGroup.TARGET_DEBUG,
+                  ResourceGroup.MUX_RTT, ResourceGroup.MUX_WATCH]
+        if isp_job is not None:
+            result += [ResourceGroup.SERIAL_PORT, ResourceGroup.MODBUS_PORT]
+        return result
 
     def _connected_bridge(port: Optional[str]) -> Optional[object]:
         device = device_provider() if callable(device_provider) else None
@@ -600,15 +610,16 @@ def create_offline_download_router(
         active_bridge: Optional[object],
         resolved_port: Optional[str],
         on_output: Optional[Callable[[str], None]] = None,
+        timeout: int = 600,
     ) -> str:
         from mklink.bridge import MKLinkSerialBridge
 
         if active_bridge is not None:
             if on_output is None:
-                return active_bridge.send_command(command, timeout=600, echo=True)
+                return active_bridge.send_command(command, timeout=timeout, echo=True)
             return active_bridge.send_command(
                 command,
-                timeout=600,
+                timeout=timeout,
                 echo=False,
                 on_output=on_output,
             )
@@ -617,20 +628,41 @@ def create_offline_download_router(
             if not bridge.connect():
                 raise ConnectionError("Unable to connect to MKLink CDC port")
             if on_output is None:
-                return bridge.send_command(command, timeout=600, echo=True)
+                return bridge.send_command(command, timeout=timeout, echo=True)
             return bridge.send_command(
                 command,
-                timeout=600,
+                timeout=timeout,
                 echo=False,
                 on_output=on_output,
             )
         finally:
             bridge.close()
 
+    async def _check_isp_capability(port=None):
+        from mklink.discovery import find_mklink_cdc_port
+        from mklink.remote.resource_manager import ResourceError
+        bridge = _connected_bridge(port)
+        resolved = port or (None if bridge else await asyncio.to_thread(find_mklink_cdc_port))
+        if bridge is None and not resolved:
+            raise OfflineDownloadError("Connect an HPMLINK V4 probe before deploying USART ISP")
+        owner = f"user:offline-download:isp-capability:{uuid.uuid4().hex}"
+        try:
+            resource_manager.acquire_many(_resources(), owner, preempt=False)
+            response = await asyncio.to_thread(_send_trigger, CAPABILITY_COMMAND, bridge, resolved, None, 5)
+            require_capability(response)
+            return response
+        except ResourceError as error:
+            raise HTTPException(409, str(error)) from error
+        except (ValueError, ConnectionError) as error:
+            raise OfflineDownloadError(str(error)) from error
+        finally:
+            resource_manager.release(owner)
+
     def _trigger_stream(
         command: str,
         active_bridge: Optional[object],
         resolved_port: Optional[str],
+        isp_job=None,
     ) -> StreamingResponse:
         from mklink.remote.resource_manager import ResourceGroup
 
@@ -653,10 +685,10 @@ def create_offline_download_router(
             async def run() -> None:
                 try:
                     resource_manager.acquire_many(
-                        [ResourceGroup.MKLINK_BRIDGE, ResourceGroup.TARGET_DEBUG, ResourceGroup.MUX_RTT, ResourceGroup.MUX_WATCH],
+                        _resources(isp_job),
                         owner,
                         preempt=False,
-                        preempt_user_dashboard=True,
+                        preempt_user_dashboard=isp_job is None,
                     )
                     response = await asyncio.to_thread(
                         _send_trigger,
@@ -666,17 +698,9 @@ def create_offline_download_router(
                         emit,
                     )
                     lines = _format_trigger_output(response)
-                    text = "\n".join(lines).casefold()
                     await queue.put({
                         "type": "result",
-                        "result": {
-                            "status": (
-                                "completed"
-                                if "finished" in text and "aborted" not in text
-                                else "failed"
-                            ),
-                            "lines": lines,
-                        },
+                        "result": trigger_result(lines, isp_job),
                     })
                 except Exception as error:
                     await queue.put({
@@ -835,6 +859,7 @@ def create_offline_download_router(
             if not disk:
                 raise OfflineDownloadError("MICROKEEN disk is unavailable")
             disk_root = Path(disk)
+            isp_capability = await _check_isp_capability() if config.hpm_isp is not None else None
             total = [0]
             with tempfile.TemporaryDirectory(prefix="mklink-offline-") as raw_temp:
                 temp = Path(raw_temp)
@@ -907,7 +932,8 @@ def create_offline_download_router(
                 async def perform(recovery=None):
                     return await _perform_deployment(runtime, disk_root, lambda callback:
                         deploy_offline_bundle(config, disk_root, firmware_sources=firmware_sources,
-                                              algorithm_sources=algorithm_sources, recovery_callback=callback), recovery)
+                                              algorithm_sources=algorithm_sources, recovery_callback=callback,
+                                              isp_capability_response=isp_capability), recovery)
                 runtime = getattr(request.app.state, 'shared_runtime', None)
                 if runtime is None:
                     await asyncio.to_thread(_validate_bin_firmware_ranges, config, online_services, firmware_sources)
@@ -939,6 +965,11 @@ def create_offline_download_router(
         from mklink.remote.resource_manager import ResourceGroup
 
         values = payload or {}
+        protocol = values.get("programming_protocol", "debug")
+        if protocol not in ("debug", "hpm_rom_isp_uart"):
+            raise HTTPException(422, "Unsupported offline programming protocol")
+        if protocol == "hpm_rom_isp_uart" and str(values.get("model", "")).upper() != "V4":
+            raise HTTPException(422, "USART ISP requires HPMLINK V4")
         raw_port = values.get("port")
         port = str(raw_port) if raw_port else None
         runtime = getattr(request.app.state, 'shared_runtime', None)
@@ -966,16 +997,41 @@ def create_offline_download_router(
         )
         if active_bridge is None and not resolved_port:
             raise HTTPException(status_code=400, detail="MKLink CDC port was not found")
+        isp_job = None
+        if values and str(values.get("model", "")).upper() == "V4":
+            from mklink.discovery import find_microkeen_disk
+            try:
+                try:
+                    disk = await asyncio.to_thread(find_microkeen_disk)
+                except (ConnectionError, RuntimeError):
+                    disk = None
+                if disk:
+                    name = script_filename("V4", str(values.get("script_name") or "offline_download.py"))
+                    script = Path(disk) / "python" / name
+                    if script.is_file():
+                        with script.open(encoding="utf-8") as stream:
+                            isp_job = script_metadata(stream.readline(4096))
+                if protocol == "hpm_rom_isp_uart" and isp_job is None:
+                    raise OfflineDownloadError("USART ISP script metadata is unavailable; deploy to the bound probe before triggering")
+                if isp_job is not None:
+                    if runtime is not None:
+                        if runtime.uart_operations or any(s.scope == "uart" for s in runtime.sessions.values()):
+                            raise HTTPException(409, "Finish independent UART operations and detach UART clients before USART ISP")
+                        if runtime.current_operation is not None:
+                            runtime.current_operation["uart_exclusive"] = True
+                    await _check_isp_capability(resolved_port)
+            except (ValueError, OSError) as error:
+                raise HTTPException(422, str(error)) from error
         if "application/x-ndjson" in request.headers.get("accept", "").casefold():
-            return _trigger_stream(command, active_bridge, resolved_port)
+            return _trigger_stream(command, active_bridge, resolved_port, isp_job)
 
         owner = f"user:offline-download:trigger:{uuid.uuid4().hex}"
         try:
             resource_manager.acquire_many(
-                [ResourceGroup.MKLINK_BRIDGE, ResourceGroup.TARGET_DEBUG, ResourceGroup.MUX_RTT, ResourceGroup.MUX_WATCH],
+                _resources(isp_job),
                 owner,
                 preempt=False,
-                preempt_user_dashboard=True,
+                preempt_user_dashboard=isp_job is None,
             )
 
             response = await asyncio.to_thread(
@@ -989,10 +1045,6 @@ def create_offline_download_router(
         finally:
             resource_manager.release(owner)
         lines = _format_trigger_output(response)
-        text = "\n".join(lines).casefold()
-        return {
-            "status": "completed" if "finished" in text and "aborted" not in text else "failed",
-            "lines": lines,
-        }
+        return trigger_result(lines, isp_job)
 
     return router

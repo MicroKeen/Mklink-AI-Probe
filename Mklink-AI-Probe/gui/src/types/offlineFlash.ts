@@ -49,7 +49,31 @@ export interface HpmOfflineOtp {
   expected_hard_lock: string
   confirm_irreversible: boolean
 }
+export const HPM_ISP_BAUD_RATES = [115200, 1000000, 2000000, 5000000, 10000000] as const
+export interface HpmIspConfig {
+  baud_rate: number
+  connect_timeout_ms: number
+  command_timeout_ms: number
+  flash_base: string
+  flash_size: string
+  sector_size: number
+  memory_id: string
+  config_address: string
+  nor_options: string[]
+  rearm_mode: 'isp_reconnect'
+  confirm_reconnect_cycles: boolean
+  completion: {
+    beep: boolean
+    reset: 'none' | 'software' | 'hardware' | 'power_cycle'
+    restore_voltage_mv: number | null
+    power_off_ms: number
+  }
+}
 export interface OfflineConfigPayload {
+  programming_protocol?: 'debug' | 'hpm_rom_isp_uart'
+  hpm_isp?: HpmIspConfig
+  beep_on_completion?: boolean
+  reset_after_download?: boolean
   model: 'V2' | 'V3' | 'V4'
   port?: string | null
   script_name: string
@@ -102,7 +126,7 @@ export interface OfflineDeployResult {
 
 export interface OfflineTriggerResult {
   acquisition?: { errors: string[] }
-  status: 'completed' | 'failed'
+  status: 'completed' | 'failed' | 'unknown'
   lines: string[]
 }
 

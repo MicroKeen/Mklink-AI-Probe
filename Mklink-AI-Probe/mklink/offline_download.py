@@ -15,6 +15,7 @@ from typing import Callable, Mapping, Optional, Sequence, Union
 from mklink.file_content import copy_verified
 from mklink.offline_security import OfflineSecurityPlan, resolve_offline_security
 from mklink.hpm_offline_otp import OfflineOtp, resolve as resolve_hpm_otp, script_lines as otp_script_lines
+from mklink.hpm_isp import HpmIspConfig, parse_config as parse_hpm_isp_config
 from mklink.stm32f1_options import (
     OptionPlan,
     resolve_plan as resolve_option_plan,
@@ -79,6 +80,10 @@ class OfflineDownloadConfig:
     security: Optional[OfflineSecurityPlan]
     option_bytes: Optional[OptionPlan] = None
     hpm_user_otp: Optional[OfflineOtp] = None
+    programming_protocol: str = "debug"
+    hpm_isp: Optional[HpmIspConfig] = None
+    beep_on_completion: bool = True
+    reset_after_download: bool = True
 
     @property
     def script_name(self) -> str:
@@ -198,6 +203,33 @@ def parse_offline_config(
     from mklink.hpm_config import is_hpm_target, normalize_hpm_configuration
 
     hpm_target = is_hpm_target(target_part)
+    beep_on_completion = _strict_bool(payload.get("beep_on_completion", True), "completion beep")
+    reset_after_download = _strict_bool(payload.get("reset_after_download", True), "completion reset")
+    protocol = payload.get("programming_protocol", "debug")
+    if protocol not in ("debug", "hpm_rom_isp_uart"):
+        raise OfflineDownloadError("Unsupported offline programming protocol")
+    isp = None
+    if protocol == "hpm_rom_isp_uart":
+        if not hpm_target or model != "V4":
+            raise OfflineDownloadError("USART ISP requires an HPM target and HPMLINK V4 firmware")
+        if not re.fullmatch(r"HPM5301[A-Z0-9]*", target_part.upper()):
+            raise OfflineDownloadError("USART ISP currently supports the HPM5301 profile")
+        if hpm_user_otp or option_bytes:
+            raise OfflineDownloadError("USART ISP does not support OTP or option-byte operations")
+        if payload.get("board") or payload.get("hpm_flash_cfg"):
+            raise OfflineDownloadError("USART ISP requires separate NOR options, not JTAG board/flash configuration")
+        try:
+            from mklink.hpm_isp import integer
+            integer(payload.get("auto_download_count", 1), "ISP automatic download count", 1, 9999)
+            isp = parse_hpm_isp_config(payload.get("hpm_isp"))
+        except ValueError as error:
+            raise OfflineDownloadError(str(error)) from error
+        if count > 1 and not isp.confirm_reconnect_cycles:
+            raise OfflineDownloadError("Confirm that subsequent rounds start on ISP reconnection, which does not identify a different physical board")
+    elif payload.get("hpm_isp") is not None:
+        raise OfflineDownloadError("ISP configuration requires the USART ISP protocol")
+    if hpm_target and isp is None and not reset_after_download:
+        raise OfflineDownloadError("The legacy HPM JTAG ROM API resets internally; completion reset cannot be disabled")
     if hpm_target and model != "V4":
         raise OfflineDownloadError("HPM targets require V4 downloader firmware")
     erase_all_before_download = _strict_bool(
@@ -212,7 +244,7 @@ def parse_offline_config(
         raise OfflineDownloadError("HPM board and flash config are only valid for HPM targets")
     board = None
     hpm_flash_cfg = None
-    if hpm_target:
+    if hpm_target and isp is None:
         try:
             board, hpm_flash_cfg = normalize_hpm_configuration(
                 target_part,
@@ -295,12 +327,16 @@ def parse_offline_config(
             raise OfflineDownloadError("firmware ids must be unique")
         seen_firmware_ids.add(firmware_id.casefold())
         file_name = _file_name(raw.get("file_name"), "firmware file name", (".bin", ".hex"))
+        if isp is not None and len(file_name) > 240:
+            raise OfflineDownloadError("ISP BIN file names must be at most 240 ASCII characters")
         if file_name.casefold() in seen_firmware_names:
             raise OfflineDownloadError("firmware file names must be unique")
         seen_firmware_names.add(file_name.casefold())
         image_format = str(raw.get("format") or Path(file_name).suffix[1:]).casefold()
         if image_format not in ("bin", "hex") or Path(file_name).suffix.casefold() != f".{image_format}":
             raise OfflineDownloadError("firmware format does not match its file name")
+        if isp is not None and image_format != "bin":
+            raise OfflineDownloadError("USART ISP requires BIN files with explicit addresses")
         algorithm_id = str(raw.get("algorithm_id") or "").strip()
         if not hpm_target and algorithm_id.casefold() not in seen_algorithm_ids:
             raise OfflineDownloadError("firmware references an unknown FLM algorithm")
@@ -309,6 +345,10 @@ def parse_offline_config(
             if raw.get("base_address") in (None, ""):
                 raise OfflineDownloadError("BIN firmware requires a base address")
             base_address = _parse_int(raw.get("base_address"), "BIN base address")
+            if isp is not None and not 0 <= base_address <= 0xFFFFFFFF:
+                raise OfflineDownloadError("ISP BIN address must fit in 32 bits")
+            if isp is not None and not isp.flash_base <= base_address < isp.flash_base + isp.flash_size:
+                raise OfflineDownloadError("ISP BIN address is outside configured Flash")
         raw_upload_index = raw.get("upload_index")
         source_path = str(raw.get("source_path") or "").strip() or None
         upload_index = (
@@ -333,6 +373,8 @@ def parse_offline_config(
         )
     if not firmwares and option_bytes is None:
         raise OfflineDownloadError("at least one firmware file is required")
+    if isp is not None and len(firmwares) > 8:
+        raise OfflineDownloadError("USART ISP supports at most 8 BIN files")
 
     try:
         security = resolve_offline_security(
@@ -360,6 +402,10 @@ def parse_offline_config(
         security=security,
         option_bytes=option_bytes,
         hpm_user_otp=hpm_user_otp,
+        programming_protocol=protocol,
+        hpm_isp=isp,
+        beep_on_completion=beep_on_completion,
+        reset_after_download=reset_after_download,
     )
 
 
@@ -496,10 +542,9 @@ def _generate_v2_script(config: OfflineDownloadConfig) -> str:
         (
             "if not abort:",
             '    print("offline download finished")',
-            *([] if config.is_hpm else ["    cmd.set_reset()"]),
-            "    cmd.set_beep_on()",
-            "    time.sleep_ms(1000)",
-            "    cmd.set_beep_off()",
+            *([] if config.is_hpm or not config.reset_after_download else ["    cmd.set_reset()"]),
+            *(["    cmd.set_beep_on()", "    time.sleep_ms(1000)", "    cmd.set_beep_off()"]
+              if config.beep_on_completion else []),
             "else:",
             '    print("offline download aborted")',
             "",
@@ -509,6 +554,9 @@ def _generate_v2_script(config: OfflineDownloadConfig) -> str:
 
 
 def generate_offline_script(config: OfflineDownloadConfig) -> str:
+    if config.hpm_isp is not None:
+        from mklink.hpm_isp import generate_script
+        return generate_script(config)
     if config.model == "V2":
         return _generate_v2_script(config)
     lines = [
@@ -603,10 +651,9 @@ def generate_offline_script(config: OfflineDownloadConfig) -> str:
             "if not abort:",
             '    print("auto download finished")',
             # HPM ROM programming already resets and starts the target.
-            *([] if config.is_hpm else ["    cmd.set_reset()", "    cmd.cpu_run()"]),
-            "    cmd.set_beep_on()",
-            "    time.sleep_ms(1000)",
-            "    cmd.set_beep_off()",
+            *([] if config.is_hpm or not config.reset_after_download else ["    cmd.set_reset()", "    cmd.cpu_run()"]),
+            *(["    cmd.set_beep_on()", "    time.sleep_ms(1000)", "    cmd.set_beep_off()"]
+              if config.beep_on_completion else []),
             "else:",
             '    print("auto download aborted")',
             "",
@@ -767,7 +814,14 @@ def deploy_offline_bundle(
     firmware_sources: SourceCollection,
     algorithm_sources: SourceCollection,
     recovery_callback: Optional[Callable[[Optional[Path]], None]] = None,
+    isp_capability_response: Optional[str] = None,
 ) -> dict:
+    if config.hpm_isp is not None:
+        from mklink.hpm_isp import require_capability
+        try:
+            require_capability(isp_capability_response or "")
+        except ValueError as error:
+            raise OfflineDownloadError(str(error)) from error
     disk = Path(disk_root).resolve()
     if not disk.is_dir():
         raise OfflineDownloadError("MICROKEEN disk is unavailable")
@@ -860,6 +914,13 @@ def deploy_offline_bundle(
         plan.append((Path("CFG") / options.config_dir / "options.json", None, manifest))
 
     script_relative = Path("python") / config.script_name
+    if config.hpm_isp is not None:
+        from mklink.hpm_isp import validate_images
+        try:
+            validate_images(config, {f.id: _source_for(firmware_sources, item_id=f.id,
+                upload_index=f.upload_index, description="firmware") for f in config.firmwares})
+        except ValueError as error:
+            raise OfflineDownloadError(str(error)) from error
     plan.append(
         (script_relative, None, generate_offline_script(config).encode("utf-8"))
     )

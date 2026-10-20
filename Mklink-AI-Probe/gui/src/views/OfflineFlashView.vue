@@ -5,7 +5,9 @@ import { selectDownloadProbe } from '../lib/downloadProbe'
 import ConfirmationDialog from '../components/ConfirmationDialog.vue'
 import DeviceConfigurationPanel from '../components/DeviceConfigurationPanel.vue'
 import HpmOfflineOtpPanel from '../components/HpmOfflineOtpPanel.vue'
-import type { HpmOfflineOtp } from '../types/offlineFlash'
+import HpmIspSettings from '../components/HpmIspSettings.vue'
+import type { HpmOfflineOtp, HpmIspConfig } from '../types/offlineFlash'
+import { HPM_ISP_BAUD_RATES } from '../types/offlineFlash'
 import { provideConfirmation } from '../composables/useConfirmation'
 import { OfflineFlashApiError, useOfflineFlashApi } from '../composables/useOfflineFlashApi'
 import { useOnlineFlashApi } from '../composables/useOnlineFlashApi'
@@ -43,10 +45,14 @@ type ProbeModel = 'V2' | 'V3' | 'V4'
 defineOptions({ name: 'OfflineFlashView' })
 
 const OFFLINE_STORAGE_KEY = 'mklink.offlineFlash.settings'
-function savedSettings(): { model?: ProbeModel; scriptName?: string; automaticCount?: number; idcodeTimeout?: number; swdClock?: number } {
+function savedSettings(): { model?: ProbeModel; scriptName?: string; automaticCount?: number; idcodeTimeout?: number; swdClock?: number; ispBaudRate?: number } {
   try { return JSON.parse(localStorage.getItem(OFFLINE_STORAGE_KEY) || '{}') } catch { return {} }
 }
 const saved = savedSettings()
+function validIspBaud(value: unknown): value is number {
+  return typeof value === 'number' && HPM_ISP_BAUD_RATES.some(rate => rate === value)
+}
+let savedIspBaud = validIspBaud(saved.ispBaudRate) ? saved.ispBaudRate : 2000000
 
 const hpmBoards = [
   'hpm5300evk', 'hpm5301evklite', 'hpm5e00evk', 'hpm6e00evk',
@@ -85,6 +91,18 @@ const firmwares = ref<FirmwareRow[]>([])
 const targetQuery = ref(consumerTarget('offline') || 'STM32F103RC')
 const targetPart = ref('')
 const hpmBoard = ref('')
+const programmingProtocol = ref<'debug' | 'hpm_rom_isp_uart'>('debug')
+const beepOnCompletion = ref(true)
+const resetAfterDownload = ref(true)
+const ispConnection = ref<'idle' | 'waiting' | 'connected'>('idle')
+const ispConfig = ref<HpmIspConfig>({
+  baud_rate: savedIspBaud, connect_timeout_ms: 30000, command_timeout_ms: 10000,
+  memory_id: '0x10000', config_address: '0x200',
+  nor_options: ['0xFCF90002', '0x6', '0x1000'],
+  flash_base: '0x80000000', flash_size: '', sector_size: 4096,
+  rearm_mode: 'isp_reconnect', confirm_reconnect_cycles: false,
+  completion: { beep: true, reset: 'none', restore_voltage_mv: null, power_off_ms: 200 },
+})
 const securityCapability = ref<OfflineSecurityCapability | null>(null)
 const securityLoading = ref(false)
 const eraseAllBeforeDownload = ref(false)
@@ -105,6 +123,7 @@ const deploymentRequestId = ref('')
 const deploymentUncertain = ref(false)
 const preview = ref<OfflinePreview | null>(null)
 const triggerLines = ref<string[]>([])
+const triggerUncertain = ref(false)
 const deployedScriptName = ref('')
 const deployedModel = ref<'V2' | 'V3' | 'V4' | ''>('')
 const firmwareDropActive = ref(false)
@@ -130,6 +149,21 @@ const scriptFieldName = computed({
   set: value => { if (effectiveModel.value === 'V4') scriptName.value = value },
 })
 const hpmMode = computed(() => isHpmPart(targetPart.value))
+const ispMode = computed(() => hpmMode.value && programmingProtocol.value === 'hpm_rom_isp_uart')
+watch([targetPart, model], () => {
+  programmingProtocol.value = 'debug'
+  if (hpmMode.value) resetAfterDownload.value = true
+})
+watch(programmingProtocol, () => {
+  hpmOfflineOtp.value = undefined
+  if (ispMode.value) {
+    automaticCount.value = 1
+    eraseAllBeforeDownload.value = false
+    unlockBeforeDownload.value = false
+    lockAfterDownload.value = false
+    optionByteChanges.value = {}
+  }
+})
 const selectedAlgorithmIds = computed(() => new Set(
   firmwares.value.map(item => item.algorithm_id).filter(Boolean),
 ))
@@ -157,12 +191,16 @@ const securityReady = computed(() => (
 ))
 const canBuild = computed(() => (
   !!effectiveModel.value
+  && (!ispMode.value || automaticCount.value === 1 || ispConfig.value.confirm_reconnect_cycles)
   && !!disk.value?.available
   && securityReady.value
   && ((firmwares.value.length === 0 && Object.keys(optionByteChanges.value).length > 0
     && !securityRequested.value && !eraseAllBeforeDownload.value)
   || (firmwares.value.length > 0 && (hpmMode.value
-    ? !!hpmBoard.value && firmwares.value.every(item => (item.file || item.source_path) && (item.format === 'hex' || !!item.base_address))
+    ? (ispMode.value ? effectiveModel.value === 'V4' && validIspBaud(ispConfig.value.baud_rate) && !!ispConfig.value.flash_size
+        && firmwares.value.length <= 8 && firmwares.value.every(item => item.format === 'bin')
+        && (ispConfig.value.completion.reset !== 'power_cycle' || !!ispConfig.value.completion.restore_voltage_mv)
+      : !!hpmBoard.value) && firmwares.value.every(item => (item.file || item.source_path) && (item.format === 'hex' || !!item.base_address))
     : selectedAlgorithms.value.length > 0
       && unavailableSelectedAlgorithms.value.length === 0
       && firmwares.value.every(item => (item.file || item.source_path) && item.algorithm_id && algorithms.value.some(algorithm => algorithm.id === item.algorithm_id)))))
@@ -170,13 +208,14 @@ const canBuild = computed(() => (
 const canTrigger = computed(() => (
   !!disk.value?.available
   && !deploymentUncertain.value
+  && !triggerUncertain.value
   && !!deployedScriptName.value
   && !!deployedModel.value
   && !operationBusy.value
 ))
 
 watch(
-  [model, scriptName, automaticCount, idcodeTimeout, swdClock, targetPart, hpmBoard, algorithms, firmwares, eraseAllBeforeDownload, unlockBeforeDownload, lockAfterDownload, securityVoltageMv, optionByteChanges, hpmOfflineOtp],
+  [model, scriptName, automaticCount, idcodeTimeout, swdClock, targetPart, hpmBoard, algorithms, firmwares, eraseAllBeforeDownload, unlockBeforeDownload, lockAfterDownload, securityVoltageMv, optionByteChanges, hpmOfflineOtp, programmingProtocol, ispConfig, beepOnCompletion, resetAfterDownload],
   () => {
     preview.value = null
     deployedScriptName.value = ''
@@ -186,13 +225,15 @@ watch(
   { deep: true },
 )
 
-watch([model, scriptName, automaticCount, idcodeTimeout, swdClock], () => {
+watch([model, scriptName, automaticCount, idcodeTimeout, swdClock, () => ispConfig.value.baud_rate], () => {
+  if (validIspBaud(ispConfig.value.baud_rate)) savedIspBaud = ispConfig.value.baud_rate
   localStorage.setItem(OFFLINE_STORAGE_KEY, JSON.stringify({
     model: model.value || undefined,
     scriptName: scriptName.value,
     automaticCount: automaticCount.value,
     idcodeTimeout: idcodeTimeout.value,
     swdClock: swdClock.value,
+    ispBaudRate: savedIspBaud,
   }))
 })
 
@@ -574,6 +615,10 @@ function addFirmwareSources(sources: Array<string | File>): void {
       setError(new Error(tr('固件只支持 BIN 或 HEX', 'Only BIN or HEX firmware is supported')))
       continue
     }
+    if (ispMode.value && (suffix !== 'bin' || firmwares.value.length >= 8)) {
+      setError(new Error(tr('USART ISP 支持 1–8 个 BIN 文件', 'USART ISP supports 1–8 BIN files')))
+      continue
+    }
     firmwares.value.push({
       id: nextId('firmware'),
       file,
@@ -581,7 +626,7 @@ function addFirmwareSources(sources: Array<string | File>): void {
       source_stamp: '',
       file_name: name,
       format: suffix,
-      base_address: suffix === 'bin' ? (hpmMode.value ? '0x80000400' : '0x08000000') : '',
+      base_address: suffix === 'bin' ? (ispMode.value ? '' : hpmMode.value ? '0x80000400' : '0x08000000') : '',
       algorithm_id: hpmMode.value ? '' : algorithms.value[0]?.id || '',
     })
   }
@@ -703,12 +748,18 @@ function buildRequest(): {
   return {
     payload: {
       model: model.value,
+      programming_protocol: programmingProtocol.value,
+      ...(ispMode.value ? { hpm_isp: ispConfig.value } : {}),
+      ...(!ispMode.value ? {
+        beep_on_completion: beepOnCompletion.value,
+        reset_after_download: hpmMode.value ? true : resetAfterDownload.value,
+      } : {}),
       script_name: scriptName.value,
       auto_download_count: Number(automaticCount.value),
       wait_idcode_timeout_ms: Number(idcodeTimeout.value),
       swd_clock_hz: Number(swdClock.value),
       target_part: targetPart.value || null,
-      board: hpmMode.value ? hpmBoard.value || null : null,
+      board: hpmMode.value && !ispMode.value ? hpmBoard.value || null : null,
       erase_all_before_download: eraseAllBeforeDownload.value,
       unlock_before_download: unlockBeforeDownload.value,
       lock_after_download: lockAfterDownload.value,
@@ -752,6 +803,7 @@ async function deploy(): Promise<void> {
     const result = await offline.deploy(request.payload, request.firmwareFiles, request.flmFiles, deploymentRequestId.value, identityHeaders)
     deploymentUncertain.value = false
     deployedScriptName.value = result.script_name
+    triggerUncertain.value = false
     deployedModel.value = result.model
     notice.value = tr(`已部署 ${result.file_count ?? result.files.length} 个文件，脚本 ${result.script_name}`, `Deployed ${result.file_count ?? result.files.length} files with script ${result.script_name}`)
     if (result.acquisition?.errors.length) setError(tr(`采集恢复失败：${result.acquisition.errors.join('; ')}`, `Capture restore failed: ${result.acquisition.errors.join('; ')}`))
@@ -790,22 +842,39 @@ async function triggerOffline(): Promise<void> {
   operationBusy.value = true
   clearError()
   triggerLines.value = []
+  ispConnection.value = 'idle'
   try {
     const identityHeaders = disk.value?.probe_id ? await selectDownloadProbe(disk.value.probe_id) : {}
+    triggerUncertain.value = ispMode.value
     const result = await offline.trigger(
       deployedModel.value as 'V2' | 'V3' | 'V4',
       deployedScriptName.value,
       (line) => {
         triggerLines.value.push(line)
         if (triggerLines.value.length > 200) triggerLines.value.shift()
+        if (ispMode.value && line.startsWith('HPM_ISP ')) {
+          try {
+            const event = JSON.parse(line.slice(8))
+            if (event.schema === 1 && event.event === 'connected') ispConnection.value = 'connected'
+            if (event.schema === 1 && event.event === 'waiting') ispConnection.value = 'waiting'
+            if (event.schema === 1 && event.event === 'result') ispConnection.value = 'idle'
+          } catch { /* Keep malformed output in the log, never infer success. */ }
+        }
       },
-      undefined, identityHeaders,
+      undefined, identityHeaders, ispMode.value ? 'hpm_rom_isp_uart' : undefined,
     )
     triggerLines.value = result.lines
-    notice.value = result.status === 'completed' ? tr('脱机下载执行完成', 'Offline flashing completed') : tr('脱机下载执行失败', 'Offline flashing failed')
+    triggerUncertain.value = result.status === 'unknown'
+    ispConnection.value = 'idle'
+    notice.value = result.status === 'completed' ? tr('脱机下载执行完成', 'Offline flashing completed')
+      : result.status === 'unknown' ? tr('未收到最终结果，请在下载器确认状态，不要自动重试。', 'No final result received. Check the probe; do not automatically retry.')
+        : tr('脱机下载执行失败', 'Offline flashing failed')
     if (result.acquisition?.errors.length) setError(tr(`采集恢复失败：${result.acquisition.errors.join('; ')}`, `Capture restore failed: ${result.acquisition.errors.join('; ')}`))
-  } catch (value) { setError(value) }
-  finally { operationBusy.value = false }
+  } catch (value) {
+    if (value instanceof OfflineFlashApiError && value.notStarted) triggerUncertain.value = false
+    setError(value)
+  }
+  finally { operationBusy.value = false; ispConnection.value = 'idle' }
 }
 
 async function syncTarget(): Promise<void> {
@@ -888,7 +957,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
         <p v-if="targetPart" class="selected-target"><span>{{ tr('已选器件', 'Selected target') }}</span><b>{{ targetPart }}</b></p>
-        <p v-if="hpmMode" class="hpm-mode">HPM ROM API · {{ tr('无需 Pack 或 FLM', 'No Pack or FLM required') }}</p>
+        <p v-if="hpmMode" class="hpm-mode">{{ ispMode ? 'USART ISP' : 'HPM ROM API' }} · {{ tr('无需 Pack 或 FLM', 'No Pack or FLM required') }}</p>
         <div v-else class="algorithm-list">
           <div v-for="(item, index) in algorithms" :key="item.id" class="algorithm-row" :class="{ unavailable: !item.available && item.source_kind !== 'upload' }" data-testid="offline-algorithm-row">
             <div class="row-title"><input v-model="item.file_name" class="compact-input mono"><span>{{ item.origin === '本地文件' ? tr('本地文件', 'Local file') : item.origin }}</span><button class="icon-command" :title="tr('移除算法', 'Remove algorithm')" @click="removeAlgorithm(index)">×</button></div>
@@ -904,41 +973,54 @@ onBeforeUnmount(() => {
       </section>
 
       <section class="work-panel firmware-panel" :class="{ dragging: firmwareDropActive }" data-testid="offline-firmware-drop-zone" @dragenter.prevent="firmwareDropActive = true" @dragover.prevent="firmwareDropActive = true" @dragleave.prevent="firmwareDropActive = false" @drop.prevent="dropFirmware">
-        <div class="panel-heading step-heading"><div class="step-title"><span>02</span><div><h2>{{ tr('烧录顺序', 'Flash Sequence') }}</h2><small>{{ tr('固件按从上到下顺序依次写入', 'Firmware is programmed from top to bottom') }}</small></div></div><button class="btn btn-sm" type="button" @click="browseFirmware">{{ tr('添加固件', 'Add Firmware') }}</button><input class="visually-hidden" data-testid="offline-firmware-input" type="file" multiple accept=".bin,.hex" @change="addFirmware"></div>
-        <p v-if="hpmMode" class="empty-state">{{ tr('HPM HEX 使用文件内的绝对地址，需要新版 V4 固件；BIN 需填写基地址。HEX 未覆盖的完整扇区保留，覆盖扇区内的空隙会擦除。', 'HPM HEX uses absolute file addresses and requires updated V4 firmware; BIN requires a base address. Untouched sectors are preserved; gaps within touched sectors are erased.') }}</p>
+        <div class="panel-heading step-heading"><div class="step-title"><span>02</span><div><h2>{{ tr('烧录顺序', 'Flash Sequence') }}</h2><small>{{ ispMode ? tr('按地址升序写入，相邻 BIN 合并烧录', 'Program in address order; adjacent BINs are combined') : tr('固件按从上到下顺序依次写入', 'Firmware is programmed from top to bottom') }}</small></div></div><button class="btn btn-sm" type="button" @click="browseFirmware">{{ tr('添加固件', 'Add Firmware') }}</button><input class="visually-hidden" data-testid="offline-firmware-input" type="file" multiple accept=".bin,.hex" @change="addFirmware"></div>
+        <p v-if="hpmMode && !ispMode" class="empty-state">{{ tr('HPM HEX 使用文件内的绝对地址，需要新版 V4 固件；BIN 需填写基地址。HEX 未覆盖的完整扇区保留，覆盖扇区内的空隙会擦除。', 'HPM HEX uses absolute file addresses and requires updated V4 firmware; BIN requires a base address. Untouched sectors are preserved; gaps within touched sectors are erased.') }}</p>
         <div class="firmware-list">
           <div v-for="(item, index) in firmwares" :key="item.id" class="firmware-row" data-testid="offline-firmware-row">
-            <div class="sequence-number">{{ index + 1 }}</div>
+            <div class="sequence-number">{{ ispMode ? 'BIN' : index + 1 }}</div>
             <div class="firmware-fields">
               <input v-model="item.file_name" class="compact-input mono file-name">
               <select v-if="!hpmMode" v-model="item.algorithm_id" class="compact-input">
                 <option value="" disabled>{{ tr('选择 FLM', 'Select FLM') }}</option>
                 <option v-for="algorithm in algorithms" :key="algorithm.id" :value="algorithm.id">{{ algorithm.file_name }}{{ !algorithm.available && algorithm.source_kind !== 'upload' ? ` · ${tr('不可用', 'unavailable')}` : '' }}</option>
               </select>
-              <span v-else class="embedded-address">HPM ROM API</span>
+              <span v-else class="embedded-address">{{ ispMode ? 'USART ISP' : 'HPM ROM API' }}</span>
               <input v-if="item.format === 'bin'" v-model="item.base_address" class="compact-input mono" :placeholder="tr('BIN 基地址', 'BIN base address')">
               <span v-else class="embedded-address">{{ tr('HEX 文件内地址', 'Address embedded in HEX') }}</span>
             </div>
             <div class="row-actions">
-              <button class="icon-command" :title="tr('上移', 'Move up')" :disabled="index === 0" @click="moveFirmware(index, -1)">↑</button>
-              <button class="icon-command" :title="tr('下移', 'Move down')" :disabled="index === firmwares.length - 1" @click="moveFirmware(index, 1)">↓</button>
+              <button v-if="!ispMode" class="icon-command" :title="tr('上移', 'Move up')" :disabled="index === 0" @click="moveFirmware(index, -1)">↑</button>
+              <button v-if="!ispMode" class="icon-command" :title="tr('下移', 'Move down')" :disabled="index === firmwares.length - 1" @click="moveFirmware(index, 1)">↓</button>
               <button class="icon-command" :title="tr('移除固件', 'Remove firmware')" @click="firmwares.splice(index, 1)">×</button>
             </div>
           </div>
-          <p v-if="!firmwares.length" class="empty-state">{{ tr('拖拽 BIN / HEX 到此工作区，或点击“添加固件”。仅配置选项字节时无需添加固件。', 'Drop BIN / HEX here, or click Add Firmware. Option-only configuration needs no firmware file.') }}</p>
+          <p v-if="!firmwares.length" class="empty-state">{{ ispMode ? tr('添加 1–8 个 BIN 文件，并逐个填写写入地址。', 'Add 1–8 BIN files and enter their write addresses.') : tr('拖拽 BIN / HEX 到此工作区，或点击“添加固件”。仅配置选项字节时无需添加固件。', 'Drop BIN / HEX here, or click Add Firmware. Option-only configuration needs no firmware file.') }}</p>
         </div>
       </section>
 
       <section class="work-panel settings-panel">
         <div class="panel-heading step-heading"><div class="step-title"><span>03</span><div><h2>{{ tr('量产配置与部署', 'Production Settings & Deploy') }}</h2><small>{{ tr('确认安全选项，部署后再触发一次真机验证', 'Confirm security options, deploy, then run one hardware test') }}</small></div></div></div>
         <label class="setting-row"><span>{{ tr('下载器型号', 'Probe Model') }}</span><select v-model="model" class="form-select" data-testid="offline-model" @change="modelChanged"><option value="" disabled>{{ tr('请选择', 'Select') }}</option><option value="V2">V2</option><option value="V3">V3</option><option value="V4">V4</option></select></label>
-        <label v-if="hpmMode" class="setting-row"><span>{{ tr('HPM 板卡', 'HPM Board') }}</span><select v-model="hpmBoard" class="form-select"><option v-for="item in hpmBoards" :key="item" :value="item">{{ item }}</option></select></label>
+        <label v-if="hpmMode" class="setting-row"><span>{{ tr('下载协议', 'Programming protocol') }}</span>
+          <select v-model="programmingProtocol" class="form-select" data-testid="offline-protocol">
+            <option value="debug">JTAG · ROM API</option>
+            <option value="hpm_rom_isp_uart" :disabled="model !== 'V4' || !targetPart.toUpperCase().startsWith('HPM5301')">USART ISP · HPM5301</option>
+          </select>
+        </label>
+        <HpmIspSettings v-if="ispMode" v-model="ispConfig" :count="automaticCount" />
+        <div v-else class="security-settings">
+          <label class="security-option"><input v-model="beepOnCompletion" type="checkbox" />{{ tr('下载完成响蜂鸣器', 'Beep on completion') }}</label>
+          <label class="security-option"><input v-model="resetAfterDownload" type="checkbox" :disabled="hpmMode" />{{ tr('下载完成复位', 'Reset on completion') }}</label>
+          <p class="security-reason">{{ hpmMode ? tr('JTAG ROM API 内部自动复位，保持原有行为。', 'JTAG ROM API resets internally; existing behavior is preserved.') : tr('使用现有硬件复位流程。软件及断电复位在 USART ISP 模式配置。', 'Uses the existing hardware reset sequence. Software and power-cycle reset are configured in USART ISP mode.') }}</p>
+        </div>
+        <p v-if="ispMode" class="security-reason">{{ tr('BIN 基地址必须与镜像布局一致，请逐项填写。不相邻文件不能共享擦除扇区。', 'Enter each BIN address according to its image layout. Non-adjacent files cannot share an erase sector.') }}</p>
+        <label v-if="hpmMode && !ispMode" class="setting-row"><span>{{ tr('HPM 板卡', 'HPM Board') }}</span><select v-model="hpmBoard" class="form-select"><option v-for="item in hpmBoards" :key="item" :value="item">{{ item }}</option></select></label>
         <label class="setting-row"><span>{{ tr('脚本文件名', 'Script File Name') }}</span><input v-model="scriptFieldName" class="form-input mono" data-testid="offline-script-name" :disabled="effectiveModel !== 'V4'"></label>
         <label class="setting-row"><span>{{ tr('自动烧录次数', 'Automatic Flash Count') }}</span><input v-model.number="automaticCount" type="number" min="1" max="9999" class="form-input" :disabled="effectiveModel === 'V2'"></label>
-        <label class="setting-row"><span>{{ tr('IDCODE 超时', 'IDCODE Timeout') }}</span><input v-model.number="idcodeTimeout" type="number" min="500" max="600000" step="500" class="form-input"><em>ms</em></label>
-        <label class="setting-row"><span>{{ tr('SWD 速率', 'SWD Rate') }}</span><select v-model.number="swdClock" class="form-select" data-testid="offline-clock"><option :value="1000000">1 MHz</option><option :value="4000000">4 MHz</option><option :value="5000000">5 MHz</option><option :value="8000000">8 MHz</option><option :value="10000000">10 MHz</option><option :value="20000000">20 MHz</option><option :value="30000000">30 MHz</option></select></label>
+        <label v-if="!ispMode" class="setting-row"><span>{{ tr('IDCODE 超时', 'IDCODE Timeout') }}</span><input v-model.number="idcodeTimeout" type="number" min="500" max="600000" step="500" class="form-input"><em>ms</em></label>
+        <label v-if="!ispMode" class="setting-row"><span>{{ tr('SWD 速率', 'SWD Rate') }}</span><select v-model.number="swdClock" class="form-select" data-testid="offline-clock"><option :value="1000000">1 MHz</option><option :value="4000000">4 MHz</option><option :value="5000000">5 MHz</option><option :value="8000000">8 MHz</option><option :value="10000000">10 MHz</option><option :value="20000000">20 MHz</option><option :value="30000000">30 MHz</option></select></label>
         <p v-if="effectiveModel === 'V2' && swdClock > 10000000" class="muted">{{ tr('V2 的 20/30 MHz 需要支持高速时序的新版固件。', 'V2 20/30 MHz requires updated firmware with high-speed timing support.') }}</p>
-        <DeviceConfigurationPanel v-model:changes="optionByteChanges" :has-firmware="firmwares.length > 0" :part-number="targetPart" :model="model" :unlock-before-download="unlockBeforeDownload" :lock-after-download="lockAfterDownload">
+        <DeviceConfigurationPanel v-if="!ispMode" v-model:changes="optionByteChanges" :has-firmware="firmwares.length > 0" :part-number="targetPart" :model="model" :unlock-before-download="unlockBeforeDownload" :lock-after-download="lockAfterDownload">
         <details class="security-settings">
           <summary class="security-title">
             <span>{{ tr('擦除与安全操作', 'Erase and Security Operations') }}</span>
@@ -965,12 +1047,16 @@ onBeforeUnmount(() => {
           <p v-else-if="securityCapability?.supported" class="security-reason">{{ tr('加锁与解锁只对已真机验证的器件开放；配置、器件 ID、容量和 FLM 均会严格校验。', 'Lock and unlock are enabled only for hardware-validated targets; configuration, device ID, density, and FLM are strictly verified.') }}</p>
         </details>
         </DeviceConfigurationPanel>
-        <HpmOfflineOtpPanel v-if="model === 'V4' && ['HPM5301','HPM5301XEGX'].includes(targetPart.toUpperCase())" :key="`${model}:${targetPart}`" @change="hpmOfflineOtp = $event" />
+        <HpmOfflineOtpPanel v-if="!ispMode && model === 'V4' && ['HPM5301','HPM5301XEGX'].includes(targetPart.toUpperCase())" :key="`${model}:${targetPart}`" @change="hpmOfflineOtp = $event" />
         <div class="deploy-actions">
           <button class="btn" :disabled="operationBusy || !canBuild" @click="generatePreview">{{ tr('生成预览', 'Generate Preview') }}</button>
           <button class="btn btn-primary" data-testid="offline-deploy" :disabled="operationBusy || !canBuild || deploymentUncertain" @click="deploy">{{ tr('部署到 U 盘', 'Deploy to USB Drive') }}</button>
           <button class="btn" data-testid="offline-trigger" :disabled="!canTrigger" @click="triggerOffline">{{ tr('触发测试', 'Run Test') }}</button>
         </div>
+        <p v-if="ispMode && ispConnection !== 'idle'" role="status" :class="{ ok: ispConnection === 'connected' }" data-testid="isp-connection">
+          {{ ispConnection === 'connected' ? tr('● ISP 已连接 · 正在烧录', '● ISP connected · Programming') : tr('○ 等待 ISP 握手', '○ Waiting for ISP handshake') }}
+        </p>
+        <p v-if="triggerUncertain && !operationBusy" role="alert">{{ tr('运行结果未确认，请查看下载器状态；已禁止再次触发。', 'Execution result is unconfirmed. Check the probe; triggering again is disabled.') }}</p>
         <div class="deployment-query">
           <label>{{ tr('部署请求标识（在原下载器查询）', 'Deployment request ID (query the original probe)') }} <input v-model="deploymentRequestId" class="compact-input mono" data-testid="deployment-request-id"></label>
           <button class="btn" data-testid="deployment-query" :disabled="operationBusy || !deploymentRequestId" @click="queryDeployment">{{ tr('查询部署结果', 'Query deployment result') }}</button>

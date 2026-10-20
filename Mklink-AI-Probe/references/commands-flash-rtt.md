@@ -225,6 +225,8 @@ python -m mklink rtt --visualize --port-http 8888 --no-browser
 
 HPM SDK 工程会走设备端 `hpm.program()` 下载路径。HPM 型号不使用 FLM，也不需要 Pack；算法发现必须直接返回空。`project-init` 识别到 HPM board 后，会把 `hpm_flash_cfg` 写入 `project_info.json`；手动配置时必须使用 4 个参数：
 
+HPM5301 也可以在脱机界面显式选择 [USART ISP](hpm-usart-isp.md)，由支持该能力的 HPMLINK V4 固件使用独立 UART 执行。该协议使用单独的 NOR 配置，不沿用下述 JTAG 四字参数，也不自动改变现有下载路径。
+
 ```json
 "hpm_flash_cfg": ["0xfcf90002U", "0x00000005U", "0x00001000U", "0xf3000000U"]
 ```
