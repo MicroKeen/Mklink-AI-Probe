@@ -207,6 +207,12 @@ class StreamHub:
             self._schedule_delivery(published)
         return published.sequence
 
+    @property
+    def has_subscribers(self) -> bool:
+        """Cheap demand check for optional stream decoding on producer threads."""
+        with self._lock:
+            return bool(self._subscribers)
+
     def stats(self) -> StreamHubStats:
         with self._lock:
             return StreamHubStats(

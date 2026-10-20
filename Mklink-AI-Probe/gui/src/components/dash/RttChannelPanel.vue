@@ -111,7 +111,7 @@
           @input="queueTerminalInput"
         />
       </div>
-      <RttRawView ref="rawView" v-show="viewMode === 'hex'" :channel="channel" :running="running" :paused="renderPaused" />
+      <RttRawView ref="rawView" v-show="viewMode === 'hex'" :channel="channel" :running="running && viewMode === 'hex'" :paused="renderPaused" />
       <RttTransmitBar :id-prefix="`rtt-channel-${channel}`"
         :enabled="transmitEnabled" :settings="settings" :send="sendRtt"
         @settings-change="persistSettings"
@@ -566,9 +566,14 @@ function resetChartData(): void {
   numericChannelNames.value = []
 }
 
-function attachBinary() { logBinary.start(); terminalBinary.start() }
+function attachBinary() {
+  if (viewMode.value === 'log') logBinary.start()
+  else logBinary.stop()
+  if (viewMode.value === 'terminal') terminalBinary.start()
+  else terminalBinary.stop()
+}
 function detachBinary() { logBinary.stop(); terminalBinary.stop() }
-watch(() => props.running, running => { if (running) attachBinary(); else detachBinary() }, { immediate: true })
+watch([() => props.running, viewMode], ([running]) => { if (running) attachBinary(); else detachBinary() }, { immediate: true })
 watch(() => props.channelStatus, status => {
   if (status?.numeric_channels?.length) { numericChannelNames.value = status.numeric_channels; numericChannelCount.value = status.numeric_channels.length }
   if (status?.encoding) rttEncoding.value = status.encoding as RttEncoding

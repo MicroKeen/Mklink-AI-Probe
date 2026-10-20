@@ -10,6 +10,7 @@ from __future__ import annotations
 import atexit
 from collections import deque
 import json
+import math
 import queue
 import re
 import signal
@@ -33,6 +34,8 @@ class RttLineParser:
       - regex: user-supplied named-group pattern
     """
 
+    _DECIMAL = re.compile(r"[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?")
+
     def __init__(
         self,
         strategy: str = "kv",
@@ -55,14 +58,19 @@ class RttLineParser:
         if not line:
             return None
 
-        if self.strategy == "kv":
-            return self._parse_kv(line)
-        elif self.strategy == "csv":
-            return self._parse_csv(line)
-        elif self.strategy == "regex":
-            return self._parse_regex(line)
-        else:
+        # This is an optional interpretation of target text, shared by Web,
+        # standalone CLI and MCP. A bad numeric row must not kill acquisition.
+        # Keep device I/O, hub publication and resource errors outside this scope.
+        try:
+            if self.strategy == "kv":
+                return self._parse_kv(line)
+            elif self.strategy == "csv":
+                return self._parse_csv(line)
+            elif self.strategy == "regex":
+                return self._parse_regex(line)
+        except (ValueError, OverflowError):
             return None
+        return None
 
     @classmethod
     def auto_detect(cls, sample_lines: list[str]) -> "RttLineParser":
@@ -90,7 +98,7 @@ class RttLineParser:
                 # Try whitespace
                 parts = line.split()
             numeric = sum(1 for p in parts if cls._is_numeric(p.strip("[]()<>{}")))
-            if numeric >= 2 and numeric >= len(parts) * 0.6:
+            if numeric >= 2 and numeric == len(parts):
                 return cls("csv")
         else:
             # No clear CSV lines found — fallback to kv
@@ -101,19 +109,18 @@ class RttLineParser:
 
     # -- internal --
 
-    @staticmethod
-    def _is_numeric(s: str) -> bool:
-        """Check if a string represents a finite number."""
-        # Strip common unit suffixes and brackets
-        s = s.strip().rstrip("CcmVAdB%Hzs")
-        if not s:
-            return False
-        try:
-            v = float(s)
-            import math
-            return math.isfinite(v)
-        except (ValueError, TypeError):
-            return False
+    @classmethod
+    def _number(cls, s: str) -> float | None:
+        """Convert a complete finite decimal token; never strip HEX letters as units."""
+        s = s.strip().strip("[]()<>{}")
+        if not cls._DECIMAL.fullmatch(s):
+            return None
+        value = float(s)
+        return value if math.isfinite(value) else None
+
+    @classmethod
+    def _is_numeric(cls, s: str) -> bool:
+        return cls._number(s) is not None
 
     def _parse_kv(self, line: str) -> dict[str, float] | None:
         """Parse key=value or key: value pairs from a line."""
@@ -139,44 +146,43 @@ class RttLineParser:
     def _parse_csv(self, line: str) -> dict[str, float] | None:
         """Parse delimiter-separated numeric line."""
         # Determine delimiter from first parseable line
-        if self.delimiter:
+        delimiter = self.delimiter
+        if delimiter == " ":
+            parts = line.split()
+        elif delimiter:
             parts = line.split(self.delimiter)
         elif "," in line:
             parts = line.split(",")
-            self.delimiter = ","
+            delimiter = ","
         elif "\t" in line:
             parts = line.split("\t")
-            self.delimiter = "\t"
+            delimiter = "\t"
         else:
             parts = line.split()
-            self.delimiter = " "
+            delimiter = " "
 
-        values: list[float] = []
-        for p in parts:
-            p = p.strip().strip("[]()<>{}")
-            if self._is_numeric(p):
-                values.append(float(p))
-            else:
-                values.append(float("nan"))
+        values = [self._number(p) for p in parts]
 
         if not values:
             return None
 
-        # If no headers yet and first line is all-numeric, auto-generate names
-        if not self._header_sniffed:
-            all_numeric = all(
-                self._is_numeric(p.strip().strip("[]()<>{}")) for p in parts
-            )
-            if self.csv_headers:
-                pass  # user provided
-            elif all_numeric:
-                self.csv_headers = [f"v{i}" for i in range(len(values))]
-            else:
-                # This line has text — treat as header row
-                self.csv_headers = [p.strip().strip("[]()<>{}") for p in parts]
+        # Mixed logs are not data or headers, even after the format is locked.
+        # Only an explicit delimited identifier row can establish CSV headers.
+        if any(v is None for v in values):
+            if (not self._header_sniffed and not self.csv_headers
+                    and delimiter in (",", "\t")
+                    and all(re.fullmatch(r"[A-Za-z_]\w*", p.strip()) for p in parts)
+                    and not all(re.fullmatch(r"[0-9A-Fa-f]{2}", p.strip()) for p in parts)):
+                self.csv_headers = [p.strip() for p in parts]
+                self.delimiter = delimiter
                 self._header_sniffed = True
-                return None  # header row is not data
+            return None
+
+        if not self._header_sniffed:
+            if not self.csv_headers:
+                self.csv_headers = [f"v{i}" for i in range(len(values))]
             self._header_sniffed = True
+        self.delimiter = delimiter
 
         headers = self.csv_headers or [f"v{i}" for i in range(len(values))]
         result: dict[str, float] = {}
@@ -201,7 +207,8 @@ class RttLineParser:
             if val_str is not None:
                 try:
                     v = float(val_str)
-                    result[name] = v
+                    if math.isfinite(v):
+                        result[name] = v
                 except (ValueError, TypeError):
                     continue
         return result if result else None
