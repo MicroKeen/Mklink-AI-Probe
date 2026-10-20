@@ -114,7 +114,7 @@
 
 TypeScript/Vite 生产构建通过。Chrome 实际加载 `ecc65d6d73ae`：默认 2M，输入非快捷值 3456789 后刷新并重新进入 ISP 页面，值正确恢复；输入 0 时部署禁用；恢复有效值后生成/部署/触发成功，实际调用 `isp_config` 首参为 3456789、路径 `/first.bin`，最终结果匹配部署任务。控制台无 error，测试页面/夹具正常退出。证据 `reports/hpm-isp-browser/result-custom.json`、`result-custom.png`。这是上位机任意速率传递和保存恢复证据，不声称该任意速率在实体目标上可用。
 
-## 最终调整：固定时钟分频档位
+## 中间版本：六档时钟分频档位（已被下节替代）
 
 用户随后明确要求“根据下载器固件的时钟和分配，固定上位机可以设置的波特率，只设置可以满足分频系数的档位”。该要求替代上一节自由输入方案：
 
@@ -128,3 +128,17 @@ TypeScript/Vite 生产构建通过。Chrome 实际加载 `ecc65d6d73ae`：默认
 自由输入中间版本 GUI 全量 993 通过；其 Python 全量在用户修改需求后约 4% 时结束，不计完整通过。固定档位版本须完成自己的回归、生产浏览器及最终全量。
 
 最终固定档位源码 `6b013fdc`：250 项相关 Python、44 项页面/API GUI 回归及 TypeScript/Vite 生产构建通过。Chrome 加载 `6b013fdc5b8b`，确认 SELECT 恰好六档、旧任意值回退 2M、10M 选择刷新后恢复、实际部署脚本首参 10000000 及最终匹配结果成功；无控制台 error，页面/夹具已退出。证据为 `reports/hpm-isp-browser/result-presets.json` 与 `result-presets.png`。最终完整 GUI/Python 及精确提交 CI 在 [PR47](https://github.com/MicroKeen/Mklink-AI-Probe/pull/47) 汇总。
+
+## 最终五档与固定 100MHz（2026-10-21）
+
+用户最终要求移除 4M，省去备用 80MHz 时钟切换。源码 `43a5cb5d` 的唯一可选列表为 **115200、1M、2M、5M、10M，默认 2M**。前后端同时拒绝 4M、12.5M 和其他任意输入；旧保存值不在五档内时恢复 2M。此前生成的 4M 脚本仅为历史证据，不应继续使用。
+
+156 项 ISP/脱机 Python 定点测试、45 项 GUI 页面/API 测试、TypeScript 与 Vite 生产构建通过。Chrome 真实生产页面确认五档列表、5M 刷新恢复、实际部署脚本首参 5000000、SD 根路径和匹配终态成功，无控制台 error。浏览器使用真实上位机与模拟固件，本会话没有操作物理目标；页面与夹具已退出。证据为本地 `reports/hpm-isp-browser/result-five-presets.json` 和同名 PNG。最终完整 Python/GUI 与精确提交 CI 在 PR47 汇总。
+
+固件会话最终版本已合并 [PR7](https://github.com/Aladdin-Wang/MicroLink_Plus/pull/7)，合并提交 `c350e4a542a5764fa417d4ca8170013baedbee67`。已安装 UF2 SHA256 `cc949152471a6b020810013038b327f9052a851dec48a8012cb15ede469ef351`；上位机会话只读核对了文件哈希及 `reports/hpm-isp-20261021/manifest.json`：
+
+- UART 始终使用原 100MHz 时钟，没有 4M 的 80MHz 切换逻辑；35 项 native 测试通过。
+- 最终固件 115200、1M、2M 各一轮通过，写入分别约 9.049、1.530、1.151 秒。
+- 5M 三轮分别 0.77730851、0.777405675、0.777286275 秒；10M 同哈希固件三轮 0.659939145–0.66595199 秒。
+- 五档均由波形逐字节确认写入内容一致，CRC、停止位、跳过字节错误均为 0；固件会话确认 USB-UART 查询恢复 115200。
+- 旧 `test-*` 六档实验不代表最终配置；最终证据以 manifest 对应捕获为准。此前 RST 未接线、电压未外部校准的范围限制保留。
