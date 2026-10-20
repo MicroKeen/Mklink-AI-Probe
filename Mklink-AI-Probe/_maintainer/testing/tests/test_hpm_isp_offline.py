@@ -36,7 +36,8 @@ def test_reject_inapplicable_protocol_configuration(change):
 
 
 @pytest.mark.parametrize("change", [
-    {"baud_rate": 921600}, {"baud_rate": True}, {"connect_timeout_ms": 1.5},
+    {"baud_rate": 921600}, {"baud_rate": 115201}, {"baud_rate": 2000001},
+    {"baud_rate": True}, {"baud_rate": 2000000.0}, {"connect_timeout_ms": 1.5},
     {"flash_size": "garbage"}, {"flash_size": 0}, {"flash_size": "0xFFFFFFFF"},
     {"sector_size": 1234}, {"memory_id": 0}, {"config_address": "0x1000"},
     {"nor_options": [0xFCF90002, 6, 0x1000, 0xF3000000]},
@@ -63,8 +64,11 @@ def test_explicit_addresses_and_bin_only():
         parse_offline_config(data)
 
 
-def test_script_calls_contract_and_does_not_access_debug(monkeypatch):
-    config = parse_offline_config(payload())
+@pytest.mark.parametrize("baud", [115200, 2000000])
+def test_script_calls_contract_and_does_not_access_debug(monkeypatch, baud):
+    data = payload()
+    data["hpm_isp"]["baud_rate"] = baud
+    config = parse_offline_config(data)
     script = generate_offline_script(config)
     calls = []
     fake = SimpleNamespace(
@@ -74,7 +78,7 @@ def test_script_calls_contract_and_does_not_access_debug(monkeypatch):
     )
     monkeypatch.setitem(sys.modules, "hpm", fake)
     exec(compile(script, "<isp>", "exec"), {})
-    assert calls[0][1] == (115200, 10000, 10000, 0x200, 0x10000,
+    assert calls[0][1] == (baud, 10000, 10000, 0x200, 0x10000,
                            0x80000000, 0x800000, 4096, 0xFCF90002, 6, 4096, 0)
     assert calls[1][1][1:] == (1, 1, 0, 0, 200, "/app.bin", 0x80000400)
     assert calls[1][1][0] == script_metadata(script)["job_id"]

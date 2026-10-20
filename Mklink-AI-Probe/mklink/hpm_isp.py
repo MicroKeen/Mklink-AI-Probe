@@ -49,7 +49,9 @@ class HpmIspConfig:
 def parse_config(raw: object) -> HpmIspConfig:
     if not isinstance(raw, Mapping):
         raise ValueError("USART ISP configuration is required")
-    baud = integer(raw.get("baud_rate", 115200), "ISP baud rate", 115200, 115200)
+    baud = integer(raw.get("baud_rate", 115200), "ISP baud rate", 115200, 2000000)
+    if baud not in (115200, 2000000):
+        raise ValueError("ISP baud rate must be 115200 or 2000000")
     timeout = integer(raw.get("connect_timeout_ms", 10000), "ISP handshake timeout", 1000, 3600000)
     command_timeout = integer(raw.get("command_timeout_ms", 10000), "ISP command timeout", 1000, 120000)
     memory_id = integer(raw.get("memory_id", 0x10000), "ISP memory ID", 0, 0xFFFFFFFF)

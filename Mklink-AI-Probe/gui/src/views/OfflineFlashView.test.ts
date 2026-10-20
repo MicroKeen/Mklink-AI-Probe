@@ -728,6 +728,9 @@ describe('OfflineFlashView', () => {
     expect(wrapper.text()).not.toContain('IDCODE 超时')
     expect(wrapper.text()).toContain('ROM 自动擦除并内部校验')
     expect(wrapper.findComponent(DeviceConfigurationPanel).exists()).toBe(false)
+    expect(wrapper.get<HTMLSelectElement>('[data-testid="isp-baud-rate"]').element.value).toBe('115200')
+    await wrapper.get('[data-testid="isp-baud-rate"]').setValue('2000000')
+    expect(wrapper.text()).toContain('给目标重新上电恢复默认速率')
     const input = wrapper.get('input[type="file"][multiple]')
     Object.defineProperty(input.element, 'files', {
       configurable: true, value: [new File(['a'], 'first.bin'), new File(['b'], 'second.bin')],
@@ -753,6 +756,7 @@ describe('OfflineFlashView', () => {
     expect(config.programming_protocol).toBe('hpm_rom_isp_uart')
     expect(config.board).toBeNull()
     expect(config.hpm_isp.flash_size).toBe('0x800000')
+    expect(config.hpm_isp.baud_rate).toBe(2000000)
     expect(config.hpm_isp.nor_options).toEqual(['0xFCF90002', '0x6', '0x1000'])
     expect(config.hpm_isp.completion.restore_voltage_mv).toBe(3300)
     expect(config.auto_download_count).toBe(2)
