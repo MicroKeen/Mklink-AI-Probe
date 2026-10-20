@@ -7,6 +7,7 @@ import DeviceConfigurationPanel from '../components/DeviceConfigurationPanel.vue
 import HpmOfflineOtpPanel from '../components/HpmOfflineOtpPanel.vue'
 import HpmIspSettings from '../components/HpmIspSettings.vue'
 import type { HpmOfflineOtp, HpmIspConfig } from '../types/offlineFlash'
+import { HPM_ISP_BAUD_RATES } from '../types/offlineFlash'
 import { provideConfirmation } from '../composables/useConfirmation'
 import { OfflineFlashApiError, useOfflineFlashApi } from '../composables/useOfflineFlashApi'
 import { useOnlineFlashApi } from '../composables/useOnlineFlashApi'
@@ -49,7 +50,7 @@ function savedSettings(): { model?: ProbeModel; scriptName?: string; automaticCo
 }
 const saved = savedSettings()
 function validIspBaud(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && value > 0 && value <= 0xFFFFFFFF
+  return typeof value === 'number' && HPM_ISP_BAUD_RATES.some(rate => rate === value)
 }
 let savedIspBaud = validIspBaud(saved.ispBaudRate) ? saved.ispBaudRate : 2000000
 

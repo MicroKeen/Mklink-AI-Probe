@@ -9,6 +9,8 @@ import json
 import re
 import uuid
 
+ISP_BAUD_RATES = (115200, 1000000, 2000000, 4000000, 5000000, 10000000)
+
 
 def integer(value: object, name: str, minimum: int, maximum: int) -> int:
     if isinstance(value, bool) or not isinstance(value, (int, str)):
@@ -49,9 +51,11 @@ class HpmIspConfig:
 def parse_config(raw: object) -> HpmIspConfig:
     if not isinstance(raw, Mapping):
         raise ValueError("USART ISP configuration is required")
-    # The script API carries uint32 values. Clock/driver/ROM support is checked
-    # by firmware at execution time, not by a host baud-rate whitelist.
+    # Host presets match V4 UART clock dividers. Firmware still accepts numeric
+    # configuration and verifies clock/driver/ROM support at execution time.
     baud = integer(raw.get("baud_rate", 2000000), "ISP baud rate", 1, 0xFFFFFFFF)
+    if baud not in ISP_BAUD_RATES:
+        raise ValueError("ISP baud rate must match a supported V4 clock-divider preset")
     timeout = integer(raw.get("connect_timeout_ms", 10000), "ISP handshake timeout", 1000, 3600000)
     command_timeout = integer(raw.get("command_timeout_ms", 10000), "ISP command timeout", 1000, 120000)
     memory_id = integer(raw.get("memory_id", 0x10000), "ISP memory ID", 0, 0xFFFFFFFF)

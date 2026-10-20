@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { HpmIspConfig } from '../types/offlineFlash'
+import { HPM_ISP_BAUD_RATES, type HpmIspConfig } from '../types/offlineFlash'
 import { tr } from '../composables/useLanguage'
 
 const config = defineModel<HpmIspConfig>({ required: true })
@@ -10,9 +10,8 @@ defineProps<{ count: number }>()
   <fieldset class="isp-settings" data-testid="hpm-isp-settings">
     <legend>USART ISP</legend>
     <p>{{ tr('使用下载器独立 UART 接口，目标须进入 ROM ISP。仅支持启用 HPMLINK 的 V4 固件。', 'Use the probe’s dedicated UART port with the target in ROM ISP. Requires HPMLINK-enabled V4 firmware.') }}</p>
-    <label>{{ tr('串口速率（baud，8N1）', 'Baud rate (8N1)') }}<input v-model.number="config.baud_rate" data-testid="isp-baud-rate" type="number" min="1" max="4294967295" step="1" list="hpm-isp-baud-presets" required /></label>
-    <datalist id="hpm-isp-baud-presets"><option value="115200">115200</option><option value="2000000">2M</option><option value="4000000">4M</option><option value="10000000">10M</option></datalist>
-    <p>{{ tr('可输入自定义正整数速率，实际能否使用由下载器与目标 ROM 确认；快捷值不代表已验证。配置不支持时停止，不自动回退。', 'Enter a custom positive integer baud rate. Probe and target ROM determine support; presets do not imply validation. Unsupported configurations stop without automatic fallback.') }}</p>
+    <label>{{ tr('串口速率（baud，8N1）', 'Baud rate (8N1)') }}<select v-model.number="config.baud_rate" data-testid="isp-baud-rate"><option v-for="rate in HPM_ISP_BAUD_RATES" :key="rate" :value="rate">{{ rate === 115200 ? '115200' : `${rate / 1000000}M (${rate})` }} · 8N1</option></select></label>
+    <p>{{ tr('档位依据下载器 UART 时钟分频设置，目标 ROM 是否支持以执行结果为准。配置不支持时停止，不自动回退。', 'Rates match the probe UART clock dividers. Target ROM support is checked during execution. Unsupported configurations stop without automatic fallback.') }}</p>
     <p v-if="config.baud_rate !== 115200">{{ tr('高速下载中断后，如无法重新握手，请给目标重新上电恢复默认速率。', 'If an interrupted high-speed transfer prevents reconnection, power-cycle the target to restore its default baud rate.') }}</p>
     <label>{{ tr('握手超时（ms）', 'Handshake timeout (ms)') }}<input v-model.number="config.connect_timeout_ms" type="number" min="1000" max="3600000" /></label>
     <label>{{ tr('Flash 容量（字节）', 'Flash size (bytes)') }}<input v-model="config.flash_size" data-testid="isp-flash-size" :placeholder="tr('按板卡填写，如 0x800000', 'Enter board capacity, e.g. 0x800000')" required /></label>
