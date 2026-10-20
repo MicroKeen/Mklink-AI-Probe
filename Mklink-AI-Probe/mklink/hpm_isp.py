@@ -9,7 +9,7 @@ import json
 import re
 import uuid
 
-ISP_BAUD_RATES = (115200, 1000000, 2000000, 4000000, 5000000, 10000000)
+ISP_BAUD_RATES = (115200, 1000000, 2000000, 5000000, 10000000)
 
 
 def integer(value: object, name: str, minimum: int, maximum: int) -> int:

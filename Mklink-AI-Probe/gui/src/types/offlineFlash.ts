@@ -49,7 +49,7 @@ export interface HpmOfflineOtp {
   expected_hard_lock: string
   confirm_irreversible: boolean
 }
-export const HPM_ISP_BAUD_RATES = [115200, 1000000, 2000000, 4000000, 5000000, 10000000] as const
+export const HPM_ISP_BAUD_RATES = [115200, 1000000, 2000000, 5000000, 10000000] as const
 export interface HpmIspConfig {
   baud_rate: number
   connect_timeout_ms: number

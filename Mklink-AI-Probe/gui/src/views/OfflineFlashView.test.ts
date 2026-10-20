@@ -730,7 +730,7 @@ describe('OfflineFlashView', () => {
     expect(wrapper.findComponent(DeviceConfigurationPanel).exists()).toBe(false)
     expect(wrapper.get<HTMLSelectElement>('[data-testid="isp-baud-rate"]').element.value).toBe('2000000')
     expect(wrapper.findAll('[data-testid="isp-baud-rate"] option').map(option => option.attributes('value')))
-      .toEqual(['115200', '1000000', '2000000', '4000000', '5000000', '10000000'])
+      .toEqual(['115200', '1000000', '2000000', '5000000', '10000000'])
     await wrapper.get('[data-testid="isp-baud-rate"]').setValue('10000000')
     expect(wrapper.text()).toContain('给目标重新上电恢复默认速率')
     const input = wrapper.get('input[type="file"][multiple]')
@@ -787,7 +787,7 @@ describe('OfflineFlashView', () => {
     onlineMocks.searchTargets.mockResolvedValue([{
       part_number: 'HPM5301', vendor: 'HPMicro', installed: true, source: 'builtin',
     }])
-    localStorage.setItem('mklink.offlineFlash.settings', JSON.stringify({ model: 'V4', ispBaudRate: 4000000 }))
+    localStorage.setItem('mklink.offlineFlash.settings', JSON.stringify({ model: 'V4', ispBaudRate: 5000000 }))
     async function openIsp() {
       const wrapper = mount(OfflineFlashView)
       await flushPromises()
@@ -797,7 +797,7 @@ describe('OfflineFlashView', () => {
       return wrapper
     }
     let wrapper = await openIsp()
-    expect(wrapper.get<HTMLSelectElement>('[data-testid="isp-baud-rate"]').element.value).toBe('4000000')
+    expect(wrapper.get<HTMLSelectElement>('[data-testid="isp-baud-rate"]').element.value).toBe('5000000')
     await wrapper.get('[data-testid="isp-baud-rate"]').setValue('10000000')
     expect(JSON.parse(localStorage.getItem('mklink.offlineFlash.settings')!).ispBaudRate).toBe(10000000)
     wrapper.unmount()
@@ -806,7 +806,7 @@ describe('OfflineFlashView', () => {
     wrapper.unmount()
   })
 
-  it.each([0, -1, 1.5, 4294967296, '2M', null, 3456789, 12500000])('uses the 2M default for invalid saved ISP baud %s', async savedBaud => {
+  it.each([0, -1, 1.5, 4294967296, '2M', null, 3456789, 4000000, 12500000])('uses the 2M default for invalid saved ISP baud %s', async savedBaud => {
     localStorage.setItem('mklink.offlineFlash.settings', JSON.stringify({ model: 'V4', ispBaudRate: savedBaud }))
     onlineMocks.searchTargets.mockResolvedValue([{
       part_number: 'HPM5301', vendor: 'HPMicro', installed: true, source: 'builtin',
