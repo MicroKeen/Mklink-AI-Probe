@@ -272,7 +272,8 @@ class RuntimeControl:
             finally:
                 active_operation.reset(token)
         if is_uart_path(name):
-            if self.current_operation and self.current_operation['path'] in UART_EXCLUSIVE_PATHS:
+            if self.current_operation and (self.current_operation['path'] in UART_EXCLUSIVE_PATHS
+                                           or self.current_operation.get('uart_exclusive')):
                 raise HTTPException(409, 'Resource release is in progress; wait before using UART')
             if session_id:
                 self.validate_session(session_id, target=False)

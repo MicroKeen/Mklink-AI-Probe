@@ -29,6 +29,19 @@ def add_uart_routes(app):
         return {'sent': body['data']}
 
 
+def test_isp_operation_reserves_independent_uart_ingress(runtime):
+    client, control, _, _, app = runtime
+    add_uart_routes(app)
+    control.current_operation = {'path': '/api/offline-download/trigger', 'uart_exclusive': True}
+    try:
+        response = client.post('/api/dash/serial/send', json={'data': 'must-not-reach-ROM'})
+        assert response.status_code == 409
+        assert not control.uart_operations
+    finally:
+        control.current_operation = None
+    assert client.post('/api/dash/serial/send', json={'data': 'released'}).status_code == 200
+
+
 def test_uart_lobby_attach_ignores_target_locks_and_never_connects(runtime):
     client, control, calls, _, app = runtime
     add_uart_routes(app)

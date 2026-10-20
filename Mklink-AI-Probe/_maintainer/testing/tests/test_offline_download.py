@@ -1288,6 +1288,7 @@ def test_trigger_api_streams_device_output_before_the_terminal_result(monkeypatc
 
 @pytest.mark.parametrize('shared', [False, True])
 def test_trigger_stream_keeps_resources_until_the_serial_thread_finishes(monkeypatch, shared):
+    monkeypatch.setattr("mklink.discovery.find_microkeen_disk", lambda: None)
     allow_finish = threading.Event()
 
     class Bridge:

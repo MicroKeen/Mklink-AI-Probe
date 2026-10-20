@@ -714,6 +714,69 @@ describe('OfflineFlashView', () => {
     expect(wrapper.get('.trigger-log').text()).toContain('program finished')
   })
 
+  it('configures USART ISP separately and requires explicit BIN addresses, capacity and restore voltage', async () => {
+    onlineMocks.searchTargets.mockResolvedValue([{
+      part_number: 'HPM5301xEGx', vendor: 'HPMicro', installed: true, source: 'builtin',
+    }])
+    const wrapper = mount(OfflineFlashView)
+    await flushPromises()
+    await wrapper.get('[data-testid="offline-model"]').setValue('V4')
+    await wrapper.get('.target-result').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="offline-protocol"]').setValue('hpm_rom_isp_uart')
+    expect(wrapper.find('[data-testid="offline-clock"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('IDCODE 超时')
+    expect(wrapper.text()).toContain('ROM 自动擦除并内部校验')
+    expect(wrapper.findComponent(DeviceConfigurationPanel).exists()).toBe(false)
+    const input = wrapper.get('input[type="file"][multiple]')
+    Object.defineProperty(input.element, 'files', {
+      configurable: true, value: [new File(['a'], 'first.bin'), new File(['b'], 'second.bin')],
+    })
+    await input.trigger('change')
+    const rows = wrapper.findAll('[data-testid="offline-firmware-row"]')
+    expect(rows).toHaveLength(2)
+    expect(rows[0].get<HTMLInputElement>('input[placeholder="BIN 基地址"]').element.value).toBe('')
+    await rows[0].get('input[placeholder="BIN 基地址"]').setValue('0x80000400')
+    await rows[1].get('input[placeholder="BIN 基地址"]').setValue('0x80001000')
+    expect(wrapper.get('[data-testid="offline-deploy"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('[data-testid="isp-flash-size"]').setValue('0x800000')
+    await wrapper.get('[data-testid="isp-reset"]').setValue('power_cycle')
+    expect(wrapper.get('[data-testid="offline-deploy"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('[data-testid="isp-voltage"]').setValue('3300')
+    const count = wrapper.findAll('label').find(label => label.text().includes('自动烧录次数'))!
+    await count.get('input').setValue('2')
+    expect(wrapper.get('[data-testid="offline-deploy"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('[data-testid="isp-confirm-cycles"]').setValue(true)
+    await wrapper.get('[data-testid="offline-deploy"]').trigger('click')
+    await flushPromises()
+    const config = offlineMocks.deploy.mock.calls[0][0]
+    expect(config.programming_protocol).toBe('hpm_rom_isp_uart')
+    expect(config.board).toBeNull()
+    expect(config.hpm_isp.flash_size).toBe('0x800000')
+    expect(config.hpm_isp.nor_options).toEqual(['0xFCF90002', '0x6', '0x1000'])
+    expect(config.hpm_isp.completion.restore_voltage_mv).toBe(3300)
+    expect(config.auto_download_count).toBe(2)
+    expect(config.hpm_isp.confirm_reconnect_cycles).toBe(true)
+    expect(config.firmwares.map((f: { base_address: string }) => f.base_address)).toEqual(['0x80000400', '0x80001000'])
+    let finish!: (value: { status: string; lines: string[] }) => void
+    offlineMocks.trigger.mockImplementationOnce((_model, _name, onLine) => {
+      onLine('HPM_ISP {"schema":1,"event":"connected"}')
+      return new Promise(resolve => { finish = resolve })
+    })
+    await wrapper.get('[data-testid="offline-trigger"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="isp-connection"]').text()).toContain('ISP 已连接')
+    finish({ status: 'unknown', lines: [] })
+    await flushPromises()
+    expect(wrapper.text()).toContain('运行结果未确认')
+    expect(wrapper.get('[data-testid="offline-trigger"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('[data-testid="offline-protocol"]').setValue('debug')
+    expect(wrapper.find('[data-testid="hpm-isp-settings"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="offline-clock"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="offline-trigger"]').attributes('disabled')).toBeDefined()
+    wrapper.unmount()
+  })
+
   it.each(['bin', 'hex'])('configures HPM %s download without Pack or FLM algorithms', async (format) => {
     onlineMocks.searchTargets.mockResolvedValue([{
       part_number: 'HPM5301xEGx', vendor: 'HPMicro', pack_id: null,
