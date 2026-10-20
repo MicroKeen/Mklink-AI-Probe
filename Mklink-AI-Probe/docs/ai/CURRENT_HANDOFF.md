@@ -4,12 +4,12 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-20T23:55:28+08:00`
+- 更新时间：`2026-10-21T00:10:18+08:00`
 - 分支：`codex/hpm-usart-isp`
-- HEAD：`HPM USART ISP源码6c298e47，生产资源及验证3927a27f；最终验收/记忆另提交，精确状态以git log和PR47为准。`
+- HEAD：`固定档位源码6b013fdc，生产Web及验收另提交；精确状态以git log和PR47为准。`
 - 远端 HEAD：`microkeen/codex/hpm-usart-isp已推送；PR47用于本次授权集成。原codex/0.3.6-fixes/PR46独立保留，未合并。`
 - 工作树：唯一工作区E:/software/HPM5300/Mklink-AI-Probe；源码子目录Mklink-AI-Probe。当前codex/hpm-usart-isp，不重建旧工作区。
-- 当前任务：HPM5301 USART ISP上位机实现完成：115200/2M、1–8 BIN显式地址、SD无盘符根路径、自动轮次确认、蜂鸣/三种复位及未知结果门控。PR47最终全量结果/CI/合并状态为集成依据；用户已授权任务完成后合main，不发布。本会话仅操作代码和本地夹具，实体下载器由固件会话负责，最终真实2M生成脚本已实机通过。原RTT/SuperWatch PR46与测试安装版不在本次集成范围。
+- 当前任务：HPM5301 USART ISP上位机最终实现：用户最终要求固定六档115200/1M/2M/4M/5M/10M，默认2M，前后端统一校验并保存恢复；删除目标不兼容的12.5M，旧任意值回退2M。PR47最终全量/CI/合并状态为集成依据，用户授权验收后合main，不发布、不操作目标。原PR46独立保留。
 - 状态：`implementation_complete`
 
 ## 里程碑
@@ -23,7 +23,7 @@
 
 ## 验证证据
 
-- **HPM USART ISP 联合实现**：6c298e47/PR47：237项Python定点、94文件986项GUI全量、TS/Vite及Chrome生产115200双BIN/2M部署触发通过。最终完整Python及最终头CI结果在PR47汇总。真实生成2M脚本SHA2eeb7b4e…由固件会话原样上机，匹配job最终code0/ROM0，95180字节波形重组匹配，1.15065468秒。固件多BIN/两轮/蜂鸣/软件复位/断电配置恢复/取消后UART恢复通过；RST未接线、电压精度未外部校准，不继承为已认证。详见hpm-rom-uart-isp-handoff.md。
+- **HPM USART ISP 联合实现**：6b013fdc/PR47固定档位：250项Python定点、44项GUI定点、TS/Vite及Chrome真实生产页面通过，含六档/旧值迁移/10M保存恢复/实际脚本参数与结果。最终完整Python/GUI与最终头CI结果在PR47汇总。此前两档版4981Python通过/2可选依赖跳过、986GUI通过，仅作历史。固件1M/2M/4M/5M/10M重复实测及波形一致性通过，最终2M真实生成脚本1.15065468秒。12.5M切速查询失败未写入已排除。RST未接线、电压精度未外部校准。详见hpm-rom-uart-isp-handoff.md。
 - **0.3.6 RTT与SuperWatch日志**：1669348b/PR46：SuperWatch222 Python、138 GUI、边界/记忆59通过；原生目录弹出/取消通过，完整确认链曾被QMCapture遮挡。真实manager预先记录首样本由DumpMemory夹具验证。RTT5bd50041：376通过/1跳过、扩展266（重叠）、GUI85及Chrome零解析/多通道通过。2b3d5528三个CI通过；用户授权本地NSIS覆盖成功，198 Python/40 Web/四载荷一致，冻结CLI/SVD/MCP/HTTP、无宿主Python及退出检查通过。原生/Chrome显示新构建且后台正常。未绑定探针recording/start仍409身份保护，连接后记录待用户测。详见三份v036报告；未硬件/发布。
 - **0.3.5正式发布**：Python全量4926通过/2跳过/1旧Skill断言失败，修正后相关68通过；GUI94文件985通过和生产构建通过。最终源2f474f60 Windows实装198Python/40Web/四载荷、全局Skill2605文件、冻结CLI/MCP/Web与原生退出通过；SiteAgent实际包2项通过。原生CI39116320413三平台资格/归档digest通过，5签名、双GitHub17附件匿名hash、3索引与真实Gitee Skill回退通过。安装后F103八路RTT连续及各256B下行、UART109条连续及256B下行、5034行按需记录通过。文件选择器超时边界及未解清单见v035-release-handoff.md。
 - **0.3.5 V2 RBL 自动升级**：V2独立索引双GitHub发布，旧UF2索引不变；用户回退后生产Web真实2.8→2.9升级。核心158/CLI相关127/V2专项29/GUI62及TS/Vite通过，组间重叠不相加。5be3dcf7 NSIS覆盖退出0，198Python/40Web/四载荷一致；Skill2605文件及CLI/SVD/MCP通过。安装Web、冻结/Skill实际MCP与CLI同版检查一致，F103 CPUID正确，已detach释放探针。原生正常关闭后进程/端点/端口全部释放；见v035-v2-rbl-update.md。
@@ -53,7 +53,7 @@
 
 ## 下一动作
 
-1. 以PR47核对最终Python全量、最终头CI及用户授权集成结果；若已合并，从最新microkeen/main继续，勿重放硬件测试。固件PR6已由固件会话合入main。原PR46仍待独立审核，不自动合并、打包或发布。
+1. 以PR47核对固定六档版本最终全量/精确头CI后完成用户已授权的main合并；若已合并，从最新main继续，勿重放硬件测试。固件PR6已合main，高速后续分支由固件会话负责。原PR46待独立审核，不自动合并或发布。
 2. 收集两位 RTT 客户的上位机/下载器固件版本、目标 ELF/芯片及 IDE 占用，用启动阶段耗时和 MUX 请求身份复核。历史 unknown 操作不得重放；原始 CDC/F405/受限 AI/GD32 仍待现场闭环。
 3. 继续排查 30MHz 并行目标读错/Flash 偶发 status5，区分固件目标访问与主机队列；本次低负载 F103 结果不关闭该限制，需要固件改动另开会话。
 4. 保持Gitee真实Skill回退：0.3.5已验证；Windows超过100MB被拒使用GitHub链接，其余平台仅GitHub。保留唯一发布/验收证据和Skill备份，联接run仅人工处理，不强删。
