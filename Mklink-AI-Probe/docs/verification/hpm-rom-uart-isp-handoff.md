@@ -21,7 +21,7 @@
 
 ## 当前进度（2026-10-20）
 
-- GUI 全量 94 文件 986 项通过；TypeScript 与 Vite 生产构建通过。后端最终全量正在运行。
+- GUI 全量 94 文件 986 项通过；TypeScript 与 Vite 生产构建通过。后端最终全量结果与最终提交 CI 见 [PR47](https://github.com/MicroKeen/Mklink-AI-Probe/pull/47)。
 - v1 渲染使用 `path0`–`path7` 独立赋值；每个安全 ASCII BIN 名最长 240 字符，8 文件调用单行低于 512 字节。新增长度回归。
 - 无目标能力探测命令为 `print("MKLINK_HPM_ISP_API", hpm.isp_supported())`，只接受独立行 `MKLINK_HPM_ISP_API 1`，已由固件会话实机核对。旧/非 HPMLINK 拒绝。
 - 生成脚本首行 `# MKLINK_HPM_ISP_V1 {"job_id":"...","total":1}` 用于上位机读取任务元数据；正文只有 import、赋值、if 和 API 调用。没有 SWD 时钟/IDCODE/额外擦除回读。
@@ -57,7 +57,7 @@
 - 浏览器控制台无 error；本地夹具正常退出，未连接任何物理下载器。截图及参数证据位于构建根 `reports/hpm-isp-browser/`，不提交截图。
 - GUI 全量首次 985 通过、1 旧断言失败（trigger 新增可选协议参数）；断言补齐后 **94 文件、986 项全部通过**。后端最终全量正在复跑。
 
-生产资源、断言及本交接已提交 `ff8b51dc` 并推送。上位机草稿 PR：https://github.com/MicroKeen/Mklink-AI-Probe/pull/47 。最终 Python 全量和后续实机证据完成后更新验证状态；原 PR46 与当前安装不受本分支变更。
+生产资源、断言及本交接已提交 `ff8b51dc` 并推送。上位机 PR：https://github.com/MicroKeen/Mklink-AI-Probe/pull/47 。最终全量测试及合并状态以 PR47 为准；原 PR46 与当前安装不受本分支变更。
 
 ## 固件会话提供的 HPM5301 首轮实机证据
 
@@ -85,6 +85,10 @@
 
 追加需求到达时，旧配置的第二次 Python 全量到约 47% 无失败；为让最终验证覆盖新功能，已结束该轮，不计作全量通过。2M 定点及最终全量重新运行。
 
-2M 源码 `6c298e47` 已推送。237 项相关 Python 回归通过，TypeScript/Vite 生产构建通过。Chrome 加载生产构建 `6c298e47dc0c`，确认默认 115200；选择 2M 后显示恢复提示，实际部署及触发的 `isp_config` 首参为 2000000，路径为 `/first.bin`，匹配部署任务的终态显示完成，控制台无 error。夹具证据为 `reports/hpm-isp-browser/result-2m.json` 和 `result-2m.png`，没有操作物理下载器。含 2M 的全量 GUI/Python 正在运行。
+2M 源码 `6c298e47` 已推送，生产资源及报告提交 `3927a27f`。237 项相关 Python 回归通过，TypeScript/Vite 生产构建通过。Chrome 加载生产构建 `6c298e47dc0c`，确认默认 115200；选择 2M 后显示恢复提示，实际部署及触发的 `isp_config` 首参为 2000000，路径为 `/first.bin`，匹配部署任务的终态显示完成，控制台无 error。夹具证据为 `reports/hpm-isp-browser/result-2m.json` 和 `result-2m.png`，没有操作物理下载器。含 2M 的全量 GUI **94 文件、986 项通过**；最终 Python 全量结果与最终提交 CI 在 [PR47](https://github.com/MicroKeen/Mklink-AI-Probe/pull/47) 汇总。
 
-固件提交 `6801f0b` / [固件 PR6](https://github.com/Aladdin-Wang/MicroLink_Plus/pull/6) 提供后续重复验证：2M 共 4 次成功；追加 3 次写入时长 1.14857472 / 1.14963942 / 1.14564028 秒，609 个载荷 CRC 通过、双向帧错/跳过字节均为 0，三次重组与原 BIN 完全一致。35 项固件原生回归通过。最终上位机生成脚本的实体下载器联测由固件会话执行，结果待补。
+固件提交 `6801f0b` / [固件 PR6](https://github.com/Aladdin-Wang/MicroLink_Plus/pull/6) 提供后续重复验证：2M 共 4 次成功；追加 3 次写入时长 1.14857472 / 1.14963942 / 1.14564028 秒，609 个载荷 CRC 通过、双向帧错/跳过字节均为 0，三次重组与原 BIN 完全一致。35 项固件原生回归通过。最终上位机生成脚本的实体下载器联测由固件会话执行，结果见下文。
+
+### 最终真实生成脚本联合验收
+
+固件会话原样复制本节 2M 脚本到 SD 并执行，本会话只读核对证据：脚本 SHA256 与上文一致，`job_id=305c851ac58f4cb282ab6585098b2dc4` 的最终 JSON 为 `code=0,rom_status=0,completed=1,total=1`。50MHz 波形重组 95180 字节与原 BIN SHA256 一致，写入至最终响应 **1.15065468 秒**。证据为构建根 `reports/hpm-isp-20261020/host-2m-final.log`、`host-2m-final/verified-writes.json` 及同名原始捕获文件。最终联合脚本验收通过，未改变上述 RST 电气验证/电压精度边界。
