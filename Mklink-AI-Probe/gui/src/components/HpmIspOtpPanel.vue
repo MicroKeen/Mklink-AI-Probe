@@ -13,7 +13,10 @@ const planReason = computed(() => {
   const reason = props.plan?.reason
   if (reason === 'expected_mismatch') return tr('当前值与读取快照不一致，请重新读取。', 'The current value differs from the snapshot. Read again.')
   if (reason === 'bit_clear_requested') return tr('目标值不能清除已有的 1。', 'The desired value cannot clear existing 1 bits.')
-  if (reason === 'read_semantics_and_locks_unknown') return tr('当前 ROM 尚不能确认熔丝值及写保护状态，暂不支持 UART OTP 写入。', 'Fuse values and write protection cannot yet be confirmed for this ROM. UART OTP programming is unavailable.')
+  if (reason === 'read_semantics_and_locks_unknown') return tr('当前下载器固件仅支持 OTP 预检，暂不支持写入，请更新固件。', 'This probe firmware only supports OTP preflight. Update it to enable programming.')
+  if (reason === 'hard_locked') return tr('该用户字已永久锁定，不能写入。', 'This user word is permanently locked and cannot be programmed.')
+  if (reason === 'unsupported_rom') return tr('当前 ROM 版本尚不支持 OTP 写入。', 'OTP programming is not supported for this ROM version.')
+  if (reason === 'no_change') return tr('目标值与当前值相同，无需写入。', 'The desired value matches the current value; no programming is needed.')
   return reason || tr('下载器未确认可以写入，请重新检查。', 'The probe has not confirmed this change is writable. Check again.')
 })
 watch([selected, desired], () => { confirmed.value = false; emit('invalidate') }, { flush: 'sync' })
@@ -47,7 +50,7 @@ function program() {
         <label>{{ tr('目标值', 'Desired value') }} <input v-model="desired" :disabled="busy || disabled" aria-label="UART OTP desired value" placeholder="0x00000000"></label>
         <button class="btn" data-testid="isp-otp-plan" :disabled="busy || disabled || !row || row.locked === true || !desired.trim()" @click="prepare">{{ tr('检查并预览', 'Check and Preview') }}</button>
       </div>
-      <p>{{ tr('仅配置用户 Word 69–79。目标值填写完整结果，已有的 1 不能改回 0。预览不会写入；芯片和锁定状态须通过下载器检查。', 'Only user words 69–79 can be configured. Enter the complete final value; existing 1 bits cannot be cleared. Preview does not program OTP; the probe must check the chip and locks.') }}</p>
+      <p>{{ tr('仅配置用户 Word 69–79。目标值填写完整结果，已有的 1 不能改回 0。预览不会写入；写入后通过 ROM 回读核对。', 'Only user words 69–79 can be configured. Enter the complete final value; existing 1 bits cannot be cleared. Preview does not program OTP; programming is checked by ROM readback.') }}</p>
     </template>
     <template v-if="plan">
       <p data-testid="isp-otp-diff">Word {{ plan.word }}: {{ hex(plan.expected) }} → {{ hex(plan.desired) }} · {{ tr('新增位', 'New bits') }} {{ hex(plan.delta) }}</p>
@@ -55,7 +58,7 @@ function program() {
       <p v-if="!writablePlan" role="status" data-testid="isp-otp-unavailable">{{ planReason }}</p>
       <template v-else>
         <label class="confirmation"><input v-model="confirmed" type="checkbox" data-testid="isp-otp-confirm" :disabled="busy || disabled">{{ tr('确认永久写入以上新增位，无法擦除', 'Confirm permanently burning these new bits; they cannot be erased') }}</label>
-        <button class="btn" data-testid="isp-otp-program" :disabled="busy || disabled || !confirmed" @click="program">{{ tr('写入并校验', 'Program and Verify') }}</button>
+        <button class="btn" data-testid="isp-otp-program" :disabled="busy || disabled || !confirmed" @click="program">{{ tr('写入并回读', 'Program and Read Back') }}</button>
       </template>
     </template>
   </details>

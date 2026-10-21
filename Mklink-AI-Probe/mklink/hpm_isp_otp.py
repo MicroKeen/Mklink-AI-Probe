@@ -1,4 +1,4 @@
-"""HPM5301 UART user OTP client; unknown ROM protection remains read-only."""
+"""Guarded HPM5301 user OTP through ROM read/write-memory commands."""
 from datetime import datetime, timezone
 import json
 import re
@@ -96,13 +96,17 @@ def _user_change(bridge, part_number, change, *, commit):
     if part_number not in ('HPM5301', 'HPM5301XEGX'):
         raise ValueError('UART OTP configuration requires HPM5301')
     response = bridge.send_command(USER_CAPABILITY_COMMAND, timeout=5, echo=False)
-    if not re.search(r'(?m)^\s*MKLINK_HPM_ISP_OTP_USER_API\s+1\s*$', response):
-        raise ValueError('Upgrade HPMLINK V4 firmware: UART OTP configuration API v1 required')
+    versions = re.findall(r'(?m)^\s*MKLINK_HPM_ISP_OTP_USER_API\s+([12])\s*$', response)
+    if len(versions) != 1 or (commit and versions[0] != '2'):
+        raise ValueError('Upgrade HPMLINK V4 firmware: UART OTP programming API v2 required')
     request_id = uuid.uuid4().hex
     response = bridge.send_command(
         f'hpm.isp_otp_user("{request_id}",{change["word"]},{change["expected"]},'
         f'{change["desired"]},{int(commit)},30000,1000)', timeout=90, echo=False)
-    return parse_change(response, request_id, change, commit=commit)
+    result = parse_change(response, request_id, change, commit=commit)
+    if versions[0] == '1' and result.get('qualified'):
+        raise ValueError('UART OTP preflight-only firmware cannot authorize programming')
+    return result
 
 
 def parse_change(response, request_id, change, *, commit):
@@ -125,22 +129,36 @@ def parse_change(response, request_id, change, *, commit):
         raise ValueError('Inconsistent UART OTP write qualification')
     reason = result.get('reason')
     if qualified:
-        # A generic OTP read or a raw HARD_LOCK word alone cannot establish this.
-        if (result.get('read_semantics') != 'fuse' or before != change['expected']
-                or result.get('locked') is not False or hard & (1 << (change['word'] // 4))
-                or _u32(result.get('fuse_lock')) != 0 or _u32(result.get('shadow_lock')) != 0
+        # This qualifies the bounded ROM write command, not direct fuse access.
+        # ROM enforces transient protection; unobservable locks remain unknown.
+        if (before != change['expected'] or hard & (1 << (change['word'] // 4))
+                or _u32(result.get('rom_version')) != 0x56010200
+                or _u32(result.get('soc_revision')) != 0x56010000
+                or _u32(result.get('memory_id')) != 0x20000
+                or result.get('write_method') != 'rom_write_memory'
+                or result.get('verification_source') != 'rom_otp'
                 or reason not in (None, 'ok')):
-            raise ValueError('UART OTP fuse values and write protection were not verified')
+            raise ValueError('UART OTP target or reviewed value does not match the supported ROM profile')
+        if result.get('locked') is not None and result.get('locked') is not False:
+            raise ValueError('UART OTP word is locked or has an invalid lock status')
+        for key in ('fuse_lock', 'shadow_lock'):
+            lock = result.get(key)
+            if lock is not None and (_u32(lock) > 3 or lock & 1):
+                raise ValueError('UART OTP word is write-locked')
     elif not isinstance(reason, str) or not reason or len(reason) > 128:
         raise ValueError('Missing UART OTP preflight rejection reason')
     if not commit:
-        if result['write_attempted'] or result['verified'] or result.get('after') is not None:
+        if (result['write_attempted'] or result['verified'] or result.get('after') is not None
+                or result.get('write_status') is not None):
             raise ValueError('OTP preflight returned an unexpected programming result; do not retry')
-        return dict(change, before=before, qualified=qualified, write_supported=qualified, reason=reason)
+        return dict(change, before=before, qualified=qualified, write_supported=qualified, reason=reason,
+                    verification_source='rom_otp', read_semantics=result['read_semantics'])
     if (not qualified or not result['write_attempted'] or not result['verified']
+            or _u32(result.get('write_status')) != 0
             or _u32(result.get('after')) != change['desired']):
         raise ValueError('OTP outcome is unverified; read again, do not retry programming')
-    return dict(change, after=result['after'], verified=True)
+    return dict(change, after=result['after'], verified=True, verification_source='rom_otp',
+                read_semantics=result['read_semantics'])
 
 
 def plan_change(bridge, part_number, word, expected, desired, delta):
