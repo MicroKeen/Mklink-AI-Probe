@@ -1159,8 +1159,6 @@ onBeforeUnmount(() => {
           <button v-if="deploymentUncertain" class="btn" :disabled="operationBusy" @click="deploymentUncertain = false; deploymentRequestId = ''">{{ tr('已核查磁盘，允许新部署', 'Disk inspected; allow a new deployment') }}</button>
         </div>
         </section>
-      </main>
-    </div>
     <section class="run-workspace" :aria-label="tr('预览与运行输出', 'Preview and run output')">
         <div v-if="!ispMode || preview" class="script-preview">
           <div class="preview-title"><span>{{ preview?.script_name || effectiveScriptName }}</span><span>{{ preview?.model || effectiveModel }}</span></div>
@@ -1171,6 +1169,8 @@ onBeforeUnmount(() => {
           <pre class="trigger-log">{{ displayedTriggerLines.join('\n') || tr('等待触发测试', 'Waiting to run test') }}</pre>
         </div>
     </section>
+      </main>
+    </div>
     <input ref="replacementFlmInput" class="visually-hidden" type="file" accept=".flm" @change="replaceAlgorithm">
     <ConfirmationDialog v-if="confirmationMessage !== null" :message="confirmationMessage" @answer="answerConfirmation" />
   </div>
@@ -1190,6 +1190,7 @@ onBeforeUnmount(() => {
 @media(max-width:900px){.offline-layout{grid-template-columns:260px minmax(0,1fr)}.production-panel .shared-controls{grid-template-columns:1fr}.firmware-fields{grid-template-columns:1fr}.firmware-fields .file-name{grid-column:auto}}
 @media(max-width:650px){.offline-layout{grid-template-columns:1fr}.shared-device-panel .shared-controls{display:grid;grid-template-columns:1fr 1fr;column-gap:14px}.shared-device-panel .target-combobox,.shared-device-panel .selected-target,.shared-device-panel :deep(.isp-settings),.shared-device-panel .security-settings,.shared-device-panel .field-title{grid-column:1/-1}.workspace-tabs button{flex:1;padding:12px}.production-panel .setting-row{grid-template-columns:100px 1fr auto}}
 .image-workspace.rom-workspace{grid-template-columns:minmax(0,1fr)}
+.run-workspace{margin-top:12px;min-width:0}.run-workspace .trigger-output{margin-top:0}
 .shared-device-panel>.section-title{display:flex;align-items:center;min-height:46px;margin:-16px -16px 16px;padding:0 16px;border-bottom:1px solid var(--border)}
 .workspace-tabs{min-height:46px;box-sizing:border-box}.workspace-tabs button{padding:12px 18px}
 .shared-device-panel .form-input,.shared-device-panel .form-select,.shared-device-panel .target-search .btn{min-height:36px;box-sizing:border-box}
