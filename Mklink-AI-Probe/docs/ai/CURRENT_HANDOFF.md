@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-21T20:18:38.153305+08:00`
+- 更新时间：`2026-10-21T20:58:02.447297+08:00`
 - 分支：`codex/hpm-isp-deployment-ux`
-- HEAD：`UART OTP ROM write-memory v2及官方式界面源8ebc017c/Web19eb1329；精确远端以GitHub为准。`
-- 远端 HEAD：`PR48已推送19eb1329；本地组合da502fb2已推送，待组合本次界面。PR46/49保留。`
+- HEAD：`OTP 独立选项卡源935746c4/Web a8f14d95；开始共享左栏与多系列OTP扩展。`
+- 远端 HEAD：`PR48 a8f14d95已推送且三项CI通过；本地组合73fccac2/Web f1695c2c已推送和安装。`
 - 工作树：唯一工作区E:/software/HPM5300/Mklink-AI-Probe；源码子目录Mklink-AI-Probe。当前codex/hpm-isp-deployment-ux；组合包源codex/v036-isp-ux-local。
-- 当前任务：实现HPM5301 UART OTP直接write-memory及官方式读/写网格、自定义多Word、CSV导入导出、整批预检/顺序写入失败即停；HPM和ARM配置界面分离。125OTP Python/194GUI/TS/Vite/Chrome模拟双字写入通过。待组合打包覆盖验收。无实际OTP写、永久锁、VCC变更。
-- 状态：`otp_workspace_packaging`
+- 当前任务：用户已打开新上位机，要求左侧共享下载器/芯片/下载类型和对应参数，右侧镜像烧写/OTP独立页签，兼顾ARM与HPM；HPM OTP按官方工具扩展型号和功能，固件交由指定会话继续。尚未修改本轮代码。
+- 状态：`offline_workspace_redesign`
 
 ## 里程碑
 
@@ -23,7 +23,7 @@
 
 ## 验证证据
 
-- **HPM5301 UART OTP读写及官方式界面**：源8ebc017c/Web19eb1329：125OTP Python、194GUI、TS/Vite和生产Chrome双字模拟写入通过。原直接写入330Python/84GUI通过，计数重叠。固件62d4bd6/APIv2实机read/plan qualified=true，无program；再次read作废令牌且11字仍0。ROM未知锁状态不再阻止写命令，ROM保护及回读校验保留。CSV选择器自动化超时，格式单测通过。新组合包待覆盖；原24d9d020只读实装验收见v036-uart-otp-read.md。详细见v036-uart-otp-settings.md。
+- **HPM5301 UART OTP读写及官方式界面**：独立OTP页签源935746c4/Web a8f14d95：组合338 Python、194 GUI、TS/Vite通过；IAB生产页签切换作废令牌与模拟双字写入通过。组合源73fccac2/Web f1695c2c于2026-10-21 20:42管理员覆盖exit0；202 Python源/41 Web资源/四载荷与冻结CLI/SVD/MCP/HTTP和正常退出通过。实机固件62d4bd6 v2 read/plan通过，未program；用户已打开测试。原生CSV选择器未完成自动验收。详见v036-uart-otp-settings.md。
 - **0.3.6 ISP错误原因**：2506e93c/9b056ed1：102Python、72GUI，扩展90GUI通过；修正App旧哈希断言a8250c25，CI重跑以GitHub为准。Chrome临时SD和模拟固件显示timeout/Cancelled，脚本/JSON过滤。组合9c80b12a管理员覆盖退出0，199Python/40Web/四载荷、冻结CLI/MCP/SVD/HTTP、原生/浏览器与退出零进程/监听/端点通过。见v036-isp-readable-errors.md。
 - **0.3.6 串口锁异常清理**：源dad4bf69；213通过，含15新增故障回归、真实测试进程强退后串口/HIL重取及活锁保护。三个源CI通过。组合b3878ee5管理员覆盖退出0，199Python/40Web/四载荷一致，冻结CLI/MCP/SVD/HTTP、原生/Chrome与正常退出零进程/端口/端点通过。无目标硬件操作；见v036-serial-lock-cleanup.md。
 - **0.3.6 ISP部署界面修复**：最新5df9569e：54GUI及TS/Vite通过，Chrome临时SD模拟触发显示屏幕同款waiting/connected/done/OK并保留输出框，脚本/JSON不显示、零控制台错；截图超时。组合11a865cb覆盖退出0、199源/40Web/四载荷、冻结MCP/SVD/HTTP无宿主Python、原生/Web及正常退出释放通过。未实测物理屏幕同步；详见v036-isp-deployment-ux.md。
@@ -47,13 +47,13 @@
 
 ## 真机环境
 
-- **state**：用户已关闭上位机。指定固件会话01a15977-1aef-7430-aa11-6e39725f0465升级62d4bd6对应候选并实机read/plan通过；11字仍0，未写OTP/锁/VCC。模拟双字写入后台已退出零租约。多轮物理换板未新增验收。
-- **installer**：当前实装0.3.6组合24d9d020，2026-10-21 18:38:56+08管理员覆盖exit0。F:/MKLink-Build/artifacts/v036-local-isp-24d9d020；SHA256 7ae3f0163959eaf8d9aa3b9ee845f2e5d9c4497bfcf642954865ba92ebb5ae54。安装文件/冻结/实机Web OTP通过；全局Skill未改，无公开发布。
+- **state**：用户已打开最新版上位机查看，当前不关闭其测试。固件62d4bd6 v2 read/plan已通过，无实际OTP写/永久锁/VCC；模拟测试后台已正常退出。多轮物理换板未新增验收。
+- **installer**：当前实装0.3.6组合73fccac2/Web f1695c2c，2026-10-21 20:42:52+08管理员覆盖exit0。F:/MKLink-Build/artifacts/v036-local-isp-73fccac2；SHA256 20c211f4628e21e73131054b66eb55082e3f1c390d792f14f324f4d8e17c703e。202 Python/41 Web/四载荷、冻结CLI/SVD/MCP/HTTP及正常退出通过；全局Skill未改，无公开发布。
 - **backups**：0.3.4正式包/安装/渠道/Skill/HIL在MKLINK_BUILD_ROOT/artifacts/v034-official，相邻v034-official-native保存完整原生CI ZIP；0.3.5本机包见上述构建根。原Git根.build/artifacts/v033-official、v032-official及用户备份保持；清理前快照/删除清单在构建根reports/v034-cleanup-*.json、v034-deleted-branches.json、v034-memory-before-cleanup.json。不能再把F盘仅视为可删缓存。
 
 ## 下一动作
 
-1. 组合8ebc017c到codex/v036-isp-ux-local，相关复验后NSIS打包、管理员覆盖和冻结/实装验收；同步本报告与PR48。实际OTP写须用户指定word和目标值。PR48/49/46未授权合并或发布。
+1. 按用户参考图重构脱机页共享左栏及镜像/OTP工作区；核实官方多系列OTP定义，协调固件会话01a15977-1aef-7430-aa11-6e39725f0465能力合同后扩展。完成相关测试与真实浏览器后再组合打包。实际OTP写须用户指定Word和目标值；PR48/49/46未授权合并或发布。
 2. 收集两位 RTT 客户的上位机/下载器固件版本、目标 ELF/芯片及 IDE 占用，用启动阶段耗时和 MUX 请求身份复核。历史 unknown 操作不得重放；原始 CDC/F405/受限 AI/GD32 仍待现场闭环。
 3. 继续排查 30MHz 并行目标读错/Flash 偶发 status5，区分固件目标访问与主机队列；本次低负载 F103 结果不关闭该限制，需要固件改动另开会话。
 4. 保持Gitee真实Skill回退：0.3.5已验证；Windows超过100MB被拒使用GitHub链接，其余平台仅GitHub。保留唯一发布/验收证据和Skill备份，联接run仅人工处理，不强删。

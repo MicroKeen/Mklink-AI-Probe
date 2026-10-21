@@ -128,3 +128,11 @@ a global CSS margin reset; explicit dialog centering was added. CSV chooser
 automation timed out and reset the browser tool, so native chooser completion
 is not claimed. CSV parsing/roundtrip is covered by unit tests. Fixture stopped
 normally with no resource leases; no physical target was accessed.
+
+## 2026-10-21 独立页签和覆盖安装
+
+OTP 已从弹窗改为独立页签（源935746c4/Web a8f14d95）。组合338 Python、194 GUI及TS/Vite通过；IAB生产页面模拟双字写入成功，切换镜像/OTP页签会作废旧令牌。原生CSV选择器未完成自动验收。
+
+组合源73fccac2/Web f1695c2c已管理员覆盖安装，2026-10-21 20:42:52+08退出0。归档目录为构建根artifacts/v036-local-isp-73fccac2，安装包SHA256为20c211f4628e21e73131054b66eb55082e3f1c390d792f14f324f4d8e17c703e。提取和实装检查通过：202 Python源、41 Web资源、四载荷一致，冻结CLI/SVD/MCP/HTTP、无宿主Python和正常退出通过。Windows包未签名，未公开发布。用户已打开测试；未实际烧写OTP、锁或改变VCC。
+
+用户随后要求重新组织整个脱机页：左侧共享下载器/芯片/协议和参数，右侧镜像与OTP页签，并按官方工具扩展HPM型号和OTP功能。这是后续开发范围，不能把上述安装验收当作扩展功能已完成。
