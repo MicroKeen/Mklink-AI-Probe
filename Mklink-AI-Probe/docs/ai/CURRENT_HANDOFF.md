@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-21T18:38:02.9667014+08:00`
+- 更新时间：`2026-10-21T18:44:53.1875399+08:00`
 - 分支：`codex/hpm-isp-deployment-ux`
 - HEAD：`UART只读OTP源b5e4f7ea、Web bb181a94；本地组合源24d9d020、Web7e7500c3。精确PR48头以GitHub为准。`
 - 远端 HEAD：`PR47已合并main bec395c3；PR48和PR49待审，PR46独立保留。本地组合7e7500c3已推送。`
 - 工作树：唯一工作区E:/software/HPM5300/Mklink-AI-Probe；源码子目录Mklink-AI-Probe。当前codex/hpm-isp-deployment-ux；组合包源codex/v036-isp-ux-local。
-- 当前任务：HPM5301/HPM5301XEGX UART只读OTP、复用JTAG表格、严格nonce/profile校验与取消持锁；ISP cycle_done保留连接直到disconnected。221Python/81GUI、TS/Vite/Chrome最终schema模拟及新组合NSIS冻结资格通过。固件由用户指定会话实现，ROM物理只读已验证，新API联调进行中。新包24d9d020覆盖安装等待Windows UAC，尚未完成；此前实际安装9c80b12a。
-- 状态：`in_progress`
+- 当前任务：HPM5301 UART只读OTP及cycle_done到disconnected连接状态完成。源b5e4f7ea/Web bb181a94；组合24d9d020管理员覆盖退出0，201Python源/40Web/四载荷一致、冻结MCP/SVD/HTTP通过。221Python/81GUI回归通过；实际新安装+最终固件API及浏览器按钮读回11字，未JTAG/写OTP/复位/改电压，测试后台已释放。固件多轮重连单测通过，未新做物理换板验收；PR48仍待审。
+- 状态：`implementation_complete`
 
 ## 里程碑
 
@@ -23,7 +23,7 @@
 
 ## 验证证据
 
-- **HPM5301 UART只读OTP与多轮状态**：b5e4f7ea/bb181a94：221Python、81GUI、TS/Vite、Chrome实际host路由+模拟CDC通过；无SD/BIN/JTAG读11字，锁/影子未知。组合24d9d020重复221/81并生成NSIS，冻结CLI/MCP/SVD/HTTP及退出通过。实机API及覆盖待完成；见v036-uart-otp-read.md。
+- **HPM5301 UART只读OTP与多轮状态**：源b5e4f7ea/Web bb181a94：221Python、81GUI、TS/Vite、Chrome模拟通过；组合24d9d020复验及NSIS通过。管理员覆盖退出0，201源/40Web/四载荷、冻结CLI/MCP/SVD/HTTP通过。实际安装API及Web按钮+e81059d0固件真机只读11字成功，无JTAG；退出零测试进程/端点/18788监听。多轮仅C单测/模拟，未新做物理换片；原生窗口关闭未重复。见v036-uart-otp-read.md。
 - **0.3.6 ISP错误原因**：2506e93c/9b056ed1：102Python、72GUI，扩展90GUI通过；修正App旧哈希断言a8250c25，CI重跑以GitHub为准。Chrome临时SD和模拟固件显示timeout/Cancelled，脚本/JSON过滤。组合9c80b12a管理员覆盖退出0，199Python/40Web/四载荷、冻结CLI/MCP/SVD/HTTP、原生/浏览器与退出零进程/监听/端点通过。见v036-isp-readable-errors.md。
 - **0.3.6 串口锁异常清理**：源dad4bf69；213通过，含15新增故障回归、真实测试进程强退后串口/HIL重取及活锁保护。三个源CI通过。组合b3878ee5管理员覆盖退出0，199Python/40Web/四载荷一致，冻结CLI/MCP/SVD/HTTP、原生/Chrome与正常退出零进程/端口/端点通过。无目标硬件操作；见v036-serial-lock-cleanup.md。
 - **0.3.6 ISP部署界面修复**：最新5df9569e：54GUI及TS/Vite通过，Chrome临时SD模拟触发显示屏幕同款waiting/connected/done/OK并保留输出框，脚本/JSON不显示、零控制台错；截图超时。组合11a865cb覆盖退出0、199源/40Web/四载荷、冻结MCP/SVD/HTTP无宿主Python、原生/Web及正常退出释放通过。未实测物理屏幕同步；详见v036-isp-deployment-ux.md。
@@ -47,13 +47,13 @@
 
 ## 真机环境
 
-- **state**：本会话未写OTP、锁位、VCC或目标Flash。用户指定固件会话负责候选固件升级和UART协议实测，正在通过新包冻结后台联调；不将模拟结果当硬件验收。
-- **installer**：此前已实装0.3.6组合9c80b12a。新24d9d020在F:/MKLink-Build/artifacts/v036-local-isp-24d9d020，SHA256 7ae3f0163959eaf8d9aa3b9ee845f2e5d9c4497bfcf642954865ba92ebb5ae54；冻结资格通过，管理员覆盖仍等待UAC。全局Skill未改。
+- **state**：实际安装后台与最终e81059d0固件完成HPM5301 OTP只读API和Web按钮验收；未JTAG/写OTP/锁位/复位/改VCC。固件由用户指定会话升级，PR8已合并21d4fda。测试后台正常停止，零进程/端点/18788监听。多轮新行为只有单测/模拟，物理换板待测。
+- **installer**：当前实装0.3.6组合24d9d020，2026-10-21 18:38:56+08管理员覆盖exit0。F:/MKLink-Build/artifacts/v036-local-isp-24d9d020；SHA256 7ae3f0163959eaf8d9aa3b9ee845f2e5d9c4497bfcf642954865ba92ebb5ae54。安装文件/冻结/实机Web OTP通过；全局Skill未改，无公开发布。
 - **backups**：0.3.4正式包/安装/渠道/Skill/HIL在MKLINK_BUILD_ROOT/artifacts/v034-official，相邻v034-official-native保存完整原生CI ZIP；0.3.5本机包见上述构建根。原Git根.build/artifacts/v033-official、v032-official及用户备份保持；清理前快照/删除清单在构建根reports/v034-cleanup-*.json、v034-deleted-branches.json、v034-memory-before-cleanup.json。不能再把F盘仅视为可删缓存。
 
 ## 下一动作
 
-1. 完成24d9d020的Windows UAC覆盖、安装文件资格、新固件只读OTP联调；固件会话01a15977-1aef-7430-aa11-6e39725f0465负责物理设备。PR48/49/46待明确合并授权，不公开发布。
+1. PR48 UART只读OTP/ISP界面、PR49锁修复和PR46 RTT/SuperWatch等待明确合并授权。最新0.3.6组合24d9d020已覆盖并实机只读验收。多轮物理换板流程待用户测试，不将C单测当实物验收；不公开发布。
 2. 收集两位 RTT 客户的上位机/下载器固件版本、目标 ELF/芯片及 IDE 占用，用启动阶段耗时和 MUX 请求身份复核。历史 unknown 操作不得重放；原始 CDC/F405/受限 AI/GD32 仍待现场闭环。
 3. 继续排查 30MHz 并行目标读错/Flash 偶发 status5，区分固件目标访问与主机队列；本次低负载 F103 结果不关闭该限制，需要固件改动另开会话。
 4. 保持Gitee真实Skill回退：0.3.5已验证；Windows超过100MB被拒使用GitHub链接，其余平台仅GitHub。保留唯一发布/验收证据和Skill备份，联接run仅人工处理，不强删。
@@ -72,7 +72,7 @@
 
 ## 延续协议
 
-- 读取AGENTS和v036-uart-otp-read.md；源码PR48、候选安装包组合24d9d020。OTP只读HPM5301固定69..79，无JTAG回退/写入/锁定/电压。新包冻结后台18788用于联调，UAC尚待用户点确认；不能宣称新包已覆盖安装。固件会话单独负责物理SD和目标，不抢占硬件。
+- 读取AGENTS和v036-uart-otp-read.md；源码PR48，新安装组合24d9d020已通过UAC与实机OTP验收。OTP限HPM5301固定69..79，无JTAG回退/写入/锁定/电压。固件会话01a15977-1aef-7430-aa11-6e39725f0465已合并PR8；e81059d0刷入。18788测试后台已释放，不再寻找旧端点/重复读取。物理多轮换板仍未验收。
 - V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。
 - CDC 995根因仅保留待排查。恢复只允许同身份CDC故障5秒内；超时不自动接回或新建AI会话，主动断开立即生效，不重放未知写入。测试实例已经全部释放；见v035-transport-recovery.md，不寻找旧现场窗口。
 - 客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。
