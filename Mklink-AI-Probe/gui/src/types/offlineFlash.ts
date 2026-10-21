@@ -64,7 +64,7 @@ export interface HpmIspConfig {
   confirm_reconnect_cycles: boolean
   completion: {
     beep: boolean
-    reset: 'none' | 'software' | 'hardware' | 'power_cycle'
+    reset: 'none' | 'software' | 'power_cycle'
     restore_voltage_mv: number | null
     power_off_ms: number
   }

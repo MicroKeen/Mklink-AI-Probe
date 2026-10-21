@@ -741,6 +741,8 @@ describe('OfflineFlashView', () => {
     expect(wrapper.text()).not.toContain('给目标重新上电恢复默认速率')
     expect(wrapper.text()).not.toContain('档位依据下载器')
     expect(wrapper.find('[data-testid="isp-flash-size"]').exists()).toBe(false)
+    expect(wrapper.findAll('[data-testid="isp-reset"] option').map(option => option.attributes('value')))
+      .toEqual(['none', 'software', 'power_cycle'])
     const input = wrapper.get('input[type="file"][multiple]')
     Object.defineProperty(input.element, 'files', {
       configurable: true, value: [new File(['a'], 'MicroLink.bin'), new File(['b'], 'MicroLink.bin')],
@@ -755,6 +757,7 @@ describe('OfflineFlashView', () => {
     await flushPromises()
     expect(offlineMocks.preview).toHaveBeenCalledOnce()
     await wrapper.get('[data-testid="isp-reset"]').setValue('power_cycle')
+    expect(wrapper.text()).toContain('断电持续时间（ms）')
     expect(wrapper.get<HTMLInputElement>('[data-testid="isp-voltage-3300"]').element.checked).toBe(true)
     expect(wrapper.get('[data-testid="offline-deploy"]').attributes('disabled')).toBeUndefined()
     await wrapper.get('[data-testid="isp-voltage-1800"]').setValue(true)
@@ -773,6 +776,7 @@ describe('OfflineFlashView', () => {
     await flushPromises()
     expect(offlineMocks.preview.mock.lastCall![0].hpm_isp.completion.restore_voltage_mv).toBe(5000)
     await wrapper.get('[data-testid="isp-reset"]').setValue('software')
+    expect(wrapper.text()).not.toContain('断电持续时间（ms）')
     await wrapper.findAll('button').find(button => button.text() === '生成预览')!.trigger('click')
     await flushPromises()
     expect(offlineMocks.preview.mock.lastCall![0].hpm_isp.completion.restore_voltage_mv).toBeNull()

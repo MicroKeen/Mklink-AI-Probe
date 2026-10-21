@@ -46,6 +46,7 @@ def test_reject_inapplicable_protocol_configuration(change):
     {"nor_options": [0xFCF90002, 6, 0x1000, 0xF3000000]},
     {"rearm_mode": "uart_timeout"},
     {"completion": {"beep": "false"}}, {"completion": {"reset": "power_cycle"}},
+    {"completion": {"reset": "hardware"}},
     {"completion": {"reset": "power_cycle", "restore_voltage_mv": 5500}},
     {"completion": {"reset": "software", "restore_voltage_mv": 3300}},
 ])

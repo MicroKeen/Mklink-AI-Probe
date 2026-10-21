@@ -100,7 +100,7 @@ def parse_config(raw: object) -> HpmIspConfig:
     if not isinstance(beep, bool):
         raise ValueError("Completion beep must be a boolean")
     reset = completion.get("reset", "none")
-    if reset not in ("none", "software", "hardware", "power_cycle"):
+    if reset not in ("none", "software", "power_cycle"):
         raise ValueError("Unsupported completion reset mode")
     voltage = completion.get("restore_voltage_mv")
     if reset == "power_cycle":
@@ -148,7 +148,8 @@ def generate_script(config) -> str:
     args = [isp.baud_rate, isp.connect_timeout_ms, isp.command_timeout_ms,
             isp.config_address, isp.memory_id, isp.flash_base, isp.flash_size, isp.sector_size,
             *(list(isp.nor_options) + [0] * (4 - len(isp.nor_options)))]
-    reset = ("none", "software", "hardware", "power_cycle").index(isp.completion.reset)
+    # Firmware action 2 is wired RST; keep power-cycle at action 3.
+    reset = {"none": 0, "software": 1, "power_cycle": 3}[isp.completion.reset]
     program_args = [json.dumps(job_id), str(config.auto_download_count),
                     str(int(isp.completion.beep)), str(reset),
                     str(isp.completion.restore_voltage_mv or 0), str(isp.completion.power_off_ms)]
