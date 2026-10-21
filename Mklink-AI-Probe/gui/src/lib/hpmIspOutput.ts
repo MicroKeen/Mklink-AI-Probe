@@ -1,5 +1,5 @@
 // Preserve known LCD messages. CDC events without a timeout stage use a
-// generic reason; progress events do not contain the LCD's percentage.
+// generic reason; older progress events have no percentage.
 const errors: Record<number, string> = {
   [-1]: 'Invalid settings', [-2]: 'UART I/O error', [-3]: 'timeout',
   [-4]: 'Invalid UART frame', [-5]: 'CRC mismatch', [-6]: 'ROM aborted transfer',
@@ -50,7 +50,13 @@ export function hpmIspOutput(lines: string[]): string[] {
         if (event.event === 'connected') text = 'ISP connected'
         else if (event.event === 'disconnected') text = 'ISP disconnected'
         else if (event.event === 'waiting' && validCount(event.cycle) && validCount(event.total))
-          text = `ISP waiting ${event.cycle}/${event.total}`
+          text = event.stage === 'reconnect' ? `ISP next ${event.cycle}/${event.total}: reconnect` : `ISP waiting ${event.cycle}/${event.total}`
+        else if (event.event === 'reset_wait') text = 'ISP reset; wait ROM'
+        else if (event.event === 'image_begin' && Number.isInteger(event.image_first)
+          && Number.isInteger(event.image_last) && Number.isInteger(event.image_total)
+          && event.image_first >= 1 && event.image_first <= event.image_last
+          && event.image_last <= event.image_total && event.image_total <= 8)
+          text = `ISP BIN ${event.image_first}${event.image_last === event.image_first ? '' : `-${event.image_last}`}/${event.image_total}`
         else if (event.event === 'cycle_done' && validCount(event.completed) && validCount(event.total))
           text = `ISP done ${event.completed}/${event.total}`
         else if (event.event === 'result' && Number.isInteger(event.code)
@@ -76,7 +82,9 @@ export function hpmIspOutput(lines: string[]): string[] {
         if (message) text = `ISP${scriptReason[1] ? ' config' : ''}: ${message}`
       } else if ((reason && reasons.has(reason[1]!))
         || /^ISP (?:waiting \d+\/\d+|connected|disconnected|done \d+\/\d+|OK \d+\/\d+)$/.test(line)
-        || /^ISP (?:wait|reconnect|prepare|baud|config|write|baud restore|reset|UART) timeout$/.test(line)
+        || /^ISP (?:BIN [1-8](?:-[1-8])?\/[1-8]|next \d+\/\d+: reconnect|reset; wait ROM)$/.test(line)
+        || /^ISP (?:wait|reconnect|prepare|baud|config|write|baud restore|reset|reset reconnect|UART) timeout$/.test(line)
+        || line === 'Check BOOT/UART after reset'
         || line === 'Reconnect target' || line === 'Check UART/BOOT/power'
         || line === 'Upgrade HPMLINK firmware: USART ISP API v1 required') text = line
     }

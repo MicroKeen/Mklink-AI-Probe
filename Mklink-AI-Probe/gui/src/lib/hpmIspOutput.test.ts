@@ -6,6 +6,21 @@ const event = (name: string, values = {}) => 'HPM_ISP ' + JSON.stringify({
 })
 
 describe('ISP LCD output', () => {
+  it('distinguishes two images from rounds and preserves connection until a real disconnect', () => {
+    const images = [event('image_begin', { image_first: 1, image_last: 1, image_total: 2 }),
+      event('progress', { progress: 45 }), event('image_done'),
+      event('image_begin', { image_first: 2, image_last: 2, image_total: 2 }), event('image_done')]
+    for (const line of images) expect(hpmIspConnection('connected', line)).toBe('connected')
+    expect(hpmIspConnection('cycle_done', event('reset_wait'))).toBe('cycle_done')
+    expect(hpmIspOutput([event('connected'), ...images, event('cycle_done', { completed: 1 }),
+      event('reset_wait'), event('waiting', { stage: 'reconnect', cycle: 2 })]))
+      .toEqual(['ISP connected', 'ISP BIN 1/2', 'ISP BIN 2/2', 'ISP done 1/10',
+        'ISP reset; wait ROM', 'ISP next 2/10: reconnect'])
+    expect(hpmIspOutput([event('image_begin', { image_first: 1, image_last: 2, image_total: 2 }),
+      'ISP BIN 1-2/2'])).toEqual(['ISP BIN 1-2/2'])
+    expect(hpmIspOutput([event('image_begin', { image_first: 0, image_last: 1, image_total: 2 }),
+      event('image_begin', { image_first: 2, image_last: 1, image_total: 2 })])).toEqual([])
+  })
   it('shows OTP reasons matching the LCD instead of a misleading baud error', () => {
     expect(hpmIspOutput([event('result', { code: -12, otp_reason: 'geometry_mismatch' }),
       'ISP OTP: OTP layout unsupported', 'USART ISP Baud not supported']))
