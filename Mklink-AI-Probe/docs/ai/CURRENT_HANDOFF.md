@@ -4,12 +4,12 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-21T09:51:35+08:00`
+- 更新时间：`2026-10-21T10:35:31+08:00`
 - 分支：`codex/hpm-isp-deployment-ux`
-- HEAD：`修复源6f8fbe57、生产Web cf18053b、验收7f264d9f；本地组合源码c9157017/生产Web311127fb。精确PR头以PR48为准。`
+- HEAD：`ISP源6f8fbe57；电压/版本精简源fa25a398、Web f88ea4e5、验收a46eeb43。组合包源d21ee11a、Web b84a9bdf；精确PR48头以GitHub为准。`
 - 远端 HEAD：`PR47已合并main bec395c3；PR48修复待审，任务分支已推送；PR46仍独立。`
 - 工作树：唯一工作区E:/software/HPM5300/Mklink-AI-Probe；源码子目录Mklink-AI-Probe。当前codex/hpm-isp-deployment-ux，组合包源另存codex/v036-isp-ux-local。
-- 当前任务：修复ISP偏移地址预览/部署：默认0x80000400，容量自动采用HPM5301内置2MiB配置，同名BIN自动区分；删除指定说明/容量输入/请求ID，丢响应内部查询不重放。198相关Python、45定点GUI、组合全量1002GUI、构建及浏览器模拟SD部署通过。组合c9157017已管理员覆盖安装，冻结/生产Web预览/原生版本/正常退出通过。PR48待审，不沿用PR47合并授权；未发布或再次实机烧录。
+- 当前任务：PR48继续修复ISP偏移地址部署并精简设置。恢复电压对齐在线下载：1.8/3.3/5V，默认3.3V，5V选项及实际触发确认。版本入口仅v0.3.6，组合包本版说明四条。新增44GUI、TS/Vite及浏览器验证通过；组合d21ee11a管理员覆盖安装成功，冻结/原生/生产Web通过。PR48待审，不继承PR47合并授权；未发布或实机改电压。
 - 状态：`implementation_complete`
 
 ## 里程碑
@@ -23,7 +23,7 @@
 
 ## 验证证据
 
-- **0.3.6 ISP部署界面修复**：6f8fbe57/PR48，组合c9157017：198 Python、45定点GUI、全量1002GUI、TS/Vite/NSIS通过。Chrome实际API+模拟SD完成同名双BIN在0x80000400/0x80010400预览部署，零控制台错；保留范围/重叠检查。管理员覆盖退出0，199源/40Web/四载荷匹配，冻结MCP/SVD/HTTP、安装原生版本与生产Web预览、退出资源释放通过。容量为现有2MiB配置非自动实测。见v036-isp-deployment-ux.md。
+- **0.3.6 ISP部署界面修复**：此前6f8fbe57：198相关Python、45GUI及组合1002全量GUI通过。新增fa25a398电压/版本：44GUI、TS/Vite、Chrome选项默认/5V取消/简化版本通过。组合d21ee11a NSIS覆盖退出0，199源/40Web/四载荷匹配，冻结MCP/SVD/HTTP、安装原生版本/生产Web默认3.3V通过，零控制台错误。容量为2MiB配置非实测；未操作硬件。见v036-isp-deployment-ux.md。
 - **HPM USART ISP 联合实现**：0.3.6：996 GUI通过；Python全量4993通过/2可选跳过，1插件版本清单失败已修复，17相关复验通过。本地组合0673490b：496 Python、1002 GUI、TS/Vite/NSIS通过；199源文件/40Web资源一致、冻结CLI/MCP/SVD/HTTP及无宿主Python通过。原生0.3.6更新说明与5M恢复通过；双BIN实际部署烧录code0/ROM0/1/1，正常退出释放。用户豁免管理员安装，现有安装哈希不变。最终证据见hpm-rom-uart-isp-handoff.md与PR47。
 - **0.3.6 RTT与SuperWatch日志**：1669348b/PR46：SuperWatch222 Python、138 GUI、边界/记忆59通过；原生目录弹出/取消通过，完整确认链曾被QMCapture遮挡。真实manager预先记录首样本由DumpMemory夹具验证。RTT5bd50041：376通过/1跳过、扩展266（重叠）、GUI85及Chrome零解析/多通道通过。2b3d5528三个CI通过；用户授权本地NSIS覆盖成功，198 Python/40 Web/四载荷一致，冻结CLI/SVD/MCP/HTTP、无宿主Python及退出检查通过。原生/Chrome显示新构建且后台正常。未绑定探针recording/start仍409身份保护，连接后记录待用户测。详见三份v036报告；未硬件/发布。
 - **0.3.5正式发布**：Python全量4926通过/2跳过/1旧Skill断言失败，修正后相关68通过；GUI94文件985通过和生产构建通过。最终源2f474f60 Windows实装198Python/40Web/四载荷、全局Skill2605文件、冻结CLI/MCP/Web与原生退出通过；SiteAgent实际包2项通过。原生CI39116320413三平台资格/归档digest通过，5签名、双GitHub17附件匿名hash、3索引与真实Gitee Skill回退通过。安装后F103八路RTT连续及各256B下行、UART109条连续及256B下行、5034行按需记录通过。文件选择器超时边界及未解清单见v035-release-handoff.md。
@@ -48,12 +48,12 @@
 ## 真机环境
 
 - **state**：本次仅上位机部署修复及覆盖安装验证，没有再次烧录或更改目标电压。模拟SD部署不作为硬件验收；此前0673490b的5M双BIN硬件证据仍独立保留。
-- **installer**：2026-10-21用户恢复管理员安装授权；0673490b及最新c9157017均NSIS覆盖退出0。当前安装0.3.6/c915701711d1，199Python/40Web/四载荷、原生/生产Web/冻结运行/退出通过，证据在artifacts/v036-local-isp-c9157017。全局Skill未更新。
+- **installer**：管理员安装豁免已撤销。当前0.3.6组合d21ee11a已覆盖安装退出0，199Python/40Web/四载荷、冻结MCP/SVD/HTTP、原生精简版本和生产Web电压选项通过。证据artifacts/v036-local-isp-d21ee11a；保留RTT/SuperWatch修复，全局Skill未改。
 - **backups**：0.3.4正式包/安装/渠道/Skill/HIL在MKLINK_BUILD_ROOT/artifacts/v034-official，相邻v034-official-native保存完整原生CI ZIP；0.3.5本机包见上述构建根。原Git根.build/artifacts/v033-official、v032-official及用户备份保持；清理前快照/删除清单在构建根reports/v034-cleanup-*.json、v034-deleted-branches.json、v034-memory-before-cleanup.json。不能再把F盘仅视为可删缓存。
 
 ## 下一动作
 
-1. 从PR48继续审核ISP部署修复，尚未合并或发布；本机已安装组合c9157017保留RTT/SuperWatch。用户可直接测试。PR47已合并bec395c3，不重放硬件；PR46独立。新合并仍须明确授权及完整合并门禁。
+1. PR48待审，包含ISP地址部署、电压预设和版本信息精简；本机已安装组合d21ee11a供用户测试。PR47已合，PR46独立。新合并须明确授权及完整门禁，不重放硬件。
 2. 收集两位 RTT 客户的上位机/下载器固件版本、目标 ELF/芯片及 IDE 占用，用启动阶段耗时和 MUX 请求身份复核。历史 unknown 操作不得重放；原始 CDC/F405/受限 AI/GD32 仍待现场闭环。
 3. 继续排查 30MHz 并行目标读错/Flash 偶发 status5，区分固件目标访问与主机队列；本次低负载 F103 结果不关闭该限制，需要固件改动另开会话。
 4. 保持Gitee真实Skill回退：0.3.5已验证；Windows超过100MB被拒使用GitHub链接，其余平台仅GitHub。保留唯一发布/验收证据和Skill备份，联接run仅人工处理，不强删。
