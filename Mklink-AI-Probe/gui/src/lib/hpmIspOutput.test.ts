@@ -17,15 +17,38 @@ describe('ISP LCD output', () => {
       'ISP waiting 2/10', 'ISP connected', 'ISP OK 10/10'])
   })
 
-  it('keeps error codes and LCD text while collapsing echoed duplicates', () => {
+  it('renders a timeout reason for structured events and legacy scripts', () => {
     expect(hpmIspOutput([event('connected'), 'ISP connected',
       event('result', { code: -3, completed: 2 }), 'ISP error -3 (2/10)',
-      'USART ISP failed: -3'])).toEqual(['ISP connected', 'ISP error -3 (2/10)', 'USART ISP failed: -3'])
+      'USART ISP failed: -3'])).toEqual(['ISP connected', 'ISP: timeout'])
+  })
+
+  it.each([
+    [-1, 'Invalid settings'], [-2, 'UART I/O error'], [-3, 'timeout'],
+    [-4, 'Invalid UART frame'], [-5, 'CRC mismatch'], [-6, 'ROM aborted transfer'],
+    [-7, 'ROM rejected command'], [-8, 'Cancelled'], [-9, 'Device busy'],
+    [-10, 'BIN file error'], [-11, 'BIN address conflict'], [-12, 'Baud not supported'],
+    [-999, 'Unknown ISP error'],
+  ])('describes result %s without exposing its numeric code', (code, reason) => {
+    expect(hpmIspOutput([event('result', { code })])).toEqual([`ISP: ${reason}`])
+  })
+
+  it('keeps firmware timeout stages, recovery hints and script configuration failures', () => {
+    const lines = ['ISP reconnect timeout', 'Reconnect target', 'ISP write timeout',
+      'Check UART/BOOT/power', 'ISP config: Invalid settings', 'ISP: Cancelled']
+    expect(hpmIspOutput(lines)).toEqual(lines)
+  })
+
+  it('accepts readable SD script errors and preserves cancellation', () => {
+    expect(hpmIspOutput(['USART ISP timeout', 'USART ISP cancelled',
+      'USART ISP config: Invalid settings', 'USART ISP unknown error']))
+      .toEqual(['ISP: timeout', 'ISP: Cancelled', 'ISP config: Invalid settings', 'ISP: Unknown ISP error'])
   })
 
   it.each(['HPM_ISP broken', 'HPM_ISP null', event('result', { code: '0' }),
     event('waiting', { cycle: '<script>' }), event('result', { schema: 2 }),
-    'print("ISP connected")'])('ignores malformed or non-display text: %s', line => {
+    'print("ISP connected")', 'print(isp_label, "timeout")', 'ISP: untrusted arbitrary text',
+    'ISP arbitrary timeout'])('ignores malformed or non-display text: %s', line => {
     expect(hpmIspOutput([line])).toEqual([])
   })
 })
