@@ -8,6 +8,15 @@ const errors: Record<number, string> = {
 }
 const errorText = (code: number) => `ISP: ${errors[code] ?? 'Unknown ISP error'}`
 const reasons = new Set([...Object.values(errors), 'Unknown ISP error'])
+// Keep these labels aligned with firmware otp_error_text() on the LCD.
+const otpErrors: Record<string, string> = {
+  identity_mismatch: 'Target ID mismatch', expected_mismatch: 'Value changed',
+  hard_locked: 'OTP is locked', profile_mismatch: 'Wrong chip profile',
+  geometry_mismatch: 'OTP layout unsupported', write_outcome_unknown: 'Write uncertain; check OTP',
+  readback_mismatch: 'OTP verify mismatch', readback_failed: 'OTP readback failed',
+  rom_rejected: 'ROM rejected OTP write', cancelled: 'Cancelled', read_failed: 'OTP read failed',
+}
+const otpReasons = new Set([...Object.values(otpErrors), 'OTP failed'])
 
 export type IspConnection = 'idle' | 'waiting' | 'connected' | 'cycle_done'
 
@@ -28,6 +37,7 @@ export function hpmIspConnection(previous: IspConnection, line: string): IspConn
 
 export function hpmIspOutput(lines: string[]): string[] {
   const output: string[] = []
+  let otpFailure = false
   for (const raw of lines) {
     const line = raw.trim()
     let text = ''
@@ -44,9 +54,11 @@ export function hpmIspOutput(lines: string[]): string[] {
         else if (event.event === 'cycle_done' && validCount(event.completed) && validCount(event.total))
           text = `ISP done ${event.completed}/${event.total}`
         else if (event.event === 'result' && Number.isInteger(event.code)
-          && validCount(event.completed) && validCount(event.total))
+          && validCount(event.completed) && validCount(event.total)) {
+          otpFailure = event.code !== 0 && typeof event.otp_reason === 'string' && event.otp_reason !== 'ok'
           text = event.code === 0 ? `ISP OK ${event.completed}/${event.total}`
-            : errorText(event.code)
+            : otpFailure ? `ISP OTP: ${otpErrors[event.otp_reason] ?? 'OTP read failed'}` : errorText(event.code)
+        }
       } catch { /* Script echoes and malformed protocol records are not LCD output. */ }
     } else {
       // Old SD scripts/firmware may still emit numbers. Render the reason
@@ -54,8 +66,11 @@ export function hpmIspOutput(lines: string[]): string[] {
       const legacy = /^(?:ISP error (-?\d+) \(\d+\/\d+\)|USART ISP failed: (-?\d+))$/.exec(line)
       const reason = /^ISP(?: config)?: (.+)$/.exec(line)
       const scriptReason = /^USART ISP (config: )?(.+)$/.exec(line)
-      if (legacy) text = errorText(Number(legacy[1] ?? legacy[2]))
-      else if (scriptReason) {
+      const otpReason = /^ISP OTP: (.+)$/.exec(line)
+      if (otpReason && otpReasons.has(otpReason[1]!)) text = line
+      else if (line === 'Timeout' && output.at(-1)?.startsWith('ISP OTP: ')) text = line
+      else if (legacy && !otpFailure) text = errorText(Number(legacy[1] ?? legacy[2]))
+      else if (scriptReason && !otpFailure) {
         const message = [...reasons].find(reason => reason.toLowerCase() === scriptReason[2]?.toLowerCase())
           ?? (scriptReason[2] === 'unknown error' ? 'Unknown ISP error' : undefined)
         if (message) text = `ISP${scriptReason[1] ? ' config' : ''}: ${message}`
