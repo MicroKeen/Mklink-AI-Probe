@@ -8,7 +8,7 @@ import DeviceConfigurationPanel from '../components/DeviceConfigurationPanel.vue
 import HpmOfflineOtpPanel from '../components/HpmOfflineOtpPanel.vue'
 import HpmIspSettings from '../components/HpmIspSettings.vue'
 import HpmIspOtpPanel from '../components/HpmIspOtpPanel.vue'
-import type { HpmIspOtpSnapshot } from '../types/hpmOtp'
+import type { HpmIspOtpChange, HpmIspOtpPlan, HpmIspOtpSnapshot } from '../types/hpmOtp'
 import { API_BASE } from '../lib/runtimeEndpoint'
 import type { HpmOfflineOtp, HpmIspConfig } from '../types/offlineFlash'
 import { HPM_ISP_BAUD_RATES } from '../types/offlineFlash'
@@ -121,9 +121,12 @@ const activeTargetSuggestion = ref(-1)
 const operationBusy = ref(false)
 const otpReading = ref(false)
 const otpSnapshot = ref<HpmIspOtpSnapshot | null>(null)
+const otpPlan = ref<HpmIspOtpPlan | null>(null)
+const otpResult = ref('')
 const otpError = ref('')
 let otpRevision = 0
-function invalidateOtp(): void { otpRevision++; otpSnapshot.value = null; otpError.value = '' }
+function clearOtpPlan(): void { otpPlan.value = null }
+function invalidateOtp(): void { otpRevision++; otpSnapshot.value = null; otpError.value = ''; otpResult.value = ''; clearOtpPlan() }
 watch([targetPart, model, programmingProtocol, diskProbe, () => disk.value?.probe_id], invalidateOtp)
 const error = ref('')
 const errorTitle = ref('')
@@ -898,23 +901,40 @@ async function triggerOffline(): Promise<void> {
 }
 
 async function readIspOtp(): Promise<void> {
+  await requestIspOtp('read')
+}
+async function prepareIspOtp(change: HpmIspOtpChange): Promise<void> {
+  await requestIspOtp('plan', change)
+}
+async function programIspOtp(planId: string): Promise<void> {
+  if (!otpPlan.value?.qualified || !otpPlan.value.write_supported || otpPlan.value.plan_id !== planId) return
+  await requestIspOtp('program', { plan_id: planId, confirm_irreversible: true })
+}
+async function requestIspOtp(action: 'read' | 'plan' | 'program', payload: HpmIspOtpChange | { plan_id: string; confirm_irreversible: boolean } | Record<string, never> = {}): Promise<void> {
   if (operationBusy.value || !ispMode.value || model.value !== 'V4'
     || !['HPM5301', 'HPM5301XEGX'].includes(targetPart.value.toUpperCase())) return
-  invalidateOtp()
+  if (action !== 'plan') invalidateOtp()
+  else { clearOtpPlan(); otpError.value = ''; otpResult.value = '' }
   const revision = otpRevision
   operationBusy.value = true; otpReading.value = true
   try {
     const identity = disk.value?.probe_id ? await selectDownloadProbe(disk.value.probe_id) : {}
     if (revision !== otpRevision) return
-    const response = await fetch(`${API_BASE}/api/device/configuration/hpm-isp-otp/read`, {
+    const response = await fetch(`${API_BASE}/api/device/configuration/hpm-isp-otp/${action}`, {
       method: 'POST', headers: { ...identity, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ part_number: targetPart.value.toUpperCase(), model: 'V4' }),
+      body: JSON.stringify({ part_number: targetPart.value.toUpperCase(), model: 'V4', ...payload }),
     })
     const body = await response.json()
     if (!response.ok) throw new Error(typeof body.detail === 'string' ? body.detail : body.detail?.message || `HTTP ${response.status}`)
-    if (revision === otpRevision) otpSnapshot.value = body
+    if (revision !== otpRevision) return
+    if (action === 'read') otpSnapshot.value = body
+    else if (action === 'plan') otpPlan.value = body
+    else otpResult.value = tr(`Word ${body.word} 写入并校验成功，请重新读取。`, `Word ${body.word} programmed and verified. Read again.`)
   } catch (value) {
-    if (revision === otpRevision) otpError.value = message(value)
+    if (revision === otpRevision) {
+      clearOtpPlan()
+      otpError.value = message(value) + (action === 'program' ? tr('。请重新读取确认结果，不要重试写入。', '. Read the result again; do not retry programming.') : '')
+    }
   } finally { operationBusy.value = false; otpReading.value = false }
 }
 
@@ -1057,8 +1077,8 @@ onBeforeUnmount(() => {
           <p class="security-reason">{{ hpmMode ? tr('JTAG ROM API 内部自动复位，保持原有行为。', 'JTAG ROM API resets internally; existing behavior is preserved.') : tr('使用现有硬件复位流程。软件及断电复位在 USART ISP 模式配置。', 'Uses the existing hardware reset sequence. Software and power-cycle reset are configured in USART ISP mode.') }}</p>
         </div>
         <HpmIspOtpPanel v-if="ispMode && model === 'V4' && ['HPM5301', 'HPM5301XEGX'].includes(targetPart.toUpperCase())"
-          :snapshot="otpSnapshot" :busy="otpReading" :disabled="operationBusy || triggerUncertain"
-          :error="otpError" @read="readIspOtp" />
+          :snapshot="otpSnapshot" :plan="otpPlan" :result="otpResult" :busy="otpReading" :disabled="operationBusy || triggerUncertain"
+          :error="otpError" @read="readIspOtp" @prepare="prepareIspOtp" @program="programIspOtp" @invalidate="clearOtpPlan" />
         <p v-if="ispMode" class="security-reason">{{ tr('BIN 基地址必须与镜像布局一致，请逐项填写。不相邻文件不能共享擦除扇区。', 'Enter each BIN address according to its image layout. Non-adjacent files cannot share an erase sector.') }}</p>
         <label v-if="hpmMode && !ispMode" class="setting-row"><span>{{ tr('HPM 板卡', 'HPM Board') }}</span><select v-model="hpmBoard" class="form-select"><option v-for="item in hpmBoards" :key="item" :value="item">{{ item }}</option></select></label>
         <label class="setting-row"><span>{{ tr('脚本文件名', 'Script File Name') }}</span><input v-model="scriptFieldName" class="form-input mono" data-testid="offline-script-name" :disabled="effectiveModel !== 'V4'"></label>

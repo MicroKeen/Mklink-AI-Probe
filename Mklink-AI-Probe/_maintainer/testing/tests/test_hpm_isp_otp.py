@@ -85,7 +85,26 @@ def test_api_rejects_other_chips_and_write_parameters(monkeypatch, extra):
     app, manager, reader = app_fixture(monkeypatch)
     with TestClient(app) as client:
         assert client.post(URL, json={'part_number': 'HPM5301', **extra}).status_code == 422
-        assert client.post(URL.replace('/read', '/program'), json={}).status_code == 404
+        assert client.post(URL.replace('/read', '/program'), json={}).status_code == 422
+    reader.assert_not_called()
+    assert not manager.get_status()
+
+
+@pytest.mark.parametrize('word,old,new', [(68, 0, 1), (80, 0, 1), (True, 0, 1), (69, True, 1),
+    (69, 5, 1), (69, 0, -1), (69, 0, 2**32), (69, 0, 'bad'), (69, 5, 5)])
+def test_invalid_write_change_never_reaches_hardware(word, old, new):
+    with pytest.raises(ValueError): otp.validate_change(word, old, new)
+
+
+def test_write_change_reuses_jtag_unsigned_and_monotonic_bit_rules():
+    assert otp.validate_change(69, 5, '0x80000007') == dict(word=69, expected=5, desired=0x80000007, delta=0x80000002)
+
+
+def test_write_plan_requires_bound_runtime(monkeypatch):
+    app, manager, reader = app_fixture(monkeypatch)
+    with TestClient(app) as client:
+        response = client.post(URL.replace('/read', '/plan'), json=dict(part_number='HPM5301', word=69, expected=0, desired=1))
+        assert response.status_code == 409
     reader.assert_not_called()
     assert not manager.get_status()
 
@@ -163,3 +182,128 @@ def test_shared_runtime_binds_otp_to_probe_and_blocks_uart_clients(runtime, monk
     assert client.post(URL, json={'part_number': 'HPM5301'}).status_code == 200
     read.assert_called_once_with(bridge, 'HPM5301')
     assert not state['resource_manager'].get_status()
+
+
+def write_runtime(runtime, monkeypatch):
+    client, control, _, _, app = runtime
+    control.info['probe_id'] = 'fixture-probe'
+    monkeypatch.setattr('mklink.probes.inventory', lambda: [{'probe_id': 'fixture-probe', 'port': 'COM9'}])
+    monkeypatch.setattr('mklink.probes.select_probe', lambda _: {'probe_id': 'fixture-probe', 'port': 'COM9'})
+    state = app.state.mklink_state
+    bridge = Mock(); state['device']._bridge = bridge
+    app.include_router(create_hpm_isp_otp_router(state['resource_manager'], lambda: state['device']))
+    prepare = Mock(side_effect=lambda _bridge, _part, **change: dict(change, qualified=True, write_supported=True, before=change['expected'], reason=None))
+    program = Mock(return_value=dict(word=69, after=7, verified=True))
+    monkeypatch.setattr(otp, 'plan_change', prepare, raising=False)
+    monkeypatch.setattr(otp, 'program_change', program, raising=False)
+    monkeypatch.setattr(otp, 'read_snapshot', Mock(return_value={'words': []}))
+    return client, state, prepare, program
+
+
+def test_server_preview_is_required_confirmed_single_use_and_not_client_editable(runtime, monkeypatch):
+    client, state, prepare, program = write_runtime(runtime, monkeypatch)
+    body = dict(part_number='HPM5301', word=69, expected=5, desired='0x7')
+    result = client.post(URL.replace('/read', '/plan'), json=body)
+    assert result.status_code == 200, result.text
+    plan = result.json()
+    assert plan['expected'] == 5 and plan['delta'] == 2
+    payload = dict(part_number='HPM5301', plan_id=plan['plan_id'], confirm_irreversible=False)
+    assert client.post(URL.replace('/read', '/program'), json=payload).status_code == 422
+    payload['confirm_irreversible'] = True
+    assert client.post(URL.replace('/read', '/program'), json={**payload, 'desired': 0xffffffff}).status_code == 422
+    program.assert_not_called()
+    assert client.post(URL.replace('/read', '/program'), json=payload).status_code == 200
+    assert program.call_args.kwargs == dict(word=69, expected=5, desired=7, delta=2)
+    assert client.post(URL.replace('/read', '/program'), json=payload).status_code == 422
+    assert program.call_count == 1
+    assert not state['resource_manager'].get_status()
+
+
+@pytest.mark.parametrize('invalidate', ['read', 'generation', 'failure'])
+def test_read_switch_and_unknown_failure_do_not_leave_reusable_write_approval(runtime, monkeypatch, invalidate):
+    client, state, prepare, program = write_runtime(runtime, monkeypatch)
+    plan = client.post(URL.replace('/read', '/plan'), json=dict(part_number='HPM5301', word=69, expected=5, desired=7)).json()
+    if invalidate == 'read':
+        assert client.post(URL, json={'part_number': 'HPM5301'}).status_code == 200
+    elif invalidate == 'generation':
+        state['device_generation'] = state.get('device_generation', 0) + 1
+    else:
+        program.side_effect = RuntimeError('Unknown ROM result; do not retry')
+    payload = dict(part_number='HPM5301', plan_id=plan['plan_id'], confirm_irreversible=True)
+    assert client.post(URL.replace('/read', '/program'), json=payload).status_code == 422
+    assert client.post(URL.replace('/read', '/program'), json=payload).status_code == 422
+    assert program.call_count == (1 if invalidate == 'failure' else 0)
+    assert not state['resource_manager'].get_status()
+
+
+CHANGE = dict(word=69, expected=5, desired=7, delta=2)
+
+
+def change_record(**changes):
+    result = dict(schema=1, event='result', request_id='test', code=0, rom_status=0,
+        operation='plan', part='HPM5301', chip_id=otp.CHIP_ID, read_source='rom_otp',
+        read_semantics='unknown', hard_lock=0, before=5, after=None, qualified=False,
+        write_supported=False, write_attempted=False, verified=False,
+        reason='read_semantics_and_locks_unknown', locked=None, fuse_lock=None, shadow_lock=None, **CHANGE)
+    result.update(changes)
+    return result
+
+
+def qualified_record(**changes):
+    return change_record(qualified=True, write_supported=True, read_semantics='fuse',
+                         locked=False, fuse_lock=0, shadow_lock=0, reason='ok', **changes)
+
+
+def change_line(data):
+    return 'HPM_OTP ' + json.dumps(data)
+
+
+def test_unqualified_preflight_is_displayable_but_never_issues_commit(monkeypatch):
+    monkeypatch.setattr(otp.uuid, 'uuid4', lambda: SimpleNamespace(hex='test'))
+    bridge = Mock()
+    bridge.send_command.side_effect = ['MKLINK_HPM_ISP_OTP_USER_API 1', change_line(change_record())]
+    preview = otp.plan_change(bridge, 'HPM5301', **CHANGE)
+    assert preview['qualified'] is False and preview['before'] == 5
+    assert bridge.send_command.call_args.args[0] == 'hpm.isp_otp_user("test",69,5,7,0,30000,1000)'
+    bridge.reset_mock()
+    bridge.send_command.side_effect = ['MKLINK_HPM_ISP_OTP_USER_API 1', change_line(change_record())]
+    with pytest.raises(ValueError, match='unavailable'):
+        otp.program_change(bridge, 'HPM5301', **CHANGE)
+    assert len(bridge.send_command.call_args_list) == 2
+    assert ',7,1,' not in bridge.send_command.call_args.args[0]
+
+
+@pytest.mark.parametrize('field,value', [('before', 4), ('hard_lock', 1 << 17), ('read_semantics', 'unknown'),
+    ('read_semantics', 'shadow'), ('locked', None), ('locked', True), ('fuse_lock', None), ('fuse_lock', 1),
+    ('fuse_lock', 2), ('shadow_lock', 1), ('shadow_lock', True), ('word', 70), ('expected', 4),
+    ('desired', 15), ('delta', 10), ('chip_id', 0), ('qualified', 1), ('write_supported', False),
+    ('write_attempted', True), ('verified', True), ('after', 7), ('operation', 'program')])
+def test_firmware_cannot_qualify_unknown_stale_locked_or_mismatched_change(field, value):
+    record = qualified_record(); record[field] = value
+    with pytest.raises(ValueError):
+        otp.parse_change(change_line(record), 'test', CHANGE, commit=False)
+
+
+def test_commit_requires_fresh_preflight_and_exact_verified_result_without_retry(monkeypatch):
+    monkeypatch.setattr(otp.uuid, 'uuid4', lambda: SimpleNamespace(hex='test'))
+    bridge = Mock()
+    bridge.send_command.side_effect = ['MKLINK_HPM_ISP_OTP_USER_API 1', change_line(qualified_record()),
+        'MKLINK_HPM_ISP_OTP_USER_API 1', change_line(qualified_record(operation='program', write_attempted=True, verified=True, after=7))]
+    assert otp.program_change(bridge, 'HPM5301', **CHANGE)['verified'] is True
+    assert bridge.send_command.call_args.args[0] == 'hpm.isp_otp_user("test",69,5,7,1,30000,1000)'
+    bridge.reset_mock()
+    bridge.send_command.side_effect = ['MKLINK_HPM_ISP_OTP_USER_API 1', change_line(qualified_record()),
+        'MKLINK_HPM_ISP_OTP_USER_API 1', 'HPM_OTP truncated']
+    with pytest.raises(ValueError): otp.program_change(bridge, 'HPM5301', **CHANGE)
+    assert bridge.send_command.call_count == 4
+
+
+def test_unqualified_firmware_receives_no_execution_token(runtime, monkeypatch):
+    client, _, prepare, program = write_runtime(runtime, monkeypatch)
+    prepare.side_effect = lambda *_, **change: dict(change, before=5, qualified=False, write_supported=False,
+                                                  reason='read_semantics_and_locks_unknown')
+    response = client.post(URL.replace('/read', '/plan'), json=dict(part_number='HPM5301', word=69, expected=5, desired=7))
+    assert response.status_code == 200
+    assert response.json()['plan_id'] is None
+    assert response.json()['expires_in'] == 0
+    program.assert_not_called()
