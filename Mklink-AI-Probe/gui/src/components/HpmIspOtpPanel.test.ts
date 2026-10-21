@@ -6,7 +6,7 @@ const snapshot = { part_number: 'HPM5301', chip_id: 0x11705142, hard_lock: 0, re
 const props = { plan: null, result: '', busy: false, disabled: false, error: '', snapshot }
 async function setup(extra = {}) {
   const wrapper = mount(HpmIspOtpPanel, { props: { ...props, ...extra }, global: { stubs: { teleport: true } } })
-  await wrapper.get('[data-testid=isp-otp-open]').trigger('click'); await flushPromises()
+  await flushPromises()
   return wrapper
 }
 async function add(wrapper: Awaited<ReturnType<typeof setup>>, word = 69, count = 2, value = '00000007,00000001') {
@@ -28,7 +28,7 @@ describe('UART OTP manufacturing-tool layout', () => {
     expect(wrapper.emitted('read')).toBeUndefined()
     wrapper.unmount()
   })
-  it('opens with a read and prevents reads while the probe is occupied', async () => {
+  it('loads with a read and prevents reads while the probe is occupied', async () => {
     const wrapper = await setup({ snapshot: null, disabled: true })
     expect(wrapper.emitted('read')).toBeUndefined()
     expect(wrapper.get('[data-testid=isp-otp-read]').attributes('disabled')).toBeDefined()

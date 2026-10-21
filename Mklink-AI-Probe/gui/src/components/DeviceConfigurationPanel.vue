@@ -31,6 +31,7 @@ const props = withDefaults(defineProps<{
   lockAfterDownload: boolean
   changes?: Record<string, number | string>
   hasFirmware?: boolean
+  expanded?: boolean
 }>(), { hasFirmware: true })
 const emit = defineEmits<{ 'update:changes': [value: Record<string, number | string>] }>()
 function setField(id: string, event: Event) {
@@ -108,7 +109,7 @@ onBeforeUnmount(cancel)
 
 <template>
   <div class="configuration-panel" data-testid="device-configuration">
-    <details>
+    <details :open="expanded">
     <summary class="configuration-heading">
       <strong>{{ configuration?.kind === 'otp' || /^HPM/i.test(partNumber) ? tr('HPM OTP 配置', 'HPM OTP Configuration') : tr('选项字节配置', 'Option Bytes Configuration') }}</strong>
     </summary>
