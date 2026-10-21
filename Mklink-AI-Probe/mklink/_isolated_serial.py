@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import os
 from pathlib import Path
 import select
@@ -21,6 +22,14 @@ import serial
 
 class _ControlFailure(serial.SerialException):
     """A missing/malformed reply makes subsequent command replies ambiguous."""
+
+
+class SerialCleanupPending(serial.SerialException):
+    """Keep an unreaped constructor's transport reachable for safe cleanup."""
+
+    def __init__(self, transport):
+        super().__init__('Serial worker exit is unconfirmed; ownership retained')
+        self.transport = transport
 
 
 def _worker_command(port, baudrate):
@@ -62,12 +71,16 @@ class IsolatedSerial:
             )
         except OSError as exc:
             raise serial.SerialException('Cannot start serial receive worker') from exc
+        self.is_open = True  # The worker may own IO before its ready reply.
         try:
             if not self._reply().get('ready'):
                 raise serial.SerialException('Serial worker did not open the port')
             self.is_open = True
         except BaseException:
-            self._dispose()
+            try:
+                self._dispose()
+            except Exception as cleanup_error:
+                raise SerialCleanupPending(self) from cleanup_error
             raise
 
     def _reply(self):
@@ -188,18 +201,27 @@ class IsolatedSerial:
     def _dispose(self):
         with self._dispose_lock:
             if self._process.poll() is None:
-                self._process.terminate()
+                try:
+                    self._process.terminate()
+                except OSError:
+                    if self._process.poll() is None:
+                        raise
             try:
                 self._process.wait(timeout=2)
             except subprocess.TimeoutExpired:
                 self._process.kill()
                 self._process.wait(timeout=2)
-            for pipe in (self._process.stdin, self._process.stdout, self._process.stderr):
-                pipe.close()
             # Bridge.close skips serial.close when is_open is false. Publish
             # that state only after the worker has exited, so another thread
             # cannot release the application port lock while it still owns IO.
             self.is_open = False
+            for pipe in (self._process.stdin, self._process.stdout, self._process.stderr):
+                try:
+                    pipe.close()
+                except (OSError, ValueError):
+                    # IO ownership is gone. One broken pipe must not strand
+                    # the other pipes or the parent application's locks.
+                    logging.getLogger(__name__).warning('Failed to close exited serial worker pipe', exc_info=True)
 
     def close(self):
         try:
