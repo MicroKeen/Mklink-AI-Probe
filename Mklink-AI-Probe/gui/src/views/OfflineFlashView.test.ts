@@ -48,7 +48,7 @@ describe('OfflineFlashView', () => {
     await wrapper.get('[data-testid="offline-protocol"]').setValue('hpm_rom_isp_uart')
     vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => ({ part_number: 'HPM5301', chip_id: 0x11705142,
       hard_lock: 0, source: 'rom_otp', read_at: 'now', words: [{ word: 69, current: 5, shadow: null, locked: null }] }) } as Response)
-    await wrapper.get('[data-testid="isp-otp-open"]').trigger('click'); await flushPromises()
+    await wrapper.get('[data-testid="offline-configuration-tab"]').trigger('click'); await flushPromises()
     await wrapper.get('[data-testid="isp-otp-write-view"]').trigger('click')
     await wrapper.get('[data-testid="isp-otp-add"]').trigger('click')
     await wrapper.get('[aria-label="OTP word values"]').setValue('00000007')
@@ -84,13 +84,14 @@ describe('OfflineFlashView', () => {
     const snapshot = { part_number: 'HPM5301XEGX', chip_id: 0x11705142, hard_lock: 0, read_at: 'now', source: 'rom',
       words: [{ word: 69, current: 123, shadow: null, locked: null }] }
     vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => snapshot } as Response)
-    await wrapper.get('[data-testid="isp-otp-open"]').trigger('click')
+    await wrapper.get('[data-testid="offline-configuration-tab"]').trigger('click')
     await flushPromises()
     const [url, init] = vi.mocked(fetch).mock.lastCall!
     expect(String(url)).toContain('/hpm-isp-otp/read')
     expect(JSON.parse(init!.body as string)).toEqual({ part_number: 'HPM5301XEGX', model: 'V4' })
     expect(wrapper.get('[data-testid="hpm-isp-otp"]').text()).toContain('0x0000007B')
     expect(wrapper.get('[data-testid="offline-deploy"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="hpm-isp-otp"]').find('dialog').exists()).toBe(false)
     let finish!: (value: Response) => void
     vi.mocked(fetch).mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
     await wrapper.get('[data-testid="isp-otp-read"]').trigger('click')
@@ -99,8 +100,9 @@ describe('OfflineFlashView', () => {
     await wrapper.get('[data-testid="offline-protocol"]').setValue('debug')
     finish({ ok: true, json: async () => snapshot } as Response)
     await flushPromises()
+    await wrapper.get('[data-testid="offline-image-tab"]').trigger('click')
     await wrapper.get('[data-testid="offline-protocol"]').setValue('hpm_rom_isp_uart')
-    expect(wrapper.get('[data-testid="hpm-isp-otp"]').text()).not.toContain('0x0000007B')
+    expect(wrapper.find('[data-testid="hpm-isp-otp"]').exists()).toBe(false)
     expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/device/connect'))).toBe(false)
     wrapper.unmount()
   })
@@ -241,7 +243,10 @@ describe('OfflineFlashView', () => {
     await flushPromises()
     await wrapper.get('[data-testid="offline-model"]').setValue('V4')
     await flushPromises()
+    await wrapper.get('[data-testid="offline-configuration-tab"]').trigger('click')
+    await flushPromises()
     wrapper.getComponent(DeviceConfigurationPanel).vm.$emit('update:changes', { DATA0: '0x5A' })
+    await wrapper.get('[data-testid="offline-image-tab"]').trigger('click')
     await flushPromises()
     await wrapper.get('[data-testid="offline-deploy"]').trigger('click')
     await flushPromises()
