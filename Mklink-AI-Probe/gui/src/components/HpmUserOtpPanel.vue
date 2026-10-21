@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { API_BASE } from '../lib/runtimeEndpoint'
 import { tr } from '../composables/useLanguage'
+import HpmOtpTable from './HpmOtpTable.vue'
 const props = defineProps<{ partNumber: string; model: string }>()
 interface Word { word: number; current: number; shadow: number; locked: boolean }
 interface Plan { word: number; group?: number; expected: number; desired: number; delta: number; script: string }
@@ -74,10 +75,7 @@ async function request(action: 'read' | 'plan' | 'program') {
     <p v-if="operation === 'data'" data-testid="otp-value-help">{{ tr('Word是编号，每个保存32位（4字节），可由应用定义为设备编号或配置标志。目标值是写入后的完整数值，不是本次新增位。例如旧值0x5，再置bit1，应填0x7；不能改回0x1。尚未规划用途时不要写入。', 'Each word holds 32 bits (4 bytes) for application-defined IDs or flags. Enter the complete final value, not just new bits: to add bit1 to 0x5 enter 0x7. Changing it to 0x1 is impossible. Plan its application use before programming.') }}</p>
     <button class="btn" :disabled="busy" data-testid="otp-read" @click="request('read')">{{ tr('读取用户 OTP', 'Read User OTP') }}</button>
     <p v-if="error" role="alert" class="error">{{ error }}</p><p v-if="result" role="status">{{ result }}</p>
-    <div v-if="rows.length" class="table-wrap"><table>
-      <thead><tr><th>Word</th><th>{{ tr('熔丝值', 'Fuse') }}</th><th>{{ tr('影子值', 'Shadow') }}</th><th>{{ tr('锁定', 'Locked') }}</th></tr></thead>
-      <tbody><tr v-for="item in rows" :key="item.word"><td>{{ item.word }}</td><td>{{ hex(item.current) }}</td><td>{{ hex(item.shadow) }}</td><td>{{ item.locked ? tr('是', 'Yes') : tr('否', 'No') }}</td></tr></tbody>
-    </table></div>
+    <HpmOtpTable :rows="rows" />
     <div class="inputs">
       <label>{{ tr('操作', 'Operation') }} <select v-model="operation" :disabled="busy" aria-label="OTP operation"><option value="data">{{ tr('用户数据', 'User data') }}</option><option value="lock">{{ tr('永久写保护', 'Permanent write protection') }}</option></select></label>
       <template v-if="operation === 'data'">

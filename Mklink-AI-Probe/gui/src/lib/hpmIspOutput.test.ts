@@ -1,11 +1,24 @@
 import { describe, expect, it } from 'vitest'
-import { hpmIspOutput } from './hpmIspOutput'
+import { hpmIspOutput, hpmIspConnection } from './hpmIspOutput'
 
 const event = (name: string, values = {}) => 'HPM_ISP ' + JSON.stringify({
   schema: 1, event: name, cycle: 1, completed: 0, total: 10, code: 0, ...values,
 })
 
 describe('ISP LCD output', () => {
+  it('keeps the completed round connected until firmware detects disconnect', () => {
+    let state = hpmIspConnection('idle', event('waiting'))
+    state = hpmIspConnection(state, event('connected'))
+    state = hpmIspConnection(state, event('cycle_done', { completed: 1 }))
+    expect(state).toBe('cycle_done')
+    expect(hpmIspConnection(state, 'HPM_ISP broken')).toBe('cycle_done')
+    state = hpmIspConnection(state, event('disconnected'))
+    expect(state).toBe('waiting')
+    state = hpmIspConnection(state, event('connected'))
+    expect(state).toBe('connected')
+    expect(hpmIspConnection(state, event('result'))).toBe('idle')
+    expect(hpmIspOutput([event('disconnected'), 'ISP disconnected'])).toEqual(['ISP disconnected'])
+  })
   it('matches LCD messages across rounds without script or protocol dumps', () => {
     expect(hpmIspOutput([
       'import hpm', 'rc = hpm.isp_program("job", 10)',

@@ -9,6 +9,23 @@ const errors: Record<number, string> = {
 const errorText = (code: number) => `ISP: ${errors[code] ?? 'Unknown ISP error'}`
 const reasons = new Set([...Object.values(errors), 'Unknown ISP error'])
 
+export type IspConnection = 'idle' | 'waiting' | 'connected' | 'cycle_done'
+
+// Completion is not evidence of a lost UART connection. Only firmware's
+// disconnect/waiting events move an active round back to handshake waiting.
+export function hpmIspConnection(previous: IspConnection, line: string): IspConnection {
+  if (!line.startsWith('HPM_ISP ')) return previous
+  try {
+    const event = JSON.parse(line.slice(8))
+    if (!event || event.schema !== 1) return previous
+    if (event.event === 'connected') return 'connected'
+    if (event.event === 'cycle_done') return previous === 'connected' ? 'cycle_done' : previous
+    if (event.event === 'disconnected' || event.event === 'waiting') return 'waiting'
+    if (event.event === 'result') return 'idle'
+  } catch { /* An invalid record never changes connection state. */ }
+  return previous
+}
+
 export function hpmIspOutput(lines: string[]): string[] {
   const output: string[] = []
   for (const raw of lines) {
@@ -21,6 +38,7 @@ export function hpmIspOutput(lines: string[]): string[] {
         const validCount = (value: unknown): value is number =>
           Number.isInteger(value) && Number(value) >= 0 && Number(value) <= 9999
         if (event.event === 'connected') text = 'ISP connected'
+        else if (event.event === 'disconnected') text = 'ISP disconnected'
         else if (event.event === 'waiting' && validCount(event.cycle) && validCount(event.total))
           text = `ISP waiting ${event.cycle}/${event.total}`
         else if (event.event === 'cycle_done' && validCount(event.completed) && validCount(event.total))
@@ -42,7 +60,7 @@ export function hpmIspOutput(lines: string[]): string[] {
           ?? (scriptReason[2] === 'unknown error' ? 'Unknown ISP error' : undefined)
         if (message) text = `ISP${scriptReason[1] ? ' config' : ''}: ${message}`
       } else if ((reason && reasons.has(reason[1]!))
-        || /^ISP (?:waiting \d+\/\d+|connected|done \d+\/\d+|OK \d+\/\d+)$/.test(line)
+        || /^ISP (?:waiting \d+\/\d+|connected|disconnected|done \d+\/\d+|OK \d+\/\d+)$/.test(line)
         || /^ISP (?:wait|reconnect|prepare|baud|config|write|baud restore|reset|UART) timeout$/.test(line)
         || line === 'Reconnect target' || line === 'Check UART/BOOT/power'
         || line === 'Upgrade HPMLINK firmware: USART ISP API v1 required') text = line
