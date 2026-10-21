@@ -929,7 +929,7 @@ async function requestIspOtp(action: 'read' | 'plan' | 'program', payload: HpmIs
     if (revision !== otpRevision) return
     if (action === 'read') otpSnapshot.value = body
     else if (action === 'plan') otpPlan.value = body
-    else otpResult.value = tr(`Word ${body.word} 写入并校验成功，请重新读取。`, `Word ${body.word} programmed and verified. Read again.`)
+    else otpResult.value = tr(`Word ${body.word} 写入成功，ROM 回读一致。`, `Word ${body.word} programmed; ROM readback matches.`)
   } catch (value) {
     if (revision === otpRevision) {
       clearOtpPlan()

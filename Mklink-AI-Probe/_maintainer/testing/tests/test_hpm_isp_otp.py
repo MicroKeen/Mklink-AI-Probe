@@ -250,8 +250,12 @@ def change_record(**changes):
 
 
 def qualified_record(**changes):
-    return change_record(qualified=True, write_supported=True, read_semantics='fuse',
-                         locked=False, fuse_lock=0, shadow_lock=0, reason='ok', **changes)
+    result = change_record(qualified=True, write_supported=True, reason='ok',
+                          rom_version=0x56010200, soc_revision=0x56010000, lifecycle=4,
+                          memory_id=0x20000, write_method='rom_write_memory',
+                          verification_source='rom_otp', write_status=None)
+    result.update(changes)
+    return result
 
 
 def change_line(data):
@@ -273,12 +277,13 @@ def test_unqualified_preflight_is_displayable_but_never_issues_commit(monkeypatc
     assert ',7,1,' not in bridge.send_command.call_args.args[0]
 
 
-@pytest.mark.parametrize('field,value', [('before', 4), ('hard_lock', 1 << 17), ('read_semantics', 'unknown'),
-    ('read_semantics', 'shadow'), ('locked', None), ('locked', True), ('fuse_lock', None), ('fuse_lock', 1),
-    ('fuse_lock', 2), ('shadow_lock', 1), ('shadow_lock', True), ('word', 70), ('expected', 4),
+@pytest.mark.parametrize('field,value', [('before', 4), ('hard_lock', 1 << 17), ('read_semantics', 'invalid'),
+    ('rom_version', 0), ('soc_revision', 0), ('memory_id', 0), ('write_method', 'jtag'), ('verification_source', 'fuse'),
+    ('locked', True), ('locked', 0), ('locked', 0.0), ('fuse_lock', 1),
+    ('fuse_lock', 4), ('shadow_lock', 1), ('shadow_lock', True), ('word', 70), ('expected', 4),
     ('desired', 15), ('delta', 10), ('chip_id', 0), ('qualified', 1), ('write_supported', False),
-    ('write_attempted', True), ('verified', True), ('after', 7), ('operation', 'program')])
-def test_firmware_cannot_qualify_unknown_stale_locked_or_mismatched_change(field, value):
+    ('write_attempted', True), ('write_status', 0), ('verified', True), ('after', 7), ('operation', 'program')])
+def test_firmware_cannot_qualify_stale_locked_or_mismatched_change(field, value):
     record = qualified_record(); record[field] = value
     with pytest.raises(ValueError):
         otp.parse_change(change_line(record), 'test', CHANGE, commit=False)
@@ -287,15 +292,57 @@ def test_firmware_cannot_qualify_unknown_stale_locked_or_mismatched_change(field
 def test_commit_requires_fresh_preflight_and_exact_verified_result_without_retry(monkeypatch):
     monkeypatch.setattr(otp.uuid, 'uuid4', lambda: SimpleNamespace(hex='test'))
     bridge = Mock()
-    bridge.send_command.side_effect = ['MKLINK_HPM_ISP_OTP_USER_API 1', change_line(qualified_record()),
-        'MKLINK_HPM_ISP_OTP_USER_API 1', change_line(qualified_record(operation='program', write_attempted=True, verified=True, after=7))]
-    assert otp.program_change(bridge, 'HPM5301', **CHANGE)['verified'] is True
+    bridge.send_command.side_effect = ['MKLINK_HPM_ISP_OTP_USER_API 2', change_line(qualified_record()),
+        'MKLINK_HPM_ISP_OTP_USER_API 2', change_line(qualified_record(operation='program', write_attempted=True, verified=True, after=7, write_status=0))]
+    result = otp.program_change(bridge, 'HPM5301', **CHANGE)
+    assert result['verified'] is True
+    assert result['verification_source'] == 'rom_otp' and result['read_semantics'] == 'unknown'
     assert bridge.send_command.call_args.args[0] == 'hpm.isp_otp_user("test",69,5,7,1,30000,1000)'
     bridge.reset_mock()
-    bridge.send_command.side_effect = ['MKLINK_HPM_ISP_OTP_USER_API 1', change_line(qualified_record()),
-        'MKLINK_HPM_ISP_OTP_USER_API 1', 'HPM_OTP truncated']
+    bridge.send_command.side_effect = ['MKLINK_HPM_ISP_OTP_USER_API 2', change_line(qualified_record()),
+        'MKLINK_HPM_ISP_OTP_USER_API 2', 'HPM_OTP truncated']
     with pytest.raises(ValueError): otp.program_change(bridge, 'HPM5301', **CHANGE)
     assert bridge.send_command.call_count == 4
+
+
+def test_rom_command_preflight_allows_unknown_transient_locks_and_read_origin():
+    result = otp.parse_change(change_line(qualified_record()), 'test', CHANGE, commit=False)
+    assert result['qualified'] is True
+    assert result['read_semantics'] == 'unknown'
+    assert result['verification_source'] == 'rom_otp'
+
+
+def test_preflight_only_firmware_cannot_grant_write_permission(monkeypatch):
+    monkeypatch.setattr(otp.uuid, 'uuid4', lambda: SimpleNamespace(hex='test'))
+    bridge = Mock()
+    bridge.send_command.side_effect = ['MKLINK_HPM_ISP_OTP_USER_API 1', change_line(qualified_record())]
+    with pytest.raises(ValueError, match='preflight-only'):
+        otp.program_change(bridge, 'HPM5301', **CHANGE)
+    assert bridge.send_command.call_count == 2
+
+
+@pytest.mark.parametrize('capability', ['MKLINK_HPM_ISP_OTP_USER_API 1',
+    'MKLINK_HPM_ISP_OTP_USER_API 0', 'MKLINK_HPM_ISP_OTP_USER_API 3',
+    'MKLINK_HPM_ISP_OTP_USER_API 2\nMKLINK_HPM_ISP_OTP_USER_API 2', '2', ''])
+def test_capability_change_before_commit_never_sends_program(monkeypatch, capability):
+    monkeypatch.setattr(otp.uuid, 'uuid4', lambda: SimpleNamespace(hex='test'))
+    bridge = Mock()
+    bridge.send_command.side_effect = ['MKLINK_HPM_ISP_OTP_USER_API 2', change_line(qualified_record()), capability]
+    with pytest.raises(ValueError, match='Upgrade'):
+        otp.program_change(bridge, 'HPM5301', **CHANGE)
+    assert bridge.send_command.call_count == 3
+    assert bridge.send_command.call_args.args[0] == otp.USER_CAPABILITY_COMMAND
+
+
+@pytest.mark.parametrize('field,value', [('write_status', None), ('write_status', 1),
+    ('write_status', False), ('rom_status', 1), ('code', -3), ('verified', False),
+    ('write_attempted', False), ('after', 5), ('after', None), ('after', True),
+    ('verification_source', 'fuse'), ('qualified', False)])
+def test_program_requires_rom_write_success_and_complete_matching_readback(field, value):
+    record = qualified_record(operation='program', write_attempted=True, verified=True, after=7, write_status=0)
+    record[field] = value
+    with pytest.raises(ValueError):
+        otp.parse_change(change_line(record), 'test', CHANGE, commit=True)
 
 
 def test_unqualified_firmware_receives_no_execution_token(runtime, monkeypatch):
