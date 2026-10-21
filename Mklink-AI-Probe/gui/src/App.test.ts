@@ -166,12 +166,11 @@ describe('App version footer', () => {
     wrapper.unmount()
   })
 
-  it('shows the stable release and source build in the lower right', () => {
+  it('shows the compact stable release in the lower right', () => {
     const wrapper = mountApp()
 
     expect(wrapper.getComponent(VersionHistoryPopover).props()).toEqual({
       version: __APP_VERSION__,
-      buildCommit: expect.stringMatching(/^[0-9a-f]{7,}$/),
     })
     wrapper.unmount()
   })
