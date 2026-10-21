@@ -200,6 +200,67 @@ def write_runtime(runtime, monkeypatch):
     return client, state, prepare, program
 
 
+def test_batch_rechecks_all_words_before_commit_and_stops_at_first_failure(runtime, monkeypatch):
+    client, state, prepare, program = write_runtime(runtime, monkeypatch)
+    changes = [dict(word=word, expected=0, desired=1) for word in (69, 70, 71)]
+    preview = client.post(URL.replace('/read', '/batch-plan'), json=dict(part_number='HPM5301', changes=changes)).json()
+    assert preview['qualified'] and len(preview['changes']) == 3
+    calls = []
+    def check(_bridge, _part, **change):
+        calls.append(('plan', change['word']))
+        return dict(change, qualified=True, write_supported=True, before=0, reason=None)
+    def commit(_bridge, _part, **change):
+        calls.append(('program', change['word']))
+        if change['word'] == 70: raise OSError('Lost response')
+        return dict(change, after=1, verified=True)
+    prepare.side_effect = check
+    program.side_effect = commit
+    payload = dict(part_number='HPM5301', plan_id=preview['plan_id'], confirm_irreversible=True)
+    response = client.post(URL.replace('/read', '/batch-program'), json=payload)
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert calls == [('plan', 69), ('plan', 70), ('plan', 71), ('program', 69), ('program', 70)]
+    assert result['status'] == 'failed' and result['failed_word'] == 70
+    assert [item['word'] for item in result['completed']] == [69]
+    assert result['remaining'] == [71]
+    assert client.post(URL.replace('/read', '/batch-program'), json=payload).status_code == 422
+    assert program.call_count == 2
+    assert not state['resource_manager'].get_status()
+
+
+@pytest.mark.parametrize('changes', [[], [dict(word=69, expected=0, desired=1)] * 2,
+    [dict(word=80, expected=0, desired=1)], [dict(word=69, expected=5, desired=1)]])
+def test_invalid_batch_never_reaches_probe(runtime, monkeypatch, changes):
+    client, state, prepare, program = write_runtime(runtime, monkeypatch)
+    response = client.post(URL.replace('/read', '/batch-plan'), json=dict(part_number='HPM5301', changes=changes))
+    assert response.status_code == 422
+    prepare.assert_not_called(); program.assert_not_called()
+    assert not state['resource_manager'].get_status()
+
+
+def test_changed_later_word_blocks_entire_batch_before_any_write(runtime, monkeypatch):
+    client, state, prepare, program = write_runtime(runtime, monkeypatch)
+    payload = dict(part_number='HPM5301', changes=[dict(word=word, expected=0, desired=1) for word in (69, 70)])
+    preview = client.post(URL.replace('/read', '/batch-plan'), json=payload).json()
+    prepare.side_effect = lambda _bridge, _part, **change: dict(change, qualified=change['word'] == 69,
+        write_supported=change['word'] == 69, before=0, reason='expected_mismatch')
+    result = client.post(URL.replace('/read', '/batch-program'), json=dict(part_number='HPM5301',
+        plan_id=preview['plan_id'], confirm_irreversible=True))
+    assert result.status_code == 422
+    program.assert_not_called()
+    assert not state['resource_manager'].get_status()
+
+
+def test_batch_and_single_word_tokens_cannot_be_interchanged(runtime, monkeypatch):
+    client, state, prepare, program = write_runtime(runtime, monkeypatch)
+    preview = client.post(URL.replace('/read', '/batch-plan'), json=dict(part_number='HPM5301',
+        changes=[dict(word=69, expected=0, desired=1)])).json()
+    result = client.post(URL.replace('/read', '/program'), json=dict(part_number='HPM5301',
+        plan_id=preview['plan_id'], confirm_irreversible=True))
+    assert result.status_code == 422
+    program.assert_not_called()
+
+
 def test_server_preview_is_required_confirmed_single_use_and_not_client_editable(runtime, monkeypatch):
     client, state, prepare, program = write_runtime(runtime, monkeypatch)
     body = dict(part_number='HPM5301', word=69, expected=5, desired='0x7')

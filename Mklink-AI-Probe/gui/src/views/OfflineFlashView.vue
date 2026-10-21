@@ -8,7 +8,7 @@ import DeviceConfigurationPanel from '../components/DeviceConfigurationPanel.vue
 import HpmOfflineOtpPanel from '../components/HpmOfflineOtpPanel.vue'
 import HpmIspSettings from '../components/HpmIspSettings.vue'
 import HpmIspOtpPanel from '../components/HpmIspOtpPanel.vue'
-import type { HpmIspOtpChange, HpmIspOtpPlan, HpmIspOtpSnapshot } from '../types/hpmOtp'
+import type { HpmIspOtpChange, HpmIspOtpBatchPlan, HpmIspOtpSnapshot } from '../types/hpmOtp'
 import { API_BASE } from '../lib/runtimeEndpoint'
 import type { HpmOfflineOtp, HpmIspConfig } from '../types/offlineFlash'
 import { HPM_ISP_BAUD_RATES } from '../types/offlineFlash'
@@ -121,7 +121,7 @@ const activeTargetSuggestion = ref(-1)
 const operationBusy = ref(false)
 const otpReading = ref(false)
 const otpSnapshot = ref<HpmIspOtpSnapshot | null>(null)
-const otpPlan = ref<HpmIspOtpPlan | null>(null)
+const otpPlan = ref<HpmIspOtpBatchPlan | null>(null)
 const otpResult = ref('')
 const otpError = ref('')
 let otpRevision = 0
@@ -903,17 +903,17 @@ async function triggerOffline(): Promise<void> {
 async function readIspOtp(): Promise<void> {
   await requestIspOtp('read')
 }
-async function prepareIspOtp(change: HpmIspOtpChange): Promise<void> {
-  await requestIspOtp('plan', change)
+async function prepareIspOtp(changes: HpmIspOtpChange[]): Promise<void> {
+  await requestIspOtp('batch-plan', { changes })
 }
 async function programIspOtp(planId: string): Promise<void> {
   if (!otpPlan.value?.qualified || !otpPlan.value.write_supported || otpPlan.value.plan_id !== planId) return
-  await requestIspOtp('program', { plan_id: planId, confirm_irreversible: true })
+  await requestIspOtp('batch-program', { plan_id: planId, confirm_irreversible: true })
 }
-async function requestIspOtp(action: 'read' | 'plan' | 'program', payload: HpmIspOtpChange | { plan_id: string; confirm_irreversible: boolean } | Record<string, never> = {}): Promise<void> {
+async function requestIspOtp(action: 'read' | 'batch-plan' | 'batch-program', payload: { changes: HpmIspOtpChange[] } | { plan_id: string; confirm_irreversible: boolean } | Record<string, never> = {}): Promise<void> {
   if (operationBusy.value || !ispMode.value || model.value !== 'V4'
     || !['HPM5301', 'HPM5301XEGX'].includes(targetPart.value.toUpperCase())) return
-  if (action !== 'plan') invalidateOtp()
+  if (action !== 'batch-plan') invalidateOtp()
   else { clearOtpPlan(); otpError.value = ''; otpResult.value = '' }
   const revision = otpRevision
   operationBusy.value = true; otpReading.value = true
@@ -928,12 +928,20 @@ async function requestIspOtp(action: 'read' | 'plan' | 'program', payload: HpmIs
     if (!response.ok) throw new Error(typeof body.detail === 'string' ? body.detail : body.detail?.message || `HTTP ${response.status}`)
     if (revision !== otpRevision) return
     if (action === 'read') otpSnapshot.value = body
-    else if (action === 'plan') otpPlan.value = body
-    else otpResult.value = tr(`Word ${body.word} 写入成功，ROM 回读一致。`, `Word ${body.word} programmed; ROM readback matches.`)
+    else if (action === 'batch-plan') otpPlan.value = body
+    else {
+      const completed = body.completed.map((item: { word: number }) => item.word).join(', ')
+      if (body.status === 'completed') otpResult.value = tr(`Word ${completed} 写入成功，ROM 回读一致。`, `Word ${completed} programmed; ROM readback matches.`)
+      else {
+        otpResult.value = completed ? tr(`已完成 Word ${completed}。`, `Completed Word ${completed}.`) : ''
+        otpError.value = tr(`Word ${body.failed_word} 写入未完成：`, `Word ${body.failed_word} did not complete: `) + body.error
+          + tr('。后续字未写入。请刷新确认结果，不要重试写入。', '. Later words were not programmed. Refresh to check the result; do not retry programming.')
+      }
+    }
   } catch (value) {
     if (revision === otpRevision) {
       clearOtpPlan()
-      otpError.value = message(value) + (action === 'program' ? tr('。请重新读取确认结果，不要重试写入。', '. Read the result again; do not retry programming.') : '')
+      otpError.value = message(value) + (action === 'batch-program' ? tr('。请重新读取确认结果，不要重试写入。', '. Read the result again; do not retry programming.') : '')
     }
   } finally { operationBusy.value = false; otpReading.value = false }
 }

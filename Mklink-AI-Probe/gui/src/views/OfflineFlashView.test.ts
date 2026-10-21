@@ -40,7 +40,7 @@ describe('OfflineFlashView', () => {
   it('previews UART settings and submits only the confirmed single-use plan, with no retry after an unknown result', async () => {
     onlineMocks.searchTargets.mockResolvedValue([{ part_number: 'HPM5301', vendor: 'HPMicro', installed: true, source: 'builtin' }])
     offlineMocks.getStatus.mockResolvedValue({ available: false })
-    const wrapper = mount(OfflineFlashView)
+    const wrapper = mount(OfflineFlashView, { global: { stubs: { teleport: true } } })
     await flushPromises()
     await wrapper.get('[data-testid="offline-model"]').setValue('V4')
     await wrapper.get('.target-result').trigger('click')
@@ -48,31 +48,34 @@ describe('OfflineFlashView', () => {
     await wrapper.get('[data-testid="offline-protocol"]').setValue('hpm_rom_isp_uart')
     vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => ({ part_number: 'HPM5301', chip_id: 0x11705142,
       hard_lock: 0, source: 'rom_otp', read_at: 'now', words: [{ word: 69, current: 5, shadow: null, locked: null }] }) } as Response)
-    await wrapper.get('[data-testid="isp-otp-read"]').trigger('click'); await flushPromises()
-    await wrapper.get('[aria-label="UART OTP desired value"]').setValue('0x7')
-    vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => ({ word: 69, expected: 5, desired: 7, delta: 2,
-      before: 5, plan_id: 'reviewed-token', qualified: true, write_supported: true, reason: null, expires_in: 60 }) } as Response)
+    await wrapper.get('[data-testid="isp-otp-open"]').trigger('click'); await flushPromises()
+    await wrapper.get('[data-testid="isp-otp-write-view"]').trigger('click')
+    await wrapper.get('[data-testid="isp-otp-add"]').trigger('click')
+    await wrapper.get('[aria-label="OTP word values"]').setValue('00000007')
+    await wrapper.get('form').trigger('submit')
+    vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => ({ changes: [{ word: 69, expected: 5, desired: 7, delta: 2, before: 5, reason: null }],
+      plan_id: 'reviewed-token', qualified: true, write_supported: true, expires_in: 60 }) } as Response)
     await wrapper.get('[data-testid="isp-otp-plan"]').trigger('click'); await flushPromises()
     const [planUrl, planInit] = vi.mocked(fetch).mock.lastCall!
-    expect(String(planUrl)).toContain('/hpm-isp-otp/plan')
-    expect(JSON.parse(planInit!.body as string)).toEqual({ part_number: 'HPM5301', model: 'V4', word: 69, expected: 5, desired: '0x7' })
+    expect(String(planUrl)).toContain('/hpm-isp-otp/batch-plan')
+    expect(JSON.parse(planInit!.body as string)).toEqual({ part_number: 'HPM5301', model: 'V4', changes: [{ word: 69, expected: 5, desired: '0x00000007' }] })
     expect(wrapper.get('[data-testid="isp-otp-program"]').attributes('disabled')).toBeDefined()
     await wrapper.get('[data-testid="isp-otp-confirm"]').setValue(true)
     vi.mocked(fetch).mockRejectedValueOnce(new Error('Lost response'))
     await wrapper.get('[data-testid="isp-otp-program"]').trigger('click'); await flushPromises()
     const [programUrl, programInit] = vi.mocked(fetch).mock.lastCall!
-    expect(String(programUrl)).toContain('/hpm-isp-otp/program')
+    expect(String(programUrl)).toContain('/hpm-isp-otp/batch-program')
     expect(JSON.parse(programInit!.body as string)).toEqual({ part_number: 'HPM5301', model: 'V4', plan_id: 'reviewed-token', confirm_irreversible: true })
     expect(wrapper.get('[data-testid="hpm-isp-otp"]').text()).toContain('不要重试写入')
     expect(wrapper.find('[data-testid="isp-otp-program"]').exists()).toBe(false)
-    expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes('/hpm-isp-otp/program'))).toHaveLength(1)
+    expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes('/hpm-isp-otp/batch-program'))).toHaveLength(1)
     expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/device/connect'))).toBe(false)
     wrapper.unmount()
   })
   it('reads UART OTP without a BIN or SD, and discards stale data after a protocol change', async () => {
     onlineMocks.searchTargets.mockResolvedValue([{ part_number: 'HPM5301xEGx', vendor: 'HPMicro', installed: true, source: 'builtin' }])
     offlineMocks.getStatus.mockResolvedValue({ available: false })
-    const wrapper = mount(OfflineFlashView)
+    const wrapper = mount(OfflineFlashView, { global: { stubs: { teleport: true } } })
     await flushPromises()
     await wrapper.get('[data-testid="offline-model"]').setValue('V4')
     await wrapper.get('.target-result').trigger('click')
@@ -81,7 +84,7 @@ describe('OfflineFlashView', () => {
     const snapshot = { part_number: 'HPM5301XEGX', chip_id: 0x11705142, hard_lock: 0, read_at: 'now', source: 'rom',
       words: [{ word: 69, current: 123, shadow: null, locked: null }] }
     vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => snapshot } as Response)
-    await wrapper.get('[data-testid="isp-otp-read"]').trigger('click')
+    await wrapper.get('[data-testid="isp-otp-open"]').trigger('click')
     await flushPromises()
     const [url, init] = vi.mocked(fetch).mock.lastCall!
     expect(String(url)).toContain('/hpm-isp-otp/read')

@@ -191,3 +191,26 @@ def program_change(bridge, part_number, word, expected, desired, delta):
         raise ValueError('UART OTP programming is unavailable: ' + planned['reason'])
     fixed = {key: planned[key] for key in ('word', 'expected', 'desired', 'delta')}
     return _user_change(bridge, part_number, fixed, commit=True)
+
+
+def plan_changes(bridge, part_number, changes):
+    results = [plan_change(bridge, part_number, **item) for item in changes]
+    qualified = bool(results) and all(item['qualified'] and item['write_supported'] for item in results)
+    return dict(changes=results, qualified=qualified, write_supported=qualified)
+
+
+def program_changes(bridge, part_number, changes):
+    # Validate every word again before the first irreversible operation. Each
+    # commit also rechecks its word; this sequence is deliberately not atomic.
+    preview = plan_changes(bridge, part_number, changes)
+    if not preview['qualified']:
+        raise ValueError('UART OTP configuration changed or is not writable; read again')
+    completed = []
+    for change in changes:
+        try:
+            completed.append(program_change(bridge, part_number, **change))
+        except (ValueError, RuntimeError, OSError) as error:
+            # Never replay an uncertain write or continue with later words.
+            return dict(status='failed', completed=completed, failed_word=change['word'],
+                        error=str(error), remaining=[item['word'] for item in changes[len(completed) + 1:]])
+    return dict(status='completed', completed=completed, failed_word=None, remaining=[])

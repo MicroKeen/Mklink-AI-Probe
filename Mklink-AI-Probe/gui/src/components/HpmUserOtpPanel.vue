@@ -2,10 +2,11 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { API_BASE } from '../lib/runtimeEndpoint'
 import { tr } from '../composables/useLanguage'
-import HpmOtpTable from './HpmOtpTable.vue'
+import HpmOtpGrid from './HpmOtpGrid.vue'
 const props = defineProps<{ partNumber: string; model: string }>()
 interface Word { word: number; current: number; shadow: number; locked: boolean }
 interface Plan { word: number; group?: number; expected: number; desired: number; delta: number; script: string }
+const columns = ref(4)
 const rows = ref<Word[]>([]), selected = ref(69), desired = ref('')
 const operation = ref('data'), group = ref(19), hardLock = ref<number | null>(null)
 const prepared = ref<Plan | null>(null), confirmed = ref(false), busy = ref(false)
@@ -75,7 +76,8 @@ async function request(action: 'read' | 'plan' | 'program') {
     <p v-if="operation === 'data'" data-testid="otp-value-help">{{ tr('Word是编号，每个保存32位（4字节），可由应用定义为设备编号或配置标志。目标值是写入后的完整数值，不是本次新增位。例如旧值0x5，再置bit1，应填0x7；不能改回0x1。尚未规划用途时不要写入。', 'Each word holds 32 bits (4 bytes) for application-defined IDs or flags. Enter the complete final value, not just new bits: to add bit1 to 0x5 enter 0x7. Changing it to 0x1 is impossible. Plan its application use before programming.') }}</p>
     <button class="btn" :disabled="busy" data-testid="otp-read" @click="request('read')">{{ tr('读取用户 OTP', 'Read User OTP') }}</button>
     <p v-if="error" role="alert" class="error">{{ error }}</p><p v-if="result" role="status">{{ result }}</p>
-    <HpmOtpTable :rows="rows" />
+    <div class="otp-grid-heading"><b>OTP Readable Words {{ tr('表', 'Table') }}</b><label>{{ tr('列数', 'Columns') }} <select v-model.number="columns" aria-label="JTAG OTP columns"><option :value="4">4</option><option :value="8">8</option></select></label></div>
+    <HpmOtpGrid :entries="rows.map(item => ({ ...item, value: item.current }))" :columns="columns" :selected="selected" :disabled="busy" @select="selected = $event" />
     <div class="inputs">
       <label>{{ tr('操作', 'Operation') }} <select v-model="operation" :disabled="busy" aria-label="OTP operation"><option value="data">{{ tr('用户数据', 'User data') }}</option><option value="lock">{{ tr('永久写保护', 'Permanent write protection') }}</option></select></label>
       <template v-if="operation === 'data'">
@@ -96,7 +98,7 @@ async function request(action: 'read' | 'plan' | 'program') {
   </section>
 </template>
 <style scoped>
-.user-otp{margin-top:12px;padding:12px;border:1px solid var(--border);border-radius:6px;font-size:12px}h4{margin:0 0 8px}p{line-height:1.6;color:var(--muted)}.error{color:var(--danger);overflow-wrap:anywhere}
+.otp-grid-heading{display:flex;justify-content:space-between;align-items:center;margin:12px 0;gap:8px}.user-otp{margin-top:12px;padding:12px;border:1px solid var(--border);border-radius:6px;font-size:12px}h4{margin:0 0 8px}p{line-height:1.6;color:var(--muted)}.error{color:var(--danger);overflow-wrap:anywhere}
 .table-wrap{overflow:auto;max-height:230px;margin:10px 0}table{width:100%;border-collapse:collapse;font-family:var(--font-mono);font-size:11px}th,td{text-align:left;padding:5px;white-space:nowrap;border-bottom:1px solid var(--border)}
 .otp-steps{padding-left:20px;line-height:1.65;color:var(--muted)}.otp-steps li+li{margin-top:4px}
 .inputs{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0;align-items:end}.inputs label{display:flex;flex-direction:column;gap:4px}select,input:not([type=checkbox]){padding:6px;background:var(--surface);color:var(--fg);border:1px solid var(--border);border-radius:4px;max-width:160px}

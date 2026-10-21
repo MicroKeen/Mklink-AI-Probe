@@ -37,3 +37,14 @@ def test_expired_and_superseded_previews_cannot_execute():
     fresh = plans.remember(BINDING, CHANGE)['plan_id']
     plans.clear()
     with pytest.raises(ValueError): plans.consume(fresh, BINDING)
+
+
+def test_batch_token_copies_all_words_and_is_single_use():
+    plans = OtpPlans()
+    change = dict(changes=[CHANGE.copy(), dict(word=70, expected=0, desired=1, delta=1)])
+    result = plans.remember(BINDING, change)
+    result['changes'][0]['desired'] = 999
+    fixed = plans.consume(result['plan_id'], BINDING)
+    assert fixed['changes'][0] == CHANGE
+    assert fixed['changes'][1]['word'] == 70
+    with pytest.raises(ValueError): plans.consume(result['plan_id'], BINDING)
