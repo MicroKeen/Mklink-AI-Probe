@@ -5,11 +5,11 @@ import VersionHistoryPopover from './VersionHistoryPopover.vue'
 describe('VersionHistoryPopover', () => {
   it('shows the current release notes and stable release history', async () => {
     const wrapper = mount(VersionHistoryPopover, {
-      props: { version: '0.2.0', buildCommit: 'local' },
+      props: { version: '0.2.0' },
       attachTo: document.body,
     })
 
-    expect(wrapper.get('[data-testid="app-version"]').text()).toContain('v0.2.0 · local')
+    expect(wrapper.get('[data-testid="app-version"]').text()).toBe('v0.2.0')
     expect(wrapper.find('[data-testid="version-history-panel"]').exists()).toBe(false)
 
     await wrapper.trigger('mouseenter')
@@ -57,7 +57,7 @@ describe('VersionHistoryPopover', () => {
   })
 
   it('includes the migration and hardware requirements in 0.2.1', async () => {
-    const wrapper = mount(VersionHistoryPopover, { props: { version: '0.2.1', buildCommit: 'candidate' } })
+    const wrapper = mount(VersionHistoryPopover, { props: { version: '0.2.1' } })
     await wrapper.trigger('mouseenter')
     const current = wrapper.get('.release-entry.current').text()
     expect(current).toContain('MicroKeen/Mklink-AI-Probe')
@@ -69,7 +69,7 @@ describe('VersionHistoryPopover', () => {
 
   it('keeps mouse-wheel scrolling inside a long release history', async () => {
     const wrapper = mount(VersionHistoryPopover, {
-      props: { version: '0.1.4', buildCommit: 'local' },
+      props: { version: '0.1.4' },
       attachTo: document.body,
     })
     await wrapper.trigger('mouseenter')
@@ -87,7 +87,7 @@ describe('VersionHistoryPopover', () => {
 
   it('pins on click and closes on a second click or Escape', async () => {
     const wrapper = mount(VersionHistoryPopover, {
-      props: { version: '0.1.3', buildCommit: 'f9f2f70' },
+      props: { version: '0.1.3' },
       attachTo: document.body,
     })
     const trigger = wrapper.get('[data-testid="app-version"]')
@@ -109,7 +109,7 @@ describe('VersionHistoryPopover', () => {
 
   it('closes a pinned history panel when the user clicks outside', async () => {
     const wrapper = mount(VersionHistoryPopover, {
-      props: { version: '0.1.3', buildCommit: 'f9f2f70' },
+      props: { version: '0.1.3' },
       attachTo: document.body,
     })
 
