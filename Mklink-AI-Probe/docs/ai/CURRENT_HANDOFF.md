@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-21T22:54:07.663133+08:00`
+- 更新时间：`2026-10-22T00:03:21.044628+08:00`
 - 分支：`codex/hpm-isp-deployment-ux`
-- HEAD：`共享离线工作区源c59a6f30、型号目录2f681cad、Web92122d33；安装报告64698b09。`
-- 远端 HEAD：`PR48功能源与Web已推送；组合包源a2599b21、安装报告087672a7已推送。`
+- HEAD：`联合任务a3d55b76、开放官方全字bea39ab5、LCD输出f576a68d、Web bc23b878；后续报告提交见Git。`
+- 远端 HEAD：`PR48功能/Web已推送bc23b878；组合8d2ed5a3已推送并覆盖安装。`
 - 工作树：唯一工作区E:/software/HPM5300/Mklink-AI-Probe，源码子目录Mklink-AI-Probe；当前codex/hpm-isp-deployment-ux。已安装组合源在codex/v036-isp-ux-local。
-- 当前任务：共享脱机工作区和8系列OTP已安装0.3.6组合a2599b21；本轮按用户要求升级配套下载器3d96dbb，安装版真实读取HPM5301全部128字成功。用户具体批准Word69 0→1后重新预检、单次batch-program及完整回读通过，只有该字变化，保护锁/生命周期不变。串口释放，原生窗口保留；其他型号/区域及多轮换板未据此验收。
-- 状态：`otp_profile_physical_read_write_verified`
+- 当前任务：脱机UI端口自动识别、连续输入、HPM隐藏算法与对齐完成；镜像+UART OTP共同部署。官方八系列全部128字开放，无已测型号/配置门槛。组合0.3.6源8d2ed5a3已管理员覆盖安装并验证；配套固件313ab4e已升级。用户批准V4 BIN及Word69 1→3后，真实联合任务一次成功、全128字回读仅69变化，锁/生命周期不变。原生窗口及用户连接保留。
+- 状态：`joint_image_otp_physically_verified`
 
 ## 里程碑
 
@@ -23,6 +23,7 @@
 
 ## 验证证据
 
+- **镜像与UART OTP联合脱机任务**：功能a3d55b76/bea39ab5/f576a68d，Web bc23b878；274Python/132GUI，最终针对模块166Python/17面板/28输出复验及TS/Vite通过。真实浏览器模拟部署和安装版连续输入/HPM6200入口通过，零控制台错。组合8d2ed5a3覆盖exit0，205Python/41Web/四载荷、冻结CLI/MCP/SVD/HTTP/无宿主Python/正常退出通过。固件313ab4e生产C结果交叉解析通过并升级。实际V4 BIN@0x80023000+Word69 1→3联合部署，仅触发一次code0/ROM0/1/1、otp_verified1；128字回读唯一69=3，锁/生命周期/VCC未改。报告docs/verification/v036-joint-offline-otp.md。
 - **共享脱机工作区与八系列UART OTP**：源c59a6f30/2f681cad：179相关Python、209GUI、36目录测试；组合373Python、TS/Vite通过。IAB生产Web+真实API模拟CDC验证跨HPM系列/ARM、模板预览/模拟写入、旧确认失效，零控制台错误；固件生产C read/plan/program交叉解析通过。组合a2599b21管理员覆盖exit0；解包及实装204Python/41Web/四载荷一致，冻结CLI/MCP/SVD/HTTP/无宿主Python/正常退出通过。原生启动和IAB安装后网页通过，原生窗口留给用户；未关闭本轮用户窗口。报告v036-offline-workspace.md。此前73fccac2安装见v036-uart-otp-settings.md。 2026-10-21按用户授权升级3d96dbb，安装版profile_v1实机128字全读、Word69 0→1预检/真实单次写入/全读回通过，唯一该字变化；锁/VCC未改。
 - **0.3.6 ISP错误原因**：2506e93c/9b056ed1：102Python、72GUI，扩展90GUI通过；修正App旧哈希断言a8250c25，CI重跑以GitHub为准。Chrome临时SD和模拟固件显示timeout/Cancelled，脚本/JSON过滤。组合9c80b12a管理员覆盖退出0，199Python/40Web/四载荷、冻结CLI/MCP/SVD/HTTP、原生/浏览器与退出零进程/监听/端点通过。见v036-isp-readable-errors.md。
 - **0.3.6 串口锁异常清理**：源dad4bf69；213通过，含15新增故障回归、真实测试进程强退后串口/HIL重取及活锁保护。三个源CI通过。组合b3878ee5管理员覆盖退出0，199Python/40Web/四载荷一致，冻结CLI/MCP/SVD/HTTP、原生/Chrome与正常退出零进程/端口/端点通过。无目标硬件操作；见v036-serial-lock-cleanup.md。
@@ -30,7 +31,6 @@
 - **HPM USART ISP 联合实现**：0.3.6：996 GUI通过；Python全量4993通过/2可选跳过，1插件版本清单失败已修复，17相关复验通过。本地组合0673490b：496 Python、1002 GUI、TS/Vite/NSIS通过；199源文件/40Web资源一致、冻结CLI/MCP/SVD/HTTP及无宿主Python通过。原生0.3.6更新说明与5M恢复通过；双BIN实际部署烧录code0/ROM0/1/1，正常退出释放。用户豁免管理员安装，现有安装哈希不变。最终证据见hpm-rom-uart-isp-handoff.md与PR47。
 - **0.3.6 RTT与SuperWatch日志**：1669348b/PR46：SuperWatch222 Python、138 GUI、边界/记忆59通过；原生目录弹出/取消通过，完整确认链曾被QMCapture遮挡。真实manager预先记录首样本由DumpMemory夹具验证。RTT5bd50041：376通过/1跳过、扩展266（重叠）、GUI85及Chrome零解析/多通道通过。2b3d5528三个CI通过；用户授权本地NSIS覆盖成功，198 Python/40 Web/四载荷一致，冻结CLI/SVD/MCP/HTTP、无宿主Python及退出检查通过。原生/Chrome显示新构建且后台正常。未绑定探针recording/start仍409身份保护，连接后记录待用户测。详见三份v036报告；未硬件/发布。
 - **0.3.5正式发布**：Python全量4926通过/2跳过/1旧Skill断言失败，修正后相关68通过；GUI94文件985通过和生产构建通过。最终源2f474f60 Windows实装198Python/40Web/四载荷、全局Skill2605文件、冻结CLI/MCP/Web与原生退出通过；SiteAgent实际包2项通过。原生CI39116320413三平台资格/归档digest通过，5签名、双GitHub17附件匿名hash、3索引与真实Gitee Skill回退通过。安装后F103八路RTT连续及各256B下行、UART109条连续及256B下行、5034行按需记录通过。文件选择器超时边界及未解清单见v035-release-handoff.md。
-- **0.3.5 V2 RBL 自动升级**：V2独立索引双GitHub发布，旧UF2索引不变；用户回退后生产Web真实2.8→2.9升级。核心158/CLI相关127/V2专项29/GUI62及TS/Vite通过，组间重叠不相加。5be3dcf7 NSIS覆盖退出0，198Python/40Web/四载荷一致；Skill2605文件及CLI/SVD/MCP通过。安装Web、冻结/Skill实际MCP与CLI同版检查一致，F103 CPUID正确，已detach释放探针。原生正常关闭后进程/端点/端口全部释放；见v035-v2-rbl-update.md。
 
 ## 架构决策
 
@@ -53,10 +53,10 @@
 
 ## 下一动作
 
-1. 等待用户测试新共享离线界面。已安装源a2599b21，安装包F:/MKLink-Build/artifacts/v036-local-isp-a2599b21，SHA256 acaefde89ebb199a7c9958aadbe696c518d0f95497de7d4d7c64a93c0e460384；安装时间22:29:24+08，exit0，安装验证完成。原生PID51068使用隔离installed-native-checks环境并保持打开；后续操作先核对占用。
-2. 配套固件3d96dbb已刷入并通过HPM5301实机完整读取/用户Word69单比特写入验收。固件后续仍交指定会话01a15977-1aef-7430-aa11-6e39725f0465。当前Word69=1；不得重放旧写请求，其他字/锁/VCC修改须各自明确授权。其他系列/安全/密钥区未实写验收。
-3. PR48保持待人工审核；不合并、不签名、不发布。包已包含既有RTT/SuperWatch修复。管理员覆盖安装授权继续有效；本次UAC重试后安装完成。
-4. 共享左栏/独立镜像与OTP页签、官方8系列模板及配套固件联调已完成，等待用户界面与多轮烧录测试反馈。收集两位RTT客户的上位机/固件版本、目标ELF/芯片及IDE占用，用启动耗时和MUX请求身份复核。历史unknown操作不得重放，原始CDC/F405/受限AI/GD32仍待现场闭环。
+1. 当前安装0.3.6组合8d2ed5a3；包F:/MKLink-Build/artifacts/v036-local-isp-8d2ed5a3，SHA256 2e2109f8f14f1a7f63fdda391dec41abcfe3277cba6aa0e96511d9a83cfeec59。23:50:41+08覆盖exit0，原生保留；操作前重新核对占用。
+2. 下载器313ab4e已升级。镜像+OTP联合实机通过，当前Word69=3，禁止重放旧expected0/1写请求。其他官方系列和0–127字已默认开放，由用户继续测试；实测不足不能变成功能白名单。新OTP数据/保护锁/VCC仍须具体授权。固件交会话01a15977-1aef-7430-aa11-6e39725f0465。
+3. PR48待人工集成；不合并、不签名、不发布。安装包包含既有RTT/SuperWatch修复。完整报告v036-joint-offline-otp.md；联合SD任务和测试BIN留在下载器供用户查看。
+4. 真实多轮换板、其他HPM型号及安全/密钥区由用户测试；不要把HPM5301 Word69结果推广为已实机验证。保持128字开放及失败停止、不重放未知OTP写入。
 5. 其他维护边界：继续排查 30MHz 并行目标读错/Flash 偶发 status5，区分固件目标访问与主机队列；本次低负载 F103 结果不关闭该限制，需要固件改动另开会话。；保持Gitee真实Skill回退：0.3.5已验证；Windows超过100MB被拒使用GitHub链接，其余平台仅GitHub。保留唯一发布/验收证据和Skill备份，联接run仅人工处理，不强删。；收集 Mac/Linux USB/MSC 和原地升级反馈、外置 Flash 多算法实物验证；完整 SES/芯片/拔插断电组合仍待补充。供电每次确认具体电压，长期验证仍暂停。
 
 ## 已知限制
@@ -72,7 +72,7 @@
 
 ## 延续协议
 
-- 当前已安装0.3.6组合a2599b21，共享离线工作区与8系列OTP配置完成；下载器3d96dbb已升级，HPM5301 profile_v1全部128字读取及经用户批准的Word69 0→1单次写入/全回读通过。Word69现为1，禁止重放旧请求。测试结束串口释放、原生窗口保留。新字/保护锁/VCC须具体授权；不合并发布。
+- 当前已安装组合8d2ed5a3，配套下载器313ab4e已升级。镜像+OTP联合任务真实单次成功，Word69当前3；完整回读128字仅69变化。新数据不可继承此次授权。官方八系列及128字默认开放，无已实测名单门槛；保留协议/物理保护检查。原生和用户连接保留，测试无在途操作。PR48未合并发布。
 - V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。
 - CDC 995根因仅保留待排查。恢复只允许同身份CDC故障5秒内；超时不自动接回或新建AI会话，主动断开立即生效，不重放未知写入。测试实例已经全部释放；见v035-transport-recovery.md，不寻找旧现场窗口。
 - 客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。
