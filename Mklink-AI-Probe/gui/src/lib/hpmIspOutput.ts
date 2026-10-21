@@ -20,8 +20,8 @@ const otpReasons = new Set([...Object.values(otpErrors), 'OTP failed'])
 
 export type IspConnection = 'idle' | 'waiting' | 'connected' | 'cycle_done'
 
-// Completion is not evidence of a lost UART connection. Only firmware's
-// disconnect/waiting events move an active round back to handshake waiting.
+// Waiting for the next board starts while the previous board is still present.
+// Keep its connection until firmware confirms loss of ROM responses.
 export function hpmIspConnection(previous: IspConnection, line: string): IspConnection {
   if (!line.startsWith('HPM_ISP ')) return previous
   try {
@@ -29,7 +29,11 @@ export function hpmIspConnection(previous: IspConnection, line: string): IspConn
     if (!event || event.schema !== 1) return previous
     if (event.event === 'connected') return 'connected'
     if (event.event === 'cycle_done') return previous === 'connected' ? 'cycle_done' : previous
-    if (event.event === 'disconnected' || event.event === 'waiting') return 'waiting'
+    if (event.event === 'disconnected') return 'waiting'
+    if (event.event === 'waiting') {
+      if (event.stage === 'reconnect' && (previous === 'connected' || previous === 'cycle_done')) return previous
+      return 'waiting'
+    }
     if (event.event === 'result') return 'idle'
   } catch { /* An invalid record never changes connection state. */ }
   return previous
