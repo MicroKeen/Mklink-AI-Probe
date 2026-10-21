@@ -17,16 +17,15 @@ def _supported(bridge):
 def _profile_result(response, nonce, profile, operation):
     result = legacy._result(response, nonce, allow_rom_rejection=operation == 'read')
     if (result.get('api') != 'profile_v1' or result.get('profile') != profile
-            or 'profile_verified' not in result or result['profile_verified'] is not None or result.get('operation') != operation
+            or ('profile_verified' in result and result['profile_verified'] is not None and type(result['profile_verified']) is not bool)
+            or result.get('operation') != operation
             or result.get('read_source') != 'rom_otp'
             or result.get('read_semantics') not in ('unknown', 'fuse', 'shadow')
             or legacy._u32(result.get('memory_id')) != 0x20000):
         raise ValueError('UART OTP result does not match the selected family profile')
-    for field in ('chip_id', 'rom_version', 'soc_revision'):
-        if legacy._u32(result.get(field)) in (0, 0xFFFFFFFF):
-            raise ValueError('UART OTP target identity is unavailable')
-    if result['chip_id'] == legacy.CHIP_ID and profile != 'HPM5300':
-        raise ValueError('Known HPM5301 identity conflicts with the selected profile')
+    legacy._u32(result.get('chip_id'))
+    for field in ('rom_version', 'soc_revision'):
+        legacy._u32(result.get(field))
     legacy._u32(result.get('hard_lock'))
     legacy._u32(result.get('lifecycle'))
     return result
@@ -124,8 +123,6 @@ def plan_changes(bridge, part_number, changes, target_identity=None):
     fixed = ordered_changes([validate_change(item['word'], item['expected'], item['desired']) for item in changes])
     if len({item['word'] for item in fixed}) != len(fixed):
         raise ValueError('Duplicate OTP word')
-    if len(fixed) > 1 and any(item['word'] == 64 for item in fixed):
-        raise ValueError('CHIP_ID must be configured separately; refresh identity afterwards')
     results = [_change(bridge, part_number, item, False, target_identity) for item in fixed]
     qualified = bool(results) and all(item['qualified'] for item in results)
     return dict(changes=results, qualified=qualified, write_supported=qualified, target_identity=target_identity)
@@ -137,9 +134,12 @@ def program_changes(bridge, part_number, changes, target_identity=None):
         raise ValueError('OTP configuration is no longer writable; read again')
     fixed = [{key: item[key] for key in ('word', 'expected', 'desired', 'delta')} for item in preview['changes']]
     completed = []
+    identity = dict(target_identity) if target_identity is not None else None
     for item in fixed:
         try:
-            completed.append(_change(bridge, part_number, item, True, target_identity))
+            completed.append(_change(bridge, part_number, item, True, identity))
+            if item['word'] == 64 and identity is not None:
+                identity['chip_id'] = item['desired']
         except (ValueError, RuntimeError, OSError) as error:
             return dict(status='failed', completed=completed, failed_word=item['word'], error=str(error),
                         remaining=[later['word'] for later in fixed[len(completed) + 1:]])

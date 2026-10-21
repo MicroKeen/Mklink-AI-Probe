@@ -67,7 +67,6 @@ def test_http_deploy_checks_joint_capability_before_copy(tmp_path, monkeypatch, 
 @pytest.mark.parametrize('field,value', [
     ('confirm_irreversible', False), ('confirm_irreversible', 1),
     ('target_identity', {}), ('words', []),
-    ('words', [dict(word=64, expected=0, desired=1)]),
     ('words', [dict(word=69, expected=3, desired=1)]),
     ('words', [dict(word=True, expected=0, desired=1)]),
     ('words', [dict(word=69, expected=0, desired=1)] * 2),
@@ -88,6 +87,32 @@ def test_equal_words_remain_for_firmware_skip_and_locks_are_last():
     data['hpm_isp_otp']['words'] = [dict(word=w, expected=1, desired=1) for w in (0, 2, 69, 1)]
     config = parse_offline_config(data)
     assert [w[0] for w in config.hpm_isp_otp.words] == [69, 1, 2, 0]
+
+
+def test_joint_result_requires_otp_verification_not_only_image_success():
+    from mklink.hpm_isp import trigger_result
+    expected = script_metadata(generate_offline_script(parse_offline_config(payload())))
+    result = dict(schema=1, event='result', job_id=expected['job_id'], total=1, completed=1, code=0, rom_status=0)
+    def status():
+        return trigger_result(['HPM_ISP ' + json.dumps(result)], expected)['status']
+    assert status() == 'failed'
+    result.update(otp_verified=1, otp_reason=None)
+    assert status() == 'completed'
+    result.update(otp_verified=True)
+    assert status() == 'failed'
+    result.update(otp_verified=1, otp_reason='readback_mismatch')
+    assert status() == 'failed'
+
+
+@pytest.mark.parametrize('part', ['HPM5301', 'HPM6280', 'HPM6360', 'HPM6450', 'HPM6750', 'HPM6880', 'HPM6E80', 'HPM6P81', 'HPM5E31'])
+def test_all_official_families_allow_every_word_without_validation_whitelist(part):
+    data = payload(); data['target_part'] = part
+    data['hpm_isp_otp']['target_identity']['chip_id'] = 0xFFFFFFFF
+    data['hpm_isp_otp']['target_identity'].update(rom_version=0, soc_revision=0xFFFFFFFF)
+    data['hpm_isp_otp']['words'] = [dict(word=w, expected=0, desired=1) for w in range(128)]
+    config = parse_offline_config(data)
+    assert len(config.hpm_isp_otp.words) == 128
+    assert [w[0] for w in config.hpm_isp_otp.words][-4:] == [64, 1, 2, 0]
 
 
 def test_bundle_requires_joint_capability_before_writing_disk(tmp_path):
