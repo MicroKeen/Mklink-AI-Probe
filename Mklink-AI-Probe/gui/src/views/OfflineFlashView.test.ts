@@ -719,9 +719,9 @@ describe('OfflineFlashView', () => {
     expect(wrapper.get('.trigger-log').text()).toContain('program finished')
   })
 
-  it('previews and deploys offset BIN addresses with profile capacity and explicit restore voltage', async () => {
+  it.each(['HPM5301xEGx', 'HPM5300', 'HPM5E31', 'HPM6280', 'HPM6E80', 'HPM6750', 'HPM6880', 'HPM6P81'])('previews and deploys %s ISP images with offset addresses and voltage presets', async part => {
     onlineMocks.searchTargets.mockResolvedValue([{
-      part_number: 'HPM5301xEGx', vendor: 'HPMicro', installed: true, source: 'builtin',
+      part_number: part, vendor: 'HPMicro', installed: true, source: 'builtin',
     }])
     const wrapper = mount(OfflineFlashView)
     await flushPromises()
@@ -729,6 +729,7 @@ describe('OfflineFlashView', () => {
     await wrapper.get('.target-result').trigger('click')
     await flushPromises()
     await wrapper.get('[data-testid="offline-protocol"]').setValue('hpm_rom_isp_uart')
+    expect(wrapper.get('option[value="hpm_rom_isp_uart"]').attributes('disabled')).toBeUndefined()
     expect(wrapper.find('[data-testid="offline-clock"]').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('IDCODE 超时')
     expect(wrapper.text()).toContain('ROM 自动擦除并内部校验')
@@ -785,6 +786,7 @@ describe('OfflineFlashView', () => {
     await flushPromises()
     const config = offlineMocks.deploy.mock.calls[0][0]
     expect(config.programming_protocol).toBe('hpm_rom_isp_uart')
+    expect(config.target_part).toBe(part)
     expect(config.board).toBeNull()
     expect(config.hpm_isp.flash_size).toBeUndefined()
     expect(config.hpm_isp.baud_rate).toBe(10000000)

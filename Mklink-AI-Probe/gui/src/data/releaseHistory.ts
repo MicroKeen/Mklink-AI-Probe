@@ -13,13 +13,13 @@ export const releaseHistory: ReleaseHistoryEntry[] = [
     summary: '新增 ISP 烧录，优化终端与日志',
     summaryEn: 'Add ISP programming and improve terminal and logs',
     changes: [
-      '新增 HPM5301 串口 ISP 脱机烧录，支持多固件和多档速率。',
+      '新增 HPM 串口 ISP 脱机烧录，开放其他型号测试。',
       '修复自定义地址部署，简化下载设置与结果提示。',
       '断电复位可选 1.8V、3.3V、5V，默认 3.3V。',
       'RTT 终端跳过收发解析；SuperWatch 日志可提前开启并选择系统文件夹。',
     ],
     changesEn: [
-      'Add HPM5301 UART ISP offline programming with multiple images and baud rates.',
+      'Add HPM UART ISP offline programming and enable other models for testing.',
       'Fix deployment at custom addresses and simplify setup and status messages.',
       'Choose 1.8V, 3.3V or 5V for power-cycle reset; default to 3.3V.',
       'Skip traffic parsing in RTT terminal mode; enable SuperWatch logs before capture with a system folder picker.',
