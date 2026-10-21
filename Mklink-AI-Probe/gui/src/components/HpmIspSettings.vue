@@ -4,7 +4,6 @@ import { tr } from '../composables/useLanguage'
 import { useConfirmation } from '../composables/useConfirmation'
 
 const config = defineModel<HpmIspConfig>({ required: true })
-defineProps<{ count: number }>()
 const confirm = useConfirmation()
 const voltageChoices = [1800, 3300, 5000] as const
 
@@ -29,11 +28,6 @@ async function updateVoltage(value: number, input: HTMLInputElement): Promise<vo
     <p>{{ tr('使用下载器独立 UART 接口，目标须进入 ROM ISP。仅支持启用 HPMLINK 的 V4 固件。', 'Use the probe’s dedicated UART port with the target in ROM ISP. Requires HPMLINK-enabled V4 firmware.') }}</p>
     <label>{{ tr('串口速率（baud，8N1）', 'Baud rate (8N1)') }}<select v-model.number="config.baud_rate" data-testid="isp-baud-rate"><option v-for="rate in HPM_ISP_BAUD_RATES" :key="rate" :value="rate">{{ rate === 115200 ? '115200' : `${rate / 1000000}M (${rate})` }} · 8N1</option></select></label>
     <label>{{ tr('握手超时（ms）', 'Handshake timeout (ms)') }}<input v-model.number="config.connect_timeout_ms" type="number" min="1000" max="3600000" /></label>
-    <p>{{ tr('握手成功后自动烧录。多轮模式等待目标退出 ISP，再重新握手；无法识别是否换了芯片。', 'Programming starts after a successful handshake. Subsequent rounds wait for the target to leave ISP and reconnect; this does not identify a different chip.') }}</p>
-    <label v-if="count > 1" class="check">
-      <input v-model="config.confirm_reconnect_cycles" type="checkbox" data-testid="isp-confirm-cycles" />
-      {{ tr('我选择等待目标退出 ISP 后重新握手开始下一轮（不识别是否换板）', 'Start the next round after the target leaves ISP and reconnects (does not identify board changes)') }}
-    </label>
     <details>
       <summary>{{ tr('Flash 配置', 'Flash configuration') }}</summary>
       <label>Memory ID<input v-model="config.memory_id" /></label>

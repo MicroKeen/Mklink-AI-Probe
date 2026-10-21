@@ -44,7 +44,6 @@ class HpmIspConfig:
     flash_size: int
     sector_size: int
     rearm_mode: str
-    confirm_reconnect_cycles: bool
     completion: IspCompletion
 
 
@@ -90,9 +89,6 @@ def parse_config(raw: object) -> HpmIspConfig:
     rearm = raw.get("rearm_mode", "isp_reconnect")
     if rearm != "isp_reconnect":
         raise ValueError("Unsupported ISP rearm mode")
-    confirm_cycles = raw.get("confirm_reconnect_cycles", False)
-    if not isinstance(confirm_cycles, bool):
-        raise ValueError("ISP reconnect-cycle confirmation must be a boolean")
     completion = raw.get("completion", {})
     if not isinstance(completion, Mapping):
         raise ValueError("ISP completion settings must be an object")
@@ -109,7 +105,7 @@ def parse_config(raw: object) -> HpmIspConfig:
         raise ValueError("Restore voltage is only valid for power-cycle reset")
     off_ms = integer(completion.get("power_off_ms", 200), "Reset duration", 10, 5000)
     return HpmIspConfig(baud, timeout, command_timeout, memory_id, address, options,
-                        flash_base, flash_size, sector_size, rearm, confirm_cycles,
+                        flash_base, flash_size, sector_size, rearm,
                         IspCompletion(beep, reset, voltage, off_ms))
 
 

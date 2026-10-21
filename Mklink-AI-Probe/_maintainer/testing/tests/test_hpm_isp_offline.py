@@ -160,14 +160,15 @@ def test_eight_long_paths_fit_pika_line_buffer():
         parse_offline_config(data)
 
 
-def test_repeated_isp_rounds_require_explicit_reconnect_semantics():
+@pytest.mark.parametrize("legacy_confirmation", [None, False, True])
+def test_repeated_isp_rounds_default_to_reconnect(legacy_confirmation):
     data = payload()
-    data["auto_download_count"] = 3
-    with pytest.raises(OfflineDownloadError, match="does not identify"):
-        parse_offline_config(data)
-    data["hpm_isp"]["confirm_reconnect_cycles"] = True
+    data["auto_download_count"] = 10
+    if legacy_confirmation is not None:
+        data["hpm_isp"]["confirm_reconnect_cycles"] = legacy_confirmation
     config = parse_offline_config(data)
-    assert script_metadata(generate_offline_script(config))["total"] == 3
+    assert config.hpm_isp.rearm_mode == "isp_reconnect"
+    assert script_metadata(generate_offline_script(config))["total"] == 10
 
 
 def test_debug_completion_options_keep_existing_defaults():
