@@ -10,19 +10,23 @@ import pytest
 
 from mklink.local_resources import local_resource_status, release_serial_resources, serial_lock_path
 from mklink.serial._port import _PortLock
+from mklink.hil_lock import HilFileLock
 
 
 OWNER = '''
 import json, sys
 from pathlib import Path
 from mklink.serial._port import _PortLock
+from mklink.hil_lock import HilFileLock
 lock = _PortLock('COM901')
 assert lock.acquire()
+hil = HilFileLock('test-process-owner', root=Path(sys.argv[1]).parent / 'hil').acquire()
 Path(sys.argv[1]).write_text(json.dumps({'path': lock._path}), encoding='utf-8')
 try:
     sys.stdin.readline()
 finally:
     lock.release()
+    hil.release()
 '''
 
 
@@ -75,7 +79,7 @@ def test_status_and_nonforce_cleanup_preserve_live_owner(owner):
 
 
 @pytest.mark.parametrize('crash', [False, True])
-def test_process_exit_releases_lock_without_deleting_registry(owner, crash):
+def test_process_exit_releases_lock_without_deleting_registry(owner, crash, tmp_path):
     process, info = owner
     if crash:
         process.kill()
@@ -84,6 +88,8 @@ def test_process_exit_releases_lock_without_deleting_registry(owner, crash):
     try:
         assert lock.acquire()
         assert local_resource_status('COM901')['serial_locks'][0]['owner_pid'] == os.getpid()
+        hil = HilFileLock('test-process-owner', root=tmp_path / 'hil').acquire()
+        assert hil.release()
     finally:
         lock.release()
     assert Path(info['path']).exists()

@@ -8,6 +8,8 @@ needs the same cleanup behavior for dashboard flows.
 from __future__ import annotations
 
 import glob
+import errno
+import logging
 import os
 import re
 import signal
@@ -59,18 +61,22 @@ class _PortLock:
         self._path = serial_lock_path(port)
         self._fd = None
         self._locked = False
+        self.last_error = None
 
     @classmethod
     def from_path(cls, path: str):
         """Use an enumerated registry path for conservative resource cleanup."""
         lock = cls.__new__(cls)
         lock._path, lock._fd, lock._locked = path, None, False
+        lock.last_error = None
         return lock
 
     def acquire(self) -> bool:
-        if self._locked:
-            return True
         with self._guard:
+            if self._locked:
+                return True
+            self.last_error = None
+            locking = False
             try:
                 os.makedirs(os.path.dirname(self._path), exist_ok=True)
                 fd = os.open(self._path, os.O_RDWR | os.O_CREAT, 0o600)
@@ -79,15 +85,19 @@ class _PortLock:
                     self._fd.write(b"\0")
                     self._fd.flush()
                 self._fd.seek(0)
+                locking = True
                 if os.name == "nt":
                     import msvcrt
                     msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
                 else:
                     import fcntl
                     fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                locking = False
                 # Keep the lock byte intact, and PID outside the locked range.
                 self._write_owner(os.getpid())
-            except OSError:
+            except OSError as error:
+                if not locking or error.errno not in (errno.EACCES, errno.EAGAIN, errno.EDEADLK):
+                    self.last_error = error
                 if self._fd is not None:
                     self._fd.close()  # Also releases any acquired OS lock.
                 self._fd = None
@@ -102,16 +112,18 @@ class _PortLock:
         self._fd.flush()
 
     def release(self) -> None:
-        if not self._locked or self._fd is None:
-            return
-        try:
-            self._write_owner(0)
-        finally:
-            # Closing the descriptor releases the OS lock, even if metadata
-            # cleanup fails. Keep the file so all waiters lock the same inode.
-            self._fd.close()
-            self._fd = None
-            self._locked = False
+        with self._guard:
+            if not self._locked or self._fd is None:
+                return
+            try:
+                self._write_owner(0)
+            except OSError:
+                logging.getLogger(__name__).warning('Failed to clear serial lock metadata', exc_info=True)
+            finally:
+                # Keep the file so all waiters lock the same inode.
+                self._fd.close()
+                self._fd = None
+                self._locked = False
 
 
 def _read_owner_pid(path: str) -> int | None:
@@ -233,7 +245,9 @@ def _cleanup_port_lock(path: str, *, force: bool) -> dict[str, Any]:
         info['owner_alive'] = False
     lock = _PortLock.from_path(info['path'])
     if not lock.acquire():
-        info['action'] = 'locked_or_unavailable'
+        info['action'] = 'lock_error' if lock.last_error else 'locked_or_unavailable'
+        if lock.last_error:
+            info['error'] = str(lock.last_error)
         return info
     lock.release()
     info['action'] = 'terminated_owner' if terminated else 'cleared_stale_lock'
