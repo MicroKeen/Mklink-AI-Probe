@@ -18,6 +18,22 @@ async function add(wrapper: Awaited<ReturnType<typeof setup>>, word = 69, count 
   await wrapper.get('form').trigger('submit')
 }
 describe('UART OTP manufacturing-tool layout', () => {
+  it('preserves confirmed deployment across tabs but invalidates it after editing or refreshing', async () => {
+    const wrapper = await setup({ deployment: true, active: true,
+      snapshot: { ...snapshot, capability: 'profile_v1', rom_version: 1, soc_revision: 2 } })
+    await add(wrapper, 69, 1, '00000007')
+    await wrapper.get('[data-testid=isp-otp-deploy-confirm]').setValue(true)
+    expect(wrapper.emitted('configuration')!.at(-1)![0]).toMatchObject({ words: [{ word: 69, expected: 5, desired: 7 }] })
+    await wrapper.setProps({ active: false })
+    await wrapper.setProps({ active: true })
+    expect(wrapper.get<HTMLInputElement>('[data-testid=isp-otp-deploy-confirm]').element.checked).toBe(true)
+    await wrapper.get('[data-testid=isp-otp-add]').trigger('click')
+    expect(wrapper.emitted('configuration')!.at(-1)![0]).toBeUndefined()
+    await wrapper.setProps({ snapshot: null })
+    expect(wrapper.emitted('configuration')!.at(-1)![0]).toBeUndefined()
+    expect(wrapper.find('[data-testid=isp-otp-program]').exists()).toBe(false)
+    wrapper.unmount()
+  })
   it('shows indexed grids and unknown locks without fabricating unavailable words', async () => {
     const wrapper = await setup()
     expect(wrapper.text()).toContain('OTP Readable Words')

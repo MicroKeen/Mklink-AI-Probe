@@ -176,8 +176,8 @@ watch(currentTab, name => { if (name === 'dashboard') dashboardVisited.value = t
 const tabs = computed(() => (IS_REMOTE ? [{ key: 'dashboard', label: tr('仪表盘', 'Dashboard') }] : [
   { key: 'config', label: tr('配置', 'Config') },
   { key: 'dashboard', label: tr('仪表盘', 'Dashboard') },
-  { key: 'offline-flash', label: tr('脱机烧录', 'Offline Flash') },
   { key: 'online-flash', label: tr('在线烧录', 'Online Flash') },
+  { key: 'offline-flash', label: tr('脱机烧录', 'Offline Flash') },
   { key: 'remote-service', label: tr('远程服务', 'Remote Service') },
 ]))
 

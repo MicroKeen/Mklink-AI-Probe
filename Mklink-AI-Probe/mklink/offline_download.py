@@ -15,6 +15,7 @@ from typing import Callable, Mapping, Optional, Sequence, Union
 from mklink.file_content import copy_verified
 from mklink.offline_security import OfflineSecurityPlan, resolve_offline_security
 from mklink.hpm_offline_otp import OfflineOtp, resolve as resolve_hpm_otp, script_lines as otp_script_lines
+from mklink.hpm_isp_offline_otp import IspOfflineOtp, resolve as resolve_isp_otp
 from mklink.hpm_isp import HpmIspConfig, parse_config as parse_hpm_isp_config
 from mklink.stm32f1_options import (
     OptionPlan,
@@ -82,6 +83,7 @@ class OfflineDownloadConfig:
     hpm_user_otp: Optional[OfflineOtp] = None
     programming_protocol: str = "debug"
     hpm_isp: Optional[HpmIspConfig] = None
+    hpm_isp_otp: Optional[IspOfflineOtp] = None
     beep_on_completion: bool = True
     reset_after_download: bool = True
 
@@ -208,12 +210,16 @@ def parse_offline_config(
     protocol = payload.get("programming_protocol", "debug")
     if protocol not in ("debug", "hpm_rom_isp_uart"):
         raise OfflineDownloadError("Unsupported offline programming protocol")
+    try:
+        isp_otp = resolve_isp_otp(payload.get('hpm_isp_otp'), target_part or '', model, protocol)
+    except ValueError as error:
+        raise OfflineDownloadError(str(error)) from error
     isp = None
     if protocol == "hpm_rom_isp_uart":
         if not hpm_target or model != "V4":
             raise OfflineDownloadError("USART ISP requires an HPM target and HPMLINK V4 firmware")
         if hpm_user_otp or option_bytes:
-            raise OfflineDownloadError("USART ISP does not support OTP or option-byte operations")
+            raise OfflineDownloadError("USART ISP requires its own OTP recipe; JTAG OTP and ARM option bytes are not supported")
         if payload.get("board") or payload.get("hpm_flash_cfg"):
             raise OfflineDownloadError("USART ISP requires separate NOR options, not JTAG board/flash configuration")
         try:
@@ -400,6 +406,7 @@ def parse_offline_config(
         hpm_user_otp=hpm_user_otp,
         programming_protocol=protocol,
         hpm_isp=isp,
+        hpm_isp_otp=isp_otp,
         beep_on_completion=beep_on_completion,
         reset_after_download=reset_after_download,
     )
@@ -813,9 +820,11 @@ def deploy_offline_bundle(
     isp_capability_response: Optional[str] = None,
 ) -> dict:
     if config.hpm_isp is not None:
-        from mklink.hpm_isp import require_capability
+        from mklink.hpm_isp import require_capability, require_otp_job_capability
         try:
             require_capability(isp_capability_response or "")
+            if config.hpm_isp_otp is not None:
+                require_otp_job_capability(isp_capability_response or "")
         except ValueError as error:
             raise OfflineDownloadError(str(error)) from error
     disk = Path(disk_root).resolve()

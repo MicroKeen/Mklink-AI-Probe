@@ -7,8 +7,9 @@ import type { HpmIspOtpBatchPlan, HpmIspOtpChange, HpmIspOtpSnapshot } from '../
 import { customOtpEntries, otpCsv, otpHex as hex, parseOtpCsv, type OtpEntry } from '../lib/otpConfiguration'
 import { saveTextFile } from '../lib/downloadTextFile'
 import { tr } from '../composables/useLanguage'
-const props = defineProps<{ active?: boolean; partNumber?: string; snapshot: HpmIspOtpSnapshot | null; plan: HpmIspOtpBatchPlan | null; result: string; busy: boolean; disabled: boolean; error: string }>()
-const emit = defineEmits<{ read: []; prepare: [changes: HpmIspOtpChange[]]; program: [planId: string]; invalidate: [] }>()
+import type { HpmIspOfflineOtp } from '../types/offlineFlash'
+const props = defineProps<{ deployment?: boolean; active?: boolean; partNumber?: string; snapshot: HpmIspOtpSnapshot | null; plan: HpmIspOtpBatchPlan | null; result: string; busy: boolean; disabled: boolean; error: string }>()
+const emit = defineEmits<{ read: []; prepare: [changes: HpmIspOtpChange[]]; program: [planId: string]; invalidate: []; configuration: [config: HpmIspOfflineOtp | undefined, pending: boolean] }>()
 const profile = computed(() => hpmOtpProfile(props.partNumber || props.snapshot?.part_number || 'HPM5301'))
 const range = { first: 0, last: 127 }
 const showTemplates = ref(false)
@@ -41,12 +42,27 @@ const canPrepare = computed(() => !!props.snapshot && pending.value.length > 0 &
     return row && row.current !== null && (row.current === item.value || (row.locked !== true && ((row.current & item.value) >>> 0) === row.current))
   }))
 function invalidate() { revision++; confirmed.value = false; emit('invalidate') }
+const offlineWords = computed(() => pending.value.map(item => ({ word: item.word,
+  expected: props.snapshot?.words.find(row => row.word === item.word)?.current ?? null, desired: item.value })))
+const canDeploy = computed(() => props.snapshot?.capability === 'profile_v1' && !!props.snapshot.rom_version
+  && !!props.snapshot.soc_revision && pending.value.length > 0 && !editing.value
+  && offlineWords.value.every(item => item.word !== 64 && item.expected !== null
+    && ((item.expected & item.desired) >>> 0) === item.expected
+    && (item.expected === item.desired || !(props.snapshot!.hard_lock & (1 << Math.floor(item.word / 4))))))
+watch([offlineWords, canDeploy, confirmed, editing], () => {
+  if (!props.deployment) return
+  const snapshot = props.snapshot
+  emit('configuration', canDeploy.value && confirmed.value && snapshot ? {
+    target_identity: { chip_id: snapshot.chip_id, rom_version: snapshot.rom_version!, soc_revision: snapshot.soc_revision! },
+    words: offlineWords.value.map(item => ({ ...item, expected: item.expected! })), confirm_irreversible: true,
+  } : undefined, pending.value.length > 0 || editing.value)
+}, { deep: true })
 watch(pending, invalidate, { deep: true, flush: 'sync' })
 watch(() => props.plan, () => { confirmed.value = false })
 watch(() => props.snapshot, () => { confirmed.value = false })
 onBeforeUnmount(() => { revision++; emit('invalidate') })
 watch(() => props.active !== false, active => {
-  if (!active) invalidate()
+  if (!active) { if (!props.deployment) invalidate() }
   else if (!props.snapshot && !unavailable.value) emit('read')
 }, { immediate: true })
 function refresh() {
@@ -134,8 +150,15 @@ function reason(value: string | null) {
               <div class="actions"><button class="btn" type="button" :disabled="unavailable" @click="editing = false">{{ tr('取消', 'Cancel') }}</button><button class="btn" type="submit" :disabled="unavailable" data-testid="isp-otp-add-confirm">{{ tr('确定', 'OK') }}</button></div>
             </form>
             <p class="hint">{{ tr('填写写入后的完整值，已有的 1 不能改回 0。写入前逐字预检；失败即停止，已完成的写入无法撤销。', 'Enter complete final values; existing 1 bits cannot be cleared. Every word is checked before programming. Stops on failure; completed writes cannot be undone.') }}</p>
-            <div class="actions"><span v-if="pending.length && !snapshot">{{ tr('请先刷新当前芯片的 OTP', 'Refresh OTP on the current chip first') }}</span><span v-else-if="pending.length && !canPrepare">{{ tr('检查锁定状态和目标值；与当前相同的字无需写入。', 'Check locks and desired values; unchanged words need no programming.') }}</span><button class="btn btn-primary" :disabled="unavailable || editing || !canPrepare" data-testid="isp-otp-plan" @click="prepare">{{ tr('检查并预览', 'Check and Preview') }}</button></div>
-            <section v-if="plan" class="preview">
+            <section v-if="deployment && pending.length" class="preview" data-testid="isp-otp-offline-config">
+              <h4>{{ tr('随镜像部署的 OTP 配置', 'OTP configuration deployed with images') }}</h4>
+              <table><thead><tr><th>Word</th><th>{{ tr('预期值', 'Expected') }}</th><th>{{ tr('目标值', 'Desired') }}</th></tr></thead><tbody><tr v-for="item in offlineWords" :key="item.word"><td>{{ item.word }}</td><td>{{ item.expected === null ? '—' : hex(item.expected) }}</td><td>{{ hex(item.desired) }}</td></tr></tbody></table>
+              <p>{{ tr('镜像烧录成功后执行 OTP 写入并回读；值已相同则跳过。', 'Program and verify OTP after image programming succeeds; matching values are skipped.') }}</p>
+              <p v-if="!canDeploy">{{ tr('请刷新 OTP 并检查目标值和保护锁。CHIP_ID（Word 64）不能随镜像修改。', 'Refresh OTP and check values and locks. CHIP_ID (Word 64) cannot be changed with images.') }}</p>
+              <label class="confirmation"><input v-model="confirmed" type="checkbox" data-testid="isp-otp-deploy-confirm" :disabled="unavailable || !canDeploy">{{ tr('确认部署并触发后永久写入以上配置', 'Confirm permanent programming of this configuration when deployed and triggered') }}</label>
+            </section>
+            <div v-if="!deployment" class="actions"><span v-if="pending.length && !snapshot">{{ tr('请先刷新当前芯片的 OTP', 'Refresh OTP on the current chip first') }}</span><span v-else-if="pending.length && !canPrepare">{{ tr('检查锁定状态和目标值；与当前相同的字无需写入。', 'Check locks and desired values; unchanged words need no programming.') }}</span><button class="btn btn-primary" :disabled="unavailable || editing || !canPrepare" data-testid="isp-otp-plan" @click="prepare">{{ tr('检查并预览', 'Check and Preview') }}</button></div>
+            <section v-if="!deployment && plan" class="preview">
               <h4>{{ tr('写入预览', 'Programming preview') }}</h4><table><thead><tr><th>Word</th><th>{{ tr('当前值', 'Current') }}</th><th>{{ tr('目标值', 'Desired') }}</th><th>{{ tr('新增位', 'New bits') }}</th><th>{{ tr('预检', 'Preflight') }}</th></tr></thead><tbody><tr v-for="change in plan.changes" :key="change.word" data-testid="isp-otp-diff"><td>{{ change.word }}</td><td>{{ hex(change.expected) }}</td><td>{{ hex(change.desired) }}</td><td>{{ hex(change.delta) }}</td><td>{{ reason(change.reason) }}</td></tr></tbody></table>
               <p v-if="!writablePlan" data-testid="isp-otp-unavailable">{{ tr('配置未全部通过预检，请修正后重新检查。', 'Some changes failed preflight. Correct them and check again.') }}</p>
               <template v-else><label class="confirmation"><input v-model="confirmed" type="checkbox" data-testid="isp-otp-confirm" :disabled="unavailable">{{ tr('确认永久写入以上新增位，无法擦除', 'Confirm permanently burning these new bits; they cannot be erased') }}</label><button class="btn program" data-testid="isp-otp-program" :disabled="unavailable || !confirmed" @click="program">{{ tr('写入并回读', 'Program and Read Back') }}</button></template>

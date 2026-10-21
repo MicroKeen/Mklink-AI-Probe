@@ -37,6 +37,27 @@ vi.mock('../composables/useOnlineFlashApi', () => ({
 }))
 
 describe('OfflineFlashView', () => {
+  it('keeps chip input enabled and focused while suggestions are in flight', async () => {
+    vi.useFakeTimers()
+    const wrapper = mount(OfflineFlashView, { attachTo: document.body })
+    try {
+      await flushPromises()
+      let finish!: (value: unknown[]) => void
+      onlineMocks.searchTargets.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+      const input = wrapper.get<HTMLInputElement>('[data-testid="offline-target-search"]')
+      input.element.focus()
+      await input.setValue('H')
+      await vi.advanceTimersByTimeAsync(151)
+      expect(input.element.matches(':disabled')).toBe(false)
+      expect(document.activeElement).toBe(input.element)
+      await input.setValue('HPM5301')
+      finish([{ part_number: 'HPM5300', vendor: 'HPMicro' }])
+      await flushPromises()
+      expect(input.element.value).toBe('HPM5301')
+      expect(document.activeElement).toBe(input.element)
+      expect(wrapper.find('[data-testid="offline-probe"]').exists()).toBe(false)
+    } finally { wrapper.unmount(); vi.useRealTimers() }
+  })
   it('shares one chip, probe model and protocol between image and option-byte tabs', async () => {
     onlineMocks.searchTargets.mockResolvedValue([{ part_number: 'STM32F103RC', vendor: 'ST', installed: true }])
     const wrapper = mount(OfflineFlashView)
@@ -63,9 +84,9 @@ describe('OfflineFlashView', () => {
     expect(wrapper.getComponent(DeviceConfigurationPanel).props('changes')).toEqual({ DATA0: '0x5A' })
     wrapper.unmount()
   })
-  it('previews UART settings and submits only the confirmed single-use plan, with no retry after an unknown result', async () => {
+  it('deploys image and confirmed UART OTP together without direct programming', async () => {
     onlineMocks.searchTargets.mockResolvedValue([{ part_number: 'HPM5301', vendor: 'HPMicro', installed: true, source: 'builtin' }])
-    offlineMocks.getStatus.mockResolvedValue({ available: false })
+    offlineMocks.getStatus.mockResolvedValue({ available: true, disk_path: 'G:/' })
     const wrapper = mount(OfflineFlashView, { global: { stubs: { teleport: true } } })
     await flushPromises()
     await wrapper.get('[data-testid="offline-model"]').setValue('V4')
@@ -73,28 +94,27 @@ describe('OfflineFlashView', () => {
     await flushPromises()
     await wrapper.get('[data-testid="offline-protocol"]').setValue('hpm_rom_isp_uart')
     vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => ({ part_number: 'HPM5301', chip_id: 0x11705142,
-      hard_lock: 0, source: 'rom_otp', read_at: 'now', words: [{ word: 69, current: 5, shadow: null, locked: null }] }) } as Response)
+      capability: 'profile_v1', rom_version: 1, soc_revision: 2, hard_lock: 0, source: 'rom_otp', read_at: 'now', words: [{ word: 69, current: 5, shadow: null, locked: null }] }) } as Response)
     await wrapper.get('[data-testid="offline-configuration-tab"]').trigger('click'); await flushPromises()
     await wrapper.get('[data-testid="isp-otp-write-view"]').trigger('click')
     await wrapper.get('[data-testid="isp-otp-add"]').trigger('click')
     await wrapper.get('[aria-label="OTP word values"]').setValue('00000007')
     await wrapper.get('form').trigger('submit')
-    vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => ({ changes: [{ word: 69, expected: 5, desired: 7, delta: 2, before: 5, reason: null }],
-      plan_id: 'reviewed-token', qualified: true, write_supported: true, expires_in: 60 }) } as Response)
-    await wrapper.get('[data-testid="isp-otp-plan"]').trigger('click'); await flushPromises()
-    const [planUrl, planInit] = vi.mocked(fetch).mock.lastCall!
-    expect(String(planUrl)).toContain('/hpm-isp-otp/batch-plan')
-    expect(JSON.parse(planInit!.body as string)).toEqual({ part_number: 'HPM5301', model: 'V4', extended: true, changes: [{ word: 69, expected: 5, desired: '0x00000007' }] })
-    expect(wrapper.get('[data-testid="isp-otp-program"]').attributes('disabled')).toBeDefined()
-    await wrapper.get('[data-testid="isp-otp-confirm"]').setValue(true)
-    vi.mocked(fetch).mockRejectedValueOnce(new Error('Lost response'))
-    await wrapper.get('[data-testid="isp-otp-program"]').trigger('click'); await flushPromises()
-    const [programUrl, programInit] = vi.mocked(fetch).mock.lastCall!
-    expect(String(programUrl)).toContain('/hpm-isp-otp/batch-program')
-    expect(JSON.parse(programInit!.body as string)).toEqual({ part_number: 'HPM5301', model: 'V4', extended: true, plan_id: 'reviewed-token', confirm_irreversible: true })
-    expect(wrapper.get('[data-testid="hpm-isp-otp"]').text()).toContain('不要重试写入')
+    const input = wrapper.get('[data-testid="offline-firmware-input"]')
+    Object.defineProperty(input.element, 'files', { configurable: true, value: [new File(['bin'], 'firmware.bin')] })
+    await input.trigger('change')
+    expect(wrapper.get('[data-testid="offline-deploy"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('[data-testid="isp-otp-deploy-confirm"]').setValue(true)
+    await wrapper.get('[data-testid="offline-image-tab"]').trigger('click')
+    expect(wrapper.get('[data-testid="offline-deploy"]').attributes('disabled')).toBeUndefined()
+    await wrapper.get('[data-testid="offline-deploy"]').trigger('click'); await flushPromises()
+    expect(offlineMocks.deploy).toHaveBeenCalledOnce()
+    const payload = offlineMocks.deploy.mock.calls[0][0]
+    expect(payload.firmwares).toHaveLength(1)
+    expect(payload.hpm_isp_otp).toEqual({ target_identity: { chip_id: 0x11705142, rom_version: 1, soc_revision: 2 },
+      words: [{ word: 69, expected: 5, desired: 7 }], confirm_irreversible: true })
     expect(wrapper.find('[data-testid="isp-otp-program"]').exists()).toBe(false)
-    expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes('/hpm-isp-otp/batch-program'))).toHaveLength(1)
+    expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes('/hpm-isp-otp/batch-program'))).toHaveLength(0)
     expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/device/connect'))).toBe(false)
     wrapper.unmount()
   })

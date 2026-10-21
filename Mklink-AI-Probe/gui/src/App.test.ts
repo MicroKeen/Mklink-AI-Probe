@@ -91,9 +91,9 @@ describe('App version footer', () => {
     const wrapper = mountApp()
 
     expect(wrapper.get('.app-title').text()).toBe('MKLink')
-    expect(wrapper.findAll('.nav-tab').map(tab => tab.text())).toEqual(['配置', '仪表盘', '脱机烧录', '在线烧录', '远程服务'])
+    expect(wrapper.findAll('.nav-tab').map(tab => tab.text())).toEqual(['配置', '仪表盘', '在线烧录', '脱机烧录', '远程服务'])
     await wrapper.get('[data-testid="global-language-toggle"]').trigger('click')
-    expect(wrapper.findAll('.nav-tab').map(tab => tab.text())).toEqual(['Config', 'Dashboard', 'Offline Flash', 'Online Flash', 'Remote Service'])
+    expect(wrapper.findAll('.nav-tab').map(tab => tab.text())).toEqual(['Config', 'Dashboard', 'Online Flash', 'Offline Flash', 'Remote Service'])
     expect(wrapper.get('[data-testid="global-language-toggle"]').text()).toContain('中文')
     wrapper.unmount()
   })

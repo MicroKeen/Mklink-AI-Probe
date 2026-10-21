@@ -68,9 +68,16 @@ export interface HpmIspConfig {
     power_off_ms: number
   }
 }
+export interface HpmIspOfflineOtp {
+  target_identity: { chip_id: number; rom_version: number; soc_revision: number }
+  words: { word: number; expected: number; desired: number }[]
+  confirm_irreversible: true
+}
+
 export interface OfflineConfigPayload {
   programming_protocol?: 'debug' | 'hpm_rom_isp_uart'
   hpm_isp?: HpmIspConfig
+  hpm_isp_otp?: HpmIspOfflineOtp
   beep_on_completion?: boolean
   reset_after_download?: boolean
   model: 'V2' | 'V3' | 'V4'
