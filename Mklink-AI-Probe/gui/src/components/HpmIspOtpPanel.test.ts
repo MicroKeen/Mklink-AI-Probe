@@ -18,6 +18,17 @@ async function add(wrapper: Awaited<ReturnType<typeof setup>>, word = 69, count 
   await wrapper.get('form').trigger('submit')
 }
 describe('UART OTP manufacturing-tool layout', () => {
+  it.each(['HPM5301', 'HPM6280', 'HPM6360', 'HPM6450', 'HPM6750', 'HPM6880', 'HPM6E80', 'HPM6P81', 'HPM5E31'])('allows all 128 deployment words for %s', async partNumber => {
+    const wrapper = await setup({ deployment: true, partNumber,
+      snapshot: { ...snapshot, part_number: partNumber, chip_id: 0xFFFFFFFF, capability: 'profile_v1', rom_version: 0, soc_revision: 0,
+        words: Array.from({ length: 128 }, (_, word) => ({ word, current: 0, shadow: null, locked: null })) } })
+    await add(wrapper, 0, 128, Array(128).fill('00000001').join(','))
+    await wrapper.get('[data-testid=isp-otp-deploy-confirm]').setValue(true)
+    const config = wrapper.emitted('configuration')!.at(-1)![0] as { words: { word: number }[] }
+    expect(config.words).toHaveLength(128)
+    expect(config.words.some(item => item.word === 64)).toBe(true)
+    wrapper.unmount()
+  })
   it('preserves confirmed deployment across tabs but invalidates it after editing or refreshing', async () => {
     const wrapper = await setup({ deployment: true, active: true,
       snapshot: { ...snapshot, capability: 'profile_v1', rom_version: 1, soc_revision: 2 } })

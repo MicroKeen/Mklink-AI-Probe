@@ -189,7 +189,7 @@ def generate_script(config) -> str:
         for word, expected, desired in otp.words:
             otp_lines.extend(['    if rc == 0:', f'        rc = hpm.isp_otp_job_add({word}, {expected}, {desired})'])
     return "\n".join([
-        SCRIPT_MARKER + json.dumps({"job_id": job_id, "total": config.auto_download_count, **({'otp': True} if otp else {})}, separators=(",", ":")),
+        SCRIPT_MARKER + json.dumps({"job_id": job_id, "total": config.auto_download_count, **({'otp': True, 'otp_words': len(otp.words)} if otp else {})}, separators=(",", ":")),
         "import hpm",
         ('if hpm.isp_supported() == 1 and hpm.isp_otp_job_supported() == 1:' if otp else "if hpm.isp_supported() == 1:"),
         '    isp_label = "USART ISP config:"',
@@ -220,6 +220,8 @@ def script_metadata(text: str) -> dict | None:
     integer(raw.get("total"), "ISP script total", 1, 9999)
     if 'otp' in raw and type(raw['otp']) is not bool:
         raise ValueError('Invalid ISP OTP job metadata')
+    if raw.get('otp'):
+        integer(raw.get('otp_words'), 'ISP OTP word count', 1, 128)
     return raw
 
 
@@ -247,6 +249,10 @@ def trigger_result(lines: list[str], expected: dict | None = None) -> dict:
                    and type(result.get("rom_status")) is int and result["rom_status"] == 0
                    and result.get("completed") == result["total"]
                    and (expected is None or result["total"] == expected["total"]))
+        if expected is not None and expected.get('otp'):
+            success = (success and type(result.get('otp_verified')) is int
+                       and result['otp_verified'] == expected['otp_words']
+                       and result.get('otp_reason') in (None, 'ok'))
         return {"status": "completed" if success else "failed", "lines": lines, "isp_result": result}
     text = "\n".join(lines).casefold()
     return {"status": "completed" if "finished" in text and "aborted" not in text else "failed", "lines": lines}

@@ -75,8 +75,8 @@ def test_denied_words_remain_unknown():
     assert otp.read_snapshot(bridge, 'HPM5301')['words'][80]['current'] is None
 
 
-@pytest.mark.parametrize('patch', [dict(profile='HPM6200'), dict(profile_verified=False),
-    dict(chip_id=0), dict(chip_id=True), dict(start_word=True), dict(values=[0]),
+@pytest.mark.parametrize('patch', [dict(profile='HPM6200'), dict(profile_verified='false'),
+    dict(chip_id=True), dict(start_word=True), dict(values=[0]),
     dict(statuses=[1]*8), dict(api='unknown'), dict(memory_id=0)])
 def test_bad_or_wrong_profile_snapshot_is_discarded(patch):
     bridge = Bridge()
@@ -177,15 +177,23 @@ def test_extended_write_rechecks_snapshot_identity():
     assert bridge.values == [0]*128
 
 
-def test_known_5301_cannot_use_another_family_template():
+@pytest.mark.parametrize('verified', [None, False, True])
+def test_family_is_user_selected_and_validation_history_does_not_gate(verified):
     bridge = Bridge()
-    bridge.mutate = lambda result: dict(result, chip_id=otp.legacy.CHIP_ID)
-    with pytest.raises(ValueError, match='conflicts'):
-        otp.read_snapshot(bridge, 'HPM6280')
+    bridge.mutate = lambda result: dict(result, chip_id=otp.legacy.CHIP_ID, profile_verified=verified)
+    assert otp.read_snapshot(bridge, 'HPM6280')['profile'] == 'HPM6200'
 
 
-def test_chip_id_word_requires_a_separate_batch():
+def test_chip_id_can_be_in_batch_and_later_writes_use_updated_identity():
     bridge = Bridge()
-    with pytest.raises(ValueError, match='CHIP_ID'):
-        otp.plan_changes(bridge, 'HPM5301', [validate_change(word, 0, 1) for word in (64, 69)], IDENTITY)
-    assert bridge.calls == []
+    bridge.values[64] = IDENTITY['chip_id']
+    def identity(result):
+        # The write result reports the identity read before its own write.
+        result['chip_id'] = result['before'] if result.get('word') == 64 else bridge.values[64]
+        return result
+    bridge.mutate = identity
+    changes = [validate_change(w, bridge.values[w], bridge.values[w] | 1) for w in (0, 1, 64, 69)]
+    result = otp.program_changes(bridge, 'HPM6280', changes, IDENTITY)
+    assert result['status'] == 'completed'
+    assert [item['word'] for item in result['completed']] == [69, 64, 1, 0]
+    assert IDENTITY['chip_id'] == 0x12345678

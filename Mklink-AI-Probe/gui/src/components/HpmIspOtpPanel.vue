@@ -44,9 +44,9 @@ const canPrepare = computed(() => !!props.snapshot && pending.value.length > 0 &
 function invalidate() { revision++; confirmed.value = false; emit('invalidate') }
 const offlineWords = computed(() => pending.value.map(item => ({ word: item.word,
   expected: props.snapshot?.words.find(row => row.word === item.word)?.current ?? null, desired: item.value })))
-const canDeploy = computed(() => props.snapshot?.capability === 'profile_v1' && !!props.snapshot.rom_version
-  && !!props.snapshot.soc_revision && pending.value.length > 0 && !editing.value
-  && offlineWords.value.every(item => item.word !== 64 && item.expected !== null
+const canDeploy = computed(() => props.snapshot?.capability === 'profile_v1' && props.snapshot.rom_version != null
+  && props.snapshot.soc_revision != null && pending.value.length > 0 && !editing.value
+  && offlineWords.value.every(item => item.expected !== null
     && ((item.expected & item.desired) >>> 0) === item.expected
     && (item.expected === item.desired || !(props.snapshot!.hard_lock & (1 << Math.floor(item.word / 4))))))
 watch([offlineWords, canDeploy, confirmed, editing], () => {
@@ -154,7 +154,7 @@ function reason(value: string | null) {
               <h4>{{ tr('随镜像部署的 OTP 配置', 'OTP configuration deployed with images') }}</h4>
               <table><thead><tr><th>Word</th><th>{{ tr('预期值', 'Expected') }}</th><th>{{ tr('目标值', 'Desired') }}</th></tr></thead><tbody><tr v-for="item in offlineWords" :key="item.word"><td>{{ item.word }}</td><td>{{ item.expected === null ? '—' : hex(item.expected) }}</td><td>{{ hex(item.desired) }}</td></tr></tbody></table>
               <p>{{ tr('镜像烧录成功后执行 OTP 写入并回读；值已相同则跳过。', 'Program and verify OTP after image programming succeeds; matching values are skipped.') }}</p>
-              <p v-if="!canDeploy">{{ tr('请刷新 OTP 并检查目标值和保护锁。CHIP_ID（Word 64）不能随镜像修改。', 'Refresh OTP and check values and locks. CHIP_ID (Word 64) cannot be changed with images.') }}</p>
+              <p v-if="!canDeploy">{{ tr('请刷新 OTP 并检查目标值和保护锁。', 'Refresh OTP and check values and locks.') }}</p>
               <label class="confirmation"><input v-model="confirmed" type="checkbox" data-testid="isp-otp-deploy-confirm" :disabled="unavailable || !canDeploy">{{ tr('确认部署并触发后永久写入以上配置', 'Confirm permanent programming of this configuration when deployed and triggered') }}</label>
             </section>
             <div v-if="!deployment" class="actions"><span v-if="pending.length && !snapshot">{{ tr('请先刷新当前芯片的 OTP', 'Refresh OTP on the current chip first') }}</span><span v-else-if="pending.length && !canPrepare">{{ tr('检查锁定状态和目标值；与当前相同的字无需写入。', 'Check locks and desired values; unchanged words need no programming.') }}</span><button class="btn btn-primary" :disabled="unavailable || editing || !canPrepare" data-testid="isp-otp-plan" @click="prepare">{{ tr('检查并预览', 'Check and Preview') }}</button></div>

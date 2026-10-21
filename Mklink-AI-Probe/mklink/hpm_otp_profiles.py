@@ -36,5 +36,5 @@ def validate_change(word, expected, desired):
 
 
 def ordered_changes(changes):
-    """Data first, security and access restrictions next, HARD_LOCK last."""
-    return sorted(changes, key=lambda item: (2 if item['word'] == 0 else 1 if item['word'] in (1, 2) else 0, item['word']))
+    """Data, mutable CHIP_ID, access restrictions, then HARD_LOCK."""
+    return sorted(changes, key=lambda item: (3 if item['word'] == 0 else 2 if item['word'] in (1, 2) else 1 if item['word'] == 64 else 0, item['word']))

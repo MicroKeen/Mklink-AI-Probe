@@ -27,19 +27,16 @@ def resolve(raw, part, model, protocol):
     identity = raw['target_identity']
     if not isinstance(identity, dict) or set(identity) != {'chip_id', 'rom_version', 'soc_revision'}:
         raise ValueError('UART offline OTP requires the freshly read target identity')
-    ids = [integer(identity[k], k, 1, 0xFFFFFFFE) for k in ('chip_id', 'rom_version', 'soc_revision')]
-    if ids[0] == 0x11705142 and profile != 'HPM5300':
-        raise ValueError('HPM5301 identity does not match the selected profile')
+    ids = [integer(identity['chip_id'], 'chip_id', 0, 0xFFFFFFFF)]
+    ids += [integer(identity[k], k, 0, 0xFFFFFFFF) for k in ('rom_version', 'soc_revision')]
     words = raw['words']
-    if not isinstance(words, list) or not 1 <= len(words) <= 127:
-        raise ValueError('Select 1..127 offline OTP words')
+    if not isinstance(words, list) or not 1 <= len(words) <= 128:
+        raise ValueError('Select 1..128 offline OTP words')
     parsed = []
     for item in words:
         if not isinstance(item, dict) or set(item) != {'word', 'expected', 'desired'}:
             raise ValueError('Each OTP word requires word, expected and desired')
         word = integer(item['word'], 'OTP word', 0, 127)
-        if word == 64:
-            raise ValueError('CHIP_ID Word 64 cannot be changed in an image + OTP job')
         expected = integer(item['expected'], 'Expected OTP value', 0, 0xFFFFFFFF)
         desired = integer(item['desired'], 'Desired OTP value', 0, 0xFFFFFFFF)
         if expected & desired != expected:
