@@ -43,3 +43,13 @@ Chrome exercised count 10 preview, deployment to a temporary SD directory, and a
 
 Package: MKLINK_BUILD_ROOT/artifacts/v036-local-isp-ffe24d17/Mklink-AI-Probe-0.3.6-local-ffe24d17-Setup.exe. SHA256 948c7ef10ddb03ad349b1ee943e79e427793d258d428dd576548744805f7007b. Local unsigned package only; PR48 remains unmerged. No real target download or voltage operation occurred. Temporary pytest links were retained safely in runs/run-20261021-132808-2a3e8749.
 Final native exit returned 0; installed processes and 8765/8766 listeners were released. Installer SHA256 rechecked against the archived manifest.
+
+Source 5df9569e restores a persistent UART ISP Run output panel. CDC events are rendered with the exact LCD console templates from hpm_isp_job.c: ISP waiting cycle/total, ISP connected, ISP done completed/total, ISP OK completed/total, and ISP error code (completed/total). Script lines and JSON are omitted; adjacent duplicate plain-text echoes are collapsed. Empty final responses preserve already streamed output. Explicit script preview is still separate and is cleared on test start. The actual firmware CDC progress event has no percentage, so the host does not invent LCD progress-bar values. No downloader firmware modification.
+
+54 GUI tests and TypeScript/Vite production build passed, including round messages, error codes, malformed records, echo suppression, visible streamed output, and unknown-result handling. Previous 75 Python tests belong to the preceding round-default change; this follow-up changes only GUI code. No target download or voltage operation.
+
+Combined source 11a865cb / Web bc551ba4 was administrator-overwrite installed (NSIS exit 0). Installed qualification matched 199 Python sources, 40 Web assets and four payloads; frozen MCP/SVD/HTTP without host Python passed. Native startup passed; installed Chrome confirmed the persistent Run output panel and idle placeholder with zero console errors.
+
+Chrome + real host API + temporary SD and simulated ISP events confirmed the panel before, during and after trigger; retained final text was ISP waiting 1/10, ISP connected, ISP done 10/10, ISP OK 10/10. Script/JSON were absent. This verifies event rendering against firmware LCD format strings, not physical screen synchronization or ten real downloads. Screenshot capture timed out after 5000ms; DOM output and native startup image retained locally. No target operation.
+
+Unsigned local package: MKLINK_BUILD_ROOT/artifacts/v036-local-isp-11a865cb/Mklink-AI-Probe-0.3.6-local-11a865cb-Setup.exe. SHA256 a7595484ef5dd0a01ce3edbc1761d83a19c4ed7c680b1d5231e83b98e0e3944d. PR48 remains open and unmerged.
