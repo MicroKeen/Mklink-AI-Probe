@@ -50,6 +50,21 @@ def _result(response: str, request_id: str) -> dict:
         raise ValueError("Invalid UART OTP result status")
     if code:
         reason = "Unsupported OTP operation or profile" if code == -12 else ISP_ERROR_TEXT.get(code, "Operation failed")
+        if result.get('operation') == 'program':
+            reported = result.get('reason')
+            reason = {
+                'rom_rejected': 'ROM rejected OTP programming',
+                'write_outcome_unknown': 'OTP write result is unknown',
+                'readback_failed': 'OTP was sent but ROM readback failed',
+                'readback_mismatch': 'OTP ROM readback does not match the desired value',
+                'expected_mismatch': 'OTP value changed since preview',
+                'hard_locked': 'OTP user word is permanently locked',
+            }.get(reported if isinstance(reported, str) else '', reason)
+            status = result.get('write_status')
+            if type(status) is int and 0 <= status <= 0xFFFFFFFF:
+                reason += f' (ROM write status {status})'
+            if result.get('write_attempted') is True:
+                reason += '; OTP may already have changed. Read again; do not retry programming'
         raise ValueError(f"UART OTP: {reason}")
     if _u32(result.get("rom_status")) != 0:
         raise ValueError("ROM rejected the OTP operation")
