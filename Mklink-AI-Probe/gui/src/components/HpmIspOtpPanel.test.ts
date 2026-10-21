@@ -1,58 +1,75 @@
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import HpmIspOtpPanel from './HpmIspOtpPanel.vue'
-
-describe('UART OTP settings', () => {
-  it('renders unknown states and allows a preflight, but no write without a prepared plan', async () => {
-    const wrapper = mount(HpmIspOtpPanel, { props: { plan: null, result: '', busy: false, disabled: false, error: '', snapshot: {
-      part_number: 'HPM5301', chip_id: 0x11705142, hard_lock: 0, read_at: '2026-10-21T16:30:00+08:00', source: 'rom',
-      words: [{ word: 69, current: 5, shadow: null, locked: null }, { word: 72, current: 1, shadow: 1, locked: true }],
-    } } })
-    expect(wrapper.text()).toContain('0x11705142')
-    expect(wrapper.text()).toContain('0x00000005')
-    expect(wrapper.findAll('tbody tr')[0].text()).toContain('未知')
-    expect(wrapper.findAll('tbody tr')[0].text()).toContain('—')
-    expect(wrapper.find('[data-testid="isp-otp-program"]').exists()).toBe(false)
-    await wrapper.get('[aria-label="UART OTP desired value"]').setValue('0x7')
-    await wrapper.get('[data-testid="isp-otp-plan"]').trigger('click')
-    expect(wrapper.emitted('prepare')).toEqual([[{ word: 69, expected: 5, desired: '0x7' }]])
-    expect(wrapper.emitted('program')).toBeUndefined()
-    await wrapper.get('[aria-label="UART OTP word"]').setValue(72)
-    expect(wrapper.get('[data-testid="isp-otp-plan"]').attributes('disabled')).toBeDefined()
-  })
-
-  it('blocks read while another operation owns the probe', async () => {
-    const wrapper = mount(HpmIspOtpPanel, { props: { plan: null, result: '', busy: false, disabled: true, error: '', snapshot: null } })
-    await wrapper.get('button').trigger('click')
+const snapshot = { part_number: 'HPM5301', chip_id: 0x11705142, hard_lock: 0, read_at: 'now', source: 'rom',
+  words: [{ word: 69, current: 5, shadow: null, locked: null }, { word: 70, current: 0, shadow: null, locked: null }, { word: 72, current: 1, shadow: 1, locked: true }] }
+const props = { plan: null, result: '', busy: false, disabled: false, error: '', snapshot }
+async function setup(extra = {}) {
+  const wrapper = mount(HpmIspOtpPanel, { props: { ...props, ...extra }, global: { stubs: { teleport: true } } })
+  await wrapper.get('[data-testid=isp-otp-open]').trigger('click'); await flushPromises()
+  return wrapper
+}
+async function add(wrapper: Awaited<ReturnType<typeof setup>>, word = 69, count = 2, value = '00000007,00000001') {
+  await wrapper.get('[data-testid=isp-otp-write-view]').trigger('click')
+  await wrapper.get('[data-testid=isp-otp-add]').trigger('click')
+  await wrapper.get('[aria-label="OTP start word"]').setValue(word)
+  await wrapper.get('[aria-label="OTP word count"]').setValue(count)
+  await wrapper.get('[aria-label="OTP word values"]').setValue(value)
+  await wrapper.get('form').trigger('submit')
+}
+describe('UART OTP manufacturing-tool layout', () => {
+  it('shows indexed grids and unknown locks without fabricating unavailable words', async () => {
+    const wrapper = await setup()
+    expect(wrapper.text()).toContain('OTP Readable Words')
+    expect(wrapper.get('[aria-label="Word 69"]').attributes('title')).toContain('锁定: 未知')
+    expect(wrapper.find('[aria-label="Word 68"]').exists()).toBe(false)
+    await wrapper.get('[aria-label="OTP columns"]').setValue('8')
+    expect(wrapper.findAll('.otp-grid thead th')).toHaveLength(9)
     expect(wrapper.emitted('read')).toBeUndefined()
+    wrapper.unmount()
+  })
+  it('opens with a read and prevents reads while the probe is occupied', async () => {
+    const wrapper = await setup({ snapshot: null, disabled: true })
+    expect(wrapper.emitted('read')).toBeUndefined()
+    expect(wrapper.get('[data-testid=isp-otp-read]').attributes('disabled')).toBeDefined()
     await wrapper.setProps({ disabled: false })
-    await wrapper.get('button').trigger('click')
+    await wrapper.get('[data-testid=isp-otp-read]').trigger('click')
     expect(wrapper.emitted('read')).toHaveLength(1)
-    await wrapper.setProps({ busy: true })
-    expect(wrapper.get('button').attributes('disabled')).toBeDefined()
+    wrapper.unmount()
   })
-
-  it('requires a new confirmation after a plan changes and consumes confirmation on submit', async () => {
-    const plan = { plan_id: 'one', word: 69, expected: 5, desired: 7, delta: 2, expires_in: 60, qualified: true, write_supported: true, before: 5, reason: null }
-    const wrapper = mount(HpmIspOtpPanel, { props: { plan, result: '', busy: false, disabled: false, error: '', snapshot: null } })
-    await wrapper.get('[data-testid="isp-otp-program"]').trigger('click')
+  it('prepares every changed word from the current snapshot', async () => {
+    const wrapper = await setup(); await add(wrapper)
+    await wrapper.get('[data-testid=isp-otp-plan]').trigger('click')
+    expect(wrapper.emitted('prepare')).toEqual([[[{ word: 69, expected: 5, desired: '0x00000007' }, { word: 70, expected: 0, desired: '0x00000001' }]]])
     expect(wrapper.emitted('program')).toBeUndefined()
-    await wrapper.get('[data-testid="isp-otp-confirm"]').setValue(true)
-    await wrapper.setProps({ plan: { ...plan, plan_id: 'two', desired: 15, delta: 10 } })
-    expect(wrapper.get('[data-testid="isp-otp-program"]').attributes('disabled')).toBeDefined()
-    await wrapper.get('[data-testid="isp-otp-confirm"]').setValue(true)
-    await wrapper.get('[data-testid="isp-otp-program"]').trigger('click')
-    expect(wrapper.emitted('program')).toEqual([['two']])
-    expect(wrapper.get('[data-testid="isp-otp-program"]').attributes('disabled')).toBeDefined()
+    await add(wrapper, 69, 1, '00000001')
+    expect(wrapper.get('[data-testid=isp-otp-plan]').attributes('disabled')).toBeDefined()
+    wrapper.unmount()
   })
-
-  it('shows an unqualified preflight without any write confirmation or button', () => {
-    const wrapper = mount(HpmIspOtpPanel, { props: { busy: false, disabled: false, snapshot: null, error: '', result: '', plan: {
-      plan_id: null, word: 69, expected: 0, desired: 1, delta: 1, expires_in: 0,
-      qualified: false, write_supported: false, before: 0, reason: 'read_semantics_and_locks_unknown',
-    } } })
-    expect(wrapper.get('[data-testid="isp-otp-unavailable"]').text()).toContain('暂不支持')
-    expect(wrapper.find('[data-testid="isp-otp-confirm"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="isp-otp-program"]').exists()).toBe(false)
+  it('blocks locked words, invalid ranges and missing snapshots', async () => {
+    const wrapper = await setup(); await add(wrapper, 72, 1, '00000003')
+    expect(wrapper.get('[data-testid=isp-otp-plan]').attributes('disabled')).toBeDefined()
+    await add(wrapper, 79, 2, '00000001,00000002')
+    expect(wrapper.get('[role=alert]').text()).toContain('69–79')
+    await wrapper.setProps({ snapshot: null })
+    expect(wrapper.get('[data-testid=isp-otp-plan]').attributes('disabled')).toBeDefined()
+    wrapper.unmount()
+  })
+  it('requires confirmation of differences, clears it on new plans, and drops submitted drafts', async () => {
+    const wrapper = await setup(); await add(wrapper)
+    const plan = { plan_id: 'one', qualified: true, write_supported: true, expires_in: 60,
+      changes: [{ plan_id: null, word: 69, expected: 5, desired: 7, delta: 2, qualified: true, write_supported: true, expires_in: 0, before: 5, reason: null }] }
+    await wrapper.setProps({ plan })
+    await wrapper.get('[data-testid=isp-otp-program]').trigger('click')
+    expect(wrapper.emitted('program')).toBeUndefined()
+    await wrapper.get('[data-testid=isp-otp-confirm]').setValue(true)
+    await wrapper.setProps({ plan: { ...plan, plan_id: 'two' } })
+    expect(wrapper.get('[data-testid=isp-otp-program]').attributes('disabled')).toBeDefined()
+    await wrapper.get('[data-testid=isp-otp-confirm]').setValue(true)
+    await wrapper.get('[data-testid=isp-otp-program]').trigger('click')
+    expect(wrapper.emitted('program')).toEqual([['two']])
+    expect(wrapper.get('[data-testid=isp-otp-remove-all]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid=isp-otp-program]').attributes('disabled')).toBeDefined()
+    wrapper.unmount()
   })
 })

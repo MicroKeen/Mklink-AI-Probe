@@ -25,3 +25,11 @@ export interface HpmIspOtpPlan {
   reason: string | null
   before: number | null
 }
+
+export interface HpmIspOtpBatchPlan {
+  plan_id: string | null
+  changes: HpmIspOtpPlan[]
+  qualified: boolean
+  write_supported: boolean
+  expires_in: number
+}

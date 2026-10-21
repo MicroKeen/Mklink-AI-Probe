@@ -6,7 +6,7 @@ from typing import Literal
 import uuid
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, ConfigDict, StrictBool, StrictInt, StrictStr
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr
 
 from .hpm_isp_otp_plans import OtpBinding, OtpPlans
 
@@ -28,6 +28,17 @@ class OtpProgramRequest(OtpReadRequest):
     confirm_irreversible: StrictBool
 
 
+class OtpBatchChange(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    word: StrictInt
+    expected: StrictInt
+    desired: StrictInt | StrictStr
+
+
+class OtpBatchPlanRequest(OtpReadRequest):
+    changes: list[OtpBatchChange] = Field(min_length=1, max_length=11)
+
+
 def create_hpm_isp_otp_router(resource_manager, device_provider):
     router = APIRouter(prefix="/api/device/configuration/hpm-isp-otp", tags=["device"])
     plans = OtpPlans()
@@ -45,6 +56,16 @@ def create_hpm_isp_otp_router(resource_manager, device_provider):
         if payload.confirm_irreversible is not True:
             raise HTTPException(422, 'Explicit irreversible OTP confirmation is required')
         return await execute(request, payload, 'program')
+
+    @router.post("/batch-plan")
+    async def batch_plan(request: Request, payload: OtpBatchPlanRequest):
+        return await execute(request, payload, 'batch-plan')
+
+    @router.post("/batch-program")
+    async def batch_program(request: Request, payload: OtpProgramRequest):
+        if payload.confirm_irreversible is not True:
+            raise HTTPException(422, 'Explicit irreversible OTP confirmation is required')
+        return await execute(request, payload, 'batch-program')
 
     async def execute(request, payload, action):
         from mklink import hpm_isp_otp
@@ -70,12 +91,21 @@ def create_hpm_isp_otp_router(resource_manager, device_provider):
         if action != 'read' and binding is None:
             raise HTTPException(409, 'Select a probe in the shared runtime before configuring UART OTP')
         try:
-            if action == 'program':
+            if action in ('program', 'batch-program'):
                 fixed = plans.consume(payload.plan_id, binding)
+                if ('changes' in fixed) != (action == 'batch-program'):
+                    raise ValueError('OTP plan type does not match the requested operation')
             else:
                 plans.clear()
                 if action == 'plan':
                     fixed = hpm_isp_otp.validate_change(payload.word, payload.expected, payload.desired)
+                elif action == 'batch-plan':
+                    fixed = {'changes': [hpm_isp_otp.validate_change(item.word, item.expected, item.desired)
+                                         for item in payload.changes]}
+                    words = [item['word'] for item in fixed['changes']]
+                    if len(words) != len(set(words)):
+                        raise ValueError('Duplicate OTP word in configuration')
+                    fixed['changes'].sort(key=lambda item: item['word'])
         except ValueError as error:
             raise HTTPException(422, str(error)) from error
 
@@ -103,6 +133,10 @@ def create_hpm_isp_otp_router(resource_manager, device_provider):
                     return hpm_isp_otp.read_snapshot(active, payload.part_number)
                 if action == 'plan':
                     return hpm_isp_otp.plan_change(active, payload.part_number, **fixed)
+                if action == 'batch-plan':
+                    return hpm_isp_otp.plan_changes(active, payload.part_number, fixed['changes'])
+                if action == 'batch-program':
+                    return hpm_isp_otp.program_changes(active, payload.part_number, fixed['changes'])
                 return hpm_isp_otp.program_change(active, payload.part_number, **fixed)
             finally:
                 if owned:
@@ -116,7 +150,7 @@ def create_hpm_isp_otp_router(resource_manager, device_provider):
             ], owner, preempt=False)
             # HTTP cancellation must not expose UART while the read is running.
             result = await settle(asyncio.create_task(asyncio.to_thread(worker)))
-            if action == 'plan':
+            if action in ('plan', 'batch-plan'):
                 if request.app.state.mklink_state.get('device_generation', 0) != binding.generation:
                     raise ValueError('Target selection changed during OTP preview; read again')
                 if result.get('qualified') is not True or result.get('write_supported') is not True:

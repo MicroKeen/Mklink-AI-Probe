@@ -1,5 +1,6 @@
 """Short-lived, single-use approvals for a fixed UART OTP change."""
 from dataclasses import dataclass
+from copy import deepcopy
 import secrets
 import time
 
@@ -26,7 +27,9 @@ class OtpPlans:
         # Only the newest reviewed change may remain executable in this runtime.
         self.clear()
         token = secrets.token_hex(24)
-        fixed = {key: change[key] for key in ('word', 'expected', 'desired', 'delta')}
+        keys = ('word', 'expected', 'desired', 'delta')
+        fixed = ({'changes': [{key: item[key] for key in keys} for item in change['changes']]}
+                 if 'changes' in change else {key: change[key] for key in keys})
         self.entries[token] = (self.clock() + self.TTL, binding, fixed)
         return dict(change, plan_id=token, expires_in=self.TTL)
 
@@ -37,4 +40,4 @@ class OtpPlans:
         expires, expected_binding, fixed = record
         if self.clock() >= expires or binding != expected_binding:
             raise ValueError('OTP plan expired or target selection changed; read again')
-        return fixed.copy()
+        return deepcopy(fixed)

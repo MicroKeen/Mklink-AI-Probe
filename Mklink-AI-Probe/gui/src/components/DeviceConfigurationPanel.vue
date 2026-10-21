@@ -2,7 +2,7 @@
 import { computed, onActivated, onBeforeUnmount, onDeactivated, ref, watch } from 'vue'
 import { API_BASE } from '../lib/runtimeEndpoint'
 import { tr } from '../composables/useLanguage'
-import HpmUserOtpPanel from './HpmUserOtpPanel.vue'
+import HpmDeviceConfiguration from './HpmDeviceConfiguration.vue'
 import { useMklinkApi } from '../composables/useMklinkApi'
 
 const { deviceStatus } = useMklinkApi()
@@ -110,7 +110,7 @@ onBeforeUnmount(cancel)
   <div class="configuration-panel" data-testid="device-configuration">
     <details>
     <summary class="configuration-heading">
-      <strong>{{ tr('选项字节 / OTP 配置', 'Option Bytes / OTP') }}</strong>
+      <strong>{{ configuration?.kind === 'otp' || /^HPM/i.test(partNumber) ? tr('HPM OTP 配置', 'HPM OTP Configuration') : tr('选项字节配置', 'Option Bytes Configuration') }}</strong>
     </summary>
       <button class="btn" data-testid="configuration-read" :disabled="busy || !configuration?.read_supported" @click="load(true)">
         {{ busy ? tr('加载中…', 'Loading…') : tr('读取配置', 'Read Configuration') }}
@@ -119,11 +119,8 @@ onBeforeUnmount(cancel)
     <p v-if="error" class="configuration-error" role="alert">{{ error }}</p>
     <template v-if="configuration">
       <p>{{ configuration.reason }}</p>
-      <div v-if="configuration.kind === 'otp'" class="configuration-help" data-testid="otp-reading-help">
-        <strong>{{ tr('先读懂，再配置', 'Read before configuring') }}</strong>
-        <p>{{ tr('熔丝值：永久保存的配置。影子值：当前寄存器中的副本；不一致时先检查复位和保护状态，不要重复烧写。— 表示尚未读到有效值，不是0。', 'Fuse: permanent configuration. Shadow: its current register copy. If they differ, check reset and protection before any further programming. — means no valid reading, not zero.') }}</p>
-        <p>{{ tr('上方安全字段只读；可配置的用户数据和永久写保护在下方。换芯片或重新连接后，请重新读取。', 'Security fields above are read-only. Configure user data and permanent write protection below. Read again after reconnecting or replacing the chip.') }}</p>
-      </div>
+      <HpmDeviceConfiguration v-if="configuration.kind === 'otp'" :part-number="partNumber" :model="model" :fields="configuration.fields" :read-at="configuration.read_at" />
+      <template v-else>
       <p v-if="configuration.read_at" data-testid="configuration-timestamp">{{ tr('读取快照', 'Snapshot') }} · {{ configuration.read_at }}</p>
       <div v-if="configuration.fields.length" class="configuration-table">
         <table>
@@ -142,7 +139,7 @@ onBeforeUnmount(cancel)
           </tr></tbody>
         </table>
       </div>
-      <HpmUserOtpPanel v-if="configuration.kind === 'otp' && model === 'V4'" :part-number="partNumber" :model="model" />
+      </template>
       <p v-if="configuration.kind === 'option_bytes' && configuration.read_supported" data-testid="configuration-plan">{{ tr('生成脚本的动作顺序：', 'Generated script sequence: ') }}{{ plan }}</p>
     </template>
     </details>
