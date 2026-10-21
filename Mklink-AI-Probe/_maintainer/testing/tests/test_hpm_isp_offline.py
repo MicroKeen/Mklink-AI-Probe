@@ -23,7 +23,7 @@ def payload():
 
 
 @pytest.mark.parametrize("change", [
-    {"model": "V3"}, {"target_part": "STM32F103RE"}, {"target_part": "HPM6750"},
+    {"model": "V3"}, {"model": "V2"}, {"target_part": "STM32F103RE"},
     {"board": "hpm5301evklite"}, {"hpm_flash_cfg": [1, 2, 3, 0xF3000000]},
     {"programming_protocol": "guess"}, {"erase_all_before_download": True},
     {"unlock_before_download": True}, {"lock_after_download": True},
@@ -71,8 +71,10 @@ def test_default_baud_is_2m():
     assert parse_offline_config(payload()).hpm_isp.baud_rate == 2000000
 
 
-def test_profile_capacity_allows_offset_images_without_user_capacity(tmp_path):
+@pytest.mark.parametrize("part", ["HPM5301", "HPM5300", "HPM5E31", "HPM6280", "HPM6E80", "HPM6750", "HPM6880", "HPM6P81"])
+def test_profile_capacity_allows_offset_images_without_user_capacity(tmp_path, part):
     data = payload()
+    data["target_part"] = part
     data["hpm_isp"] = {}
     data["firmwares"].append({"id": "second", "file_name": "app-2.bin", "format": "bin",
                               "base_address": "0x80010400", "upload_index": 1})

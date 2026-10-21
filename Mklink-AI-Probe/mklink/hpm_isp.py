@@ -72,8 +72,9 @@ def parse_config(raw: object) -> HpmIspConfig:
     if "flash_size" in raw:
         flash_size_value = raw["flash_size"]
     else:
-        # Use the same HPM5301 memory map as the rest of the application.
-        # This is a profile default, not a measurement of an attached board.
+        # Retain the existing 2 MiB default when opening other HPM targets for
+        # testing. This is not a measurement of the selected chip or board;
+        # callers can supply flash_size for their board's external NOR.
         from mklink.profiles import load_mcu_profiles
         flash = next(region for region in load_mcu_profiles()["hpm5301"]["regions"]
                      if region["name"] == "flash")
@@ -85,7 +86,7 @@ def parse_config(raw: object) -> HpmIspConfig:
     if flash_base + flash_size > 0x100000000:
         raise ValueError("ISP Flash range exceeds the 32-bit address space")
     if address != 0x200 or memory_id != 0x10000 or flash_base != 0x80000000:
-        raise ValueError("HPM5301 profile requires RAM 0x200, memory ID 0x10000, Flash base 0x80000000")
+        raise ValueError("HPM USART ISP profile requires RAM 0x200, memory ID 0x10000, Flash base 0x80000000")
     rearm = raw.get("rearm_mode", "isp_reconnect")
     if rearm != "isp_reconnect":
         raise ValueError("Unsupported ISP rearm mode")

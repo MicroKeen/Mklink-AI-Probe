@@ -212,8 +212,6 @@ def parse_offline_config(
     if protocol == "hpm_rom_isp_uart":
         if not hpm_target or model != "V4":
             raise OfflineDownloadError("USART ISP requires an HPM target and HPMLINK V4 firmware")
-        if not re.fullmatch(r"HPM5301[A-Z0-9]*", target_part.upper()):
-            raise OfflineDownloadError("USART ISP currently supports the HPM5301 profile")
         if hpm_user_otp or option_bytes:
             raise OfflineDownloadError("USART ISP does not support OTP or option-byte operations")
         if payload.get("board") or payload.get("hpm_flash_cfg"):

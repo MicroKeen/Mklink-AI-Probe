@@ -1019,7 +1019,7 @@ onBeforeUnmount(() => {
         <label v-if="hpmMode" class="setting-row"><span>{{ tr('下载协议', 'Programming protocol') }}</span>
           <select v-model="programmingProtocol" class="form-select" data-testid="offline-protocol">
             <option value="debug">JTAG · ROM API</option>
-            <option value="hpm_rom_isp_uart" :disabled="model !== 'V4' || !targetPart.toUpperCase().startsWith('HPM5301')">USART ISP · HPM5301</option>
+            <option value="hpm_rom_isp_uart" :disabled="model !== 'V4'">USART ISP</option>
           </select>
         </label>
         <HpmIspSettings v-if="ispMode" v-model="ispConfig" :count="automaticCount" />
