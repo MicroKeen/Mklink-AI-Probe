@@ -130,6 +130,15 @@ def validate_images(config, paths) -> None:
 SCRIPT_MARKER = "# MKLINK_HPM_ISP_V1 "
 CAPABILITY_COMMAND = 'print("MKLINK_HPM_ISP_API", hpm.isp_supported())'
 
+# hpm_isp_wire.h return codes. Keep screen text short; machine result events
+# retain the numeric code independently of the generated script's output.
+ISP_ERROR_TEXT = {
+    -1: "Invalid settings", -2: "UART I/O error", -3: "timeout",
+    -4: "Invalid UART frame", -5: "CRC mismatch", -6: "ROM aborted transfer",
+    -7: "ROM rejected command", -8: "Cancelled", -9: "Device busy",
+    -10: "BIN file error", -11: "BIN address conflict", -12: "Baud not supported",
+}
+
 
 def require_capability(response: str) -> None:
     if not re.search(r"(?m)^\s*MKLINK_HPM_ISP_API\s+1\s*$", response):
@@ -155,16 +164,28 @@ def generate_script(config) -> str:
         # on V4, so root paths must not hard-code a drive number.
         path_lines.append(f'        path{index} = {json.dumps("/" + image.file_name)}')
         program_args.extend((f"path{index}", str(image.base_address)))
+    # Emit simple branches supported by the embedded interpreter, without
+    # requiring dict lookup or a new firmware helper for error reporting.
+    error_lines = []
+    for index, (code, message) in enumerate(ISP_ERROR_TEXT.items()):
+        error_lines.extend([
+            f"        {'if' if index == 0 else 'elif'} rc == {code}:",
+            f"            print(isp_label, {json.dumps(message)})",
+        ])
     return "\n".join([
         SCRIPT_MARKER + json.dumps({"job_id": job_id, "total": config.auto_download_count}, separators=(",", ":")),
         "import hpm",
         "if hpm.isp_supported() == 1:",
+        '    isp_label = "USART ISP config:"',
         f"    rc = hpm.isp_config({', '.join(map(str, args))})",
         "    if rc == 0:",
+        '        isp_label = "USART ISP"',
         *path_lines,
         f"        rc = hpm.isp_program({', '.join(program_args)})",
         "    if rc != 0:",
-        '        print("USART ISP failed:", rc)',
+        *error_lines,
+        "        else:",
+        '            print(isp_label, "Unknown ISP error")',
         "else:",
         '    print("Upgrade HPMLINK firmware: USART ISP API v1 required")',
         "",

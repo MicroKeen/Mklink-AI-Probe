@@ -72,6 +72,41 @@ def test_default_baud_is_2m():
     assert parse_offline_config(payload()).hpm_isp.baud_rate == 2000000
 
 
+@pytest.mark.parametrize('stage', ['config', 'program'])
+@pytest.mark.parametrize(('code', 'reason'), [
+    (-1, 'Invalid settings'), (-2, 'UART I/O error'), (-3, 'timeout'),
+    (-4, 'Invalid UART frame'), (-5, 'CRC mismatch'), (-6, 'ROM aborted transfer'),
+    (-7, 'ROM rejected command'), (-8, 'Cancelled'), (-9, 'Device busy'),
+    (-10, 'BIN file error'), (-11, 'BIN address conflict'), (-12, 'Baud not supported'),
+    (-999, 'Unknown ISP error'),
+])
+def test_script_explains_failures_without_bare_codes_or_retry(monkeypatch, capsys, stage, code, reason):
+    calls = []
+    def configure(*args):
+        calls.append('config')
+        return code if stage == 'config' else 0
+    def program(*args):
+        calls.append('program')
+        return code
+    monkeypatch.setitem(sys.modules, 'hpm', SimpleNamespace(
+        isp_supported=lambda: 1, isp_config=configure, isp_program=program))
+    script = generate_offline_script(parse_offline_config(payload()))
+    namespace = {}
+    exec(compile(script, '<isp-error>', 'exec'), namespace)
+    label = 'USART ISP config:' if stage == 'config' else 'USART ISP'
+    assert capsys.readouterr().out == f'{label} {reason}\n'
+    assert namespace['rc'] == code  # Reporting never converts failure into success.
+    assert calls == (['config'] if stage == 'config' else ['config', 'program'])
+    assert max(len(line.encode()) for line in script.splitlines()) < 512
+
+
+def test_successful_script_does_not_print_an_error(monkeypatch, capsys):
+    monkeypatch.setitem(sys.modules, 'hpm', SimpleNamespace(
+        isp_supported=lambda: 1, isp_config=lambda *a: 0, isp_program=lambda *a: 0))
+    exec(generate_offline_script(parse_offline_config(payload())), {})
+    assert capsys.readouterr().out == ''
+
+
 @pytest.mark.parametrize("part", ["HPM5301", "HPM5300", "HPM5E31", "HPM6280", "HPM6E80", "HPM6750", "HPM6880", "HPM6P81"])
 def test_profile_capacity_allows_offset_images_without_user_capacity(tmp_path, part):
     data = payload()
