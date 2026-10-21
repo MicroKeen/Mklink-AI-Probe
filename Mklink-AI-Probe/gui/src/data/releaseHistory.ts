@@ -10,23 +10,17 @@ export interface ReleaseHistoryEntry {
 export const releaseHistory: ReleaseHistoryEntry[] = [
   {
     version: '0.3.6', date: '2026-10-21',
-    summary: '新增 HPM USART ISP 脱机烧录',
-    summaryEn: 'Add HPM USART ISP offline programming',
+    summary: '新增 ISP 烧录，优化下载设置',
+    summaryEn: 'Add ISP programming and simplify setup',
     changes: [
-      'HPM5301 支持通过 HPMLINK V4 独立 UART 执行 ROM ISP 脱机烧录。',
-      '提供 115200、1M、2M、5M、10M 五档波特率，默认 2M，自动保存所选档位。',
-      '支持多个 BIN 按地址排序，部署前检查文件范围、重叠和擦除扇区。',
-      'ISP 写入地址默认 0x80000400，自动采用芯片 Flash 配置，同名固件自动区分，精简部署结果提示。',
-      '可设置自动烧录次数、完成蜂鸣以及软件、硬件或断电复位。',
-      '显示握手、烧录进度及最终任务结果，结果未知时阻止重复触发。',
+      '新增 HPM5301 串口 ISP 脱机烧录，支持多固件和多档速率。',
+      '修复自定义地址部署，简化下载设置与结果提示。',
+      '断电复位可选 1.8V、3.3V、5V，默认 3.3V。',
     ],
     changesEn: [
-      'Program HPM5301 through ROM ISP using the independent UART of HPMLINK V4.',
-      'Choose 115200, 1M, 2M, 5M or 10M baud; default to 2M and remember the selected rate.',
-      'Sort multiple BIN images by address and validate ranges, overlaps and erase sectors before deployment.',
-      'Default ISP images to 0x80000400, use the chip Flash profile, distinguish duplicate names and simplify deployment status.',
-      'Configure automatic cycles, completion beeps, and software, hardware or power-cycle resets.',
-      'Show handshake, programming progress and final task results; prevent retriggering an unknown result.',
+      'Add HPM5301 UART ISP offline programming with multiple images and baud rates.',
+      'Fix deployment at custom addresses and simplify setup and status messages.',
+      'Choose 1.8V, 3.3V or 5V for power-cycle reset; default to 3.3V.',
     ],
   },
   {

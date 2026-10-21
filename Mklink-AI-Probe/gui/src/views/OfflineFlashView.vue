@@ -847,6 +847,13 @@ async function queryDeployment(deploymentError?: unknown): Promise<void> {
 }
 
 async function triggerOffline(): Promise<void> {
+  if (ispMode.value && ispConfig.value.completion.reset === 'power_cycle') {
+    const voltage = Number(ispConfig.value.completion.restore_voltage_mv) / 1000
+    if (!await confirmRisk(tr(
+      `烧录完成后将断电并恢复 ${voltage}V。请确认目标板支持此电压。继续执行？`,
+      `After programming, power will cycle and return to ${voltage}V. Confirm the target supports this voltage. Continue?`,
+    ))) return
+  }
   operationBusy.value = true
   clearError()
   triggerLines.value = []
