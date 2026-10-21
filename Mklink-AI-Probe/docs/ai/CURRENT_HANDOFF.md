@@ -4,12 +4,12 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-21T12:16:56+08:00`
+- 更新时间：`2026-10-21T13:36:44+08:00`
 - 分支：`codex/hpm-isp-deployment-ux`
-- HEAD：`UART复位源e87ba2a5、Web128dee19、验收1b9264dc。最新组合源3e3ce078、Web1c9f9e25；精确PR48头以GitHub为准。`
+- HEAD：`多轮默认重连源84b3eb41、Web7c9c5cc4、验收78e88e79及后续退出记录。最新组合源ffe24d17、Webe20b01a6；精确PR48头以GitHub为准。`
 - 远端 HEAD：`PR47已合并main bec395c3；PR48修复待审，任务分支已推送；PR46仍独立。`
 - 工作树：唯一工作区E:/software/HPM5300/Mklink-AI-Probe；源码子目录Mklink-AI-Probe。当前codex/hpm-isp-deployment-ux，组合包源另存codex/v036-isp-ux-local。
-- 当前任务：UART ISP去除硬件复位，主动复位只留软件和断电；不复位默认保留。断电动作ID仍3，后端拒绝hardware。73Python/46GUI、TS/Vite、Chrome菜单和电压显示、提取包冻结验证通过。组合3e3ce078已打包，管理员覆盖正等待UAC，尚未完成安装验证；原142ee62e为最后验证安装。PR48不合并。
+- 当前任务：移除UART ISP多轮确认勾选、提示及前后端限制；次数10可直接预览部署。触发时隐藏脚本预览和原始回显，保留状态结果及unknown防重放。75Python/46GUI、TS/Vite、Chrome临时SD全流程通过。组合ffe24d17已管理员覆盖，安装载荷/冻结/原生/Web和正常退出验证通过。PR48待审不合并。
 - 状态：`implementation_complete`
 
 ## 里程碑
@@ -23,7 +23,7 @@
 
 ## 验证证据
 
-- **0.3.6 ISP部署界面修复**：最新e87ba2a5：73Python、46GUI、TS/Vite通过。Chrome HPM6E00 ISP无硬件选项，软件隐藏电源设置、断电默认3.3V/200ms，零控制台错；截图CDP超时。组合3e3ce078提取包199源/40Web、冻结MCP/SVD/HTTP、无宿主Python及退出通过。覆盖等待UAC，安装后验证未完成；未操作目标。历史证据见v036-isp-deployment-ux.md。
+- **0.3.6 ISP部署界面修复**：最新84b3eb41：75Python、46GUI、TS/Vite通过；Chrome次数10预览、临时SD部署和模拟触发成功，脚本隐藏、零控制台错；截图CDP超时。组合ffe24d17覆盖退出0，199源/40Web/四载荷、冻结MCP/SVD/HTTP无宿主Python及原生/Web、正常退出释放端口通过。未操作真实目标。详见v036-isp-deployment-ux.md。
 - **HPM USART ISP 联合实现**：0.3.6：996 GUI通过；Python全量4993通过/2可选跳过，1插件版本清单失败已修复，17相关复验通过。本地组合0673490b：496 Python、1002 GUI、TS/Vite/NSIS通过；199源文件/40Web资源一致、冻结CLI/MCP/SVD/HTTP及无宿主Python通过。原生0.3.6更新说明与5M恢复通过；双BIN实际部署烧录code0/ROM0/1/1，正常退出释放。用户豁免管理员安装，现有安装哈希不变。最终证据见hpm-rom-uart-isp-handoff.md与PR47。
 - **0.3.6 RTT与SuperWatch日志**：1669348b/PR46：SuperWatch222 Python、138 GUI、边界/记忆59通过；原生目录弹出/取消通过，完整确认链曾被QMCapture遮挡。真实manager预先记录首样本由DumpMemory夹具验证。RTT5bd50041：376通过/1跳过、扩展266（重叠）、GUI85及Chrome零解析/多通道通过。2b3d5528三个CI通过；用户授权本地NSIS覆盖成功，198 Python/40 Web/四载荷一致，冻结CLI/SVD/MCP/HTTP、无宿主Python及退出检查通过。原生/Chrome显示新构建且后台正常。未绑定探针recording/start仍409身份保护，连接后记录待用户测。详见三份v036报告；未硬件/发布。
 - **0.3.5正式发布**：Python全量4926通过/2跳过/1旧Skill断言失败，修正后相关68通过；GUI94文件985通过和生产构建通过。最终源2f474f60 Windows实装198Python/40Web/四载荷、全局Skill2605文件、冻结CLI/MCP/Web与原生退出通过；SiteAgent实际包2项通过。原生CI39116320413三平台资格/归档digest通过，5签名、双GitHub17附件匿名hash、3索引与真实Gitee Skill回退通过。安装后F103八路RTT连续及各256B下行、UART109条连续及256B下行、5034行按需记录通过。文件选择器超时边界及未解清单见v035-release-handoff.md。
@@ -48,12 +48,12 @@
 ## 真机环境
 
 - **state**：本次仅上位机部署修复及覆盖安装验证，没有再次烧录或更改目标电压。模拟SD部署不作为硬件验收；此前0673490b的5M双BIN硬件证据仍独立保留。
-- **installer**：管理员安装豁免已撤销。新组合3e3ce078已打包并启动管理员覆盖，等待Windows UAC；检查artifacts/v036-local-isp-3e3ce078/install-result.json再续，勿重复启动。原142ee62e为最后已验证安装，新包未完成实装资格。保留RTT/SuperWatch；全局Skill未改。
+- **installer**：当前0.3.6组合ffe24d17管理员覆盖退出0，安装资格及原生/Web通过，正常退出释放。包在artifacts/v036-local-isp-ffe24d17。此前3e3ce078的UAC于13:06完成，已被本包替代，无待处理安装。保留RTT/SuperWatch；全局Skill未改。
 - **backups**：0.3.4正式包/安装/渠道/Skill/HIL在MKLINK_BUILD_ROOT/artifacts/v034-official，相邻v034-official-native保存完整原生CI ZIP；0.3.5本机包见上述构建根。原Git根.build/artifacts/v033-official、v032-official及用户备份保持；清理前快照/删除清单在构建根reports/v034-cleanup-*.json、v034-deleted-branches.json、v034-memory-before-cleanup.json。不能再把F盘仅视为可删缓存。
 
 ## 下一动作
 
-1. 等待用户点击UAC后确认3e3ce078覆盖结果，切组合分支进行源/载荷/冻结运行和安装UI验证；原生退出检查。包在artifacts/v036-local-isp-3e3ce078，安装进程仍等待，勿重复启动。用户测试其他HPM实物，旧SD脚本需重新部署。PR48待审、PR46独立；无合并授权。
+1. 用户测试当前组合ffe24d17的多轮ISP及其他HPM实物；修改次数后重新部署，旧SD脚本不自动改写。PR48待审、PR46独立；无合并授权，不自动接管硬件。
 2. 收集两位 RTT 客户的上位机/下载器固件版本、目标 ELF/芯片及 IDE 占用，用启动阶段耗时和 MUX 请求身份复核。历史 unknown 操作不得重放；原始 CDC/F405/受限 AI/GD32 仍待现场闭环。
 3. 继续排查 30MHz 并行目标读错/Flash 偶发 status5，区分固件目标访问与主机队列；本次低负载 F103 结果不关闭该限制，需要固件改动另开会话。
 4. 保持Gitee真实Skill回退：0.3.5已验证；Windows超过100MB被拒使用GitHub链接，其余平台仅GitHub。保留唯一发布/验收证据和Skill备份，联接run仅人工处理，不强删。
@@ -72,7 +72,7 @@
 
 ## 延续协议
 
-- 读取AGENTS及v036-isp-deployment-ux.md。当前PR48任务分支；组合源3e3ce078另存codex/v036-isp-ux-local。3e3ce078管理员覆盖等待UAC，检查现存安装进程/结果，勿重复启动；上次142ee62e覆盖已验收。
+- 读取AGENTS及v036-isp-deployment-ux.md。当前PR48任务分支；组合ffe24d17在codex/v036-isp-ux-local，已覆盖验收并正常退出，无待处理UAC。
 - V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。
 - CDC 995根因仅保留待排查。恢复只允许同身份CDC故障5秒内；超时不自动接回或新建AI会话，主动断开立即生效，不重放未知写入。测试实例已经全部释放；见v035-transport-recovery.md，不寻找旧现场窗口。
 - 客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。

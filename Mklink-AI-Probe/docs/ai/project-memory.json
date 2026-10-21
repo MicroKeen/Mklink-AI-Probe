@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-21T12:16:56+08:00",
+  "updated_at": "2026-10-21T13:36:44+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/hpm-isp-deployment-ux",
-    "head": "UART复位源e87ba2a5、Web128dee19、验收1b9264dc。最新组合源3e3ce078、Web1c9f9e25；精确PR48头以GitHub为准。",
+    "head": "多轮默认重连源84b3eb41、Web7c9c5cc4、验收78e88e79及后续退出记录。最新组合源ffe24d17、Webe20b01a6；精确PR48头以GitHub为准。",
     "remote_head": "PR47已合并main bec395c3；PR48修复待审，任务分支已推送；PR46仍独立。",
     "working_tree": "唯一工作区E:/software/HPM5300/Mklink-AI-Probe；源码子目录Mklink-AI-Probe。当前codex/hpm-isp-deployment-ux，组合包源另存codex/v036-isp-ux-local。"
   },
@@ -14,7 +14,7 @@
   },
   "current_session": {
     "status": "implementation_complete",
-    "current_task": "UART ISP去除硬件复位，主动复位只留软件和断电；不复位默认保留。断电动作ID仍3，后端拒绝hardware。73Python/46GUI、TS/Vite、Chrome菜单和电压显示、提取包冻结验证通过。组合3e3ce078已打包，管理员覆盖正等待UAC，尚未完成安装验证；原142ee62e为最后验证安装。PR48不合并。"
+    "current_task": "移除UART ISP多轮确认勾选、提示及前后端限制；次数10可直接预览部署。触发时隐藏脚本预览和原始回显，保留状态结果及unknown防重放。75Python/46GUI、TS/Vite、Chrome临时SD全流程通过。组合ffe24d17已管理员覆盖，安装载荷/冻结/原生/Web和正常退出验证通过。PR48待审不合并。"
   },
   "milestones": [
     {
@@ -51,7 +51,7 @@
   "verification": [
     {
       "area": "0.3.6 ISP部署界面修复",
-      "result": "最新e87ba2a5：73Python、46GUI、TS/Vite通过。Chrome HPM6E00 ISP无硬件选项，软件隐藏电源设置、断电默认3.3V/200ms，零控制台错；截图CDP超时。组合3e3ce078提取包199源/40Web、冻结MCP/SVD/HTTP、无宿主Python及退出通过。覆盖等待UAC，安装后验证未完成；未操作目标。历史证据见v036-isp-deployment-ux.md。"
+      "result": "最新84b3eb41：75Python、46GUI、TS/Vite通过；Chrome次数10预览、临时SD部署和模拟触发成功，脚本隐藏、零控制台错；截图CDP超时。组合ffe24d17覆盖退出0，199源/40Web/四载荷、冻结MCP/SVD/HTTP无宿主Python及原生/Web、正常退出释放端口通过。未操作真实目标。详见v036-isp-deployment-ux.md。"
     },
     {
       "area": "HPM USART ISP 联合实现",
@@ -96,7 +96,7 @@
   ],
   "hardware": {
     "state": "本次仅上位机部署修复及覆盖安装验证，没有再次烧录或更改目标电压。模拟SD部署不作为硬件验收；此前0673490b的5M双BIN硬件证据仍独立保留。",
-    "installer": "管理员安装豁免已撤销。新组合3e3ce078已打包并启动管理员覆盖，等待Windows UAC；检查artifacts/v036-local-isp-3e3ce078/install-result.json再续，勿重复启动。原142ee62e为最后已验证安装，新包未完成实装资格。保留RTT/SuperWatch；全局Skill未改。",
+    "installer": "当前0.3.6组合ffe24d17管理员覆盖退出0，安装资格及原生/Web通过，正常退出释放。包在artifacts/v036-local-isp-ffe24d17。此前3e3ce078的UAC于13:06完成，已被本包替代，无待处理安装。保留RTT/SuperWatch；全局Skill未改。",
     "backups": "0.3.4正式包/安装/渠道/Skill/HIL在MKLINK_BUILD_ROOT/artifacts/v034-official，相邻v034-official-native保存完整原生CI ZIP；0.3.5本机包见上述构建根。原Git根.build/artifacts/v033-official、v032-official及用户备份保持；清理前快照/删除清单在构建根reports/v034-cleanup-*.json、v034-deleted-branches.json、v034-memory-before-cleanup.json。不能再把F盘仅视为可删缓存。"
   },
   "known_limits": [
@@ -110,14 +110,14 @@
     "nRF54L15 GUI保护闭环、全部物理擦除/拔插/休眠/断电场景、电源外部精度校准未全部认证。VCC每次改动必须确认具体电压，HPM已锁定OTP不得重放。 已知无可靠扇区表的26个FLM禁用扇区操作；重叠算法需要匹配Bank模式。 HPM5301组18/19永久锁定的历史状态及用户字先写/组锁最后、全部固件独立校验后才写OTP等边界见docs/ai/hpm-offline-otp-handoff.md；接手重新确认芯片，其他型号不继承验收。"
   ],
   "next_actions": [
-    "等待用户点击UAC后确认3e3ce078覆盖结果，切组合分支进行源/载荷/冻结运行和安装UI验证；原生退出检查。包在artifacts/v036-local-isp-3e3ce078，安装进程仍等待，勿重复启动。用户测试其他HPM实物，旧SD脚本需重新部署。PR48待审、PR46独立；无合并授权。",
+    "用户测试当前组合ffe24d17的多轮ISP及其他HPM实物；修改次数后重新部署，旧SD脚本不自动改写。PR48待审、PR46独立；无合并授权，不自动接管硬件。",
     "收集两位 RTT 客户的上位机/下载器固件版本、目标 ELF/芯片及 IDE 占用，用启动阶段耗时和 MUX 请求身份复核。历史 unknown 操作不得重放；原始 CDC/F405/受限 AI/GD32 仍待现场闭环。",
     "继续排查 30MHz 并行目标读错/Flash 偶发 status5，区分固件目标访问与主机队列；本次低负载 F103 结果不关闭该限制，需要固件改动另开会话。",
     "保持Gitee真实Skill回退：0.3.5已验证；Windows超过100MB被拒使用GitHub链接，其余平台仅GitHub。保留唯一发布/验收证据和Skill备份，联接run仅人工处理，不强删。",
     "收集 Mac/Linux USB/MSC 和原地升级反馈、外置 Flash 多算法实物验证；完整 SES/芯片/拔插断电组合仍待补充。供电每次确认具体电压，长期验证仍暂停。"
   ],
   "continuation_protocol": [
-    "读取AGENTS及v036-isp-deployment-ux.md。当前PR48任务分支；组合源3e3ce078另存codex/v036-isp-ux-local。3e3ce078管理员覆盖等待UAC，检查现存安装进程/结果，勿重复启动；上次142ee62e覆盖已验收。",
+    "读取AGENTS及v036-isp-deployment-ux.md。当前PR48任务分支；组合ffe24d17在codex/v036-isp-ux-local，已覆盖验收并正常退出，无待处理UAC。",
     "V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。",
     "CDC 995根因仅保留待排查。恢复只允许同身份CDC故障5秒内；超时不自动接回或新建AI会话，主动断开立即生效，不重放未知写入。测试实例已经全部释放；见v035-transport-recovery.md，不寻找旧现场窗口。",
     "客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。",
