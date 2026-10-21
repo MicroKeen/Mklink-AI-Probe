@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-21T22:33:00.910147+08:00`
+- 更新时间：`2026-10-21T22:54:07.663133+08:00`
 - 分支：`codex/hpm-isp-deployment-ux`
 - HEAD：`共享离线工作区源c59a6f30、型号目录2f681cad、Web92122d33；安装报告64698b09。`
 - 远端 HEAD：`PR48功能源与Web已推送；组合包源a2599b21、安装报告087672a7已推送。`
 - 工作树：唯一工作区E:/software/HPM5300/Mklink-AI-Probe，源码子目录Mklink-AI-Probe；当前codex/hpm-isp-deployment-ux。已安装组合源在codex/v036-isp-ux-local。
-- 当前任务：共享左侧下载器/芯片/下载类型，右侧镜像和HPM OTP/ARM选项字独立页签已完成；官方8组HPM系列128字、字段/模板/CSV和预检写入已接入。组合0.3.6源a2599b21于2026-10-21 22:29管理员覆盖exit0，解包/实装资格通过，原生窗口和安装后网页通过，原生PID51068保留给用户测试。下载器配套固件3d96dbb未刷入，物理OTP/锁/VCC均未操作，新区域真机读写未验收。
-- 状态：`offline_workspace_installed_waiting_user_test`
+- 当前任务：共享脱机工作区和8系列OTP已安装0.3.6组合a2599b21；本轮按用户要求升级配套下载器3d96dbb，安装版真实读取HPM5301全部128字成功。用户具体批准Word69 0→1后重新预检、单次batch-program及完整回读通过，只有该字变化，保护锁/生命周期不变。串口释放，原生窗口保留；其他型号/区域及多轮换板未据此验收。
+- 状态：`otp_profile_physical_read_write_verified`
 
 ## 里程碑
 
@@ -23,7 +23,7 @@
 
 ## 验证证据
 
-- **共享脱机工作区与八系列UART OTP**：源c59a6f30/2f681cad：179相关Python、209GUI、36目录测试；组合373Python、TS/Vite通过。IAB生产Web+真实API模拟CDC验证跨HPM系列/ARM、模板预览/模拟写入、旧确认失效，零控制台错误；固件生产C read/plan/program交叉解析通过。组合a2599b21管理员覆盖exit0；解包及实装204Python/41Web/四载荷一致，冻结CLI/MCP/SVD/HTTP/无宿主Python/正常退出通过。原生启动和IAB安装后网页通过，原生窗口留给用户；未关闭本轮用户窗口。报告v036-offline-workspace.md。此前73fccac2安装见v036-uart-otp-settings.md。
+- **共享脱机工作区与八系列UART OTP**：源c59a6f30/2f681cad：179相关Python、209GUI、36目录测试；组合373Python、TS/Vite通过。IAB生产Web+真实API模拟CDC验证跨HPM系列/ARM、模板预览/模拟写入、旧确认失效，零控制台错误；固件生产C read/plan/program交叉解析通过。组合a2599b21管理员覆盖exit0；解包及实装204Python/41Web/四载荷一致，冻结CLI/MCP/SVD/HTTP/无宿主Python/正常退出通过。原生启动和IAB安装后网页通过，原生窗口留给用户；未关闭本轮用户窗口。报告v036-offline-workspace.md。此前73fccac2安装见v036-uart-otp-settings.md。 2026-10-21按用户授权升级3d96dbb，安装版profile_v1实机128字全读、Word69 0→1预检/真实单次写入/全读回通过，唯一该字变化；锁/VCC未改。
 - **0.3.6 ISP错误原因**：2506e93c/9b056ed1：102Python、72GUI，扩展90GUI通过；修正App旧哈希断言a8250c25，CI重跑以GitHub为准。Chrome临时SD和模拟固件显示timeout/Cancelled，脚本/JSON过滤。组合9c80b12a管理员覆盖退出0，199Python/40Web/四载荷、冻结CLI/MCP/SVD/HTTP、原生/浏览器与退出零进程/监听/端点通过。见v036-isp-readable-errors.md。
 - **0.3.6 串口锁异常清理**：源dad4bf69；213通过，含15新增故障回归、真实测试进程强退后串口/HIL重取及活锁保护。三个源CI通过。组合b3878ee5管理员覆盖退出0，199Python/40Web/四载荷一致，冻结CLI/MCP/SVD/HTTP、原生/Chrome与正常退出零进程/端口/端点通过。无目标硬件操作；见v036-serial-lock-cleanup.md。
 - **0.3.6 ISP部署界面修复**：最新5df9569e：54GUI及TS/Vite通过，Chrome临时SD模拟触发显示屏幕同款waiting/connected/done/OK并保留输出框，脚本/JSON不显示、零控制台错；截图超时。组合11a865cb覆盖退出0、199源/40Web/四载荷、冻结MCP/SVD/HTTP无宿主Python、原生/Web及正常退出释放通过。未实测物理屏幕同步；详见v036-isp-deployment-ux.md。
@@ -47,16 +47,16 @@
 
 ## 真机环境
 
-- **state**：用户已打开最新版上位机查看，当前不关闭其测试。固件62d4bd6 v2 read/plan已通过，无实际OTP写/永久锁/VCC；模拟测试后台已正常退出。多轮物理换板未新增验收。
-- **installer**：当前实装0.3.6组合73fccac2/Web f1695c2c，2026-10-21 20:42:52+08管理员覆盖exit0。F:/MKLink-Build/artifacts/v036-local-isp-73fccac2；SHA256 20c211f4628e21e73131054b66eb55082e3f1c390d792f14f324f4d8e17c703e。202 Python/41 Web/四载荷、冻结CLI/SVD/MCP/HTTP及正常退出通过；全局Skill未改，无公开发布。
+- **state**：配套3d96dbb已按用户要求刷入V4，安装版profile_v1读取HPM5301全部128字通过；用户批准Word69 0→1后实写与全读回成功，其余127字/锁/生命周期不变。当前Word69=1，不重放旧expected0写请求。测试串口释放，原生窗口保留；VCC未改，未烧目标镜像，多轮换板未新增验证。
+- **installer**：实装0.3.6组合a2599b21，2026-10-21 22:29:24+08管理员覆盖exit0；包SHA256 acaefde89ebb199a7c9958aadbe696c518d0f95497de7d4d7c64a93c0e460384。204Python/41Web/四载荷、冻结资格及原生/Web通过。全局Skill未改，无公开发布。
 - **backups**：0.3.4正式包/安装/渠道/Skill/HIL在MKLINK_BUILD_ROOT/artifacts/v034-official，相邻v034-official-native保存完整原生CI ZIP；0.3.5本机包见上述构建根。原Git根.build/artifacts/v033-official、v032-official及用户备份保持；清理前快照/删除清单在构建根reports/v034-cleanup-*.json、v034-deleted-branches.json、v034-memory-before-cleanup.json。不能再把F盘仅视为可删缓存。
 
 ## 下一动作
 
 1. 等待用户测试新共享离线界面。已安装源a2599b21，安装包F:/MKLink-Build/artifacts/v036-local-isp-a2599b21，SHA256 acaefde89ebb199a7c9958aadbe696c518d0f95497de7d4d7c64a93c0e460384；安装时间22:29:24+08，exit0，安装验证完成。原生PID51068使用隔离installed-native-checks环境并保持打开；后续操作先核对占用。
-2. 继续HPM扩展固件联调交给用户指定会话01a15977-1aef-7430-aa11-6e39725f0465。PR9固件3d96dbb模拟/SES通过，尚未升级物理下载器；现有62d4bd6仅用户69–79可兼容。新系列/安全/密钥区真实烧写未验收，不能执行未获具体批准的永久OTP/锁/VCC操作。
+2. 配套固件3d96dbb已刷入并通过HPM5301实机完整读取/用户Word69单比特写入验收。固件后续仍交指定会话01a15977-1aef-7430-aa11-6e39725f0465。当前Word69=1；不得重放旧写请求，其他字/锁/VCC修改须各自明确授权。其他系列/安全/密钥区未实写验收。
 3. PR48保持待人工审核；不合并、不签名、不发布。包已包含既有RTT/SuperWatch修复。管理员覆盖安装授权继续有效；本次UAC重试后安装完成。
-4. 历史待办：按用户参考图重构脱机页共享左栏及镜像/OTP工作区；核实官方多系列OTP定义，协调固件会话01a15977-1aef-7430-aa11-6e39725f0465能力合同后扩展。完成相关测试与真实浏览器后再组合打包。实际OTP写须用户指定Word和目标值；PR48/49/46未授权合并或发布。；收集两位 RTT 客户的上位机/下载器固件版本、目标 ELF/芯片及 IDE 占用，用启动阶段耗时和 MUX 请求身份复核。历史 unknown 操作不得重放；原始 CDC/F405/受限 AI/GD32 仍待现场闭环。
+4. 共享左栏/独立镜像与OTP页签、官方8系列模板及配套固件联调已完成，等待用户界面与多轮烧录测试反馈。收集两位RTT客户的上位机/固件版本、目标ELF/芯片及IDE占用，用启动耗时和MUX请求身份复核。历史unknown操作不得重放，原始CDC/F405/受限AI/GD32仍待现场闭环。
 5. 其他维护边界：继续排查 30MHz 并行目标读错/Flash 偶发 status5，区分固件目标访问与主机队列；本次低负载 F103 结果不关闭该限制，需要固件改动另开会话。；保持Gitee真实Skill回退：0.3.5已验证；Windows超过100MB被拒使用GitHub链接，其余平台仅GitHub。保留唯一发布/验收证据和Skill备份，联接run仅人工处理，不强删。；收集 Mac/Linux USB/MSC 和原地升级反馈、外置 Flash 多算法实物验证；完整 SES/芯片/拔插断电组合仍待补充。供电每次确认具体电压，长期验证仍暂停。
 
 ## 已知限制
@@ -68,11 +68,11 @@
 - V3无屏幕、不支持HPM；V3.6.4原生Keil先运行再采集、暂停/单步/继续/退出和OpenOCD均通过。V4最终无诊断固件完整SES矩阵未完成。
 - 后台最后会话释放约5秒租约，加排空和退出开销；不保证硬实时5秒。每个GUI客户端一个后台，同窗口切换固定PID/端口；一个物理探针在任一时刻仅由一个后台独占。打开已有URL的额外页面共享当前后台并跟随明确切换；独立操作应启动新客户端。
 - 跨物理主机Agent、真实Modbus从站及全部芯片组合未完整认证，模拟测试不能替代实体。0.3.5最终独立Windows Site Agent已重新构建并通过两项实际包资格检查；macOS Intel/ARM和Linux原生CI包构建/冻结运行/载荷检查通过，但实体USB/MSC、原生GUI、签名升级未认证。Mac仅ad-hoc无Developer ID公证，Windows无Authenticode。Web真实文件句柄选择/跟踪未完成；新候选原生日志文件选择、回放和PNG已通过。
-- nRF54L15 GUI保护闭环、全部物理擦除/拔插/休眠/断电场景、电源外部精度校准未全部认证。VCC每次改动必须确认具体电压，HPM已锁定OTP不得重放。 已知无可靠扇区表的26个FLM禁用扇区操作；重叠算法需要匹配Bank模式。 HPM5301组18/19永久锁定的历史状态及用户字先写/组锁最后、全部固件独立校验后才写OTP等边界见docs/ai/hpm-offline-otp-handoff.md；接手重新确认芯片，其他型号不继承验收。 UART OTP已实现ROM write-memory APIv2，独立熔丝/影子/临时锁读语义仍未知并如实显示；以ROM写入状态及回读为准。固件实机只读预检qualified=true，真实烧写尚未验收；未指定永久OTP字和值，不自主烧写。多Word顺序执行不可回滚。CSV原生选择器自动化未完成。
+- nRF54L15 GUI保护闭环、全部物理擦除/拔插/休眠/断电场景、电源外部精度校准未全部认证。VCC每次改动必须确认具体电压，HPM已锁定OTP不得重放。 已知无可靠扇区表的26个FLM禁用扇区操作；重叠算法需要匹配Bank模式。 HPM5301组18/19永久锁定的历史状态及用户字先写/组锁最后、全部固件独立校验后才写OTP等边界见docs/ai/hpm-offline-otp-handoff.md；接手重新确认芯片，其他型号不继承验收。 UART OTP已实现ROM write-memory APIv2，独立熔丝/影子/临时锁读语义仍未知并如实显示；以ROM写入状态及回读为准。配套3d96dbb已实机验证HPM5301全部128字读取和用户批准的Word69 0→1单次写入回读；其余型号/区域未实写，新数据须具体授权。多Word顺序执行不可回滚。CSV原生选择器自动化未完成。
 
 ## 延续协议
 
-- 继续完成官方式HPM OTP界面安装验收；源8ebc017c/Web19eb1329，组合分支da502fb2待cherry-pick本次界面。旧预检阻塞结论已废弃，直接write-memory v2固件62d4bd6已刷且read/plan实机通过。当前实装24d9d020只读未变。用户授权覆盖安装持续有效；禁止实际OTP自主写、旧请求重放、VCC变更或合并发布。
+- 当前已安装0.3.6组合a2599b21，共享离线工作区与8系列OTP配置完成；下载器3d96dbb已升级，HPM5301 profile_v1全部128字读取及经用户批准的Word69 0→1单次写入/全回读通过。Word69现为1，禁止重放旧请求。测试结束串口释放、原生窗口保留。新字/保护锁/VCC须具体授权；不合并发布。
 - V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。
 - CDC 995根因仅保留待排查。恢复只允许同身份CDC故障5秒内；超时不自动接回或新建AI会话，主动断开立即生效，不重放未知写入。测试实例已经全部释放；见v035-transport-recovery.md，不寻找旧现场窗口。
 - 客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。
