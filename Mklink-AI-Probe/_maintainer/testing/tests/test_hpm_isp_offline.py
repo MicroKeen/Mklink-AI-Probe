@@ -71,6 +71,32 @@ def test_default_baud_is_2m():
     assert parse_offline_config(payload()).hpm_isp.baud_rate == 2000000
 
 
+def test_profile_capacity_allows_offset_images_without_user_capacity(tmp_path):
+    data = payload()
+    data["hpm_isp"] = {}
+    data["firmwares"].append({"id": "second", "file_name": "app-2.bin", "format": "bin",
+                              "base_address": "0x80010400", "upload_index": 1})
+    config = parse_offline_config(data)
+    assert config.hpm_isp.flash_size == 0x200000
+    script = generate_offline_script(config)
+    assert 'path0, 2147484672, path1, 2147550208' in script
+    first, second = tmp_path / "first.bin", tmp_path / "second.bin"
+    first.write_bytes(b"first")
+    second.write_bytes(b"second")
+    disk = tmp_path / "disk"
+    disk.mkdir()
+    deploy_offline_bundle(config, disk, firmware_sources={"app": first, "second": second},
+                          algorithm_sources={}, isp_capability_response="MKLINK_HPM_ISP_API 1")
+    assert (disk / "app.bin").read_bytes() == b"first"
+    assert (disk / "app-2.bin").read_bytes() == b"second"
+    # The default memory map must still reject an image crossing its upper bound.
+    data["firmwares"][1]["base_address"] = "0x801FFFFF"
+    with pytest.raises(OfflineDownloadError, match="outside configured Flash"):
+        deploy_offline_bundle(parse_offline_config(data), disk,
+                              firmware_sources={"app": first, "second": second},
+                              algorithm_sources={}, isp_capability_response="MKLINK_HPM_ISP_API 1")
+
+
 @pytest.mark.parametrize("baud", [115200, 1000000, 2000000, 5000000, 10000000])
 def test_script_calls_contract_and_does_not_access_debug(monkeypatch, baud):
     data = payload()

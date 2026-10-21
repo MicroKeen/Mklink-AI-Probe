@@ -11,10 +11,7 @@ defineProps<{ count: number }>()
     <legend>USART ISP</legend>
     <p>{{ tr('使用下载器独立 UART 接口，目标须进入 ROM ISP。仅支持启用 HPMLINK 的 V4 固件。', 'Use the probe’s dedicated UART port with the target in ROM ISP. Requires HPMLINK-enabled V4 firmware.') }}</p>
     <label>{{ tr('串口速率（baud，8N1）', 'Baud rate (8N1)') }}<select v-model.number="config.baud_rate" data-testid="isp-baud-rate"><option v-for="rate in HPM_ISP_BAUD_RATES" :key="rate" :value="rate">{{ rate === 115200 ? '115200' : `${rate / 1000000}M (${rate})` }} · 8N1</option></select></label>
-    <p>{{ tr('档位依据下载器 UART 时钟分频设置，目标 ROM 是否支持以执行结果为准。配置不支持时停止，不自动回退。', 'Rates match the probe UART clock dividers. Target ROM support is checked during execution. Unsupported configurations stop without automatic fallback.') }}</p>
-    <p v-if="config.baud_rate !== 115200">{{ tr('高速下载中断后，如无法重新握手，请给目标重新上电恢复默认速率。', 'If an interrupted high-speed transfer prevents reconnection, power-cycle the target to restore its default baud rate.') }}</p>
     <label>{{ tr('握手超时（ms）', 'Handshake timeout (ms)') }}<input v-model.number="config.connect_timeout_ms" type="number" min="1000" max="3600000" /></label>
-    <label>{{ tr('Flash 容量（字节）', 'Flash size (bytes)') }}<input v-model="config.flash_size" data-testid="isp-flash-size" :placeholder="tr('按板卡填写，如 0x800000', 'Enter board capacity, e.g. 0x800000')" required /></label>
     <p>{{ tr('握手成功后自动烧录。多轮模式等待目标退出 ISP，再重新握手；无法识别是否换了芯片。', 'Programming starts after a successful handshake. Subsequent rounds wait for the target to leave ISP and reconnect; this does not identify a different chip.') }}</p>
     <label v-if="count > 1" class="check">
       <input v-model="config.confirm_reconnect_cycles" type="checkbox" data-testid="isp-confirm-cycles" />

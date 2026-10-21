@@ -522,6 +522,7 @@ describe('OfflineFlashView', () => {
       source_token: null, origin: 'MCU profile', available: true, on_probe: true,
     }])
     offlineMocks.deploy.mockRejectedValueOnce(new Error('response lost'))
+    offlineMocks.deploymentStatus.mockRejectedValueOnce(new Error('connection unavailable'))
     const wrapper = mount(OfflineFlashView)
     await flushPromises()
     await wrapper.get('[data-testid="offline-model"]').setValue('V4')
@@ -538,25 +539,29 @@ describe('OfflineFlashView', () => {
     await flushPromises()
 
     expect(offlineMocks.deploy).toHaveBeenCalledOnce()
-    const id = wrapper.get<HTMLInputElement>('[data-testid="deployment-request-id"]').element.value
-    expect(id).toBe(offlineMocks.deploy.mock.calls[0][3])
+    const id = offlineMocks.deploy.mock.calls[0][3]
+    expect(id).toBeTruthy()
+    expect(wrapper.find('[data-testid="deployment-request-id"]').exists()).toBe(false)
+    expect(offlineMocks.deploymentStatus).toHaveBeenCalledExactlyOnceWith(id)
     expect(wrapper.get('[data-testid="offline-deploy"]').attributes('disabled')).toBeDefined()
     offlineMocks.deploymentStatus.mockResolvedValue({ state: 'succeeded', result: {
       status: 'deployed', model: 'V4', script_name: 'factory-download.py', files: ['app.hex'],
     } })
     await wrapper.get('[data-testid="deployment-query"]').trigger('click')
     await flushPromises()
-    expect(offlineMocks.deploymentStatus).toHaveBeenCalledExactlyOnceWith(id)
+    expect(offlineMocks.deploymentStatus).toHaveBeenLastCalledWith(id)
     expect(offlineMocks.deploy).toHaveBeenCalledOnce()
-    expect(wrapper.text()).toContain('已查询到部署成功记录')
+    expect(wrapper.text()).toContain('部署成功')
+    expect(wrapper.find('[data-testid="deployment-query"]').exists()).toBe(false)
+    offlineMocks.deploy.mockRejectedValueOnce(new Error('response lost again'))
     offlineMocks.deploymentStatus.mockRejectedValueOnce(new Error('No retained deployment'))
-    await wrapper.get('[data-testid="deployment-request-id"]').setValue('missing-request')
-    await wrapper.get('[data-testid="deployment-query"]').trigger('click')
+    await wrapper.get('[data-testid="offline-deploy"]').trigger('click')
     await flushPromises()
-    expect(wrapper.text()).toContain('No retained deployment')
-    expect(wrapper.text()).not.toContain('已查询到部署成功记录')
+    expect(wrapper.text()).toContain('response lost again')
+    expect(wrapper.text()).not.toContain('部署成功')
     expect(wrapper.get('[data-testid="offline-deploy"]').attributes('disabled')).toBeDefined()
-    expect(offlineMocks.deploy).toHaveBeenCalledOnce()
+    expect(offlineMocks.deploy).toHaveBeenCalledTimes(2)
+    wrapper.unmount()
   })
 
   it('confirms security choices immediately and sends the validated V3 recipe', async () => {
@@ -714,7 +719,7 @@ describe('OfflineFlashView', () => {
     expect(wrapper.get('.trigger-log').text()).toContain('program finished')
   })
 
-  it('configures USART ISP separately and requires explicit BIN addresses, capacity and restore voltage', async () => {
+  it('previews and deploys offset BIN addresses with profile capacity and explicit restore voltage', async () => {
     onlineMocks.searchTargets.mockResolvedValue([{
       part_number: 'HPM5301xEGx', vendor: 'HPMicro', installed: true, source: 'builtin',
     }])
@@ -732,19 +737,22 @@ describe('OfflineFlashView', () => {
     expect(wrapper.findAll('[data-testid="isp-baud-rate"] option').map(option => option.attributes('value')))
       .toEqual(['115200', '1000000', '2000000', '5000000', '10000000'])
     await wrapper.get('[data-testid="isp-baud-rate"]').setValue('10000000')
-    expect(wrapper.text()).toContain('给目标重新上电恢复默认速率')
+    expect(wrapper.text()).not.toContain('给目标重新上电恢复默认速率')
+    expect(wrapper.text()).not.toContain('档位依据下载器')
+    expect(wrapper.find('[data-testid="isp-flash-size"]').exists()).toBe(false)
     const input = wrapper.get('input[type="file"][multiple]')
     Object.defineProperty(input.element, 'files', {
-      configurable: true, value: [new File(['a'], 'first.bin'), new File(['b'], 'second.bin')],
+      configurable: true, value: [new File(['a'], 'MicroLink.bin'), new File(['b'], 'MicroLink.bin')],
     })
     await input.trigger('change')
     const rows = wrapper.findAll('[data-testid="offline-firmware-row"]')
     expect(rows).toHaveLength(2)
-    expect(rows[0].get<HTMLInputElement>('input[placeholder="BIN 基地址"]').element.value).toBe('')
-    await rows[0].get('input[placeholder="BIN 基地址"]').setValue('0x80000400')
-    await rows[1].get('input[placeholder="BIN 基地址"]').setValue('0x80001000')
-    expect(wrapper.get('[data-testid="offline-deploy"]').attributes('disabled')).toBeDefined()
-    await wrapper.get('[data-testid="isp-flash-size"]').setValue('0x800000')
+    expect(rows[0].get<HTMLInputElement>('input[placeholder="BIN 基地址"]').element.value).toBe('0x80000400')
+    await rows[1].get('input[placeholder="BIN 基地址"]').setValue('0x80010400')
+    expect(wrapper.get('[data-testid="offline-deploy"]').attributes('disabled')).toBeUndefined()
+    await wrapper.findAll('button').find(button => button.text() === '生成预览')!.trigger('click')
+    await flushPromises()
+    expect(offlineMocks.preview).toHaveBeenCalledOnce()
     await wrapper.get('[data-testid="isp-reset"]').setValue('power_cycle')
     expect(wrapper.get('[data-testid="offline-deploy"]').attributes('disabled')).toBeDefined()
     await wrapper.get('[data-testid="isp-voltage"]').setValue('3300')
@@ -757,13 +765,14 @@ describe('OfflineFlashView', () => {
     const config = offlineMocks.deploy.mock.calls[0][0]
     expect(config.programming_protocol).toBe('hpm_rom_isp_uart')
     expect(config.board).toBeNull()
-    expect(config.hpm_isp.flash_size).toBe('0x800000')
+    expect(config.hpm_isp.flash_size).toBeUndefined()
     expect(config.hpm_isp.baud_rate).toBe(10000000)
     expect(config.hpm_isp.nor_options).toEqual(['0xFCF90002', '0x6', '0x1000'])
     expect(config.hpm_isp.completion.restore_voltage_mv).toBe(3300)
     expect(config.auto_download_count).toBe(2)
     expect(config.hpm_isp.confirm_reconnect_cycles).toBe(true)
-    expect(config.firmwares.map((f: { base_address: string }) => f.base_address)).toEqual(['0x80000400', '0x80001000'])
+    expect(config.firmwares.map((f: { base_address: string }) => f.base_address)).toEqual(['0x80000400', '0x80010400'])
+    expect(config.firmwares.map((f: { file_name: string }) => f.file_name)).toEqual(['MicroLink.bin', 'MicroLink-2.bin'])
     let finish!: (value: { status: string; lines: string[] }) => void
     offlineMocks.trigger.mockImplementationOnce((_model, _name, onLine) => {
       onLine('HPM_ISP {"schema":1,"event":"connected"}')
