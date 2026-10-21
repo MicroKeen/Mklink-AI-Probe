@@ -1,20 +1,20 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-21T00:46:00+08:00",
+  "updated_at": "2026-10-21T09:51:35+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
-    "branch": "codex/hpm-usart-isp",
-    "head": "0.3.6 ISP功能源及版本修正fbac9e80；本地组合包源码0673490b、生产Web3eac4a6d。PR47最终检查/合并以GitHub为准。",
-    "remote_head": "microkeen/codex/hpm-usart-isp已推送；PR47用于本次授权集成。原codex/0.3.6-fixes/PR46独立保留，未合并。",
-    "working_tree": "唯一工作区E:/software/HPM5300/Mklink-AI-Probe；源码子目录Mklink-AI-Probe。当前codex/hpm-usart-isp，不重建旧工作区。"
+    "branch": "codex/hpm-isp-deployment-ux",
+    "head": "修复源6f8fbe57、生产Web cf18053b、验收7f264d9f；本地组合源码c9157017/生产Web311127fb。精确PR头以PR48为准。",
+    "remote_head": "PR47已合并main bec395c3；PR48修复待审，任务分支已推送；PR46仍独立。",
+    "working_tree": "唯一工作区E:/software/HPM5300/Mklink-AI-Probe；源码子目录Mklink-AI-Probe。当前codex/hpm-isp-deployment-ux，组合包源另存codex/v036-isp-ux-local。"
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
     "status": "implementation_complete",
-    "current_task": "0.3.6 HPM USART ISP五档默认2M已完成；本地组合包0673490b保留既有RTT/SuperWatch修复，NSIS、冻结检查、原生版本信息及5M双BIN实机1/1成功。用户豁免管理员安装测试，现有安装未覆盖。按授权完成PR47精确头CI及main集成；PR46独立，不公开发布。"
+    "current_task": "修复ISP偏移地址预览/部署：默认0x80000400，容量自动采用HPM5301内置2MiB配置，同名BIN自动区分；删除指定说明/容量输入/请求ID，丢响应内部查询不重放。198相关Python、45定点GUI、组合全量1002GUI、构建及浏览器模拟SD部署通过。组合c9157017已管理员覆盖安装，冻结/生产Web预览/原生版本/正常退出通过。PR48待审，不沿用PR47合并授权；未发布或再次实机烧录。"
   },
   "milestones": [
     {
@@ -50,6 +50,10 @@
   ],
   "verification": [
     {
+      "area": "0.3.6 ISP部署界面修复",
+      "result": "6f8fbe57/PR48，组合c9157017：198 Python、45定点GUI、全量1002GUI、TS/Vite/NSIS通过。Chrome实际API+模拟SD完成同名双BIN在0x80000400/0x80010400预览部署，零控制台错；保留范围/重叠检查。管理员覆盖退出0，199源/40Web/四载荷匹配，冻结MCP/SVD/HTTP、安装原生版本与生产Web预览、退出资源释放通过。容量为现有2MiB配置非自动实测。见v036-isp-deployment-ux.md。"
+    },
+    {
       "area": "HPM USART ISP 联合实现",
       "result": "0.3.6：996 GUI通过；Python全量4993通过/2可选跳过，1插件版本清单失败已修复，17相关复验通过。本地组合0673490b：496 Python、1002 GUI、TS/Vite/NSIS通过；199源文件/40Web资源一致、冻结CLI/MCP/SVD/HTTP及无宿主Python通过。原生0.3.6更新说明与5M恢复通过；双BIN实际部署烧录code0/ROM0/1/1，正常退出释放。用户豁免管理员安装，现有安装哈希不变。最终证据见hpm-rom-uart-isp-handoff.md与PR47。"
     },
@@ -76,10 +80,6 @@
     {
       "area": "0.3.5 串口文本续行",
       "result": "100相关测试、TS/Vite通过；d9ac3a26 NSIS实装、196Python/40Web/四载荷一致，冻结CLI/SVD/MCP/HTTP通过；Skill 2d029f18的2603文件及CLI/SVD/MCP通过。Chrome实机周期文本完整，六段发送恢复三行，跨批次CRLF/UTF-8正确。原生导出49字节与输入逐字节一致。原生窗口正常关闭，全部MKLink进程、endpoint及8765/8766端口释放。2d029f18三个CI成功。详见v035-serial-lines.md。"
-    },
-    {
-      "area": "0.3.5 串口即时显示与 MSH 安装实测",
-      "result": "串口Worker/页面89、RTT页面/终端69、相关后端372通过，TS/Vite通过。NSIS提取/实装196Python/40Web、四载荷、Windows-only CLI/SVD/MCP/HTTP通过，Skill2603文件匹配。安装F103 ls三尾端15次与Chrome整条/逐键完整，CH1 256字节校验/120周期连续；UART115200下1000帧、38400下300帧序号CRC一致，两轮反向256字节一致。重新配置UART后首帧前各有一个额外字节单列保留；Chrome无换行7字节即时显示，最终导出文件恰好4f4b000a0dfeff共7字节；原生关闭后全部进程/endpoint及8765/8766释放。Skill/冻结CLI/MCP目标回显与UART累计校验一致。026b0bf3三CI通过。详见v035-serial-immediate.md。"
     }
   ],
   "decisions": [
@@ -95,8 +95,8 @@
     "编译完成不代表目标已下载：所有稳定文件变化（包括地址不变/仅时间戳）仅发待重载事件，不后台解析或应用。SuperWatch每次变化弹窗一次，稍后保留顶部醒目按钮。用户明确重新加载后才执行共享符号迁移和采集恢复；用户主动停止不恢复。"
   ],
   "hardware": {
-    "state": "本轮独占使用已授权HPM5301/HPMLINK，以解包0.3.6程序完成5M双BIN单轮烧录；无蜂鸣/无复位，最终1/1成功，程序正常退出并释放端口。固件五档波形证据由固件会话提供；RST电气与电压外部精度仍未验证。",
-    "installer": "用户授权2b3d5528本地未签名NSIS覆盖安装成功，版本号仍0.3.5；证据在MKLINK_BUILD_ROOT/artifacts/v036-local-2b3d5528。全局Skill仍正式2f474f60，未更新；正式包和Skill备份保留。",
+    "state": "本次仅上位机部署修复及覆盖安装验证，没有再次烧录或更改目标电压。模拟SD部署不作为硬件验收；此前0673490b的5M双BIN硬件证据仍独立保留。",
+    "installer": "2026-10-21用户恢复管理员安装授权；0673490b及最新c9157017均NSIS覆盖退出0。当前安装0.3.6/c915701711d1，199Python/40Web/四载荷、原生/生产Web/冻结运行/退出通过，证据在artifacts/v036-local-isp-c9157017。全局Skill未更新。",
     "backups": "0.3.4正式包/安装/渠道/Skill/HIL在MKLINK_BUILD_ROOT/artifacts/v034-official，相邻v034-official-native保存完整原生CI ZIP；0.3.5本机包见上述构建根。原Git根.build/artifacts/v033-official、v032-official及用户备份保持；清理前快照/删除清单在构建根reports/v034-cleanup-*.json、v034-deleted-branches.json、v034-memory-before-cleanup.json。不能再把F盘仅视为可删缓存。"
   },
   "known_limits": [
@@ -110,14 +110,14 @@
     "nRF54L15 GUI保护闭环、全部物理擦除/拔插/休眠/断电场景、电源外部精度校准未全部认证。VCC每次改动必须确认具体电压，HPM已锁定OTP不得重放。 已知无可靠扇区表的26个FLM禁用扇区操作；重叠算法需要匹配Bank模式。 HPM5301组18/19永久锁定的历史状态及用户字先写/组锁最后、全部固件独立校验后才写OTP等边界见docs/ai/hpm-offline-otp-handoff.md；接手重新确认芯片，其他型号不继承验收。"
   ],
   "next_actions": [
-    "核对PR47最终精确头CI并完成已授权main合并；若已合并，从main继续，勿重放实机任务。本地0.3.6组合NSIS与验收在artifacts/v036-local-isp-0673490b，用户明确豁免管理员安装，本机现有安装未覆盖。PR46独立。",
+    "从PR48继续审核ISP部署修复，尚未合并或发布；本机已安装组合c9157017保留RTT/SuperWatch。用户可直接测试。PR47已合并bec395c3，不重放硬件；PR46独立。新合并仍须明确授权及完整合并门禁。",
     "收集两位 RTT 客户的上位机/下载器固件版本、目标 ELF/芯片及 IDE 占用，用启动阶段耗时和 MUX 请求身份复核。历史 unknown 操作不得重放；原始 CDC/F405/受限 AI/GD32 仍待现场闭环。",
     "继续排查 30MHz 并行目标读错/Flash 偶发 status5，区分固件目标访问与主机队列；本次低负载 F103 结果不关闭该限制，需要固件改动另开会话。",
     "保持Gitee真实Skill回退：0.3.5已验证；Windows超过100MB被拒使用GitHub链接，其余平台仅GitHub。保留唯一发布/验收证据和Skill备份，联接run仅人工处理，不强删。",
     "收集 Mac/Linux USB/MSC 和原地升级反馈、外置 Flash 多算法实物验证；完整 SES/芯片/拔插断电组合仍待补充。供电每次确认具体电压，长期验证仍暂停。"
   ],
   "continuation_protocol": [
-    "读取AGENTS、本交接及hpm-rom-uart-isp-handoff.md；当前HPM功能分支，原PR46保留在另一分支。固件会话串行负责硬件，当前会话只做上位机，不重复烧录或接管下载器。",
+    "读取AGENTS、本交接及v036-isp-deployment-ux.md。当前PR48任务分支；本地组合安装源在codex/v036-isp-ux-local。管理员安装豁免已撤销且覆盖成功，不再套用旧未安装结论。",
     "V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。",
     "CDC 995根因仅保留待排查。恢复只允许同身份CDC故障5秒内；超时不自动接回或新建AI会话，主动断开立即生效，不重放未知写入。测试实例已经全部释放；见v035-transport-recovery.md，不寻找旧现场窗口。",
     "客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。",
