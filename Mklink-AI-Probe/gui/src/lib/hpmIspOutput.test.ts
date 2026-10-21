@@ -6,6 +6,14 @@ const event = (name: string, values = {}) => 'HPM_ISP ' + JSON.stringify({
 })
 
 describe('ISP LCD output', () => {
+  it('shows OTP reasons matching the LCD instead of a misleading baud error', () => {
+    expect(hpmIspOutput([event('result', { code: -12, otp_reason: 'geometry_mismatch' }),
+      'ISP OTP: OTP layout unsupported', 'USART ISP Baud not supported']))
+      .toEqual(['ISP OTP: OTP layout unsupported'])
+    expect(hpmIspOutput([event('result', { code: -3, otp_reason: 'write_outcome_unknown' }),
+      'ISP OTP: Write uncertain; check OTP', 'Timeout', 'USART ISP timeout']))
+      .toEqual(['ISP OTP: Write uncertain; check OTP', 'Timeout'])
+  })
   it('keeps the completed round connected until firmware detects disconnect', () => {
     let state = hpmIspConnection('idle', event('waiting'))
     state = hpmIspConnection(state, event('connected'))
