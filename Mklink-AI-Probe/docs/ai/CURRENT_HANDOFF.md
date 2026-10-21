@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-21T15:07:46+08:00`
+- 更新时间：`2026-10-21T18:38:02.9667014+08:00`
 - 分支：`codex/hpm-isp-deployment-ux`
-- HEAD：`ISP错误文案源2506e93c、Web9b056ed1、旧版本断言修正a8250c25、验收2c6d86a0；本地组合安装源9c80b12a、Web1b6661df。精确PR48头以GitHub为准。`
-- 远端 HEAD：`PR47已合并main bec395c3；PR48 ISP UI与PR49锁清理待审，PR46独立保留。组合分支20952821已推送。`
+- HEAD：`UART只读OTP源b5e4f7ea、Web bb181a94；本地组合源24d9d020、Web7e7500c3。精确PR48头以GitHub为准。`
+- 远端 HEAD：`PR47已合并main bec395c3；PR48和PR49待审，PR46独立保留。本地组合7e7500c3已推送。`
 - 工作树：唯一工作区E:/software/HPM5300/Mklink-AI-Probe；源码子目录Mklink-AI-Probe。当前codex/hpm-isp-deployment-ux；组合包源codex/v036-isp-ux-local。
-- 当前任务：生成脚本将ISP -1至-12及未知码转明确英文原因，配置失败加config前缀，不重试/改返回值；UI兼容结构化事件、旧数字和新文本。102 Python、72 ISP GUI、扩展90 GUI（重叠）、TS/Vite与Chrome隔离模拟timeout/cancel通过。用户首次取消UAC后明确允许重试，组合9c80b12a覆盖及冻结/原生/Web/退出通过。保留锁和RTT/SuperWatch修复，未改固件/物理SD或目标；PR48待审。
-- 状态：`implementation_complete`
+- 当前任务：HPM5301/HPM5301XEGX UART只读OTP、复用JTAG表格、严格nonce/profile校验与取消持锁；ISP cycle_done保留连接直到disconnected。221Python/81GUI、TS/Vite/Chrome最终schema模拟及新组合NSIS冻结资格通过。固件由用户指定会话实现，ROM物理只读已验证，新API联调进行中。新包24d9d020覆盖安装等待Windows UAC，尚未完成；此前实际安装9c80b12a。
+- 状态：`in_progress`
 
 ## 里程碑
 
@@ -23,6 +23,7 @@
 
 ## 验证证据
 
+- **HPM5301 UART只读OTP与多轮状态**：b5e4f7ea/bb181a94：221Python、81GUI、TS/Vite、Chrome实际host路由+模拟CDC通过；无SD/BIN/JTAG读11字，锁/影子未知。组合24d9d020重复221/81并生成NSIS，冻结CLI/MCP/SVD/HTTP及退出通过。实机API及覆盖待完成；见v036-uart-otp-read.md。
 - **0.3.6 ISP错误原因**：2506e93c/9b056ed1：102Python、72GUI，扩展90GUI通过；修正App旧哈希断言a8250c25，CI重跑以GitHub为准。Chrome临时SD和模拟固件显示timeout/Cancelled，脚本/JSON过滤。组合9c80b12a管理员覆盖退出0，199Python/40Web/四载荷、冻结CLI/MCP/SVD/HTTP、原生/浏览器与退出零进程/监听/端点通过。见v036-isp-readable-errors.md。
 - **0.3.6 串口锁异常清理**：源dad4bf69；213通过，含15新增故障回归、真实测试进程强退后串口/HIL重取及活锁保护。三个源CI通过。组合b3878ee5管理员覆盖退出0，199Python/40Web/四载荷一致，冻结CLI/MCP/SVD/HTTP、原生/Chrome与正常退出零进程/端口/端点通过。无目标硬件操作；见v036-serial-lock-cleanup.md。
 - **0.3.6 ISP部署界面修复**：最新5df9569e：54GUI及TS/Vite通过，Chrome临时SD模拟触发显示屏幕同款waiting/connected/done/OK并保留输出框，脚本/JSON不显示、零控制台错；截图超时。组合11a865cb覆盖退出0、199源/40Web/四载荷、冻结MCP/SVD/HTTP无宿主Python、原生/Web及正常退出释放通过。未实测物理屏幕同步；详见v036-isp-deployment-ux.md。
@@ -30,7 +31,6 @@
 - **0.3.6 RTT与SuperWatch日志**：1669348b/PR46：SuperWatch222 Python、138 GUI、边界/记忆59通过；原生目录弹出/取消通过，完整确认链曾被QMCapture遮挡。真实manager预先记录首样本由DumpMemory夹具验证。RTT5bd50041：376通过/1跳过、扩展266（重叠）、GUI85及Chrome零解析/多通道通过。2b3d5528三个CI通过；用户授权本地NSIS覆盖成功，198 Python/40 Web/四载荷一致，冻结CLI/SVD/MCP/HTTP、无宿主Python及退出检查通过。原生/Chrome显示新构建且后台正常。未绑定探针recording/start仍409身份保护，连接后记录待用户测。详见三份v036报告；未硬件/发布。
 - **0.3.5正式发布**：Python全量4926通过/2跳过/1旧Skill断言失败，修正后相关68通过；GUI94文件985通过和生产构建通过。最终源2f474f60 Windows实装198Python/40Web/四载荷、全局Skill2605文件、冻结CLI/MCP/Web与原生退出通过；SiteAgent实际包2项通过。原生CI39116320413三平台资格/归档digest通过，5签名、双GitHub17附件匿名hash、3索引与真实Gitee Skill回退通过。安装后F103八路RTT连续及各256B下行、UART109条连续及256B下行、5034行按需记录通过。文件选择器超时边界及未解清单见v035-release-handoff.md。
 - **0.3.5 V2 RBL 自动升级**：V2独立索引双GitHub发布，旧UF2索引不变；用户回退后生产Web真实2.8→2.9升级。核心158/CLI相关127/V2专项29/GUI62及TS/Vite通过，组间重叠不相加。5be3dcf7 NSIS覆盖退出0，198Python/40Web/四载荷一致；Skill2605文件及CLI/SVD/MCP通过。安装Web、冻结/Skill实际MCP与CLI同版检查一致，F103 CPUID正确，已detach释放探针。原生正常关闭后进程/端点/端口全部释放；见v035-v2-rbl-update.md。
-- **0.3.5 五秒意外断链恢复**：925cadc8/生产Web cb1223d2：最终恢复/重连49项、共享运行时133项及GUI54项通过。NSIS实装退出0，197Python/40Web/四载荷一致，Skill2604文件及CLI/SVD/MCP通过。V3.6.5/F103快拔插约3.1秒恢复RTT/SuperWatch、原冻结MCP会话CPUID正确；超时约5秒进入expired，晚插回保持断开，旧MCP不重附着。显式Web连接后采集保持停止，Skill CLI读数正确；用户关闭后进程/端点/端口释放。见v035-transport-recovery.md；旧995根因仍待排查。
 
 ## 架构决策
 
@@ -47,13 +47,13 @@
 
 ## 真机环境
 
-- **state**：本次仅上位机部署修复及覆盖安装验证，没有再次烧录或更改目标电压。模拟SD部署不作为硬件验收；此前0673490b的5M双BIN硬件证据仍独立保留。
-- **installer**：当前0.3.6组合11a865cb管理员覆盖退出0，安装资格及原生/Web常驻输出框通过，正常退出释放全部进程和8765/8766。包在artifacts/v036-local-isp-11a865cb。保留RTT/SuperWatch和多轮默认重连；全局Skill未改。
+- **state**：本会话未写OTP、锁位、VCC或目标Flash。用户指定固件会话负责候选固件升级和UART协议实测，正在通过新包冻结后台联调；不将模拟结果当硬件验收。
+- **installer**：此前已实装0.3.6组合9c80b12a。新24d9d020在F:/MKLink-Build/artifacts/v036-local-isp-24d9d020，SHA256 7ae3f0163959eaf8d9aa3b9ee845f2e5d9c4497bfcf642954865ba92ebb5ae54；冻结资格通过，管理员覆盖仍等待UAC。全局Skill未改。
 - **backups**：0.3.4正式包/安装/渠道/Skill/HIL在MKLINK_BUILD_ROOT/artifacts/v034-official，相邻v034-official-native保存完整原生CI ZIP；0.3.5本机包见上述构建根。原Git根.build/artifacts/v033-official、v032-official及用户备份保持；清理前快照/删除清单在构建根reports/v034-cleanup-*.json、v034-deleted-branches.json、v034-memory-before-cleanup.json。不能再把F盘仅视为可删缓存。
 
 ## 下一动作
 
-1. PR48 ISP UI、PR49锁修复与PR46 RTT/SuperWatch等待审阅/明确合并授权；最新0.3.6组合9c80b12a已覆盖安装。旧SD脚本一般须重新生成部署；当前物理SD脚本由固件会话单独修复，本会话未写。未授权公开发布。
+1. 完成24d9d020的Windows UAC覆盖、安装文件资格、新固件只读OTP联调；固件会话01a15977-1aef-7430-aa11-6e39725f0465负责物理设备。PR48/49/46待明确合并授权，不公开发布。
 2. 收集两位 RTT 客户的上位机/下载器固件版本、目标 ELF/芯片及 IDE 占用，用启动阶段耗时和 MUX 请求身份复核。历史 unknown 操作不得重放；原始 CDC/F405/受限 AI/GD32 仍待现场闭环。
 3. 继续排查 30MHz 并行目标读错/Flash 偶发 status5，区分固件目标访问与主机队列；本次低负载 F103 结果不关闭该限制，需要固件改动另开会话。
 4. 保持Gitee真实Skill回退：0.3.5已验证；Windows超过100MB被拒使用GitHub链接，其余平台仅GitHub。保留唯一发布/验收证据和Skill备份，联接run仅人工处理，不强删。
@@ -72,7 +72,7 @@
 
 ## 延续协议
 
-- 读取AGENTS、本交接和v036-isp-readable-errors.md；当前PR48，已安装组合9c80b12a包含PR49锁修复。新脚本输出原因，CDC数字结果保留；JSON缺少超时阶段时UI只显示通用timeout，不猜阶段。当前实体SD脚本由固件会话单独维护，不重复烧录或改SD。
+- 读取AGENTS和v036-uart-otp-read.md；源码PR48、候选安装包组合24d9d020。OTP只读HPM5301固定69..79，无JTAG回退/写入/锁定/电压。新包冻结后台18788用于联调，UAC尚待用户点确认；不能宣称新包已覆盖安装。固件会话单独负责物理SD和目标，不抢占硬件。
 - V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。
 - CDC 995根因仅保留待排查。恢复只允许同身份CDC故障5秒内；超时不自动接回或新建AI会话，主动断开立即生效，不重放未知写入。测试实例已经全部释放；见v035-transport-recovery.md，不寻找旧现场窗口。
 - 客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。
