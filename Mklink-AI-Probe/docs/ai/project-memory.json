@@ -1,20 +1,20 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-21T20:58:02.447297+08:00",
+  "updated_at": "2026-10-21T22:28:03.347986+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/hpm-isp-deployment-ux",
-    "head": "OTP 独立选项卡源935746c4/Web a8f14d95；开始共享左栏与多系列OTP扩展。",
-    "remote_head": "PR48 a8f14d95已推送且三项CI通过；本地组合73fccac2/Web f1695c2c已推送和安装。",
-    "working_tree": "唯一工作区E:/software/HPM5300/Mklink-AI-Probe；源码子目录Mklink-AI-Probe。当前codex/hpm-isp-deployment-ux；组合包源codex/v036-isp-ux-local。"
+    "head": "共享设备/镜像/OTP工作区源c59a6f30，目录补全2f681cad，Web92122d33；报告d4616b5d。",
+    "remote_head": "PR48源和Web已推送；本地组合包源a2599b21，报告15ffae31已推送。",
+    "working_tree": "唯一工作区E:/software/HPM5300/Mklink-AI-Probe，源码子目录Mklink-AI-Probe；当前任务分支，安装后验收须切codex/v036-isp-ux-local以核对完整组合源。"
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "offline_workspace_redesign",
-    "current_task": "用户已打开新上位机，要求左侧共享下载器/芯片/下载类型和对应参数，右侧镜像烧写/OTP独立页签，兼顾ARM与HPM；HPM OTP按官方工具扩展型号和功能，固件交由指定会话继续。尚未修改本轮代码。"
+    "status": "offline_workspace_package_waiting_uac",
+    "current_task": "已实现左侧共享下载器/芯片/下载类型，右侧镜像和HPM OTP/ARM选项字独立页签；HPM按官方8组系列开放128字、字段/模板/CSV和预检写入。组合0.3.6源a2599b21已打包并通过解包资格；管理员安装已发起，Windows consent仍等待用户点击是，未安装完成。安装进程exec session68679；结果文件F:/MKLink-Build/artifacts/v036-local-isp-a2599b21/install-result.json。用户无OTP写入/锁/供电授权，未操作物理设备；下载器扩展固件3d96dbb已由指定会话提交，未升级实机。"
   },
   "milestones": [
     {
@@ -49,6 +49,10 @@
     }
   ],
   "verification": [
+    {
+      "area": "共享脱机工作区与八系列UART OTP",
+      "result": "源c59a6f30/2f681cad：179相关Python、209GUI、36目录测试；组合373Python、TS/Vite通过。IAB生产Web+真实API模拟CDC验证页签、跨HPM系列和ARM、模板预览/模拟写入、旧确认失效，零控制台错误。固件生产C模拟JSON read/plan/program交叉解析通过。组合源a2599b21解包204Python/41Web一致，冻结CLI/MCP/SVD/HTTP/无宿主Python/正常退出通过；安装等待UAC。报告docs/verification/v036-offline-workspace.md。"
+    },
     {
       "area": "HPM5301 UART OTP读写及官方式界面",
       "result": "独立OTP页签源935746c4/Web a8f14d95：组合338 Python、194 GUI、TS/Vite通过；IAB生产页签切换作废令牌与模拟双字写入通过。组合源73fccac2/Web f1695c2c于2026-10-21 20:42管理员覆盖exit0；202 Python源/41 Web资源/四载荷与冻结CLI/SVD/MCP/HTTP和正常退出通过。实机固件62d4bd6 v2 read/plan通过，未program；用户已打开测试。原生CSV选择器未完成自动验收。详见v036-uart-otp-settings.md。"
@@ -110,6 +114,9 @@
     "nRF54L15 GUI保护闭环、全部物理擦除/拔插/休眠/断电场景、电源外部精度校准未全部认证。VCC每次改动必须确认具体电压，HPM已锁定OTP不得重放。 已知无可靠扇区表的26个FLM禁用扇区操作；重叠算法需要匹配Bank模式。 HPM5301组18/19永久锁定的历史状态及用户字先写/组锁最后、全部固件独立校验后才写OTP等边界见docs/ai/hpm-offline-otp-handoff.md；接手重新确认芯片，其他型号不继承验收。 UART OTP已实现ROM write-memory APIv2，独立熔丝/影子/临时锁读语义仍未知并如实显示；以ROM写入状态及回读为准。固件实机只读预检qualified=true，真实烧写尚未验收；未指定永久OTP字和值，不自主烧写。多Word顺序执行不可回滚。CSV原生选择器自动化未完成。"
   ],
   "next_actions": [
+    "等待本轮UAC结果；安装包F:/MKLink-Build/artifacts/v036-local-isp-a2599b21，SHA256 acaefde89ebb199a7c9958aadbe696c518d0f95497de7d4d7c64a93c0e460384。确认install-result.json exit0后切codex/v036-isp-ux-local，使用同包qualify-package.py installed经build_workspace执行；再验证已安装网页/原生启动。未收到确认不得声称已覆盖安装。",
+    "继续HPM扩展固件联调交给用户指定会话01a15977-1aef-7430-aa11-6e39725f0465。PR9固件3d96dbb模拟/SES通过，尚未升级物理下载器；现有62d4bd6仅用户69–79可兼容。新系列/安全/密钥区真实烧写未验收，不能执行未获具体批准的永久OTP/锁/VCC操作。",
+    "PR48保持待人工审核；不合并、不签名、不发布。包已包含既有RTT/SuperWatch修复。管理员覆盖安装授权继续有效，仅Windows权限窗口需用户操作。",
     "按用户参考图重构脱机页共享左栏及镜像/OTP工作区；核实官方多系列OTP定义，协调固件会话01a15977-1aef-7430-aa11-6e39725f0465能力合同后扩展。完成相关测试与真实浏览器后再组合打包。实际OTP写须用户指定Word和目标值；PR48/49/46未授权合并或发布。",
     "收集两位 RTT 客户的上位机/下载器固件版本、目标 ELF/芯片及 IDE 占用，用启动阶段耗时和 MUX 请求身份复核。历史 unknown 操作不得重放；原始 CDC/F405/受限 AI/GD32 仍待现场闭环。",
     "继续排查 30MHz 并行目标读错/Flash 偶发 status5，区分固件目标访问与主机队列；本次低负载 F103 结果不关闭该限制，需要固件改动另开会话。",
