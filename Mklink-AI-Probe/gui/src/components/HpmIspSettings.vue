@@ -50,7 +50,6 @@ async function updateVoltage(value: number, input: HTMLInputElement): Promise<vo
       <select v-model="config.completion.reset" data-testid="isp-reset" @change="config.completion.restore_voltage_mv = config.completion.reset === 'power_cycle' ? 3300 : null">
         <option value="none">{{ tr('不复位', 'No reset') }}</option>
         <option value="software">{{ tr('软件复位', 'Software reset') }}</option>
-        <option value="hardware">{{ tr('硬件复位', 'Hardware reset') }}</option>
         <option value="power_cycle">{{ tr('断电复位', 'Power-cycle reset') }}</option>
       </select>
     </label>
@@ -63,7 +62,7 @@ async function updateVoltage(value: number, input: HTMLInputElement): Promise<vo
         </label>
       </div>
     </div>
-    <label v-if="config.completion.reset === 'power_cycle' || config.completion.reset === 'hardware'">{{ tr('复位持续时间（ms）', 'Reset duration (ms)') }}<input v-model.number="config.completion.power_off_ms" type="number" min="10" max="5000" /></label>
+    <label v-if="config.completion.reset === 'power_cycle'">{{ tr('断电持续时间（ms）', 'Power-off duration (ms)') }}<input v-model.number="config.completion.power_off_ms" type="number" min="10" max="5000" /></label>
   </fieldset>
 </template>
 
