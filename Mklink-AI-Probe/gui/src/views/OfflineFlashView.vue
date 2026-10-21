@@ -2,6 +2,7 @@
 import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
 import { consumerTarget, saveConsumerTarget, TARGET_SELECTION_CHANGED, PACKS_CHANGED } from '../lib/targetSelection'
 import { selectDownloadProbe } from '../lib/downloadProbe'
+import { hpmOtpProfile } from '../lib/hpmOtpProfiles'
 import { hpmIspOutput, hpmIspConnection, type IspConnection } from '../lib/hpmIspOutput'
 import ConfirmationDialog from '../components/ConfirmationDialog.vue'
 import DeviceConfigurationPanel from '../components/DeviceConfigurationPanel.vue'
@@ -166,7 +167,7 @@ const scriptFieldName = computed({
 const hpmMode = computed(() => isHpmPart(targetPart.value))
 const ispMode = computed(() => hpmMode.value && programmingProtocol.value === 'hpm_rom_isp_uart')
 watch([targetPart, model], () => {
-  programmingProtocol.value = 'debug'
+  if (!hpmMode.value || model.value !== 'V4') programmingProtocol.value = 'debug'
   if (hpmMode.value) resetAfterDownload.value = true
 })
 watch(programmingProtocol, () => {
@@ -531,7 +532,6 @@ async function addTargetAlgorithms(target: TargetRecord): Promise<void> {
       algorithms.value = []
       hpmBoard.value = defaultHpmBoard(target.part_number)
       firmwares.value.forEach(item => { item.algorithm_id = '' })
-      notice.value = tr(`${target.part_number} 使用 HPM ROM API，无需 Pack 或 FLM`, `${target.part_number} uses HPM ROM API; no Pack or FLM required`)
       return
     }
     hpmBoard.value = ''
@@ -905,15 +905,18 @@ async function readIspOtp(): Promise<void> {
   await requestIspOtp('read')
 }
 async function prepareIspOtp(changes: HpmIspOtpChange[]): Promise<void> {
-  await requestIspOtp('batch-plan', { changes })
+  const snapshot = otpSnapshot.value
+  const target_identity = snapshot?.rom_version && snapshot.soc_revision
+    ? { chip_id: snapshot.chip_id, rom_version: snapshot.rom_version, soc_revision: snapshot.soc_revision } : undefined
+  await requestIspOtp('batch-plan', { changes, ...(target_identity ? { target_identity } : {}) })
 }
 async function programIspOtp(planId: string): Promise<void> {
   if (!otpPlan.value?.qualified || !otpPlan.value.write_supported || otpPlan.value.plan_id !== planId) return
   await requestIspOtp('batch-program', { plan_id: planId, confirm_irreversible: true })
 }
-async function requestIspOtp(action: 'read' | 'batch-plan' | 'batch-program', payload: { changes: HpmIspOtpChange[] } | { plan_id: string; confirm_irreversible: boolean } | Record<string, never> = {}): Promise<void> {
+async function requestIspOtp(action: 'read' | 'batch-plan' | 'batch-program', payload: { changes: HpmIspOtpChange[]; target_identity?: { chip_id: number; rom_version: number; soc_revision: number } } | { plan_id: string; confirm_irreversible: boolean } | Record<string, never> = {}): Promise<void> {
   if (operationBusy.value || !ispMode.value || model.value !== 'V4'
-    || !['HPM5301', 'HPM5301XEGX'].includes(targetPart.value.toUpperCase())) return
+    || !hpmOtpProfile(targetPart.value)) return
   if (action !== 'batch-plan') invalidateOtp()
   else { clearOtpPlan(); otpError.value = ''; otpResult.value = '' }
   const revision = otpRevision
@@ -923,7 +926,7 @@ async function requestIspOtp(action: 'read' | 'batch-plan' | 'batch-program', pa
     if (revision !== otpRevision) return
     const response = await fetch(`${API_BASE}/api/device/configuration/hpm-isp-otp/${action}`, {
       method: 'POST', headers: { ...identity, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ part_number: targetPart.value.toUpperCase(), model: 'V4', ...payload }),
+      body: JSON.stringify({ part_number: targetPart.value.toUpperCase(), model: 'V4', extended: true, ...payload }),
     })
     const body = await response.json()
     if (!response.ok) throw new Error(typeof body.detail === 'string' ? body.detail : body.detail?.message || `HTTP ${response.status}`)
@@ -994,10 +997,6 @@ onBeforeUnmount(() => {
       <div><span class="status-label">{{ tr('U 盘', 'USB Drive') }}</span><b :class="disk?.available ? 'ok' : 'bad'">{{ disk?.available ? disk.disk_path : tr('未发现', 'Not found') }}</b></div>
       <div><span class="status-label">{{ tr('脚本', 'Script') }}</span><b>{{ effectiveScriptName }}</b></div>
       <div class="status-actions">
-        <select v-if="disk?.probes?.length" v-model="diskProbe" data-testid="offline-probe" :aria-label="tr('下载器端口', 'Probe port')" :disabled="operationBusy || deploymentUncertain" @change="changeDiskProbe">
-          <option value="">{{ tr('选择下载器', 'Select probe') }}</option>
-          <option v-for="probe in disk.probes" :key="probe.probe_id" :value="probe.probe_id">{{ probe.port }}</option>
-        </select>
         <button class="btn" :disabled="operationBusy" @click="refreshDisk">{{ tr('刷新 U 盘', 'Refresh USB Drive') }}</button>
       </div>
     </header>
@@ -1010,16 +1009,18 @@ onBeforeUnmount(() => {
     <div v-if="selectionWarning" class="alert alert-warn" data-testid="offline-selection-warning">{{ selectionWarning }}</div>
     <div v-if="notice" class="alert alert-success">{{ notice }}</div>
 
-    <div class="workspace-tabs" role="tablist" :aria-label="tr('烧录工作区', 'Programming workspace')">
-      <button id="offline-image-tab" role="tab" :aria-selected="workspaceTab === 'image'" aria-controls="offline-image-panel" :disabled="operationBusy" data-testid="offline-image-tab" @click="workspaceTab = 'image'; clearOtpPlan()">{{ tr('镜像烧写', 'Image programming') }}</button>
-      <button id="offline-configuration-tab" role="tab" :aria-selected="workspaceTab === 'configuration'" aria-controls="offline-configuration-panel" :disabled="operationBusy" data-testid="offline-configuration-tab" @click="workspaceTab = 'configuration'">{{ hpmMode ? tr('OTP 操作', 'OTP operations') : tr('选项字配置', 'Option bytes') }}</button>
-    </div>
-    <div v-show="workspaceTab === 'image'" id="offline-image-panel" role="tabpanel" aria-labelledby="offline-image-tab" class="offline-workspace">
-      <section class="work-panel target-panel">
-        <div class="panel-heading step-heading">
-          <div class="step-title"><span>01</span><div><h2>{{ tr('器件与下载算法', 'Targets and Flash Algorithms') }}</h2><small>{{ tr('输入型号并从联想结果中选定器件', 'Type a model and select a suggested target') }}</small></div></div>
-          <button v-if="!hpmMode" class="btn btn-sm" type="button" data-testid="offline-add-flm" @click="browseManualFlm">{{ tr('添加本地 FLM', 'Add Local FLM') }}</button>
-        </div>
+    <div class="offline-layout">
+      <aside class="work-panel shared-device-panel" data-testid="offline-shared-device">
+        <h2 class="section-title">{{ tr('设备与连接', 'Device and connection') }}</h2>
+        <fieldset :disabled="operationBusy || targetBusy" class="shared-controls">
+        <label class="setting-row"><span>{{ tr('下载器型号', 'Probe Model') }}</span><select v-model="model" class="form-select" data-testid="offline-model" @change="modelChanged"><option value="" disabled>{{ tr('请选择', 'Select') }}</option><option value="V2">V2</option><option value="V3">V3</option><option value="V4">V4</option></select></label>
+        <label v-if="disk?.probes?.length" class="setting-row"><span>{{ tr('下载器端口', 'Probe port') }}</span>
+        <select v-if="disk?.probes?.length" v-model="diskProbe" class="form-select" data-testid="offline-probe" :aria-label="tr('下载器端口', 'Probe port')" :disabled="operationBusy || deploymentUncertain" @change="changeDiskProbe">
+          <option value="">{{ tr('选择下载器', 'Select probe') }}</option>
+          <option v-for="probe in disk.probes" :key="probe.probe_id" :value="probe.probe_id">{{ probe.port }}</option>
+        </select>
+        </label>
+        <div class="field-title">{{ tr('芯片型号', 'Chip model') }}</div>
         <div ref="targetSearchBox" class="target-combobox" @focusout="targetSearchFocusOut">
           <div class="target-search">
             <input v-model="targetQuery" class="form-input" data-testid="offline-target-search" type="search" role="combobox" aria-autocomplete="list" aria-controls="offline-target-suggestions" :aria-expanded="targetSuggestionsOpen" :aria-activedescendant="targetSuggestionsOpen && activeTargetSuggestion >= 0 ? `offline-target-option-${activeTargetSuggestion}` : undefined" :placeholder="tr('搜索型号 / 厂商 / 系列', 'Search model / vendor / family / series')" @input="scheduleTargetSearch" @focus="targetSearchFocus" @keydown="targetSearchKeydown">
@@ -1033,6 +1034,32 @@ onBeforeUnmount(() => {
           </div>
         </div>
         <p v-if="targetPart" class="selected-target"><span>{{ tr('已选器件', 'Selected target') }}</span><b>{{ targetPart }}</b></p>
+        <label class="setting-row"><span>{{ tr('下载类型', 'Programming type') }}</span>
+          <select v-model="programmingProtocol" class="form-select" data-testid="offline-protocol">
+            <option value="debug">{{ hpmMode ? 'JTAG · ROM API' : 'SWD' }}</option>
+            <option v-if="hpmMode" value="hpm_rom_isp_uart" :disabled="model !== 'V4'">USART ISP</option>
+          </select>
+        </label>
+        <HpmIspSettings v-if="ispMode" v-model="ispConfig" />
+        <div v-else class="security-settings">
+          <label class="security-option"><input v-model="beepOnCompletion" type="checkbox" />{{ tr('下载完成响蜂鸣器', 'Beep on completion') }}</label>
+          <label class="security-option"><input v-model="resetAfterDownload" type="checkbox" :disabled="hpmMode" />{{ tr('下载完成复位', 'Reset on completion') }}</label>
+          <p class="security-reason">{{ hpmMode ? tr('JTAG ROM API 内部自动复位，保持原有行为。', 'JTAG ROM API resets internally; existing behavior is preserved.') : tr('使用现有硬件复位流程。软件及断电复位在 USART ISP 模式配置。', 'Uses the existing hardware reset sequence. Software and power-cycle reset are configured in USART ISP mode.') }}</p>
+        </div>
+        <label v-if="hpmMode && !ispMode" class="setting-row"><span>{{ tr('HPM 板卡', 'HPM Board') }}</span><select v-model="hpmBoard" class="form-select"><option v-for="item in hpmBoards" :key="item" :value="item">{{ item }}</option></select></label>
+        <label v-if="!ispMode" class="setting-row"><span>{{ tr('IDCODE 超时', 'IDCODE Timeout') }}</span><input v-model.number="idcodeTimeout" type="number" min="500" max="600000" step="500" class="form-input"><em>ms</em></label>
+        <label v-if="!ispMode" class="setting-row"><span>{{ tr('调试速率', 'Debug clock') }}</span><select v-model.number="swdClock" class="form-select" data-testid="offline-clock"><option :value="1000000">1 MHz</option><option :value="4000000">4 MHz</option><option :value="5000000">5 MHz</option><option :value="8000000">8 MHz</option><option :value="10000000">10 MHz</option><option :value="20000000">20 MHz</option><option :value="30000000">30 MHz</option></select></label>
+        <p v-if="effectiveModel === 'V2' && swdClock > 10000000" class="muted">{{ tr('V2 的 20/30 MHz 需要支持高速时序的新版固件。', 'V2 20/30 MHz requires updated firmware with high-speed timing support.') }}</p>
+        </fieldset>
+      </aside>
+      <main class="programming-workspace">
+    <div class="workspace-tabs" role="tablist" :aria-label="tr('烧录工作区', 'Programming workspace')">
+      <button id="offline-image-tab" role="tab" :aria-selected="workspaceTab === 'image'" aria-controls="offline-image-panel" :disabled="operationBusy" data-testid="offline-image-tab" @click="workspaceTab = 'image'; clearOtpPlan()">{{ tr('镜像烧写', 'Image programming') }}</button>
+      <button id="offline-configuration-tab" role="tab" :aria-selected="workspaceTab === 'configuration'" aria-controls="offline-configuration-panel" :disabled="operationBusy" data-testid="offline-configuration-tab" @click="workspaceTab = 'configuration'">{{ hpmMode ? tr('OTP 操作', 'OTP operations') : tr('选项字配置', 'Option bytes') }}</button>
+    </div>
+        <div v-show="workspaceTab === 'image'" id="offline-image-panel" role="tabpanel" aria-labelledby="offline-image-tab" class="image-workspace">
+          <section class="work-panel algorithm-panel">
+            <div class="panel-heading"><h2>{{ tr('下载算法', 'Flash algorithm') }}</h2><button v-if="!hpmMode" class="btn btn-sm" type="button" data-testid="offline-add-flm" :disabled="operationBusy" @click="browseManualFlm">{{ tr('添加本地 FLM', 'Add Local FLM') }}</button></div>
         <p v-if="hpmMode" class="hpm-mode">{{ ispMode ? 'USART ISP' : 'HPM ROM API' }} · {{ tr('无需 Pack 或 FLM', 'No Pack or FLM required') }}</p>
         <div v-else class="algorithm-list">
           <div v-for="(item, index) in algorithms" :key="item.id" class="algorithm-row" :class="{ unavailable: !item.available && item.source_kind !== 'upload' }" data-testid="offline-algorithm-row">
@@ -1045,11 +1072,9 @@ onBeforeUnmount(() => {
             <label>RAM<input v-model="item.ram_base" class="compact-input mono"></label>
           </div>
           <p v-if="!algorithms.length" class="empty-state">{{ tr('尚未配置 FLM', 'No FLM configured') }}</p>
-        </div>
-      </section>
-
+        </div>          </section>
       <section class="work-panel firmware-panel" :class="{ dragging: firmwareDropActive }" data-testid="offline-firmware-drop-zone" @dragenter.prevent="firmwareDropActive = true" @dragover.prevent="firmwareDropActive = true" @dragleave.prevent="firmwareDropActive = false" @drop.prevent="dropFirmware">
-        <div class="panel-heading step-heading"><div class="step-title"><span>02</span><div><h2>{{ tr('烧录顺序', 'Flash Sequence') }}</h2><small>{{ ispMode ? tr('按地址升序写入，相邻 BIN 合并烧录', 'Program in address order; adjacent BINs are combined') : tr('固件按从上到下顺序依次写入', 'Firmware is programmed from top to bottom') }}</small></div></div><button class="btn btn-sm" type="button" @click="browseFirmware">{{ tr('添加固件', 'Add Firmware') }}</button><input class="visually-hidden" data-testid="offline-firmware-input" type="file" multiple accept=".bin,.hex" @change="addFirmware"></div>
+        <div class="panel-heading step-heading"><div class="step-title"><div><h2>{{ tr('固件镜像', 'Firmware images') }}</h2><small>{{ ispMode ? tr('按地址升序写入，相邻 BIN 合并烧录', 'Program in address order; adjacent BINs are combined') : tr('固件按从上到下顺序依次写入', 'Firmware is programmed from top to bottom') }}</small></div></div><button class="btn btn-sm" type="button" @click="browseFirmware">{{ tr('添加固件', 'Add Firmware') }}</button><input class="visually-hidden" data-testid="offline-firmware-input" type="file" multiple accept=".bin,.hex" @change="addFirmware"></div>
         <p v-if="hpmMode && !ispMode" class="empty-state">{{ tr('HPM HEX 使用文件内的绝对地址，需要新版 V4 固件；BIN 需填写基地址。HEX 未覆盖的完整扇区保留，覆盖扇区内的空隙会擦除。', 'HPM HEX uses absolute file addresses and requires updated V4 firmware; BIN requires a base address. Untouched sectors are preserved; gaps within touched sectors are erased.') }}</p>
         <div class="firmware-list">
           <div v-for="(item, index) in firmwares" :key="item.id" class="firmware-row" data-testid="offline-firmware-row">
@@ -1074,28 +1099,21 @@ onBeforeUnmount(() => {
         </div>
       </section>
 
-      <section class="work-panel settings-panel">
-        <div class="panel-heading step-heading"><div class="step-title"><span>03</span><div><h2>{{ tr('量产配置与部署', 'Production Settings & Deploy') }}</h2><small>{{ tr('确认安全选项，部署后再触发一次真机验证', 'Confirm security options, deploy, then run one hardware test') }}</small></div></div></div>
-        <label class="setting-row"><span>{{ tr('下载器型号', 'Probe Model') }}</span><select v-model="model" class="form-select" data-testid="offline-model" @change="modelChanged"><option value="" disabled>{{ tr('请选择', 'Select') }}</option><option value="V2">V2</option><option value="V3">V3</option><option value="V4">V4</option></select></label>
-        <label v-if="hpmMode" class="setting-row"><span>{{ tr('下载协议', 'Programming protocol') }}</span>
-          <select v-model="programmingProtocol" class="form-select" data-testid="offline-protocol">
-            <option value="debug">JTAG · ROM API</option>
-            <option value="hpm_rom_isp_uart" :disabled="model !== 'V4'">USART ISP</option>
-          </select>
-        </label>
-        <HpmIspSettings v-if="ispMode" v-model="ispConfig" />
-        <div v-else class="security-settings">
-          <label class="security-option"><input v-model="beepOnCompletion" type="checkbox" />{{ tr('下载完成响蜂鸣器', 'Beep on completion') }}</label>
-          <label class="security-option"><input v-model="resetAfterDownload" type="checkbox" :disabled="hpmMode" />{{ tr('下载完成复位', 'Reset on completion') }}</label>
-          <p class="security-reason">{{ hpmMode ? tr('JTAG ROM API 内部自动复位，保持原有行为。', 'JTAG ROM API resets internally; existing behavior is preserved.') : tr('使用现有硬件复位流程。软件及断电复位在 USART ISP 模式配置。', 'Uses the existing hardware reset sequence. Software and power-cycle reset are configured in USART ISP mode.') }}</p>
+
         </div>
-        <p v-if="ispMode" class="security-reason">{{ tr('BIN 基地址必须与镜像布局一致，请逐项填写。不相邻文件不能共享擦除扇区。', 'Enter each BIN address according to its image layout. Non-adjacent files cannot share an erase sector.') }}</p>
-        <label v-if="hpmMode && !ispMode" class="setting-row"><span>{{ tr('HPM 板卡', 'HPM Board') }}</span><select v-model="hpmBoard" class="form-select"><option v-for="item in hpmBoards" :key="item" :value="item">{{ item }}</option></select></label>
+        <section v-show="workspaceTab === 'configuration'" id="offline-configuration-panel" role="tabpanel" aria-labelledby="offline-configuration-tab" class="configuration-workspace">
+      <HpmIspOtpPanel v-if="ispMode && model === 'V4' && hpmOtpProfile(targetPart)"
+        :key="`${model}:${targetPart}:${diskProbe}`" :active="workspaceTab === 'configuration'" :part-number="targetPart" :snapshot="otpSnapshot" :plan="otpPlan" :result="otpResult" :busy="otpReading" :disabled="operationBusy || triggerUncertain"
+        :error="otpError" @read="readIspOtp" @prepare="prepareIspOtp" @program="programIspOtp" @invalidate="clearOtpPlan" />
+      <p v-else-if="ispMode" class="muted">{{ tr('当前型号尚未开放 UART OTP 配置。', 'UART OTP configuration is not available for this target.') }}</p>
+      <DeviceConfigurationPanel v-else-if="workspaceTab === 'configuration' && !ispMode" expanded v-model:changes="optionByteChanges" :has-firmware="firmwares.length > 0" :part-number="targetPart" :model="model" :unlock-before-download="unlockBeforeDownload" :lock-after-download="lockAfterDownload" />
+        <HpmOfflineOtpPanel v-if="!ispMode && model === 'V4' && ['HPM5301','HPM5301XEGX'].includes(targetPart.toUpperCase())" :key="`${model}:${targetPart}`" @change="hpmOfflineOtp = $event" />
+        </section>
+          <section v-show="workspaceTab === 'image' || !ispMode" class="work-panel production-panel">
+            <h2 class="section-title">{{ tr('烧录选项', 'Programming options') }}</h2>
+            <fieldset :disabled="operationBusy" class="shared-controls">
         <label class="setting-row"><span>{{ tr('脚本文件名', 'Script File Name') }}</span><input v-model="scriptFieldName" class="form-input mono" data-testid="offline-script-name" :disabled="effectiveModel !== 'V4'"></label>
         <label class="setting-row"><span>{{ tr('自动烧录次数', 'Automatic Flash Count') }}</span><input v-model.number="automaticCount" type="number" min="1" max="9999" class="form-input" :disabled="effectiveModel === 'V2'"></label>
-        <label v-if="!ispMode" class="setting-row"><span>{{ tr('IDCODE 超时', 'IDCODE Timeout') }}</span><input v-model.number="idcodeTimeout" type="number" min="500" max="600000" step="500" class="form-input"><em>ms</em></label>
-        <label v-if="!ispMode" class="setting-row"><span>{{ tr('SWD 速率', 'SWD Rate') }}</span><select v-model.number="swdClock" class="form-select" data-testid="offline-clock"><option :value="1000000">1 MHz</option><option :value="4000000">4 MHz</option><option :value="5000000">5 MHz</option><option :value="8000000">8 MHz</option><option :value="10000000">10 MHz</option><option :value="20000000">20 MHz</option><option :value="30000000">30 MHz</option></select></label>
-        <p v-if="effectiveModel === 'V2' && swdClock > 10000000" class="muted">{{ tr('V2 的 20/30 MHz 需要支持高速时序的新版固件。', 'V2 20/30 MHz requires updated firmware with high-speed timing support.') }}</p>
         <div v-if="!ispMode">
         <details class="security-settings">
           <summary class="security-title">
@@ -1123,7 +1141,9 @@ onBeforeUnmount(() => {
           <p v-else-if="securityCapability?.supported" class="security-reason">{{ tr('加锁与解锁只对已真机验证的器件开放；配置、器件 ID、容量和 FLM 均会严格校验。', 'Lock and unlock are enabled only for hardware-validated targets; configuration, device ID, density, and FLM are strictly verified.') }}</p>
         </details>
         </div>
-        <HpmOfflineOtpPanel v-if="!ispMode && model === 'V4' && ['HPM5301','HPM5301XEGX'].includes(targetPart.toUpperCase())" :key="`${model}:${targetPart}`" @change="hpmOfflineOtp = $event" />
+            </fieldset>
+          </section>
+        <section v-show="workspaceTab === 'image' || !ispMode" class="deployment-toolbar" :aria-label="tr('部署与测试', 'Deploy and test')">
         <div class="deploy-actions">
           <button class="btn" :disabled="operationBusy || !canBuild" @click="generatePreview">{{ tr('生成预览', 'Generate Preview') }}</button>
           <button class="btn btn-primary" data-testid="offline-deploy" :disabled="operationBusy || !canBuild || deploymentUncertain" @click="deploy">{{ tr('部署到 U 盘', 'Deploy to USB Drive') }}</button>
@@ -1138,7 +1158,10 @@ onBeforeUnmount(() => {
           <button class="btn" data-testid="deployment-query" :disabled="operationBusy" @click="queryDeployment()">{{ tr('重试查询', 'Retry status check') }}</button>
           <button v-if="deploymentUncertain" class="btn" :disabled="operationBusy" @click="deploymentUncertain = false; deploymentRequestId = ''">{{ tr('已核查磁盘，允许新部署', 'Disk inspected; allow a new deployment') }}</button>
         </div>
-        <p class="action-guide">{{ tr('建议流程：先生成预览检查脚本 → 部署到 U 盘 → 点击“触发测试”验证目标板。', 'Recommended: inspect the generated script → deploy to USB → run a hardware test.') }}</p>
+        </section>
+      </main>
+    </div>
+    <section class="run-workspace" :aria-label="tr('预览与运行输出', 'Preview and run output')">
         <div v-if="!ispMode || preview" class="script-preview">
           <div class="preview-title"><span>{{ preview?.script_name || effectiveScriptName }}</span><span>{{ preview?.model || effectiveModel }}</span></div>
           <pre>{{ preview?.script || tr('等待生成配置', 'Waiting to generate configuration') }}</pre>
@@ -1147,20 +1170,6 @@ onBeforeUnmount(() => {
           <div class="preview-title">{{ tr('运行输出', 'Run output') }}</div>
           <pre class="trigger-log">{{ displayedTriggerLines.join('\n') || tr('等待触发测试', 'Waiting to run test') }}</pre>
         </div>
-      </section>
-    </div>
-    <section v-if="workspaceTab === 'configuration'" id="offline-configuration-panel" role="tabpanel" aria-labelledby="offline-configuration-tab" class="configuration-workspace">
-      <div class="configuration-context">
-        <span>{{ tr('当前器件', 'Target') }} <b>{{ targetPart || tr('未选择', 'Not selected') }}</b></span>
-        <label>{{ tr('下载器型号', 'Probe model') }} <select v-model="model" :disabled="operationBusy" @change="modelChanged"><option value="V2">V2</option><option value="V3">V3</option><option value="V4">V4</option></select></label>
-        <label v-if="hpmMode">{{ tr('连接协议', 'Connection protocol') }} <select v-model="programmingProtocol" :disabled="operationBusy" data-testid="configuration-protocol"><option value="debug">JTAG · ROM API</option><option value="hpm_rom_isp_uart" :disabled="model !== 'V4'">USART ISP</option></select></label>
-        <button class="btn" :disabled="operationBusy" @click="workspaceTab = 'image'; clearOtpPlan()">{{ tr('选择器件', 'Select target') }}</button>
-      </div>
-      <HpmIspOtpPanel v-if="ispMode && model === 'V4' && ['HPM5301', 'HPM5301XEGX'].includes(targetPart.toUpperCase())"
-        :key="`${model}:${targetPart}:${diskProbe}`" :snapshot="otpSnapshot" :plan="otpPlan" :result="otpResult" :busy="otpReading" :disabled="operationBusy || triggerUncertain"
-        :error="otpError" @read="readIspOtp" @prepare="prepareIspOtp" @program="programIspOtp" @invalidate="clearOtpPlan" />
-      <p v-else-if="ispMode" class="muted">{{ tr('当前型号尚未开放 UART OTP 配置。', 'UART OTP configuration is not available for this target.') }}</p>
-      <DeviceConfigurationPanel v-else expanded v-model:changes="optionByteChanges" :has-firmware="firmwares.length > 0" :part-number="targetPart" :model="model" :unlock-before-download="unlockBeforeDownload" :lock-after-download="lockAfterDownload" />
     </section>
     <input ref="replacementFlmInput" class="visually-hidden" type="file" accept=".flm" @change="replaceAlgorithm">
     <ConfirmationDialog v-if="confirmationMessage !== null" :message="confirmationMessage" @answer="answerConfirmation" />
@@ -1168,11 +1177,16 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.workspace-tabs{display:flex;gap:3px;border-bottom:1px solid var(--border)}.workspace-tabs button{padding:12px 22px;background:var(--surface);border:1px solid var(--border);border-bottom:0;border-radius:7px 7px 0 0;color:var(--muted);cursor:pointer;font-size:13px}.workspace-tabs button[aria-selected=true]{background:var(--bg);color:var(--accent);box-shadow:inset 0 -2px var(--accent)}.workspace-tabs button:disabled{opacity:.5;cursor:default}.configuration-workspace{min-width:0}.configuration-context{display:flex;align-items:center;gap:20px;flex-wrap:wrap;padding:14px;border:1px solid var(--border);border-radius:6px;margin-bottom:12px;background:var(--surface);font-size:12px;color:var(--muted)}.configuration-context b{margin-left:8px;color:var(--success);font-family:var(--font-mono)}.configuration-context select{padding:7px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--fg);margin-left:6px}
+.workspace-tabs{display:flex;gap:3px;border-bottom:1px solid var(--border)}.workspace-tabs button{padding:12px 22px;background:var(--surface);border:1px solid var(--border);border-bottom:0;border-radius:7px 7px 0 0;color:var(--muted);cursor:pointer;font-size:13px}.workspace-tabs button[aria-selected=true]{background:var(--bg);color:var(--accent);box-shadow:inset 0 -2px var(--accent)}.workspace-tabs button:disabled{opacity:.5;cursor:default}.configuration-workspace{min-width:0}
 
 .trigger-output{margin-top:8px;border:1px solid var(--border);border-radius:5px;overflow:hidden}.trigger-output .trigger-log{margin:0;border-radius:0;min-height:100px;white-space:pre-wrap}
 .firmware-panel{outline:2px solid transparent;outline-offset:-2px}.firmware-panel.dragging{outline-color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,var(--surface))}.visually-hidden{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .deployment-query{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0;padding:10px;border:1px solid var(--border);border-radius:5px}.deployment-query label{width:100%;font-size:11px;color:var(--muted)}.deployment-query input{margin-top:5px}.deployment-query p{margin:0;font-size:11px;line-height:1.5;color:var(--muted)}.offline-page{min-height:0;display:flex;flex-direction:column;gap:10px}.status-strip{display:flex;align-items:center;gap:28px;min-height:46px;padding:8px 14px;border:1px solid var(--border);border-radius:6px;background:var(--surface)}.status-strip>div{display:flex;align-items:baseline;gap:8px;min-width:0}.status-strip b{font-size:12px;font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.status-label{font-size:11px;color:var(--muted)}.status-actions{margin-left:auto}.ok{color:var(--success)}.bad{color:var(--danger)}.error-detail{display:block;margin-top:4px}.technical-error{margin-top:6px;color:var(--muted);font-size:11px}.technical-error code{display:block;margin-top:4px;white-space:pre-wrap;word-break:break-word;font:11px/1.45 var(--font-mono)}.offline-workspace{display:grid;grid-template-columns:minmax(260px,.9fr) minmax(360px,1.25fr) minmax(300px,1fr);gap:10px;min-height:620px}.work-panel{min-width:0;min-height:0;padding:14px;border:1px solid var(--border);border-radius:6px;background:var(--surface);overflow:auto}.panel-heading{height:34px;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;border-bottom:1px solid var(--border-subtle);margin-bottom:10px}.panel-heading h2{font-size:14px}.file-button{position:relative;overflow:hidden}.file-button input{position:absolute;inset:0;opacity:0;cursor:pointer}.target-search{display:grid;grid-template-columns:1fr auto;gap:6px}.target-results{display:grid;gap:5px;max-height:150px;overflow:auto;margin:8px 0 12px}.target-result{display:flex;align-items:center;justify-content:space-between;text-align:left;padding:7px 9px;border:1px solid var(--border);border-radius:5px;background: var(--input-bg, #fff);color:var(--fg);cursor:pointer}.target-result span{display:grid}.target-result small{font-size:10px;color:var(--muted)}.target-result em{font-style:normal;font-size:10px;color:var(--accent)}.hpm-mode{padding:12px;border:1px solid var(--border);border-radius:5px;background:var(--bg);color:var(--success);font-size:12px}.algorithm-list,.firmware-list{display:grid;gap:7px}.algorithm-row,.firmware-row{border:1px solid var(--border);border-radius:5px;background:var(--input-bg)}.algorithm-row{padding:8px}.algorithm-row.unavailable{border-color:var(--warn)}.algorithm-warning{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 8px;margin-bottom:5px;border-radius:4px;background:var(--warn-bg);color:var(--warn);font-size:11px}.row-title{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:7px;margin-bottom:7px}.row-title span{font-size:10px;color:var(--muted)}.algorithm-row>label{display:grid;grid-template-columns:42px 1fr;align-items:center;gap:6px;margin-top:5px;font-size:10px;color:var(--muted)}.compact-input{width:100%;height:27px;padding:0 7px;border:1px solid var(--border);border-radius:4px;background: var(--input-bg, #fff);color:var(--fg);min-width:0}.mono{font-family:var(--font-mono)}.icon-command{width:27px;height:27px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--muted);cursor:pointer}.icon-command:hover{color:var(--accent);border-color:var(--accent)}.icon-command:disabled{opacity:.35;cursor:not-allowed}.firmware-row{display:grid;grid-template-columns:34px 1fr 28px;padding:8px;gap:7px}.sequence-number{display:grid;place-items:center;width:28px;height:28px;border-radius:4px;background:var(--bg);font-family:var(--font-mono);font-weight:600}.firmware-fields{display:grid;grid-template-columns:minmax(120px,1.2fr) minmax(110px,1fr);gap:6px}.firmware-fields .file-name{grid-column:1/-1}.embedded-address{align-self:center;font-size:11px;color:var(--muted)}.row-actions{display:grid;gap:4px}.setting-row{display:grid;grid-template-columns:108px 1fr auto;align-items:center;gap:8px;margin-bottom:9px}.setting-row>span{font-size:12px;color:var(--muted);text-align:right}.setting-row em{font-size:10px;color:var(--muted);font-style:normal}.security-settings{margin:12px 0;padding:10px;border:1px solid var(--border);border-radius:5px;background:var(--bg)}.security-title{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;font-size:12px;font-weight:600}.security-title em{font-size:10px;font-style:normal}.security-option{display:flex;align-items:flex-start;gap:7px;margin:7px 0;font-size:11px;line-height:1.45}.security-option input{margin-top:2px}.security-voltage{margin:9px 0 4px}.security-reason{margin:7px 0 0;color:var(--muted);font-size:10px;line-height:1.5}.deploy-actions{display:flex;flex-wrap:wrap;gap:7px;margin:14px 0}.script-preview{border:1px solid var(--border);border-radius:5px;overflow:hidden}.preview-title{display:flex;justify-content:space-between;padding:6px 9px;background:var(--bg);font-size:10px;color:var(--muted)}.script-preview pre,.trigger-log{margin:0;padding:10px;max-height:310px;overflow:auto;background:#16191d;color:#d9dee5;font:11px/1.55 var(--font-mono);white-space:pre}.trigger-log{margin-top:8px;border-radius:5px}.empty-state{padding:20px 8px;text-align:center;color:var(--dim);font-size:12px}@media(max-width:1100px){.offline-workspace{grid-template-columns:1fr 1.25fr}.settings-panel{grid-column:1/-1}}@media(max-width:760px){.status-strip{align-items:flex-start;flex-wrap:wrap}.status-actions{margin-left:0}.offline-workspace{grid-template-columns:1fr}.settings-panel{grid-column:auto}.firmware-fields{grid-template-columns:1fr}.firmware-fields .file-name{grid-column:auto}}
 .step-heading{height:auto;min-height:44px;align-items:flex-start}.step-title{display:flex;gap:8px;min-width:0}.step-title>span{display:grid;place-items:center;flex:0 0 27px;height:27px;border-radius:5px;background:color-mix(in srgb,var(--accent) 13%,var(--bg));color:var(--accent);font:600 11px var(--font-mono)}.step-title h2{margin:0}.step-title small{display:block;margin-top:2px;color:var(--muted);font-size:9px;font-weight:400}.target-combobox{position:relative}.target-results{position:absolute;z-index:30;top:34px;left:0;right:0;max-height:260px;margin:4px 0;padding:4px;border:1px solid var(--accent);border-radius:5px;background:var(--surface);box-shadow:0 10px 24px rgba(0,0,0,.18)}.target-result.active{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,var(--surface))}.selected-target{display:flex;align-items:center;justify-content:space-between;margin:8px 0 10px;padding:7px 9px;border-radius:5px;background:var(--bg);font-size:10px;color:var(--muted)}.selected-target b{color:var(--success);font-family:var(--font-mono)}.action-guide{margin:-7px 0 12px;color:var(--muted);font-size:10px;line-height:1.5}
 .security-reason.erase-all-warning{padding:8px;border-left:3px solid var(--warn);background:color-mix(in srgb,var(--warn) 10%,var(--bg));color:var(--warn);font-size:11px}
+
+.offline-layout{display:grid;grid-template-columns:320px minmax(0,1fr);gap:14px;align-items:start}.shared-device-panel{overflow:visible;padding:16px}.shared-controls{border:0;padding:0;margin:0;min-width:0}.shared-controls:disabled{opacity:.65}.section-title{font-size:14px;margin:0 0 16px}.field-title{font-size:12px;color:var(--muted);margin:14px 0 7px}.shared-device-panel .setting-row{grid-template-columns:1fr;gap:6px;margin-bottom:14px}.shared-device-panel .setting-row>span{text-align:left}.shared-device-panel .target-search{grid-template-columns:minmax(0,1fr) auto}.shared-device-panel .target-search .btn{padding:6px 9px}.programming-workspace{min-width:0}.image-workspace{display:grid;gap:12px;padding-top:12px}.configuration-workspace{padding-top:12px}.algorithm-panel .algorithm-list{grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}.algorithm-panel .hpm-mode{border:0;padding:0;margin:0;background:none}.firmware-panel{min-height:220px}.panel-heading{height:auto;min-height:32px}.production-panel{margin-top:12px}.production-panel .shared-controls{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}.production-panel .shared-controls>div{grid-column:1/-1}.production-panel .security-settings{margin-bottom:0}.deployment-toolbar{padding:4px 16px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface);margin-top:12px}.run-workspace{display:grid;gap:12px}.run-workspace pre{max-height:220px}.step-title>div{min-width:0}.shared-device-panel :deep(.isp-settings){padding:0;border:0;border-top:1px solid var(--border);border-radius:0;margin-top:18px}.shared-device-panel :deep(.isp-settings>label:not(.check)){grid-template-columns:1fr;gap:5px}.shared-device-panel :deep(.isp-settings legend){padding:0 7px 0 0}.shared-device-panel :deep(.isp-settings details){padding:0 10px;border:1px solid var(--border);border-radius:4px}.shared-device-panel :deep(.isp-settings p){margin:8px 0}.configuration-workspace :deep(.otp-workspace){min-height:500px}
+@media(min-width:1600px){.offline-layout{grid-template-columns:350px minmax(0,1fr)}.image-workspace{grid-template-columns:minmax(0,.8fr) minmax(0,1.5fr)}.production-panel{grid-column:1/-1}.firmware-panel{min-height:350px}}
+@media(max-width:900px){.offline-layout{grid-template-columns:260px minmax(0,1fr)}.production-panel .shared-controls{grid-template-columns:1fr}.firmware-fields{grid-template-columns:1fr}.firmware-fields .file-name{grid-column:auto}}
+@media(max-width:650px){.offline-layout{grid-template-columns:1fr}.shared-device-panel .shared-controls{display:grid;grid-template-columns:1fr 1fr;column-gap:14px}.shared-device-panel .target-combobox,.shared-device-panel .selected-target,.shared-device-panel :deep(.isp-settings),.shared-device-panel .security-settings,.shared-device-panel .field-title{grid-column:1/-1}.workspace-tabs button{flex:1;padding:12px}.production-panel .setting-row{grid-template-columns:100px 1fr auto}}
 </style>

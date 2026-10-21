@@ -11,6 +11,7 @@ class OtpBinding:
     port: str
     generation: int
     part: str
+    extended: bool = False
 
 
 class OtpPlans:
@@ -30,6 +31,8 @@ class OtpPlans:
         keys = ('word', 'expected', 'desired', 'delta')
         fixed = ({'changes': [{key: item[key] for key in keys} for item in change['changes']]}
                  if 'changes' in change else {key: change[key] for key in keys})
+        if 'target_identity' in change:
+            fixed['target_identity'] = deepcopy(change['target_identity'])
         self.entries[token] = (self.clock() + self.TTL, binding, fixed)
         return dict(change, plan_id=token, expires_in=self.TTL)
 

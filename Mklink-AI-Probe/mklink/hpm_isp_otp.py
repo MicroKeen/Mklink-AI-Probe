@@ -28,7 +28,7 @@ def _u32(value):
     return value
 
 
-def _result(response: str, request_id: str) -> dict:
+def _result(response: str, request_id: str, *, allow_rom_rejection=False) -> dict:
     results = []
     for line in response.splitlines():
         if not line.startswith("HPM_OTP "):
@@ -66,7 +66,7 @@ def _result(response: str, request_id: str) -> dict:
             if result.get('write_attempted') is True:
                 reason += '; OTP may already have changed. Read again; do not retry programming'
         raise ValueError(f"UART OTP: {reason}")
-    if _u32(result.get("rom_status")) != 0:
+    if _u32(result.get("rom_status")) != 0 and not allow_rom_rejection:
         raise ValueError("ROM rejected the OTP operation")
     return result
 
