@@ -345,6 +345,23 @@ def test_program_requires_rom_write_success_and_complete_matching_readback(field
         otp.parse_change(change_line(record), 'test', CHANGE, commit=True)
 
 
+@pytest.mark.parametrize('reason,code,message', [
+    ('write_outcome_unknown', -3, 'write result is unknown'),
+    ('readback_failed', -3, 'ROM readback failed'),
+    ('readback_mismatch', -2, 'does not match'),
+    ('rom_rejected', -6, 'ROM rejected OTP programming'),
+])
+def test_write_errors_report_rom_outcome_without_suggesting_replay(reason, code, message):
+    record = qualified_record(operation='program', code=code, reason=reason,
+                              write_attempted=True, write_status=0)
+    with pytest.raises(ValueError) as caught:
+        otp.parse_change(change_line(record), 'test', CHANGE, commit=True)
+    assert message in str(caught.value)
+    assert 'may already have changed' in str(caught.value)
+    assert 'do not retry' in str(caught.value)
+    assert 'ROM write status 0' in str(caught.value)
+
+
 def test_unqualified_firmware_receives_no_execution_token(runtime, monkeypatch):
     client, _, prepare, program = write_runtime(runtime, monkeypatch)
     prepare.side_effect = lambda *_, **change: dict(change, before=5, qualified=False, write_supported=False,
