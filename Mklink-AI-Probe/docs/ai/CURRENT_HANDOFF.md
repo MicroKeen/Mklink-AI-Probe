@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-21T22:28:03.347986+08:00`
+- 更新时间：`2026-10-21T22:33:00.910147+08:00`
 - 分支：`codex/hpm-isp-deployment-ux`
-- HEAD：`共享设备/镜像/OTP工作区源c59a6f30，目录补全2f681cad，Web92122d33；报告d4616b5d。`
-- 远端 HEAD：`PR48源和Web已推送；本地组合包源a2599b21，报告15ffae31已推送。`
-- 工作树：唯一工作区E:/software/HPM5300/Mklink-AI-Probe，源码子目录Mklink-AI-Probe；当前任务分支，安装后验收须切codex/v036-isp-ux-local以核对完整组合源。
-- 当前任务：已实现左侧共享下载器/芯片/下载类型，右侧镜像和HPM OTP/ARM选项字独立页签；HPM按官方8组系列开放128字、字段/模板/CSV和预检写入。组合0.3.6源a2599b21已打包并通过解包资格；管理员安装已发起，Windows consent仍等待用户点击是，未安装完成。安装进程exec session68679；结果文件F:/MKLink-Build/artifacts/v036-local-isp-a2599b21/install-result.json。用户无OTP写入/锁/供电授权，未操作物理设备；下载器扩展固件3d96dbb已由指定会话提交，未升级实机。
-- 状态：`offline_workspace_package_waiting_uac`
+- HEAD：`共享离线工作区源c59a6f30、型号目录2f681cad、Web92122d33；安装报告64698b09。`
+- 远端 HEAD：`PR48功能源与Web已推送；组合包源a2599b21、安装报告087672a7已推送。`
+- 工作树：唯一工作区E:/software/HPM5300/Mklink-AI-Probe，源码子目录Mklink-AI-Probe；当前codex/hpm-isp-deployment-ux。已安装组合源在codex/v036-isp-ux-local。
+- 当前任务：共享左侧下载器/芯片/下载类型，右侧镜像和HPM OTP/ARM选项字独立页签已完成；官方8组HPM系列128字、字段/模板/CSV和预检写入已接入。组合0.3.6源a2599b21于2026-10-21 22:29管理员覆盖exit0，解包/实装资格通过，原生窗口和安装后网页通过，原生PID51068保留给用户测试。下载器配套固件3d96dbb未刷入，物理OTP/锁/VCC均未操作，新区域真机读写未验收。
+- 状态：`offline_workspace_installed_waiting_user_test`
 
 ## 里程碑
 
@@ -23,7 +23,7 @@
 
 ## 验证证据
 
-- **共享脱机工作区与八系列UART OTP**：源c59a6f30/2f681cad：179相关Python、209GUI、36目录测试；组合373Python、TS/Vite通过。IAB生产Web+真实API模拟CDC验证页签、跨HPM系列和ARM、模板预览/模拟写入、旧确认失效，零控制台错误。固件生产C模拟JSON read/plan/program交叉解析通过。组合源a2599b21解包204Python/41Web一致，冻结CLI/MCP/SVD/HTTP/无宿主Python/正常退出通过；安装等待UAC。报告docs/verification/v036-offline-workspace.md。 上一已安装版本源73fccac2/Web f1695c2c，20:42管理员安装验收通过；详见v036-uart-otp-settings.md。
+- **共享脱机工作区与八系列UART OTP**：源c59a6f30/2f681cad：179相关Python、209GUI、36目录测试；组合373Python、TS/Vite通过。IAB生产Web+真实API模拟CDC验证跨HPM系列/ARM、模板预览/模拟写入、旧确认失效，零控制台错误；固件生产C read/plan/program交叉解析通过。组合a2599b21管理员覆盖exit0；解包及实装204Python/41Web/四载荷一致，冻结CLI/MCP/SVD/HTTP/无宿主Python/正常退出通过。原生启动和IAB安装后网页通过，原生窗口留给用户；未关闭本轮用户窗口。报告v036-offline-workspace.md。此前73fccac2安装见v036-uart-otp-settings.md。
 - **0.3.6 ISP错误原因**：2506e93c/9b056ed1：102Python、72GUI，扩展90GUI通过；修正App旧哈希断言a8250c25，CI重跑以GitHub为准。Chrome临时SD和模拟固件显示timeout/Cancelled，脚本/JSON过滤。组合9c80b12a管理员覆盖退出0，199Python/40Web/四载荷、冻结CLI/MCP/SVD/HTTP、原生/浏览器与退出零进程/监听/端点通过。见v036-isp-readable-errors.md。
 - **0.3.6 串口锁异常清理**：源dad4bf69；213通过，含15新增故障回归、真实测试进程强退后串口/HIL重取及活锁保护。三个源CI通过。组合b3878ee5管理员覆盖退出0，199Python/40Web/四载荷一致，冻结CLI/MCP/SVD/HTTP、原生/Chrome与正常退出零进程/端口/端点通过。无目标硬件操作；见v036-serial-lock-cleanup.md。
 - **0.3.6 ISP部署界面修复**：最新5df9569e：54GUI及TS/Vite通过，Chrome临时SD模拟触发显示屏幕同款waiting/connected/done/OK并保留输出框，脚本/JSON不显示、零控制台错；截图超时。组合11a865cb覆盖退出0、199源/40Web/四载荷、冻结MCP/SVD/HTTP无宿主Python、原生/Web及正常退出释放通过。未实测物理屏幕同步；详见v036-isp-deployment-ux.md。
@@ -53,9 +53,9 @@
 
 ## 下一动作
 
-1. 等待本轮UAC结果；安装包F:/MKLink-Build/artifacts/v036-local-isp-a2599b21，SHA256 acaefde89ebb199a7c9958aadbe696c518d0f95497de7d4d7c64a93c0e460384。确认install-result.json exit0后切codex/v036-isp-ux-local，使用同包qualify-package.py installed经build_workspace执行；再验证已安装网页/原生启动。未收到确认不得声称已覆盖安装。
+1. 等待用户测试新共享离线界面。已安装源a2599b21，安装包F:/MKLink-Build/artifacts/v036-local-isp-a2599b21，SHA256 acaefde89ebb199a7c9958aadbe696c518d0f95497de7d4d7c64a93c0e460384；安装时间22:29:24+08，exit0，安装验证完成。原生PID51068使用隔离installed-native-checks环境并保持打开；后续操作先核对占用。
 2. 继续HPM扩展固件联调交给用户指定会话01a15977-1aef-7430-aa11-6e39725f0465。PR9固件3d96dbb模拟/SES通过，尚未升级物理下载器；现有62d4bd6仅用户69–79可兼容。新系列/安全/密钥区真实烧写未验收，不能执行未获具体批准的永久OTP/锁/VCC操作。
-3. PR48保持待人工审核；不合并、不签名、不发布。包已包含既有RTT/SuperWatch修复。管理员覆盖安装授权继续有效，仅Windows权限窗口需用户操作。
+3. PR48保持待人工审核；不合并、不签名、不发布。包已包含既有RTT/SuperWatch修复。管理员覆盖安装授权继续有效；本次UAC重试后安装完成。
 4. 历史待办：按用户参考图重构脱机页共享左栏及镜像/OTP工作区；核实官方多系列OTP定义，协调固件会话01a15977-1aef-7430-aa11-6e39725f0465能力合同后扩展。完成相关测试与真实浏览器后再组合打包。实际OTP写须用户指定Word和目标值；PR48/49/46未授权合并或发布。；收集两位 RTT 客户的上位机/下载器固件版本、目标 ELF/芯片及 IDE 占用，用启动阶段耗时和 MUX 请求身份复核。历史 unknown 操作不得重放；原始 CDC/F405/受限 AI/GD32 仍待现场闭环。
 5. 其他维护边界：继续排查 30MHz 并行目标读错/Flash 偶发 status5，区分固件目标访问与主机队列；本次低负载 F103 结果不关闭该限制，需要固件改动另开会话。；保持Gitee真实Skill回退：0.3.5已验证；Windows超过100MB被拒使用GitHub链接，其余平台仅GitHub。保留唯一发布/验收证据和Skill备份，联接run仅人工处理，不强删。；收集 Mac/Linux USB/MSC 和原地升级反馈、外置 Flash 多算法实物验证；完整 SES/芯片/拔插断电组合仍待补充。供电每次确认具体电压，长期验证仍暂停。
 
