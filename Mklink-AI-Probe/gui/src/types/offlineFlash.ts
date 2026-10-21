@@ -55,7 +55,7 @@ export interface HpmIspConfig {
   connect_timeout_ms: number
   command_timeout_ms: number
   flash_base: string
-  flash_size: string
+  flash_size?: string
   sector_size: number
   memory_id: string
   config_address: string

@@ -69,7 +69,16 @@ def parse_config(raw: object) -> HpmIspConfig:
     if options[0] & 0xFFFFFF00 != 0xFCF90000 or (options[0] & 0xFF) != len(options) - 1:
         raise ValueError("NOR option header length does not match the supplied option words")
     flash_base = integer(raw.get("flash_base", 0x80000000), "ISP Flash base", 0, 0xFFFFFFFF)
-    flash_size = integer(raw.get("flash_size"), "ISP Flash size", 1, 0x10000000)
+    if "flash_size" in raw:
+        flash_size_value = raw["flash_size"]
+    else:
+        # Use the same HPM5301 memory map as the rest of the application.
+        # This is a profile default, not a measurement of an attached board.
+        from mklink.profiles import load_mcu_profiles
+        flash = next(region for region in load_mcu_profiles()["hpm5301"]["regions"]
+                     if region["name"] == "flash")
+        flash_size_value = flash["size"]
+    flash_size = integer(flash_size_value, "ISP Flash size", 1, 0x10000000)
     sector_size = integer(raw.get("sector_size", 4096), "ISP erase sector size", 256, 65536)
     if sector_size & (sector_size - 1) or flash_size % sector_size or flash_base % sector_size:
         raise ValueError("Flash size/base must align to a power-of-two erase sector size")

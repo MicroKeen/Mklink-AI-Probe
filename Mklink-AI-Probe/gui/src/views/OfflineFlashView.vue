@@ -99,7 +99,7 @@ const ispConfig = ref<HpmIspConfig>({
   baud_rate: savedIspBaud, connect_timeout_ms: 30000, command_timeout_ms: 10000,
   memory_id: '0x10000', config_address: '0x200',
   nor_options: ['0xFCF90002', '0x6', '0x1000'],
-  flash_base: '0x80000000', flash_size: '', sector_size: 4096,
+  flash_base: '0x80000000', sector_size: 4096,
   rearm_mode: 'isp_reconnect', confirm_reconnect_cycles: false,
   completion: { beep: true, reset: 'none', restore_voltage_mv: null, power_off_ms: 200 },
 })
@@ -197,7 +197,7 @@ const canBuild = computed(() => (
   && ((firmwares.value.length === 0 && Object.keys(optionByteChanges.value).length > 0
     && !securityRequested.value && !eraseAllBeforeDownload.value)
   || (firmwares.value.length > 0 && (hpmMode.value
-    ? (ispMode.value ? effectiveModel.value === 'V4' && validIspBaud(ispConfig.value.baud_rate) && !!ispConfig.value.flash_size
+    ? (ispMode.value ? effectiveModel.value === 'V4' && validIspBaud(ispConfig.value.baud_rate)
         && firmwares.value.length <= 8 && firmwares.value.every(item => item.format === 'bin')
         && (ispConfig.value.completion.reset !== 'power_cycle' || !!ispConfig.value.completion.restore_voltage_mv)
       : !!hpmBoard.value) && firmwares.value.every(item => (item.file || item.source_path) && (item.format === 'hex' || !!item.base_address))
@@ -619,14 +619,21 @@ function addFirmwareSources(sources: Array<string | File>): void {
       setError(new Error(tr('USART ISP 支持 1–8 个 BIN 文件', 'USART ISP supports 1–8 BIN files')))
       continue
     }
+    // SD destinations must be unique, including files selected from different
+    // folders or the same image added at two addresses.
+    const usedNames = new Set(firmwares.value.map(item => item.file_name.toLowerCase()))
+    let destinationName = name
+    for (let copy = 2; usedNames.has(destinationName.toLowerCase()); copy++) {
+      destinationName = `${name.slice(0, -(suffix.length + 1))}-${copy}.${suffix}`
+    }
     firmwares.value.push({
       id: nextId('firmware'),
       file,
       source_path: path || null,
       source_stamp: '',
-      file_name: name,
+      file_name: destinationName,
       format: suffix,
-      base_address: suffix === 'bin' ? (ispMode.value ? '' : hpmMode.value ? '0x80000400' : '0x08000000') : '',
+      base_address: suffix === 'bin' ? (hpmMode.value ? '0x80000400' : '0x08000000') : '',
       algorithm_id: hpmMode.value ? '' : algorithms.value[0]?.id || '',
     })
   }
@@ -805,17 +812,18 @@ async function deploy(): Promise<void> {
     deployedScriptName.value = result.script_name
     triggerUncertain.value = false
     deployedModel.value = result.model
-    notice.value = tr(`已部署 ${result.file_count ?? result.files.length} 个文件，脚本 ${result.script_name}`, `Deployed ${result.file_count ?? result.files.length} files with script ${result.script_name}`)
+    notice.value = tr('部署成功', 'Deployment succeeded')
     if (result.acquisition?.errors.length) setError(tr(`采集恢复失败：${result.acquisition.errors.join('; ')}`, `Capture restore failed: ${result.acquisition.errors.join('; ')}`))
     await refreshDisk()
   } catch (value) {
     if (value instanceof OfflineFlashApiError && value.notStarted) deploymentUncertain.value = false
-    setError(value)
+    if (deploymentUncertain.value) await queryDeployment(value)
+    else setError(value)
   }
   finally { operationBusy.value = false }
 }
 
-async function queryDeployment(): Promise<void> {
+async function queryDeployment(deploymentError?: unknown): Promise<void> {
   operationBusy.value = true
   deploymentUncertain.value = true
   notice.value = ''
@@ -828,13 +836,13 @@ async function queryDeployment(): Promise<void> {
       deploymentUncertain.value = false
       deployedScriptName.value = job.result.script_name
       deployedModel.value = job.result.model
-      notice.value = tr('已查询到部署成功记录，未重新写入。', 'Deployment succeeded; queried without writing again.')
+      notice.value = tr('部署成功', 'Deployment succeeded')
     } else {
       deploymentUncertain.value = true
       notice.value = ''
       setError(`${job.state}: ${job.error ?? tr('仍在执行，请稍后查询。', 'Still running; query again later.')} ${job.recovery_directory ?? ''}`)
     }
-  } catch (value) { setError(value) }
+  } catch (value) { setError(deploymentError ?? value) }
   finally { operationBusy.value = false }
 }
 
@@ -1057,11 +1065,10 @@ onBeforeUnmount(() => {
           {{ ispConnection === 'connected' ? tr('● ISP 已连接 · 正在烧录', '● ISP connected · Programming') : tr('○ 等待 ISP 握手', '○ Waiting for ISP handshake') }}
         </p>
         <p v-if="triggerUncertain && !operationBusy" role="alert">{{ tr('运行结果未确认，请查看下载器状态；已禁止再次触发。', 'Execution result is unconfirmed. Check the probe; triggering again is disabled.') }}</p>
-        <div class="deployment-query">
-          <label>{{ tr('部署请求标识（在原下载器查询）', 'Deployment request ID (query the original probe)') }} <input v-model="deploymentRequestId" class="compact-input mono" data-testid="deployment-request-id"></label>
-          <button class="btn" data-testid="deployment-query" :disabled="operationBusy || !deploymentRequestId" @click="queryDeployment">{{ tr('查询部署结果', 'Query deployment result') }}</button>
+        <div v-if="deploymentUncertain" class="deployment-query" role="status">
+          <p>{{ tr('部署结果暂未确认，请检查连接后重试查询。', 'Deployment result is unconfirmed. Check the connection and retry the status check.') }}</p>
+          <button class="btn" data-testid="deployment-query" :disabled="operationBusy" @click="queryDeployment()">{{ tr('重试查询', 'Retry status check') }}</button>
           <button v-if="deploymentUncertain" class="btn" :disabled="operationBusy" @click="deploymentUncertain = false; deploymentRequestId = ''">{{ tr('已核查磁盘，允许新部署', 'Disk inspected; allow a new deployment') }}</button>
-          <p>{{ tr('断线或响应丢失时请先查询，不要重复部署。记录最多保留 64 项；找不到记录不代表没有执行。', 'Query after disconnect or a lost response; do not replay. Up to 64 jobs are retained. A missing record does not prove no execution.') }}</p>
         </div>
         <p class="action-guide">{{ tr('建议流程：先生成预览检查脚本 → 部署到 U 盘 → 点击“触发测试”验证目标板。', 'Recommended: inspect the generated script → deploy to USB → run a hardware test.') }}</p>
         <div class="script-preview">
