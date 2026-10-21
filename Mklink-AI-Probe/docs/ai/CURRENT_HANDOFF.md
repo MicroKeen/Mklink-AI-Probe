@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-21T19:11:47.172234+08:00`
+- 更新时间：`2026-10-21T20:18:38.153305+08:00`
 - 分支：`codex/hpm-isp-deployment-ux`
-- HEAD：`UART OTP设置预检源f2075267、生产Web04cc85e9；PR48精确头以GitHub为准。已安装组合源仍24d9d020。`
-- 远端 HEAD：`PR47已合并main bec395c3；PR48和PR49待审，PR46独立保留。本地组合7e7500c3已推送。`
+- HEAD：`UART OTP ROM write-memory v2及官方式界面源8ebc017c/Web19eb1329；精确远端以GitHub为准。`
+- 远端 HEAD：`PR48已推送19eb1329；本地组合da502fb2已推送，待组合本次界面。PR46/49保留。`
 - 工作树：唯一工作区E:/software/HPM5300/Mklink-AI-Probe；源码子目录Mklink-AI-Probe。当前codex/hpm-isp-deployment-ux；组合包源codex/v036-isp-ux-local。
-- 当前任务：UART OTP设置继续实现：目标值/差异预览与一次性确认接口完成，291Python/84GUI/TS/Vite/Chrome通过；实机源码API预检成功但qualified=false，ROM拒绝FUSE/锁寄存器读取，真实写入尚未实现或验收。固件候选0445f0已刷入，draft PR9源278b67c未合；需厂商provider/锁语义证据或新UART RAM helper。无OTP写/锁/改VCC，新上位机未打包覆盖，原实装只读功能保持。
-- 状态：`blocked_on_rom_write_qualification`
+- 当前任务：实现HPM5301 UART OTP直接write-memory及官方式读/写网格、自定义多Word、CSV导入导出、整批预检/顺序写入失败即停；HPM和ARM配置界面分离。125OTP Python/194GUI/TS/Vite/Chrome模拟双字写入通过。待组合打包覆盖验收。无实际OTP写、永久锁、VCC变更。
+- 状态：`otp_workspace_packaging`
 
 ## 里程碑
 
@@ -23,7 +23,7 @@
 
 ## 验证证据
 
-- **HPM5301 UART OTP读取/设置预检及多轮状态**：f2075267/04cc85e9：291Python、84GUI、TS/Vite及最终生产Chrome真实路由/模拟CDC通过。读→预检显示差异和不可写原因，修改清预览，零console错误，无commit；fixture身份字段缺失已修复复验。固件278b67c/候选0445f0通过实机源码API read/plan，plan_id=null；ROM系统读仅128KiB SRAM，OTP锁寄存器status1001001。无实际写入、新安装或合并。见v036-uart-otp-settings.md。 先前只读实装：源b5e4f7ea/Web bb181a94：221Python、81GUI、TS/Vite、Chrome模拟通过；组合24d9d020复验及NSIS通过。管理员覆盖退出0，201源/40Web/四载荷、冻结CLI/MCP/SVD/HTTP通过。实际安装API及Web按钮+e81059d0固件真机只读11字成功，无JTAG；退出零测试进程/端点/18788监听。多轮仅C单测/模拟，未新做物理换片；原生窗口关闭未重复。见v036-uart-otp-read.md。
+- **HPM5301 UART OTP读写及官方式界面**：源8ebc017c/Web19eb1329：125OTP Python、194GUI、TS/Vite和生产Chrome双字模拟写入通过。原直接写入330Python/84GUI通过，计数重叠。固件62d4bd6/APIv2实机read/plan qualified=true，无program；再次read作废令牌且11字仍0。ROM未知锁状态不再阻止写命令，ROM保护及回读校验保留。CSV选择器自动化超时，格式单测通过。新组合包待覆盖；原24d9d020只读实装验收见v036-uart-otp-read.md。详细见v036-uart-otp-settings.md。
 - **0.3.6 ISP错误原因**：2506e93c/9b056ed1：102Python、72GUI，扩展90GUI通过；修正App旧哈希断言a8250c25，CI重跑以GitHub为准。Chrome临时SD和模拟固件显示timeout/Cancelled，脚本/JSON过滤。组合9c80b12a管理员覆盖退出0，199Python/40Web/四载荷、冻结CLI/MCP/SVD/HTTP、原生/浏览器与退出零进程/监听/端点通过。见v036-isp-readable-errors.md。
 - **0.3.6 串口锁异常清理**：源dad4bf69；213通过，含15新增故障回归、真实测试进程强退后串口/HIL重取及活锁保护。三个源CI通过。组合b3878ee5管理员覆盖退出0，199Python/40Web/四载荷一致，冻结CLI/MCP/SVD/HTTP、原生/Chrome与正常退出零进程/端口/端点通过。无目标硬件操作；见v036-serial-lock-cleanup.md。
 - **0.3.6 ISP部署界面修复**：最新5df9569e：54GUI及TS/Vite通过，Chrome临时SD模拟触发显示屏幕同款waiting/connected/done/OK并保留输出框，脚本/JSON不显示、零控制台错；截图超时。组合11a865cb覆盖退出0、199源/40Web/四载荷、冻结MCP/SVD/HTTP无宿主Python、原生/Web及正常退出释放通过。未实测物理屏幕同步；详见v036-isp-deployment-ux.md。
@@ -47,13 +47,13 @@
 
 ## 真机环境
 
-- **state**：用户确认实装UART只读OTP可读后已退出上位机。固件会话01a15977-1aef-7430-aa11-6e39725f0465升级预检候选0445f0fa，实机源码API read/plan通过但不可写；ROM锁寄存器读invalid range。无JTAG/写OTP/锁位/改VCC，后台正常释放；固件draft PR9源278b67c未合。多轮物理换板未新增验收。
+- **state**：用户已关闭上位机。指定固件会话01a15977-1aef-7430-aa11-6e39725f0465升级62d4bd6对应候选并实机read/plan通过；11字仍0，未写OTP/锁/VCC。模拟双字写入后台已退出零租约。多轮物理换板未新增验收。
 - **installer**：当前实装0.3.6组合24d9d020，2026-10-21 18:38:56+08管理员覆盖exit0。F:/MKLink-Build/artifacts/v036-local-isp-24d9d020；SHA256 7ae3f0163959eaf8d9aa3b9ee845f2e5d9c4497bfcf642954865ba92ebb5ae54。安装文件/冻结/实机Web OTP通过；全局Skill未改，无公开发布。
 - **backups**：0.3.4正式包/安装/渠道/Skill/HIL在MKLINK_BUILD_ROOT/artifacts/v034-official，相邻v034-official-native保存完整原生CI ZIP；0.3.5本机包见上述构建根。原Git根.build/artifacts/v033-official、v032-official及用户备份保持；清理前快照/删除清单在构建根reports/v034-cleanup-*.json、v034-deleted-branches.json、v034-memory-before-cleanup.json。不能再把F盘仅视为可删缓存。
 
 ## 下一动作
 
-1. 继续完成UART OTP设置需ROM写入资格依据或新RAM helper；预检代码/证据见v036-uart-otp-settings.md。PR48（含预检）、PR49锁和PR46 RTT待明确合并授权。现有实装24d9d020只读保持，本次未覆盖；多轮换板待用户实测，不发布。
+1. 组合8ebc017c到codex/v036-isp-ux-local，相关复验后NSIS打包、管理员覆盖和冻结/实装验收；同步本报告与PR48。实际OTP写须用户指定word和目标值。PR48/49/46未授权合并或发布。
 2. 收集两位 RTT 客户的上位机/下载器固件版本、目标 ELF/芯片及 IDE 占用，用启动阶段耗时和 MUX 请求身份复核。历史 unknown 操作不得重放；原始 CDC/F405/受限 AI/GD32 仍待现场闭环。
 3. 继续排查 30MHz 并行目标读错/Flash 偶发 status5，区分固件目标访问与主机队列；本次低负载 F103 结果不关闭该限制，需要固件改动另开会话。
 4. 保持Gitee真实Skill回退：0.3.5已验证；Windows超过100MB被拒使用GitHub链接，其余平台仅GitHub。保留唯一发布/验收证据和Skill备份，联接run仅人工处理，不强删。
@@ -68,11 +68,11 @@
 - V3无屏幕、不支持HPM；V3.6.4原生Keil先运行再采集、暂停/单步/继续/退出和OpenOCD均通过。V4最终无诊断固件完整SES矩阵未完成。
 - 后台最后会话释放约5秒租约，加排空和退出开销；不保证硬实时5秒。每个GUI客户端一个后台，同窗口切换固定PID/端口；一个物理探针在任一时刻仅由一个后台独占。打开已有URL的额外页面共享当前后台并跟随明确切换；独立操作应启动新客户端。
 - 跨物理主机Agent、真实Modbus从站及全部芯片组合未完整认证，模拟测试不能替代实体。0.3.5最终独立Windows Site Agent已重新构建并通过两项实际包资格检查；macOS Intel/ARM和Linux原生CI包构建/冻结运行/载荷检查通过，但实体USB/MSC、原生GUI、签名升级未认证。Mac仅ad-hoc无Developer ID公证，Windows无Authenticode。Web真实文件句柄选择/跟踪未完成；新候选原生日志文件选择、回放和PNG已通过。
-- nRF54L15 GUI保护闭环、全部物理擦除/拔插/休眠/断电场景、电源外部精度校准未全部认证。VCC每次改动必须确认具体电压，HPM已锁定OTP不得重放。 已知无可靠扇区表的26个FLM禁用扇区操作；重叠算法需要匹配Bank模式。 HPM5301组18/19永久锁定的历史状态及用户字先写/组锁最后、全部固件独立校验后才写OTP等边界见docs/ai/hpm-offline-otp-handoff.md；接手重新确认芯片，其他型号不继承验收。 UART OTP设置当前仅预检，实际写入未完成：ROM OTP读来源/临时锁状态未证实，system-memory仅128KiB SRAM拒绝FUSE/锁寄存器。当前固件任何commit均拒绝，不发执行令牌。须厂商ROM provider源码及写/锁语义，或开发并验证RAM helper；不能把JTAG/SDK demo直接当UART助手。未指定永久OTP写入字/值，禁止自主烧写资格试验。
+- nRF54L15 GUI保护闭环、全部物理擦除/拔插/休眠/断电场景、电源外部精度校准未全部认证。VCC每次改动必须确认具体电压，HPM已锁定OTP不得重放。 已知无可靠扇区表的26个FLM禁用扇区操作；重叠算法需要匹配Bank模式。 HPM5301组18/19永久锁定的历史状态及用户字先写/组锁最后、全部固件独立校验后才写OTP等边界见docs/ai/hpm-offline-otp-handoff.md；接手重新确认芯片，其他型号不继承验收。 UART OTP已实现ROM write-memory APIv2，独立熔丝/影子/临时锁读语义仍未知并如实显示；以ROM写入状态及回读为准。固件实机只读预检qualified=true，真实烧写尚未验收；未指定永久OTP字和值，不自主烧写。多Word顺序执行不可回滚。CSV原生选择器自动化未完成。
 
 ## 延续协议
 
-- 读取AGENTS和v036-uart-otp-settings.md；PR48源f2075267/Web04cc85e9预检完成但实际UART OTP写未实现。固件指定会话01a15977-1aef-7430-aa11-6e39725f0465：draft PR9源278b67c/候选0445f0已刷，锁状态仍未知，no token/no commit。安装组合24d9d020不变，旧UAC问答回放不是新安装授权。用户已关闭测试，上位机18787模拟后台正常退出零租约；不得重放旧OTP操作。物理多轮换板未验收。
+- 继续完成官方式HPM OTP界面安装验收；源8ebc017c/Web19eb1329，组合分支da502fb2待cherry-pick本次界面。旧预检阻塞结论已废弃，直接write-memory v2固件62d4bd6已刷且read/plan实机通过。当前实装24d9d020只读未变。用户授权覆盖安装持续有效；禁止实际OTP自主写、旧请求重放、VCC变更或合并发布。
 - V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。
 - CDC 995根因仅保留待排查。恢复只允许同身份CDC故障5秒内；超时不自动接回或新建AI会话，主动断开立即生效，不重放未知写入。测试实例已经全部释放；见v035-transport-recovery.md，不寻找旧现场窗口。
 - 客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。

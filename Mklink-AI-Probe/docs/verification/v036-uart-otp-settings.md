@@ -1,84 +1,130 @@
-# HPM5301 UART OTP settings preflight — 2026-10-21
+# HPM5301 UART OTP settings — 2026-10-21
 
-Host source `f2075267`, PR [48](https://github.com/MicroKeen/Mklink-AI-Probe/pull/48).
-This implements configuration preview and guarded host integration. **Actual UART
-OTP programming is not implemented in the current firmware or qualified on a
-target.** The installed read-only host package is unchanged in this step.
+Host implementation: PR [48](https://github.com/MicroKeen/Mklink-AI-Probe/pull/48).
+The UART settings workflow is implemented through ROM `write-memory` with
+explicit confirmation and ROM readback. **No physical OTP programming was
+performed by either task.** Simulation, physical read-only preflight and
+installation checks below are distinct evidence.
 
-## Implemented behavior
+## Behavior and protocol
 
 After reading, the UART panel accepts user Word 69–79 and a complete desired
-32-bit value. It reuses JTAG value/range validation, rejects clearing existing
-bits and no-op changes, and shows expected/current/desired values and added bits.
-Preview sends commit=0. Unknown ROM read semantics or lock state produces a
-specific unavailable reason, no write button and no server execution token.
+32-bit value. JTAG value/range validation is reused. No-op changes and clearing
+existing bits are rejected; the preview shows expected, current, desired and
+added bits. No BIN, SD or JTAG connection is needed.
 
-The host also contains a future qualified-firmware execution path. Qualification
-requires a matching chip, change, direct fuse semantics, known unlocked state,
-and explicit firmware support. Only then may a server-owned, 60-second,
-single-use token be created. The token binds the exact change, probe, port,
-generation and part. Read/new preview invalidates prior tokens; target switches,
-expiry, failed attempts and successful use prevent reuse. Execution requires
-explicit irreversible confirmation, a fresh firmware preflight and an exact
-verified result. No automatic retries, JTAG fallback, arbitrary addresses, lock
-configuration, target reset or voltage changes are introduced.
+Firmware API v2 is required for writing. API v1 remains usable for read-only
+preflight and cannot authorize programming. Each qualified result must match
+HPM5301 CHIP_ID, ROM 0x56010200, SoC 0x56010000, OTP memory ID 0x20000,
+`write_method=rom_write_memory`, and `verification_source=rom_otp`. The raw
+HARD_LOCK group bit blocks writing when set. Unknown transient locks and
+fuse/shadow read provenance stay unknown; ROM enforces write protection.
 
-All operations retain exclusive resource leases through worker completion,
-including cancellation, and reject competing UART clients. UI inputs and stale
-results are invalidated on the relevant selection changes. Actual programming
-cannot currently pass the qualification gate, even via direct API calls.
+The server stores the exact change behind a 60-second single-use token, bound
+to probe, port, generation and part. New reads/previews invalidate old tokens;
+expiry, selection changes and failed or successful consumption prevent reuse.
+The user must confirm the displayed irreversible change. Before execution the
+host reruns preflight, and firmware rechecks expected value while owning the
+same UART operation. One command writes the complete desired value; delta is
+only the change preview. ROM success and matching complete readback are both
+required. Success means ROM OTP readback matches, not independent direct-fuse
+verification. No automatic retry, JTAG fallback, permanent-lock command, target
+reset or VCC change is introduced.
 
-## Verification
+If an attempted write fails, the UI reports that OTP may already have changed
+and instructs reading before any further operation. ROM rejection, unknown
+write outcome, failed readback and mismatched readback have distinct messages;
+available ROM write status is preserved.
 
-- 291 Python tests passed: UART OTP/API/plans, existing JTAG OTP, offline OTP,
-  ISP generation and shared UART runtime. Includes no execution token for
-  unqualified firmware, unchanged fuse requirement, bit/lock checks, expiry,
-  binding, consumed tokens, incomplete response and no retry behavior.
-- 84 GUI tests passed across UART/JTAG OTP panels, offline view and ISP output.
-  TypeScript and Vite production builds passed. Existing chunk-size warnings
-  remain.
-- Chrome loaded the production assets and exercised real host routes/parsers
-  with simulated CDC, without SD/BIN/JTAG. Read and preview displayed the
-  expected values and unavailable reason. Editing desired value removed the
-  preview; no write button appeared. Captured commands were only capability,
-  read and commit=0 preflight. Final browser console had no errors, the server
-  exited normally with no leases, and the test tab was closed.
-- The first browser fixture omitted probe identity metadata, causing its disk
-  status endpoint to raise KeyError. The fixture was corrected and the final
-  production-asset check repeated successfully; this was not a product failure.
-- The user confirmed the previously installed UART read feature works. The
-  delegated firmware task then verified the developing **source** host API
-  against its new physical candidate: read followed by Word69 expected0,
-  desired1 preflight returned before0, qualified=false, write_supported=false,
-  plan_id=null, expires_in=0. No program call was sent; JTAG remained disconnected.
+## Corrected implementation decision
 
-Local logs: `uart-otp-settings-python.log`, `uart-otp-settings-gui.log`,
-`uart-otp-settings-production.log` and browser fixture/command records under
-`F:/MKLink-Build/reports`. Test scratch containing links was retained for manual
-inspection, including `run-20261021-190534-4a9409ac`; no forced cleanup.
+The initial preflight-only source f2075267/Web04cc85e9 required direct fuse and
+all transient lock states before writing. The user clarified in the firmware
+chat that OTP uses `write-memory`. This supersedes that overly restrictive
+host policy: lack of direct register access does not establish that the ROM
+write command is unsupported. Source 64da676d/Web1bc5e76e implements API v2;
+the combined source 2b99001f also includes explicit uncertain-write errors.
+The historical invalid-register-range trace remains valid evidence about that
+read path only. No RAM helper is needed or executed for this implementation.
 
-## Hardware blocker and next implementation
+## Automated and browser verification
 
-Firmware source [278b67c](https://github.com/Aladdin-Wang/MicroLink_Plus/commit/278b67c)
-is in draft [PR9](https://github.com/Aladdin-Wang/MicroLink_Plus/pull/9), unmerged.
-Its candidate UF2 SHA256 is
-`0445f0fa8e3d206facfb7f6fceb7f7d96d2c68a145f639203c7acadc5542f935`.
-The delegated task upgraded the probe and released its backend normally.
+- Initial direct-write source: 316 affected Python and 84 GUI tests passed.
+  Combined candidate including error messages: 330 Python tests passed across
+  OTP, offline ISP, shared UART and runtime logging. Final parser refinement:
+  111 tests passed; combined GUI repeat: 84 passed. Counts overlap.
+- Tests cover API capability downgrade, stale expected values, known locks,
+  invalid bit changes, exact target/protocol fields, single-use tokens,
+  cancellation resource lifetime, unknown outcomes, ROM failure, readback
+  mismatch and no retries. The previously failing CI windowless logging case
+  passed locally with the full logging file; CI evidence is recorded separately.
+- TypeScript/Vite and local NSIS builds passed. Existing Pack overlap,
+  dependency deprecation and chunk-size warnings remain.
+- Chrome used production Web and real host routes/parsers with simulated CDC.
+  It displayed unknown locks, enabled confirmation after a valid preview and
+  completed a simulated write with the ROM-readback success message. Commands
+  showed initial preview, fresh preflight and exactly one commit. Console had
+  no errors; the simulated server exited with no leases and the tab closed.
+  Earlier browser checks cover unavailable v1 preview and edit invalidation.
+- The first preflight fixture omitted probe identity metadata, causing a disk
+  status KeyError. It was corrected and final production checks repeated.
 
-The tested ROM reports 128 KiB SRAM for system-memory reads. Fixed OTP fuse,
-shadow and lock register reads all return invalid-memory-range status 1001001;
-OTP memory reads continue to succeed. Consequently the current UART ROM path
-cannot verify the write protection state or prove its OTP read source is fuse.
-The firmware refuses commit and never issues a ROM OTP write.
+Logs and local fixtures are under `F:/MKLink-Build/reports` with prefixes
+`uart-otp-write-` and `uart-otp-settings-`. Linked test scratch was retained for
+manual inspection, including run-20261021-192313-edb24f09 and
+run-20261021-192408-5e18af21; no forced cleanup.
 
-See the firmware [contract](https://github.com/Aladdin-Wang/MicroLink_Plus/blob/278b67c/microlink_app/docs/hpm-uart-otp-user-contract.md)
-and [hardware report](https://github.com/Aladdin-Wang/MicroLink_Plus/blob/278b67c/microlink_app/docs/verification/hpm-uart-otp-preflight-20261021.md).
-Completion requires vendor evidence for ROM OTP provider/read/write/lock
-semantics, or a new UART-loaded RAM helper with audited image/startup/UART
-handoff, direct fuse/lock checks, atomic guarded programming and readback.
-The existing JTAG OTP and SDK application examples are not qualified UART
-load-image helpers. None was uploaded or executed during this task.
+## Physical firmware validation
 
-No target OTP, permanent lock or Flash was written, and no target voltage was
-changed. There is no new installer, overwrite, public release or merge for this
-preflight step; it must not be represented as completed OTP settings support.
+Firmware [62d4bd6](https://github.com/Aladdin-Wang/MicroLink_Plus/commit/62d4bd6),
+draft [PR9](https://github.com/Aladdin-Wang/MicroLink_Plus/pull/9), implements
+the bounded write command, full desired-value payload, final ROM status and
+readback. Native firmware build and production C protocol/ownership tests pass.
+UF2 SHA256:
+`a1110d7453b3753cf47f0c5e3be9818e2d0131770acdc95e97d511b4e8f81556`.
+
+The delegated task upgraded the probe, then invoked the source host API
+read/plan for Word69 expected0/desired1. The plan was qualified with a
+60-second token and truthful unknown lock/read semantics. Another read
+invalidated the token and confirmed all eleven values remained zero. No
+program request was sent; JTAG remained disconnected, and the backend stopped
+normally. See its [contract](https://github.com/Aladdin-Wang/MicroLink_Plus/blob/62d4bd6/microlink_app/docs/hpm-uart-otp-user-contract.md)
+and [report](https://github.com/Aladdin-Wang/MicroLink_Plus/blob/62d4bd6/microlink_app/docs/verification/hpm-uart-otp-write-20261021.md).
+
+Physical programming needs the user to choose and confirm an exact word and
+value. No target OTP/lock/Flash or voltage was changed during this host task.
+Multi-round physical board-swap testing was not repeated. No public release,
+official tag/channel, signing, global Skill update or PR merge is performed.
+
+## Local package qualification
+
+Installation details are appended after the candidate qualification completes.
+
+## Official-style OTP workspace
+
+Source 8ebc017c / Web 19eb1329 follows the read/write views, indexed Word grid,
+column count, custom start/count/value editor and word,value CSV format in the
+[official article](https://doc.hpmicro.com/service-support/technical-articles/216)
+and local v0.6.0 manual section 2.1.3. UART uses a separate wide dialog; HPM JTAG
+configuration now renders a separate HPM component, sharing the Word grid.
+ARM option-byte forms remain separate. Only HPM5301 user words 69–79 are writable;
+boot/security/key templates outside that range are not enabled.
+
+A batch preview stores all exact changes in one bound, single-use token. All
+words are preflighted again before the first write; each word also gets the
+existing immediate preflight and firmware guard. Programming is sequential,
+not atomic. The first failure stops later words and reports completed words,
+the failed/uncertain word and untouched remaining words. Drafts are consumed
+on dispatch; there is no automatic replay. Single-word and batch tokens cannot
+be interchanged. Unchanged imported values are omitted from the write plan;
+CSV zero/empty values are skipped like the official format. Unsupported words,
+duplicate indices, invalid lengths and bit clearing are rejected.
+
+125 OTP Python tests and 194 affected GUI tests passed; TypeScript/Vite passed.
+Production Chrome against simulated CDC verified the independent dialog,
+unknown lock display, two-word custom editor, exact diff, explicit confirmation
+and success for words 69/70; zero console errors. The first screenshot exposed
+a global CSS margin reset; explicit dialog centering was added. CSV chooser
+automation timed out and reset the browser tool, so native chooser completion
+is not claimed. CSV parsing/roundtrip is covered by unit tests. Fixture stopped
+normally with no resource leases; no physical target was accessed.
