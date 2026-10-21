@@ -100,7 +100,7 @@ const ispConfig = ref<HpmIspConfig>({
   memory_id: '0x10000', config_address: '0x200',
   nor_options: ['0xFCF90002', '0x6', '0x1000'],
   flash_base: '0x80000000', sector_size: 4096,
-  rearm_mode: 'isp_reconnect', confirm_reconnect_cycles: false,
+  rearm_mode: 'isp_reconnect',
   completion: { beep: true, reset: 'none', restore_voltage_mv: null, power_off_ms: 200 },
 })
 const securityCapability = ref<OfflineSecurityCapability | null>(null)
@@ -191,7 +191,6 @@ const securityReady = computed(() => (
 ))
 const canBuild = computed(() => (
   !!effectiveModel.value
-  && (!ispMode.value || automaticCount.value === 1 || ispConfig.value.confirm_reconnect_cycles)
   && !!disk.value?.available
   && securityReady.value
   && ((firmwares.value.length === 0 && Object.keys(optionByteChanges.value).length > 0
@@ -858,6 +857,7 @@ async function triggerOffline(): Promise<void> {
   clearError()
   triggerLines.value = []
   ispConnection.value = 'idle'
+  if (ispMode.value) preview.value = null
   try {
     const identityHeaders = disk.value?.probe_id ? await selectDownloadProbe(disk.value.probe_id) : {}
     triggerUncertain.value = ispMode.value
@@ -1022,7 +1022,7 @@ onBeforeUnmount(() => {
             <option value="hpm_rom_isp_uart" :disabled="model !== 'V4'">USART ISP</option>
           </select>
         </label>
-        <HpmIspSettings v-if="ispMode" v-model="ispConfig" :count="automaticCount" />
+        <HpmIspSettings v-if="ispMode" v-model="ispConfig" />
         <div v-else class="security-settings">
           <label class="security-option"><input v-model="beepOnCompletion" type="checkbox" />{{ tr('下载完成响蜂鸣器', 'Beep on completion') }}</label>
           <label class="security-option"><input v-model="resetAfterDownload" type="checkbox" :disabled="hpmMode" />{{ tr('下载完成复位', 'Reset on completion') }}</label>
@@ -1078,11 +1078,11 @@ onBeforeUnmount(() => {
           <button v-if="deploymentUncertain" class="btn" :disabled="operationBusy" @click="deploymentUncertain = false; deploymentRequestId = ''">{{ tr('已核查磁盘，允许新部署', 'Disk inspected; allow a new deployment') }}</button>
         </div>
         <p class="action-guide">{{ tr('建议流程：先生成预览检查脚本 → 部署到 U 盘 → 点击“触发测试”验证目标板。', 'Recommended: inspect the generated script → deploy to USB → run a hardware test.') }}</p>
-        <div class="script-preview">
+        <div v-if="!ispMode || preview" class="script-preview">
           <div class="preview-title"><span>{{ preview?.script_name || effectiveScriptName }}</span><span>{{ preview?.model || effectiveModel }}</span></div>
           <pre>{{ preview?.script || tr('等待生成配置', 'Waiting to generate configuration') }}</pre>
         </div>
-        <pre v-if="triggerLines.length" class="trigger-log">{{ triggerLines.join('\n') }}</pre>
+        <pre v-if="!ispMode && triggerLines.length" class="trigger-log">{{ triggerLines.join('\n') }}</pre>
       </section>
     </div>
     <input ref="replacementFlmInput" class="visually-hidden" type="file" accept=".flm" @change="replaceAlgorithm">

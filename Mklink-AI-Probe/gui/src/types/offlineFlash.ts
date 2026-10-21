@@ -61,7 +61,6 @@ export interface HpmIspConfig {
   config_address: string
   nor_options: string[]
   rearm_mode: 'isp_reconnect'
-  confirm_reconnect_cycles: boolean
   completion: {
     beep: boolean
     reset: 'none' | 'software' | 'power_cycle'

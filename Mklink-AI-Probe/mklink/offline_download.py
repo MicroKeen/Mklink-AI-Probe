@@ -222,8 +222,6 @@ def parse_offline_config(
             isp = parse_hpm_isp_config(payload.get("hpm_isp"))
         except ValueError as error:
             raise OfflineDownloadError(str(error)) from error
-        if count > 1 and not isp.confirm_reconnect_cycles:
-            raise OfflineDownloadError("Confirm that subsequent rounds start on ISP reconnection, which does not identify a different physical board")
     elif payload.get("hpm_isp") is not None:
         raise OfflineDownloadError("ISP configuration requires the USART ISP protocol")
     if hpm_target and isp is None and not reset_after_download:
