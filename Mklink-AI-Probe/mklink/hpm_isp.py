@@ -129,6 +129,12 @@ def validate_images(config, paths) -> None:
 
 SCRIPT_MARKER = "# MKLINK_HPM_ISP_V1 "
 CAPABILITY_COMMAND = 'print("MKLINK_HPM_ISP_API", hpm.isp_supported())'
+OTP_JOB_CAPABILITY_COMMAND = 'print("MKLINK_HPM_ISP_OTP_JOB_API", hpm.isp_otp_job_supported())'
+
+
+def require_otp_job_capability(response: str) -> None:
+    if re.findall(r'(?m)^\s*MKLINK_HPM_ISP_OTP_JOB_API\s+(\d+)\s*$', response) != ['1']:
+        raise ValueError('Upgrade HPMLINK V4 firmware for combined image and OTP offline jobs')
 
 # hpm_isp_wire.h return codes. Keep screen text short; machine result events
 # retain the numeric code independently of the generated script's output.
@@ -172,16 +178,28 @@ def generate_script(config) -> str:
             f"        {'if' if index == 0 else 'elif'} rc == {code}:",
             f"            print(isp_label, {json.dumps(message)})",
         ])
+    otp = config.hpm_isp_otp
+    otp_lines = []
+    if otp is not None:
+        otp_lines = [
+            '    if rc == 0:',
+            '        isp_label = "USART ISP OTP config:"',
+            f'        rc = hpm.isp_otp_job_config({json.dumps(otp.profile)}, {otp.chip_id}, {otp.rom_version}, {otp.soc_revision})',
+        ]
+        for word, expected, desired in otp.words:
+            otp_lines.extend(['    if rc == 0:', f'        rc = hpm.isp_otp_job_add({word}, {expected}, {desired})'])
     return "\n".join([
-        SCRIPT_MARKER + json.dumps({"job_id": job_id, "total": config.auto_download_count}, separators=(",", ":")),
+        SCRIPT_MARKER + json.dumps({"job_id": job_id, "total": config.auto_download_count, **({'otp': True} if otp else {})}, separators=(",", ":")),
         "import hpm",
-        "if hpm.isp_supported() == 1:",
+        ('if hpm.isp_supported() == 1 and hpm.isp_otp_job_supported() == 1:' if otp else "if hpm.isp_supported() == 1:"),
         '    isp_label = "USART ISP config:"',
         f"    rc = hpm.isp_config({', '.join(map(str, args))})",
+        *otp_lines,
         "    if rc == 0:",
         '        isp_label = "USART ISP"',
         *path_lines,
         f"        rc = hpm.isp_program({', '.join(program_args)})",
+        *(['    hpm.isp_otp_job_clear()'] if otp else []),
         "    if rc != 0:",
         *error_lines,
         "        else:",
@@ -200,6 +218,8 @@ def script_metadata(text: str) -> dict | None:
     if not isinstance(raw, dict) or not re.fullmatch(r"[A-Za-z0-9_-]{1,48}", str(raw.get("job_id", ""))):
         raise ValueError("Invalid ISP script job identifier")
     integer(raw.get("total"), "ISP script total", 1, 9999)
+    if 'otp' in raw and type(raw['otp']) is not bool:
+        raise ValueError('Invalid ISP OTP job metadata')
     return raw
 
 

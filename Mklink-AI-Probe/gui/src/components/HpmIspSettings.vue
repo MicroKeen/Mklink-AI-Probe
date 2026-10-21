@@ -25,7 +25,6 @@ async function updateVoltage(value: number, input: HTMLInputElement): Promise<vo
 <template>
   <fieldset class="isp-settings" data-testid="hpm-isp-settings">
     <legend>USART ISP</legend>
-    <p>{{ tr('使用下载器独立 UART 接口，目标须进入 ROM ISP。仅支持启用 HPMLINK 的 V4 固件。', 'Use the probe’s dedicated UART port with the target in ROM ISP. Requires HPMLINK-enabled V4 firmware.') }}</p>
     <label>{{ tr('串口速率（baud，8N1）', 'Baud rate (8N1)') }}<select v-model.number="config.baud_rate" data-testid="isp-baud-rate"><option v-for="rate in HPM_ISP_BAUD_RATES" :key="rate" :value="rate">{{ rate === 115200 ? '115200' : `${rate / 1000000}M (${rate})` }} · 8N1</option></select></label>
     <label>{{ tr('握手超时（ms）', 'Handshake timeout (ms)') }}<input v-model.number="config.connect_timeout_ms" type="number" min="1000" max="3600000" /></label>
     <details>

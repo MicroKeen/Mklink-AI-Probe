@@ -11,7 +11,7 @@ import HpmIspSettings from '../components/HpmIspSettings.vue'
 import HpmIspOtpPanel from '../components/HpmIspOtpPanel.vue'
 import type { HpmIspOtpChange, HpmIspOtpBatchPlan, HpmIspOtpSnapshot } from '../types/hpmOtp'
 import { API_BASE } from '../lib/runtimeEndpoint'
-import type { HpmOfflineOtp, HpmIspConfig } from '../types/offlineFlash'
+import type { HpmOfflineOtp, HpmIspConfig, HpmIspOfflineOtp } from '../types/offlineFlash'
 import { HPM_ISP_BAUD_RATES } from '../types/offlineFlash'
 import { provideConfirmation } from '../composables/useConfirmation'
 import { OfflineFlashApiError, useOfflineFlashApi } from '../composables/useOfflineFlashApi'
@@ -126,9 +126,14 @@ const workspaceTab = ref<'image' | 'configuration'>('image')
 const otpPlan = ref<HpmIspOtpBatchPlan | null>(null)
 const otpResult = ref('')
 const otpError = ref('')
+const ispOfflineOtp = ref<HpmIspOfflineOtp>()
+const ispOtpPending = ref(false)
+function setIspOfflineOtp(config: HpmIspOfflineOtp | undefined, pending: boolean): void {
+  ispOfflineOtp.value = config; ispOtpPending.value = pending
+}
 let otpRevision = 0
 function clearOtpPlan(): void { otpPlan.value = null }
-function invalidateOtp(): void { otpRevision++; otpSnapshot.value = null; otpError.value = ''; otpResult.value = ''; clearOtpPlan() }
+function invalidateOtp(): void { otpRevision++; otpSnapshot.value = null; otpError.value = ''; otpResult.value = ''; ispOfflineOtp.value = undefined; ispOtpPending.value = false; clearOtpPlan() }
 watch([targetPart, model, programmingProtocol, diskProbe, () => disk.value?.probe_id], invalidateOtp)
 const error = ref('')
 const errorTitle = ref('')
@@ -209,6 +214,7 @@ const canBuild = computed(() => (
   !!effectiveModel.value
   && !!disk.value?.available
   && securityReady.value
+  && (!ispMode.value || !ispOtpPending.value || !!ispOfflineOtp.value)
   && ((firmwares.value.length === 0 && Object.keys(optionByteChanges.value).length > 0
     && !securityRequested.value && !eraseAllBeforeDownload.value)
   || (firmwares.value.length > 0 && (hpmMode.value
@@ -253,6 +259,9 @@ watch([model, scriptName, automaticCount, idcodeTimeout, swdClock, () => ispConf
 })
 
 watch([model, targetPart], () => { void refreshSecurityCapability() })
+watch([ispOfflineOtp, ispOtpPending], () => {
+  preview.value = null; deployedScriptName.value = ''; deployedModel.value = ''; triggerLines.value = []
+}, { deep: true })
 
 function message(value: unknown): string {
   return value instanceof Error ? value.message : String(value)
@@ -321,14 +330,10 @@ function targetAction(target: TargetRecord): string {
 
 async function refreshDisk(): Promise<void> {
   try {
-    disk.value = await offline.getStatus(diskProbe.value)
+    disk.value = await offline.getStatus()
     diskProbe.value = disk.value.probe_id || ''
   }
   catch (value) { setError(value) }
-}
-function changeDiskProbe(): void {
-  deployedScriptName.value = ''; deployedModel.value = ''; preview.value = null
-  void refreshDisk()
 }
 
 function modelChanged(): void {
@@ -498,6 +503,7 @@ function targetSearchKeydown(event: KeyboardEvent): void {
   }
   if (event.key === 'Enter' && targetSuggestionsOpen.value && activeTargetSuggestion.value >= 0) {
     event.preventDefault()
+    if (targetBusy.value) return
     void addTargetAlgorithms(targets.value[activeTargetSuggestion.value])
   }
 }
@@ -770,7 +776,7 @@ function buildRequest(): {
     payload: {
       model: model.value,
       programming_protocol: programmingProtocol.value,
-      ...(ispMode.value ? { hpm_isp: ispConfig.value } : {}),
+      ...(ispMode.value ? { hpm_isp: ispConfig.value, hpm_isp_otp: ispOfflineOtp.value } : {}),
       ...(!ispMode.value ? {
         beep_on_completion: beepOnCompletion.value,
         reset_after_download: hpmMode.value ? true : resetAfterDownload.value,
@@ -1012,14 +1018,8 @@ onBeforeUnmount(() => {
     <div class="offline-layout">
       <aside class="work-panel shared-device-panel" data-testid="offline-shared-device">
         <h2 class="section-title">{{ tr('设备与连接', 'Device and connection') }}</h2>
-        <fieldset :disabled="operationBusy || targetBusy" class="shared-controls">
+        <fieldset :disabled="operationBusy" class="shared-controls">
         <label class="setting-row"><span>{{ tr('下载器型号', 'Probe Model') }}</span><select v-model="model" class="form-select" data-testid="offline-model" @change="modelChanged"><option value="" disabled>{{ tr('请选择', 'Select') }}</option><option value="V2">V2</option><option value="V3">V3</option><option value="V4">V4</option></select></label>
-        <label v-if="disk?.probes?.length" class="setting-row"><span>{{ tr('下载器端口', 'Probe port') }}</span>
-        <select v-if="disk?.probes?.length" v-model="diskProbe" class="form-select" data-testid="offline-probe" :aria-label="tr('下载器端口', 'Probe port')" :disabled="operationBusy || deploymentUncertain" @change="changeDiskProbe">
-          <option value="">{{ tr('选择下载器', 'Select probe') }}</option>
-          <option v-for="probe in disk.probes" :key="probe.probe_id" :value="probe.probe_id">{{ probe.port }}</option>
-        </select>
-        </label>
         <div class="field-title">{{ tr('芯片型号', 'Chip model') }}</div>
         <div ref="targetSearchBox" class="target-combobox" @focusout="targetSearchFocusOut">
           <div class="target-search">
@@ -1057,11 +1057,10 @@ onBeforeUnmount(() => {
       <button id="offline-image-tab" role="tab" :aria-selected="workspaceTab === 'image'" aria-controls="offline-image-panel" :disabled="operationBusy" data-testid="offline-image-tab" @click="workspaceTab = 'image'; clearOtpPlan()">{{ tr('镜像烧写', 'Image programming') }}</button>
       <button id="offline-configuration-tab" role="tab" :aria-selected="workspaceTab === 'configuration'" aria-controls="offline-configuration-panel" :disabled="operationBusy" data-testid="offline-configuration-tab" @click="workspaceTab = 'configuration'">{{ hpmMode ? tr('OTP 操作', 'OTP operations') : tr('选项字配置', 'Option bytes') }}</button>
     </div>
-        <div v-show="workspaceTab === 'image'" id="offline-image-panel" role="tabpanel" aria-labelledby="offline-image-tab" class="image-workspace">
-          <section class="work-panel algorithm-panel">
+        <div v-show="workspaceTab === 'image'" id="offline-image-panel" role="tabpanel" aria-labelledby="offline-image-tab" class="image-workspace" :class="{ 'rom-workspace': hpmMode }">
+          <section v-if="!hpmMode" class="work-panel algorithm-panel">
             <div class="panel-heading"><h2>{{ tr('下载算法', 'Flash algorithm') }}</h2><button v-if="!hpmMode" class="btn btn-sm" type="button" data-testid="offline-add-flm" :disabled="operationBusy" @click="browseManualFlm">{{ tr('添加本地 FLM', 'Add Local FLM') }}</button></div>
-        <p v-if="hpmMode" class="hpm-mode">{{ ispMode ? 'USART ISP' : 'HPM ROM API' }} · {{ tr('无需 Pack 或 FLM', 'No Pack or FLM required') }}</p>
-        <div v-else class="algorithm-list">
+        <div class="algorithm-list">
           <div v-for="(item, index) in algorithms" :key="item.id" class="algorithm-row" :class="{ unavailable: !item.available && item.source_kind !== 'upload' }" data-testid="offline-algorithm-row">
             <div class="row-title"><input v-model="item.file_name" class="compact-input mono"><span>{{ item.origin === '本地文件' ? tr('本地文件', 'Local file') : item.origin }}</span><button class="icon-command" :title="tr('移除算法', 'Remove algorithm')" @click="removeAlgorithm(index)">×</button></div>
             <div v-if="!item.available && item.source_kind !== 'upload'" class="algorithm-warning" data-testid="offline-algorithm-unavailable">
@@ -1103,13 +1102,13 @@ onBeforeUnmount(() => {
         </div>
         <section v-show="workspaceTab === 'configuration'" id="offline-configuration-panel" role="tabpanel" aria-labelledby="offline-configuration-tab" class="configuration-workspace">
       <HpmIspOtpPanel v-if="ispMode && model === 'V4' && hpmOtpProfile(targetPart)"
-        :key="`${model}:${targetPart}:${diskProbe}`" :active="workspaceTab === 'configuration'" :part-number="targetPart" :snapshot="otpSnapshot" :plan="otpPlan" :result="otpResult" :busy="otpReading" :disabled="operationBusy || triggerUncertain"
-        :error="otpError" @read="readIspOtp" @prepare="prepareIspOtp" @program="programIspOtp" @invalidate="clearOtpPlan" />
+        :key="`${model}:${targetPart}:${diskProbe}`" deployment :active="workspaceTab === 'configuration'" :part-number="targetPart" :snapshot="otpSnapshot" :plan="otpPlan" :result="otpResult" :busy="otpReading" :disabled="operationBusy || triggerUncertain"
+        :error="otpError" @read="readIspOtp" @prepare="prepareIspOtp" @program="programIspOtp" @invalidate="clearOtpPlan" @configuration="setIspOfflineOtp" />
       <p v-else-if="ispMode" class="muted">{{ tr('当前型号尚未开放 UART OTP 配置。', 'UART OTP configuration is not available for this target.') }}</p>
       <DeviceConfigurationPanel v-else-if="workspaceTab === 'configuration' && !ispMode" expanded v-model:changes="optionByteChanges" :has-firmware="firmwares.length > 0" :part-number="targetPart" :model="model" :unlock-before-download="unlockBeforeDownload" :lock-after-download="lockAfterDownload" />
         <HpmOfflineOtpPanel v-if="!ispMode && model === 'V4' && ['HPM5301','HPM5301XEGX'].includes(targetPart.toUpperCase())" :key="`${model}:${targetPart}`" @change="hpmOfflineOtp = $event" />
         </section>
-          <section v-show="workspaceTab === 'image' || !ispMode" class="work-panel production-panel">
+          <section class="work-panel production-panel">
             <h2 class="section-title">{{ tr('烧录选项', 'Programming options') }}</h2>
             <fieldset :disabled="operationBusy" class="shared-controls">
         <label class="setting-row"><span>{{ tr('脚本文件名', 'Script File Name') }}</span><input v-model="scriptFieldName" class="form-input mono" data-testid="offline-script-name" :disabled="effectiveModel !== 'V4'"></label>
@@ -1143,7 +1142,8 @@ onBeforeUnmount(() => {
         </div>
             </fieldset>
           </section>
-        <section v-show="workspaceTab === 'image' || !ispMode" class="deployment-toolbar" :aria-label="tr('部署与测试', 'Deploy and test')">
+        <section class="deployment-toolbar" :aria-label="tr('部署与测试', 'Deploy and test')">
+        <p v-if="ispMode && ispOtpPending" data-testid="offline-otp-summary">{{ ispOfflineOtp ? tr(`镜像 + OTP（${ispOfflineOtp.words.length} 个字）将一起部署`, `Images + OTP (${ispOfflineOtp.words.length} words) will be deployed together`) : tr('OTP 配置尚未确认，请在 OTP 操作中检查并确认。', 'Review and confirm the OTP configuration in OTP operations.') }}</p>
         <div class="deploy-actions">
           <button class="btn" :disabled="operationBusy || !canBuild" @click="generatePreview">{{ tr('生成预览', 'Generate Preview') }}</button>
           <button class="btn btn-primary" data-testid="offline-deploy" :disabled="operationBusy || !canBuild || deploymentUncertain" @click="deploy">{{ tr('部署到 U 盘', 'Deploy to USB Drive') }}</button>
@@ -1189,4 +1189,12 @@ onBeforeUnmount(() => {
 @media(min-width:1600px){.offline-layout{grid-template-columns:350px minmax(0,1fr)}.image-workspace{grid-template-columns:minmax(0,.8fr) minmax(0,1.5fr)}.production-panel{grid-column:1/-1}.firmware-panel{min-height:350px}}
 @media(max-width:900px){.offline-layout{grid-template-columns:260px minmax(0,1fr)}.production-panel .shared-controls{grid-template-columns:1fr}.firmware-fields{grid-template-columns:1fr}.firmware-fields .file-name{grid-column:auto}}
 @media(max-width:650px){.offline-layout{grid-template-columns:1fr}.shared-device-panel .shared-controls{display:grid;grid-template-columns:1fr 1fr;column-gap:14px}.shared-device-panel .target-combobox,.shared-device-panel .selected-target,.shared-device-panel :deep(.isp-settings),.shared-device-panel .security-settings,.shared-device-panel .field-title{grid-column:1/-1}.workspace-tabs button{flex:1;padding:12px}.production-panel .setting-row{grid-template-columns:100px 1fr auto}}
+.image-workspace.rom-workspace{grid-template-columns:minmax(0,1fr)}
+.shared-device-panel>.section-title{display:flex;align-items:center;min-height:46px;margin:-16px -16px 16px;padding:0 16px;border-bottom:1px solid var(--border)}
+.workspace-tabs{min-height:46px;box-sizing:border-box}.workspace-tabs button{padding:12px 18px}
+.shared-device-panel .form-input,.shared-device-panel .form-select,.shared-device-panel .target-search .btn{min-height:36px;box-sizing:border-box}
+.shared-device-panel :deep(.isp-settings input:not([type=checkbox]):not([type=radio])),.shared-device-panel :deep(.isp-settings select){min-height:36px;padding:7px 10px;box-sizing:border-box}
+.shared-device-panel .target-results{top:100%;margin-top:5px}.shared-device-panel .target-search .btn{min-width:88px}
+.production-panel .setting-row{grid-template-columns:1fr;align-items:start;gap:6px;margin-bottom:0}.production-panel .setting-row>span{text-align:left}
+.production-panel .form-input{min-height:36px;box-sizing:border-box}.deployment-toolbar .deploy-actions{margin:10px 0 0}
 </style>
