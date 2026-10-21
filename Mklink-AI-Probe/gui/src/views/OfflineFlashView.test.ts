@@ -37,6 +37,38 @@ vi.mock('../composables/useOnlineFlashApi', () => ({
 }))
 
 describe('OfflineFlashView', () => {
+  it('reads UART OTP without a BIN or SD, and discards stale data after a protocol change', async () => {
+    onlineMocks.searchTargets.mockResolvedValue([{ part_number: 'HPM5301xEGx', vendor: 'HPMicro', installed: true, source: 'builtin' }])
+    offlineMocks.getStatus.mockResolvedValue({ available: false })
+    const wrapper = mount(OfflineFlashView)
+    await flushPromises()
+    await wrapper.get('[data-testid="offline-model"]').setValue('V4')
+    await wrapper.get('.target-result').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="offline-protocol"]').setValue('hpm_rom_isp_uart')
+    const snapshot = { part_number: 'HPM5301XEGX', chip_id: 0x11705142, hard_lock: 0, read_at: 'now', source: 'rom',
+      words: [{ word: 69, current: 123, shadow: null, locked: null }] }
+    vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => snapshot } as Response)
+    await wrapper.get('[data-testid="isp-otp-read"]').trigger('click')
+    await flushPromises()
+    const [url, init] = vi.mocked(fetch).mock.lastCall!
+    expect(String(url)).toContain('/hpm-isp-otp/read')
+    expect(JSON.parse(init!.body as string)).toEqual({ part_number: 'HPM5301XEGX', model: 'V4' })
+    expect(wrapper.get('[data-testid="hpm-isp-otp"]').text()).toContain('0x0000007B')
+    expect(wrapper.get('[data-testid="offline-deploy"]').attributes('disabled')).toBeDefined()
+    let finish!: (value: Response) => void
+    vi.mocked(fetch).mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    await wrapper.get('[data-testid="isp-otp-read"]').trigger('click')
+    expect(wrapper.get('[data-testid="hpm-isp-otp"]').text()).not.toContain('0x0000007B')
+    expect(wrapper.get('[data-testid="isp-otp-read"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('[data-testid="offline-protocol"]').setValue('debug')
+    finish({ ok: true, json: async () => snapshot } as Response)
+    await flushPromises()
+    await wrapper.get('[data-testid="offline-protocol"]').setValue('hpm_rom_isp_uart')
+    expect(wrapper.get('[data-testid="hpm-isp-otp"]').text()).not.toContain('0x0000007B')
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/device/connect'))).toBe(false)
+    wrapper.unmount()
+  })
   it('adopts online chip defaults and refreshes imported targets without a device connection', async () => {
     onlineMocks.searchTargets.mockImplementation(async (part: string) => [{ part_number: part, installed: true, vendor: 'Fixture' }])
     publishOnlineTarget('STM32F103RC')
@@ -824,6 +856,12 @@ describe('OfflineFlashView', () => {
     expect(wrapper.find('.script-preview').exists()).toBe(false)
     expect(wrapper.get('.trigger-log').text()).toBe('ISP waiting 1/10\nISP connected')
     expect(wrapper.text()).not.toContain('import hpm')
+    offlineMocks.trigger.mock.lastCall![2]('HPM_ISP {"schema":1,"event":"cycle_done","completed":1,"total":10}')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="isp-connection"]').text()).toContain('已连接 · 本轮烧录完成')
+    offlineMocks.trigger.mock.lastCall![2]('HPM_ISP {"schema":1,"event":"disconnected"}')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="isp-connection"]').text()).toContain('等待 ISP 握手')
     finish({ status: 'unknown', lines: [] })
     await flushPromises()
     expect(wrapper.get('.trigger-log').text()).toContain('ISP connected')

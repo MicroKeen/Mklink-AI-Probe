@@ -2,11 +2,14 @@
 import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
 import { consumerTarget, saveConsumerTarget, TARGET_SELECTION_CHANGED, PACKS_CHANGED } from '../lib/targetSelection'
 import { selectDownloadProbe } from '../lib/downloadProbe'
-import { hpmIspOutput } from '../lib/hpmIspOutput'
+import { hpmIspOutput, hpmIspConnection, type IspConnection } from '../lib/hpmIspOutput'
 import ConfirmationDialog from '../components/ConfirmationDialog.vue'
 import DeviceConfigurationPanel from '../components/DeviceConfigurationPanel.vue'
 import HpmOfflineOtpPanel from '../components/HpmOfflineOtpPanel.vue'
 import HpmIspSettings from '../components/HpmIspSettings.vue'
+import HpmIspOtpPanel from '../components/HpmIspOtpPanel.vue'
+import type { HpmIspOtpSnapshot } from '../types/hpmOtp'
+import { API_BASE } from '../lib/runtimeEndpoint'
 import type { HpmOfflineOtp, HpmIspConfig } from '../types/offlineFlash'
 import { HPM_ISP_BAUD_RATES } from '../types/offlineFlash'
 import { provideConfirmation } from '../composables/useConfirmation'
@@ -95,7 +98,7 @@ const hpmBoard = ref('')
 const programmingProtocol = ref<'debug' | 'hpm_rom_isp_uart'>('debug')
 const beepOnCompletion = ref(true)
 const resetAfterDownload = ref(true)
-const ispConnection = ref<'idle' | 'waiting' | 'connected'>('idle')
+const ispConnection = ref<IspConnection>('idle')
 const ispConfig = ref<HpmIspConfig>({
   baud_rate: savedIspBaud, connect_timeout_ms: 30000, command_timeout_ms: 10000,
   memory_id: '0x10000', config_address: '0x200',
@@ -116,6 +119,12 @@ const targetSearchBox = ref<HTMLElement | null>(null)
 const targetSuggestionsOpen = ref(false)
 const activeTargetSuggestion = ref(-1)
 const operationBusy = ref(false)
+const otpReading = ref(false)
+const otpSnapshot = ref<HpmIspOtpSnapshot | null>(null)
+const otpError = ref('')
+let otpRevision = 0
+function invalidateOtp(): void { otpRevision++; otpSnapshot.value = null; otpError.value = '' }
+watch([targetPart, model, programmingProtocol, diskProbe, () => disk.value?.probe_id], invalidateOtp)
 const error = ref('')
 const errorTitle = ref('')
 const errorDetail = ref('')
@@ -856,6 +865,7 @@ async function triggerOffline(): Promise<void> {
     ))) return
   }
   operationBusy.value = true
+  invalidateOtp()
   clearError()
   triggerLines.value = []
   ispConnection.value = 'idle'
@@ -869,14 +879,7 @@ async function triggerOffline(): Promise<void> {
       (line) => {
         triggerLines.value.push(line)
         if (triggerLines.value.length > 200) triggerLines.value.shift()
-        if (ispMode.value && line.startsWith('HPM_ISP ')) {
-          try {
-            const event = JSON.parse(line.slice(8))
-            if (event.schema === 1 && event.event === 'connected') ispConnection.value = 'connected'
-            if (event.schema === 1 && event.event === 'waiting') ispConnection.value = 'waiting'
-            if (event.schema === 1 && event.event === 'result') ispConnection.value = 'idle'
-          } catch { /* Keep malformed output in the log, never infer success. */ }
-        }
+        if (ispMode.value) ispConnection.value = hpmIspConnection(ispConnection.value, line)
       },
       undefined, identityHeaders, ispMode.value ? 'hpm_rom_isp_uart' : undefined,
     )
@@ -892,6 +895,27 @@ async function triggerOffline(): Promise<void> {
     setError(value)
   }
   finally { operationBusy.value = false; ispConnection.value = 'idle' }
+}
+
+async function readIspOtp(): Promise<void> {
+  if (operationBusy.value || !ispMode.value || model.value !== 'V4'
+    || !['HPM5301', 'HPM5301XEGX'].includes(targetPart.value.toUpperCase())) return
+  invalidateOtp()
+  const revision = otpRevision
+  operationBusy.value = true; otpReading.value = true
+  try {
+    const identity = disk.value?.probe_id ? await selectDownloadProbe(disk.value.probe_id) : {}
+    if (revision !== otpRevision) return
+    const response = await fetch(`${API_BASE}/api/device/configuration/hpm-isp-otp/read`, {
+      method: 'POST', headers: { ...identity, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ part_number: targetPart.value.toUpperCase(), model: 'V4' }),
+    })
+    const body = await response.json()
+    if (!response.ok) throw new Error(typeof body.detail === 'string' ? body.detail : body.detail?.message || `HTTP ${response.status}`)
+    if (revision === otpRevision) otpSnapshot.value = body
+  } catch (value) {
+    if (revision === otpRevision) otpError.value = message(value)
+  } finally { operationBusy.value = false; otpReading.value = false }
 }
 
 async function syncTarget(): Promise<void> {
@@ -919,10 +943,12 @@ onActivated(() => {
   void startNativeDrops()
 })
 onDeactivated(() => {
+  invalidateOtp()
   stopSourcePolling()
   stopNativeDrops()
 })
 onBeforeUnmount(() => {
+  invalidateOtp()
   window.removeEventListener(TARGET_SELECTION_CHANGED, syncTarget)
   window.removeEventListener(PACKS_CHANGED, refreshPacks)
   targetSearchRevision++
@@ -1030,6 +1056,9 @@ onBeforeUnmount(() => {
           <label class="security-option"><input v-model="resetAfterDownload" type="checkbox" :disabled="hpmMode" />{{ tr('下载完成复位', 'Reset on completion') }}</label>
           <p class="security-reason">{{ hpmMode ? tr('JTAG ROM API 内部自动复位，保持原有行为。', 'JTAG ROM API resets internally; existing behavior is preserved.') : tr('使用现有硬件复位流程。软件及断电复位在 USART ISP 模式配置。', 'Uses the existing hardware reset sequence. Software and power-cycle reset are configured in USART ISP mode.') }}</p>
         </div>
+        <HpmIspOtpPanel v-if="ispMode && model === 'V4' && ['HPM5301', 'HPM5301XEGX'].includes(targetPart.toUpperCase())"
+          :snapshot="otpSnapshot" :busy="otpReading" :disabled="operationBusy || triggerUncertain"
+          :error="otpError" @read="readIspOtp" />
         <p v-if="ispMode" class="security-reason">{{ tr('BIN 基地址必须与镜像布局一致，请逐项填写。不相邻文件不能共享擦除扇区。', 'Enter each BIN address according to its image layout. Non-adjacent files cannot share an erase sector.') }}</p>
         <label v-if="hpmMode && !ispMode" class="setting-row"><span>{{ tr('HPM 板卡', 'HPM Board') }}</span><select v-model="hpmBoard" class="form-select"><option v-for="item in hpmBoards" :key="item" :value="item">{{ item }}</option></select></label>
         <label class="setting-row"><span>{{ tr('脚本文件名', 'Script File Name') }}</span><input v-model="scriptFieldName" class="form-input mono" data-testid="offline-script-name" :disabled="effectiveModel !== 'V4'"></label>
@@ -1070,8 +1099,8 @@ onBeforeUnmount(() => {
           <button class="btn btn-primary" data-testid="offline-deploy" :disabled="operationBusy || !canBuild || deploymentUncertain" @click="deploy">{{ tr('部署到 U 盘', 'Deploy to USB Drive') }}</button>
           <button class="btn" data-testid="offline-trigger" :disabled="!canTrigger" @click="triggerOffline">{{ tr('触发测试', 'Run Test') }}</button>
         </div>
-        <p v-if="ispMode && ispConnection !== 'idle'" role="status" :class="{ ok: ispConnection === 'connected' }" data-testid="isp-connection">
-          {{ ispConnection === 'connected' ? tr('● ISP 已连接 · 正在烧录', '● ISP connected · Programming') : tr('○ 等待 ISP 握手', '○ Waiting for ISP handshake') }}
+        <p v-if="ispMode && ispConnection !== 'idle'" role="status" :class="{ ok: ispConnection === 'connected' || ispConnection === 'cycle_done' }" data-testid="isp-connection">
+          {{ ispConnection === 'cycle_done' ? tr('● ISP 已连接 · 本轮烧录完成', '● ISP connected · Round complete') : ispConnection === 'connected' ? tr('● ISP 已连接 · 正在烧录', '● ISP connected · Programming') : tr('○ 等待 ISP 握手', '○ Waiting for ISP handshake') }}
         </p>
         <p v-if="triggerUncertain && !operationBusy" role="alert">{{ tr('运行结果未确认，请查看下载器状态；已禁止再次触发。', 'Execution result is unconfirmed. Check the probe; triggering again is disabled.') }}</p>
         <div v-if="deploymentUncertain" class="deployment-query" role="status">

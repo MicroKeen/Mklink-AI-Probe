@@ -1059,6 +1059,8 @@ def create_app(
             lambda: _state.get("device"),
         )
     )
+    from mklink.remote.hpm_isp_otp_api import create_hpm_isp_otp_router
+    app.include_router(create_hpm_isp_otp_router(_state["resource_manager"], lambda: _state.get("device")))
 
     async def shutdown_online_flash() -> None:
         await run_in_threadpool(
