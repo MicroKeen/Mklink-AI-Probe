@@ -810,6 +810,7 @@ describe('OfflineFlashView', () => {
     let finish!: (value: { status: string; lines: string[] }) => void
     offlineMocks.trigger.mockImplementationOnce((_model, _name, onLine) => {
       onLine('import hpm')
+      onLine('HPM_ISP {"schema":1,"event":"waiting","cycle":1,"total":10}')
       onLine('HPM_ISP {"schema":1,"event":"connected"}')
       return new Promise(resolve => { finish = resolve })
     })
@@ -821,11 +822,11 @@ describe('OfflineFlashView', () => {
     await flushPromises()
     expect(wrapper.get('[data-testid="isp-connection"]').text()).toContain('ISP 已连接')
     expect(wrapper.find('.script-preview').exists()).toBe(false)
-    expect(wrapper.find('.trigger-log').exists()).toBe(false)
+    expect(wrapper.get('.trigger-log').text()).toBe('ISP waiting 1/10\nISP connected')
     expect(wrapper.text()).not.toContain('import hpm')
-    finish({ status: 'unknown', lines: ['import hpm'] })
+    finish({ status: 'unknown', lines: [] })
     await flushPromises()
-    expect(wrapper.find('.trigger-log').exists()).toBe(false)
+    expect(wrapper.get('.trigger-log').text()).toContain('ISP connected')
     expect(wrapper.text()).toContain('运行结果未确认')
     expect(wrapper.get('[data-testid="offline-trigger"]').attributes('disabled')).toBeDefined()
     await wrapper.get('[data-testid="offline-protocol"]').setValue('debug')
