@@ -35,6 +35,8 @@ def packet(op, epoch, request, payload=b''):
 
 
 class MuxTransport:
+    SOFTWARE_RESET_CAPABILITY = 1 << 5
+    SOFTWARE_RESET_COMMAND = 0x15
     MAX_QUEUE_BYTES = 65536
     # ~160 ms at 200k 4-byte samples/s (timestamp + value). RTT queues keep
     # their original limit; replies bypass event queues. Still drop oldest on
@@ -289,6 +291,19 @@ class MuxTransport:
             raise ValueError('Invalid memory range')
         for offset in range(0, len(data), 128):
             self.request(0x12, struct.pack('<I', address+offset)+data[offset:offset+128])
+
+    @property
+    def supports_software_reset(self):
+        return bool(self.capabilities & self.SOFTWARE_RESET_CAPABILITY)
+
+    def software_reset(self):
+        """Reset once in the existing session; event queues remain readable."""
+        if not self.supports_software_reset:
+            raise RuntimeError('Probe firmware does not support in-stream software reset; update the probe firmware')
+        answer = self.request(self.SOFTWARE_RESET_COMMAND)
+        if answer:
+            self.fail('Invalid software reset response; outcome unknown, do not replay')
+            self._check()
 
     def close(self):
         with self._commands:

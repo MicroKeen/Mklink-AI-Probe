@@ -552,13 +552,16 @@ class RuntimeGate:
         # Download operations temporarily yield captures inside shared admission.
         from mklink.remote.dashboards import BRIDGE_DASHBOARD_TYPES, active_bridge_dashboards
         active = active_bridge_dashboards()
-        from mklink.runtime_capabilities import multiplex_enabled, MUX_MEMORY_PATHS
+        from mklink.runtime_capabilities import multiplex_enabled, MUX_MEMORY_PATHS, capture_reset_supported
         mux_active = multiplex_enabled(c.app.state.mklink_state) and set(active) <= {'rtt', 'superwatch'}
         if path in {f"/api/dash/{name}/start" for name in BRIDGE_DASHBOARD_TYPES}:
             if active and not (mux_active and path in {'/api/dash/rtt/start', '/api/dash/superwatch/start'}):
                 return await reject(409, "A CDC acquisition is already running; subscribe to its cached data or stop it explicitly")
         if (path.startswith(("/api/device/", "/api/probe/")) and path not in {"/api/device/connect", "/api/device/flash"}) or path in {'/api/dash/superwatch/inspect', '/api/mcu-detect'}:
-            if active and not (mux_active and path in MUX_MEMORY_PATHS):
+            sharing_reset = path == '/api/device/reset' and capture_reset_supported(c.app.state.mklink_state, active)
+            if active and not ((mux_active and path in MUX_MEMORY_PATHS) or sharing_reset):
+                if path == '/api/device/reset':
+                    return await reject(409, 'In-stream software reset is unavailable for this firmware or capture transport; acquisition was left running')
                 return await reject(409, {"busy": active, "hint": "Read a shared dashboard snapshot or explicitly stop acquisition first"})
         async def observe(message):
             if message['type'] == 'http.response.start':

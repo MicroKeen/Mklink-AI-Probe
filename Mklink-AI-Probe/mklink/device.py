@@ -1141,6 +1141,13 @@ class Device:
     def reset(self) -> None:
         """Reset the target MCU while keeping the probe session connected."""
         self._require_connected()
+        from mklink.mux import MuxTransport
+        mux = getattr(self._bridge, '_mux', None)
+        if isinstance(mux, MuxTransport):
+            # The framed request shares the command slot with memory access.
+            # Never leave MUX, stop streams, clear queues or replay a reset.
+            mux.software_reset()
+            return
         self._bridge.send_command("cmd.set_reset()", timeout=10.0)
 
     def _stop_active_probe_streams(self) -> None:
