@@ -1,20 +1,20 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-22T14:14:51.9590265+08:00",
+  "updated_at": "2026-10-22T14:31:15.865980+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/hpm-isp-deployment-ux",
-    "head": "主机527a1339/207b47c7及验收文档，精确最终头见Git。",
-    "remote_head": "PR48功能与验收推送；组合8e402491已推送、安装验证通过。",
+    "head": "功能6c2095c7、在线进度35f7da59；精确最终头见Git。",
+    "remote_head": "功能分支已推送；组合f4221d96、生产Web d7d2db3d已推送，安装包覆盖验证通过。",
     "working_tree": "唯一工作区E:/software/HPM5300/Mklink-AI-Probe，源码子目录Mklink-AI-Probe；当前codex/hpm-isp-deployment-ux。已安装组合源在codex/v036-isp-ux-local。"
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "online_program_progress_fixed_verified",
-    "current_task": "35f7da59修复在线烧录进度阶段混用与重复擦除，391相关测试通过。用户另授一次相同HEX实机JobManager流程成功：擦除2.360s/写入5.595s/校验1.686s，100%唯一一次且0.796ms后完成；无内部重复擦除。授权消耗，原上位机连接恢复，采集保持用户此前停止状态。下一步将修复纳入0.3.6安装包。"
+    "status": "online_flash_fixes_packaged_installed",
+    "current_task": "内外Flash合并HEX：自定义FLM统一记录遗漏page_size/sector_sizes，6c2095c7补齐。388相关Python+5版本组件测试、真实客户文件两组合1027扇区及真实浏览器准入通过。组合f4221d96含前一在线100%停顿/重复擦除修复，NSIS已构建并管理员覆盖exit0；解包/实装冻结API再验证真实文件1027扇区，206Python/41Web匹配、CLI/MCP/SVD/HTTP/无宿主Python及退出通过。安装生产界面核对简短版本说明，原生留给用户未连目标。N32实体写入未验证；前次F103单次重烧授权已消耗。"
   },
   "milestones": [
     {
@@ -50,8 +50,12 @@
   ],
   "verification": [
     {
+      "area": "合并HEX及0.3.6安装包",
+      "result": "6c2095c7自定义FLM几何修复；388Python/5GUI/真实浏览器通过。两种算法组合均正确映射外部4MiB+内部4588B，1027扇区；实体N32未写。集成f4221d96（Web d7d2db3d）NSIS SHA256 82f95c6310507fbe832b6749f3752e26be7af07384034f0f66ab80765e404cf7，管理员覆盖exit0、解包与实装冻结运行通过；两条简短版本说明已验证。见v036-combined-hex-fix.md。"
+    },
+    {
       "area": "在线烧录100%停顿诊断",
-      "result": "35f7da59：391测试含真实pyOCD构建器模拟目标、多Bank稀疏HEX/单双缓冲/失败清理；唯一授权源JobManager实烧通过，写入阶段7.892→5.595s，PROGRAM100%仅一次到完成0.796ms，完整回读通过。初始UnInit推断已纠正。详见v036-online-program-progress-diagnosis.md；安装包待更新。"
+      "result": "35f7da59：391测试含真实pyOCD构建器模拟目标、多Bank稀疏HEX/单双缓冲/失败清理；唯一授权源JobManager实烧通过，写入阶段7.892→5.595s，PROGRAM100%仅一次到完成0.796ms，完整回读通过。初始UnInit推断已纠正。详见v036-online-program-progress-diagnosis.md；已包含f4221d96安装包并覆盖验证。"
     },
     {
       "area": "采集中软件复位实装与实机",
@@ -76,10 +80,6 @@
     {
       "area": "镜像与UART OTP联合脱机任务",
       "result": "功能a3d55b76/bea39ab5/f576a68d，Web bc23b878；274Python/132GUI，最终针对模块166Python/17面板/28输出复验及TS/Vite通过。真实浏览器模拟部署和安装版连续输入/HPM6200入口通过，零控制台错。组合8d2ed5a3覆盖exit0，205Python/41Web/四载荷、冻结CLI/MCP/SVD/HTTP/无宿主Python/正常退出通过。固件313ab4e生产C结果交叉解析通过并升级。实际V4 BIN@0x80023000+Word69 1→3联合部署，仅触发一次code0/ROM0/1/1、otp_verified1；128字回读唯一69=3，锁/生命周期/VCC未改。报告docs/verification/v036-joint-offline-otp.md。"
-    },
-    {
-      "area": "共享脱机工作区与八系列UART OTP",
-      "result": "源c59a6f30/2f681cad：179相关Python、209GUI、36目录测试；组合373Python、TS/Vite通过。IAB生产Web+真实API模拟CDC验证跨HPM系列/ARM、模板预览/模拟写入、旧确认失效，零控制台错误；固件生产C read/plan/program交叉解析通过。组合a2599b21管理员覆盖exit0；解包及实装204Python/41Web/四载荷一致，冻结CLI/MCP/SVD/HTTP/无宿主Python/正常退出通过。原生启动和IAB安装后网页通过，原生窗口留给用户；未关闭本轮用户窗口。报告v036-offline-workspace.md。此前73fccac2安装见v036-uart-otp-settings.md。 2026-10-21按用户授权升级3d96dbb，安装版profile_v1实机128字全读、Word69 0→1预检/真实单次写入/全读回通过，唯一该字变化；锁/VCC未改。"
     }
   ],
   "decisions": [
@@ -110,7 +110,7 @@
     "nRF54L15 GUI保护闭环、全部物理擦除/拔插/休眠/断电场景、电源外部精度校准未全部认证。VCC每次改动必须确认具体电压，HPM已锁定OTP不得重放。 已知无可靠扇区表的26个FLM禁用扇区操作；重叠算法需要匹配Bank模式。 HPM5301组18/19永久锁定的历史状态及用户字先写/组锁最后、全部固件独立校验后才写OTP等边界见docs/ai/hpm-offline-otp-handoff.md；接手重新确认芯片，其他型号不继承验收。 UART OTP已实现ROM write-memory APIv2，独立熔丝/影子/临时锁读语义仍未知并如实显示；以ROM写入状态及回读为准。配套3d96dbb已实机验证HPM5301全部128字读取和用户批准的Word69 0→1单次写入回读；其余型号/区域未实写，新数据须具体授权。多Word顺序执行不可回滚。CSV原生选择器自动化未完成。"
   ],
   "next_actions": [
-    "将35f7da59纳入当前组合0.3.6，构建检查和覆盖安装；无须更新下载器固件。第二次同HEX实烧授权也已消耗，不自动重复。原生连接恢复、采集保持停止。",
+    "收集客户N32WB452内外Flash组合实际烧写/回读反馈；本轮主机解析准入及安装包通过，不代替外置SPI硬件验证。不重复使用已消耗的F103单次烧录授权；不主动烧写或改OTP/供电。",
     "每板多镜像完成次数与换板去抖已有脚本执行/真实浏览器模拟，尚未实测完整STM32多板Flash流程。当前目标已从HPM换成STM32F103，不继承历史HPM镜像或OTP写入授权，不能重放旧unknown任务。",
     "PR48未合并发布。此前联合镜像+OTP实机证据保留，当前Word69=3；本轮未追加目标烧录/OTP/VCC。其他HPM型号继续由用户测试，固件交会话01a15977-1aef-7430-aa11-6e39725f0465。",
     "未知MKLINK_V2任务不得重放。当前接入若为烧好固件的目标板或另一V2.9.0设备，不能误当原下载器升级。",
