@@ -63,6 +63,7 @@ export interface HpmIspConfig {
   rearm_mode: 'isp_reconnect'
   completion: {
     beep: boolean
+    beep_duration_ms?: number
     reset: 'none' | 'software' | 'power_cycle'
     restore_voltage_mv: number | null
     power_off_ms: number
@@ -79,6 +80,7 @@ export interface OfflineConfigPayload {
   hpm_isp?: HpmIspConfig
   hpm_isp_otp?: HpmIspOfflineOtp
   beep_on_completion?: boolean
+  beep_duration_ms?: number
   reset_after_download?: boolean
   model: 'V2' | 'V3' | 'V4'
   port?: string | null

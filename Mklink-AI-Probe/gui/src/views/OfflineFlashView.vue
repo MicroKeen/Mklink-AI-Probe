@@ -98,6 +98,7 @@ const targetPart = ref('')
 const hpmBoard = ref('')
 const programmingProtocol = ref<'debug' | 'hpm_rom_isp_uart'>('debug')
 const beepOnCompletion = ref(true)
+const beepDurationMs = ref(1000)
 const resetAfterDownload = ref(true)
 const ispConnection = ref<IspConnection>('idle')
 const ispConfig = ref<HpmIspConfig>({
@@ -106,7 +107,7 @@ const ispConfig = ref<HpmIspConfig>({
   nor_options: ['0xFCF90002', '0x6', '0x1000'],
   flash_base: '0x80000000', sector_size: 4096,
   rearm_mode: 'isp_reconnect',
-  completion: { beep: true, reset: 'none', restore_voltage_mv: null, power_off_ms: 200 },
+  completion: { beep: true, beep_duration_ms: 1500, reset: 'none', restore_voltage_mv: null, power_off_ms: 200 },
 })
 const securityCapability = ref<OfflineSecurityCapability | null>(null)
 const securityLoading = ref(false)
@@ -143,6 +144,7 @@ const deploymentRequestId = ref('')
 const deploymentUncertain = ref(false)
 const preview = ref<OfflinePreview | null>(null)
 const triggerLines = ref<string[]>([])
+const showRunOutput = ref(false)
 const displayedTriggerLines = computed(() => ispMode.value ? hpmIspOutput(triggerLines.value) : triggerLines.value)
 const triggerUncertain = ref(false)
 const deployedScriptName = ref('')
@@ -236,7 +238,7 @@ const canTrigger = computed(() => (
 ))
 
 watch(
-  [model, scriptName, automaticCount, idcodeTimeout, swdClock, targetPart, hpmBoard, algorithms, firmwares, eraseAllBeforeDownload, unlockBeforeDownload, lockAfterDownload, securityVoltageMv, optionByteChanges, hpmOfflineOtp, programmingProtocol, ispConfig, beepOnCompletion, resetAfterDownload],
+  [model, scriptName, automaticCount, idcodeTimeout, swdClock, targetPart, hpmBoard, algorithms, firmwares, eraseAllBeforeDownload, unlockBeforeDownload, lockAfterDownload, securityVoltageMv, optionByteChanges, hpmOfflineOtp, programmingProtocol, ispConfig, beepOnCompletion, beepDurationMs, resetAfterDownload],
   () => {
     preview.value = null
     deployedScriptName.value = ''
@@ -779,6 +781,7 @@ function buildRequest(): {
       ...(ispMode.value ? { hpm_isp: ispConfig.value, hpm_isp_otp: ispOfflineOtp.value } : {}),
       ...(!ispMode.value ? {
         beep_on_completion: beepOnCompletion.value,
+        beep_duration_ms: Number(beepDurationMs.value),
         reset_after_download: hpmMode.value ? true : resetAfterDownload.value,
       } : {}),
       script_name: scriptName.value,
@@ -879,7 +882,7 @@ async function triggerOffline(): Promise<void> {
   clearError()
   triggerLines.value = []
   ispConnection.value = 'idle'
-  if (ispMode.value) preview.value = null
+  showRunOutput.value = true
   try {
     const identityHeaders = disk.value?.probe_id ? await selectDownloadProbe(disk.value.probe_id) : {}
     triggerUncertain.value = ispMode.value
@@ -1043,6 +1046,7 @@ onBeforeUnmount(() => {
         <HpmIspSettings v-if="ispMode" v-model="ispConfig" />
         <div v-else class="security-settings">
           <label class="security-option"><input v-model="beepOnCompletion" type="checkbox" />{{ tr('下载完成响蜂鸣器', 'Beep on completion') }}</label>
+          <label class="setting-row"><span>{{ tr('蜂鸣时长（ms）', 'Beep duration (ms)') }}</span><input v-model.number="beepDurationMs" data-testid="offline-beep-duration" type="number" min="1" max="10000" step="1" class="form-input" :disabled="!beepOnCompletion" /></label>
           <label class="security-option"><input v-model="resetAfterDownload" type="checkbox" :disabled="hpmMode" />{{ tr('下载完成复位', 'Reset on completion') }}</label>
           <p class="security-reason">{{ hpmMode ? tr('JTAG ROM API 内部自动复位，保持原有行为。', 'JTAG ROM API resets internally; existing behavior is preserved.') : tr('使用现有硬件复位流程。软件及断电复位在 USART ISP 模式配置。', 'Uses the existing hardware reset sequence. Software and power-cycle reset are configured in USART ISP mode.') }}</p>
         </div>
@@ -1159,12 +1163,12 @@ onBeforeUnmount(() => {
           <button v-if="deploymentUncertain" class="btn" :disabled="operationBusy" @click="deploymentUncertain = false; deploymentRequestId = ''">{{ tr('已核查磁盘，允许新部署', 'Disk inspected; allow a new deployment') }}</button>
         </div>
         </section>
-    <section class="run-workspace" :aria-label="tr('预览与运行输出', 'Preview and run output')">
-        <div v-if="!ispMode || preview" class="script-preview">
+    <section class="run-workspace" :class="{ 'has-run-output': showRunOutput }" :aria-label="tr('预览与运行输出', 'Preview and run output')">
+        <div class="script-preview">
           <div class="preview-title"><span>{{ preview?.script_name || effectiveScriptName }}</span><span>{{ preview?.model || effectiveModel }}</span></div>
           <pre>{{ preview?.script || tr('等待生成配置', 'Waiting to generate configuration') }}</pre>
         </div>
-        <div v-if="ispMode || triggerLines.length" class="trigger-output" data-testid="trigger-output">
+        <div v-if="showRunOutput" class="trigger-output" data-testid="trigger-output">
           <div class="preview-title">{{ tr('运行输出', 'Run output') }}</div>
           <pre class="trigger-log">{{ displayedTriggerLines.join('\n') || tr('等待触发测试', 'Waiting to run test') }}</pre>
         </div>
@@ -1190,7 +1194,8 @@ onBeforeUnmount(() => {
 @media(max-width:900px){.offline-layout{grid-template-columns:260px minmax(0,1fr)}.production-panel .shared-controls{grid-template-columns:1fr}.firmware-fields{grid-template-columns:1fr}.firmware-fields .file-name{grid-column:auto}}
 @media(max-width:650px){.offline-layout{grid-template-columns:1fr}.shared-device-panel .shared-controls{display:grid;grid-template-columns:1fr 1fr;column-gap:14px}.shared-device-panel .target-combobox,.shared-device-panel .selected-target,.shared-device-panel :deep(.isp-settings),.shared-device-panel .security-settings,.shared-device-panel .field-title{grid-column:1/-1}.workspace-tabs button{flex:1;padding:12px}.production-panel .setting-row{grid-template-columns:100px 1fr auto}}
 .image-workspace.rom-workspace{grid-template-columns:minmax(0,1fr)}
-.run-workspace{margin-top:12px;min-width:0}.run-workspace .trigger-output{margin-top:0}.run-workspace .script-preview,.run-workspace .trigger-output{display:flex;flex-direction:column;min-width:0;min-height:0;background:#16191d}
+.run-workspace{margin-top:12px;min-width:0;grid-template-columns:minmax(0,1fr);align-items:stretch}.run-workspace.has-run-output{grid-template-columns:repeat(2,minmax(0,1fr))}.run-workspace .trigger-output{margin-top:0}.run-workspace .script-preview,.run-workspace .trigger-output{display:flex;flex-direction:column;min-width:0;min-height:0;background:#16191d}.run-workspace .preview-title{min-height:28px;box-sizing:border-box;align-items:center}.run-workspace pre{min-height:100px;box-sizing:border-box}
+@media(max-width:650px){.run-workspace.has-run-output{grid-template-columns:minmax(0,1fr)}}
 .shared-device-panel>.section-title{display:flex;align-items:center;min-height:46px;margin:-16px -16px 16px;padding:0 16px;border-bottom:1px solid var(--border)}
 .workspace-tabs{min-height:46px;box-sizing:border-box}.workspace-tabs button{padding:12px 18px}
 .shared-device-panel .form-input,.shared-device-panel .form-select,.shared-device-panel .target-search .btn{min-height:36px;box-sizing:border-box}

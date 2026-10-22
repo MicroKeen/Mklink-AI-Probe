@@ -39,6 +39,7 @@ async function updateVoltage(value: number, input: HTMLInputElement): Promise<vo
     </details>
     <p>{{ tr('ROM 自动擦除并内部校验；以写入命令最终成功状态为准。', 'ROM automatically erases and verifies internally; completion requires the final successful write status.') }}</p>
     <label class="check"><input v-model="config.completion.beep" type="checkbox" />{{ tr('下载完成响蜂鸣器', 'Beep on completion') }}</label>
+    <label>{{ tr('蜂鸣时长（ms）', 'Beep duration (ms)') }}<input v-model.number="config.completion.beep_duration_ms" data-testid="isp-beep-duration" type="number" min="1" max="10000" step="1" :disabled="!config.completion.beep" /></label>
     <label>{{ tr('下载完成复位', 'Reset on completion') }}
       <select v-model="config.completion.reset" data-testid="isp-reset" @change="config.completion.restore_voltage_mv = config.completion.reset === 'power_cycle' ? 3300 : null">
         <option value="none">{{ tr('不复位', 'No reset') }}</option>

@@ -86,6 +86,7 @@ class OfflineDownloadConfig:
     hpm_isp_otp: Optional[IspOfflineOtp] = None
     beep_on_completion: bool = True
     reset_after_download: bool = True
+    beep_duration_ms: int = 1000
 
     @property
     def script_name(self) -> str:
@@ -206,6 +207,10 @@ def parse_offline_config(
 
     hpm_target = is_hpm_target(target_part)
     beep_on_completion = _strict_bool(payload.get("beep_on_completion", True), "completion beep")
+    duration = payload.get("beep_duration_ms", 1000)
+    if isinstance(duration, bool) or not isinstance(duration, (int, str)):
+        raise OfflineDownloadError("Beep duration (ms) must be an integer")
+    beep_duration_ms = _positive_int(duration, "Beep duration (ms)", 1, 10000)
     reset_after_download = _strict_bool(payload.get("reset_after_download", True), "completion reset")
     protocol = payload.get("programming_protocol", "debug")
     if protocol not in ("debug", "hpm_rom_isp_uart"):
@@ -408,6 +413,7 @@ def parse_offline_config(
         hpm_isp=isp,
         hpm_isp_otp=isp_otp,
         beep_on_completion=beep_on_completion,
+        beep_duration_ms=beep_duration_ms,
         reset_after_download=reset_after_download,
     )
 
@@ -546,7 +552,7 @@ def _generate_v2_script(config: OfflineDownloadConfig) -> str:
             "if not abort:",
             '    print("offline download finished")',
             *([] if config.is_hpm or not config.reset_after_download else ["    cmd.set_reset()"]),
-            *(["    cmd.set_beep_on()", "    time.sleep_ms(1000)", "    cmd.set_beep_off()"]
+            *(["    cmd.set_beep_on()", f"    time.sleep_ms({config.beep_duration_ms})", "    cmd.set_beep_off()"]
               if config.beep_on_completion else []),
             "else:",
             '    print("offline download aborted")',
@@ -655,7 +661,7 @@ def generate_offline_script(config: OfflineDownloadConfig) -> str:
             '    print("auto download finished")',
             # HPM ROM programming already resets and starts the target.
             *([] if config.is_hpm or not config.reset_after_download else ["    cmd.set_reset()", "    cmd.cpu_run()"]),
-            *(["    cmd.set_beep_on()", "    time.sleep_ms(1000)", "    cmd.set_beep_off()"]
+            *(["    cmd.set_beep_on()", f"    time.sleep_ms({config.beep_duration_ms})", "    cmd.set_beep_off()"]
               if config.beep_on_completion else []),
             "else:",
             '    print("auto download aborted")',

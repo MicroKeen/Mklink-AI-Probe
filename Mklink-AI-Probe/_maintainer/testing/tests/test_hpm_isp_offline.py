@@ -218,6 +218,65 @@ def test_debug_completion_options_keep_existing_defaults():
     assert "cmd.set_beep_on()" in old and "cmd.set_reset()" in old
 
 
+@pytest.mark.parametrize('duration', [0, -1, 10001, True, 1.5, None, ''])
+def test_beep_duration_rejects_invalid_input_for_both_protocols(duration):
+    from test_offline_download import _config
+    data = _config()
+    data['beep_duration_ms'] = duration
+    with pytest.raises(OfflineDownloadError, match='Beep duration'):
+        parse_offline_config(data)
+    data = payload()
+    data['hpm_isp']['completion'] = {'beep_duration_ms': duration}
+    with pytest.raises(OfflineDownloadError, match='Beep duration'):
+        parse_offline_config(data)
+
+
+@pytest.mark.parametrize('model', ['V2', 'V3', 'V4'])
+def test_debug_beep_duration_reaches_script(model):
+    from test_offline_download import _config
+    data = _config()
+    data.update(model=model, beep_duration_ms=275, auto_download_count=1 if model == 'V2' else 3)
+    script = generate_offline_script(parse_offline_config(data))
+    assert 'cmd.set_beep_on()\n    time.sleep_ms(275)\n    cmd.set_beep_off()' in script
+    data['beep_on_completion'] = False
+    assert 'cmd.set_beep_on()' not in generate_offline_script(parse_offline_config(data))
+
+
+@pytest.mark.parametrize('config_result', [0, -1])
+def test_isp_duration_uses_optional_config_arg_and_stops_before_program(monkeypatch, capsys, config_result):
+    calls = []
+    monkeypatch.setitem(sys.modules, 'hpm', SimpleNamespace(
+        isp_supported=lambda: 1,
+        isp_config=lambda *args: calls.append(('config', args)) or config_result,
+        isp_program=lambda *args: calls.append(('program', args)) or 0))
+    data = payload()
+    data['hpm_isp']['completion'] = {'beep_duration_ms': 100}
+    script = generate_offline_script(parse_offline_config(data))
+    assert script_metadata(script)['beep_duration_ms'] == 100
+    assert 'isp_beep_' not in script
+    exec(compile(script, '<beep-test>', 'exec'), {})
+    assert len(calls[0][1]) == 13
+    assert calls[0][1][-1] == 100
+    assert [call[0] for call in calls] == ['config'] + (['program'] if config_result == 0 else [])
+    if config_result != 0:
+        assert 'Upgrade HPMLINK firmware for configurable beep duration' in capsys.readouterr().out
+
+
+@pytest.mark.parametrize('completion', [{}, {'beep': False, 'beep_duration_ms': 100}])
+def test_isp_legacy_and_disabled_beep_keep_twelve_config_args(monkeypatch, completion):
+    calls = []
+    monkeypatch.setitem(sys.modules, 'hpm', SimpleNamespace(
+        isp_supported=lambda: 1,
+        isp_config=lambda *args: calls.append(args) or 0,
+        isp_program=lambda *args: 0))
+    data = payload()
+    data['hpm_isp']['completion'] = completion
+    script = generate_offline_script(parse_offline_config(data))
+    exec(compile(script, '<beep-test>', 'exec'), {})
+    assert len(calls[0]) == 12
+    assert 'beep_duration_ms' not in script_metadata(script)
+
+
 @pytest.mark.parametrize("response", ["", "1", "MKLINK_HPM_ISP_API 0", "MKLINK_HPM_ISP_API 11",
                                       "print('MKLINK_HPM_ISP_API 1')", "NameError: isp_supported"])
 def test_capability_probe_fails_closed(response):

@@ -30,6 +30,7 @@ class IspCompletion:
     reset: str
     restore_voltage_mv: int | None
     power_off_ms: int
+    beep_duration_ms: int | None = None
 
 
 @dataclass(frozen=True)
@@ -95,6 +96,8 @@ def parse_config(raw: object) -> HpmIspConfig:
     beep = completion.get("beep", True)
     if not isinstance(beep, bool):
         raise ValueError("Completion beep must be a boolean")
+    beep_ms = (integer(completion["beep_duration_ms"], "Beep duration (ms)", 1, 10000)
+               if "beep_duration_ms" in completion else None)
     reset = completion.get("reset", "none")
     if reset not in ("none", "software", "power_cycle"):
         raise ValueError("Unsupported completion reset mode")
@@ -106,7 +109,7 @@ def parse_config(raw: object) -> HpmIspConfig:
     off_ms = integer(completion.get("power_off_ms", 200), "Reset duration", 10, 5000)
     return HpmIspConfig(baud, timeout, command_timeout, memory_id, address, options,
                         flash_base, flash_size, sector_size, rearm,
-                        IspCompletion(beep, reset, voltage, off_ms))
+                        IspCompletion(beep, reset, voltage, off_ms, beep_ms))
 
 
 def validate_images(config, paths) -> None:
@@ -179,6 +182,12 @@ def generate_script(config) -> str:
             f"            print(isp_label, {json.dumps(message)})",
         ])
     otp = config.hpm_isp_otp
+    timed_beep = isp.completion.beep and isp.completion.beep_duration_ms is not None
+    capabilities = ['hpm.isp_supported() == 1']
+    if otp is not None:
+        capabilities.append('hpm.isp_otp_job_supported() == 1')
+    if timed_beep:
+        args.append(isp.completion.beep_duration_ms)
     otp_lines = []
     if otp is not None:
         otp_lines = [
@@ -189,11 +198,13 @@ def generate_script(config) -> str:
         for word, expected, desired in otp.words:
             otp_lines.extend(['    if rc == 0:', f'        rc = hpm.isp_otp_job_add({word}, {expected}, {desired})'])
     return "\n".join([
-        SCRIPT_MARKER + json.dumps({"job_id": job_id, "total": config.auto_download_count, **({'otp': True, 'otp_words': len(otp.words)} if otp else {})}, separators=(",", ":")),
+        SCRIPT_MARKER + json.dumps({"job_id": job_id, "total": config.auto_download_count, **({'otp': True, 'otp_words': len(otp.words)} if otp else {}), **({'beep_duration_ms': isp.completion.beep_duration_ms} if timed_beep else {})}, separators=(",", ":")),
         "import hpm",
-        ('if hpm.isp_supported() == 1 and hpm.isp_otp_job_supported() == 1:' if otp else "if hpm.isp_supported() == 1:"),
+        'if ' + ' and '.join(capabilities) + ':',
         '    isp_label = "USART ISP config:"',
         f"    rc = hpm.isp_config({', '.join(map(str, args))})",
+        *(['    if rc == -1:',
+           '        print("USART ISP config: Upgrade HPMLINK firmware for configurable beep duration")'] if timed_beep else []),
         *otp_lines,
         "    if rc == 0:",
         '        isp_label = "USART ISP"',
@@ -222,6 +233,8 @@ def script_metadata(text: str) -> dict | None:
         raise ValueError('Invalid ISP OTP job metadata')
     if raw.get('otp'):
         integer(raw.get('otp_words'), 'ISP OTP word count', 1, 128)
+    if 'beep_duration_ms' in raw:
+        integer(raw['beep_duration_ms'], 'Beep duration (ms)', 1, 10000)
     return raw
 
 
