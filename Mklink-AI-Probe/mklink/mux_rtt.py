@@ -31,6 +31,8 @@ class MuxRTTSession:
                 for frame in self.transport.drain(0x40, ch):
                     if frame[1] == 7:
                         raise RuntimeError('DAP changed the target; RTT capture was invalidated. Restart capture after debugging.')
+                    if frame[1] == 8:
+                        raise RuntimeError('MCU reset recovery timed out; RTT control block did not recover within 5 seconds. The reset was not repeated.')
                     if frame[1]:
                         raise RuntimeError('RTT target read failed')
                     result[ch].extend(frame[6:])

@@ -148,3 +148,65 @@ def test_malformed_reset_reply_is_unknown_without_retry():
     with pytest.raises(ConnectionError, match='outcome unknown'):
         transport.software_reset()
     transport.request.assert_called_once_with(transport.SOFTWARE_RESET_COMMAND)
+
+
+@pytest.mark.parametrize('status', [0, 5])
+@pytest.mark.parametrize('consume_old_before_reset', [True, False])
+def test_watch_parts_never_join_across_reset_even_when_new_first_part_is_lost(status, consume_old_before_reset):
+    from mklink.mux import MuxTargetError
+    from mklink.mux_watch import MuxWatchSession
+    def write(wire):
+        _, _, op, _, epoch, request = struct.unpack_from('<4sBBHII', wire)
+        transport.feed(packet(op|0x80, epoch, request, bytes([status])))
+        return len(wire)
+    transport = MuxTransport(write)
+    transport.epoch, transport.ready = 17, True
+    transport.capabilities = transport.SOFTWARE_RESET_CAPABILITY
+    watch = MuxWatchSession(transport, [(0x20000000, 130)], .001)
+    def part(seq, index, data):
+        transport.feed(packet(0x41, 17, seq, struct.pack('<BBI', index, 0, seq)+data))
+    part(1, 0, b'A'*128)
+    part(2, 1, b'aa')  # A complete old sample must be retained.
+    part(3, 0, b'B'*128)  # An incomplete old sample must never be completed by new data.
+    old = watch.read_frames() if consume_old_before_reset else []
+    if status:
+        with pytest.raises(MuxTargetError): transport.software_reset()
+    else:
+        transport.software_reset()
+    part(5, 1, b'cc')  # Simulate a lost post-reset index 0.
+    part(6, 0, b'D'*128)
+    part(7, 1, b'dd')
+    values = [frame['regions'][0][1] for frame in old + watch.read_frames()]
+    assert values == [b'A'*128+b'aa', b'D'*128+b'dd']
+
+
+def test_busy_reset_does_not_change_watch_generation():
+    from mklink.mux import MuxTargetError
+    def write(wire):
+        _, _, op, _, epoch, request = struct.unpack_from('<4sBBHII', wire)
+        transport.feed(packet(op|0x80, epoch, request, b'\x06'))
+        return len(wire)
+    transport = MuxTransport(write)
+    transport.epoch = 17
+    transport.capabilities = transport.SOFTWARE_RESET_CAPABILITY
+    with pytest.raises(MuxTargetError): transport.software_reset()
+    assert transport._reset_generation == 0
+
+
+@pytest.mark.parametrize('stream', ['rtt', 'superwatch'])
+def test_recovery_timeout_reports_reset_context_without_poisoning_other_stream(stream):
+    from mklink.mux_watch import MuxWatchSession
+    from mklink.mux_rtt import MuxRTTSession
+    transport = MuxTransport(Mock())
+    transport.epoch = 17
+    if stream == 'rtt':
+        session = MuxRTTSession(transport, {}, channels=[0])
+        opcode, read = 0x40, lambda: session.read_channels(0)
+    else:
+        session = MuxWatchSession(transport, [(0x20000000, 4)], .001)
+        opcode, read = 0x41, session.read_frames
+    transport.feed(packet(opcode, 17, 1, struct.pack('<BBI', 0, 8, 100)))
+    with pytest.raises(RuntimeError, match='reset recovery timed out'):
+        read()
+    assert transport._error is None
+    transport._write.assert_not_called()
