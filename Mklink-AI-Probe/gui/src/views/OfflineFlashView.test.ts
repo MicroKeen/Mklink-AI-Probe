@@ -37,6 +37,45 @@ vi.mock('../composables/useOnlineFlashApi', () => ({
 }))
 
 describe('OfflineFlashView', () => {
+  it('deploys ARM reset modes and confirms the selected power-cycle voltage before triggering', async () => {
+    pickerMocks.pickFlmFile.mockResolvedValue(new File(['algorithm'], 'Device.FLM'))
+    const wrapper = mount(OfflineFlashView, { global: { stubs: { teleport: true } } })
+    try {
+      await flushPromises()
+      await wrapper.get('[data-testid="offline-model"]').setValue('V4')
+      await wrapper.get('[data-testid="offline-add-flm"]').trigger('click')
+      await flushPromises()
+      const input = wrapper.get('[data-testid="offline-firmware-input"]')
+      Object.defineProperty(input.element, 'files', { configurable: true, value: [new File(['hex'], 'firmware.hex')] })
+      await input.trigger('change')
+      expect(wrapper.text()).toContain('目标连接／换板等待时间（ms）')
+      expect(wrapper.text()).not.toContain('IDCODE 超时')
+      const reset = wrapper.get('[data-testid="offline-reset-mode"]')
+      expect(reset.findAll('option').map(option => option.attributes('value'))).toEqual(['software', 'hardware', 'power_cycle'])
+      for (const mode of ['software', 'hardware', 'power_cycle']) {
+        await reset.setValue(mode)
+        expect(wrapper.get('[data-testid="offline-trigger"]').attributes('disabled')).toBeDefined()
+        if (mode === 'power_cycle') await wrapper.get('[data-testid="offline-reset-voltage"]').setValue('1800')
+        await wrapper.get('[data-testid="offline-deploy"]').trigger('click')
+        await flushPromises()
+        expect(offlineMocks.deploy.mock.lastCall?.[0]).toMatchObject({
+          reset_after_download: true, reset_mode: mode, reset_voltage_mv: mode === 'power_cycle' ? 1800 : null,
+        })
+      }
+      await wrapper.get('[data-testid="offline-trigger"]').trigger('click')
+      expect(wrapper.get('[role="alertdialog"]').text()).toContain('恢复 1.8V')
+      expect(offlineMocks.trigger).not.toHaveBeenCalled()
+      await wrapper.get('[data-testid="confirmation-cancel"]').trigger('click')
+      await flushPromises()
+      expect(offlineMocks.trigger).not.toHaveBeenCalled()
+      await wrapper.get('[data-testid="offline-trigger"]').trigger('click')
+      await wrapper.get('[data-testid="confirmation-accept"]').trigger('click')
+      await flushPromises()
+      expect(offlineMocks.trigger).toHaveBeenCalledOnce()
+      await wrapper.get('[data-testid="offline-reset-voltage"]').setValue('3300')
+      expect(wrapper.get('[data-testid="offline-trigger"]').attributes('disabled')).toBeDefined()
+    } finally { wrapper.unmount() }
+  })
   it('keeps chip input enabled and focused while suggestions are in flight', async () => {
     vi.useFakeTimers()
     const wrapper = mount(OfflineFlashView, { attachTo: document.body })

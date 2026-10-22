@@ -82,6 +82,8 @@ export interface OfflineConfigPayload {
   beep_on_completion?: boolean
   beep_duration_ms?: number
   reset_after_download?: boolean
+  reset_mode?: 'software' | 'hardware' | 'power_cycle'
+  reset_voltage_mv?: number | null
   model: 'V2' | 'V3' | 'V4'
   port?: string | null
   script_name: string
