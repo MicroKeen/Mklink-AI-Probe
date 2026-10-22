@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-22T00:57:21.409171+08:00`
+- 更新时间：`2026-10-22T08:58:30.839233+08:00`
 - 分支：`codex/hpm-isp-deployment-ux`
 - HEAD：`自适应布局5c979720、连接状态373b44e9、生产Web f6ca3925；后续验收记录见Git。`
 - 远端 HEAD：`PR48功能/Web已推送；组合a821be6d已推送并覆盖安装。`
 - 工作树：唯一工作区E:/software/HPM5300/Mklink-AI-Probe，源码子目录Mklink-AI-Probe；当前codex/hpm-isp-deployment-ux。已安装组合源在codex/v036-isp-ux-local。
-- 当前任务：脱机工作区自动等高，预览/运行输出补齐右侧底部；reconnect等待不提前显示断开。79 GUI及TS/Vite、真实浏览器ARM/HPM对齐检查通过。组合0.3.6源a821be6d管理员覆盖exit0并通过解包/实装资格。固件8845cab已完成掉线状态及ISP RX上拉隔离修复，36回归/双SES通过。部署与原生启动状态见最新验证报告；本轮不重放未知任务，不烧写目标/OTP、不改VCC。
-- 状态：`disconnect_layout_installed`
+- 当前任务：用户实测8845cab后断开提示仍延迟：拔开目标保持5秒，英文ISP disconnected也不出现；界面电压/动画仍刷新，重接后才弹断开/连接。上一版未闭环。指定固件会话正在查真实wire/DMA/query返回并准备限速诊断；当前不占用户端口，不重放旧任务。主机a821be6d安装和布局验收保持有效。
+- 状态：`disconnect_field_failure_investigating`
 
 ## 里程碑
 
@@ -23,7 +23,7 @@
 
 ## 验证证据
 
-- **自适应布局与拔板断开显示**：5c979720/373b44e9/Web f6ca3925；79 GUI及TS/Vite通过。真实IAB模拟后台ARM/HPM左右底边差<0.01px，无横向溢出/控制台错误。组合a821be6d于2026-10-22 00:52:14+08覆盖exit0，解包/实装205Python/41Web/四载荷、冻结CLI/MCP/SVD/HTTP/无宿主Python/正常退出通过。固件8845cab：正常reconnect和自身reset连续三次静默先断开/恢复115200，RX仅ISP占用上拉并完整恢复；1250ms模拟时序、错误不重烧、36回归、双SES和SWD地址检查通过。RX悬空解释未有现场波形，实物拔插显示待用户验证。升级/启动结果详见docs/verification/v036-isp-disconnect-layout.md。
+- **自适应布局与拔板断开显示**：5c979720/373b44e9/Web f6ca3925；79 GUI及TS/Vite通过。真实IAB模拟后台ARM/HPM左右底边差<0.01px，无横向溢出/控制台错误。组合a821be6d于2026-10-22 00:52:14+08覆盖exit0，解包/实装205Python/41Web/四载荷、冻结CLI/MCP/SVD/HTTP/无宿主Python/正常退出通过。固件8845cab：正常reconnect和自身reset连续三次静默先断开/恢复115200，RX仅ISP占用上拉并完整恢复；1250ms模拟时序、错误不重烧、36回归、双SES和SWD地址检查通过。RX悬空解释未有现场波形，实物拔插显示待用户验证。升级/启动结果详见docs/verification/v036-isp-disconnect-layout.md。 后续现场失败：用户确认8845cab仍只在重接后出现英文断开日志和中文弹窗，断开期间GUI仍刷新。不能认定现场问题解决；真实query/DMA诊断继续。
 - **多镜像ISP阶段与右侧输出布局**：cc043fd1/Web4433456e；79GUI、TS/Vite、20条生产C序列化事件交叉解析通过。IAB模拟后台确认右侧布局且零控制台错误，文件选择事件超时未上传。固件d2452d2报告20轮×双BIN×5M回归40写/20复位/19掉线，文件间无重连且进度单调；36CI及双版SES通过。组合ea606a48于2026-10-22 00:32:07+08覆盖exit0，解包/实装205Python/41Web/四载荷、冻结CLI/MCP/SVD/HTTP/无宿主Python/正常退出通过。原身份重接后UF2仅写一次，版本/编译时间及三项能力通过；原生已打开，安装版IAB右侧预览/零控制台错。详见docs/verification/v036-multifile-isp-display.md。
 - **镜像与UART OTP联合脱机任务**：功能a3d55b76/bea39ab5/f576a68d，Web bc23b878；274Python/132GUI，最终针对模块166Python/17面板/28输出复验及TS/Vite通过。真实浏览器模拟部署和安装版连续输入/HPM6200入口通过，零控制台错。组合8d2ed5a3覆盖exit0，205Python/41Web/四载荷、冻结CLI/MCP/SVD/HTTP/无宿主Python/正常退出通过。固件313ab4e生产C结果交叉解析通过并升级。实际V4 BIN@0x80023000+Word69 1→3联合部署，仅触发一次code0/ROM0/1/1、otp_verified1；128字回读唯一69=3，锁/生命周期/VCC未改。报告docs/verification/v036-joint-offline-otp.md。
 - **共享脱机工作区与八系列UART OTP**：源c59a6f30/2f681cad：179相关Python、209GUI、36目录测试；组合373Python、TS/Vite通过。IAB生产Web+真实API模拟CDC验证跨HPM系列/ARM、模板预览/模拟写入、旧确认失效，零控制台错误；固件生产C read/plan/program交叉解析通过。组合a2599b21管理员覆盖exit0；解包及实装204Python/41Web/四载荷一致，冻结CLI/MCP/SVD/HTTP/无宿主Python/正常退出通过。原生启动和IAB安装后网页通过，原生窗口留给用户；未关闭本轮用户窗口。报告v036-offline-workspace.md。此前73fccac2安装见v036-uart-otp-settings.md。 2026-10-21按用户授权升级3d96dbb，安装版profile_v1实机128字全读、Word69 0→1预检/真实单次写入/全读回通过，唯一该字变化；锁/VCC未改。
@@ -47,14 +47,14 @@
 
 ## 真机环境
 
-- **state**：用户结束测试并关闭上位机；预检曾遇另一V2.9.0设备而未操作。用户接回原下载器后8845cab本体升级仅一次，原身份回连、编译时间00:52:43及ISP/OTP三能力通过，锁已释放。当前已打开新版原生窗口，8766后台健康，复用上次WebView配置。实物拔插LCD时序待用户测；本轮无目标/OTP/VCC操作。Word69仍为此前3，未知MKLINK_V2不重放。
+- **state**：用户结束测试并关闭上位机；预检曾遇另一V2.9.0设备而未操作。用户接回原下载器后8845cab本体升级仅一次，原身份回连、编译时间00:52:43及ISP/OTP三能力通过，锁已释放。当前已打开新版原生窗口，8766后台健康，复用上次WebView配置。实物拔插LCD时序待用户测；本轮无目标/OTP/VCC操作。Word69仍为此前3，未知MKLINK_V2不重放。 后续用户实测掉线显示仍失败，5秒断开期间英文日志也无而GUI持续刷新。新诊断候选尚未部署，等待定位。
 - **installer**：当前0.3.6组合a821be6d；2026-10-22 00:52:14+08管理员覆盖exit0；205Python/41Web/四载荷与冻结资格通过。包SHA256 8380ab070fd8ffdcfa543794272c11223f2b67962fb56544edd209659124aef0。未公开发布。
 - **backups**：0.3.4正式包/安装/渠道/Skill/HIL在MKLINK_BUILD_ROOT/artifacts/v034-official，相邻v034-official-native保存完整原生CI ZIP；0.3.5本机包见上述构建根。原Git根.build/artifacts/v033-official、v032-official及用户备份保持；清理前快照/删除清单在构建根reports/v034-cleanup-*.json、v034-deleted-branches.json、v034-memory-before-cleanup.json。不能再把F盘仅视为可删缓存。
 
 ## 下一动作
 
 1. 当前安装a821be6d，包F:/MKLink-Build/artifacts/v036-local-isp-a821be6d；固件8845cab升级/原生验证状态见v036-isp-disconnect-layout.md。
-2. 用户记得拔板前LCD为ISP next …: reconnect，复位选项不明。RX悬空为待实证解释；用户需验证拔板后重插前已显示断开。1250ms仅生产C模拟计时，不等同实物时延。
+2. 8845cab现场失败已确认：英文日志及中文提示均重接后出现，GUI仍正常刷新。固件会话正在增加真实wire/DMA回归和查询诊断；不能再仅凭理想静默回归声称修复。用户测试中不得占端口、升级或重放任务。
 3. PR48未合并发布。此前联合镜像+OTP实机证据保留，当前Word69=3；本轮未追加目标烧录/OTP/VCC。其他HPM型号继续由用户测试，固件交会话01a15977-1aef-7430-aa11-6e39725f0465。
 4. 未知MKLINK_V2任务不得重放。当前接入若为烧好固件的目标板或另一V2.9.0设备，不能误当原下载器升级。
 5. 其他维护边界：继续排查 30MHz 并行目标读错/Flash 偶发 status5，区分固件目标访问与主机队列；本次低负载 F103 结果不关闭该限制，需要固件改动另开会话。；保持Gitee真实Skill回退：0.3.5已验证；Windows超过100MB被拒使用GitHub链接，其余平台仅GitHub。保留唯一发布/验收证据和Skill备份，联接run仅人工处理，不强删。；收集 Mac/Linux USB/MSC 和原地升级反馈、外置 Flash 多算法实物验证；完整 SES/芯片/拔插断电组合仍待补充。供电每次确认具体电压，长期验证仍暂停。
@@ -72,7 +72,7 @@
 
 ## 延续协议
 
-- 当前已装组合a821be6d；固件8845cab部署与原生启动状态见最新验证报告。现场未知任务不重放；OTP Word69=3。RX悬空为未有现场波形的解释，实物拔插显示尚待用户验收。
+- 当前主机a821be6d与固件8845cab已安装，但2026-10-22用户实测断开提示仍失败。先看v036-isp-disconnect-layout.md顶部现场反馈；指定固件会话继续诊断，用户测试中不占端口，旧任务不重放，OTP Word69=3。
 - V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。
 - CDC 995根因仅保留待排查。恢复只允许同身份CDC故障5秒内；超时不自动接回或新建AI会话，主动断开立即生效，不重放未知写入。测试实例已经全部释放；见v035-transport-recovery.md，不寻找旧现场窗口。
 - 客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。
