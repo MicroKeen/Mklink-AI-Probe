@@ -100,6 +100,8 @@ const programmingProtocol = ref<'debug' | 'hpm_rom_isp_uart'>('debug')
 const beepOnCompletion = ref(true)
 const beepDurationMs = ref(1000)
 const resetAfterDownload = ref(true)
+const resetMode = ref<'software' | 'hardware' | 'power_cycle'>('software')
+const resetVoltageMv = ref(3300)
 const ispConnection = ref<IspConnection>('idle')
 const ispConfig = ref<HpmIspConfig>({
   baud_rate: savedIspBaud, connect_timeout_ms: 30000, command_timeout_ms: 10000,
@@ -238,7 +240,7 @@ const canTrigger = computed(() => (
 ))
 
 watch(
-  [model, scriptName, automaticCount, idcodeTimeout, swdClock, targetPart, hpmBoard, algorithms, firmwares, eraseAllBeforeDownload, unlockBeforeDownload, lockAfterDownload, securityVoltageMv, optionByteChanges, hpmOfflineOtp, programmingProtocol, ispConfig, beepOnCompletion, beepDurationMs, resetAfterDownload],
+  [model, scriptName, automaticCount, idcodeTimeout, swdClock, targetPart, hpmBoard, algorithms, firmwares, eraseAllBeforeDownload, unlockBeforeDownload, lockAfterDownload, securityVoltageMv, optionByteChanges, hpmOfflineOtp, programmingProtocol, ispConfig, beepOnCompletion, beepDurationMs, resetAfterDownload, resetMode, resetVoltageMv],
   () => {
     preview.value = null
     deployedScriptName.value = ''
@@ -783,6 +785,10 @@ function buildRequest(): {
         beep_on_completion: beepOnCompletion.value,
         beep_duration_ms: Number(beepDurationMs.value),
         reset_after_download: hpmMode.value ? true : resetAfterDownload.value,
+        ...(!hpmMode.value ? {
+          reset_mode: resetMode.value,
+          reset_voltage_mv: resetAfterDownload.value && resetMode.value === 'power_cycle' ? resetVoltageMv.value : null,
+        } : {}),
       } : {}),
       script_name: scriptName.value,
       auto_download_count: Number(automaticCount.value),
@@ -870,8 +876,10 @@ async function queryDeployment(deploymentError?: unknown): Promise<void> {
 }
 
 async function triggerOffline(): Promise<void> {
-  if (ispMode.value && ispConfig.value.completion.reset === 'power_cycle') {
-    const voltage = Number(ispConfig.value.completion.restore_voltage_mv) / 1000
+  const powerCycle = ispMode.value ? ispConfig.value.completion.reset === 'power_cycle'
+    : !hpmMode.value && resetAfterDownload.value && resetMode.value === 'power_cycle'
+  if (powerCycle) {
+    const voltage = Number(ispMode.value ? ispConfig.value.completion.restore_voltage_mv : resetVoltageMv.value) / 1000
     if (!await confirmRisk(tr(
       `烧录完成后将断电并恢复 ${voltage}V。请确认目标板支持此电压。继续执行？`,
       `After programming, power will cycle and return to ${voltage}V. Confirm the target supports this voltage. Continue?`,
@@ -1048,10 +1056,14 @@ onBeforeUnmount(() => {
           <label class="security-option"><input v-model="beepOnCompletion" type="checkbox" />{{ tr('下载完成响蜂鸣器', 'Beep on completion') }}</label>
           <label class="setting-row"><span>{{ tr('蜂鸣时长（ms）', 'Beep duration (ms)') }}</span><input v-model.number="beepDurationMs" data-testid="offline-beep-duration" type="number" min="1" max="10000" step="1" class="form-input" :disabled="!beepOnCompletion" /></label>
           <label class="security-option"><input v-model="resetAfterDownload" type="checkbox" :disabled="hpmMode" />{{ tr('下载完成复位', 'Reset on completion') }}</label>
-          <p class="security-reason">{{ hpmMode ? tr('JTAG ROM API 内部自动复位，保持原有行为。', 'JTAG ROM API resets internally; existing behavior is preserved.') : tr('使用现有硬件复位流程。软件及断电复位在 USART ISP 模式配置。', 'Uses the existing hardware reset sequence. Software and power-cycle reset are configured in USART ISP mode.') }}</p>
+          <p v-if="hpmMode" class="security-reason">{{ tr('JTAG ROM API 内部自动复位，保持原有行为。', 'JTAG ROM API resets internally; existing behavior is preserved.') }}</p>
+          <template v-else-if="resetAfterDownload">
+            <label class="setting-row"><span>{{ tr('复位方式', 'Reset mode') }}</span><select v-model="resetMode" data-testid="offline-reset-mode" class="form-select"><option value="software">{{ tr('软件复位', 'Software reset') }}</option><option value="hardware">{{ tr('硬件复位', 'Hardware reset') }}</option><option value="power_cycle">{{ tr('断电复位', 'Power-cycle reset') }}</option></select></label>
+            <label v-if="resetMode === 'power_cycle'" class="setting-row"><span>{{ tr('VCC 恢复电压', 'VCC restore voltage') }}</span><select v-model.number="resetVoltageMv" data-testid="offline-reset-voltage" class="form-select"><option :value="1800">1.8V</option><option :value="3300">3.3V</option><option :value="5000">5V</option></select></label>
+          </template>
         </div>
         <label v-if="hpmMode && !ispMode" class="setting-row"><span>{{ tr('HPM 板卡', 'HPM Board') }}</span><select v-model="hpmBoard" class="form-select"><option v-for="item in hpmBoards" :key="item" :value="item">{{ item }}</option></select></label>
-        <label v-if="!ispMode" class="setting-row"><span>{{ tr('IDCODE 超时', 'IDCODE Timeout') }}</span><input v-model.number="idcodeTimeout" type="number" min="500" max="600000" step="500" class="form-input"><em>ms</em></label>
+        <label v-if="!ispMode" class="setting-row"><span>{{ tr('目标连接／换板等待时间（ms）', 'Connection / board replacement timeout (ms)') }}</span><input v-model.number="idcodeTimeout" type="number" min="500" max="600000" step="500" class="form-input"></label>
         <label v-if="!ispMode" class="setting-row"><span>{{ tr('调试速率', 'Debug clock') }}</span><select v-model.number="swdClock" class="form-select" data-testid="offline-clock"><option :value="1000000">1 MHz</option><option :value="4000000">4 MHz</option><option :value="5000000">5 MHz</option><option :value="8000000">8 MHz</option><option :value="10000000">10 MHz</option><option :value="20000000">20 MHz</option><option :value="30000000">30 MHz</option></select></label>
         <p v-if="effectiveModel === 'V2' && swdClock > 10000000" class="muted">{{ tr('V2 的 20/30 MHz 需要支持高速时序的新版固件。', 'V2 20/30 MHz requires updated firmware with high-speed timing support.') }}</p>
         </fieldset>

@@ -87,6 +87,8 @@ class OfflineDownloadConfig:
     beep_on_completion: bool = True
     reset_after_download: bool = True
     beep_duration_ms: int = 1000
+    reset_mode: Optional[str] = None
+    reset_voltage_mv: Optional[int] = None
 
     @property
     def script_name(self) -> str:
@@ -178,12 +180,12 @@ def parse_offline_config(
         raise OfflineDownloadError("V2 automatic download count must be 1")
     timeout = _positive_int(
         payload.get("wait_idcode_timeout_ms", 10000),
-        "IDCODE timeout",
+        "Target connection / board replacement timeout",
         500,
         600000,
     )
     if timeout % 500:
-        raise OfflineDownloadError("IDCODE timeout must be a multiple of 500 ms")
+        raise OfflineDownloadError("Target connection / board replacement timeout must be a multiple of 500 ms")
     swd_clock = _positive_int(
         payload.get("swd_clock_hz", 10000000),
         "SWD clock",
@@ -212,6 +214,16 @@ def parse_offline_config(
         raise OfflineDownloadError("Beep duration (ms) must be an integer")
     beep_duration_ms = _positive_int(duration, "Beep duration (ms)", 1, 10000)
     reset_after_download = _strict_bool(payload.get("reset_after_download", True), "completion reset")
+    reset_mode = payload.get("reset_mode")
+    if reset_mode is not None and reset_mode not in ("software", "hardware", "power_cycle"):
+        raise OfflineDownloadError("Unsupported completion reset mode")
+    if hpm_target and reset_mode is not None:
+        raise OfflineDownloadError("ARM completion reset mode cannot be used with HPM")
+    reset_voltage_mv = None
+    if reset_after_download and reset_mode == "power_cycle":
+        reset_voltage_mv = payload.get("reset_voltage_mv")
+        if type(reset_voltage_mv) is not int or reset_voltage_mv not in (1800, 3300, 5000):
+            raise OfflineDownloadError("Choose reset restore voltage: 1800, 3300 or 5000 mV")
     protocol = payload.get("programming_protocol", "debug")
     if protocol not in ("debug", "hpm_rom_isp_uart"):
         raise OfflineDownloadError("Unsupported offline programming protocol")
@@ -414,6 +426,8 @@ def parse_offline_config(
         hpm_isp_otp=isp_otp,
         beep_on_completion=beep_on_completion,
         beep_duration_ms=beep_duration_ms,
+        reset_mode=reset_mode,
+        reset_voltage_mv=reset_voltage_mv,
         reset_after_download=reset_after_download,
     )
 
@@ -535,6 +549,58 @@ def _security_api_preflight_lines(indent: str) -> list[str]:
     ]
 
 
+def _reset_preflight_lines(config: OfflineDownloadConfig) -> list[str]:
+    if config.reset_mode is None:
+        return []
+    return [
+        "    if cmd.reset_target(0) != -1:",
+        '        print("Upgrade downloader firmware: completion reset support required")',
+        "        abort = True",
+        "        break",
+    ]
+
+
+def _completion_lines(config: OfflineDownloadConfig) -> list[str]:
+    # Once per successful board, after all images/options and before waiting
+    # for removal. Legacy callers retain their existing reset command.
+    lines = []
+    if not config.is_hpm and config.reset_after_download:
+        if config.reset_mode in ("software", "hardware"):
+            mode = 1 if config.reset_mode == "software" else 2
+            lines.extend([
+                f"    completion_rc = cmd.reset_target({mode})",
+                "    if completion_rc != 0:",
+                '        print("completion reset failed:", completion_rc)',
+                "        abort = True",
+                "        break",
+            ])
+        elif config.reset_mode == "power_cycle":
+            lines.extend([
+                "    completion_rc = cmd.set_power_off()",
+                "    if completion_rc == 0:",
+                "        time.sleep_ms(3000)",
+                f"        completion_rc = cmd.set_power_on({config.reset_voltage_mv})",
+                "    if completion_rc != 0:",
+                '        print("completion power cycle failed:", completion_rc)',
+                "        abort = True",
+                "        break",
+                "    time.sleep_ms(200)",
+            ])
+        else:
+            lines.append("    cmd.set_reset()")
+            if config.model != "V2":
+                lines.append("    cmd.cpu_run()")
+    return lines
+
+
+def _board_success_lines(config: OfflineDownloadConfig) -> list[str]:
+    lines = []
+    if config.beep_on_completion:
+        lines.extend(["    cmd.set_beep_on()", f"    time.sleep_ms({config.beep_duration_ms})", "    cmd.set_beep_off()"])
+    lines.append('    print("board download OK")')
+    return lines
+
+
 def _generate_v2_script(config: OfflineDownloadConfig) -> str:
     lines = [
         "import PikaStdLib",
@@ -546,14 +612,14 @@ def _generate_v2_script(config: OfflineDownloadConfig) -> str:
         "abort = False",
         "for i in range(1):",
     ]
+    lines.extend(_reset_preflight_lines(config))
     lines.extend(_program_lines(config, "    "))
+    lines.extend(_completion_lines(config))
+    lines.extend(_board_success_lines(config))
     lines.extend(
         (
             "if not abort:",
             '    print("offline download finished")',
-            *([] if config.is_hpm or not config.reset_after_download else ["    cmd.set_reset()"]),
-            *(["    cmd.set_beep_on()", f"    time.sleep_ms({config.beep_duration_ms})", "    cmd.set_beep_off()"]
-              if config.beep_on_completion else []),
             "else:",
             '    print("offline download aborted")',
             "",
@@ -568,6 +634,7 @@ def generate_offline_script(config: OfflineDownloadConfig) -> str:
         return generate_script(config)
     if config.model == "V2":
         return _generate_v2_script(config)
+    read_idcode = "cmd.read_swd_idcode()" if config.reset_mode is not None else "cmd.get_idcode()"
     lines = [
         "import PikaStdLib",
         "import time",
@@ -585,11 +652,15 @@ def generate_offline_script(config: OfflineDownloadConfig) -> str:
         '    print("=== Auto Download Round:", i + 1, "===")',
         "    elapsed = 0",
         "    while True:",
-        "        idcode = cmd.get_idcode()",
+        f"        idcode = {read_idcode}",
+        "        if idcode < 0:",
+        '            print("target connection check failed:", idcode)',
+        "            abort = True",
+        "            break",
         "        if idcode not in (0, 0xFFFFFFFF):",
         "            break",
         "        if elapsed >= WAIT_IDCODE_TIMEOUT:",
-        '            print("wait idcode online timeout")',
+        '            print("target connection timeout")',
         "            abort = True",
         "            break",
         "        time.sleep_ms(500)",
@@ -598,6 +669,8 @@ def generate_offline_script(config: OfflineDownloadConfig) -> str:
         "        break",
         '    print("IDCODE: 0x%08X" % idcode)',
     ]
+    insert_at = lines.index("    elapsed = 0")
+    lines[insert_at:insert_at] = _reset_preflight_lines(config)
     if config.is_hpm and any(f.format == "hex" for f in config.firmwares):
         insert_at = lines.index("    elapsed = 0")
         lines[insert_at:insert_at] = [
@@ -642,27 +715,63 @@ def generate_offline_script(config: OfflineDownloadConfig) -> str:
         lines.extend(otp_script_lines(config.hpm_user_otp, commit=True))
     if config.security is not None and config.security.lock_after_download:
         lines.extend(_security_lines(config.security, action="lock", indent="    "))
+    lines.extend(_completion_lines(config))
+    if not config.is_hpm:
+        lines.extend([
+            "    # Confirm recovery before sounding success: the operator may remove",
+            "    # the board immediately after the beep.",
+            "    elapsed = 0",
+            "    connected_samples = 0",
+            "    while connected_samples < 2:",
+            f"        idcode = {read_idcode}",
+            "        if idcode < 0:",
+            '            print("target connection check failed:", idcode)',
+            "            abort = True",
+            "            break",
+            "        if idcode not in (0, 0xFFFFFFFF):",
+            "            connected_samples += 1",
+            "        else:",
+            "            connected_samples = 0",
+            "        if connected_samples >= 2:",
+            "            break",
+            "        if elapsed >= WAIT_IDCODE_TIMEOUT:",
+            '            print("target connection timeout after programming")',
+            "            abort = True",
+            "            break",
+            "        time.sleep_ms(100)",
+            "        elapsed += 100",
+            "    if abort:",
+            "        break",
+            "    disconnected_samples = 0",
+        ])
+    lines.extend(_board_success_lines(config))
     lines.extend(
         (
             "    if abort or i + 1 >= AUTO_DOWNLOAD_COUNT:",
             "        break",
             "    elapsed = 0",
             "    while True:",
-            "        idcode = cmd.get_idcode()",
-            "        if idcode in (0, 0xFFFFFFFF):",
-            "            break",
-            "        if elapsed >= WAIT_IDCODE_TIMEOUT:",
-            '            print("wait idcode offline timeout")',
+            f"        idcode = {read_idcode}",
+            "        if idcode < 0:",
+            '            print("target connection check failed:", idcode)',
             "            abort = True",
             "            break",
-            "        time.sleep_ms(500)",
-            "        elapsed += 500",
+            "        if idcode in (0, 0xFFFFFFFF):",
+            *(["            break"] if config.is_hpm else [
+                "            disconnected_samples += 1",
+                "        else:",
+                "            disconnected_samples = 0",
+                "        if disconnected_samples >= 3:",
+                "            break",
+            ]),
+            "        if elapsed >= WAIT_IDCODE_TIMEOUT:",
+            '            print("board replacement timeout: waiting for target removal")',
+            "            abort = True",
+            "            break",
+            f"        time.sleep_ms({500 if config.is_hpm else 100})",
+            f"        elapsed += {500 if config.is_hpm else 100}",
             "if not abort:",
             '    print("auto download finished")',
-            # HPM ROM programming already resets and starts the target.
-            *([] if config.is_hpm or not config.reset_after_download else ["    cmd.set_reset()", "    cmd.cpu_run()"]),
-            *(["    cmd.set_beep_on()", f"    time.sleep_ms({config.beep_duration_ms})", "    cmd.set_beep_off()"]
-              if config.beep_on_completion else []),
             "else:",
             '    print("auto download aborted")',
             "",

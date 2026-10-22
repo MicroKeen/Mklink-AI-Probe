@@ -408,7 +408,127 @@ def test_v3_without_post_lock_resets_and_beeps_after_programming():
     delay = script.index("time.sleep_ms(1000)")
     beep_off = script.index("cmd.set_beep_off()")
     finished = script.index('print("auto download finished")')
-    assert program < finished < reset < run < beep_on < delay < beep_off
+    assert program < reset < run < beep_on < delay < beep_off < finished
+    assert beep_off < script.index("if abort or i + 1 >= AUTO_DOWNLOAD_COUNT:")
+
+
+def _execute_completion_script(monkeypatch, payload, *, fail_image=0, reset_rc=0, capability=-1, power_rc=0, idcodes=None):
+    import sys
+    from types import SimpleNamespace
+    events = []
+    # Connect, stable post-reset connection, one ignored dropout, real removal.
+    reads = iter(idcodes if idcodes is not None else [0x1234, 0x1234, 0x1234, 0, 0x1234, 0, 0, 0] * 3)
+    image_count = 0
+
+    def image(*args):
+        nonlocal image_count
+        image_count += 1
+        events.append(("image", args[0]))
+        return -1 if image_count == fail_image else 0
+
+    def record(name, result=0):
+        def call(*args):
+            events.append((name, *args))
+            return result
+        return call
+
+    def reset(mode):
+        events.append(("reset", mode))
+        return capability if mode == 0 else reset_rc
+
+    monkeypatch.setitem(sys.modules, "PikaStdLib", SimpleNamespace())
+    monkeypatch.setitem(sys.modules, "time", SimpleNamespace(sleep_ms=record("sleep")))
+    monkeypatch.setitem(sys.modules, "load", SimpleNamespace(flm=record("flm"), bin=image, hex=image))
+    monkeypatch.setitem(sys.modules, "cmd", SimpleNamespace(
+        set_swd_clock=record("clock"), get_idcode=lambda: next(reads), read_swd_idcode=lambda: next(reads), reset_target=reset,
+        set_reset=record("legacy_reset"), cpu_run=record("run"),
+        set_beep_on=record("beep_on"), set_beep_off=record("beep_off"),
+        set_power_off=record("power_off", power_rc), set_power_on=record("power_on", power_rc),
+    ))
+    namespace = {}
+    exec(generate_offline_script(parse_offline_config(payload)), namespace)
+    return events, namespace["abort"]
+
+
+@pytest.mark.parametrize("mode", ["software", "hardware", "power_cycle", None])
+def test_each_successful_board_completes_once_after_all_images(monkeypatch, mode):
+    payload = _config()
+    payload.update(reset_mode=mode, reset_voltage_mv=3300, beep_duration_ms=100)
+    events, aborted = _execute_completion_script(monkeypatch, payload)
+    assert not aborted
+    assert sum(e[0] == "image" for e in events) == 9
+    assert events.count(("beep_on",)) == events.count(("beep_off",)) == 3
+    since_beep = []
+    for event in events:
+        since_beep.append(event)
+        if event == ("beep_off",):
+            assert sum(e[0] == "image" for e in since_beep) == 3
+            assert since_beep[-3:] == [("beep_on",), ("sleep", 100), ("beep_off",)]
+            since_beep = []
+    if mode in ("software", "hardware"):
+        assert events.count(("reset", 1 if mode == "software" else 2)) == 3
+        assert not any(e[0] in ("legacy_reset", "run") for e in events)
+        assert events.index(("reset", 0)) < next(i for i, e in enumerate(events) if e[0] == "image")
+    elif mode == "power_cycle":
+        assert events.count(("power_off",)) == events.count(("power_on", 3300)) == 3
+        assert events.count(("sleep", 3000)) == 3
+    else:
+        assert events.count(("legacy_reset",)) == events.count(("run",)) == 3
+
+
+@pytest.mark.parametrize("failure, expected_images, expected_beeps", [
+    ({"fail_image": 5}, 5, 1), ({"reset_rc": -4}, 3, 0), ({"capability": 4294967295}, 0, 0),
+])
+def test_failed_board_or_reset_never_reports_completion(monkeypatch, failure, expected_images, expected_beeps):
+    payload = dict(_config(), reset_mode="software")
+    events, aborted = _execute_completion_script(monkeypatch, payload, **failure)
+    assert aborted
+    assert sum(e[0] == "image" for e in events) == expected_images
+    assert events.count(("beep_on",)) == expected_beeps
+
+
+def test_completion_disabled_and_power_failure(monkeypatch):
+    events, aborted = _execute_completion_script(monkeypatch, dict(_config(), reset_after_download=False, beep_on_completion=False))
+    assert not aborted
+    assert not any(e[0] in ("legacy_reset", "reset", "beep_on", "power_off") for e in events)
+    events, aborted = _execute_completion_script(monkeypatch, dict(_config(), reset_mode="power_cycle", reset_voltage_mv=1800), power_rc=-1)
+    assert aborted
+    assert not any(e[0] in ("power_on", "beep_on") for e in events)
+
+
+def test_lost_target_after_reset_does_not_start_another_board(monkeypatch):
+    payload = dict(_config(), reset_mode="software", wait_idcode_timeout_ms=500)
+    events, aborted = _execute_completion_script(monkeypatch, payload, idcodes=[0x1234] + [0] * 20)
+    assert aborted
+    assert sum(e[0] == "image" for e in events) == 3
+    assert events.count(("beep_on",)) == 0
+
+
+@pytest.mark.parametrize("idcodes, images", [([-2], 0), ([0x1234, -6], 3), ([0x1234, 0x1234, 0x1234, -2], 3)])
+def test_presence_errors_never_mean_a_new_board(monkeypatch, idcodes, images):
+    events, aborted = _execute_completion_script(monkeypatch, dict(_config(), reset_mode="software"), idcodes=idcodes)
+    assert aborted
+    assert sum(e[0] == "image" for e in events) == images
+
+
+@pytest.mark.parametrize("voltage", [None, 0, True, 3300.0, "3300", 1200, 5500])
+def test_power_cycle_requires_an_explicit_supported_voltage(voltage):
+    with pytest.raises(OfflineDownloadError, match="restore voltage"):
+        parse_offline_config(dict(_config(), reset_mode="power_cycle", reset_voltage_mv=voltage))
+
+
+def test_one_board_success_does_not_complete_the_whole_trigger():
+    from mklink.hpm_isp import trigger_result
+    assert trigger_result(["board download OK", "target connection check failed: -2"])["status"] == "failed"
+
+
+@pytest.mark.parametrize("mode", ["software", "hardware", "power_cycle"])
+def test_v2_completion_modes_remain_single_board(monkeypatch, mode):
+    payload = dict(_config("V2"), auto_download_count=1, reset_mode=mode, reset_voltage_mv=3300)
+    events, aborted = _execute_completion_script(monkeypatch, payload)
+    assert not aborted
+    assert events.count(("beep_on",)) == 1
+    assert sum(e[0] == "image" for e in events) == 3
 
 
 def test_v3_stm32g474_security_uses_generic_masked_word_recipe():
