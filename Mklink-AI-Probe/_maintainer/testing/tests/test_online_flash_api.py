@@ -2532,6 +2532,50 @@ def _inspect_multi(app, ids):
         data={'part_number': 'DEVICE_A', 'algorithm_ids': ids}, files={'file': ('multi.hex', _multi_hex())})
 
 
+def test_persisted_custom_algorithms_keep_geometry_for_combined_hex(app, services, tmp_path):
+    from types import SimpleNamespace
+    from mklink.cmsis_dap.custom_flm import CustomFlmCatalog
+    from mklink.cmsis_dap.algorithm_catalog import discover_flash_algorithms
+
+    metadata = {
+        'internal': SimpleNamespace(flash_start=0x1000, flash_size=0x1000,
+            page_size=0x100, sector_sizes=((0, 0x200),)),
+        'external': SimpleNamespace(flash_start=0x90000000, flash_size=0x4000,
+            page_size=0x200, sector_sizes=((0, 0x1000), (0x2000, 0x2000))),
+    }
+    catalog = CustomFlmCatalog(services.paths.root,
+        parser=lambda path: metadata[path.read_text()])
+    ids = []
+    for name in metadata:
+        path = tmp_path / (name + '.flm')
+        path.write_text(name)
+        ids.append(catalog.add(path, path.name, 'DEVICE_A', ()).algorithm_id)
+    # Reload persisted records and exercise real discovery, not a prebuilt algorithm fixture.
+    services.custom_flms = CustomFlmCatalog(services.paths.root)
+    services.image_inspector = ImageInspector(snapshot_root=tmp_path / 'images')
+    discovered = {item.algorithm_id: item for item in
+        discover_flash_algorithms('DEVICE_A', paths=services.paths)}
+    for name, algorithm_id in zip(metadata, ids):
+        assert discovered[algorithm_id].page_size == metadata[name].page_size
+        assert discovered[algorithm_id].sector_sizes == metadata[name].sector_sizes
+
+    result = _inspect_multi(app, ids)
+    assert result.status_code == 200, result.text
+    image = result.json()
+    assert not image['preview_only']
+    assert image['sector_operations_available']
+    assert [(item['address'], item['size']) for item in image['sectors']] == [
+        (0x1000, 0x200), (0x90000000, 0x1000)]
+    started = request(app, 'POST', '/api/online-flash/jobs', json={
+        'target_part': 'DEVICE_A', 'probe_id': 'mk', 'image_id': image['image_id'],
+        'algorithm_ids': ids, 'actions': ['connect', 'erase', 'program', 'verify', 'disconnect'],
+        'sector_addresses': [item['address'] for item in image['sectors']]})
+    assert started.status_code == 200, started.text
+    job = services.job_manager.started[0]
+    assert job.custom_flm_regions == ((0x1000, 0x1000), (0x90000000, 0x4000))
+    assert [Path(item).read_text() for item in job.custom_flm_paths] == ['internal', 'external']
+
+
 def test_explicit_internal_external_hex_plan_and_exact_job_assets(app, services, explicit_algorithms):
     result = _inspect_multi(app, ['internal', 'external'])
     assert result.status_code == 200, result.text
