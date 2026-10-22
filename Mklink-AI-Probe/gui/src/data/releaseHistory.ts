@@ -9,10 +9,12 @@ export interface ReleaseHistoryEntry {
 
 export const releaseHistory: ReleaseHistoryEntry[] = [
   {
-    version: '0.3.6', date: '2026-10-21',
+    version: '0.3.6', date: '2026-10-22',
     summary: '新增 ISP 烧录，优化下载设置',
     summaryEn: 'Add ISP programming and simplify setup',
     changes: [
+      '修复内外 Flash 合并 HEX 的组合烧录。',
+      '修复在线烧录进度到 100% 后等待过久的问题。',
       '新增 HPM 串口 ISP 脱机烧录，开放其他型号测试。',
       '脱机烧录与 OTP 共用设备配置，按芯片加载独立配置页。',
       'HPM UART OTP 开放八组系列的字段、模板与读写，需配套固件。',
@@ -20,6 +22,8 @@ export const releaseHistory: ReleaseHistoryEntry[] = [
       '断电复位可选 1.8V、3.3V、5V，默认 3.3V。',
     ],
     changesEn: [
+      'Fix combined HEX programming across internal and external Flash.',
+      'Fix the long wait after online programming progress reaches 100%.',
       'Add HPM UART ISP offline programming and enable other models for testing.',
       'Share device settings between image programming and chip-specific configuration tabs.',
       'Add UART OTP fields, templates and read/write for eight HPM families; requires compatible probe firmware.',
