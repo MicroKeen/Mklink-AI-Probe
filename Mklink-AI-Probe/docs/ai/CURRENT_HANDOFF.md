@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-22T09:49:41.378387+08:00`
+- 更新时间：`2026-10-22T11:41:10.004130+08:00`
 - 分支：`codex/hpm-isp-deployment-ux`
-- HEAD：`蜂鸣时长e700f579、兼容提示5244c274、生产Web def4d105；后续验收记录见Git。`
-- 远端 HEAD：`PR48本轮功能/Web与验收记录推送后核对远端；组合9b8c9009已推送并覆盖安装。`
+- HEAD：`ARM每板完成动作eca8b0b0、生产Web7c5dea72；后续验收记录见Git。`
+- 远端 HEAD：`功能/Web已推送PR48，组合203dfe51已推送并管理员覆盖。`
 - 工作树：唯一工作区E:/software/HPM5300/Mklink-AI-Probe，源码子目录Mklink-AI-Probe；当前codex/hpm-isp-deployment-ux。已安装组合源在codex/v036-isp-ux-local。
-- 当前任务：蜂鸣时长(ms)已加入：普通脚本复用cmd开/延时/关，ISP既有config可选第13参数，无新增Pika方法。预览常显、触发后输出等宽等高并排。236Python/80GUI及IAB模拟部署触发通过，组合9b8c9009已覆盖并通过冻结资格，固件8705f753已单次升级原下载器且新旧配置实机通过；原生已打开给用户测试。
-- 状态：`beep_layout_installed`
+- 当前任务：用户当前STM32F103。ARM新增软件/硬件/断电完成复位，每板全文件成功后复位并蜂鸣；实时SWD连接检测与换板去抖，超时更名。305Python/51GUI/TS/Vite/IAB模拟通过，组合203dfe51已覆盖并通过冻结资格。配套V4固件2435484已升级，用户授权的软件/硬件/3300mV断电复位各一次实测通过，端口释放后新版原生已打开。恢复板载遥测约3480mV，未校准。完整多板Flash流程待用户测试。见v036-arm-completion-reset.md。
+- 状态：`arm_completion_installed_verified`
 
 ## 里程碑
 
@@ -23,14 +23,14 @@
 
 ## 验证证据
 
+- **ARM每板完成复位和蜂鸣**：源eca8b0b0/Web7c5dea72，305相关Python/51离线GUI/TS/Vite通过；IAB模拟双镜像3轮与最终实时查询脚本3轮均通过，无控制台错。组合203dfe51管理员覆盖exit0，解包/实装205Python/41Web/四载荷、冻结CLI/MCP/SVD/HTTP/无宿主Python/后台正常退出通过。配套固件2435484双SES/38CI通过且已升级；软件/硬件/3300mV断电复位各一次通过。恢复遥测3480mV非外部校准。原生已打开，实装Web三模式/电压/等待标签核对通过，无控制台错。完整实际Flash多板循环尚未验证。见v036-arm-completion-reset.md。
+- **ARM每板完成复位和蜂鸣**：源eca8b0b0/Web7c5dea72，305相关Python/51离线GUI/TS/Vite通过；IAB模拟双镜像3轮与最终实时查询脚本3轮均通过，无控制台错。组合203dfe51管理员覆盖exit0，解包/实装205Python/41Web/四载荷、冻结CLI/MCP/SVD/HTTP/无宿主Python/后台正常退出通过。配套固件最终双SES/38CI已报告通过，原固件会话正在升级并按用户授权三种复位实测。完整实际Flash多板循环尚未验证。见v036-arm-completion-reset.md。
 - **蜂鸣时长与预览输出并排**：e700f579/5244c274/Web def4d105：236Python、80GUI、TS/Vite；IAB模拟100ms部署触发，两列442px等宽/349.333px等高、标题28px、无控制台错误。组合9b8c9009管理员覆盖exit0，解包/实装205Python/41Web/四载荷与冻结CLI/MCP/SVD/HTTP/退出通过。固件8705f753双SES/37CI通过，原下载器单次升级，13参数100ms与旧12参数均rc0后清配置释放。原生已重开，实际声长/完整换板待用户测。见v036-beep-layout.md。
 - **自适应布局与拔板断开显示**：主机5c979720/373b44e9/Web f6ca3925，79GUI/TS/Vite及IAB对齐通过；组合a821be6d覆盖和冻结资格保持。8845cab实物失败；cd790707查询诊断捕获154 FRAME/0 TIMEOUT，证明无效帧清空静默计数。8d5d294独立presence修复：37回归、50/250ms各29场景、双SES/SWD地址/UF2通过并升级。实物115200拔开时disconnected+用户确认LCD已断开，19.834秒后重接connected，code0/close。200–225ms仅模型，无精确拔开时间戳；高速多轮未重测。报告v036-isp-disconnect-layout.md。
 - **多镜像ISP阶段与右侧输出布局**：cc043fd1/Web4433456e；79GUI、TS/Vite、20条生产C序列化事件交叉解析通过。IAB模拟后台确认右侧布局且零控制台错误，文件选择事件超时未上传。固件d2452d2报告20轮×双BIN×5M回归40写/20复位/19掉线，文件间无重连且进度单调；36CI及双版SES通过。组合ea606a48于2026-10-22 00:32:07+08覆盖exit0，解包/实装205Python/41Web/四载荷、冻结CLI/MCP/SVD/HTTP/无宿主Python/正常退出通过。原身份重接后UF2仅写一次，版本/编译时间及三项能力通过；原生已打开，安装版IAB右侧预览/零控制台错。详见docs/verification/v036-multifile-isp-display.md。
 - **镜像与UART OTP联合脱机任务**：功能a3d55b76/bea39ab5/f576a68d，Web bc23b878；274Python/132GUI，最终针对模块166Python/17面板/28输出复验及TS/Vite通过。真实浏览器模拟部署和安装版连续输入/HPM6200入口通过，零控制台错。组合8d2ed5a3覆盖exit0，205Python/41Web/四载荷、冻结CLI/MCP/SVD/HTTP/无宿主Python/正常退出通过。固件313ab4e生产C结果交叉解析通过并升级。实际V4 BIN@0x80023000+Word69 1→3联合部署，仅触发一次code0/ROM0/1/1、otp_verified1；128字回读唯一69=3，锁/生命周期/VCC未改。报告docs/verification/v036-joint-offline-otp.md。
 - **共享脱机工作区与八系列UART OTP**：源c59a6f30/2f681cad：179相关Python、209GUI、36目录测试；组合373Python、TS/Vite通过。IAB生产Web+真实API模拟CDC验证跨HPM系列/ARM、模板预览/模拟写入、旧确认失效，零控制台错误；固件生产C read/plan/program交叉解析通过。组合a2599b21管理员覆盖exit0；解包及实装204Python/41Web/四载荷一致，冻结CLI/MCP/SVD/HTTP/无宿主Python/正常退出通过。原生启动和IAB安装后网页通过，原生窗口留给用户；未关闭本轮用户窗口。报告v036-offline-workspace.md。此前73fccac2安装见v036-uart-otp-settings.md。 2026-10-21按用户授权升级3d96dbb，安装版profile_v1实机128字全读、Word69 0→1预检/真实单次写入/全读回通过，唯一该字变化；锁/VCC未改。
 - **0.3.6 ISP错误原因**：2506e93c/9b056ed1：102Python、72GUI，扩展90GUI通过；修正App旧哈希断言a8250c25，CI重跑以GitHub为准。Chrome临时SD和模拟固件显示timeout/Cancelled，脚本/JSON过滤。组合9c80b12a管理员覆盖退出0，199Python/40Web/四载荷、冻结CLI/MCP/SVD/HTTP、原生/浏览器与退出零进程/监听/端点通过。见v036-isp-readable-errors.md。
-- **0.3.6 串口锁异常清理**：源dad4bf69；213通过，含15新增故障回归、真实测试进程强退后串口/HIL重取及活锁保护。三个源CI通过。组合b3878ee5管理员覆盖退出0，199Python/40Web/四载荷一致，冻结CLI/MCP/SVD/HTTP、原生/Chrome与正常退出零进程/端口/端点通过。无目标硬件操作；见v036-serial-lock-cleanup.md。
-- **0.3.6 ISP部署界面修复**：最新5df9569e：54GUI及TS/Vite通过，Chrome临时SD模拟触发显示屏幕同款waiting/connected/done/OK并保留输出框，脚本/JSON不显示、零控制台错；截图超时。组合11a865cb覆盖退出0、199源/40Web/四载荷、冻结MCP/SVD/HTTP无宿主Python、原生/Web及正常退出释放通过。未实测物理屏幕同步；详见v036-isp-deployment-ux.md。
 
 ## 架构决策
 
@@ -53,8 +53,8 @@
 
 ## 下一动作
 
-1. 主机9b8c9009与配套固件8705f753已升级，原生已打开。用户验证蜂鸣时长、触发后预览/输出并排与多轮换板；实际声长未测量，不误称已实测。见v036-beep-layout.md。
-2. 用户继续测试实际多轮烧录及5M拔插；先前115200只查询确认断开早于重接和LCD提示，不等于高速完整烧录验收。新固件仅配置接口实测通过，勿重放unknown任务或在用户测试中占端口。
+1. 当前STM32F103；上位机组合203dfe51已覆盖，新版原生已打开供用户测试；V4固件2435484已升级并完成三种复位各一次验证。不要重复升级或复位；无本轮Flash/OTP重写授权。3300mV设定恢复板载遥测3480mV，未作外部校准。
+2. 每板多镜像完成次数与换板去抖已有脚本执行/真实浏览器模拟，尚未实测完整STM32多板Flash流程。当前目标已从HPM换成STM32F103，不继承历史HPM镜像或OTP写入授权，不能重放旧unknown任务。
 3. PR48未合并发布。此前联合镜像+OTP实机证据保留，当前Word69=3；本轮未追加目标烧录/OTP/VCC。其他HPM型号继续由用户测试，固件交会话01a15977-1aef-7430-aa11-6e39725f0465。
 4. 未知MKLINK_V2任务不得重放。当前接入若为烧好固件的目标板或另一V2.9.0设备，不能误当原下载器升级。
 5. 其他维护边界：继续排查 30MHz 并行目标读错/Flash 偶发 status5，区分固件目标访问与主机队列；本次低负载 F103 结果不关闭该限制，需要固件改动另开会话。；保持Gitee真实Skill回退：0.3.5已验证；Windows超过100MB被拒使用GitHub链接，其余平台仅GitHub。保留唯一发布/验收证据和Skill备份，联接run仅人工处理，不强删。；收集 Mac/Linux USB/MSC 和原地升级反馈、外置 Flash 多算法实物验证；完整 SES/芯片/拔插断电组合仍待补充。供电每次确认具体电压，长期验证仍暂停。
@@ -72,7 +72,7 @@
 
 ## 延续协议
 
-- 蜂鸣时长/并排输出已安装9b8c9009，固件8705f753已升级且配置接口实机通过；原生留用户测试，不占端口。115200掉线实物历史结论见disconnect报告；本轮没有目标Flash/OTP/VCC，Word69仍3，旧unknown任务不重放。
+- ARM每板复位/蜂鸣已实现，主机203dfe51覆盖、固件2435484升级及三种复位实测均已完成，原生已打开。完整多板Flash流程待用户验证，不重放历史任务；本轮复位授权已执行完毕。历史HPM Word69=3只属原HPM目标，当前是STM32F103。
 - V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。
 - CDC 995根因仅保留待排查。恢复只允许同身份CDC故障5秒内；超时不自动接回或新建AI会话，主动断开立即生效，不重放未知写入。测试实例已经全部释放；见v035-transport-recovery.md，不寻找旧现场窗口。
 - 客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。
