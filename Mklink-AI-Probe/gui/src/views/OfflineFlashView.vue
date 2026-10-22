@@ -50,7 +50,7 @@ type ProbeModel = 'V2' | 'V3' | 'V4'
 defineOptions({ name: 'OfflineFlashView' })
 
 const OFFLINE_STORAGE_KEY = 'mklink.offlineFlash.settings'
-function savedSettings(): { model?: ProbeModel; scriptName?: string; automaticCount?: number; idcodeTimeout?: number; swdClock?: number; ispBaudRate?: number } {
+function savedSettings(): { model?: ProbeModel; scriptName?: string; idcodeTimeout?: number; swdClock?: number; ispBaudRate?: number } {
   try { return JSON.parse(localStorage.getItem(OFFLINE_STORAGE_KEY) || '{}') } catch { return {} }
 }
 const saved = savedSettings()
@@ -87,7 +87,7 @@ const disk = ref<OfflineDiskStatus | null>(null)
 const diskProbe = ref('')
 const model = ref<ProbeModel | ''>(saved.model ?? '')
 const scriptName = ref(saved.scriptName ?? 'factory-download.py')
-const automaticCount = ref(saved.automaticCount ?? 1)
+const automaticCount = ref(1)
 const idcodeTimeout = ref(saved.idcodeTimeout ?? 10000)
 const swdClock = ref(saved.swdClock ?? 10000000)
 
@@ -250,12 +250,11 @@ watch(
   { deep: true },
 )
 
-watch([model, scriptName, automaticCount, idcodeTimeout, swdClock, () => ispConfig.value.baud_rate], () => {
+watch([model, scriptName, idcodeTimeout, swdClock, () => ispConfig.value.baud_rate], () => {
   if (validIspBaud(ispConfig.value.baud_rate)) savedIspBaud = ispConfig.value.baud_rate
   localStorage.setItem(OFFLINE_STORAGE_KEY, JSON.stringify({
     model: model.value || undefined,
     scriptName: scriptName.value,
-    automaticCount: automaticCount.value,
     idcodeTimeout: idcodeTimeout.value,
     swdClock: swdClock.value,
     ispBaudRate: savedIspBaud,
@@ -1063,7 +1062,8 @@ onBeforeUnmount(() => {
           </template>
         </div>
         <label v-if="hpmMode && !ispMode" class="setting-row"><span>{{ tr('HPM 板卡', 'HPM Board') }}</span><select v-model="hpmBoard" class="form-select"><option v-for="item in hpmBoards" :key="item" :value="item">{{ item }}</option></select></label>
-        <label v-if="!ispMode" class="setting-row"><span>{{ tr('目标连接／换板等待时间（ms）', 'Connection / board replacement timeout (ms)') }}</span><input v-model.number="idcodeTimeout" type="number" min="500" max="600000" step="500" class="form-input"></label>
+        <label class="setting-row"><span>{{ tr('自动烧录次数', 'Automatic Flash Count') }}</span><input v-model.number="automaticCount" data-testid="offline-automatic-count" type="number" min="1" max="9999" class="form-input" :disabled="effectiveModel === 'V2'"></label>
+        <label v-if="!ispMode" class="setting-row"><span>{{ tr('目标连接／换板等待时间（ms）', 'Connection / board replacement timeout (ms)') }}</span><input v-model.number="idcodeTimeout" data-testid="offline-connection-timeout" type="number" min="500" max="600000" step="500" class="form-input" :disabled="!(automaticCount > 1)"></label>
         <label v-if="!ispMode" class="setting-row"><span>{{ tr('调试速率', 'Debug clock') }}</span><select v-model.number="swdClock" class="form-select" data-testid="offline-clock"><option :value="1000000">1 MHz</option><option :value="4000000">4 MHz</option><option :value="5000000">5 MHz</option><option :value="8000000">8 MHz</option><option :value="10000000">10 MHz</option><option :value="20000000">20 MHz</option><option :value="30000000">30 MHz</option></select></label>
         <p v-if="effectiveModel === 'V2' && swdClock > 10000000" class="muted">{{ tr('V2 的 20/30 MHz 需要支持高速时序的新版固件。', 'V2 20/30 MHz requires updated firmware with high-speed timing support.') }}</p>
         </fieldset>
@@ -1127,8 +1127,7 @@ onBeforeUnmount(() => {
           <section class="work-panel production-panel">
             <h2 class="section-title">{{ tr('烧录选项', 'Programming options') }}</h2>
             <fieldset :disabled="operationBusy" class="shared-controls">
-        <label class="setting-row"><span>{{ tr('脚本文件名', 'Script File Name') }}</span><input v-model="scriptFieldName" class="form-input mono" data-testid="offline-script-name" :disabled="effectiveModel !== 'V4'"></label>
-        <label class="setting-row"><span>{{ tr('自动烧录次数', 'Automatic Flash Count') }}</span><input v-model.number="automaticCount" type="number" min="1" max="9999" class="form-input" :disabled="effectiveModel === 'V2'"></label>
+        <label class="setting-row script-name-row"><span>{{ tr('脚本文件名', 'Script File Name') }}</span><input v-model="scriptFieldName" class="form-input mono" data-testid="offline-script-name" :disabled="effectiveModel !== 'V4'"></label>
         <div v-if="!ispMode">
         <details class="security-settings">
           <summary class="security-title">
@@ -1215,4 +1214,5 @@ onBeforeUnmount(() => {
 .shared-device-panel .target-results{top:100%;margin-top:5px}.shared-device-panel .target-search .btn{min-width:88px}
 .production-panel .setting-row{grid-template-columns:1fr;align-items:start;gap:6px;margin-bottom:0}.production-panel .setting-row>span{text-align:left}
 .production-panel .form-input{min-height:36px;box-sizing:border-box}.deployment-toolbar .deploy-actions{margin:10px 0 0}
+.production-panel .script-name-row{grid-column:1/-1}
 </style>
