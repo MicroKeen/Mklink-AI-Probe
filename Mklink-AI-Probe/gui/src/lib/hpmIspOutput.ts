@@ -7,7 +7,8 @@ const errors: Record<number, string> = {
   [-10]: 'BIN file error', [-11]: 'BIN address conflict', [-12]: 'Baud not supported',
 }
 const errorText = (code: number) => `ISP: ${errors[code] ?? 'Unknown ISP error'}`
-const reasons = new Set([...Object.values(errors), 'Unknown ISP error'])
+const reasons = new Set([...Object.values(errors), 'Unknown ISP error',
+  'Upgrade HPMLINK firmware for configurable beep duration'])
 // Keep these labels aligned with firmware otp_error_text() on the LCD.
 const otpErrors: Record<string, string> = {
   identity_mismatch: 'Target ID mismatch', expected_mismatch: 'Value changed',

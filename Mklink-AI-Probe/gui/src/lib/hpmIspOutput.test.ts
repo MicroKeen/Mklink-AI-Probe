@@ -85,6 +85,12 @@ describe('ISP LCD output', () => {
       .toEqual(['ISP: timeout', 'ISP: Cancelled', 'ISP config: Invalid settings', 'ISP: Unknown ISP error'])
   })
 
+  it('keeps the duration compatibility error while filtering its script source', () => {
+    const message = 'Upgrade HPMLINK firmware for configurable beep duration'
+    expect(hpmIspOutput([`print("USART ISP config: ${message}")`, `USART ISP config: ${message}`]))
+      .toEqual([`ISP config: ${message}`])
+  })
+
   it.each(['HPM_ISP broken', 'HPM_ISP null', event('result', { code: '0' }),
     event('waiting', { cycle: '<script>' }), event('result', { schema: 2 }),
     'print("ISP connected")', 'print(isp_label, "timeout")', 'ISP: untrusted arbitrary text',
