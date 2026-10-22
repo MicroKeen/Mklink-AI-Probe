@@ -64,9 +64,43 @@ FLMs, smart flash is explicitly disabled, so the second erase is not skipped.
   and failure cases, then verify the corrected installed task on hardware with
   appropriate authorization.
 
-No product code, firmware or installer was changed during this diagnosis.
+No product code, firmware or installer was changed during the initial diagnosis.
 The diagnostic backend released the probe. The installed runtime was explicitly
 rebound to the same device; connection, RTT channels and SuperWatch were restored
 and confirmed running, with zero Watch read errors in the restoration check.
 Raw traces, original image and hardware identities remain in ignored local
 build storage and are not committed.
+
+## Authorized correction and hardware verification
+
+The subsequent request to fix the problem is implemented in `35f7da59`.
+The backend remembers only successfully erased sector ranges on its current
+connection. A program operation consumes this evidence once and bypasses the
+loader's erase loop only if every padded programming page is covered. Reset,
+security operations, erase attempts, disconnect and failures invalidate it.
+Standalone program still erases sectors. The phase adapter retains pyOCD page
+programming, cleanup, Pack completion sequences and multi-region aggregation;
+erase callbacks cannot reach PROGRAM progress, and final 100% follows cleanup.
+The job manager suppresses duplicate PROGRAM completion events.
+
+391 tests passed, including real pyOCD loader/builder/eraser tests with simulated
+target I/O: single/double buffering, standalone and pre-erased programming,
+sparse two-bank HEX, exact sector selection, repeated operations, failed erase,
+page or cleanup failure, and whole-page coverage. These tests are not hardware
+evidence.
+
+The user separately authorized one more identical HEX burn after the correction.
+The actual source `OnlineFlashJobManager` and backend completed that single run,
+including full readback and the original completion reset. The trace shows:
+
+- Explicit sector erase: 2.360 s; no internal erase during `program()`.
+- Program stage: 5.595 s, compared with the earlier instrumented 7.892 s.
+- Verify: 1.686 s; complete job: 11.54 s.
+- PROGRAM 100% appears once; `program complete` follows 0.796 ms later.
+- Intermediate PROGRAM progress continues throughout actual page programming.
+
+This second burn authorization is consumed. No OTP, option-byte or supply
+changes occurred. The installed GUI connection was restored; RTT and SuperWatch
+were left stopped as the user had stopped them before this run. The installed
+application still needs the corrected package; this source hardware result is
+not an installed-build validation.

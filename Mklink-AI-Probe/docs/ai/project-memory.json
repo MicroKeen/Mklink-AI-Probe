@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-22T14:01:08.650061+08:00",
+  "updated_at": "2026-10-22T14:14:51.9590265+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
@@ -13,8 +13,8 @@
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "online_program_progress_diagnosed",
-    "current_task": "在线烧录100%停顿已实机定位：pyOCD内部擦除先报100%，随后真正写入0–99%被任务单调过滤；不是UnInit长等待。用户授权唯一一次同HEX重烧通过写入/回读；重复擦除2.270s、真实写入5.585s、UnInit含恢复24ms。未改产品代码/固件/安装包。已恢复原上位机连接、RTT与SuperWatch。见v036-online-program-progress-diagnosis.md。"
+    "status": "online_program_progress_fixed_verified",
+    "current_task": "35f7da59修复在线烧录进度阶段混用与重复擦除，391相关测试通过。用户另授一次相同HEX实机JobManager流程成功：擦除2.360s/写入5.595s/校验1.686s，100%唯一一次且0.796ms后完成；无内部重复擦除。授权消耗，原上位机连接恢复，采集保持用户此前停止状态。下一步将修复纳入0.3.6安装包。"
   },
   "milestones": [
     {
@@ -51,7 +51,7 @@
   "verification": [
     {
       "area": "在线烧录100%停顿诊断",
-      "result": "原安装任务100%间隔6.660705s；源后台同HEX/地址/1MHz实机唯一重烧成功。profile证明program内部重复擦除2.270s后再写5.585s；UnInit含PRIMASK恢复24ms。pyOCD两阶段回调混用且主机过滤后阶段进度。只诊断，未实施修复或性能改善；采集恢复运行且Watch零读错。详见v036-online-program-progress-diagnosis.md。"
+      "result": "35f7da59：391测试含真实pyOCD构建器模拟目标、多Bank稀疏HEX/单双缓冲/失败清理；唯一授权源JobManager实烧通过，写入阶段7.892→5.595s，PROGRAM100%仅一次到完成0.796ms，完整回读通过。初始UnInit推断已纠正。详见v036-online-program-progress-diagnosis.md；安装包待更新。"
     },
     {
       "area": "采集中软件复位实装与实机",
@@ -110,14 +110,14 @@
     "nRF54L15 GUI保护闭环、全部物理擦除/拔插/休眠/断电场景、电源外部精度校准未全部认证。VCC每次改动必须确认具体电压，HPM已锁定OTP不得重放。 已知无可靠扇区表的26个FLM禁用扇区操作；重叠算法需要匹配Bank模式。 HPM5301组18/19永久锁定的历史状态及用户字先写/组锁最后、全部固件独立校验后才写OTP等边界见docs/ai/hpm-offline-otp-handoff.md；接手重新确认芯片，其他型号不继承验收。 UART OTP已实现ROM write-memory APIv2，独立熔丝/影子/临时锁读语义仍未知并如实显示；以ROM写入状态及回读为准。配套3d96dbb已实机验证HPM5301全部128字读取和用户批准的Word69 0→1单次写入回读；其余型号/区域未实写，新数据须具体授权。多Word顺序执行不可回滚。CSV原生选择器自动化未完成。"
   ],
   "next_actions": [
-    "在线进度待修：擦除/写入分阶段回调，消除重复扇区擦除，保留覆盖限制、稀疏/多Bank与独立擦除契约，不删除UnInit或校验。当前为诊断结果，尚无产品修改；一次同HEX重烧授权已消耗，不自动再烧。上位机连接及RTT/Watch已恢复。",
+    "将35f7da59纳入当前组合0.3.6，构建检查和覆盖安装；无须更新下载器固件。第二次同HEX实烧授权也已消耗，不自动重复。原生连接恢复、采集保持停止。",
     "每板多镜像完成次数与换板去抖已有脚本执行/真实浏览器模拟，尚未实测完整STM32多板Flash流程。当前目标已从HPM换成STM32F103，不继承历史HPM镜像或OTP写入授权，不能重放旧unknown任务。",
     "PR48未合并发布。此前联合镜像+OTP实机证据保留，当前Word69=3；本轮未追加目标烧录/OTP/VCC。其他HPM型号继续由用户测试，固件交会话01a15977-1aef-7430-aa11-6e39725f0465。",
     "未知MKLINK_V2任务不得重放。当前接入若为烧好固件的目标板或另一V2.9.0设备，不能误当原下载器升级。",
     "其他维护边界：继续排查 30MHz 并行目标读错/Flash 偶发 status5，区分固件目标访问与主机队列；本次低负载 F103 结果不关闭该限制，需要固件改动另开会话。；保持Gitee真实Skill回退：0.3.5已验证；Windows超过100MB被拒使用GitHub链接，其余平台仅GitHub。保留唯一发布/验收证据和Skill备份，联接run仅人工处理，不强删。；收集 Mac/Linux USB/MSC 和原地升级反馈、外置 Flash 多算法实物验证；完整 SES/芯片/拔插断电组合仍待补充。供电每次确认具体电压，长期验证仍暂停。"
   ],
   "continuation_protocol": [
-    "当前STM32F103，安装组合8e402491与原V4固件不变；新增在线进度诊断详见v036-online-program-progress-diagnosis.md，前期UnInit长等待推断已被实测否定。唯一一次重烧通过且授权消耗，产品修复尚未实施。原上位机和采集已恢复；此前采集中复位验收保留。",
+    "在线进度修复35f7da59及单次实机验证完成，尚待当前组合0.3.6安装包更新；原V4固件不变。目标仍STM32F103，不继承HPM/OTP授权。详见v036-online-program-progress-diagnosis.md。",
     "V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。",
     "CDC 995根因仅保留待排查。恢复只允许同身份CDC故障5秒内；超时不自动接回或新建AI会话，主动断开立即生效，不重放未知写入。测试实例已经全部释放；见v035-transport-recovery.md，不寻找旧现场窗口。",
     "客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。",
