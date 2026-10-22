@@ -102,7 +102,12 @@ class RuntimeJobs:
         if c.lifecycle_pending or self.active or c.operation_lock.locked() or c.attach_lock.locked() or c.online_job():
             raise HTTPException(409, 'Another operation is active; no job was queued')
         from mklink.remote.dashboards import active_bridge_dashboards
-        if active_bridge_dashboards() and action != 'flash':
+        from mklink.runtime_capabilities import capture_reset_supported
+        active = active_bridge_dashboards()
+        sharing_reset = action == 'reset' and capture_reset_supported(c.app.state.mklink_state, active)
+        if active and action != 'flash' and not sharing_reset:
+            if action == 'reset':
+                raise HTTPException(409, 'In-stream software reset requires supported probe firmware and RTT/SuperWatch multiplex capture; acquisition was left running')
             raise HTTPException(409, 'Stop acquisition explicitly before an exclusive job')
         device = c.app.state.mklink_state.get('device')
         if action != 'security' and (not device or not device.connected):

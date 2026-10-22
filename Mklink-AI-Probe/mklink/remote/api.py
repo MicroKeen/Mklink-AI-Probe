@@ -524,7 +524,7 @@ def _target_resources(operation):
     from mklink.remote.resource_manager import ResourceGroup
     resources = [ResourceGroup.TARGET_DEBUG]
     from mklink.runtime_capabilities import MUX_MEMORY_CAPABILITIES
-    if operation.replace('-', '_') not in MUX_MEMORY_CAPABILITIES:
+    if operation != 'capture-reset' and operation.replace('-', '_') not in MUX_MEMORY_CAPABILITIES:
         resources += [ResourceGroup.MUX_RTT, ResourceGroup.MUX_WATCH]
     return resources
 
@@ -2345,9 +2345,22 @@ def create_app(
 
     @app.post("/api/device/reset")
     async def reset_device():
-        async with _exclusive_probe_control("reset") as (device, stopped):
-            await run_in_threadpool(device.reset)
-        return {"status": "ok", "stopped": stopped}
+        from mklink.remote.dashboards import active_bridge_dashboards
+        from mklink.runtime_capabilities import capture_reset_supported
+        async with _dashboard_start_lock(_state):
+            device = _state.get('device')
+            if device is None or not device.connected:
+                raise HTTPException(400, 'Device not connected')
+            active = active_bridge_dashboards()
+            if active and not capture_reset_supported(_state, active):
+                raise HTTPException(409, {
+                    'busy': active,
+                    'hint': 'This firmware or capture transport does not support in-stream software reset; acquisition was left running',
+                })
+            operation = 'capture-reset' if active else 'reset'
+            async with async_target_debug_lease(_state, operation):
+                await run_in_threadpool(device.reset)
+        return {"status": "ok", "stopped": []}
 
     @app.post("/api/device/debug-speed")
     async def set_debug_speed(profile: str = Body(..., embed=True), save: bool = Body(True, strict=True)):

@@ -826,7 +826,7 @@ def test_native_api_target_operation_releases_lease_on_success_and_failure():
     assert state["resource_manager"].get_status() == {}
 
 
-def test_reset_stops_bridge_dashboard_before_sending_command():
+def test_reset_preserves_legacy_capture_when_in_stream_reset_is_unavailable():
     from mklink.remote.resource_manager import ResourceGroup
 
     managers = {
@@ -854,13 +854,13 @@ def test_reset_stops_bridge_dashboard_before_sending_command():
     with patch("mklink.remote.dashboards.get_managers", return_value=managers):
         response = client.post("/api/device/reset")
 
-    assert response.status_code == 200
-    assert response.json() == {"status": "ok", "stopped": ["rtt"]}
-    assert events == ["stop-rtt", "reset"]
-    assert state["resource_manager"].get_status() == {}
+    assert response.status_code == 409
+    assert events == []
+    assert managers['rtt'].running
+    assert state["resource_manager"].get_status()['target_debug']['owner'] == 'user:dashboard:rtt'
 
 
-def test_reset_does_not_send_command_when_dashboard_cannot_stop():
+def test_reset_does_not_stop_an_unsupported_capture_transport():
     managers = {
         name: SimpleNamespace(running=False, start=MagicMock(), stop=MagicMock())
         for name in ("rtt", "systemview", "superwatch", "vofa", "serial", "modbus")
@@ -875,7 +875,8 @@ def test_reset_does_not_send_command_when_dashboard_cannot_stop():
         response = client.post("/api/device/reset")
 
     assert response.status_code == 409
-    assert response.json()["detail"]["code"] == "DASHBOARD_STOP_FAILED"
+    assert response.json()["detail"]["busy"] == ["systemview"]
+    managers['systemview'].stop.assert_not_called()
     device.reset.assert_not_called()
 
 
