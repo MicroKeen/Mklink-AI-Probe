@@ -562,6 +562,7 @@ def test_program_progress_reports_real_bytes_and_updates_total_progress(image_fo
             progress_callback(0.25)
             progress_callback(0.5)
             progress_callback(1.0)
+            progress_callback(1.0)
 
     backend = ProgressiveBackend()
     inspected = image()
@@ -589,6 +590,7 @@ def test_program_progress_reports_real_bytes_and_updates_total_progress(image_fo
     assert "[PROGRAM] 256 / 1024 Bytes (25%)" in messages
     assert "[PROGRAM] 512 / 1024 Bytes (50%)" in messages
     assert "[PROGRAM] 1024 / 1024 Bytes (100%)" in messages
+    assert messages.count("[PROGRAM] 1024 / 1024 Bytes (100%)") == 1
     assert any(event.progress == pytest.approx(0.5) for event in events)
     assert result.state is JobState.SUCCEEDED
     assert result.total_progress == 1.0
