@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-22T11:52:34.477618+08:00`
+- 更新时间：`2026-10-22T13:43:16.980749+08:00`
 - 分支：`codex/hpm-isp-deployment-ux`
-- HEAD：`自动烧录次数侧栏/等待时间启用规则与生产Web已提交，具体HEAD见Git。`
-- 远端 HEAD：`本轮源与Web随PR48任务分支推送；已安装组合仍203dfe51。`
+- HEAD：`主机527a1339及恢复边界207b47c7；最终文档头以Git为准。`
+- 远端 HEAD：`PR48功能代码已推送；组合候选8e402491已推送并打包。已安装仍203dfe51。`
 - 工作树：唯一工作区E:/software/HPM5300/Mklink-AI-Probe，源码子目录Mklink-AI-Probe；当前codex/hpm-isp-deployment-ux。已安装组合源在codex/v036-isp-ux-local。
-- 当前任务：自动烧录次数移至左侧目标连接/换板等待时间之前；每次打开默认1，不恢复历史次数；只有次数>1允许编辑等待时间。脚本文件名占满原区域。51离线GUI、TS/Vite、真实浏览器1→2→1及刷新恢复1、零控制台错误通过。源码和生产Web已更新，本轮没有重新打包或覆盖安装。
-- 状态：`offline_count_ui_verified`
+- 当前任务：采集中软件复位已实现：ARM/SWD MUX RTT/SuperWatch保留订阅和历史，通过0x15执行一次软件复位，恢复超时明确报告。361相关Python、生产Web真实浏览器模拟链路、81个固件生产帧交叉解码、组合8e402491安装包提取检查通过。已询问用户结束测试并关闭上位机，等待答复后覆盖安装、配套固件升级及一次采集中的软件复位实测。尚未操作当前板子。
+- 状态：`capture_reset_candidate_verified_awaiting_close`
 
 ## 里程碑
 
@@ -23,6 +23,7 @@
 
 ## 验证证据
 
+- **采集中软件复位候选**：361相关Python通过；真实生产Web/API/Device/MUX浏览器模拟点击1次复位、0次stop、epoch不变并继续BOOT输出；固件生产81帧交叉解码得到25完整Watch组和两路BOOT。组合8e402491冻结源/Web、CLI/MCP/SVD/HTTP、无宿主Python与正常退出检查通过。配套固件源8f56bd6完成38检查及双宏SES，尚未升级或实机复位。详见v036-capture-reset.md。
 - **自动烧录次数与等待时间**：51离线GUI及TS/Vite通过；真实生产Web模拟后台验证默认1且等待时间禁用，2时启用，改回1禁用，5后刷新恢复1；左侧相邻对齐、右侧脚本名满宽，控制台无错。未部署/触发/接触设备，未重新打包安装。
 - **ARM每板完成复位和蜂鸣**：源eca8b0b0/Web7c5dea72，305相关Python/51离线GUI/TS/Vite通过；IAB模拟双镜像3轮与最终实时查询脚本3轮均通过，无控制台错。组合203dfe51管理员覆盖exit0，解包/实装205Python/41Web/四载荷、冻结CLI/MCP/SVD/HTTP/无宿主Python/后台正常退出通过。配套固件2435484双SES/38CI通过且已升级；软件/硬件/3300mV断电复位各一次通过。恢复遥测3480mV非外部校准。原生已打开，实装Web三模式/电压/等待标签核对通过，无控制台错。完整实际Flash多板循环尚未验证。见v036-arm-completion-reset.md。
 - **蜂鸣时长与预览输出并排**：e700f579/5244c274/Web def4d105：236Python、80GUI、TS/Vite；IAB模拟100ms部署触发，两列442px等宽/349.333px等高、标题28px、无控制台错误。组合9b8c9009管理员覆盖exit0，解包/实装205Python/41Web/四载荷与冻结CLI/MCP/SVD/HTTP/退出通过。固件8705f753双SES/37CI通过，原下载器单次升级，13参数100ms与旧12参数均rc0后清配置释放。原生已重开，实际声长/完整换板待用户测。见v036-beep-layout.md。
@@ -30,7 +31,6 @@
 - **多镜像ISP阶段与右侧输出布局**：cc043fd1/Web4433456e；79GUI、TS/Vite、20条生产C序列化事件交叉解析通过。IAB模拟后台确认右侧布局且零控制台错误，文件选择事件超时未上传。固件d2452d2报告20轮×双BIN×5M回归40写/20复位/19掉线，文件间无重连且进度单调；36CI及双版SES通过。组合ea606a48于2026-10-22 00:32:07+08覆盖exit0，解包/实装205Python/41Web/四载荷、冻结CLI/MCP/SVD/HTTP/无宿主Python/正常退出通过。原身份重接后UF2仅写一次，版本/编译时间及三项能力通过；原生已打开，安装版IAB右侧预览/零控制台错。详见docs/verification/v036-multifile-isp-display.md。
 - **镜像与UART OTP联合脱机任务**：功能a3d55b76/bea39ab5/f576a68d，Web bc23b878；274Python/132GUI，最终针对模块166Python/17面板/28输出复验及TS/Vite通过。真实浏览器模拟部署和安装版连续输入/HPM6200入口通过，零控制台错。组合8d2ed5a3覆盖exit0，205Python/41Web/四载荷、冻结CLI/MCP/SVD/HTTP/无宿主Python/正常退出通过。固件313ab4e生产C结果交叉解析通过并升级。实际V4 BIN@0x80023000+Word69 1→3联合部署，仅触发一次code0/ROM0/1/1、otp_verified1；128字回读唯一69=3，锁/生命周期/VCC未改。报告docs/verification/v036-joint-offline-otp.md。
 - **共享脱机工作区与八系列UART OTP**：源c59a6f30/2f681cad：179相关Python、209GUI、36目录测试；组合373Python、TS/Vite通过。IAB生产Web+真实API模拟CDC验证跨HPM系列/ARM、模板预览/模拟写入、旧确认失效，零控制台错误；固件生产C read/plan/program交叉解析通过。组合a2599b21管理员覆盖exit0；解包及实装204Python/41Web/四载荷一致，冻结CLI/MCP/SVD/HTTP/无宿主Python/正常退出通过。原生启动和IAB安装后网页通过，原生窗口留给用户；未关闭本轮用户窗口。报告v036-offline-workspace.md。此前73fccac2安装见v036-uart-otp-settings.md。 2026-10-21按用户授权升级3d96dbb，安装版profile_v1实机128字全读、Word69 0→1预检/真实单次写入/全读回通过，唯一该字变化；锁/VCC未改。
-- **0.3.6 ISP错误原因**：2506e93c/9b056ed1：102Python、72GUI，扩展90GUI通过；修正App旧哈希断言a8250c25，CI重跑以GitHub为准。Chrome临时SD和模拟固件显示timeout/Cancelled，脚本/JSON过滤。组合9c80b12a管理员覆盖退出0，199Python/40Web/四载荷、冻结CLI/MCP/SVD/HTTP、原生/浏览器与退出零进程/监听/端点通过。见v036-isp-readable-errors.md。
 
 ## 架构决策
 
@@ -47,13 +47,13 @@
 
 ## 真机环境
 
-- **state**：当前目标STM32F103；原V4固件2435484已升级，三种授权复位各一次通过并释放端口；无本轮Flash/OTP写入。原生上位机已打开供用户测试。
-- **installer**：已安装0.3.6组合203dfe51，管理员覆盖与冻结资格通过；SHA256 22d8be1bbbd99b44f31ecf742a6380f88ba602b4d136370a327f8b923ca4a193。次数侧栏的后续纯UI改动尚未打包覆盖。
+- **state**：当前STM32F103；本轮仅模型和只读查询，未操作设备。原下载器仍旧固件，候选8f56bd6尚未刷入，用户尚未回复关闭。
+- **installer**：已安装203dfe51；新未签名0.3.6组合8e402491已构建并通过提取资格，SHA256 d40c633b29164c7ac5bda317ddf06317614597aea0a80312214522d887e956b2，待覆盖。包含次数左移/默认1/>1启用等待。
 - **backups**：0.3.4正式包/安装/渠道/Skill/HIL在MKLINK_BUILD_ROOT/artifacts/v034-official，相邻v034-official-native保存完整原生CI ZIP；0.3.5本机包见上述构建根。原Git根.build/artifacts/v033-official、v032-official及用户备份保持；清理前快照/删除清单在构建根reports/v034-cleanup-*.json、v034-deleted-branches.json、v034-memory-before-cleanup.json。不能再把F盘仅视为可删缓存。
 
 ## 下一动作
 
-1. 次数侧栏与等待时间规则已完成源码/生产Web验证，尚未打包覆盖；当前已安装203dfe51且原生窗口为用户保留，若继续安装先确认测试已结束。无需为本次纯UI改动更新固件或重复复位。
+1. 等待用户回复已关闭；随后切组合8e402491核对源，覆盖安装并做installed资格，与原固件会话协调只升级原下载器、当前STM32F103一次采集中软件复位。无Flash/OTP/VCC授权；旧三种复位测试不可重放。
 2. 每板多镜像完成次数与换板去抖已有脚本执行/真实浏览器模拟，尚未实测完整STM32多板Flash流程。当前目标已从HPM换成STM32F103，不继承历史HPM镜像或OTP写入授权，不能重放旧unknown任务。
 3. PR48未合并发布。此前联合镜像+OTP实机证据保留，当前Word69=3；本轮未追加目标烧录/OTP/VCC。其他HPM型号继续由用户测试，固件交会话01a15977-1aef-7430-aa11-6e39725f0465。
 4. 未知MKLINK_V2任务不得重放。当前接入若为烧好固件的目标板或另一V2.9.0设备，不能误当原下载器升级。
@@ -72,7 +72,7 @@
 
 ## 延续协议
 
-- 当前STM32F103；ARM三种复位验证已完成，不重复硬件操作。最新纯UI改动（次数左移、默认1、>1启用等待）已验证，尚未覆盖安装。
+- 当前STM32F103，上位机仍开着；等待本轮关闭回复后才能升级。新MUX软件复位仅ARM/SWD RTT/SuperWatch，SystemView/原始流/HPM/JTAG不宣称穿插支持；不停止采集、不降级硬复位、不重放未知结果。
 - V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。
 - CDC 995根因仅保留待排查。恢复只允许同身份CDC故障5秒内；超时不自动接回或新建AI会话，主动断开立即生效，不重放未知写入。测试实例已经全部释放；见v035-transport-recovery.md，不寻找旧现场窗口。
 - 客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。
