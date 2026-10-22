@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-22T14:31:15.865980+08:00`
+- 更新时间：`2026-10-22T16:47:58.893376+08:00`
 - 分支：`codex/hpm-isp-deployment-ux`
-- HEAD：`功能6c2095c7、在线进度35f7da59；精确最终头见Git。`
-- 远端 HEAD：`功能分支已推送；组合f4221d96、生产Web d7d2db3d已推送，安装包覆盖验证通过。`
+- HEAD：`功能6c2095c7、验收7942975f；最终清理交接提交见Git HEAD。`
+- 远端 HEAD：`功能与验收均已推送；组合f4221d96及Web d7d2db3d已推送、覆盖安装验证通过。清理交接提交后核对远端。`
 - 工作树：唯一工作区E:/software/HPM5300/Mklink-AI-Probe，源码子目录Mklink-AI-Probe；当前codex/hpm-isp-deployment-ux。已安装组合源在codex/v036-isp-ux-local。
-- 当前任务：内外Flash合并HEX：自定义FLM统一记录遗漏page_size/sector_sizes，6c2095c7补齐。388相关Python+5版本组件测试、真实客户文件两组合1027扇区及真实浏览器准入通过。组合f4221d96含前一在线100%停顿/重复擦除修复，NSIS已构建并管理员覆盖exit0；解包/实装冻结API再验证真实文件1027扇区，206Python/41Web匹配、CLI/MCP/SVD/HTTP/无宿主Python及退出通过。安装生产界面核对简短版本说明，原生留给用户未连目标。N32实体写入未验证；前次F103单次重烧授权已消耗。
-- 状态：`online_flash_fixes_packaged_installed`
+- 当前任务：内外Flash合并HEX：自定义FLM统一记录遗漏page_size/sector_sizes，6c2095c7补齐。388相关Python+5版本组件测试、真实客户文件两组合1027扇区及真实浏览器准入通过。组合f4221d96含前一在线100%停顿/重复擦除修复，NSIS已构建并管理员覆盖exit0；解包/实装冻结API再验证真实文件1027扇区，206Python/41Web匹配、CLI/MCP/SVD/HTTP/无宿主Python及退出通过。安装生产界面核对简短版本说明，原生留给用户未连目标。N32实体写入未验证；前次F103单次重烧授权已消耗。 用户随后要求清理和交接：106个pyc共3100781字节及1个空run已删除；188个带测试链接的历史run按规则保留（普通文件完整盘点约11.23GB），明细在本地reports，见v036-cleanup-handoff.md。保留最新安装包/证据/共享缓存和运行中的原生上位机。当前唯一工作区、功能分支不变，清理未操作硬件。
+- 状态：`handoff_ready`
 
 ## 里程碑
 
@@ -23,6 +23,7 @@
 
 ## 验证证据
 
+- **清理交接**：106个普通pyc/3,100,781B和1个空run已删除；188个含测试链接的run保留，完整只读盘点普通文件约11.23GB。安装包/硬件证据/缓存/用户文件保留，运行中上位机未终止。见v036-cleanup-handoff.md，本地reports有保留及删除明细。
 - **合并HEX及0.3.6安装包**：6c2095c7自定义FLM几何修复；388Python/5GUI/真实浏览器通过。两种算法组合均正确映射外部4MiB+内部4588B，1027扇区；实体N32未写。集成f4221d96（Web d7d2db3d）NSIS SHA256 82f95c6310507fbe832b6749f3752e26be7af07384034f0f66ab80765e404cf7，管理员覆盖exit0、解包与实装冻结运行通过；两条简短版本说明已验证。见v036-combined-hex-fix.md。
 - **在线烧录100%停顿诊断**：35f7da59：391测试含真实pyOCD构建器模拟目标、多Bank稀疏HEX/单双缓冲/失败清理；唯一授权源JobManager实烧通过，写入阶段7.892→5.595s，PROGRAM100%仅一次到完成0.796ms，完整回读通过。初始UnInit推断已纠正。详见v036-online-program-progress-diagnosis.md；已包含f4221d96安装包并覆盖验证。
 - **采集中软件复位实装与实机**：361相关Python、真实生产Web模拟链路、81个固件帧/25完整Watch组交叉检查通过；8e402491管理员覆盖、205Python/41Web/四载荷匹配及冻结资格通过。原V4新固件升级一次，STM32F103在30MHz RTT0/1+Watch10ms下唯一一次软件复位成功，stopped=[]、session不变，捕获两路seq0/tick2及Watch137902→2ms后连续增长；5秒零读错/丢样。已安装Web两页及次数规则验证、控制台无错。详见v036-capture-reset.md；短测不清除历史30MHz高负载限制。 自动烧录次数左移/默认1/>1启用等待：51离线GUI及TS/Vite、真实Web模拟交互验证通过，已包含安装。
@@ -30,7 +31,6 @@
 - **蜂鸣时长与预览输出并排**：e700f579/5244c274/Web def4d105：236Python、80GUI、TS/Vite；IAB模拟100ms部署触发，两列442px等宽/349.333px等高、标题28px、无控制台错误。组合9b8c9009管理员覆盖exit0，解包/实装205Python/41Web/四载荷与冻结CLI/MCP/SVD/HTTP/退出通过。固件8705f753双SES/37CI通过，原下载器单次升级，13参数100ms与旧12参数均rc0后清配置释放。原生已重开，实际声长/完整换板待用户测。见v036-beep-layout.md。
 - **自适应布局与拔板断开显示**：主机5c979720/373b44e9/Web f6ca3925，79GUI/TS/Vite及IAB对齐通过；组合a821be6d覆盖和冻结资格保持。8845cab实物失败；cd790707查询诊断捕获154 FRAME/0 TIMEOUT，证明无效帧清空静默计数。8d5d294独立presence修复：37回归、50/250ms各29场景、双SES/SWD地址/UF2通过并升级。实物115200拔开时disconnected+用户确认LCD已断开，19.834秒后重接connected，code0/close。200–225ms仅模型，无精确拔开时间戳；高速多轮未重测。报告v036-isp-disconnect-layout.md。
 - **多镜像ISP阶段与右侧输出布局**：cc043fd1/Web4433456e；79GUI、TS/Vite、20条生产C序列化事件交叉解析通过。IAB模拟后台确认右侧布局且零控制台错误，文件选择事件超时未上传。固件d2452d2报告20轮×双BIN×5M回归40写/20复位/19掉线，文件间无重连且进度单调；36CI及双版SES通过。组合ea606a48于2026-10-22 00:32:07+08覆盖exit0，解包/实装205Python/41Web/四载荷、冻结CLI/MCP/SVD/HTTP/无宿主Python/正常退出通过。原身份重接后UF2仅写一次，版本/编译时间及三项能力通过；原生已打开，安装版IAB右侧预览/零控制台错。详见docs/verification/v036-multifile-isp-display.md。
-- **镜像与UART OTP联合脱机任务**：功能a3d55b76/bea39ab5/f576a68d，Web bc23b878；274Python/132GUI，最终针对模块166Python/17面板/28输出复验及TS/Vite通过。真实浏览器模拟部署和安装版连续输入/HPM6200入口通过，零控制台错。组合8d2ed5a3覆盖exit0，205Python/41Web/四载荷、冻结CLI/MCP/SVD/HTTP/无宿主Python/正常退出通过。固件313ab4e生产C结果交叉解析通过并升级。实际V4 BIN@0x80023000+Word69 1→3联合部署，仅触发一次code0/ROM0/1/1、otp_verified1；128字回读唯一69=3，锁/生命周期/VCC未改。报告docs/verification/v036-joint-offline-otp.md。
 
 ## 架构决策
 
