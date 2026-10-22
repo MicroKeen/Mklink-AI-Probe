@@ -919,6 +919,7 @@ class PyOcdBackend:
         self._connection_arguments: Optional[dict[str, Any]] = None
         self._py32f030_unlock_transition_pending = False
         self._nrf54l_lock_pending = False
+        self._erased_ranges: Tuple[Tuple[int, int], ...] = ()
         self._lock = threading.RLock()
 
     def connect(
@@ -1313,6 +1314,7 @@ class PyOcdBackend:
         """Disable a whitelisted reversible RDP level; this mass-erases Flash."""
 
         with self._lock:
+            self._erased_ranges = ()
             try:
                 if self._security_family == "nrf54l15-ctrl-ap":
                     return self._unlock_nrf54l15()
@@ -1399,6 +1401,7 @@ class PyOcdBackend:
         """Enable a whitelisted reversible RDP level and reset to activate it."""
 
         with self._lock:
+            self._erased_ranges = ()
             try:
                 if self._security_family == "nrf54l15-ctrl-ap":
                     return self._lock_nrf54l15()
@@ -2415,6 +2418,7 @@ class PyOcdBackend:
     def disconnect(self) -> None:
         with self._lock:
             session, self._session = self._session, None
+            self._erased_ranges = ()
             self._probe_identifier = ""
             self._reset_voltage_mv = None
             self._security_family = ""
@@ -2435,6 +2439,7 @@ class PyOcdBackend:
     def erase_chip(self) -> None:
         with self._lock:
             session = self._require_session()
+            self._erased_ranges = ()
             try:
                 self._prepare_algorithm_execution(session.target)
                 factory, mode = self._eraser(erase_mode="CHIP")
@@ -2447,11 +2452,20 @@ class PyOcdBackend:
     def erase_sectors(self, addresses: Any) -> None:
         with self._lock:
             session = self._require_session()
+            self._erased_ranges = ()
             try:
                 unique = self._validated_sector_addresses(session.target, addresses)
+                ranges = tuple(
+                    (address, address + self._flash_region_for_address(
+                        session.target, address).flash.get_sector_info(address).size)
+                    for address in unique
+                )
                 self._prepare_algorithm_execution(session.target)
                 factory, mode = self._eraser(erase_mode="SECTOR")
                 factory(session, mode).erase(unique)
+                # Only a fully successful erase on this connection is reusable,
+                # and only by the immediately following program operation.
+                self._erased_ranges = ranges
             except FlashError:
                 raise
             except Exception as exc:
@@ -2464,6 +2478,7 @@ class PyOcdBackend:
     ) -> None:
         with self._lock:
             session = self._require_session()
+            erased_ranges, self._erased_ranges = self._erased_ranges, ()
             try:
                 path = Path(image.file_path)
                 if not path.is_file():
@@ -2478,11 +2493,9 @@ class PyOcdBackend:
                 self._prepare_algorithm_execution(session.target)
                 factory = self._programmer_factory
                 if factory is None:
-                    FileProgrammer = import_pyocd_attr(
-                        "pyocd.flash.file_programmer", "FileProgrammer"
-                    )
+                    from .programmer import create_programmer
 
-                    factory = FileProgrammer
+                    factory = create_programmer
                 image_start = (
                     image.base_address
                     if image.format.lower() == "bin" and image.base_address is not None
@@ -2492,6 +2505,14 @@ class PyOcdBackend:
                 # A program request only authorizes image-covered sectors, never
                 # pyOCD's automatic cost-based escalation to chip erase.
                 programmer_options: dict[str, Any] = {"chip_erase": "sector"}
+                if self._programmer_factory is None:
+                    spans = (
+                        tuple((segment.start, segment.end) for segment, _ in hex_data)
+                        if hex_data is not None else ((image_start, image_start + path.stat().st_size),)
+                    )
+                    programmer_options["already_erased"] = self._image_pages_erased(
+                        session.target, erased_ranges, spans
+                    )
                 if progress_callback is not None:
                     programmer_options["progress"] = progress_callback
                 if str(getattr(region, "name", "")).startswith("mklink_custom_flm_"):
@@ -2526,6 +2547,41 @@ class PyOcdBackend:
                 self._close_after_failure()
                 logging.getLogger(__name__).exception("Online firmware programming failed")
                 raise self._mapped_error(exc, FlashErrorCode.PROGRAM_FAIL) from None
+
+    @staticmethod
+    def _image_pages_erased(target, erased, spans) -> bool:
+        if not erased:
+            return False
+        pages = []
+        for start, end in spans:
+            address = start
+            while address < end:
+                region = PyOcdBackend._flash_region_for_address(target, address)
+                get_info = getattr(getattr(region, "flash", None), "get_page_info", None)
+                info = get_info(address) if callable(get_info) else None
+                if info is None or info.size <= 0 or not info.base_addr <= address < info.base_addr + info.size:
+                    return False
+                pages.append((info.base_addr, info.base_addr + info.size))
+                address = info.base_addr + info.size
+        return PyOcdBackend._ranges_cover(erased, pages)
+
+    @staticmethod
+    def _ranges_cover(erased, spans) -> bool:
+        """Never skip erase for a gap or an unproven part of an image."""
+        if not erased or not spans:
+            return False
+        for start, end in spans:
+            cursor = start
+            for low, high in sorted(erased):
+                if low > cursor:
+                    break
+                if high > cursor:
+                    cursor = high
+                if cursor >= end:
+                    break
+            if cursor < end:
+                return False
+        return True
 
     def _prepare_algorithm_execution(self, target: Any) -> None:
         """Reset Cortex-M targets once before destructive work.
@@ -2722,6 +2778,7 @@ class PyOcdBackend:
     def reset_run(self, reset_mode: Optional[str] = None) -> None:
         with self._lock:
             session = self._require_session()
+            self._erased_ranges = ()
             trace_delegate = getattr(session, "delegate", None)
             if isinstance(trace_delegate, _TraceStateDelegate):
                 trace_delegate.enabled = False
@@ -3119,6 +3176,7 @@ class PyOcdBackend:
         return self._session
 
     def _close_after_failure(self) -> None:
+        self._erased_ranges = ()
         session, self._session = self._session, None
         if session is not None:
             try:

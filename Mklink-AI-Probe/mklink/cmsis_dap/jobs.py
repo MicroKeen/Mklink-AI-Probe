@@ -471,7 +471,7 @@ class OnlineFlashJobManager:
                                     if deferred_erase and fraction <= 0:
                                         return
                                     percent = int(fraction * 100)
-                                    if percent <= last_reported_percent and fraction < 1:
+                                    if percent <= last_reported_percent:
                                         return
                                     last_reported_percent = percent
                                     if deferred_erase and fraction > 0:
