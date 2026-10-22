@@ -413,7 +413,8 @@ def test_watch_target_error_stops_instead_of_silently_discarding_forever(status)
     watch.start()
     previous_commands = len(calls)
     transport.feed(packet(0x41, 17, 1, struct.pack('<BBI', 0, status, 123)))
-    with pytest.raises(RuntimeError, match=f'target read failed \\(status {status}\\)'):
+    message = 'reset recovery timed out' if status == 8 else f'target read failed \\(status {status}\\)'
+    with pytest.raises(RuntimeError, match=message):
         watch.read_frames()
     assert watch.samples == 0
     assert watch.gaps == 1

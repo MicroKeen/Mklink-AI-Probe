@@ -27,6 +27,14 @@ class MuxTargetError(RuntimeError):
         super().__init__(message)
 
 
+class MuxWatchEvent(bytes):
+    """Local reset generation accompanies queued wire bytes, without loss."""
+    def __new__(cls, payload, reset_generation):
+        value = super().__new__(cls, payload)
+        value.reset_generation = reset_generation
+        return value
+
+
 def packet(op, epoch, request, payload=b''):
     if len(payload) > 256:
         raise ValueError('Multiplex payload exceeds 256 bytes')
@@ -56,6 +64,7 @@ class MuxTransport:
         self.nonce = secrets.token_bytes(8)
         self.ready = False
         self.capabilities = 0
+        self._reset_generation = 0
         self.rtt_mask = 0
         self.watch_running = False
         self._last_command = time.monotonic()
@@ -214,6 +223,10 @@ class MuxTransport:
                     heartbeat = self._pending[3]
                     self._last_reply = time.monotonic()
                     self._reply = payload
+                    if self._pending[0] == self.SOFTWARE_RESET_COMMAND and payload[:1] in (b'\0', b'\x05'):
+                        # Mark the boundary before subsequent events arrive.
+                        # Queued pre-reset samples keep their own generation.
+                        self._reset_generation += 1
                     self._pending = None
                     if heartbeat and payload != b'\0':
                         self.fail('Heartbeat rejected')
@@ -231,6 +244,8 @@ class MuxTransport:
                         self.event_gaps += (req-self._event_id-1) & 0xffffffff
                     self._event_id = req
                     key = (op, payload[0] if op == 0x40 else 255)
+                    if op == 0x41:
+                        payload = MuxWatchEvent(payload, self._reset_generation)
                     queue = self._queues.setdefault(key, deque())
                     size = self._sizes.get(key, 0)
                     budget = self.WATCH_QUEUE_BYTES if op == 0x41 else self.MAX_QUEUE_BYTES
