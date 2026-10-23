@@ -636,6 +636,9 @@ def generate_offline_script(config: OfflineDownloadConfig) -> str:
         return _generate_v2_script(config)
     read_idcode = ("hpm.read_idcode()" if config.is_hpm else
                    "cmd.read_swd_idcode()" if config.reset_mode is not None else "cmd.get_idcode()")
+    # A floating/disconnecting JTAG line can yield an inconsistent scan (-4).
+    # It proves neither presence nor absence; retry within the same deadline.
+    idcode_error = "idcode < 0 and idcode != -4" if config.is_hpm else "idcode < 0"
     lines = [
         "import PikaStdLib",
         "import time",
@@ -655,11 +658,11 @@ def generate_offline_script(config: OfflineDownloadConfig) -> str:
         "    elapsed = 0",
         "    while True:",
         f"        idcode = {read_idcode}",
-        "        if idcode < 0:",
+        f"        if {idcode_error}:",
         '            print("target connection check failed:", idcode)',
         "            abort = True",
         "            break",
-        "        if idcode not in (0, 0xFFFFFFFF):",
+        "        if idcode > 0 and idcode != 0xFFFFFFFF:",
         "            break",
         "        if elapsed >= WAIT_IDCODE_TIMEOUT:",
         '            print("target connection timeout")',
@@ -736,11 +739,11 @@ def generate_offline_script(config: OfflineDownloadConfig) -> str:
             "    connected_samples = 0",
             "    while connected_samples < 2:",
             f"        idcode = {read_idcode}",
-            "        if idcode < 0:",
+            f"        if {idcode_error}:",
             '            print("target connection check failed:", idcode)',
             "            abort = True",
             "            break",
-            "        if idcode not in (0, 0xFFFFFFFF):",
+            "        if idcode > 0 and idcode != 0xFFFFFFFF:",
             "            connected_samples += 1",
             "        else:",
             "            connected_samples = 0",
@@ -765,7 +768,7 @@ def generate_offline_script(config: OfflineDownloadConfig) -> str:
             "    elapsed = 0",
             "    while True:",
             f"        idcode = {read_idcode}",
-            "        if idcode < 0:",
+            f"        if {idcode_error}:",
             '            print("target connection check failed:", idcode)',
             "            abort = True",
             "            break",

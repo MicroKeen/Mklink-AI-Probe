@@ -74,7 +74,7 @@ def test_single_board_finishes_without_post_program_connection_wait(monkeypatch)
     assert output[-1] == 'auto download finished'
 
 
-@pytest.mark.parametrize('code', [-2, -3, -4, -6, -12])
+@pytest.mark.parametrize('code', [-2, -3, -6, -12])
 @pytest.mark.parametrize('prefix,expected_images', [([], 0), ([ID], 2), ([ID, ID, ID], 2)])
 def test_presence_errors_abort_without_advancing_board(monkeypatch, code, prefix, expected_images):
     events, output, aborted = execute(monkeypatch, prefix+[code])
@@ -108,3 +108,27 @@ def test_failed_image_does_not_beep_or_wait_for_replacement(monkeypatch):
     events, output, aborted = execute(monkeypatch, [ID], fail_image=2)
     assert aborted and events.count(('beep_on',)) == 0
     assert 'waiting for target removal' not in output
+
+
+def test_unstable_scan_resets_debounce_and_never_counts_as_connection_or_removal(monkeypatch):
+    ids = [-4, ID, ID, -4, ID, ID, 0, 0, -4, 0, 0, 0, -4, ID, ID, ID]
+    events, output, aborted = execute(monkeypatch, ids)
+    assert not aborted
+    images = [i for i, event in enumerate(events) if event[0] == 'image']
+    assert len(images) == 4
+    assert [e[1] for e in events[:images[0]] if e[0] == 'presence'] == ids[:2]
+    assert [e[1] for e in events[:images[2]] if e[0] == 'presence'] == ids[:14]
+    assert output.count('target disconnected') == 1
+    assert events.count(('beep_on',)) == 2
+
+
+@pytest.mark.parametrize('prefix,message,images', [
+    ([], 'target connection timeout', 0),
+    ([ID], 'target connection timeout after programming', 2),
+    ([ID, ID, ID], 'board replacement timeout: waiting for target removal', 2),
+])
+def test_persistent_unstable_scans_reach_existing_deadline(monkeypatch, prefix, message, images):
+    events, output, aborted = execute(monkeypatch, prefix+[-4]*20)
+    assert aborted and message in output
+    assert sum(e[0] == 'image' for e in events) == images
+    assert 'target disconnected' not in output
