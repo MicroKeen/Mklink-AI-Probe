@@ -92,6 +92,7 @@ class MKLinkSerialBridge:
         self._cmd_lock = threading.RLock()  # Includes explicit framed/legacy transitions.
         self._mux = None
         self._mux_supported = None
+        self._firmware_capabilities: frozenset[str] | None = None
         self._echo_enabled = False
         self._echo_prefix = "[SERIAL] "
         self._echo_offset = 0
@@ -106,12 +107,19 @@ class MKLinkSerialBridge:
     def supports_dump_write(self) -> bool:
         if self._mux_supported is True:
             return True
-        response = self.send_command("cmd.get_version()", timeout=3.0)
-        return any(line.strip() == "DUMP_WRITE=1" for line in response.splitlines())
+        return "DUMP_WRITE=1" in self._get_firmware_capabilities()
 
     def supports_hpm_dump_write(self) -> bool:
-        response = self.send_command("cmd.get_version()", timeout=3.0)
-        return any(line.strip() == "DUMP_WRITE_HPM=1" for line in response.splitlines())
+        return "DUMP_WRITE_HPM=1" in self._get_firmware_capabilities()
+
+    def _get_firmware_capabilities(self) -> frozenset[str]:
+        # Capture all advertised features before entering MUX. Later dashboard
+        # starts must not leave a running RTT/Watch session to query legacy REPL.
+        with self._cmd_lock:
+            if self._firmware_capabilities is None:
+                response = self.send_command("cmd.get_version()", timeout=3.0)
+                self._firmware_capabilities = frozenset(line.strip() for line in response.splitlines())
+            return self._firmware_capabilities
 
     def _verify_identity(self) -> bool:
         try:
@@ -139,6 +147,7 @@ class MKLinkSerialBridge:
         self._transport_error = None
         self.last_connect_error = 'Command port did not return a prompt; check the probe firmware/USB connection and retry'
         self._mux_supported = None  # Re-negotiate after reconnect/firmware changes.
+        self._firmware_capabilities = None
         # 进程级互斥：获取文件锁
         if not self._port_lock.acquire():
             error = getattr(self._port_lock, 'last_error', None)
@@ -368,8 +377,7 @@ class MKLinkSerialBridge:
     # ------------------------------------------------------------------
     def supports_multiplex(self) -> bool:
         if self._mux_supported is None:
-            response = self.send_command('cmd.get_version()', timeout=3)
-            self._mux_supported = any(line.strip() == 'MUX_TARGET=1' for line in response.splitlines())
+            self._mux_supported = 'MUX_TARGET=1' in self._get_firmware_capabilities()
         return self._mux_supported
 
     def enable_multiplex(self):
