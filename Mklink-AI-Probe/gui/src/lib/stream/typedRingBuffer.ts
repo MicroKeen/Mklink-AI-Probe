@@ -186,7 +186,7 @@ export class TypedRingBuffer {
     return low
   }
 
-  selectMinMaxEnvelope(start: number, end: number, pixelWidth: number): NumericEnvelopeSelection {
+  selectMinMaxEnvelope(start: number, end: number, pixelWidth: number, transforms?: Array<(value: number) => number>): NumericEnvelopeSelection {
     if (
       !Number.isFinite(start) || !Number.isFinite(end) || end < start
       || !Number.isSafeInteger(pixelWidth) || pixelWidth <= 0
@@ -199,8 +199,8 @@ export class TypedRingBuffer {
     const bucketSlots = pixelWidth * this.channelCount
     const minIndices = new Int32Array(bucketSlots)
     const maxIndices = new Int32Array(bucketSlots)
-    const minValues = new Float32Array(bucketSlots)
-    const maxValues = new Float32Array(bucketSlots)
+    const minValues = new Float64Array(bucketSlots)
+    const maxValues = new Float64Array(bucketSlots)
     minIndices.fill(-1)
     maxIndices.fill(-1)
     minValues.fill(Number.POSITIVE_INFINITY)
@@ -212,7 +212,9 @@ export class TypedRingBuffer {
       const bucket = Math.min(pixelWidth - 1, Math.floor(relative / span * pixelWidth))
       for (let channel = 0; channel < this.channelCount; channel += 1) {
         const bucketIndex = channel * pixelWidth + bucket
-        const value = this.valueAt(logical, channel)
+        const raw = this.valueAt(logical, channel)
+        const value = transforms?.[channel] ? transforms[channel](raw) : raw
+        if (!Number.isFinite(value)) continue
         if (minIndices[bucketIndex] < 0 || value < minValues[bucketIndex]) {
           minIndices[bucketIndex] = logical
           minValues[bucketIndex] = value

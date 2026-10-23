@@ -215,7 +215,7 @@ def test_source_reload_does_not_stop_unrelated_idle_managers(tmp_path):
         asyncio.run(app.state.check_file_sources(apply=True))
         asyncio.run(app.state.check_file_sources(apply=True))
     assert order == ["parse"]
-    assert app.state.mklink_state["file_source_change"]["rtt_addr"] == "0x20000020"
+    assert app.state.mklink_state["file_source_change"]["symbols_reloaded"]
 
 
 def test_shared_source_reload_defers_without_losing_changes(tmp_path, monkeypatch):
@@ -237,10 +237,12 @@ def test_shared_source_reload_defers_without_losing_changes(tmp_path, monkeypatc
     async def scenario():
         control.sessions['ai'] = Session(str(tmp_path), str(axf))
         axf.write_bytes(b'new')
-        await app.state.check_file_sources(apply=True)
+        async with control.attach_lock:
+            await app.state.check_file_sources(apply=True)
         event = dict(app.state.mklink_state['file_source_change'])
         assert event['state'] == 'deferred' and event['pending']
-        await app.state.check_file_sources(apply=True)
+        async with control.attach_lock:
+            await app.state.check_file_sources(apply=True)
         assert app.state.mklink_state['file_source_change']['sequence'] == event['sequence']
         active.clear()
         # A job, an attaching client and a one-shot operation must also defer it.

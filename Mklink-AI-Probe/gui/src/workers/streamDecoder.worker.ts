@@ -4,6 +4,7 @@ import {
   SUPERWATCH_SAMPLE_MAJOR_FLOAT32, SUPERWATCH_TIMESTAMPED_FLOAT32,
   WAVEFORM_SAMPLE_MAJOR_FLOAT32, type StreamFrame,
 } from '../lib/stream/protocol'
+import { signalFormula } from '../lib/signalFormula'
 import { TypedRingBuffer } from '../lib/stream/typedRingBuffer'
 import {
   safeTickDifference,
@@ -29,7 +30,7 @@ export type WorkerInput =
       connectionGeneration: number
       frameTicket: number
     }
-  | { type: 'visible-range'; requestId: number; start: number; end: number; pixelWidth: number }
+  | { type: 'visible-range'; requestId: number; start: number; end: number; pixelWidth: number; formulas?: string[] }
   | { type: 'waveform-detail'; enabled: boolean }
   | { type: 'waveform-capacity'; capacity: number; requestId?: number }
   | { type: 'history-snapshot'; requestId: number }
@@ -1054,7 +1055,7 @@ export class StreamDecoder {
       return
     }
     const selection = ring.selectMinMaxEnvelope(
-      message.start, message.end, message.pixelWidth,
+      message.start, message.end, message.pixelWidth, message.formulas?.slice(0, ring.channelCount).map(signalFormula),
     )
     const selectedLogical = selection.logicalIndices.subarray(0, selection.pointCount)
     if (!this.timeIndexScratch || this.timeIndexScratch.length < ring.length) this.timeIndexScratch = new Int32Array(ring.length)

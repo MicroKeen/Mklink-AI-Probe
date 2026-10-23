@@ -177,10 +177,10 @@ export class StreamClient {
     this.worker.postMessage({ type: 'waveform-capacity', capacity, requestId } satisfies WorkerInput)
   }
 
-  requestVisibleRange(requestId: number, start: number, end: number, pixelWidth: number): void {
+  requestVisibleRange(requestId: number, start: number, end: number, pixelWidth: number, formulas?: string[]): void {
     if (this.disposed) return
     this.worker.postMessage({
-      type: 'visible-range', requestId, start, end, pixelWidth,
+      type: 'visible-range', requestId, start, end, pixelWidth, formulas,
     } satisfies WorkerInput)
   }
 

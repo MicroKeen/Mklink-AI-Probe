@@ -25,6 +25,7 @@
           <button :aria-label="`折叠 ${group.name}`" :aria-expanded="!group.collapsed" @click="collapse(group.id)">{{ group.collapsed ? '▸' : '▾' }}</button>
           <InlineWatchName :value="group.name" :label="`重命名分组 ${group.name}`" :commit="name => rename(group.id,name)" />
           <small>{{ group.paths.length }}</small>
+          <button v-if="group.id !== (prefs.workspace.value.defaultGroup || groups[0].id)" :disabled="prefs.busy.value" :aria-label="`合并 ${group.name}`" @click="prefs.merge(group.id)">{{ tr('合并窗口', 'Merge plot') }}</button>
           <template v-if="settings">
             <button :disabled="prefs.busy.value || groups[0].id === group.id" title="上移分组" @click="move(group.id,-1)">↑</button>
             <button :disabled="prefs.busy.value || groups[groups.length-1].id === group.id" title="下移分组" @click="move(group.id,1)">↓</button>
@@ -39,10 +40,20 @@
             <InlineWatchName :value="prefs.style(path).alias" :fallback="path" :title="path" :label="`重命名变量 ${path}`" :commit="name => prefs.setStyle([path],{alias:name})" /><output>{{ formatValue(values[path]) }}</output>
             <button :aria-label="`强调 ${path}`" :aria-pressed="prefs.style(path).emphasis" @click="toggleStyle(path,'emphasis')"><b>B</b></button>
             <button :aria-label="`采样点 ${path}`" :title="tr('仅显示采样点，不连线', 'Sample points only, no lines')" :aria-pressed="prefs.style(path).renderMode === 'points'" @click="toggleStyle(path,'renderMode')">{{ tr('点','Dots') }}</button>
+            <button :aria-label="`曲线设置 ${path}`" @click="configure(path)">ƒx</button>
           </div>
-
+          <div v-if="prefs.style(path).formula" class="converted-value">{{ tr('计算值', 'Calculated') }}: {{ formatValue(signalFormula(prefs.style(path).formula)(Number(values[path]))) }} · {{ tr('原始值', 'Raw') }}: {{ formatValue(values[path]) }}</div>
         </div>
       </section>
+    </div>
+    <div v-if="editing" class="curve-settings" role="dialog" :aria-label="tr('曲线设置', 'Curve settings')">
+      <strong>{{ editing }}</strong>
+      <label>{{ tr('计算公式（x 为原始值）', 'Formula (x is the raw value)') }}<input v-model="formula" maxlength="256" aria-label="计算公式" placeholder="x * 3.3 / 4095" /></label>
+      <small>{{ tr('支持 + - * / % ^、括号及 abs、sqrt、sin、cos、min、max、pow 等函数。留空显示原始值。', 'Supports + - * / % ^, parentheses, abs, sqrt, sin, cos, min, max, pow, etc. Leave empty for raw values.') }}</small>
+      <label>{{ tr('曲线颜色', 'Curve color') }}<input v-model="color" type="color" aria-label="曲线颜色" /></label>
+      <p v-if="formulaError" role="alert">{{ formulaError }}</p>
+      <button :disabled="prefs.busy.value" @click="applyCurve">{{ tr('应用', 'Apply') }}</button>
+      <button @click="editing = ''">{{ tr('取消', 'Cancel') }}</button>
     </div>
   </section>
 </template>
@@ -51,13 +62,22 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useWatchWorkspace } from '../../composables/useWatchWorkspace'
 import InlineWatchName from './InlineWatchName.vue'
 import { tr } from '../../composables/useLanguage'
+import { compileSignalFormula, signalFormula } from '../../lib/signalFormula'
 const props = defineProps<{ paths: string[]; values: Record<string, number | boolean>; hidden?: ReadonlySet<string> }>()
 defineEmits<{ visibility: [path: string, visible: boolean] }>()
 const prefs = useWatchWorkspace(), settings = ref(false), newName = ref(''), checked = ref<string[]>([])
+const editing = ref(''), formula = ref(''), color = ref('#ef9878'), formulaError = ref('')
+function configure(path: string) {
+  editing.value = path; formula.value = prefs.style(path).formula || ''; color.value = prefs.style(path).color || '#ef9878'; formulaError.value = ''
+}
+async function applyCurve() {
+  try { compileSignalFormula(formula.value) } catch (error) { formulaError.value = String(error); return }
+  if (await prefs.setStyle([editing.value], { formula: formula.value.trim(), color: color.value })) editing.value = ''
+}
 const workspaceElement = ref<HTMLElement>(), dragTarget = ref('')
 let drag: {path:string; pointerId:number; x:number; y:number; moved:boolean; handle:HTMLElement} | undefined
 const groups = computed(() => prefs.workspace.value.groups.map(g => ({...g, paths: props.paths.filter(p => prefs.style(p).group === g.id)})))
-const formatValue = (v: number | boolean | undefined) => typeof v === 'number' ? Number.isInteger(v) ? String(v) : v.toPrecision(7) : v === undefined ? '—' : String(v)
+const formatValue = (v: number | boolean | undefined) => typeof v === 'number' ? !Number.isFinite(v) ? '—' : Number.isInteger(v) ? String(v) : v.toPrecision(7) : v === undefined ? '—' : String(v)
 const value = (event: Event) => (event.target as HTMLInputElement).value
 async function add() {
   if(prefs.workspace.value.groups.length >= 128) return
@@ -115,6 +135,11 @@ onUnmounted(() => {clearInterval(timer);cancelDrag();window.removeEventListener(
 </script>
 <style scoped>
 .selected-workspace { border-bottom: 1px solid var(--border); min-height: 80px; overflow: auto; max-height: 55%; flex-shrink: 0; }
+.curve-settings { position: fixed; z-index: 1000; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(420px, calc(100vw - 32px)); max-height: 80vh; overflow: auto; padding: 18px; background: var(--surface); box-shadow: 0 12px 48px #0008; border: 1px solid var(--accent); border-radius: 8px; display: grid; gap: 10px; }
+.curve-settings label { display: grid; gap: 4px; }
+.curve-settings input[type=color] { width: 48px; height: 28px; }
+.curve-settings strong { overflow-wrap: anywhere; }
+.converted-value { padding: 3px 8px; font: 12px monospace; overflow-wrap: anywhere; }
 header,.signal-heading,.section-editor { display:flex; align-items:center; gap:5px; padding:4px; }
 header strong { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 button { white-space:nowrap; flex-shrink:0; }

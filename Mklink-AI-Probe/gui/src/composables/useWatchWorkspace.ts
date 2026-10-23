@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { API_BASE } from '../lib/runtimeEndpoint'
 export interface Section { id: string; name: string; collapsed: boolean; height: number }
-export interface SignalStyle { alias: string; emphasis: boolean; group: string; pane: string; renderMode?: 'line' | 'points' }
+export interface SignalStyle { alias: string; emphasis: boolean; group: string; pane: string; renderMode?: 'line' | 'points'; formula?: string; color?: string }
 export interface WatchWorkspace { version: 2; defaultGroup?: string; groups: Section[]; panes: Section[]; signals: Record<string, SignalStyle> }
 const empty = (): WatchWorkspace => ({ version: 2, groups: [{ id: 'main', name: '默认分组', collapsed: false, height: 240 }], panes: [{ id: 'main', name: '默认分组', collapsed: false, height: 240 }], signals: {} })
 const workspace = ref<WatchWorkspace>(empty())
@@ -56,12 +56,27 @@ function style(path: string): SignalStyle {
 function setStyle(paths: string[], patch: Partial<SignalStyle>) {
   return update(w => { for (const path of paths) w.signals[path] = { ...style(path), ...patch, ...(patch.group !== undefined ? {pane: patch.group} : {}) } })
 }
+function merge(group: string) {
+  return update(w => {
+    const target = w.defaultGroup || w.groups[0].id
+    if (group === target) return
+    for (const signal of Object.values(w.signals)) {
+      if (signal.group === group) { signal.group = target; signal.pane = target }
+    }
+    w.groups = w.groups.filter(item => item.id !== group)
+  })
+}
 function imported(event: Event) {
   const data = (event as CustomEvent).detail
   if (data?.version === 1 || data?.version === 2) void update(w => Object.assign(w, data))
 }
 if (typeof window !== 'undefined') window.addEventListener('mklink:workspace-import', imported)
-export function useWatchWorkspace() { return { workspace, error, busy, ready, load, update, style, setStyle } }
+export function useWatchWorkspace() { return { workspace, error, busy, ready, load, update, style, setStyle, merge } }
+
+if (typeof window !== 'undefined') window.addEventListener('mklink:workspace-merge', event => {
+  const group = (event as CustomEvent).detail?.group
+  if (typeof group === 'string') void merge(group)
+})
 
 if (typeof window !== 'undefined') window.addEventListener('mklink:workspace-split', event => {
   const path = (event as CustomEvent).detail?.path

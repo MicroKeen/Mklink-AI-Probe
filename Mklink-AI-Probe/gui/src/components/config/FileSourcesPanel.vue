@@ -114,13 +114,12 @@ const parserBackend = computed(() => {
         class="btn btn-primary"
         type="button"
         data-testid="parse-symbols"
-        :disabled="parsing || !connected || !isSymbolFilePath(symbolPath)"
+        :disabled="parsing || !isSymbolFilePath(symbolPath)"
         @click="emit('parse')"
       >
         <ScanSearch :size="15" aria-hidden="true" />
         {{ parsing ? tr('解析中...', 'Parsing...') : tr('解析符号', 'Parse Symbols') }}
       </button>
-      <span v-if="!connected" class="action-state">{{ tr('需先连接设备', 'Connect a device first') }}</span>
     </footer>
   </section>
 </template>
