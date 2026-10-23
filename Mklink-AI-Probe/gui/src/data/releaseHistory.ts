@@ -13,6 +13,7 @@ export const releaseHistory: ReleaseHistoryEntry[] = [
     summary: '新增 ISP 烧录，优化下载设置',
     summaryEn: 'Add ISP programming and simplify setup',
     changes: [
+      '修复 HPM 的 RTT 与 SuperWatch 启动顺序导致采集失败的问题。',
       '修复内外 Flash 合并 HEX 的组合烧录。',
       '修复在线烧录进度到 100% 后等待过久的问题。',
       '新增 HPM 串口 ISP 脱机烧录，开放其他型号测试。',
@@ -22,6 +23,7 @@ export const releaseHistory: ReleaseHistoryEntry[] = [
       '断电复位可选 1.8V、3.3V、5V，默认 3.3V。',
     ],
     changesEn: [
+      'Fix HPM capture failures caused by the RTT and SuperWatch startup order.',
       'Fix combined HEX programming across internal and external Flash.',
       'Fix the long wait after online programming progress reaches 100%.',
       'Add HPM UART ISP offline programming and enable other models for testing.',
