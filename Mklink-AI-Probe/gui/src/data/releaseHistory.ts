@@ -14,7 +14,7 @@ export const releaseHistory: ReleaseHistoryEntry[] = [
     summaryEn: 'Add ISP programming and simplify setup',
     changes: [
       '优化 HPM JTAG 连续烧录的换板检测；单次烧录隐藏等待时间。',
-      '修复 HPM 的 RTT 与 SuperWatch 启动顺序导致采集失败的问题。',
+      '修复刚连接时 RTT 自动搜索失败，改善 RTT 与 SuperWatch 启动顺序兼容性。',
       '修复内外 Flash 合并 HEX 的组合烧录。',
       '修复在线烧录进度到 100% 后等待过久的问题。',
       '新增 HPM 串口 ISP 脱机烧录，开放其他型号测试。',
@@ -25,7 +25,7 @@ export const releaseHistory: ReleaseHistoryEntry[] = [
     ],
     changesEn: [
       'Improve HPM JTAG board replacement detection; hide the wait setting for a single run.',
-      'Fix HPM capture failures caused by the RTT and SuperWatch startup order.',
+      'Fix RTT auto-discovery after connecting and improve RTT/SuperWatch startup-order compatibility.',
       'Fix combined HEX programming across internal and external Flash.',
       'Fix the long wait after online programming progress reaches 100%.',
       'Add HPM UART ISP offline programming and enable other models for testing.',
