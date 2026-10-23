@@ -43,12 +43,13 @@ def test_generated_recipe_stops_before_any_following_operation(monkeypatch, fail
             assert old == 0x30400016
         events.append(label)
         return -1 if failure == label else 0
-    hpm = SimpleNamespace(otp_user=word, otp_user_lock=lock, board=lambda _: 0)
+    hpm = SimpleNamespace(otp_user=word, otp_user_lock=lock, board=lambda _: 0,
+                          jtag_presence_supported=lambda: 1, read_idcode=lambda: 0x1000563D)
     if failure != 'missing-api':
         hpm.program_verified = verified
     for name, obj in dict(hpm=hpm, PikaStdLib=SimpleNamespace(),
                           time=SimpleNamespace(sleep_ms=lambda _: None),
-                          cmd=SimpleNamespace(set_swd_clock=lambda _: None, get_idcode=lambda: 0x1000563D,
+                          cmd=SimpleNamespace(set_swd_clock=lambda _: None,
                                               set_beep_on=lambda: None, set_beep_off=lambda: None)).items():
         monkeypatch.setitem(sys.modules, name, obj)
     script = generate_offline_script(parse_offline_config(payload()))

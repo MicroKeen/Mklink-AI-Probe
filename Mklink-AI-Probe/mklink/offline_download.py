@@ -634,7 +634,8 @@ def generate_offline_script(config: OfflineDownloadConfig) -> str:
         return generate_script(config)
     if config.model == "V2":
         return _generate_v2_script(config)
-    read_idcode = "cmd.read_swd_idcode()" if config.reset_mode is not None else "cmd.get_idcode()"
+    read_idcode = ("hpm.read_idcode()" if config.is_hpm else
+                   "cmd.read_swd_idcode()" if config.reset_mode is not None else "cmd.get_idcode()")
     lines = [
         "import PikaStdLib",
         "import time",
@@ -650,6 +651,7 @@ def generate_offline_script(config: OfflineDownloadConfig) -> str:
         "    if abort:",
         "        break",
         '    print("=== Auto Download Round:", i + 1, "===")',
+        *(['    print("waiting for target connection")'] if config.is_hpm else []),
         "    elapsed = 0",
         "    while True:",
         f"        idcode = {read_idcode}",
@@ -663,14 +665,24 @@ def generate_offline_script(config: OfflineDownloadConfig) -> str:
         '            print("target connection timeout")',
         "            abort = True",
         "            break",
-        "        time.sleep_ms(500)",
-        "        elapsed += 500",
+        f"        time.sleep_ms({100 if config.is_hpm else 500})",
+        f"        elapsed += {100 if config.is_hpm else 500}",
         "    if abort:",
         "        break",
-        '    print("IDCODE: 0x%08X" % idcode)',
+        '    print("target connected")' if config.is_hpm else '    print("IDCODE: 0x%08X" % idcode)',
     ]
     insert_at = lines.index("    elapsed = 0")
     lines[insert_at:insert_at] = _reset_preflight_lines(config)
+    if config.is_hpm:
+        # The legacy cached get_idcode() cannot establish board removal. Never
+        # silently fall back to it on firmware without live JTAG presence.
+        insert_at = lines.index("    elapsed = 0")
+        lines[insert_at:insert_at] = [
+            '    if hpm.jtag_presence_supported() != 1:',
+            '        print("Upgrade HPMLink: live JTAG connection detection required")',
+            '        abort = True',
+            '        break',
+        ]
     if config.is_hpm and any(f.format == "hex" for f in config.firmwares):
         insert_at = lines.index("    elapsed = 0")
         lines[insert_at:insert_at] = [
@@ -716,7 +728,7 @@ def generate_offline_script(config: OfflineDownloadConfig) -> str:
     if config.security is not None and config.security.lock_after_download:
         lines.extend(_security_lines(config.security, action="lock", indent="    "))
     lines.extend(_completion_lines(config))
-    if not config.is_hpm:
+    if not config.is_hpm or config.auto_download_count > 1:
         lines.extend([
             "    # Confirm recovery before sounding success: the operator may remove",
             "    # the board immediately after the beep.",
@@ -749,6 +761,7 @@ def generate_offline_script(config: OfflineDownloadConfig) -> str:
         (
             "    if abort or i + 1 >= AUTO_DOWNLOAD_COUNT:",
             "        break",
+            *(['    print("waiting for target removal")'] if config.is_hpm else []),
             "    elapsed = 0",
             "    while True:",
             f"        idcode = {read_idcode}",
@@ -757,19 +770,18 @@ def generate_offline_script(config: OfflineDownloadConfig) -> str:
             "            abort = True",
             "            break",
             "        if idcode in (0, 0xFFFFFFFF):",
-            *(["            break"] if config.is_hpm else [
-                "            disconnected_samples += 1",
-                "        else:",
-                "            disconnected_samples = 0",
-                "        if disconnected_samples >= 3:",
-                "            break",
-            ]),
+            "            disconnected_samples += 1",
+            "        else:",
+            "            disconnected_samples = 0",
+            "        if disconnected_samples >= 3:",
+            "            break",
             "        if elapsed >= WAIT_IDCODE_TIMEOUT:",
             '            print("board replacement timeout: waiting for target removal")',
             "            abort = True",
             "            break",
-            f"        time.sleep_ms({500 if config.is_hpm else 100})",
-            f"        elapsed += {500 if config.is_hpm else 100}",
+            "        time.sleep_ms(100)",
+            "        elapsed += 100",
+            *(['    if not abort:', '        print("target disconnected")'] if config.is_hpm else []),
             "if not abort:",
             '    print("auto download finished")',
             "else:",
