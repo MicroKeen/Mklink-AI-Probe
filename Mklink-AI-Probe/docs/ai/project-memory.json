@@ -1,20 +1,20 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-23T19:58:14.588062+08:00",
+  "updated_at": "2026-10-23T23:21:37.287172+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/hpm-isp-deployment-ux",
-    "head": "RTT搜索修复dc751650；组合安装源ef51d4d3/Web5aeb2da2。本次验收文档见Git HEAD。",
-    "remote_head": "任务dc751650、组合5aeb2da2已推送；本次验收文档随后提交推送核对。",
-    "working_tree": "唯一工作区E:/software/HPM5300/Mklink-AI-Probe，源码子目录Mklink-AI-Probe；当前codex/hpm-isp-deployment-ux。已安装组合源在codex/v036-isp-ux-local。"
+    "head": "SuperWatch源870471b6；组合源e7c49b04/Web bcdc8474。本次验收文档见Git HEAD。",
+    "remote_head": "任务870471b6及组合bcdc8474已推送核对；本次交接文档随后单独提交推送。",
+    "working_tree": "唯一工作区E:/software/HPM5300/Mklink-AI-Probe，源码子目录Mklink-AI-Probe；已返回任务分支codex/hpm-isp-deployment-ux。已安装组合在codex/v036-isp-ux-local。"
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
     "status": "handoff_ready",
-    "current_task": "修复刚连接RTT搜索未准备MUX的问题，搜索/启动统一通道且保留旧ARM文本读取。462Python、70GUI、TS/Vite通过；原V4+HPM5301源码及实装新连接、两启动顺序、活动搜索和独立重启通过，四组实装读错/丢样0。0.3.6 ef51d4d3/Web5aeb2da2管理员覆盖exit0、冻结/原生/真实网页验收通过，已重新打开。V2/V3及ARM仅协议回归，未换板实测。见v036-rtt-discovery.md。"
+    "current_task": "SuperWatch离线解析/重载先停采集、断开保留变量与数组选择；增加单曲线公式/颜色与快捷合并。源870471b6，组合e7c49b04/Web bcdc8474，188Python、1083全GUI及末次189GUI/TS/Vite通过。真实浏览器离线1480变量、公式x/1000、颜色与合并通过；0.3.6安装包SHA256 818035c005e02978b0729facd7cafcfba91babc659aa209e6bbc6409495b202b。首次UAC取消，用户要求重试后管理员覆盖exit0，解包/实装206Python/41Web与公式静态模块、冻结MCP/SVD/HTTP/离线功能及原生Web/退出通过。未操作硬件或更新固件/全局Skill。见v036-superwatch-formulas.md。"
   },
   "milestones": [
     {
@@ -50,6 +50,10 @@
   ],
   "verification": [
     {
+      "area": "SuperWatch离线文件与公式颜色",
+      "result": "SuperWatch离线解析/重载先停采集、断开保留变量与数组选择；增加单曲线公式/颜色与快捷合并。源870471b6，组合e7c49b04/Web bcdc8474，188Python、1083全GUI及末次189GUI/TS/Vite通过。真实浏览器离线1480变量、公式x/1000、颜色与合并通过；0.3.6安装包SHA256 818035c005e02978b0729facd7cafcfba91babc659aa209e6bbc6409495b202b。首次UAC取消，用户要求重试后管理员覆盖exit0，解包/实装206Python/41Web与公式静态模块、冻结MCP/SVD/HTTP/离线功能及原生Web/退出通过。未操作硬件或更新固件/全局Skill。见v036-superwatch-formulas.md。"
+    },
+    {
       "area": "新连接RTT搜索与采集顺序",
       "result": "修复刚连接RTT搜索未准备MUX的问题，搜索/启动统一通道且保留旧ARM文本读取。462Python、70GUI、TS/Vite通过；原V4+HPM5301源码及实装新连接、两启动顺序、活动搜索和独立重启通过，四组实装读错/丢样0。0.3.6 ef51d4d3/Web5aeb2da2管理员覆盖exit0、冻结/原生/真实网页验收通过，已重新打开。V2/V3及ARM仅协议回归，未换板实测。见v036-rtt-discovery.md。"
     },
@@ -76,10 +80,6 @@
     {
       "area": "ARM每板完成复位和蜂鸣",
       "result": "源eca8b0b0/Web7c5dea72，305相关Python/51离线GUI/TS/Vite通过；IAB模拟双镜像3轮与最终实时查询脚本3轮均通过，无控制台错。组合203dfe51管理员覆盖exit0，解包/实装205Python/41Web/四载荷、冻结CLI/MCP/SVD/HTTP/无宿主Python/后台正常退出通过。配套固件2435484双SES/38CI通过且已升级；软件/硬件/3300mV断电复位各一次通过。恢复遥测3480mV非外部校准。原生已打开，实装Web三模式/电压/等待标签核对通过，无控制台错。完整实际Flash多板循环尚未验证。见v036-arm-completion-reset.md。"
-    },
-    {
-      "area": "蜂鸣时长与预览输出并排",
-      "result": "e700f579/5244c274/Web def4d105：236Python、80GUI、TS/Vite；IAB模拟100ms部署触发，两列442px等宽/349.333px等高、标题28px、无控制台错误。组合9b8c9009管理员覆盖exit0，解包/实装205Python/41Web/四载荷与冻结CLI/MCP/SVD/HTTP/退出通过。固件8705f753双SES/37CI通过，原下载器单次升级，13参数100ms与旧12参数均rc0后清配置释放。原生已重开，实际声长/完整换板待用户测。见v036-beep-layout.md。"
     }
   ],
   "decisions": [
@@ -92,7 +92,7 @@
     "构建使用scripts/build_workspace.ps1与F:/MKLink-Build，保留正式包、独有证据、依赖和缓存；联接或不可访问路径不强删。0.3.5清理已完成，仅保留原Mklink-AI-Probe工作区；历史联接run清单保存在构建根reports，不沿用旧清理任务。长期硬件跟进仍暂停，不因交接自动接管硬件或重复发布。",
     "工程上下文固定于后台生命周期；被动MI_04枚举不遍历占用设备，底层自动连接只接受唯一候选；本机别名不写固件。未知结果不重放，worker实际退出后才发布串口关闭，取消前保留缓冲寿命，背压错误不隐瞒。",
     "原MK-Firmware及用户固件工程改动保留，不自动恢复旧备份。2026-10-18授权的0.3.5、V3.6.5/V4.6.9发布已完成；未知操作不重放。用户要求未解决项保留交接，未扩大验收或宣称客户故障已闭环。",
-    "编译完成不代表目标已下载：所有稳定文件变化（包括地址不变/仅时间戳）仅发待重载事件，不后台解析或应用。SuperWatch每次变化弹窗一次，稍后保留顶部醒目按钮。用户明确重新加载后才执行共享符号迁移和采集恢复；用户主动停止不恢复。"
+    "编译完成不代表目标已下载：文件变化仅发待重载提示，不后台解析。用户明确加载/重载文件时自动停止目标采集，确认worker退出后原子换表，保持停止；失败保留旧目录/选择。不要求连接下载器；断开保留文件和选中变量但清空旧采样。公式只改变可视化，原始记录不变；不恢复旧地址采集或重放写操作。"
   ],
   "hardware": {
     "state": "原V4固件保持7d21040，HPM5301保持连接。四组只读采集通过，已停止并断开测试连接；原生正常退出后已重开供用户测试。未写Flash/OTP/VCC、变量或复位。",
@@ -110,14 +110,14 @@
     "nRF54L15 GUI保护闭环、全部物理擦除/拔插/休眠/断电场景、电源外部精度校准未全部认证。VCC每次改动必须确认具体电压，HPM已锁定OTP不得重放。 已知无可靠扇区表的26个FLM禁用扇区操作；重叠算法需要匹配Bank模式。 HPM5301组18/19永久锁定的历史状态及用户字先写/组锁最后、全部固件独立校验后才写OTP等边界见docs/ai/hpm-offline-otp-handoff.md；接手重新确认芯片，其他型号不继承验收。 UART OTP已实现ROM write-memory APIv2，独立熔丝/影子/临时锁读语义仍未知并如实显示；以ROM写入状态及回读为准。配套3d96dbb已实机验证HPM5301全部128字读取和用户批准的Word69 0→1单次写入回读；其余型号/区域未实写，新数据须具体授权。多Word顺序执行不可回滚。CSV原生选择器自动化未完成。"
   ],
   "next_actions": [
-    "用户测试新连接自动搜索；V2/V3和ARM实板尚未在本轮连接，需设备就绪后补真机验证，不将协议测试当作物理验收。",
+    "用户测试新版SuperWatch加载时停采集、断开后选择保留与公式/颜色/合并；安装和网页验证已完成，测试进程已正常退出。当前硬件不可按旧HPM身份推定；本轮未接管探针。V2/V3和ARM真实采集矩阵仍需另行补充，不把协议回归当实体认证。",
     "收集客户N32WB452内外Flash组合实际烧写/回读反馈；本轮主机解析准入及安装包通过，不代替外置SPI硬件验证。不重复使用已消耗的F103单次烧录授权；不主动烧写或改OTP/供电。",
     "用户需重新生成并部署U盘脚本再测完整HPM JTAG连续烧录；旧脚本不会自动更新。实时拔插/LCD已验证，完整多板Flash/蜂鸣次数仍待实测；不重复历史一次性写入授权。",
     "PR48未合并发布。此前联合镜像+OTP实机证据保留，当前Word69=3；本轮未追加目标烧录/OTP/VCC。其他HPM型号继续由用户测试，固件交会话01a15977-1aef-7430-aa11-6e39725f0465。 未知MKLINK_V2任务不得重放。当前接入若为烧好固件的目标板或另一V2.9.0设备，不能误当原下载器升级。",
     "其他维护边界：继续排查 30MHz 并行目标读错/Flash 偶发 status5，区分固件目标访问与主机队列；本次低负载 F103 结果不关闭该限制，需要固件改动另开会话。；保持Gitee真实Skill回退：0.3.5已验证；Windows超过100MB被拒使用GitHub链接，其余平台仅GitHub。保留唯一发布/验收证据和Skill备份，联接run仅人工处理，不强删。；收集 Mac/Linux USB/MSC 和原地升级反馈、外置 Flash 多算法实物验证；完整 SES/芯片/拔插断电组合仍待补充。供电每次确认具体电压，长期验证仍暂停。"
   ],
   "continuation_protocol": [
-    "修复刚连接RTT搜索未准备MUX的问题，搜索/启动统一通道且保留旧ARM文本读取。462Python、70GUI、TS/Vite通过；原V4+HPM5301源码及实装新连接、两启动顺序、活动搜索和独立重启通过，四组实装读错/丢样0。0.3.6 ef51d4d3/Web5aeb2da2管理员覆盖exit0、冻结/原生/真实网页验收通过，已重新打开。V2/V3及ARM仅协议回归，未换板实测。见v036-rtt-discovery.md。 本轮没有更新下载器固件或全局Skill；不要继承历史一次性烧录/OTP/复位授权。",
+    "SuperWatch离线解析/重载先停采集、断开保留变量与数组选择；增加单曲线公式/颜色与快捷合并。源870471b6，组合e7c49b04/Web bcdc8474，188Python、1083全GUI及末次189GUI/TS/Vite通过。真实浏览器离线1480变量、公式x/1000、颜色与合并通过；0.3.6安装包SHA256 818035c005e02978b0729facd7cafcfba91babc659aa209e6bbc6409495b202b。首次UAC取消，用户要求重试后管理员覆盖exit0，解包/实装206Python/41Web与公式静态模块、冻结MCP/SVD/HTTP/离线功能及原生Web/退出通过。未操作硬件或更新固件/全局Skill。见v036-superwatch-formulas.md。 安装包位于构建根artifacts/v036-watch-formulas-e7c49b04；仍是未签名本地候选，不发布渠道或标签，不继承历史一次性写入授权。",
     "V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。",
     "CDC 995根因仅保留待排查。恢复只允许同身份CDC故障5秒内；超时不自动接回或新建AI会话，主动断开立即生效，不重放未知写入。测试实例已经全部释放；见v035-transport-recovery.md，不寻找旧现场窗口。",
     "客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。",
