@@ -4,12 +4,12 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-23T23:21:37.287172+08:00`
+- 更新时间：`2026-10-23T23:57:07.312697+08:00`
 - 分支：`codex/hpm-isp-deployment-ux`
-- HEAD：`SuperWatch源870471b6；组合源e7c49b04/Web bcdc8474。本次验收文档见Git HEAD。`
-- 远端 HEAD：`任务870471b6及组合bcdc8474已推送核对；本次交接文档随后单独提交推送。`
+- HEAD：`功能源870471b6；组合源e7c49b04/Web bcdc8474；清理前交接6e02aefc。本次文档提交以Git HEAD为准。`
+- 远端 HEAD：`清理前6e02aefc已fetch核对一致；清理交接随后单独提交推送，核对远端。`
 - 工作树：唯一工作区E:/software/HPM5300/Mklink-AI-Probe，源码子目录Mklink-AI-Probe；已返回任务分支codex/hpm-isp-deployment-ux。已安装组合在codex/v036-isp-ux-local。
-- 当前任务：SuperWatch离线加载、重载自动停采集、断开保留变量，新增公式/颜色/快捷合并已实现并覆盖安装。源870471b6，组合e7c49b04/Web bcdc8474；188Python、1083GUI及末次189GUI/真实页面/冻结与安装验证通过。见v036-superwatch-formulas.md。
+- 当前任务：SuperWatch新功能已实现、验证并覆盖安装，见v036-superwatch-formulas.md。E/F磁盘清理完成：释放12.97/10.38GiB，剩余13.60/37.16GiB；218个含链接测试目录11.55GiB列人工清单。源码/最新包/独有证据保留，见v036-storage-cleanup-20261023.md。
 - 状态：`handoff_ready`
 
 ## 里程碑
@@ -40,16 +40,16 @@
 - SuperWatch 变量写入只认写应答，不做自动回读；烧录/显式内存校验仍保留，真实写错误不得吞掉或重放。外设 ID 基于 Pack 版本/芯片/SVD 相对路径；失效选择不得阻断物理连接，无法迁移时重选。 在线型号提供脱机/外设默认值，各页可独立修改；Pack操作完成自动刷新。下载先预留唯一物理身份，不要求先连接目标；自身预留不重建下载表单，其他设备切换仍清理。
 - 应用主索引 MicroKeen/release，旧 GitHub/updates 和 Gitee/updates 兼容，固件使用独立索引。Gitee 仅要求 Windows 与 Skill；本次 Windows 超 100MB 被拒，索引指向 GitHub；Skill 已真实镜像，GitHub 不可达回退实测通过。其他平台仅 GitHub。
 - 测试直接使用用户原工程及 build/keil/Obj ELF，允许修改且无需备份还原，不复制工程；硬件路径只留本地。HPM 使用 ROM API，不使用 FLM/第二次通用 SWD reset；VCC 每次改动需确认具体电压，固件修改另开会话。
-- 构建使用scripts/build_workspace.ps1与F:/MKLink-Build，保留正式包、独有证据、依赖和缓存；联接或不可访问路径不强删。0.3.5清理已完成，仅保留原Mklink-AI-Probe工作区；历史联接run清单保存在构建根reports，不沿用旧清理任务。长期硬件跟进仍暂停，不因交接自动接管硬件或重复发布。
+- 构建使用scripts/build_workspace.ps1与F:/MKLink-Build，保留正式包、独有证据和依赖。用户明确清理授权下可删除过时可再生编译输出，链接/不可访问目录交人工处理，不强删。唯一原工作区保持；清理不接管硬件、不重复发布。
 - 工程上下文固定于后台生命周期；被动MI_04枚举不遍历占用设备，底层自动连接只接受唯一候选；本机别名不写固件。未知结果不重放，worker实际退出后才发布串口关闭，取消前保留缓冲寿命，背压错误不隐瞒。
 - 原MK-Firmware及用户固件工程改动保留，不自动恢复旧备份。2026-10-18授权的0.3.5、V3.6.5/V4.6.9发布已完成；未知操作不重放。用户要求未解决项保留交接，未扩大验收或宣称客户故障已闭环。
 - 编译完成不代表目标已下载：文件变化仅发待重载提示，不后台解析。用户明确加载/重载文件时自动停止目标采集，确认worker退出后原子换表，保持停止；失败保留旧目录/选择。不要求连接下载器；断开保留文件和选中变量但清空旧采样。公式只改变可视化，原始记录不变；不恢复旧地址采集或重放写操作。
 
 ## 真机环境
 
-- **state**：原V4固件保持7d21040，HPM5301保持连接。四组只读采集通过，已停止并断开测试连接；原生正常退出后已重开供用户测试。未写Flash/OTP/VCC、变量或复位。
-- **installer**：已覆盖0.3.6 ef51d4d3/Web5aeb2da2；SHA256 42f9156a2dcb80dd1b206ca3d4c6412740cd170625830e72247d6409e965c61d；构建根artifacts/v036-rtt-discovery-ef51d4d3。
-- **backups**：0.3.4正式包/安装/渠道/Skill/HIL在MKLINK_BUILD_ROOT/artifacts/v034-official，相邻v034-official-native保存完整原生CI ZIP；0.3.5本机包见上述构建根。原Git根.build/artifacts/v033-official、v032-official及用户备份保持；清理前快照/删除清单在构建根reports/v034-cleanup-*.json、v034-deleted-branches.json、v034-memory-before-cleanup.json。不能再把F盘仅视为可删缓存。 2026-10-23清理明细见v036-cleanup-handoff.md；含测试链接的run继续保留。
+- **state**：本轮仅磁盘清理和文档交接，没有接管探针或操作目标。上轮SuperWatch验收进程已正常退出；当前物理接入不可沿用旧身份推定。
+- **installer**：已覆盖0.3.6 e7c49b04/Web bcdc8474；最新包在构建根artifacts/v036-watch-formulas-e7c49b04，SHA256 818035c005e02978b0729facd7cafcfba91babc659aa209e6bbc6409495b202b，清理后再次核对一致。
+- **backups**：正式release、原安装包、CI ZIP、唯一硬件证据、Skill备份和当前F盘缓存保留。删除61个可再生旧编译/解压目录；218个含链接测试目录未删。完整人工清单和删除结果在F:/MKLink-Build/reports/cleanup-20261023，见v036-storage-cleanup-20261023.md。
 
 ## 下一动作
 
@@ -57,7 +57,7 @@
 2. 收集客户N32WB452内外Flash组合实际烧写/回读反馈；本轮主机解析准入及安装包通过，不代替外置SPI硬件验证。不重复使用已消耗的F103单次烧录授权；不主动烧写或改OTP/供电。
 3. 用户需重新生成并部署U盘脚本再测完整HPM JTAG连续烧录；旧脚本不会自动更新。实时拔插/LCD已验证，完整多板Flash/蜂鸣次数仍待实测；不重复历史一次性写入授权。
 4. PR48未合并发布。此前联合镜像+OTP实机证据保留，当前Word69=3；本轮未追加目标烧录/OTP/VCC。其他HPM型号继续由用户测试，固件交会话01a15977-1aef-7430-aa11-6e39725f0465。 未知MKLINK_V2任务不得重放。当前接入若为烧好固件的目标板或另一V2.9.0设备，不能误当原下载器升级。
-5. 其他维护边界：继续排查 30MHz 并行目标读错/Flash 偶发 status5，区分固件目标访问与主机队列；本次低负载 F103 结果不关闭该限制，需要固件改动另开会话。；保持Gitee真实Skill回退：0.3.5已验证；Windows超过100MB被拒使用GitHub链接，其余平台仅GitHub。保留唯一发布/验收证据和Skill备份，联接run仅人工处理，不强删。；收集 Mac/Linux USB/MSC 和原地升级反馈、外置 Flash 多算法实物验证；完整 SES/芯片/拔插断电组合仍待补充。供电每次确认具体电压，长期验证仍暂停。
+5. 继续排查30MHz并行读错/Flash偶发status5，客户及Mac/Linux实物矩阵仍待补充；低负载测试不关闭限制。人工清理只按reports/cleanup-20261023/manual-cleanup.csv核对临时目录，不沿链接删除目标，最新安装包必须保留。长期验证仍暂停。
 
 ## 已知限制
 
