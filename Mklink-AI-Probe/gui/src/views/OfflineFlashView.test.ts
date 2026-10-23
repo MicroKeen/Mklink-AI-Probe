@@ -37,6 +37,25 @@ vi.mock('../composables/useOnlineFlashApi', () => ({
 }))
 
 describe('OfflineFlashView', () => {
+  it.each(['STM32F103RE', 'HPM5301'])('shows replacement timing only for multiple boards: %s', async part => {
+    onlineMocks.searchTargets.mockResolvedValue([{ part_number: part, vendor: part.startsWith('HPM') ? 'HPMicro' : 'STMicroelectronics', installed: true, source: 'builtin' }])
+    const wrapper = mount(OfflineFlashView)
+    try {
+      await flushPromises()
+      await wrapper.get('[data-testid="offline-model"]').setValue('V4')
+      await wrapper.get('.target-result').trigger('click')
+      await flushPromises()
+      const count = wrapper.get('[data-testid="offline-automatic-count"]')
+      expect((count.element as HTMLInputElement).value).toBe('1')
+      expect(wrapper.find('[data-testid="offline-connection-timeout"]').exists()).toBe(false)
+      await count.setValue('3')
+      await wrapper.get('[data-testid="offline-connection-timeout"]').setValue('15000')
+      await count.setValue('1')
+      expect(wrapper.find('[data-testid="offline-connection-timeout"]').exists()).toBe(false)
+      await count.setValue('2')
+      expect(wrapper.get<HTMLInputElement>('[data-testid="offline-connection-timeout"]').element.value).toBe('15000')
+    } finally { wrapper.unmount() }
+  })
   it('deploys ARM reset modes and confirms the selected power-cycle voltage before triggering', async () => {
     pickerMocks.pickFlmFile.mockResolvedValue(new File(['algorithm'], 'Device.FLM'))
     const wrapper = mount(OfflineFlashView, { global: { stubs: { teleport: true } } })
@@ -48,6 +67,8 @@ describe('OfflineFlashView', () => {
       const input = wrapper.get('[data-testid="offline-firmware-input"]')
       Object.defineProperty(input.element, 'files', { configurable: true, value: [new File(['hex'], 'firmware.hex')] })
       await input.trigger('change')
+      expect(wrapper.find('[data-testid="offline-connection-timeout"]').exists()).toBe(false)
+      await wrapper.get('[data-testid="offline-automatic-count"]').setValue('2')
       expect(wrapper.text()).toContain('目标连接／换板等待时间（ms）')
       expect(wrapper.text()).not.toContain('IDCODE 超时')
       const reset = wrapper.get('[data-testid="offline-reset-mode"]')

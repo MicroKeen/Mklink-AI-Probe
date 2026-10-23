@@ -13,6 +13,7 @@ export const releaseHistory: ReleaseHistoryEntry[] = [
     summary: '新增 ISP 烧录，优化终端与日志',
     summaryEn: 'Add ISP programming and improve terminal and logs',
     changes: [
+      '优化 HPM JTAG 连续烧录的换板检测；单次烧录隐藏等待时间。',
       '修复 HPM 的 RTT 与 SuperWatch 启动顺序导致采集失败的问题。',
       '修复内外 Flash 合并 HEX 的组合烧录。',
       '修复在线烧录进度到 100% 后等待过久的问题。',
@@ -24,6 +25,7 @@ export const releaseHistory: ReleaseHistoryEntry[] = [
       'RTT 终端跳过收发解析；SuperWatch 日志可提前开启并选择系统文件夹。',
     ],
     changesEn: [
+      'Improve HPM JTAG board replacement detection; hide the wait setting for a single run.',
       'Fix HPM capture failures caused by the RTT and SuperWatch startup order.',
       'Fix combined HEX programming across internal and external Flash.',
       'Fix the long wait after online programming progress reaches 100%.',
