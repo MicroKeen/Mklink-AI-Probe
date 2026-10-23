@@ -4,12 +4,12 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-23T15:40:17.877192+08:00`
+- 更新时间：`2026-10-23T15:51:49.943972+08:00`
 - 分支：`codex/hpm-isp-deployment-ux`
-- HEAD：`HPM JTAG代码c963982c/9442e5b5已推送；组合d0b662b9/Web6af28792已实装；本次验收文档提交见Git HEAD。`
-- 远端 HEAD：`任务9442e5b5、组合d0b662b9已同步；验收文档随后推送核对。`
+- HEAD：`代码9442e5b5与组合d0b662b9不变；9f2ff27b已记录实装；本次本地Skill同步记录见Git HEAD。`
+- 远端 HEAD：`任务9f2ff27b、组合d0b662b9已同步；本次Skill记录提交后推送核对。`
 - 工作树：唯一工作区E:/software/HPM5300/Mklink-AI-Probe，源码子目录Mklink-AI-Probe；当前codex/hpm-isp-deployment-ux。已安装组合源在codex/v036-isp-ux-local。
-- 当前任务：优化HPM JTAG连续下载与单次等待配置：实时静默presence替代缓存ID；复位恢复后蜂鸣、三零换板、-4清计数且限时重试；次数1隐藏等待。332Python/53GUI/生产网页通过。配套7d21040固件升级一次，真实拔开/接回及LCD确认；首次浮空-4触发补修。最终d0b662b9包覆盖并冻结/实装/网页验证通过，原生已打开。没有目标Flash/OTP/VCC/复位，完整多板烧录仍待用户。见v036-hpm-jtag-cycles.md。
+- 当前任务：优化HPM JTAG连续下载与单次等待配置：实时静默presence替代缓存ID；复位恢复后蜂鸣、三零换板、-4清计数且限时重试；次数1隐藏等待。332Python/53GUI/生产网页通过。配套7d21040固件升级一次，真实拔开/接回及LCD确认；首次浮空-4触发补修。最终d0b662b9包覆盖并冻结/实装/网页验证通过，原生已打开。没有目标Flash/OTP/VCC/复位，完整多板烧录仍待用户。见v036-hpm-jtag-cycles.md。 用户后续要求本地Skill同步：已由0.3.5更新为与安装包一致的d0b662b9/0.3.6，2615文件逐字节/生产Web一致、5339本地配置缓存保留、离线CLI/SVD和实际stdio MCP通过；备份与报告在构建根artifacts/v036-local-skill-d0b662b9，无硬件操作。
 - 状态：`handoff_ready`
 
 ## 里程碑
@@ -23,7 +23,7 @@
 
 ## 验证证据
 
-- **HPM JTAG实时换板与单次配置**：c963982c/9442e5b5，332定点Python、53GUI、TS/Vite及真实网页通过。固件7d21040的44回归/Pika/双构建通过并升级一次；只读拔插及时报告且用户确认LCD，第二轮240秒858次0/1522有效ID。首次断开后-4导致采集断言退出，主机补有限重试并保留证据。最终d0b662b9包SHA256 72274ecca51ea790beac8e15a06c24042a42faefb60a5875d41a2c59b99fdc1a，覆盖exit0、解包/实装206Python/41Web/四载荷/冻结MCP-SVD-HTTP/无宿主Python/正常退出通过；解包首次HTTP超时原包重跑通过。原生与安装网页正常。完整实体连续Flash未做。见v036-hpm-jtag-cycles.md。
+- **HPM JTAG实时换板与单次配置**：c963982c/9442e5b5，332定点Python、53GUI、TS/Vite及真实网页通过。固件7d21040的44回归/Pika/双构建通过并升级一次；只读拔插及时报告且用户确认LCD，第二轮240秒858次0/1522有效ID。首次断开后-4导致采集断言退出，主机补有限重试并保留证据。最终d0b662b9包SHA256 72274ecca51ea790beac8e15a06c24042a42faefb60a5875d41a2c59b99fdc1a，覆盖exit0、解包/实装206Python/41Web/四载荷/冻结MCP-SVD-HTTP/无宿主Python/正常退出通过；解包首次HTTP超时原包重跑通过。原生与安装网页正常。完整实体连续Flash未做。见v036-hpm-jtag-cycles.md。 用户后续要求本地Skill同步：已由0.3.5更新为与安装包一致的d0b662b9/0.3.6，2615文件逐字节/生产Web一致、5339本地配置缓存保留、离线CLI/SVD和实际stdio MCP通过；备份与报告在构建根artifacts/v036-local-skill-d0b662b9，无硬件操作。
 - **RTT与SuperWatch启动顺序及覆盖安装**：77f0f004缓存能力查询，445Python/TS/Vite通过；组合a8a5dfad/Web f579b0c4，NSIS SHA256 90361fe45063167cad76cba2b3b46e574b1390f600aaabb0de3d7834924c6395。管理员覆盖exit0，解包/实装206Python/41Web/四载荷及冻结CLI/MCP/SVD/HTTP/后台正常退出通过。原V4+HPM5301在30MHz、RTT0/1+Watch10ms，两顺序各新连接及逐项停止重开通过；安装观察265/283组、无读错/丢样，网页约88Hz与RTT文本正常。详见v036-capture-start-order.md。
 - **合并HEX及0.3.6安装包**：6c2095c7自定义FLM几何修复；388Python/5GUI/真实浏览器通过。两种算法组合均正确映射外部4MiB+内部4588B，1027扇区；实体N32未写。集成f4221d96（Web d7d2db3d）NSIS SHA256 82f95c6310507fbe832b6749f3752e26be7af07384034f0f66ab80765e404cf7，管理员覆盖exit0、解包与实装冻结运行通过；两条简短版本说明已验证。见v036-combined-hex-fix.md。
 - **在线烧录100%停顿诊断**：35f7da59：391测试含真实pyOCD构建器模拟目标、多Bank稀疏HEX/单双缓冲/失败清理；唯一授权源JobManager实烧通过，写入阶段7.892→5.595s，PROGRAM100%仅一次到完成0.796ms，完整回读通过。初始UnInit推断已纠正。详见v036-online-program-progress-diagnosis.md；已包含f4221d96安装包并覆盖验证。
@@ -72,7 +72,7 @@
 
 ## 延续协议
 
-- 最终安装组合d0b662b9已含HPM JTAG实时换板和-4有限重试、单次隐藏等待，以及此前采集顺序/在线进度/合并HEX修复。原V4固件7d21040、HPM5301已接回，原生重新打开，无活动采集；见v036-hpm-jtag-cycles.md。旧U盘脚本需用户重新生成部署，不重放未知烧录任务。
+- 最终安装组合d0b662b9已含HPM JTAG实时换板和-4有限重试、单次隐藏等待，以及此前采集顺序/在线进度/合并HEX修复。原V4固件7d21040、HPM5301已接回，原生重新打开，无活动采集；见v036-hpm-jtag-cycles.md。旧U盘脚本需用户重新生成部署，不重放未知烧录任务。 全局mklink-ai-probe Skill已同步d0b662b9/0.3.6；旧版已备份，现有MCP进程需重启加载。
 - V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。
 - CDC 995根因仅保留待排查。恢复只允许同身份CDC故障5秒内；超时不自动接回或新建AI会话，主动断开立即生效，不重放未知写入。测试实例已经全部释放；见v035-transport-recovery.md，不寻找旧现场窗口。
 - 客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。
