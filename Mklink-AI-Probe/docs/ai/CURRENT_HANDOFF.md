@@ -4,12 +4,12 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-23T13:45:25.428218+08:00`
+- 更新时间：`2026-10-23T14:08:33.129473+08:00`
 - 分支：`codex/hpm-isp-deployment-ux`
-- HEAD：`主机代码仍6c2095c7/35f7da59；HPM固件验收文档提交见Git HEAD。`
-- 远端 HEAD：`此前ff3e75df已同步；本次HPM验收文档提交后推送核对。`
+- HEAD：`代码77f0f004已推送；安装集成a8a5dfad/Web f579b0c4；本次验收文档提交见Git HEAD。`
+- 远端 HEAD：`任务77f0f004、组合f579b0c4已同步；验收文档随后推送核对。`
 - 工作树：唯一工作区E:/software/HPM5300/Mklink-AI-Probe，源码子目录Mklink-AI-Probe；当前codex/hpm-isp-deployment-ux。已安装组合源在codex/v036-isp-ux-local。
-- 当前任务：V4 HPM采集中复位status1已定位为MUX仅ARM。固件专用会话8b2a6ce新增HPM检查复位，42回归/双构建/81帧宿主解码通过。原V4升级一次、实装0.3.6在30MHz JTAG的RTT CH0+Watch10ms同时运行时单次复位成功35.75ms，session保留、stopped=[]，捕获tick1/telemetry1及Watch计数归零后增长，五秒无错。未改上位机代码或打包、未写目标Flash/OTP/VCC。详见v036-hpm-capture-reset.md。
+- 当前任务：修复HPM的RTT先开后SuperWatch启动HTTP500：固件能力查询触发legacy/MUX切换保护。77f0f004缓存完整能力且重连清空，组合a8a5dfad/Web f579b0c4已打包覆盖。445回归、解包/实装冻结资格、原V4+HPM5301两种启动顺序与分别重启均通过；真实网页两项采集正常。未改固件/目标Flash/OTP/VCC或复位。见v036-capture-start-order.md。
 - 状态：`handoff_ready`
 
 ## 里程碑
@@ -23,7 +23,7 @@
 
 ## 验证证据
 
-- **清理交接**：106个普通pyc/3,100,781B和1个空run已删除；188个含测试链接的run保留，完整只读盘点普通文件约11.23GB。安装包/硬件证据/缓存/用户文件保留，运行中上位机未终止。见v036-cleanup-handoff.md，本地reports有保留及删除明细。
+- **RTT与SuperWatch启动顺序及覆盖安装**：77f0f004缓存能力查询，445Python/TS/Vite通过；组合a8a5dfad/Web f579b0c4，NSIS SHA256 90361fe45063167cad76cba2b3b46e574b1390f600aaabb0de3d7834924c6395。管理员覆盖exit0，解包/实装206Python/41Web/四载荷及冻结CLI/MCP/SVD/HTTP/后台正常退出通过。原V4+HPM5301在30MHz、RTT0/1+Watch10ms，两顺序各新连接及逐项停止重开通过；安装观察265/283组、无读错/丢样，网页约88Hz与RTT文本正常。详见v036-capture-start-order.md。
 - **合并HEX及0.3.6安装包**：6c2095c7自定义FLM几何修复；388Python/5GUI/真实浏览器通过。两种算法组合均正确映射外部4MiB+内部4588B，1027扇区；实体N32未写。集成f4221d96（Web d7d2db3d）NSIS SHA256 82f95c6310507fbe832b6749f3752e26be7af07384034f0f66ab80765e404cf7，管理员覆盖exit0、解包与实装冻结运行通过；两条简短版本说明已验证。见v036-combined-hex-fix.md。
 - **在线烧录100%停顿诊断**：35f7da59：391测试含真实pyOCD构建器模拟目标、多Bank稀疏HEX/单双缓冲/失败清理；唯一授权源JobManager实烧通过，写入阶段7.892→5.595s，PROGRAM100%仅一次到完成0.796ms，完整回读通过。初始UnInit推断已纠正。详见v036-online-program-progress-diagnosis.md；已包含f4221d96安装包并覆盖验证。
 - **采集中软件复位实装与实机**：361相关Python、真实生产Web模拟链路、81个固件帧/25完整Watch组交叉检查通过；8e402491管理员覆盖、205Python/41Web/四载荷匹配及冻结资格通过。原V4新固件升级一次，STM32F103在30MHz RTT0/1+Watch10ms下唯一一次软件复位成功，stopped=[]、session不变，捕获两路seq0/tick2及Watch137902→2ms后连续增长；5秒零读错/丢样。已安装Web两页及次数规则验证、控制台无错。详见v036-capture-reset.md；短测不清除历史30MHz高负载限制。 自动烧录次数左移/默认1/>1启用等待：51离线GUI及TS/Vite、真实Web模拟交互验证通过，已包含安装。 2026-10-23补齐V4 HPM：固件8b2a6ce、42回归/双构建通过，实装API单次复位35.75ms成功，RTT CH0捕获tick1/telemetry1，Watch归零后增长、同会话/订阅保留、五秒零错；见v036-hpm-capture-reset.md。
@@ -47,9 +47,9 @@
 
 ## 真机环境
 
-- **state**：当前原V4+HPM5301。V4修复8b2a6ce/Oct23 13:34:27已写入一次；唯一HPM采集中软件复位实测成功。原生上位机与RTT CH0/Watch10ms保持运行供用户继续测试。目标Flash/OTP/VCC未修改。
-- **installer**：已安装0.3.6组合f4221d96（Web d7d2db3d），SHA256 82f95c6310507fbe832b6749f3752e26be7af07384034f0f66ab80765e404cf7；本次仅升级V4固件，无新安装包。
-- **backups**：0.3.4正式包/安装/渠道/Skill/HIL在MKLINK_BUILD_ROOT/artifacts/v034-official，相邻v034-official-native保存完整原生CI ZIP；0.3.5本机包见上述构建根。原Git根.build/artifacts/v033-official、v032-official及用户备份保持；清理前快照/删除清单在构建根reports/v034-cleanup-*.json、v034-deleted-branches.json、v034-memory-before-cleanup.json。不能再把F盘仅视为可删缓存。
+- **state**：当前原V4+HPM5301，固件仍8b2a6ce/Oct23 13:34:27。本轮仅上位机启动顺序修复；安装版原生与RTT CH0/1、Watch10ms两变量运行供用户测试。目标Flash/OTP/VCC未修改，未复位或变量写入。
+- **installer**：已安装0.3.6组合a8a5dfad（Web f579b0c4），SHA256 90361fe45063167cad76cba2b3b46e574b1390f600aaabb0de3d7834924c6395；包在构建根artifacts/v036-capture-order-a8a5dfad。保留旧f4221d96包与既有修复。
+- **backups**：0.3.4正式包/安装/渠道/Skill/HIL在MKLINK_BUILD_ROOT/artifacts/v034-official，相邻v034-official-native保存完整原生CI ZIP；0.3.5本机包见上述构建根。原Git根.build/artifacts/v033-official、v032-official及用户备份保持；清理前快照/删除清单在构建根reports/v034-cleanup-*.json、v034-deleted-branches.json、v034-memory-before-cleanup.json。不能再把F盘仅视为可删缓存。 2026-10-23清理明细见v036-cleanup-handoff.md；含测试链接的run继续保留。
 
 ## 下一动作
 
@@ -72,7 +72,7 @@
 
 ## 延续协议
 
-- 当前安装包f4221d96已包含在线进度35f7da59/合并HEX6c2095c7修复。2026-10-23原V4升级HPM复位8b2a6ce并实测通过；当前HPM5301、RTT CH0和Watch10ms运行。见v036-hpm-capture-reset.md；不自动重复复位或刷写。
+- 当前安装包a8a5dfad/Web f579b0c4已包含77f0f004采集启动顺序修复及此前在线进度/合并HEX等功能。原V4固件仍8b2a6ce，HPM5301的RTT CH0/1和Watch10ms运行。见v036-capture-start-order.md；本轮未复位或刷写，不继承历史一次性硬件写授权。
 - V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。
 - CDC 995根因仅保留待排查。恢复只允许同身份CDC故障5秒内；超时不自动接回或新建AI会话，主动断开立即生效，不重放未知写入。测试实例已经全部释放；见v035-transport-recovery.md，不寻找旧现场窗口。
 - 客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。
