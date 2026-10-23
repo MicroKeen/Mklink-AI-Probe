@@ -3851,4 +3851,27 @@ describe('VOFA viewer typed-ring runtime', () => {
       runtime.cleanup()
     }
   })
+  it('scales computed curves, retains raw samples, applies colors and exposes a stable merge shortcut', async () => {
+    const runtime = await loadRttViewerRuntime('SuperWatch', 10)
+    try {
+      runtime.viewer.configureBinaryChannels([{name:'adc'}, {name:'other'}])
+      runtime.viewer.setWorkspace({version:2,defaultGroup:'main',groups:[],panes:[{id:'main',name:'Main',height:200},{id:'split',name:'ADC',height:200}],signals:{adc:{pane:'split',formula:'x * 3.3 / 4095',color:'#00aaff'}}})
+      runtime.viewer.acceptBinaryBatch({sequence:1n,timestampNs:2000000000n,itemCount:2,channelCount:2,layout:'sample-major-float32',values:Float32Array.of(0,1,4095,2).buffer,times:Float64Array.of(1000,2000).buffer})
+      runtime.viewer.renderBinaryFrame()
+      expect(runtime.viewer.getFormulas()).toEqual(['x * 3.3 / 4095',''])
+      expect(runtime.probe.fields().adc.ringBuf.latest().y).toBe(4095)
+      expect(runtime.probe.fields().adc.color).toBe('#00aaff')
+      const panels = runtime.probe.panelLayout().panes
+      expect(panels.find((p:any)=>p.id==='split').range.yMax).toBeCloseTo(3.63)
+      const merge=document.querySelector<HTMLButtonElement>('.workspace-merge')!
+      expect(merge).not.toBeNull()
+      runtime.viewer.renderBinaryFrame()
+      expect(document.querySelector('.workspace-merge')).toBe(merge)
+      const callback=vi.fn()
+      window.addEventListener('mklink:workspace-merge',callback,{once:true})
+      merge.click()
+      expect(callback.mock.calls[0][0].detail.group).toBe('split')
+    } finally { runtime.cleanup(); delete (window as any).__MKLINK_WATCH_WORKSPACE__ }
+  })
+
 })

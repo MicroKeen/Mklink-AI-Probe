@@ -245,14 +245,15 @@ class RuntimeControl:
             raise HTTPException(409, 'Symbols changed; reconnect explicitly before reading the new target layout')
         return session
 
-    def require_symbol_change(self):
+    def require_symbol_change(self, *, stop_acquisition=False):
         from mklink.remote.dashboards import active_bridge_dashboards
         self.prune()
-        self.require_identity()
-        if self.target_sessions:
+        if not stop_acquisition:
+            self.require_identity()
+        if self.target_sessions and not stop_acquisition:
             raise HTTPException(409, 'Detach shared clients before changing symbols')
         active = active_bridge_dashboards()
-        if active:
+        if active and not stop_acquisition:
             raise HTTPException(409, {'busy': active, 'hint': 'Stop acquisition explicitly before changing symbols'})
 
     async def run_operation(self, name, operation, *, session_id=None, configuration=False, online_stop=False):
@@ -295,7 +296,7 @@ class RuntimeControl:
         if configuration:
             if self.attach_lock.locked():
                 raise HTTPException(409, 'Wait for the attaching client before changing symbols')
-            self.require_symbol_change()
+            self.require_symbol_change(stop_acquisition=name in {'/api/device/parse-axf', '/api/symbols/reparse', '/api/symbols/reload-sources'})
         session = self.validate_session(session_id) if session_id else None
         async with self.operation_lock:
             started = time.monotonic()
@@ -473,7 +474,8 @@ class RuntimeGate:
             return await reject(409, 'An exclusive job is active; inspect its result before further hardware operations')
         from mklink.probes import select_probe
         from mklink.runtime import RuntimeErrorResponse
-        if (path.startswith(('/api/device/', '/api/dash/', '/api/probe/')) or path == '/api/mcu-detect') and not path.endswith(('/stop', '/disconnect')) and path != '/api/probe/firmware-upgrade':
+        local_symbols = path in {'/api/device/parse-axf', '/api/dash/superwatch/add', '/api/dash/superwatch/remove', '/api/dash/superwatch/workspace'}
+        if (path.startswith(('/api/device/', '/api/dash/', '/api/probe/')) or path == '/api/mcu-detect') and not path.endswith(('/stop', '/disconnect')) and path != '/api/probe/firmware-upgrade' and not local_symbols:
             try:
                 c.require_identity(reconnect=path == '/api/device/connect')
             except HTTPException as exc:
@@ -530,7 +532,7 @@ class RuntimeGate:
         if path == '/api/dash/superwatch/peripherals/select' and (
                 c.attach_lock.locked() or any(key != session_id for key in c.target_sessions)):
             return await reject(409, 'Detach other shared clients before changing the peripheral catalog')
-        if path in {"/api/symbols/reparse", "/api/symbols/c-layout",
+        if path in {"/api/symbols/c-layout",
                     "/api/device/reboot", "/api/probe/firmware-upgrade"} and (c.target_sessions or c.attach_lock.locked()):
             return await reject(409, {
                 'reason': 'shared_clients_attached',
@@ -557,7 +559,7 @@ class RuntimeGate:
         if path in {f"/api/dash/{name}/start" for name in BRIDGE_DASHBOARD_TYPES}:
             if active and not (mux_active and path in {'/api/dash/rtt/start', '/api/dash/superwatch/start'}):
                 return await reject(409, "A CDC acquisition is already running; subscribe to its cached data or stop it explicitly")
-        if (path.startswith(("/api/device/", "/api/probe/")) and path not in {"/api/device/connect", "/api/device/flash"}) or path in {'/api/dash/superwatch/inspect', '/api/mcu-detect'}:
+        if (path.startswith(("/api/device/", "/api/probe/")) and path not in {"/api/device/connect", "/api/device/flash", "/api/device/parse-axf"}) or path in {'/api/dash/superwatch/inspect', '/api/mcu-detect'}:
             sharing_reset = path == '/api/device/reset' and capture_reset_supported(c.app.state.mklink_state, active)
             if active and not ((mux_active and path in MUX_MEMORY_PATHS) or sharing_reset):
                 if path == '/api/device/reset':
@@ -581,7 +583,7 @@ class RuntimeGate:
             return await self.app(scope, receive, observe)
         try:
             await c.run_operation(path, operation, session_id=session_id,
-                                  configuration=path in {'/api/device/parse-axf', '/api/symbols/reparse', '/api/symbols/c-layout'},
+                                  configuration=path in {'/api/device/parse-axf', '/api/symbols/reparse', '/api/symbols/reload-sources', '/api/symbols/c-layout'},
                                   online_stop=online_stop)
         except HTTPException as exc:
             return await reject(exc.status_code, exc.detail)

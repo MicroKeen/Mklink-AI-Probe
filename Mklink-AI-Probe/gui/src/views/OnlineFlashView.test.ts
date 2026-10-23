@@ -127,9 +127,9 @@ describe('online flash navigation and workspace', () => {
     })
 
     const labels = wrapper.findAll('.nav-tab').map(tab => tab.text())
-    expect(labels).toEqual(['配置', '仪表盘', '脱机烧录', '在线烧录', '远程服务'])
+    expect(labels).toEqual(['配置', '仪表盘', '在线烧录', '脱机烧录', '远程服务'])
 
-    await wrapper.findAll('.nav-tab')[2].trigger('click')
+    await wrapper.findAll('.nav-tab')[3].trigger('click')
     await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('offline-flash'))
     wrapper.unmount()
   })

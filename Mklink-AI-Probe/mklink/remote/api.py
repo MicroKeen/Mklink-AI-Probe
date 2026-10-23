@@ -994,10 +994,12 @@ def create_app(
     ) -> dict:
         runtime = getattr(app.state, 'shared_runtime', None)
         if runtime is not None and not automatic:
-            runtime.require_symbol_change()
-        device = _state.get("device")
-        if not device or not device.connected:
-            raise HTTPException(status_code=400, detail="Device not connected")
+            runtime.require_symbol_change(stop_acquisition=True)
+        device = _state.get("device") or _state.get("symbol_device")
+        if device is None:
+            from mklink.device import Device
+            device = Device(project_root=_state['project_root'])
+            _state['symbol_device'] = device
 
         manager = get_managers()["superwatch"]
         try:
@@ -1023,7 +1025,7 @@ def create_app(
                 result = await run_in_threadpool(
                     device.parse_axf, axf, elf_backend=elf_backend
                 )
-                if manager._runtime is not None and not result.get("error"):
+                if not result.get("error") and getattr(device, "symbol_catalog", None) is not None:
                     await run_in_threadpool(manager.prepare, device)
         except SuperWatchTransactionError as exc:
             raise HTTPException(status_code=409, detail=exc.to_detail()) from exc
@@ -1042,6 +1044,25 @@ def create_app(
                 },
             )
         return result
+
+    async def _load_symbol_file(axf=None, elf_backend=None, *, error_status=500):
+        # Explicit file loading owns admission and drains capture workers before
+        # rebinding addresses. It never resumes acquisition on the new layout.
+        runtime = getattr(app.state, 'shared_runtime', None)
+        if runtime is not None:
+            if runtime.attach_lock.locked():
+                raise HTTPException(409, 'Wait for the attaching client before changing symbols')
+            runtime.require_symbol_change(stop_acquisition=True)
+        async with _dashboard_start_lock(_state):
+            async with _async_target_lock():
+                from mklink.remote.dashboards import BRIDGE_DASHBOARD_TYPES
+                for name in BRIDGE_DASHBOARD_TYPES:
+                    manager = get_managers()[name]
+                    if _dashboard_worker_alive(manager):
+                        await run_in_threadpool(stop_dashboard_manager, _state, name, manager)
+                        if _dashboard_worker_alive(manager):
+                            raise DashboardStopPending(name)
+                return await _reparse_active_symbols(axf, elf_backend, error_status=error_status)
 
     online_flash = online_flash_api.create_default_online_flash_services(
         _state["resource_manager"],
@@ -1098,8 +1119,8 @@ def create_app(
 
     async def check_file_sources(*, apply: bool = False, admitted: bool = False, background: bool = False,
                                  source_path: str | None = None, expected_axf: str | None = None):
-        device = _state.get("device")
-        if device is None or not device.connected:
+        device = _state.get("device") or _state.get("symbol_device")
+        if device is None:
             if source_path:
                 raise HTTPException(409, 'Connect the target before reloading symbols')
             return
@@ -1128,7 +1149,7 @@ def create_app(
         if source_path:
             from mklink.file_content import source_fingerprint
             pending[source_path] = await run_in_threadpool(source_fingerprint, source_path)
-        if not pending or device is not _state.get("device"):
+        if not pending or device is not (_state.get("device") or _state.get("symbol_device")):
             return
         if background and not apply and not source_monitor.settled(pending):
             return
@@ -1160,77 +1181,18 @@ def create_app(
             return
 
         async def reload_sources():
-            from contextlib import AsyncExitStack
-            from mklink.remote.dashboards import active_bridge_dashboards
-            from mklink.project_config import ensure_rtt_config_updated
-            async with AsyncExitStack() as stack:
-                # Admission serializes target operations; attachment must also
-                # finish before publishing a new symbol identity. Existing SDK
-                # sessions remain stale and cannot write through the new layout.
-                if runtime is not None:
-                    if runtime.attach_lock.locked():
-                        raise HTTPException(409, 'A client is attaching')
-                    await stack.enter_async_context(runtime.attach_lock)
-                    runtime.require_identity()
-                await stack.enter_async_context(_dashboard_start_lock(_state))
-                await stack.enter_async_context(_async_target_lock())
-                if device is not _state.get('device') or not device.connected:
-                    raise HTTPException(409, 'The target connection changed')
-                if source_path and not expected_source_active():
-                    raise HTTPException(409, 'The active symbol source changed')
-                if set(active_bridge_dashboards()) - {'rtt', 'superwatch'}:
-                    raise HTTPException(409, 'Another target capture is active')
-                event['state'] = 'reloading'
-                manager = get_managers()['rtt']
-                watch_manager = get_managers()['superwatch']
-                for name, capture in (('rtt', manager), ('superwatch', watch_manager)):
-                    if capture.running and name not in reload_captures:
-                        paused = capture.paused if name == 'rtt' else not capture._collecting.is_set()
-                        reload_captures[name] = (getattr(capture, '_explicit_stop_version', 0), paused)
-                def resume_requested(name, capture):
-                    saved = reload_captures.get(name)
-                    return bool(saved and saved[0] == getattr(capture, '_explicit_stop_version', 0))
-                previous_rtt = manager.get_status()
-                config = await run_in_threadpool(
-                    ensure_rtt_config_updated, _state['project_root'],
-                    source_path=source_path or getattr(device, '_axf', None), persist=False)
-                address = (config or {}).get('rtt_addr')
-                from mklink.project_config import load_rtt_config
-                old_address = (previous_rtt.get('control_block_addr')
-                               or manager.restart_options().get('addr')
-                               or (load_rtt_config(_state['project_root']) or {}).get('rtt_addr'))
-                address_changed = bool(old_address) and (
-                    not address or int(address, 0) != int(old_address, 0))
-                catalog = getattr(device, 'symbol_catalog', None)
-                restart = None
-                if ((address_changed and previous_rtt['running']) or
-                        (apply and not previous_rtt['running'] and resume_requested('rtt', manager))):
-                    options = {**manager.restart_options(), 'addr': address, 'mode': 0, 'search_size': 0}
-                    restart = lambda: manager.start(device, **options)
-                    # Retain ownership/subscriptions during this automatic
-                    # transition, and wait for the old worker before rebinding.
-                    await run_in_threadpool(stop_dashboard_manager, _state, 'rtt', manager)
-                if source_path or getattr(device, '_axf', None):
-                    catalog = getattr(device, 'symbol_catalog', None)
-                    if source_path or catalog is None or await run_in_threadpool(catalog.is_stale):
-                        result = await _reparse_active_symbols(axf=source_path, automatic=True)
-                        event['rebind'] = result.get('rebind', {})
-                        event['symbols_reloaded'] = True
-                await run_in_threadpool(ensure_rtt_config_updated, _state['project_root'],
-                                        source_path=source_path or getattr(device, '_axf', None))
-                if restart is not None:
-                    if not address:
-                        raise ValueError('RTT symbol is absent from the rebuilt firmware')
-                    await _start_dashboard_manager_transaction(_state, 'rtt', manager, restart)
-                if apply and not watch_manager.running and resume_requested('superwatch', watch_manager):
-                    await _start_dashboard_manager_transaction(_state, 'superwatch', watch_manager,
-                                                              lambda: watch_manager.start(device))
-                    if reload_captures['superwatch'][1]:
-                        watch_manager.pause()
-                event.update(axf_path=getattr(device, '_axf', None), rtt_addr=address, rtt_changed=address_changed,
-                             rtt_restarted=restart is not None, pending=False, state='applied')
-                source_monitor.acknowledge(device, pending)
-                reload_captures.clear()
+            if runtime is not None and runtime.attach_lock.locked():
+                raise HTTPException(409, 'A client is attaching')
+            if device is not (_state.get('device') or _state.get('symbol_device')):
+                raise HTTPException(409, 'The symbol context changed')
+            if source_path and not expected_source_active():
+                raise HTTPException(409, 'The active symbol source changed')
+            event['state'] = 'reloading'
+            result = await _load_symbol_file(source_path)
+            event.update(axf_path=result.get('axf_path'), rebind=result.get('rebind', {}),
+                         symbols_reloaded=True, rtt_restarted=False, pending=False, state='applied')
+            source_monitor.acknowledge(device, pending)
+            reload_captures.clear()
 
         try:
             runtime = getattr(app.state, 'shared_runtime', None)
@@ -1246,7 +1208,7 @@ def create_app(
         except Exception as error:
             event.update(state='failed', error=str(error))
             logger.warning("File source reload failed: %s", error)
-        if device is not _state.get('device'):
+        if device is not (_state.get('device') or _state.get('symbol_device')):
             return
         if new_content or previous.get('state') != event.get('state'):
             event['sequence'] = time.time_ns()
@@ -1258,11 +1220,17 @@ def create_app(
 
     @app.post('/api/symbols/reload-sources')
     async def reload_file_sources(source_path: str | None = None, expected_axf: str | None = None):
-        # Runtime middleware already holds operation admission for this route.
-        await check_file_sources(apply=True, admitted=True, source_path=source_path, expected_axf=expected_axf)
-        event = _state.get('file_source_change') or {}
-        if event.get('state') in {'failed', 'deferred'}:
-            raise HTTPException(409, event.get('error') or 'Another operation is active; retry after it finishes')
+        device = _state.get('device') or _state.get('symbol_device')
+        if source_path and not _same_file_source_path(expected_axf, getattr(device, '_axf', None)):
+            raise HTTPException(409, 'The active symbol source changed; select it again before reloading')
+        result = await _load_symbol_file(source_path)
+        device = _state.get('device') or _state.get('symbol_device')
+        source_monitor.acknowledge(device, dict(source_monitor.pending))
+        reload_captures.clear()
+        event = {'sequence': time.time_ns(), 'state': 'applied', 'pending': False,
+                 'symbols_reloaded': True, 'axf_path': result.get('axf_path'),
+                 'rebind': result.get('rebind', {}), 'rtt_restarted': False}
+        _state['file_source_change'] = event
         return event
 
     async def monitor_file_sources():
@@ -1930,6 +1898,7 @@ def create_app(
                 if device:
                     remember_device_connection(_state, device)
                     await run_in_threadpool(device.close)
+                    _state['symbol_device'] = device
                     _state["device"] = None
                     _state["dispatcher"] = None
                 return {"status": "disconnected", "stopped": stopped}
@@ -1942,6 +1911,16 @@ def create_app(
             old = dashboard_managers[name]
             old._bridge.stop()
             manager = type(old)()
+            if name == 'superwatch' and _state.get('symbol_device') is not None:
+                # Carry names/catalog only, never old samples or a live session.
+                manager.prepare(_state['symbol_device'])
+                if old._runtime is not None:
+                    for item in old._runtime.items:
+                        if getattr(item, 'source', 'ram') == 'ram':
+                            manager.add_watch(item.name)
+                if old._array_snapshot is not None:
+                    snapshot = old._array_snapshot
+                    manager.select_array_snapshot(snapshot['name'], start_index=snapshot['start_index'], count=snapshot['count'])
             dashboard_managers[name] = manager
             stream_registry[name] = StreamHub(stream_api.MAX_BATCHES_PER_CLIENT)
             manager.set_stream_hub(stream_registry[name])
@@ -1996,6 +1975,9 @@ def create_app(
             if runtime.target_sessions and current and current.connected and not port_changed and any(value is not None for value in (axf, mcu, elf_backend)):
                 raise HTTPException(status_code=409, detail="Detach shared clients before changing device configuration or symbols")
         preferred_port = None
+        symbol_device = _state.get('device') or _state.get('symbol_device')
+        if axf is None and symbol_device is not None and not symbol_device.connected:
+            axf = getattr(symbol_device, '_axf', None)
         if restore_last:
             previous = _state.get("last_device_connection") or {}
             if port is None:
@@ -2132,7 +2114,8 @@ def create_app(
     @app.get("/api/device/status")
     async def device_status():
         if not _state["device"]:
-            return {"connected": False, "state": "disconnected", "axf": {"loaded": False},
+            symbols = _state.get('symbol_device')
+            return {"connected": False, "state": "disconnected", "axf": symbols.axf_status if symbols else {"loaded": False},
                     "device_generation": _state.get('device_generation', 0)}
         dev = _state["device"]
         return {
@@ -2299,8 +2282,7 @@ def create_app(
         elf_backend: str | None = Body(default=None, embed=True),
     ):
         """手动触发 AXF/ELF 符号表解析。"""
-        async with _exclusive_probe_control("reload-symbol-source"):
-            return await _reparse_active_symbols(axf, elf_backend)
+        return await _load_symbol_file(axf, elf_backend)
 
     @app.post("/api/device/flash")
     async def flash_device(body: dict = Body(...)):
@@ -3982,7 +3964,7 @@ def create_app(
     # ===================================================================
 
     def _require_symbol_catalog():
-        device = _state.get("device")
+        device = _state.get("device") or _state.get('symbol_device')
         if not device:
             raise HTTPException(status_code=400, detail="No device instance")
         catalog = getattr(device, "symbol_catalog", None)
@@ -4046,7 +4028,7 @@ def create_app(
 
     @app.post("/api/symbols/reparse")
     async def symbols_reparse():
-        result = await _reparse_active_symbols(error_status=422)
+        result = await _load_symbol_file(error_status=422)
         return result.get("rebind", result)
 
     @app.post("/api/symbols/c-layout")

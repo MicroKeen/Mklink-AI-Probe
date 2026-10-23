@@ -4,6 +4,35 @@ import SelectedSignals from './SelectedSignals.vue'
 import { useWatchWorkspace } from '../../composables/useWatchWorkspace'
 
 afterEach(() => vi.unstubAllGlobals())
+it('configures a formula and individual color and merges a separated group without changing samples', async () => {
+  let workspace:any={version:2,defaultGroup:'main',groups:[{id:'main',name:'波形',height:240},{id:'adc',name:'分离',height:200}],panes:[{id:'main'},{id:'adc'}],signals:{adc:{group:'adc',pane:'adc'}}}
+  const request=vi.fn(async (_url:any,init?:RequestInit) => {
+    if(init) workspace=JSON.parse(String(init.body)).workspace
+    return {ok:true,json:async()=>({workspace:structuredClone(workspace),revision:'revision'})}
+  })
+  vi.stubGlobal('fetch', request)
+  const values={adc:4095}
+  const wrapper=mount(SelectedSignals,{props:{paths:['adc'],values}})
+  await flushPromises()
+  await wrapper.get('[aria-label="曲线设置 adc"]').trigger('click')
+  await wrapper.get('[aria-label="计算公式"]').setValue('x * 3.3 / 4095')
+  await wrapper.get('[aria-label="曲线颜色"]').setValue('#00aaff')
+  await wrapper.get('.curve-settings button').trigger('click'); await flushPromises()
+  expect(workspace.signals.adc).toMatchObject({formula:'x * 3.3 / 4095',color:'#00aaff'})
+  expect(wrapper.find('.converted-value').text()).toContain('3.300000')
+  expect(wrapper.find('.converted-value').text()).toContain('4095')
+  await wrapper.get('[aria-label="合并 分离"]').trigger('click'); await flushPromises()
+  expect(workspace.groups).toHaveLength(1)
+  expect(workspace.signals.adc).toMatchObject({group:'main',pane:'main',formula:'x * 3.3 / 4095',color:'#00aaff'})
+  await wrapper.get('[aria-label="曲线设置 adc"]').trigger('click')
+  await wrapper.get('[aria-label="计算公式"]').setValue('window.alert(x)')
+  await wrapper.get('.curve-settings button').trigger('click'); await flushPromises()
+  expect(wrapper.find('[role=alert]').exists()).toBe(true)
+  expect(workspace.signals.adc.formula).toBe('x * 3.3 / 4095')
+  expect(values).toEqual({adc:4095})
+  expect(request.mock.calls.every(([url])=>String(url).endsWith('/workspace'))).toBe(true)
+  wrapper.unmount()
+})
 it('persists Chinese aliases and folding/assignments without acquisition calls', async () => {
   let revision=0
   let workspace:any={version:2,groups:[{id:'motor',name:'电机',collapsed:false,height:200},{id:'c',name:'电压',collapsed:false,height:200}],panes:[{id:'a',name:'速度',height:200},{id:'b',name:'电流',height:200},{id:'c',name:'电压',height:200}],signals:{rpm:{alias:'目标转速',group:'motor',pane:'a',emphasis:false}}}

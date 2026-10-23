@@ -44,6 +44,7 @@ def test_background_linker_replacement_is_silent_and_recovers_after_persistent_e
 
     monkeypatch.setattr('mklink.project_config.ensure_rtt_config_updated', config)
     monkeypatch.setattr(device, 'parse_axf', parse)
+    device.reparse_axf_atomically = lambda *a, **kw: (parse(*a, **kw), device.symbol_catalog)[1]
 
     def poll(at):
         now[0] = at
@@ -80,7 +81,7 @@ def test_background_linker_replacement_is_silent_and_recovers_after_persistent_e
 
 
 @pytest.mark.parametrize('address', ['0x20000020', '0x20000040', None])
-def test_live_rtt_restarts_only_for_changed_address_and_retains_subscribers(source, monkeypatch, address):
+def test_explicit_reload_stops_rtt_for_any_address_and_retains_subscribers(source, monkeypatch, address):
     app, device, axf, control = source
     rtt = dashboards.get_managers()['rtt']
     rtt._running = True
@@ -114,27 +115,16 @@ def test_live_rtt_restarts_only_for_changed_address_and_retains_subscribers(sour
     assert actions == []
     response = TestClient(app, base_url='http://127.0.0.1:8765',
                           headers={'X-Auth-Token': 'fixture'}).post('/api/symbols/reload-sources')
-    assert response.status_code == (409 if address is None else 200), response.text
+    assert response.status_code == 200, response.text
     event = app.state.mklink_state['file_source_change']
-    if address is None:
-        assert actions == ['stop', 'parse'] and event['state'] == 'failed'
-        assert not rtt.running
-    elif address == '0x20000020':
-        assert actions == ['parse'] and event['state'] == 'applied'
-        assert not event['rtt_changed'] and not event['rtt_restarted']
-        assert rtt.running
-    else:
-        assert actions == ['stop', 'parse', 'start'] and event['rtt_restarted']
-        assert rtt.running
-        actions.clear()
-        rtt._restart_after_operation()
-        assert actions == ['start']  # Later flash restoration uses the new address.
+    assert actions == ['stop', 'parse'] and event['state'] == 'applied'
+    assert not rtt.running and not event['rtt_restarted']
     assert control.created_streams['rtt'] == 'reader'
     assert control.sessions['reader'].streams == {'rtt'}
 
 
 @pytest.mark.parametrize('cancel', [False, True])
-def test_reload_restores_invalidated_capture_but_respects_explicit_stop(source, monkeypatch, cancel):
+def test_reload_keeps_invalidated_or_explicitly_stopped_capture_stopped(source, monkeypatch, cancel):
     app, device, axf, control = source
     rtt = dashboards.get_managers()['rtt']
     rtt._running = True
@@ -161,14 +151,11 @@ def test_reload_restores_invalidated_capture_but_respects_explicit_stop(source, 
         rtt._start_info = {}
     asyncio.run(app.state.check_file_sources(apply=True))
     assert app.state.mklink_state['file_source_change']['state'] == 'applied'
-    if cancel:
-        start.assert_not_called()
-    else:
-        start.assert_called_once_with(device, addr='0x20000040', all_channels=True, encoding='utf-8', mode=0, search_size=0)
+    start.assert_not_called()
 
 
 @pytest.mark.parametrize('paused', [False, True])
-def test_monitor_rebinds_superwatch_addresses_removes_renamed_items_and_restores_pause(source, monkeypatch, paused):
+def test_reload_rebinds_superwatch_addresses_removes_renamed_items_and_stays_stopped(source, monkeypatch, paused):
     app, device, axf, control = source
     manager = dashboards.get_managers()['superwatch']
     manager._runtime = SuperWatchRuntime(
@@ -215,9 +202,9 @@ def test_monitor_rebinds_superwatch_addresses_removes_renamed_items_and_restores
     assert app.state.mklink_state['file_source_change']['state'] == 'awaiting-reload'
     assert actions == [] and manager._runtime.items[0].address == 0x20000010
     asyncio.run(app.state.check_file_sources(apply=True))
-    assert actions == ['stop', 'parse', 'start']
+    assert actions == ['stop', 'parse']
     assert [(item.name, item.address) for item in manager._runtime.items] == [('gain', 0x20000040)]
-    assert manager.running and manager._collecting.is_set() == (not paused)
+    assert not manager.running and not manager._collecting.is_set()
     event = app.state.mklink_state['file_source_change']
     assert event['state'] == 'applied' and event['symbols_reloaded']
     assert event['rebind']['removed'] == ['removed']
@@ -239,8 +226,7 @@ def test_timestamp_only_rebuild_requires_manual_reload_without_preview(source, m
     parse.assert_not_called()
 
 
-@pytest.mark.parametrize('fail_after_parse', [False, True])
-def test_explicit_browser_snapshot_reload_uses_shared_transaction(source, monkeypatch, fail_after_parse):
+def test_explicit_browser_snapshot_reload_uses_shared_transaction(source, monkeypatch):
     app, device, axf, control = source
     uploaded = axf.with_name('new-upload.axf')
     uploaded.write_bytes(b'uploaded rebuilt firmware')
@@ -255,8 +241,6 @@ def test_explicit_browser_snapshot_reload_uses_shared_transaction(source, monkey
 
     def config(*args, **kwargs):
         configs.append(kwargs['source_path'])
-        if fail_after_parse and len(configs) == 2:
-            raise OSError('configuration storage temporarily unavailable')
         return {'rtt_addr': '0x20000040'}
 
     monkeypatch.setattr(device, 'parse_axf', parse)
@@ -266,15 +250,11 @@ def test_explicit_browser_snapshot_reload_uses_shared_transaction(source, monkey
     client = TestClient(app, base_url='http://127.0.0.1:8765', headers={'X-Auth-Token': 'fixture'})
     result = client.post('/api/symbols/reload-sources', params={
         'source_path': str(uploaded), 'expected_axf': str(axf)})
-    if fail_after_parse:
-        assert result.status_code == 409 and device._axf == str(uploaded)
-        result = client.post('/api/symbols/reload-sources', params={
-            'source_path': str(uploaded), 'expected_axf': str(axf)})
     assert result.status_code == 200, result.text
     assert result.json()['state'] == 'applied'
     assert result.json()['axf_path'] == str(uploaded)
-    attempts = 2 if fail_after_parse else 1
-    assert parses == [str(uploaded)] * attempts and configs == [str(uploaded)] * (attempts * 2)
+    attempts = 1
+    assert parses == [str(uploaded)] * attempts and configs == []
     assert device.symbol_catalog.generation == 2
     # A stale browser must not replace a source activated by another client.
     result = client.post('/api/symbols/reload-sources', params={
@@ -283,10 +263,12 @@ def test_explicit_browser_snapshot_reload_uses_shared_transaction(source, monkey
     assert parses == [str(uploaded)] * attempts
 
 
-def test_browser_snapshot_reload_requires_connected_target(source):
+def test_browser_snapshot_reload_accepts_disconnected_target(source):
     app, device, axf, control = source
     device.connected = False
+    device.axf_status = {'loaded': True, 'axf_path': str(axf)}
+    device.parse_axf = lambda *a, **kw: device.axf_status
     client = TestClient(app, base_url='http://127.0.0.1:8765', headers={'X-Auth-Token': 'fixture'})
     result = client.post('/api/symbols/reload-sources', params={
         'source_path': str(axf), 'expected_axf': str(axf)})
-    assert result.status_code == 409
+    assert result.status_code == 200, result.text

@@ -13,7 +13,7 @@ def test_workspace_roundtrip_and_isolation(tmp_path):
     workspace['signals']={'motor.rpm':{'alias':'转速','emphasis':True,'group':'motor','pane':'current','address':1234}}
     saved=save_workspace(root,workspace,initial['revision'])
     assert load_workspace(root)==saved
-    assert saved['workspace']['signals']['motor.rpm']=={'alias':'转速','emphasis':True,'group':'motor','pane':'motor','renderMode':'line'}
+    assert saved['workspace']['signals']['motor.rpm']=={'alias':'转速','emphasis':True,'group':'motor','pane':'motor','renderMode':'line','formula':'','color':''}
     assert load_workspace(str(tmp_path/'two'))['workspace']['signals']=={}
     with pytest.raises(PreferencesConflict): save_workspace(root,workspace,initial['revision'])
 
@@ -114,3 +114,12 @@ def test_empty_group_names_get_readable_defaults():
     state=normalize_workspace({'version':2,'groups':[{'id':'a','name':'   '},{'id':'b','name':''}]})
     assert [g['name'] for g in state['groups']]==['分组 1','分组 2']
     assert [p['name'] for p in state['panes']]==['分组 1','分组 2']
+
+
+def test_formula_and_color_persist_and_reject_invalid_color(tmp_path):
+    state=load_workspace(str(tmp_path))
+    state['workspace']['signals']={'adc': {'formula': 'x * 3.3 / 4095', 'color': '#00aaff'}}
+    saved=save_workspace(str(tmp_path), state['workspace'], state['revision'])
+    assert load_workspace(str(tmp_path))['workspace']['signals']['adc']['formula'] == 'x * 3.3 / 4095'
+    saved['workspace']['signals']['adc']['color']='red;bad'
+    with pytest.raises(ValueError): save_workspace(str(tmp_path),saved['workspace'],saved['revision'])

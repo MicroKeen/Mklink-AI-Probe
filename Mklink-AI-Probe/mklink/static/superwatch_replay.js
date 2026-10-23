@@ -33,7 +33,8 @@ export function mountReplayButton(host, options = {}) {
     inFlight = ++requestId; pending = false;
     requestedRevision = viewRevision;
     worker.postMessage({ type: 'range', id: inFlight, start: range.start / 1000, end: range.end / 1000,
-      position, playing, width: range.pixelWidth, names: metadata.channels.map(c => c.name) });
+      position, playing, width: range.pixelWidth, names: metadata.channels.map(c => c.name),
+      formulas: Object.fromEntries(metadata.channels.map((c, index) => [c.name, viewer()?.getFormulas?.()[index] || ''])) });
   }
   function paint(follow = true) { viewer()?.setReplayPosition?.(position, playing, follow); update(); request(); }
   function pause() { playing = false; cancelAnimationFrame(frame); frame = 0; }

@@ -13,6 +13,7 @@ export const releaseHistory: ReleaseHistoryEntry[] = [
     summary: '新增 ISP 烧录，优化终端与日志',
     summaryEn: 'Add ISP programming and improve terminal and logs',
     changes: [
+      'SuperWatch 支持离线加载、重载自动停止采集，断开保留变量选择；新增公式、曲线颜色和快捷合并。',
       '优化 HPM JTAG 连续烧录的换板检测；单次烧录隐藏等待时间。',
       '修复刚连接时 RTT 自动搜索失败，改善 RTT 与 SuperWatch 启动顺序兼容性。',
       '修复内外 Flash 合并 HEX 的组合烧录。',
@@ -25,6 +26,7 @@ export const releaseHistory: ReleaseHistoryEntry[] = [
       'RTT 终端跳过收发解析；SuperWatch 日志可提前开启并选择系统文件夹。',
     ],
     changesEn: [
+      'SuperWatch supports offline loading, stops capture on reload and retains selections on disconnect; adds formulas, curve colors and quick merge.',
       'Improve HPM JTAG board replacement detection; hide the wait setting for a single run.',
       'Fix RTT auto-discovery after connecting and improve RTT/SuperWatch startup-order compatibility.',
       'Fix combined HEX programming across internal and external Flash.',

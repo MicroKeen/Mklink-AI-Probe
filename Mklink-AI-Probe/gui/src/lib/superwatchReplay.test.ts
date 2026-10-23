@@ -10,6 +10,13 @@ function parse(text: string) {
 }
 
 describe('SuperWatch file replay', () => {
+  it('keeps the raw samples at extrema of the converted curve during decimation', () => {
+    const data = parse('timestamp,a\n0,-3\n1,-1\n2,0\n3,2\n')
+    const range = replayRange(data, 0, 3, 3, 1, ['a'], false, { a: 'x^2' })
+    expect(range.channels[0].points).toContainEqual([2, 0])
+    expect(range.channels[0].points).toContainEqual([0, -3])
+    expect([...data.channels[0].values]).toEqual([-3, -1, 0, 2])
+  })
   it('lets the original paused chart inspect later history while playback clips at its timestamp', () => {
     const data = parse('timestamp,a\n0,1\n5,99\n10,3\n')
     expect(replayRange(data, 4, 10, 1, 800, ['a'], false).channels[0].points).toEqual([[5, 99], [10, 3]])
