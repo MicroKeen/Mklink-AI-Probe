@@ -4,6 +4,9 @@ import sys
 import site
 import subprocess
 
+from mklink.startup_timing import mark
+mark("python_entry")
+
 from mklink.internal_process import dispatch_internal_process
 
 _internal_result = dispatch_internal_process(sys.argv[1:])
@@ -70,5 +73,6 @@ if _base_dir not in sys.path:
 
 # 保存原工作目录，cli main() 内部会自行切换到项目目录
 from mklink.cli import main
+mark("cli_imported")
 
 raise SystemExit(main())

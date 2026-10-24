@@ -52,3 +52,24 @@ def test_runtime_spawn_does_not_depend_on_launchers_temporary_directory(tmp_path
     else:
         assert Path(options["cwd"]) == Path(runtime.__file__).resolve().parent.parent
         assert command[1:3] == ["-m", "mklink"]
+
+
+def test_new_unbound_window_does_not_enumerate_usb(tmp_path, monkeypatch):
+    monkeypatch.setenv('MKLINK_RUNTIME_DIR', str(tmp_path / 'runtime'))
+    monkeypatch.setattr(probes, 'select_probe', lambda *a, **kw: pytest.fail('Unbound window enumerated USB'))
+    info = {'probe_id': 'lobby', 'port': 8765}
+    spawned = []
+    monkeypatch.setattr(runtime, 'discover', lambda _: info if spawned else None)
+    monkeypatch.setattr(runtime.subprocess, 'Popen', lambda command, **kw: spawned.append(command))
+    assert runtime.ensure_runtime(new_window=True, allow_lobby=True) == info
+    assert spawned[0][spawned[0].index('--probe-id') + 1] == 'lobby'
+
+
+def test_explicit_new_window_selector_still_checks_identity(monkeypatch):
+    def select(*a, **kw):
+        raise runtime.RuntimeErrorResponse('Probe selector is missing or ambiguous')
+    monkeypatch.setattr(probes, 'select_probe', select)
+    with pytest.raises(runtime.RuntimeErrorResponse, match='ambiguous'):
+        runtime.ensure_runtime(new_window=True, probe='missing', allow_lobby=True)
+    with pytest.raises(runtime.RuntimeErrorResponse, match='ambiguous'):
+        runtime.ensure_runtime(new_window=True, allow_lobby=False)

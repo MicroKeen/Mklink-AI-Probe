@@ -161,12 +161,15 @@ def selected_runtime(selector=None) -> dict | None:
 
 def ensure_runtime(*, project_root: str = ".", port: int = 8765, probe=None, device_port=None, allow_lobby=False, new_window=False) -> dict:
     from mklink.probes import select_probe
-    selected = select_probe(probe or device_port, allow_lobby=allow_lobby)
-    probe_id = selected["probe_id"]
-    # A newly opened window gets its own backend. It starts unbound if no
-    # physical selection was explicit, without stealing another window's probe.
-    if new_window and not (probe or device_port):
+    # A new unbound window does not need USB enumeration before starting.
+    # Explicit selectors still take the normal identity/ambiguity checks.
+    if new_window and allow_lobby and not (probe or device_port):
         probe_id = 'lobby'
+    else:
+        selected = select_probe(probe or device_port, allow_lobby=allow_lobby)
+        probe_id = selected["probe_id"]
+        if new_window and not (probe or device_port):
+            probe_id = 'lobby'
     if new_window and probe_id != 'lobby' and discover(probe_id):
         raise RuntimeErrorResponse('This probe is already owned by another window; disconnect it there or open a window without a probe selection')
     runtime_id = 'local-' + secrets.token_hex(12)
@@ -220,7 +223,7 @@ def ensure_runtime(*, project_root: str = ".", port: int = 8765, probe=None, dev
                         return info
                     if process.poll() is not None:
                         raise RuntimeErrorResponse(f"Runtime startup failed; inspect {root / 'runtime.log'} and {root / 'startup.log'}")
-                    time.sleep(0.2)
+                    time.sleep(0.05)
                 raise RuntimeErrorResponse("Runtime startup timed out; do not open CDC independently")
         except RuntimeErrorResponse as exc:
             if "starting or already running" not in str(exc):
@@ -510,11 +513,14 @@ def serve_runtime(*, project_root=".", port=8765, probe_id="lobby", runtime_id=N
 
 
 def _serve_runtime(*, project_root, port, probe_id, runtime_id):
+    from mklink.startup_timing import mark
+    mark("runtime_enter")
     from mklink.probes import bind_runtime
     bind_runtime(probe_id)
     import uvicorn
     from mklink.remote.api import create_app
     from mklink.runtime_api import install_runtime
+    mark("runtime_dependencies")
     listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     if os.name == "nt":
         listener.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
@@ -529,7 +535,9 @@ def _serve_runtime(*, project_root, port, probe_id, runtime_id):
                 "probe_id": probe_id, "runtime_id": runtime_id}
         info['jobs_path'] = str(_private_dir(probe_id if probe_id != 'lobby' else runtime_id) / 'jobs.json')
         app = create_app(project_root=str(Path(project_root).resolve()), backend_port=info["port"])
+        mark("runtime_routes")
         control = install_runtime(app, info)
+        mark("runtime_control")
         from mklink.observe_bridge import configure_stream_observation
         configure_stream_observation(app, host="127.0.0.1", port=info["port"],
                                      auth_token=info["token"], private_correlation=info["instance_id"])

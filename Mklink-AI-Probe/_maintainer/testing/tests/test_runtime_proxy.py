@@ -32,7 +32,7 @@ def test_proxy_server_reuses_runtime_and_sansio_without_device_connect(tmp_path,
     import mklink
     import socket
     import uvicorn
-    from mklink.remote import api
+    from mklink import desktop_endpoint as api
     info = {'port': 8765, 'token': 'test'}
     ensure = Mock(return_value=info)
     monkeypatch.setattr(runtime, 'ensure_runtime', ensure)
