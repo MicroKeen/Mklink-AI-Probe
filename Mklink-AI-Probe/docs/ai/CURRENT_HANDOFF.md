@@ -4,12 +4,12 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-25T00:44:02+08:00`
+- 更新时间：`2026-10-25T00:46:27+08:00`
 - 分支：`codex/tencent-update-preview`
 - HEAD：`基于main 303a2667开发腾讯云独立测试更新；精确源码见Git HEAD。`
 - 远端 HEAD：`PR42/46/48/49均已合并；main 303a2667，正式release/firmware引用未变。`
 - 工作树：唯一原工作区及源码子目录保留；测试/构建证据位于F盘。
-- 当前任务：维护者已明确授权0.3.6正式发布、COS香港公开下载并保留GitHub/Gitee；已配置COS并上传四份指定固件及验证三源哈希，正式索引尚未切换。主机新增同版本构建识别、未知可重装、禁止降级和精确构建确认；5478Python/2skip，4个FLM环境包测试补配重跑中，1104GUI/生产构建及真实浏览器隔离场景通过。详见v036-cos-firmware-revisions.md。仍须最终PR合并、正式签名Windows/Skill/SiteAgent及实装、公网验证，再撤preview/通知Dot。临时SSH已当次授权启用，完成须撤销。
+- 当前任务：维护者已明确授权0.3.6正式发布、COS香港公开下载并保留GitHub/Gitee；已配置COS并上传四份指定固件及验证三源哈希，正式索引尚未切换。主机新增同版本构建识别、未知可重装、禁止降级和精确构建确认；5478Python/2skip，4个FLM环境包测试补配后所在6项全部通过，1104GUI/生产构建及真实浏览器隔离场景通过。详见v036-cos-firmware-revisions.md。仍须最终PR合并、正式签名Windows/Skill/SiteAgent及实装、公网验证，再撤preview/通知Dot。临时SSH已当次授权启用，完成须撤销。
 - 状态：`in_progress`
 
 ## 里程碑
