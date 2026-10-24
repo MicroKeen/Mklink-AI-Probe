@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-24T09:41:20.909187+08:00",
+  "updated_at": "2026-10-24T09:52:42.2046386+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
@@ -14,7 +14,7 @@
   },
   "current_session": {
     "status": "in_progress",
-    "current_task": "0.3.6发布前整合4个PR、分支清理与全功能验收进行中。新增用户反馈：Skill常用FLM不得遗漏；已确认安装Skill含F767算法，系列宏STM32F767xx缺容量，补候选诊断和旧MCP工具重启提示。79定点通过；此前5392全量通过/4打包环境错误，补资源后相关6项通过，源码变化后需重跑全量。"
+    "current_task": "0.3.6发布前整合4个PR、分支清理与全功能验收进行中。新增用户反馈：Skill常用FLM不得遗漏；已确认安装Skill含F767算法，系列宏STM32F767xx缺容量，补候选诊断和旧MCP工具重启提示。79定点通过；此前5392全量通过/4打包环境错误，补资源后相关6项通过，源码变化后需重跑全量。 用户后续明确本轮不构建Linux/macOS包，已取消在途三平台构建；仅Windows安装包与用户Skill。"
   },
   "milestones": [
     {
