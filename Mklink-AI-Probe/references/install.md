@@ -20,12 +20,24 @@ Python 环境；完整安装包含 Web GUI 与 MCP：
 ```powershell
 python -m pip install -e ".[gui,mcp]"
 python -c "import serial, pymodbus, elftools, pycparser, websockets, fastapi, starlette, uvicorn, pyocd, intelhex, multipart, fastmcp, pydantic; print('MKLink dependencies OK')"
+python -c "from pathlib import Path; import mklink; from mklink.mcu_detect import inspect_mcu; assert Path(mklink.__file__).resolve().is_relative_to(Path.cwd().resolve()), mklink.__file__; r = inspect_mcu(device='STM32F767ZIT6'); assert r.get('candidates'), r; print('Bundled FLM OK')"
 python -m mklink web-entry install --quick-launch
 ```
 
 最后一条会检查依赖和已打包的 `gui/dist`，再注册用户级 URL 启动器和 HTML 入口。
 缺依赖则修复对应环境；缺 Web assets 则重新取得完整官方包，不引导用户构建前端。
 失败时不能仅复制网页就宣称安装成功。
+
+FLM 自检无需连接硬件，也不依赖 Keil、下载器 U 盘或用户 Pack 缓存。完整发布
+包包含 `mklink/builtin_flm/manifest.json` 及其全部算法文件，并带有
+`mklink/builtin_packs`。GitHub Releases 中选择 `*-Skill.zip`；自动生成的
+`Source code` 压缩包和 Git checkout 不包含这些随发布打包的资源。自检失败时
+核对当前解释器导入的目录并重新安装完整 Skill 包，保留用户工程和配置。
+
+`STM32F767xx` 等编译宏只标识系列，不能区分 Flash 容量。使用完整料号（如
+`STM32F767ZIT6`）调用 `inspect_mcu`；返回多个算法时按实际地址和 Bank 模式选择。
+如果工具列表仍含旧名称 `detect_mcu_profile`，或该名称出现导入错误，核对
+MCP 解释器及包目录，重启该 MCP 进程后重新列出工具；当前入口为 `inspect_mcu`。
 
 快速启动页优先写入卷标 `MICROKEEN` 的下载器 U 盘，未检测到时写入用户桌面。
 报告自检与文件位置，不必立即打开 GUI。双击入口会等待本地服务健康后打开页面，
