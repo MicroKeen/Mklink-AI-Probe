@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-24T20:02:47.121359+08:00",
+  "updated_at": "2026-10-24T20:09:18.2128716+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
@@ -14,7 +14,7 @@
   },
   "current_session": {
     "status": "complete",
-    "current_task": "启动阶段优化源86f9a75d：新空窗口免多余USB枚举、代理轻量依赖、发现50ms，界面与后台并行加载，真实三阶段替代估算百分比。1097GUI/24Python/23Rust/TS-Vite通过；Windows覆盖exit0，3623文件/209Python/41Web、冻结资格和原生/Web/ZIP/正常退出通过。后台同机中位数1.516→1.441s；原生至健康2.746s与前轮基本持平，新增首屏计时2.582s。见v036-desktop-startup.md；仅本地preview，固件/线上未变。"
+    "current_task": "用户要求启动画面取消勾选及阶段文字：改为30/60/90/100进度条，按并行前置任务完成及首屏绘制推进，延迟不虚增；失败仍显示错误与重试，切换下载器提示保留。7项启动回归、TS/Vite生产构建、浏览器60%视觉预览通过，gui/dist已同步。本轮仅UI源码/Web资源，未重新打包或覆盖安装；当前实装仍为86f9a75d，既有性能与冻结资格见v036-desktop-startup.md。"
   },
   "milestones": [
     {
@@ -110,7 +110,7 @@
     "nRF54L15 GUI保护闭环、全部物理擦除/拔插/休眠/断电场景、电源外部精度校准未全部认证。VCC每次改动必须确认具体电压，HPM已锁定OTP不得重放。 已知无可靠扇区表的26个FLM禁用扇区操作；重叠算法需要匹配Bank模式。 HPM5301组18/19永久锁定的历史状态及用户字先写/组锁最后、全部固件独立校验后才写OTP等边界见docs/ai/hpm-offline-otp-handoff.md；接手重新确认芯片，其他型号不继承验收。 UART OTP已实现ROM write-memory APIv2，独立熔丝/影子/临时锁读语义仍未知并如实显示；以ROM写入状态及回读为准。配套3d96dbb已实机验证HPM5301全部128字读取和用户批准的Word69 0→1单次写入回读；其余型号/区域未实写，新数据须具体授权。多Word顺序执行不可回滚。CSV原生选择器自动化未完成。"
   ],
   "next_actions": [
-    "86f9a75d阶段优化覆盖安装及实装验收已通过，见v036-desktop-startup.md。等待V3再次掉线后先导出诊断ZIP再拔插，当前新版已安装且未连接，需用户连接并开启RTT；历史USB移除混有手动操作，根因未定。PR50待审，正式发布须明确授权，重新跑合并源码完整门禁并构建stable包，不能把preview候选当正式包；保留GitHub/Gitee，线上包及stable/release/firmware/标签未变，临时SSH已撤销。",
+    "进度条UI已完成并同步生产Web，本轮未重打包安装，当前实装仍86f9a75d（勾选版）；如需实装新UI需生成新Windows本地包并验收。86f9a75d阶段优化覆盖安装及实装验收已通过，见v036-desktop-startup.md。等待V3再次掉线后先导出诊断ZIP再拔插，当前新版已安装且未连接，需用户连接并开启RTT；历史USB移除混有手动操作，根因未定。PR50待审，正式发布须明确授权，重新跑合并源码完整门禁并构建stable包，不能把preview候选当正式包；保留GitHub/Gitee，线上包及stable/release/firmware/标签未变，临时SSH已撤销。",
     "收集客户N32WB452内外Flash组合实际烧写/回读反馈；本轮主机解析准入及安装包通过，不代替外置SPI硬件验证。不重复使用已消耗的F103单次烧录授权；不主动烧写或改OTP/供电。",
     "用户需重新生成并部署U盘脚本再测完整HPM JTAG连续烧录；旧脚本不会自动更新。实时拔插/LCD已验证，完整多板Flash/蜂鸣次数仍待实测；不重复历史一次性写入授权。",
     "HPM联合镜像/OTP历史证据保留，Word69=3；本轮使用F103，未写HPM OTP或调整VCC。其他HPM型号继续由用户测试，未知MKLINK_V2任务不得重放，勿将目标板误作下载器升级。",

@@ -15,7 +15,7 @@
       #startup-splash.is-probe-switch::before,
       #startup-splash.is-probe-switch .startup-visual,
       #startup-splash.is-probe-switch .startup-heading,
-      #startup-splash.is-probe-switch .startup-steps { display:none; }
+      #startup-splash.is-probe-switch .startup-progress { display:none; }
       .startup-visual { position:relative; width:min(440px,80vw); }
       .startup-circuit { display:block; width:100%; height:auto; overflow:visible; }
       .startup-track { fill:none; stroke:#3c4859; stroke-width:1.5; }
@@ -30,15 +30,10 @@
       .startup-heading { display:flex; align-items:baseline; justify-content:space-between; gap:16px; margin-bottom:20px; }
       .startup-brand { font-size:22px; font-weight:650; letter-spacing:-.6px; }
       .startup-brand small { font-size:12px; font-weight:400; color:#a8b4c4; letter-spacing:.02em; margin-left:8px; }
-      .startup-steps { list-style:none; padding:0; margin:0; display:grid; gap:9px; font-size:12px; color:#a8b4c4; }
-      .startup-steps li { display:flex; align-items:center; gap:10px; }
-      .startup-steps li::before { content:'○'; width:14px; text-align:center; color:#708095; }
-      .startup-steps li[data-state="active"] { color:#edf1f7; }
-      .startup-steps li[data-state="active"]::before { content:'◌'; color:#ee9677; animation:stage-spin 1s linear infinite; }
-      .startup-steps li[data-state="done"]::before { content:'✓'; color:#82c7a5; }
-      .startup-steps li[data-state="failed"]::before { content:'!'; color:#f0a28c; }
+      .startup-progress-track { height:5px; overflow:hidden; background:#303947; border-radius:4px; }
+      #startup-progress-fill { height:100%; width:30%; background:#ee9677; border-radius:inherit; transition:width 180ms ease; }
+      #startup-percent { margin-top:10px; text-align:right; font-size:12px; font-variant-numeric:tabular-nums; color:#a8b4c4; }
       #startup-retry { margin:12px auto 0; padding:6px 16px; color:#edf1f7; background:#303947; border:1px solid #8193aa; border-radius:4px; cursor:pointer; }
-      @keyframes stage-spin { to { transform:rotate(360deg); } }
       #startup-status { min-height:20px; margin:14px 0 0; color:#a8b4c4; font-size:12px; text-align:center; }
       @keyframes signal-travel { to { stroke-dashoffset:-228; } }
       @keyframes core-breathe { 50% { opacity:.15; transform:scale(1.06); } }
@@ -65,12 +60,11 @@
         <div class="startup-heading">
           <span class="startup-brand">MKLink<small>AI Probe</small></span>
         </div>
-        <ol class="startup-steps" aria-label="启动阶段">
-          <li data-step="backend" data-state="pending">建立本地服务连接</li>
-          <li data-step="modules" data-state="active">加载界面模块</li>
-          <li data-step="workspace" data-state="pending">显示工作区</li>
-        </ol>
-        <p id="startup-status">正在准备工作区…</p>
+        <div class="startup-progress" role="progressbar" aria-label="启动进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="30">
+          <div class="startup-progress-track"><div id="startup-progress-fill"></div></div>
+          <div id="startup-percent" aria-hidden="true">30%</div>
+        </div>
+        <p id="startup-status" hidden></p>
         <button id="startup-retry" hidden>重试</button>
       </div>
     </div>
@@ -79,46 +73,49 @@
         const splash = document.getElementById('startup-splash')
         const status = document.getElementById('startup-status')
         const retry = document.getElementById('startup-retry')
+        const progress = document.querySelector('.startup-progress')
+        const fill = document.getElementById('startup-progress-fill')
+        const percent = document.getElementById('startup-percent')
         const english = window.localStorage.getItem('mklink_lang') === 'en'
         const timings = { document: performance.now() }
-        const labels = english ? {
-          backend: 'Connecting to local service', modules: 'Loading interface modules', workspace: 'Opening workspace',
-        } : { backend: '建立本地服务连接', modules: '加载界面模块', workspace: '显示工作区' }
-        document.querySelector('.startup-steps').setAttribute('aria-label', english ? 'Startup stages' : '启动阶段')
-        for (const [key, label] of Object.entries(labels)) document.querySelector(`[data-step="${key}"]`).textContent = label
-        status.textContent = english ? 'Preparing workspace…' : '正在准备工作区…'
+        const states = { backend: 'pending', modules: 'pending', workspace: 'pending' }
+        const setProgress = value => {
+          progress.setAttribute('aria-valuenow', String(value))
+          fill.style.width = `${value}%`
+          percent.textContent = `${value}%`
+        }
+        progress.setAttribute('aria-label', english ? 'Startup progress' : '启动进度')
         retry.textContent = english ? 'Retry' : '重试'
         retry.addEventListener('click', () => window.location.reload())
         const locationUrl = new URL(window.location.href)
         const switching = locationUrl.searchParams.get('runtime_transition') === 'probe'
         if (switching) {
           splash.classList.add('is-probe-switch')
+          status.hidden = false
           status.textContent = window.localStorage.getItem('mklink_lang') === 'en'
             ? 'Switching probe…' : '正在切换下载器…'
           locationUrl.searchParams.delete('runtime_transition')
           history.replaceState(history.state, '', locationUrl.href)
         }
         const step = (key, state) => {
-          const row = document.querySelector(`[data-step="${key}"]`)
-          if (!row) return
-          row.dataset.state = state
+          if (!Object.hasOwn(states, key)) return
+          states[key] = state
           timings[`${key}_${state}`] = performance.now()
           document.documentElement.dataset.startupTimings = JSON.stringify(timings)
-          if (switching) return
-          if (state === 'active') status.textContent = `${labels[key]}…`
-          // A module can finish while the independent service is still starting.
-          if (document.querySelector('[data-step="backend"]').dataset.state === 'active') {
-            status.textContent = english ? 'Connecting to local service…' : '正在建立本地服务连接…'
-          }
+          // Either independent prerequisite may finish first: 30 → 60 → 90.
+          // Reserve 100 for the rendered workspace; elapsed time never advances it.
+          setProgress(30 + 30 * ['backend', 'modules'].filter(key => states[key] === 'done').length)
         }
         window.__MKLINK_STARTUP__ = {
           step, timings,
           fail() {
             splash.setAttribute('role', 'alert')
+            status.hidden = false
             status.textContent = english ? 'Unable to load the workspace. Please retry.' : '工作区加载失败，请重试。'
             retry.hidden = false
           },
           finish() {
+            if (Object.values(states).every(state => state === 'done')) setProgress(100)
             timings.ready = performance.now()
             document.documentElement.dataset.startupTimings = JSON.stringify(timings)
             splash.classList.add('is-complete')
