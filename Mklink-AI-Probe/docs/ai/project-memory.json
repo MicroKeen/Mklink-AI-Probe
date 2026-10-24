@@ -1,22 +1,27 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-25T00:46:27+08:00",
+  "updated_at": "2026-10-25T01:14:05+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
-    "branch": "codex/tencent-update-preview",
-    "head": "基于main 303a2667开发腾讯云独立测试更新；精确源码见Git HEAD。",
-    "remote_head": "PR42/46/48/49均已合并；main 303a2667，正式release/firmware引用未变。",
+    "branch": "codex/v036-readme-handoff",
+    "head": "正式源/不可变v0.3.6为d000370b901a72e4f8ec8fe09cf8b837f2579f0c；README与发布交接在后续PR，精确头见Git。",
+    "remote_head": "PR50/51已合并；四个应用索引、固件索引及GitHub/Gitee正式标签已核对。",
     "working_tree": "唯一原工作区及源码子目录保留；测试/构建证据位于F盘。"
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "in_progress",
-    "current_task": "维护者已明确授权0.3.6正式发布、COS香港公开下载并保留GitHub/Gitee；已配置COS并上传四份指定固件及验证三源哈希，正式索引尚未切换。主机新增同版本构建识别、未知可重装、禁止降级和精确构建确认；5478Python/2skip，4个FLM环境包测试补配后所在6项全部通过，1104GUI/生产构建及真实浏览器隔离场景通过。详见v036-cos-firmware-revisions.md。仍须最终PR合并、正式签名Windows/Skill/SiteAgent及实装、公网验证，再撤preview/通知Dot。临时SSH已当次授权启用，完成须撤销。"
+    "status": "complete",
+    "current_task": "0.3.6正式发布完成：香港COS主下载，两个GitHub各7附件，Gitee实际Skill及安装包GitHub备用；正式索引一致，原生更新/实装/Skill升级通过。preview与旧测试包已撤下并保留恢复归档，Dot网站更新任务已发送，临时SSH撤销并验证拒绝。README取消固定版本说明，补齐功能/下载/更新/诊断；与本交接走后续文档PR，不移动发布标签。详见v036-release-handoff.md。"
   },
   "milestones": [
+    {
+      "name": "0.3.6正式版",
+      "status": "complete",
+      "notes": "PR50/51正式源d000370b；Windows签名/Skill/SiteAgent、COS+GitHub/Gitee渠道、实装与升级通过，preview撤下、Dot已通知、临时SSH撤销。README与交接单独后续PR。见v036-release-handoff.md。"
+    },
     {
       "name": "0.3.5正式版",
       "status": "complete",
@@ -41,14 +46,13 @@
       "name": "0.3.1正式版",
       "status": "complete",
       "notes": "PR33合并，源1d61159d；签名NSIS/Skill/SiteAgent与三端索引完成，最终提取包检查通过。见v031-release-handoff.md。"
-    },
-    {
-      "name": "0.3.0及2026-10-09固件归档",
-      "status": "complete",
-      "notes": "0.3.0发布及2026-10-09固件记录见历史交接和固件归档；不继承其硬件验收结论。"
     }
   ],
   "verification": [
+    {
+      "area": "0.3.6正式包与COS更新",
+      "result": "5478 Python/2skip，4个FLM环境错误补配后涉及6项通过；1104 GUI/TS/Vite。实装3625文件/210 Python/41 Web，常见FLM/SVD/冻结MCP/诊断/校验预览通过；原生健康2.699s、正常退出0并释放端口。Skill真实0.3.5→0.3.6及全局2622文件一致、MCP泛型号20候选。COS七文件完整SHA/Range通过，安装包上海直连2.299MiB/s、Skill4.620MiB/s。Gitee真实Skill备用完整下载通过，四入口应用/固件索引一致。未再次刷下载器。"
+    },
     {
       "area": "0.3.6最新组合与H743发布准备",
       "result": "208804e0：全Python5467通过2跳过(缺可选hil_core.observe)，全GUI1102、TS/Vite和41交付Web字节一致，CI三项成功；隔离Skill7059目标/2224FLM/4800外设与真实MCP泛型号通过。普通V4.7.0+H743 Keil0错0警告，冻结在线烧录两扇区及215716B全回读一致；RTT8双向、录制4059样本、四组并行共52731周期零错/丢样、MCP附着、RAM/寄存器/单步/VOFA/HardFault通过。复位后0.5s过早启动RTT失败已保留，目标签名0.964s就绪后补验通过；空输出60s保持连接，断开留符号，正常释放。八页/公式颜色刷新通过；本轮回放文件选择器超时未完成。详见v036-release-readiness-20261025.md。"
@@ -76,18 +80,14 @@
     {
       "area": "HPM JTAG实时换板与单次配置",
       "result": "c963982c/9442e5b5：332Python/53GUI/TS/Vite/实页；固件7d21040回归/双构建及授权升级通过。只读拔插/LCD确认，240秒858无目标/1522有效ID；首次-4补有界重试并保留失败。d0b662b9包覆盖exit0、完整冻结/原生/Web/退出通过，完整连续Flash未做。见v036-hpm-jtag-cycles.md。后续全局Skill同步d0b662b9/0.3.6，2615文件/生产Web一致、用户缓存保留，离线CLI/SVD/真实MCP通过；原包及备份在构建根。"
-    },
-    {
-      "area": "合并HEX及在线烧录进度",
-      "result": "6c2095c7修复自定义FLM几何，388Python/5GUI/真实浏览器通过，组合f4221d96安装资格通过。35f7da59在线进度修复391测试及授权实烧通过，PROGRAM100%至完成0.796ms、全回读一致。见v036-combined-hex-fix.md、v036-online-program-progress-diagnosis.md；N32外部Flash仍未实烧。"
     }
   ],
   "decisions": [
-    "0.3.5已经完成正式发布，源2f474f60372e及标签不可变；发布后正式Web/交接另经PR合入。新修改从最新microkeen/main创建codex/任务分支，保留必需CI、精确PR头和指定整合者边界；本轮授权不自动延伸到新版本发布。",
+    "0.3.6已经完成正式发布，正式源d000370b901a72e4f8ec8fe09cf8b837f2579f0c及v0.3.6标签不可变；后续README/交接另走PR，保留必需CI与精确头检查。新的产品改动从最新microkeen/main创建codex分支，本轮不授权新版本发布。",
     "后台协议 52：一个 GUI 客户端持有一个固定后台，同窗口切换只改下载器，RTT/Watch/Trace 跟随当前设备并清空旧目标状态；另开客户端才建独立后台。已有 URL 的额外页面共享该后台。工程上下文固定，换工程须停止原后台后重开。",
     "物理探针唯一 OS 所有权、USB 身份核对和 epoch 隔离保留。GUI/AI 明确断开或切换自动停止采集、排空在途操作并释放端口；旧会话不得跨设备，未知结果不得自动重放，不偷取其他后台占用。MCP disconnect 物理断开，detach 仅退出自身；独立 UART 保留。",
     "SuperWatch 变量写入只认写应答，不做自动回读；烧录/显式内存校验仍保留，真实写错误不得吞掉或重放。外设 ID 基于 Pack 版本/芯片/SVD 相对路径；失效选择不得阻断物理连接，无法迁移时重选。 在线型号提供脱机/外设默认值，各页可独立修改；Pack操作完成自动刷新。下载先预留唯一物理身份，不要求先连接目标；自身预留不重建下载表单，其他设备切换仍清理。",
-    "用户2026-10-24要求腾讯云优先、GitHub/Gitee备用，已完成独立preview测试。2026-10-25要求准备正式发布，先整理缺口并H743真机测试；后续正式完成后撤下Tencent测试版本、通知Dot更新网站。旧临时SSH已撤销，实际发布前重新申请并在完成后撤销。stable当前404、preview仍5920c5c5；正式切换未执行。固件渠道独立，需确定精确配套包与验证范围。",
+    "用户要求腾讯云优先、GitHub/Gitee备用；0.3.6已正式切换香港COS，stable启用、preview与旧测试包已撤下并留非公开恢复归档。固件独立索引已发布四份指定构建；Dot已收到网站正式更新任务，网站部署结果另核对。临时SSH完成后已撤销，不得复用或自行重新授权。",
     "测试直接使用用户原工程及 build/keil/Obj ELF，允许修改且无需备份还原，不复制工程；硬件路径只留本地。HPM 使用 ROM API，不使用 FLM/第二次通用 SWD reset；VCC 每次改动需确认具体电压，固件修改另开会话。",
     "用户2026-10-24明确长期规则：默认只构建Windows安装包；仅在用户明确要求Linux/macOS时才构建对应安装包或触发原生CI，一般构建、全功能验收及发布请求不包含它们。用户Skill仍需完整FLM/Pack资格检查。历史Linux/macOS本地构建包已按用户要求清理，保留日志与验收证据；用户明确保留GitHub已正式发布附件。 构建使用scripts/build_workspace.ps1与F:/MKLink-Build，保留正式包、独有证据和依赖。用户明确清理授权下可删除过时可再生编译输出，链接/不可访问目录交人工处理，不强删。唯一原工作区保持；清理不接管硬件、不重复发布。",
     "工程上下文固定于后台生命周期；被动MI_04枚举不遍历占用设备，底层自动连接只接受唯一候选；本机别名不写固件。未知结果不重放，worker实际退出后才发布串口关闭，取消前保留缓冲寿命，背压错误不隐瞒。",
@@ -96,7 +96,7 @@
   ],
   "hardware": {
     "state": "当前普通MicroLink V4.7.0 + STM32H743IITx，UART未接。用户授权原工程修改/编译/烧录无需备份；八通道RTT/Watch/调试测试及215716B在线回读已完成，目标测试程序保留运行，所有测试后台正常退出。前轮BIN/HEX四组212672B回读证据单列，不冒充本轮新程序重复执行。未改探针固件、OTP或供电。",
-    "installer": "本地preview源b2f29322覆盖exit0，SHA256 5211d305d41e7911dbd10e9e20c8b0eab629b1670cbe950b2ff55b76afa71687；3624文件/210Python/41Web及冻结、原生/Web/退出通过。后续独立会话V4+H743四组校验开关实机通过。详见v036-offline-verification-option.md；腾讯云线上仍5920c5c5。",
+    "installer": "最终正式源d000370b覆盖安装并自动重启0.3.6；SHA256 0cdd5ccb1d75e68aadb7a90e93a6c35e2750b40230167230349b0d335e25650e；3625安装文件/210 Python/41 Web，冻结/原生及正常退出通过。全局Skill正式2622文件一致；本轮无新增硬件写入。",
     "backups": "正式release、原安装包、CI ZIP、唯一硬件证据、Skill备份和当前F盘缓存保留。删除61个可再生旧编译/解压目录；218个含链接测试目录未删。完整人工清单和删除结果在F:/MKLink-Build/reports/cleanup-20261023，见v036-storage-cleanup-20261023.md。 2026-10-24另按明确授权删除896个本地Linux/macOS包/签名/归档/分片，释放16072740412字节；归档证据另存unix-package-cleanup，线上正式附件保留。"
   },
   "known_limits": [
@@ -110,17 +110,17 @@
     "nRF54L15 GUI保护闭环、全部物理擦除/拔插/休眠/断电场景、电源外部精度校准未全部认证。VCC每次改动必须确认具体电压，HPM已锁定OTP不得重放。 已知无可靠扇区表的26个FLM禁用扇区操作；重叠算法需要匹配Bank模式。 HPM5301组18/19永久锁定的历史状态及用户字先写/组锁最后、全部固件独立校验后才写OTP等边界见docs/ai/hpm-offline-otp-handoff.md；接手重新确认芯片，其他型号不继承验收。 UART OTP已实现ROM write-memory APIv2，独立熔丝/影子/临时锁读语义仍未知并如实显示；以ROM写入状态及回读为准。配套3d96dbb已实机验证HPM5301全部128字读取和用户批准的Word69 0→1单次写入回读；其余型号/区域未实写，新数据须具体授权。多Word顺序执行不可回滚。CSV原生选择器自动化未完成。 V3直连USB、RTT空采集约30分钟掉线仍未定因；再次复现先导出诊断再拔插，本轮V4短测不能关闭。"
   ],
   "next_actions": [
-    "完成v036-cos-firmware-revisions.md剩余门槛：包测试→精确PR50/51整合→主线签名Windows/Skill/SiteAgent→实装及COS/备用大包验收→正式索引→撤Tencent preview→通知Dot→撤临时SSH；不再次刷探针。",
+    "核对Dot网站正式更新结果：应默认0.3.6、移除preview入口、腾讯云COS优先并保留备用/历史版本；通知已成功发出，勿重复发布资源或改标签。README/交接后续文档PR完成后从最新主线开始新的工作。",
     "收集客户N32WB452内外Flash组合实际烧写/回读反馈；本轮主机解析准入及安装包通过，不代替外置SPI硬件验证。不重复使用已消耗的F103单次烧录授权；不主动烧写或改OTP/供电。",
     "用户需重新生成并部署U盘脚本再测完整HPM JTAG连续烧录；旧脚本不会自动更新。实时拔插/LCD已验证，完整多板Flash/蜂鸣次数仍待实测；不重复历史一次性写入授权。",
     "HPM联合镜像/OTP历史证据保留，Word69=3；本轮使用H743，未写HPM OTP或调整VCC。其他HPM型号继续由用户测试，未知MKLINK_V2任务不得重放，勿将目标板误作下载器升级。",
     "继续排查30MHz并行读错/Flash偶发status5，客户及Mac/Linux实物矩阵仍待补充；低负载测试不关闭限制。人工清理只按reports/cleanup-20261023/manual-cleanup.csv核对临时目录，不沿链接删除目标，最新安装包必须保留。长期验证仍暂停。"
   ],
   "continuation_protocol": [
+    "0.3.6正式发布已完成，四入口索引/不可变标签已核对，preview撤下，临时SSH撤销。源码与完整证据见v036-release-handoff.md；不得重复发布、移动标签或重放硬件升级。README无固定版本，当前版本以正式下载索引和Release为准。",
     "本轮最终Windows候选f20fe781和完整Skill位于artifacts/v036-prerelease-20261024；冻结、覆盖、原生、真实Web及F103实机通过，测试进程正常退出。用户授权原测试工程改编译烧录无需备份，但不包含OTP/供电或探针固件变化。客户旧MCP导入故障仍缺现场证据，不能认定已闭环。",
     "V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。",
     "CDC 995根因仅保留待排查。恢复只允许同身份CDC故障5秒内；超时不自动接回或新建AI会话，主动断开立即生效，不重放未知写入。测试实例已经全部释放；见v035-transport-recovery.md，不寻找旧现场窗口。",
-    "客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。",
-    "2026-10-18授权的验收与发布已完成，已知未解项交接保留；正式源2f474f60。发布后交接/正式Web通过独立PR保存，标签不动；敏感日志和本机硬件路径不提交。"
+    "客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。"
   ]
 }
