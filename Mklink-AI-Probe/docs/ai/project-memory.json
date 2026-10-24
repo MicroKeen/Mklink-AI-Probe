@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-24T20:09:18.2128716+08:00",
+  "updated_at": "2026-10-24T21:34:38.1009229+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
@@ -13,8 +13,8 @@
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "complete",
-    "current_task": "用户要求启动画面取消勾选及阶段文字：改为30/60/90/100进度条，按并行前置任务完成及首屏绘制推进，延迟不虚增；失败仍显示错误与重试，切换下载器提示保留。7项启动回归、TS/Vite生产构建、浏览器60%视觉预览通过，gui/dist已同步。本轮仅UI源码/Web资源，未重新打包或覆盖安装；当前实装仍为86f9a75d，既有性能与冻结资格见v036-desktop-startup.md。"
+    "status": "in_progress",
+    "current_task": "已按用户授权整合PR51完整头7aca0480（DAP遗留占用恢复与CI），保留当前诊断和纯进度条。353项定点与1099GUI通过；Python全套5444通过2跳过4项因临时源码缺FLM路径准备失败，补已验证MKLINK_BUILTIN_FLM_ROOT后4项全通过，累计5448通过2跳过。PR51远端三项全通过。正在生成Windows本地preview包并覆盖验收；不合并main、不正式发布。"
   },
   "milestones": [
     {
