@@ -4,12 +4,12 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-24T23:49:33.8317194+08:00`
+- 更新时间：`2026-10-24T23:59:35.9708523+08:00`
 - 分支：`codex/tencent-update-preview`
 - HEAD：`基于main 303a2667开发腾讯云独立测试更新；精确源码见Git HEAD。`
 - 远端 HEAD：`PR42/46/48/49均已合并；main 303a2667，正式release/firmware引用未变。`
 - 工作树：唯一原工作区及源码子目录保留；测试/构建证据位于F盘。
-- 当前任务：BIN/HEX脱机烧录后校验开关已接入，默认开启并保存；关闭按绑定下载器和实际格式精确能力检查，缺能力提示升级且写盘前拒绝。源b2f29322已Windows本地覆盖exit0、冻结资格、原生/Web设置保存、正常退出通过。356后端、1101全GUI及末次62定点、TS/Vite/Rust通过。本轮未连接、部署实体U盘、烧写或升级硬件。见v036-offline-verification-option.md。
+- 当前任务：b2f29322的BIN/HEX脱机校验默认开启、关闭检查能力并提示升级，Windows覆盖及无硬件资格完成。后续独立会话以安装后台Web完成普通V4.7.0+H743四组真实脱机和完整回读，本会话核对报告/脚本/日志并重算SHA，未再操作硬件。默认校验已恢复部署、连接已释放。见v036-offline-verification-option.md。
 - 状态：`complete`
 
 ## 里程碑
@@ -23,7 +23,7 @@
 
 ## 验证证据
 
-- **BIN/HEX脱机校验开关**：BIN/HEX脱机烧录后校验开关已接入，默认开启并保存；关闭按绑定下载器和实际格式精确能力检查，缺能力提示升级且写盘前拒绝。源b2f29322已Windows本地覆盖exit0、冻结资格、原生/Web设置保存、正常退出通过。356后端、1101全GUI及末次62定点、TS/Vite/Rust通过。本轮未连接、部署实体U盘、烧写或升级硬件。见v036-offline-verification-option.md。
+- **BIN/HEX脱机校验开关**：源b2f29322：356后端、1101全GUI及末次62定点、TS/Vite/Rust通过；Windows覆盖exit0，3624文件/210Python/41Web及冻结、原生/Web/正常退出通过。独立会话普通V4.7.0+H743实测BIN/HEX默认/关闭四组，212672字节回读一致，默认已恢复；本会话仅核对证据。旧固件拒绝仅模拟覆盖，不扩大其他硬件结论。见v036-offline-verification-option.md。
 - **腾讯云下载与更新通道接入**：源码5920c5c5；全Python5412通过2跳过、GUI1090和96项定点通过，CI三项通过；Windows签名、完整FLM/Packs、解包与实装206Python/41Web冻结资格通过。公网安装包8.17秒21.87MiB/s，Skill3.93秒23.94MiB/s；完整SHA/Range通过。Skill真实0.3.5到0.3.6升级2617文件一致、用户文件保留、二次无更新、MCP模糊搜索20候选。GitHub/Gitee实际索引及Gitee完整包通过，无降级。首次UAC未完成；用户要求重试后原生较低版本下载/验签/安装/自动重启成功，启动检查无重复更新或错误提示。临时SSH撤销并验证拒绝，stable404，正式引用未变。详见docs/verification/v036-tencent-preview-20261024.md。
 - **0.3.6四PR整合与发布前资格**：源码f20fe781；5404Python/2skip、1090GUI、生产构建；Windows覆盖exit0、206Python/41Web/4载荷、离线完整Skill7059目标/2224FLM/4800外设通过。实机Flash全回读/RTT8/Watch/UART5/TTLModbus/VOFA/SystemView/HardFault/共享MCP及浏览器和原生文件选择通过。30MHz一顺序1读错，10MHz0。详见docs/verification/v036-prerelease-20261024.md。
 - **SuperWatch离线文件与公式颜色**：SuperWatch离线解析/重载先停采集、断开保留变量与数组选择；增加单曲线公式/颜色与快捷合并。源870471b6，组合e7c49b04/Web bcdc8474，188Python、1083全GUI及末次189GUI/TS/Vite通过。真实浏览器离线1480变量、公式x/1000、颜色与合并通过；0.3.6安装包SHA256 818035c005e02978b0729facd7cafcfba91babc659aa209e6bbc6409495b202b。首次UAC取消，用户要求重试后管理员覆盖exit0，解包/实装206Python/41Web与公式静态模块、冻结MCP/SVD/HTTP/离线功能及原生Web/退出通过。未操作硬件或更新固件/全局Skill。见v036-superwatch-formulas.md。
@@ -48,12 +48,12 @@
 ## 真机环境
 
 - **state**：V4.7.0+STM32F103RE512KiB/UART5实测；当前DAP缺GUID经用户批准定点修复后Keil/pyOCD枚举正常。测试固件保留SystemView CH2/UART5/RTT0和1/PID；无OTP、供电或探针固件变更。全部测试进程正常退出，30MHz1读错保留。
-- **installer**：本地preview源b2f29322覆盖exit0，SHA256 5211d305d41e7911dbd10e9e20c8b0eab629b1670cbe950b2ff55b76afa71687；3624文件、210Python/41Web、冻结资格和原生/Web/正常退出通过。BIN/HEX校验默认开启、关闭缺能力提示升级。原生健康3.032s、首屏2.944s仅一次检查。见v036-offline-verification-option.md；腾讯云线上仍5920c5c5。
+- **installer**：本地preview源b2f29322覆盖exit0，SHA256 5211d305d41e7911dbd10e9e20c8b0eab629b1670cbe950b2ff55b76afa71687；3624文件/210Python/41Web及冻结、原生/Web/退出通过。后续独立会话V4+H743四组校验开关实机通过。详见v036-offline-verification-option.md；腾讯云线上仍5920c5c5。
 - **backups**：正式release、原安装包、CI ZIP、唯一硬件证据、Skill备份和当前F盘缓存保留。删除61个可再生旧编译/解压目录；218个含链接测试目录未删。完整人工清单和删除结果在F:/MKLink-Build/reports/cleanup-20261023，见v036-storage-cleanup-20261023.md。 2026-10-24另按明确授权删除896个本地Linux/macOS包/签名/归档/分片，释放16072740412字节；归档证据另存unix-package-cleanup，线上正式附件保留。
 
 ## 下一动作
 
-1. b2f29322已完成BIN/HEX校验开关、Windows覆盖及无硬件验收，见v036-offline-verification-option.md；真实能力应答及烧录效果须另获硬件授权。此前dde3ad01整合PR51，DAP恢复V2/V3与完整SES待验证。V3再次掉线先导出ZIP再拔插，根因未定。PR50待审；main合并及正式发布需明确授权和精确合并源码门禁，preview非正式包，线上正式引用未变。
+1. b2f29322已完成BIN/HEX校验开关、Windows覆盖及无硬件验收，见v036-offline-verification-option.md；独立会话已完成普通V4+H743四组实机并核对证据，无需重复；V2/V3/其他目标及旧固件能力不足实机场景仍未验收。此前dde3ad01整合PR51，DAP恢复V2/V3与完整SES待验证。V3再次掉线先导出ZIP再拔插，根因未定。PR50待审；main合并及正式发布需明确授权和精确合并源码门禁，preview非正式包，线上正式引用未变。
 2. 收集客户N32WB452内外Flash组合实际烧写/回读反馈；本轮主机解析准入及安装包通过，不代替外置SPI硬件验证。不重复使用已消耗的F103单次烧录授权；不主动烧写或改OTP/供电。
 3. 用户需重新生成并部署U盘脚本再测完整HPM JTAG连续烧录；旧脚本不会自动更新。实时拔插/LCD已验证，完整多板Flash/蜂鸣次数仍待实测；不重复历史一次性写入授权。
 4. HPM联合镜像/OTP历史证据保留，Word69=3；本轮使用F103，未写HPM OTP或调整VCC。其他HPM型号继续由用户测试，未知MKLINK_V2任务不得重放，勿将目标板误作下载器升级。
