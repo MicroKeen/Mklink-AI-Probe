@@ -30,6 +30,8 @@ def check_idle(control, *, now=None, timeout=IDLE_SECONDS):
     if now-control.last_activity < timeout or not callable(control.shutdown):
         return False
     control.stopping = True
+    from mklink.connection_diagnostics import event
+    event('runtime.idle_shutdown', idle_seconds=now-control.last_activity)
     logging.getLogger(__name__).info('No runtime clients for %.0fs; closing idle backend', timeout)
     control.shutdown()  # uvicorn runs the existing stream/device shutdown handlers
     return True

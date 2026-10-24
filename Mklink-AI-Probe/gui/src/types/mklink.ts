@@ -410,12 +410,16 @@ export interface FirmwareInfo {
   model: 'V2' | 'V3' | 'V4'
   family: 'microlink' | 'hpmlink'
   path: string
-  source: 'github' | 'gitee' | 'local'
+  source: 'tencent' | 'github' | 'gitee' | 'local'
+  build_id?: string | null
+  sha256?: string | null
+  size?: number | null
 }
 
 export type ProbeFirmwareCheckStatus =
   | 'ok'
   | 'upgrade_required'
+  | 'revision_unknown'
   | 'no_firmware'
   | 'manifest_unavailable'
   | 'skipped'
@@ -423,6 +427,7 @@ export type ProbeFirmwareCheckStatus =
 export interface ProbeFirmwareCheck {
   status: ProbeFirmwareCheckStatus
   current_version: string | null
+  current_build_id?: string | null
   min_required_version: string | null
   recommended_uf2: FirmwareInfo | null
   all_uf2s: FirmwareInfo[]
@@ -432,6 +437,7 @@ export interface ProbeFirmwareCheck {
 
 export type ProbeFirmwareUpgradeStatus =
   | 'up_to_date'
+  | 'downgrade_blocked'
   | 'updated'
   | 'copied_unverified'
   | 'manual_required'
@@ -447,7 +453,9 @@ export interface ProbeFirmwareUpgrade {
   model?: 'V2' | 'V3' | 'V4'
   family?: 'microlink' | 'hpmlink'
   download_available?: boolean
-  source?: 'github' | 'gitee' | 'local'
+  source?: 'tencent' | 'github' | 'gitee' | 'local'
+  build_id?: string | null
+  verified_build_id?: string | null
   message?: string
   stopped?: string[]
 }
@@ -456,7 +464,7 @@ export interface ProbeFirmwareDownload {
   blob: Blob
   filename: string
   version: string
-  source: 'github' | 'gitee' | 'local'
+  source: 'tencent' | 'github' | 'gitee' | 'local'
   family: 'microlink' | 'hpmlink'
 }
 

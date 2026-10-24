@@ -92,6 +92,8 @@ def create_proxy(info, *, port, instance_id, transport=None):
             app.state.client = client
             presence = asyncio.create_task(keep_view_alive())
             try:
+                from mklink.startup_timing import mark
+                mark("proxy_serving")
                 yield
             finally:
                 presence.cancel()
@@ -101,6 +103,8 @@ def create_proxy(info, *, port, instance_id, transport=None):
 
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.shutdown = None
+    from mklink.connection_diagnostics import install_export
+    install_export(app)  # Export remains available when the CDC backend is down.
     origins = DESKTOP_ORIGINS | {f"http://127.0.0.1:{port}"}
     app.add_middleware(CORSMiddleware, allow_origins=sorted(origins), allow_methods=["*"],
                        allow_headers=["*"], expose_headers=['X-MKLink-Submission'])
@@ -232,16 +236,32 @@ def create_proxy(info, *, port, instance_id, transport=None):
 
 
 def serve_desktop_proxy(args):
+    from mklink.startup_timing import mark
+    mark("proxy_imported")
     import uvicorn
     from mklink.runtime import ensure_runtime
-    from mklink.remote.api import _bind_desktop_server_socket, _write_desktop_runtime_info
+    from mklink.desktop_endpoint import _bind_desktop_server_socket, _write_desktop_runtime_info
+    mark("proxy_dependencies")
     info = ensure_runtime(project_root=args.project_root, port=args.port, allow_lobby=True, new_window=True)
+    mark("runtime_discovered")
     listener, selected = _bind_desktop_server_socket(args.host, args.port, args.desktop_port_end)
     try:
         app = create_proxy(info, port=selected, instance_id=args.desktop_instance_id)
+        mark("proxy_routes")
         server = uvicorn.Server(uvicorn.Config(app, access_log=False, ws="websockets-sansio", ws_per_message_deflate=False))
         app.state.shutdown = lambda: setattr(server, "should_exit", True)
         _write_desktop_runtime_info(args.desktop_runtime_info, port=selected, instance_id=args.desktop_instance_id)
-        server.run(sockets=[listener])
+        mark("proxy_endpoint")
+        from mklink.runtime import runtime_dir
+        from mklink.connection_diagnostics import connection_log
+        directory = runtime_dir() / 'desktops' / view_directory_name(args.desktop_instance_id)
+        with connection_log(directory):
+            server.run(sockets=[listener])
     finally:
         listener.close()
+
+
+def view_directory_name(instance_id):
+    # The launcher identity is metadata, never a filesystem path.
+    import hashlib
+    return hashlib.sha256(instance_id.encode()).hexdigest()[:24]

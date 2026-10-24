@@ -28,6 +28,7 @@ from mklink.firmware_check import (  # noqa: E402
     Version,
     parse_firmware_filename,
     validate_uf2,
+    bundled_firmwares,
 )
 from _maintainer.release.publish_update_release import (  # noqa: E402
     _asset_url,
@@ -80,6 +81,11 @@ def scan_firmware_directory(root: Path) -> dict[tuple[str, str], dict[str, objec
             "uf2_blocks": blocks,
             "path": path,
         }
+        pinned = next((item for item in bundled_firmwares() if item.name == path.name), None)
+        if pinned is not None:
+            if pinned.sha256 != entry['sha256'] or pinned.size != entry['size']:
+                raise ValueError(f'firmware differs from pinned delivery: {path.name}')
+            entry['build_id'] = pinned.build_id
         key = (info.family, info.model)
         previous = selected.get(key)
         if previous is None or info.version > _version(str(previous["version"])):
@@ -99,6 +105,7 @@ def _public_entry(entry: Mapping[str, object], urls: Mapping[str, str]) -> dict[
         "sha256": entry["sha256"],
         "uf2_blocks": entry["uf2_blocks"],
         "urls": dict(urls),
+        **({'build_id': entry['build_id']} if entry.get('build_id') else {}),
     }
 
 

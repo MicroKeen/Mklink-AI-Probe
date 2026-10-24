@@ -11,6 +11,11 @@ from mklink import firmware_check as fc
 from mklink.rbl import PAYLOAD_LIMIT, validate_rbl
 
 
+@pytest.fixture(autouse=True)
+def isolated_release_catalog(monkeypatch):
+    monkeypatch.setattr(fc, 'bundled_firmwares', lambda: [])
+
+
 def rbl(*, version=b'V2.9.0', partition=b'MicroLink', algorithm=0, data=b'\x13\0\0\0' * 8, size=None):
     size = len(data) if size is None else size
     head = struct.pack('<4sHHI16s24s24sIIII', b'RBL\0', algorithm, 0, 0,
@@ -79,6 +84,9 @@ def update(monkeypatch, tmp_path):
     (disk/'readme.txt').write_text('V2.8.0')
     file = tmp_path/'MicroLink_V2.9.0.rbl'; file.write_bytes(rbl())
     monkeypatch.setattr(fc, '_remote_firmware', lambda *a, **k: None)
+    candidate = fc.parse_firmware_filename(file)
+    candidate.build_id = '2026-10-24T23:24:28'
+    monkeypatch.setattr(fc, 'latest_firmware', lambda *a, **k: candidate)
     return disk, tmp_path, file
 
 
@@ -88,7 +96,7 @@ def test_v2_copy_no_uf2_command_and_version_verified(update):
     def copy(source, name, bound):
         assert source == file and bound == str(disk)
         calls.append(name)
-        (disk/'readme.txt').write_text('V2.9.0')
+        (disk/'readme.txt').write_text('Firmware Build Date:Oct 24 2026 23:24:28\nV2.9.0')
     device = SimpleNamespace(copy_rbl=copy, enter_bootloader=lambda: pytest.fail('V2 entered UF2'))
     result = fc.upgrade_probe_firmware(device, root, confirm=True, disk_reader=lambda: str(disk), verify_timeout=.1)
     assert result['status'] == 'updated' and calls == [file.name]
@@ -97,10 +105,10 @@ def test_v2_copy_no_uf2_command_and_version_verified(update):
 @pytest.mark.parametrize('current', ['V2.9.0', 'V2.10.0'])
 def test_same_or_newer_version_never_copies(update, current):
     disk, root, _ = update
-    (disk/'readme.txt').write_text(current)
+    (disk/'readme.txt').write_text('Firmware Build Date:Oct 24 2026 23:24:28\n'+current)
     result = fc.upgrade_probe_firmware(SimpleNamespace(copy_rbl=lambda *a: pytest.fail('unexpected write')),
         root, confirm=True, disk_reader=lambda: str(disk))
-    assert result['status'] == 'up_to_date'
+    assert result['status'] == ('up_to_date' if current == 'V2.9.0' else 'downgrade_blocked')
 
 
 @pytest.mark.parametrize('failure', ['copy', 'timeout', 'corrupt'])

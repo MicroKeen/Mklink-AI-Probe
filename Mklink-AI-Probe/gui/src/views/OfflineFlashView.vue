@@ -50,7 +50,7 @@ type ProbeModel = 'V2' | 'V3' | 'V4'
 defineOptions({ name: 'OfflineFlashView' })
 
 const OFFLINE_STORAGE_KEY = 'mklink.offlineFlash.settings'
-function savedSettings(): { model?: ProbeModel; scriptName?: string; idcodeTimeout?: number; swdClock?: number; ispBaudRate?: number } {
+function savedSettings(): { model?: ProbeModel; scriptName?: string; idcodeTimeout?: number; swdClock?: number; ispBaudRate?: number; verifyAfterDownload?: boolean } {
   try { return JSON.parse(localStorage.getItem(OFFLINE_STORAGE_KEY) || '{}') } catch { return {} }
 }
 const saved = savedSettings()
@@ -100,6 +100,7 @@ const programmingProtocol = ref<'debug' | 'hpm_rom_isp_uart'>('debug')
 const beepOnCompletion = ref(true)
 const beepDurationMs = ref(1000)
 const resetAfterDownload = ref(true)
+const verifyAfterDownload = ref(saved.verifyAfterDownload !== false)
 const resetMode = ref<'software' | 'hardware' | 'power_cycle'>('software')
 const resetVoltageMv = ref(3300)
 const ispConnection = ref<IspConnection>('idle')
@@ -240,7 +241,7 @@ const canTrigger = computed(() => (
 ))
 
 watch(
-  [model, scriptName, automaticCount, idcodeTimeout, swdClock, targetPart, hpmBoard, algorithms, firmwares, eraseAllBeforeDownload, unlockBeforeDownload, lockAfterDownload, securityVoltageMv, optionByteChanges, hpmOfflineOtp, programmingProtocol, ispConfig, beepOnCompletion, beepDurationMs, resetAfterDownload, resetMode, resetVoltageMv],
+  [model, scriptName, automaticCount, idcodeTimeout, swdClock, targetPart, hpmBoard, algorithms, firmwares, eraseAllBeforeDownload, unlockBeforeDownload, lockAfterDownload, securityVoltageMv, optionByteChanges, hpmOfflineOtp, programmingProtocol, ispConfig, beepOnCompletion, beepDurationMs, resetAfterDownload, resetMode, resetVoltageMv, verifyAfterDownload],
   () => {
     preview.value = null
     deployedScriptName.value = ''
@@ -250,7 +251,7 @@ watch(
   { deep: true },
 )
 
-watch([model, scriptName, idcodeTimeout, swdClock, () => ispConfig.value.baud_rate], () => {
+watch([model, scriptName, idcodeTimeout, swdClock, verifyAfterDownload, () => ispConfig.value.baud_rate], () => {
   if (validIspBaud(ispConfig.value.baud_rate)) savedIspBaud = ispConfig.value.baud_rate
   localStorage.setItem(OFFLINE_STORAGE_KEY, JSON.stringify({
     model: model.value || undefined,
@@ -258,6 +259,7 @@ watch([model, scriptName, idcodeTimeout, swdClock, () => ispConfig.value.baud_ra
     idcodeTimeout: idcodeTimeout.value,
     swdClock: swdClock.value,
     ispBaudRate: savedIspBaud,
+    verifyAfterDownload: verifyAfterDownload.value,
   }))
 })
 
@@ -779,6 +781,7 @@ function buildRequest(): {
     payload: {
       model: model.value,
       programming_protocol: programmingProtocol.value,
+      verify_after_download: hpmMode.value ? true : verifyAfterDownload.value,
       ...(ispMode.value ? { hpm_isp: ispConfig.value, hpm_isp_otp: ispOfflineOtp.value } : {}),
       ...(!ispMode.value ? {
         beep_on_completion: beepOnCompletion.value,
@@ -865,6 +868,9 @@ async function queryDeployment(deploymentError?: unknown): Promise<void> {
       deployedScriptName.value = job.result.script_name
       deployedModel.value = job.result.model
       notice.value = tr('部署成功', 'Deployment succeeded')
+    } else if (job.state === 'failed' && !job.recovery_directory) {
+      deploymentUncertain.value = false
+      setError(job.error ?? tr('部署失败，请检查配置。', 'Deployment failed. Check the configuration.'))
     } else {
       deploymentUncertain.value = true
       notice.value = ''
@@ -1052,6 +1058,8 @@ onBeforeUnmount(() => {
         </label>
         <HpmIspSettings v-if="ispMode" v-model="ispConfig" />
         <div v-else class="security-settings">
+          <label v-if="!hpmMode" class="security-option"><input v-model="verifyAfterDownload" data-testid="offline-verify" type="checkbox" />{{ tr('烧录后校验', 'Verify after programming') }}</label>
+          <p v-if="!hpmMode && !verifyAfterDownload" class="muted">{{ tr('仅跳过 Flash 内容校验；HEX 格式检查仍保留。部署时核对固件是否支持关闭校验，不支持时需升级。', 'Skips Flash verification only; HEX format checks remain active. Deployment checks firmware support and requires an upgrade if unavailable.') }}</p>
           <label class="security-option"><input v-model="beepOnCompletion" type="checkbox" />{{ tr('下载完成响蜂鸣器', 'Beep on completion') }}</label>
           <label class="setting-row"><span>{{ tr('蜂鸣时长（ms）', 'Beep duration (ms)') }}</span><input v-model.number="beepDurationMs" data-testid="offline-beep-duration" type="number" min="1" max="10000" step="1" class="form-input" :disabled="!beepOnCompletion" /></label>
           <label class="security-option"><input v-model="resetAfterDownload" type="checkbox" :disabled="hpmMode" />{{ tr('下载完成复位', 'Reset on completion') }}</label>
@@ -1160,7 +1168,7 @@ onBeforeUnmount(() => {
         <section class="deployment-toolbar" :aria-label="tr('部署与测试', 'Deploy and test')">
         <p v-if="ispMode && ispOtpPending" data-testid="offline-otp-summary">{{ ispOfflineOtp ? tr(`镜像 + OTP（${ispOfflineOtp.words.length} 个字）将一起部署`, `Images + OTP (${ispOfflineOtp.words.length} words) will be deployed together`) : tr('OTP 配置尚未确认，请在 OTP 操作中检查并确认。', 'Review and confirm the OTP configuration in OTP operations.') }}</p>
         <div class="deploy-actions">
-          <button class="btn" :disabled="operationBusy || !canBuild" @click="generatePreview">{{ tr('生成预览', 'Generate Preview') }}</button>
+          <button class="btn" data-testid="offline-preview" :disabled="operationBusy || !canBuild" @click="generatePreview">{{ tr('生成预览', 'Generate Preview') }}</button>
           <button class="btn btn-primary" data-testid="offline-deploy" :disabled="operationBusy || !canBuild || deploymentUncertain" @click="deploy">{{ tr('部署到 U 盘', 'Deploy to USB Drive') }}</button>
           <button class="btn" data-testid="offline-trigger" :disabled="!canTrigger" @click="triggerOffline">{{ tr('触发测试', 'Run Test') }}</button>
         </div>

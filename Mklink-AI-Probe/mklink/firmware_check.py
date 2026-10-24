@@ -7,6 +7,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 
 from dataclasses import dataclass
+from datetime import datetime
 import hashlib
 import json
 from pathlib import Path
@@ -40,7 +41,7 @@ DEFAULT_VERSION_TIMEOUT = 5.0
 
 # Status of CheckResult
 CheckStatus = Literal[
-    "ok", "upgrade_required", "no_firmware", "manifest_unavailable", "skipped"
+    "ok", "upgrade_required", "revision_unknown", "no_firmware", "manifest_unavailable", "skipped"
 ]
 UpgradeStatus = Literal[
     "up_to_date",
@@ -49,6 +50,7 @@ UpgradeStatus = Literal[
     "manual_required",
     "no_probe_disk",
     "no_firmware",
+    "downgrade_blocked",
 ]
 
 
@@ -90,10 +92,11 @@ class FirmwareInfo:
     path: Path
     family: FirmwareFamily = "microlink"
     download_url: str | None = None
-    download_source: Literal["github", "gitee"] | None = None
+    download_source: Literal["tencent", "github", "gitee"] | None = None
     download_urls: dict[str, str] | None = None
     size: int | None = None
     sha256: str | None = None
+    build_id: str | None = None
 
     @property
     def version_str(self) -> str:
@@ -148,6 +151,11 @@ def list_firmwares(root: Path) -> list[FirmwareInfo]:
     for entry in root.iterdir():
         info = parse_firmware_filename(entry)
         if info is not None:
+            # A matching filename alone cannot authenticate a cached repair.
+            pinned = next((item for item in bundled_firmwares()
+                           if item.name == info.name), None)
+            if pinned is not None:
+                info.size, info.sha256, info.build_id = pinned.size, pinned.sha256, pinned.build_id
             result.append(info)
     result.sort(key=lambda f: f.version)
     return result
@@ -186,6 +194,38 @@ def probe_firmware_family(
     return "hpmlink" if text is not None and HPM_FIRMWARE_MARKER.search(text) else "microlink"
 
 
+def read_microkeen_build_id(root: str | Path) -> str | None:
+    """Read the compiler stamp exposed by the probe, independently of its version.
+
+    This identifies a published build; it is not a device image hash or an
+    attestation. Parse English C compiler months without depending on OS locale.
+    """
+    text = _read_microkeen_readme(root) or ""
+    match = re.search(
+        r"(?m)^\s*(?:HPM\s+)?Firmware\s+Build\s+Date\s*:\s*"
+        r"([A-Za-z]{3})\s+(\d{1,2})\s+(\d{4})\s+(\d{2}):(\d{2}):(\d{2})\s*$", text,
+    )
+    if not match:
+        return None
+    try:
+        month, day, year, hour, minute, second = match.groups()
+        months = 'Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.split()
+        return datetime(int(year), months.index(month) + 1, int(day), int(hour),
+                        int(minute), int(second)).isoformat()
+    except ValueError:
+        return None
+
+
+def _installed_build_matches(root: str | Path, info: FirmwareInfo) -> bool:
+    return bool(info.build_id and read_microkeen_version(root) == info.version
+                and probe_firmware_family(root, info.version) == info.family
+                and read_microkeen_build_id(root) == info.build_id)
+
+
+def _firmware_order(info: FirmwareInfo) -> tuple:
+    return (info.version, info.build_id or "")
+
+
 def _probe_disk():
     from mklink.discovery import find_microkeen_disk
 
@@ -218,6 +258,7 @@ def _find_bootloader_disk() -> str | None:
 
 
 FIRMWARE_MANIFEST_URLS = {
+    "tencent": "https://download.microkeenai.com/mklink/firmware/latest.json",
     "github": "https://raw.githubusercontent.com/Aladdin-Wang/Mklink-AI-Probe/firmware/latest.json",
     "gitee": "https://gitee.com/Aladdin-Wang/Mklink-AI-Probe/raw/firmware/latest.json",
 }
@@ -258,7 +299,7 @@ def _parse_manifest(payload: object) -> list[FirmwareInfo]:
             raise ValueError("invalid firmware manifest entry")
         clean_urls = {
             source: str(urls[source])
-            for source in ("github", "gitee")
+            for source in ("tencent", "github", "gitee")
             if isinstance(urls.get(source), str)
             and str(urls[source]).startswith("https://")
         }
@@ -271,8 +312,14 @@ def _parse_manifest(payload: object) -> list[FirmwareInfo]:
         info.path = Path(info.name)
         info.size = size
         info.sha256 = digest
+        build_id = raw.get("build_id")
+        if build_id is not None:
+            if not isinstance(build_id, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}", build_id):
+                raise ValueError("invalid firmware build identity")
+            datetime.fromisoformat(build_id)
+        info.build_id = build_id
         info.download_urls = clean_urls
-        preferred = "github" if "github" in clean_urls else "gitee"
+        preferred = next(iter(clean_urls))
         info.download_source = preferred
         info.download_url = clean_urls[preferred]
         entries.append(info)
@@ -280,7 +327,7 @@ def _parse_manifest(payload: object) -> list[FirmwareInfo]:
 
 
 def _remote_firmwares_from_source(
-    source: Literal["github", "gitee"], *, timeout: float = 8.0, v2: bool = False,
+    source: Literal["tencent", "github", "gitee"], *, timeout: float = 8.0, v2: bool = False,
 ) -> list[FirmwareInfo] | None:
     """Fetch one provider's complete firmware manifest; fail softly."""
     try:
@@ -301,7 +348,7 @@ def _remote_firmwares_from_source(
 
 def _remote_firmware_from_source(
     model: str,
-    source: Literal["github", "gitee"],
+    source: Literal["tencent", "github", "gitee"],
     *,
     family: FirmwareFamily = "microlink",
     timeout: float = 8.0,
@@ -336,27 +383,33 @@ def _remote_firmware(
 
 def _remote_firmwares(*, timeout: float = 8.0, v2: bool = False) -> list[FirmwareInfo] | None:
     """Compare both trusted mirrors so a lagging successful mirror cannot pin updates."""
-    sources = ("github", "gitee")
-    with ThreadPoolExecutor(max_workers=2) as executor:
+    sources = ("tencent", "github", "gitee")
+    with ThreadPoolExecutor(max_workers=len(sources)) as executor:
         results = list(executor.map(
             lambda source: (_remote_firmwares_from_source(source, timeout=timeout, v2=True)
                             if v2 else _remote_firmwares_from_source(source, timeout=timeout)), sources,
         ))
-    if all(entries is None for entries in results):
+    pinned = [item for item in bundled_firmwares() if (item.model == 'V2') == v2]
+    if all(entries is None for entries in results) and not pinned:
         return None
     latest = {}
-    for source, entries in zip(sources, results):
+    for source, entries in [*zip(sources, results), ('tencent', pinned)]:
         for info in entries or []:
             key = (info.family, info.model)
             previous = latest.get(key)
-            # Equal versions retain GitHub precedence and its integrity metadata.
-            if previous is not None and previous.version >= info.version:
+            # A stale mirror must not mask a newer same-version repair build.
+            if previous is not None and _firmware_order(previous) >= _firmware_order(info):
                 continue
             if info.download_urls and source in info.download_urls:
                 info.download_source = source
                 info.download_url = info.download_urls[source]
             latest[key] = info
     return list(latest.values())
+
+
+def bundled_firmwares() -> list[FirmwareInfo]:
+    """Pinned release metadata, not bundled probe images or device attestation."""
+    return _parse_manifest(json.loads(Path(__file__).with_name('firmware-catalog.json').read_text(encoding='utf-8')))
 
 
 def _materialize_firmware(info: FirmwareInfo) -> tuple[Path, bool, str]:
@@ -367,7 +420,7 @@ def _materialize_firmware(info: FirmwareInfo) -> tuple[Path, bool, str]:
         destination = Path(raw_path)
         preferred = info.download_source or "github"
         downloads: list[tuple[str, str]] = [(preferred, info.download_url)]
-        for source in ("github", "gitee"):
+        for source in ("tencent", "github", "gitee"):
             url = (info.download_urls or {}).get(source)
             if url and (source, url) not in downloads:
                 downloads.append((source, url))
@@ -403,8 +456,7 @@ def _materialize_firmware(info: FirmwareInfo) -> tuple[Path, bool, str]:
         destination.unlink(missing_ok=True)
         attempted = "、".join(attempted_sources)
         raise OSError(f"固件下载失败（已尝试 {attempted}）") from last_error
-    if info.format == 'rbl':
-        _validate_downloaded_firmware(info.path, info)
+    _validate_downloaded_firmware(info.path, info)
     return info.path, False, "local"
 
 
@@ -470,7 +522,7 @@ def latest_firmware(
     except (FileNotFoundError, NotADirectoryError, OSError):
         local = []
     candidates = ([remote] if remote is not None else []) + local
-    return max(candidates, key=lambda item: item.version) if candidates else None
+    return max(candidates, key=_firmware_order) if candidates else None
 
 
 def _looks_like_bootloader(root: str | Path) -> bool:
@@ -534,7 +586,13 @@ def upgrade_probe_firmware(
             "model": f"V{current.major}",
             "family": family,
         }
-    if candidate.version <= current:
+    current_build = read_microkeen_build_id(disk)
+    if candidate.version < current or (candidate.version == current and candidate.build_id
+                                      and current_build and current_build > candidate.build_id):
+        return {"status": "downgrade_blocked", "current_version": str(current),
+                "latest_version": candidate.version_str, "firmware": candidate.name,
+                "message": "当前固件版本或构建日期更新，已阻止降级。"}
+    if _installed_build_matches(disk, candidate):
         return {"status": "up_to_date", "current_version": str(current), "latest_version": candidate.version_str, "firmware": candidate.name}
     manual_details = {
         "current_version": str(current),
@@ -543,6 +601,9 @@ def upgrade_probe_firmware(
         "model": candidate.model,
         "family": candidate.family,
         "download_available": True,
+        "current_build_id": current_build,
+        "build_id": candidate.build_id,
+        "sha256": candidate.sha256,
     }
     if candidate.format == 'rbl':
         manual_details['format'] = 'rbl'
@@ -556,7 +617,7 @@ def upgrade_probe_firmware(
         }
     try:
         source, temporary, download_source = _materialize_firmware(candidate)
-    except OSError as error:
+    except (OSError, ValueError) as error:
         return {
             "status": "manual_required",
             "message": str(error),
@@ -593,6 +654,7 @@ def upgrade_probe_firmware(
         deadline = time.monotonic() + verify_timeout
         verified = None
         while time.monotonic() < deadline:
+            active = None
             try:
                 active = disk_reader()
             except (OSError, RuntimeError):
@@ -601,7 +663,7 @@ def upgrade_probe_firmware(
                 version = read_microkeen_version(active)
                 if version is not None:
                     verified = version
-                    if version >= candidate.version:
+                    if _installed_build_matches(active, candidate):
                         return {
                             "status": "updated",
                             "current_version": str(current),
@@ -610,6 +672,8 @@ def upgrade_probe_firmware(
                             "firmware": candidate.name,
                             "family": candidate.family,
                             "source": download_source,
+                            "build_id": candidate.build_id,
+                            "verified_build_id": read_microkeen_build_id(active),
                         }
             time.sleep(0.25)
         return {
@@ -618,7 +682,7 @@ def upgrade_probe_firmware(
             "latest_version": candidate.version_str,
             "verified_version": str(verified) if verified else None,
             "firmware": candidate.name,
-            "message": "固件已复制到 U 盘，但尚未读到新的 readme.txt 版本",
+            "message": "固件已复制，但尚未确认原下载器运行目标构建；相同版本号不能证明升级成功，请检查后再操作。",
             "model": candidate.model,
             "family": candidate.family,
             "download_available": True,
@@ -649,6 +713,7 @@ def _upgrade_rbl(device, candidate, current, disk, disk_reader, timeout, details
                     'message': f'RBL 升级未确认：{error}。请检查下载器状态，不要自动重试。'}
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
+            active = None
             try:
                 active = disk_reader()
                 verified = read_microkeen_version(active) if active else None
@@ -656,8 +721,9 @@ def _upgrade_rbl(device, candidate, current, disk, disk_reader, timeout, details
                 verified = None
             # Exact expected version on the original USB identity, not merely
             # successful file copying or a newer unrelated build.
-            if verified == candidate.version:
-                return {'status': 'updated', **details, 'verified_version': str(verified), 'source': provider}
+            if active and _installed_build_matches(active, candidate):
+                return {'status': 'updated', **details, 'verified_version': str(verified),
+                        'verified_build_id': read_microkeen_build_id(active), 'source': provider}
             time.sleep(.25)
         return {'status': 'copied_unverified', **details, 'source': provider,
                 'message': 'RBL 已复制，但尚未确认原下载器运行新版本；请检查状态，不要自动重试。'}
@@ -685,7 +751,7 @@ def find_recommended_uf2(
     same_major = [f for f in firmwares if f.version.major == current.major]
     if not same_major:
         return None
-    return max(same_major, key=lambda f: f.version)
+    return max(same_major, key=_firmware_order)
 
 
 def _resolve_firmware_root() -> Path:
@@ -784,6 +850,7 @@ class CheckResult:
     all_uf2s: list[FirmwareInfo]
     firmware_dir: Path | None
     instructions: str
+    current_build_id: str | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -794,6 +861,7 @@ class CheckResult:
             "all_uf2s": [_firmware_to_dict(f) for f in self.all_uf2s],
             "firmware_dir": str(self.firmware_dir) if self.firmware_dir else None,
             "instructions": self.instructions,
+            "current_build_id": self.current_build_id,
         }
 
 
@@ -806,6 +874,9 @@ def _firmware_to_dict(f: FirmwareInfo) -> dict:
         "path": str(f.path),
         "source": f.download_source or "local",
         "format": f.format,
+        "build_id": f.build_id,
+        "sha256": f.sha256,
+        "size": f.size,
     }
 
 
@@ -911,7 +982,7 @@ def check_probe_firmware(
             instructions=(
                 "在线固件索引中没有可用固件"
                 if remote_available
-                else "无法连接 GitHub/Gitee 固件通道，且没有本地备用固件"
+                else "无法连接腾讯云/GitHub/Gitee 固件通道，且没有本地备用固件"
             ),
         )
 
@@ -994,6 +1065,12 @@ def check_probe_firmware(
         recommended is not None and current < recommended.version
     )
     status = "upgrade_required" if requires_upgrade else "ok"
+    current_build = read_microkeen_build_id(disk) if disk else None
+    if recommended is not None and current == recommended.version:
+        if not current_build or not recommended.build_id:
+            status = "revision_unknown"
+        elif current_build < recommended.build_id:
+            status = "upgrade_required"
 
     result = CheckResult(
         status=status,
@@ -1003,7 +1080,10 @@ def check_probe_firmware(
         all_uf2s=firmwares,
         firmware_dir=None if remote_available else Path(firmware_root),
         instructions="",
+        current_build_id=current_build,
     )
     if status == "upgrade_required":
         result.instructions = build_instructions(result)
+    elif status == "revision_unknown":
+        result.instructions = "版本号相同，但无法确认已安装的修订；可以重新安装该版本的最新修复包。"
     return result

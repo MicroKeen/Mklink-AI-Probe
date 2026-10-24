@@ -6,6 +6,7 @@ explicit stop/switch, jobs and client lifetimes retain their normal authority.
 import asyncio
 import logging
 import time
+from mklink.connection_diagnostics import event, error_detail
 
 from mklink.runtime_api import settle
 
@@ -26,11 +27,16 @@ class TransportRecovery:
         self.next_attempt = 0
         self.lost_at = None
         self.expired = False
+        self.presence_error = None
         self.status = {'state': 'idle', 'attempts': 0}
 
     def publish(self, state, **detail):
         self.status = {'state': state, 'attempts': self.attempts, **detail}
         self.control.app.state.mklink_state['connection_recovery'] = self.status
+        if state != 'idle':
+            event('recovery.' + state, attempts=self.attempts,
+                  elapsed_ms=None if self.lost_at is None else round((time.monotonic()-self.lost_at)*1000),
+                  **detail)
 
     def reset(self):
         self.device = None
@@ -43,6 +49,7 @@ class TransportRecovery:
         self.next_attempt = 0
         self.lost_at = None
         self.expired = False
+        self.presence_error = None
         self.publish('idle')
 
     def expire_if_due(self):
@@ -114,6 +121,9 @@ class TransportRecovery:
                 return  # A target error/failed explicit connection is not USB loss.
             self.pending = True
             self.lost_at = time.monotonic()
+            event('recovery.loss_detected', error=error_detail(error),
+                  port=getattr(device, 'port', None),
+                  streams=[name for name, *_ in self.plan])
             self.publish('waiting', error=str(error), grace_seconds=RECOVERY_GRACE_SECONDS)
         if self.attempts >= 5 or time.monotonic() < self.next_attempt:
             return
@@ -123,8 +133,13 @@ class TransportRecovery:
         from mklink.probes import select_probe
         try:
             selected = await asyncio.to_thread(select_probe, self.identity)
-        except Exception:
+        except Exception as error:
+            reason = str(error)
+            if reason != self.presence_error:
+                event('recovery.probe_unavailable', error=error_detail(error))
+                self.presence_error = reason
             return  # Enumeration only while absent; no repeated open attempts.
+        self.presence_error = None
         if selected['probe_id'] != self.identity:
             return
 
@@ -190,6 +205,8 @@ class TransportRecovery:
                     return
                 # The transport recovered within the grace period. Capture
                 # initialization may take longer without extending that period.
+                event('recovery.transport_restored', attempts=self.attempts,
+                      elapsed_ms=round((time.monotonic()-self.lost_at)*1000) if self.lost_at is not None else None)
                 self.lost_at = None
                 restored, errors = [], []
                 source_pending = bool((state.get('file_source_change') or {}).get('pending'))

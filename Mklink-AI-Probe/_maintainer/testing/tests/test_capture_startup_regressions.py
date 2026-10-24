@@ -150,7 +150,7 @@ def test_mux_heartbeat_write_disconnect_uses_bridge_failure_boundary():
     transport = MuxTransport(write)
     transport.ready = True
     transport._last_command = time.monotonic()-2
-    bridge = MKLinkSerialBridge.__new__(MKLinkSerialBridge)
+    bridge = MKLinkSerialBridge('TEST')
     bridge._mux, bridge._running = transport, True
     bridge._ctx = SimpleNamespace(state=DeviceState.READY)
     bridge._prompt_event = threading.Event()

@@ -27,6 +27,7 @@ except ImportError:  # pragma: no cover
 
 
 DEFAULT_MANIFEST_URLS = (
+    "https://download.microkeenai.com/mklink/stable/latest.json",
     "https://raw.githubusercontent.com/MicroKeen/Mklink-AI-Probe/release/latest.json",
     "https://gitee.com/Aladdin-Wang/Mklink-AI-Probe/raw/updates/latest.json",
 )
@@ -97,9 +98,18 @@ def fetch_manifest(urls: Iterable[str]) -> tuple[dict[str, object], str]:
     raise RuntimeError("; ".join(errors) or "no update manifest URL configured")
 
 
-def _read_cache(path: Path, max_age_hours: float) -> tuple[dict[str, object], str] | None:
+def configured_manifest_urls() -> tuple[str, ...]:
+    """Keep this standalone updater's channels aligned with mklink.update_check."""
+    if os.environ.get("MKLINK_UPDATE_CHANNEL", "").strip().lower() == "preview":
+        return ("https://download.microkeenai.com/mklink/preview/latest.json", *DEFAULT_MANIFEST_URLS[1:])
+    return DEFAULT_MANIFEST_URLS
+
+
+def _read_cache(path: Path, max_age_hours: float, urls: Sequence[str]) -> tuple[dict[str, object], str] | None:
     try:
         cached = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(cached, dict) or cached.get("manifest_urls") != list(urls):
+            return None
         checked_at = float(cached["checked_at_epoch"])
         manifest = cached["manifest"]
         url = str(cached["manifest_url"])
@@ -112,13 +122,14 @@ def _read_cache(path: Path, max_age_hours: float) -> tuple[dict[str, object], st
         return None
 
 
-def _write_cache(path: Path, manifest: Mapping[str, object], url: str) -> None:
+def _write_cache(path: Path, manifest: Mapping[str, object], url: str, urls: Sequence[str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(".tmp")
     temporary.write_text(json.dumps({
         "checked_at_epoch": time.time(),
         "checked_at": utc_now(),
         "manifest_url": url,
+        "manifest_urls": list(urls),
         "manifest": manifest,
     }, ensure_ascii=True, indent=2) + "\n", encoding="utf-8")
     os.replace(temporary, path)
@@ -143,18 +154,19 @@ def update_result(
 
 
 def check_for_update(
-    *, root: Path, urls: Sequence[str] = DEFAULT_MANIFEST_URLS,
+    *, root: Path, urls: Sequence[str] | None = None,
     cache_file: Path | None = None, max_age_hours: float = 24, force: bool = False,
 ) -> dict[str, object]:
+    urls = tuple(urls) if urls is not None else configured_manifest_urls()
     cache = cache_file or default_cache_file()
     if not force:
-        cached = _read_cache(cache, max_age_hours)
+        cached = _read_cache(cache, max_age_hours, urls)
         if cached is not None:
             manifest, url = cached
             return update_result(root=root, manifest=manifest, manifest_url=url, cached=True)
     try:
         manifest, url = fetch_manifest(urls)
-        _write_cache(cache, manifest, url)
+        _write_cache(cache, manifest, url, urls)
         return update_result(root=root, manifest=manifest, manifest_url=url, cached=False)
     except (RuntimeError, ValueError) as error:
         return {
@@ -441,7 +453,7 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     root = Path(__file__).resolve().parents[1]
-    urls = tuple(args.manifest_urls or DEFAULT_MANIFEST_URLS)
+    urls = tuple(args.manifest_urls or configured_manifest_urls())
     if args.command == "check":
         result = check_for_update(
             root=root, urls=urls, max_age_hours=args.cache_hours, force=args.force,

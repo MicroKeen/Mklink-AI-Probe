@@ -2789,6 +2789,8 @@ def main():
         if name == 'write-variable':
             entry.add_argument('value', help='整数值，支持 0x 前缀')
     args = parser.parse_args()
+    from mklink.startup_timing import mark
+    mark("cli_parsed")
 
     from mklink.runtime_cli import COMMANDS
     if args.command in COMMANDS:

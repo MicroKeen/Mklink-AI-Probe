@@ -9,6 +9,7 @@ import os
 import threading
 import time
 import traceback
+from datetime import datetime
 
 MAX_BYTES = 2 * 1024 * 1024
 BACKUP_COUNT = 3
@@ -137,6 +138,14 @@ class _DiagnosticStream(io.TextIOBase):
 
     def __init__(self, handler):
         self.handler = handler
+        self._lock = threading.RLock()
+        self._pending = {}
+
+    def _emit(self, text):
+        stamp = datetime.now().astimezone().isoformat(timespec='milliseconds')
+        record = logging.LogRecord('mklink.runtime', logging.INFO, '', 0,
+                                   f'[{stamp}] [pid={os.getpid()}] {text}\n', (), None)
+        self.handler.handle(record)
 
     def writable(self):
         return True
@@ -144,15 +153,31 @@ class _DiagnosticStream(io.TextIOBase):
     def write(self, text):
         if not isinstance(text, str):
             raise TypeError('diagnostic output must be text')
-        # Bound a single record too; a large print must not defeat rotation.
-        for offset in range(0, len(text), CHUNK_CHARS):
-            record = logging.LogRecord('mklink.runtime', logging.INFO, '', 0,
-                                       text[offset:offset + CHUNK_CHARS], (), None)
-            self.handler.handle(record)
+        # Preserve split print writes, without interleaving threads or buffering
+        # an unbounded line. Every persisted line gets a timezone-aware timestamp.
+        with self._lock:
+            key = threading.get_ident()
+            pending = self._pending.pop(key, '')
+            for offset in range(0, len(text), CHUNK_CHARS):
+                pending += text[offset:offset + CHUNK_CHARS]
+                while '\n' in pending or len(pending) >= CHUNK_CHARS:
+                    newline = pending.find('\n')
+                    end = newline if 0 <= newline < CHUNK_CHARS else CHUNK_CHARS
+                    self._emit(pending[:end].rstrip('\r'))
+                    pending = pending[end + (end == newline):]
+            if pending:
+                self._pending[key] = pending
+            if len(self._pending) > 64:
+                _, oldest = self._pending.popitem()
+                self._emit(oldest)
         return len(text)
 
     def flush(self):
-        self.handler.flush()
+        with self._lock:
+            for text in self._pending.values():
+                self._emit(text)
+            self._pending.clear()
+            self.handler.flush()
 
 
 @contextmanager
@@ -181,12 +206,14 @@ def runtime_diagnostics(directory, *, max_bytes=MAX_BYTES, backup_count=BACKUP_C
     # Disk/rotation failure must not recurse through stderr or break hardware I/O.
     logging.raiseExceptions = False
     try:
-        with redirect_stdout(stream), redirect_stderr(stream), _native_diagnostics(stream):
+        from mklink.connection_diagnostics import connection_log
+        with connection_log(directory), redirect_stdout(stream), redirect_stderr(stream), _native_diagnostics(stream):
             try:
                 yield
             except BaseException:
                 traceback.print_exc()
                 raise
     finally:
+        stream.flush()
         logging.raiseExceptions = previous_errors
         handler.close()

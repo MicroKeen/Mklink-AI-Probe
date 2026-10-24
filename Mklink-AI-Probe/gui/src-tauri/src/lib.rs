@@ -1,5 +1,7 @@
 mod desktop_clipboard;
 mod sidecar_diagnostics;
+mod startup_timing;
+use startup_timing::record_startup_timing;
 mod site_agent_config;
 mod site_agent_network;
 mod site_agent_secret;
@@ -60,8 +62,7 @@ const HEALTH_CHECK_INTERVAL_SECS: u64 = 5;
 const MAX_CONSECUTIVE_FAILS: u32 = 3;
 const DEFAULT_SIDECAR_PORT: u16 = 8765;
 const LAST_SIDECAR_PORT: u16 = 8799;
-// Cold onefile startup extracts both the proxy and its detached runtime.
-// Cover the runtime's 60s budget plus the proxy's own extraction/imports.
+// Keep the existing slow-machine budget, including Unix onefile extraction.
 const SIDECAR_START_TIMEOUT_SECS: u64 = 120;
 const SIDECAR_SHUTDOWN_TIMEOUT_SECS: u64 = 2;
 
@@ -926,7 +927,9 @@ pub fn run() {
         instance_id
     ));
 
+    let startup_timing = startup_timing::StartupTiming::new(runtime_info_path.with_extension("timing.json"));
     tauri::Builder::default()
+        .manage(startup_timing)
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -945,6 +948,7 @@ pub fn run() {
             job: Mutex::new(None),
         })
         .invoke_handler(tauri::generate_handler![
+            record_startup_timing,
             sidecar_status,
             start_sidecar,
             stop_sidecar,

@@ -89,7 +89,7 @@ const manualFirmwareChoice = ref('')
 const usbNamingAction = ref<'idle' | 'apply' | 'restore'>('idle')
 const manualFirmwareUpgrade = computed(() => {
   const result = firmwareUpgradeResult.value
-  if (!result || result.status === 'updated' || result.status === 'up_to_date') return null
+  if (!result || result.status === 'updated' || result.status === 'up_to_date' || result.status === 'downgrade_blocked') return null
   return result
 })
 const firmwareDownloadTarget = computed(() => {
@@ -373,8 +373,8 @@ async function recheckFirmware() {
 async function upgradeFirmware() {
   if (firmwareUpgrading.value) return
   if (!window.confirm(tr(
-    '将检查所选下载器并升级固件：V2 写入 RBL，V3/V4 进入 UF2 模式。升级会断开连接，请先停止采集，期间不要拔掉 USB。继续吗？',
-    'Update the selected probe: V2 uses RBL; V3/V4 use UF2 mode. The connection will close. Stop acquisition first and keep USB connected. Continue?',
+    '将检查并安装所选下载器的最新修复固件；版本号相同但修订未确认时也会重新安装。V2 写入 RBL，V3/V4 进入 UF2 模式。升级会断开连接，请先停止采集，期间不要拔掉 USB。继续吗？',
+    'Install the latest repair firmware for the selected probe, including reinstalling the same version when its build cannot be confirmed. V2 uses RBL; V3/V4 use UF2. Stop acquisition first and keep USB connected. Continue?',
   ))) return
   firmwareUpgrading.value = true
   firmwareUpgradeResult.value = null
@@ -386,8 +386,8 @@ async function upgradeFirmware() {
     firmwareUpgradeResult.value = result
     if (result.status === 'updated') {
       firmwareUpgradeStatus.value = tr(
-        `升级完成：${result.verified_version || result.latest_version || ''}`,
-        `Update complete: ${result.verified_version || result.latest_version || ''}`,
+        `升级完成：${result.verified_version || result.latest_version || ''}${result.verified_build_id ? ' · ' + result.verified_build_id : ''}`,
+        `Update complete: ${result.verified_version || result.latest_version || ''}${result.verified_build_id ? ' · ' + result.verified_build_id : ''}`,
       )
       toast.success(firmwareUpgradeStatus.value)
     } else if (result.status === 'up_to_date') {
@@ -420,7 +420,9 @@ async function downloadFirmware() {
       firmwareDownloadStatus.value = ''
       return
     }
-    const source = downloaded.source === 'gitee'
+    const source = downloaded.source === 'tencent'
+      ? tr('腾讯云', 'Tencent Cloud')
+      : downloaded.source === 'gitee'
       ? tr('Gitee', 'Gitee')
       : downloaded.source === 'local'
         ? tr('本地固件包', 'local firmware package')
@@ -603,6 +605,10 @@ onUnmounted(() => {
         </header>
         <div class="firmware-upgrade-content">
           <p>{{ tr('检查并升级所选下载器。V2 使用 RBL，V3/V4 使用 UF2；升级期间请勿拔掉 USB。', 'Check and update the selected probe. V2 uses RBL; V3/V4 use UF2. Keep USB connected during the update.') }}</p>
+          <button class="btn" type="button" data-testid="check-firmware" :disabled="firmwareUpgrading" @click="recheckFirmware">{{ tr('检查固件', 'Check Firmware') }}</button>
+          <p v-if="firmwareCheck?.status === 'revision_unknown'" data-testid="firmware-revision-unknown">{{ tr('版本号相同，但尚未确认已安装的修订。可以重新安装最新修复包。', 'The version matches, but the installed build is unconfirmed. You can reinstall the latest repair package.') }}</p>
+          <p v-if="firmwareCheck?.current_build_id" data-testid="firmware-build-id">{{ tr('当前构建：', 'Installed build: ') }}{{ firmwareCheck.current_build_id }}</p>
+          <p v-if="firmwareCheck?.recommended_uf2?.build_id" data-testid="firmware-recommended-build">{{ tr('可用构建：', 'Available build: ') }}{{ firmwareCheck.recommended_uf2.build_id }}</p>
           <button class="btn" type="button" data-testid="upgrade-firmware" :disabled="firmwareUpgrading" @click="upgradeFirmware">
             {{ firmwareUpgrading ? tr('升级中...', 'Updating...') : tr('升级到最新固件', 'Update to Latest Firmware') }}
           </button>

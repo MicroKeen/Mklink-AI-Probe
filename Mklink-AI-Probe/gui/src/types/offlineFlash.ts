@@ -82,6 +82,7 @@ export interface OfflineConfigPayload {
   beep_on_completion?: boolean
   beep_duration_ms?: number
   reset_after_download?: boolean
+  verify_after_download?: boolean
   reset_mode?: 'software' | 'hardware' | 'power_cycle'
   reset_voltage_mv?: number | null
   model: 'V2' | 'V3' | 'V4'
@@ -119,6 +120,7 @@ export interface OfflineSecurityCapability {
 }
 
 export interface OfflinePreview {
+  required_capabilities?: string[]
   model: 'V2' | 'V3' | 'V4'
   script_name: string
   script: string

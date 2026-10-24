@@ -339,9 +339,16 @@ class RuntimeControl:
                         record = {'path': name, 'client': 'GUI / API',
                                   'started_at': time.time(), 'http_status': None}
                         self.current_operation = record
+                        from mklink.connection_diagnostics import event, error_detail
+                        event('lifecycle.started', operation=name)
                         try:
                             return await operation()
+                        except BaseException as error:
+                            event('lifecycle.failed', operation=name, error=error_detail(error))
+                            raise
                         finally:
+                            event('lifecycle.finished', operation=name,
+                                  elapsed_ms=round((time.monotonic()-started)*1000))
                             self.last_operation = {**record, 'duration_seconds': time.monotonic() - started}
                             self.current_operation = None
                             active_operation.reset(token)

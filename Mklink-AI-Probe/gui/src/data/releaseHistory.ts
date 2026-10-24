@@ -9,10 +9,14 @@ export interface ReleaseHistoryEntry {
 
 export const releaseHistory: ReleaseHistoryEntry[] = [
   {
-    version: '0.3.6', date: '2026-10-24',
-    summary: '新增 ISP 烧录，优化终端与日志',
-    summaryEn: 'Add ISP programming and improve terminal and logs',
+    version: '0.3.6', date: '2026-10-25',
+    summary: '新增 ISP 烧录，优化下载、启动与诊断',
+    summaryEn: 'Add ISP programming and improve downloads, startup and diagnostics',
     changes: [
+      '安装包、Skill 与固件优先使用腾讯云下载，保留 GitHub/Gitee 备用。',
+      '固件升级支持识别相同版本的修复构建，未知修订可重装，阻止降级。',
+      '缩短 Windows 启动等待，进度条按实际加载阶段推进。',
+      'BIN/HEX 脱机校验默认开启；关闭前检查固件能力，不足时提示升级。',
       'SuperWatch 支持离线加载、重载自动停止采集，断开保留变量选择；新增公式、曲线颜色和快捷合并。',
       '优化 HPM JTAG 连续烧录的换板检测；单次烧录隐藏等待时间。',
       '修复刚连接时 RTT 自动搜索失败，改善 RTT 与 SuperWatch 启动顺序兼容性。',
@@ -25,8 +29,13 @@ export const releaseHistory: ReleaseHistoryEntry[] = [
       '断电复位可选 1.8V、3.3V、5V，默认 3.3V。',
       'RTT 终端跳过收发解析；SuperWatch 日志可提前开启并选择系统文件夹。',
       '修复连接失败和串口工作进程退出后的资源释放。',
+      '新增连接诊断包导出，记录断开时间、具体错误和重连过程。',
     ],
     changesEn: [
+      'Prefer Tencent Cloud for application, Skill and firmware downloads, with GitHub/Gitee fallbacks.',
+      'Identify same-version firmware repair builds, allow reinstalling unconfirmed revisions and block downgrades.',
+      'Reduce Windows startup delays and advance the progress bar with actual loading stages.',
+      'Enable BIN/HEX offline verification by default; check firmware support before disabling it and prompt for an upgrade when needed.',
       'SuperWatch supports offline loading, stops capture on reload and retains selections on disconnect; adds formulas, curve colors and quick merge.',
       'Improve HPM JTAG board replacement detection; hide the wait setting for a single run.',
       'Fix RTT auto-discovery after connecting and improve RTT/SuperWatch startup-order compatibility.',
@@ -39,6 +48,7 @@ export const releaseHistory: ReleaseHistoryEntry[] = [
       'Choose 1.8V, 3.3V or 5V for power-cycle reset; default to 3.3V.',
       'Skip traffic parsing in RTT terminal mode; enable SuperWatch logs before capture with a system folder picker.',
       'Release serial resources after failed connections and worker exit.',
+      'Export connection diagnostics with disconnect timestamps, specific errors and recovery events.',
     ],
   },
   {

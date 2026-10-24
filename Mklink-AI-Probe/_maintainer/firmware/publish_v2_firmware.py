@@ -17,7 +17,7 @@ from urllib.request import urlopen
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-from mklink.firmware_check import _parse_manifest, FIRMWARE_MANIFEST_SCHEMA, parse_firmware_filename
+from mklink.firmware_check import _parse_manifest, FIRMWARE_MANIFEST_SCHEMA, parse_firmware_filename, bundled_firmwares
 from mklink.rbl import validate_rbl
 from _maintainer.release.publish_update_release import verify_public_asset
 
@@ -44,6 +44,9 @@ def make_manifest(file, previous, url):
         raise ValueError('Expected MicroLink_V2.x.y.rbl')
     payload = validate_rbl(file, version=info.version_str)
     digest = hashlib.sha256(file.read_bytes()).hexdigest()
+    pinned = next((item for item in bundled_firmwares() if item.name == file.name), None)
+    if pinned is not None and (pinned.sha256 != digest or pinned.size != file.stat().st_size):
+        raise ValueError('Firmware differs from pinned delivery')
     if previous is not None:
         old = _parse_manifest(previous)
         if len(old) != 1 or old[0].model != 'V2':
@@ -56,7 +59,8 @@ def make_manifest(file, previous, url):
             'published_at': datetime.now(timezone.utc).isoformat(),
             'firmwares': [dict(name=file.name, family='microlink', model='V2', format='rbl',
                 version=info.version_str, size=file.stat().st_size, sha256=digest,
-                rbl_payload_bytes=payload, urls={'github': url})]}
+                rbl_payload_bytes=payload, urls={'github': url},
+                **({'build_id': pinned.build_id} if pinned is not None else {}))]}
 
 
 def snapshot(repo):
