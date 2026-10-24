@@ -63,8 +63,13 @@ Skill 3.93 秒（23.94 MiB/s）；这是本机本次测量，不代表所有用�
   和目标二进制版本均为 `0.3.6`，没有伪造更高索引版本。
   已实际下载并在界面显示“v0.3.6 已下载完成”，点击安装后触发 Windows UAC。
   UAC 随后消失，安装目录可执行文件哈希仍为旧包，安装程序和客户端均已退出；
-  没有证据判定是用户取消或系统超时。**安装、重启及二次无更新检查未完成，
-  需要用户可操作 UAC 时重试。**
+  没有证据判定是用户取消或系统超时。用户随后明确要求重试；13:10 重试成功，
+  安装目录程序自动启动，界面版本为 0.3.6、后台正常，启动更新检查后没有
+  重复下载/安装提示或错误。实际安装的四份载荷与解包产物逐字节一致，206 份
+  Python、41 份 Web、冻结 MCP/SVD/HTTP、离线功能及隔离后台正常退出均通过。
+  主程序 SHA-256 为
+  `181e0ec82fe4ddcd22288467f6e3747c473292dea8a87d67883cfdd7bfde0077`。
+  已安装新版保持打开，未连接或写入硬件。
 
 本轮更新改动没有操作硬件。原 V4/F103 全功能实测属于前次候选，证据和
 30MHz 并行采集读错限制继续保留，不能把前次实测当作本包新增硬件证据。
@@ -83,11 +88,10 @@ Skill 3.93 秒（23.94 MiB/s）；这是本机本次测量，不代表所有用�
 
 证据位于配置构建根的 `artifacts/v036-tencent-preview-20261024/`：
 `build-report.json`、`latest.json`、`extracted-qualification.json`、
-`download-verification.json`、`skill-upgrade-report.json`、`fallback-report.json`。
+`download-verification.json`、`skill-upgrade-report.json`、`fallback-report.json`、
+`installed-qualification.json`、`native-update-report.json`。
 构建根 `reports/tencent-preview-*-20261024.log` 保存全量、构建、升级、
 服务器复核及密钥撤销日志。测试链接目录按存储规则保留，未沿链接强删。
 
-继续时先确认用户已准备好处理 UAC，再重新启动已有的较低版本测试客户端，
-通过真实更新入口重试；检查安装文件与解包载荷逐字节一致、原生重启和二次
-更新状态。无需重新上传、重新签名或重新授权 SSH。正式发布仍需用户明确指示，
-不能推进 stable 或正式标签。
+腾讯云预览更新的 Windows 和 Skill 真实升级验证已完成。无需重新上传、
+重新签名或重新授权 SSH。正式发布仍需用户明确指示，不能推进 stable 或正式标签。
