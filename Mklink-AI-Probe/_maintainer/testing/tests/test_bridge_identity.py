@@ -99,6 +99,7 @@ def test_bound_identity_allows_only_its_own_port(bound_probe, monkeypatch):
 
 def test_unchanged_identity_keeps_existing_handshake(bound_probe, monkeypatch):
     serial_port = Mock(is_open=True)
+    serial_port.close.side_effect = lambda: setattr(serial_port, 'is_open', False)
     monkeypatch.setattr(bridge_module.serial, 'Serial', Mock(return_value=serial_port))
     monkeypatch.setattr(bridge_module.threading, 'Thread', Mock())
     bridge = MKLinkSerialBridge('COM10')
@@ -115,6 +116,7 @@ def test_unchanged_identity_keeps_existing_handshake(bound_probe, monkeypatch):
 @pytest.mark.parametrize('mode', ['normal', 'systemview', 'text_stream', 'mux', 'no_prompt'])
 def test_known_usb_command_interface_never_executes_identity_script(bound_probe, monkeypatch, mode):
     serial_port = Mock(is_open=True)
+    serial_port.close.side_effect = lambda: setattr(serial_port, 'is_open', False)
     monkeypatch.setattr(bridge_module.serial, 'Serial', Mock(return_value=serial_port))
     reader = Mock()
     reader.is_alive.return_value = False

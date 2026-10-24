@@ -15,7 +15,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 import serial
-from mklink._isolated_serial import IsolatedSerial
+from mklink._isolated_serial import IsolatedSerial, SerialCleanupPending
 import os
 import sys
 
@@ -132,14 +132,29 @@ class MKLinkSerialBridge:
         )
 
     def connect(self, *, recover_stream: bool = True) -> bool:
+        try:
+            return self._connect(recover_stream=recover_stream)
+        except BaseException:
+            self.close()
+            raise
+
+    def _connect(self, *, recover_stream: bool = True) -> bool:
         """打开串口并同步设备状态（等待 >>> 提示符）。"""
         from mklink.probes import require_runtime_port
+        # A failed worker shutdown must remain reachable across retries.
+        if self._serial is not None and self._serial.is_open:
+            self.close()
         self._transport_error = None
         self.last_connect_error = 'Command port did not return a prompt; check the probe firmware/USB connection and retry'
         self._mux_supported = None  # Re-negotiate after reconnect/firmware changes.
         self._firmware_capabilities = None
         # 进程级互斥：获取文件锁
         if not self._port_lock.acquire():
+            error = getattr(self._port_lock, 'last_error', None)
+            if error is not None:
+                self.last_connect_error = f'Cannot access command-port lock: {error}'
+                print(f'[FAIL] {self.last_connect_error}')
+                return False
             self.last_connect_error = 'Command port is owned by another process; close its connection before retrying'
             print(f"[FAIL] 串口 {self._port} 正被其他进程使用")
             print("       请等待其他操作完成，或关闭占用串口的进程后重试。")
@@ -158,6 +173,9 @@ class MKLinkSerialBridge:
             # Opening the Windows worker/serial handle can take time. Recheck
             # before clearing buffers, starting a reader or sending sync/stop.
             require_runtime_port(self._port)
+        except SerialCleanupPending as e:
+            self._serial = e.transport
+            raise
         except (serial.SerialException, ConnectionError) as e:
             self.last_connect_error = f'Could not open command port: {e}'
             self.close()
@@ -168,9 +186,6 @@ class MKLinkSerialBridge:
             else:
                 print(f"[FAIL] 无法打开端口 {self._port}: {e}")
             return False
-        except BaseException:
-            self.close()
-            raise
         self._ctx.state = DeviceState.CONNECTING
         self._running = True
 
@@ -245,9 +260,7 @@ class MKLinkSerialBridge:
             if self._reader_thread.is_alive():
                 # reader 线程未退出，关闭串口强制终止
                 self._ctx.state = DeviceState.ERROR
-                if self._serial and self._serial.is_open:
-                    self._serial.close()
-                self._port_lock.release()
+                self.close()
                 return False
 
         try:
@@ -299,12 +312,7 @@ class MKLinkSerialBridge:
 
         # 恢复也失败，释放资源
         self._ctx.state = DeviceState.ERROR
-        self._running = False
-        if self._reader_thread and self._reader_thread.is_alive():
-            self._reader_thread.join(timeout=1.0)
-        if self._serial and self._serial.is_open:
-            self._serial.close()
-        self._port_lock.release()
+        self.close()
         return False
 
     def _is_known_command_port(self) -> bool:
@@ -342,7 +350,13 @@ class MKLinkSerialBridge:
         if self._reader_thread and self._reader_thread.is_alive():
             self._reader_thread.join(timeout=2.0)
         if self._serial and self._serial.is_open:
-            self._serial.close()
+            try:
+                self._serial.close()
+            except Exception:
+                if self._serial.is_open:
+                    raise  # Still owns IO (or exit unconfirmed): retain locks.
+            if self._serial.is_open:
+                raise serial.SerialException('Serial port close is unconfirmed; ownership retained')
         # 释放进程级文件锁
         self._port_lock.release()
         # 重置上下文
