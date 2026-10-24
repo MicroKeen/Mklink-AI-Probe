@@ -38,7 +38,11 @@ async function request(path: string, body?: unknown) {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
   })
   const data = await response.json()
-  if (!response.ok) throw new Error(data.detail || `HTTP ${response.status}`)
+  if (!response.ok) {
+    const detail = data.detail
+    const message = typeof detail === 'string' ? detail : detail?.message
+    throw new Error(typeof message === 'string' && message ? message : `HTTP ${response.status}`)
+  }
   return data
 }
 function update(data: Recording) { status.value = data; emit('state', data.state) }

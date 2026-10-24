@@ -68,6 +68,25 @@ it('cancels without starting or browsing and allows retry after a native picker 
   } finally { wrapper.unmount() }
 })
 
+it('shows a structured admission error and allows recording to be retried', async () => {
+  environment.pickDirectory.mockResolvedValue('F:/logs')
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => ({
+    ok: !url.endsWith('/start'), status: 409,
+    json: async () => url.endsWith('/start')
+      ? { detail: { code: 'probe_not_selected', message: 'Select a probe before recording' } }
+      : { active: false, state: 'idle' },
+  })))
+  const wrapper = mount(SuperWatchRecording)
+  try {
+    await flushPromises()
+    await wrapper.get('[data-testid=sw-record-toggle]').trigger('click'); await flushPromises()
+    expect(wrapper.text()).toContain('Select a probe before recording')
+    expect(wrapper.text()).not.toContain('[object Object]')
+    expect(wrapper.get('[data-testid=sw-record-toggle]').attributes('disabled')).toBeUndefined()
+    expect(localStorage.setItem).not.toHaveBeenCalled()
+  } finally { wrapper.unmount() }
+})
+
 it.each([{ native: false, remote: false }, { native: true, remote: true }])('keeps backend directory browsing for $native/$remote windows', async options => {
   Object.assign(environment, options)
   vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ active: false, state: 'idle', current: 'F:/logs', parent: 'F:/', dirs: [], drives: [] }) })))
