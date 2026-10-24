@@ -104,6 +104,7 @@
         :title="tr('还有其他客户端时后台继续运行；全部退出且无在途任务后约5秒自动停止采集并释放下载器。', 'The backend stays alive for other clients. About 5 seconds after all clients leave and pending work completes, it stops capture and releases the probe.')">
         {{ IS_REMOTE ? tr('远程会话 · 固定目标 · 不回退本地', 'Remote session · Fixed target · No local fallback') : tr('共享后台 · CDC · GUI / AI 共用连接', 'Shared backend · CDC · GUI / AI connection') }}
       </span>
+      <DiagnosticsExport />
       <VersionHistoryPopover :version="appVersion" />
     </footer>
     <ToastContainer />
@@ -121,6 +122,7 @@ import StatusBar from './components/StatusBar.vue'
 import ToastContainer from './components/ToastContainer.vue'
 import AppUpdateBanner from './components/AppUpdateBanner.vue'
 import VersionHistoryPopover from './components/VersionHistoryPopover.vue'
+import DiagnosticsExport from './components/DiagnosticsExport.vue'
 import { useMklinkApi } from './composables/useMklinkApi'
 import { useBackendHealth } from './composables/useBackendHealth'
 import { useAppUpdater } from './composables/useAppUpdater'

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-24T13:12:04+08:00",
+  "updated_at": "2026-10-24T18:04:30.2347875+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
@@ -13,8 +13,8 @@
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "complete",
-    "current_task": "腾讯云0.3.6预览更新测试完成，源码5920c5c5，PR50待审，尚未正式发布。完整Python5412通过2跳过、GUI1090、签名Windows与完整Skill资格通过。公网大小/SHA/Range、Skill真实升级2617文件一致、GitHub/Gitee回退及不降级通过。用户要求重试后原生0.3.6-preview.0到0.3.6真实安装/自动重启成功，四份实装载荷一致、206Python/41Web及冻结功能通过，启动再次检查无重复更新提示或错误。新版保持打开且未连接硬件。临时SSH已撤销并验证拒绝；stable仍404，正式引用未变。"
+    "status": "in_progress",
+    "current_task": "0.3.6续改：仅主机连接诊断与客户ZIP导出，固件不变。Python全套首轮5413通过2跳过；夹具修正后定点215通过，4个隔离打包项补齐资源后通过；GUI全套1094及Windows builder检查通过。本地preview构建及真实安装/导出进行中。此前腾讯云预览5920c5c5已完成；PR50待审，尚未正式发布。"
   },
   "milestones": [
     {
@@ -110,7 +110,7 @@
     "nRF54L15 GUI保护闭环、全部物理擦除/拔插/休眠/断电场景、电源外部精度校准未全部认证。VCC每次改动必须确认具体电压，HPM已锁定OTP不得重放。 已知无可靠扇区表的26个FLM禁用扇区操作；重叠算法需要匹配Bank模式。 HPM5301组18/19永久锁定的历史状态及用户字先写/组锁最后、全部固件独立校验后才写OTP等边界见docs/ai/hpm-offline-otp-handoff.md；接手重新确认芯片，其他型号不继承验收。 UART OTP已实现ROM write-memory APIv2，独立熔丝/影子/临时锁读语义仍未知并如实显示；以ROM写入状态及回读为准。配套3d96dbb已实机验证HPM5301全部128字读取和用户批准的Word69 0→1单次写入回读；其余型号/区域未实写，新数据须具体授权。多Word顺序执行不可回滚。CSV原生选择器自动化未完成。"
   ],
   "next_actions": [
-    "腾讯云Windows/Skill预览真实升级已完成，PR50待审；正式发布等待用户明确指示。保留GitHub/Gitee备用，暂不推进stable、release/firmware或正式标签。临时SSH已撤销；不重复授权、上传、安装和硬件写入。正式候选需按合并源码重新核对并构建stable通道包，不能把preview安装包直接当正式包分发。",
+    "完成连接诊断Windows本地preview构建、真实安装/导出并提交PR50；不改固件/供电。V3掉线20分钟未复现，历史移除混有手动拔插，不能认定自动复位。腾讯云预览升级已完成，临时SSH已撤销；正式发布待明确指示，保留GitHub/Gitee备用，不推进stable/release/firmware/标签。正式候选按合并源码重建stable包，不能分发preview包充当正式包。",
     "收集客户N32WB452内外Flash组合实际烧写/回读反馈；本轮主机解析准入及安装包通过，不代替外置SPI硬件验证。不重复使用已消耗的F103单次烧录授权；不主动烧写或改OTP/供电。",
     "用户需重新生成并部署U盘脚本再测完整HPM JTAG连续烧录；旧脚本不会自动更新。实时拔插/LCD已验证，完整多板Flash/蜂鸣次数仍待实测；不重复历史一次性写入授权。",
     "HPM联合镜像/OTP历史证据保留，Word69=3；本轮使用F103，未写HPM OTP或调整VCC。其他HPM型号继续由用户测试，未知MKLINK_V2任务不得重放，勿将目标板误作下载器升级。",

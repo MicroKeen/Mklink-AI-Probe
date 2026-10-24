@@ -228,3 +228,23 @@ def test_expiry_during_worker_join_does_not_close_its_handle(recovery, monkeypat
         await r.tick()
     asyncio.run(run())
     assert r.status['state'] == 'expired' and calls == []
+
+def test_recovery_expiry_is_logged_once_with_elapsed_time(recovery, monkeypatch, tmp_path):
+    import asyncio
+    from mklink.connection_diagnostics import connection_log
+    from test_connection_diagnostics import rows
+    r, state, _, _ = recovery
+    async def run():
+        await lose(r, state)
+        monkeypatch.setattr('mklink.probes.select_probe', lambda key: (_ for _ in ()).throw(OSError('probe absent')))
+        await r.tick()
+        await r.tick()
+        r.lost_at -= 6
+        await r.tick()
+        await r.tick()
+    with connection_log(tmp_path):
+        asyncio.run(run())
+    result = rows(tmp_path)
+    assert len([r for r in result if r['event'] == 'recovery.probe_unavailable']) == 1
+    expiry = [r for r in result if r['event'] == 'recovery.expired']
+    assert len(expiry) == 1 and expiry[0]['elapsed_ms'] >= 5000

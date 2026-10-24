@@ -1,4 +1,5 @@
 import { ref, readonly } from 'vue'
+import { recordStatusFailure, recordStatusRestored } from '../lib/connectionDiagnostics'
 import type {
   PortInfo,
   McuProfile,
@@ -221,13 +222,15 @@ export function useMklinkApi() {
     try {
       const s = await api<DeviceStatus>('/api/device/status')
       if (request === statusRequest) {
+        recordStatusRestored()
         if (s.device_generation !== deviceStatus.value.device_generation) resetDeviceSymbolCatalog()
         deviceStatus.value = s
       }
       return s
-    } catch {
+    } catch (error) {
       // The remote window is made inert by backend health; keep the last snapshot visible.
       if (IS_REMOTE || request !== statusRequest) return deviceStatus.value
+      recordStatusFailure(error)
       deviceStatus.value = {
         connected: false,
         state: 'disconnected',

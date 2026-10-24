@@ -158,8 +158,13 @@ def test_concurrent_writers_and_separate_runtime_directories(tmp_path):
             list(pool.map(lambda n: stream.write(f'row-{n}\n'), range(300)))
     with runtime_diagnostics(second):
         print('other runtime')
-    assert sorted((first / 'runtime.log').read_text().splitlines()) == sorted(f'row-{n}' for n in range(300))
-    assert (second / 'runtime.log').read_text() == 'other runtime\n'
+    import re
+    from datetime import datetime
+    rows = (first / 'runtime.log').read_text().splitlines()
+    for row in rows:
+        assert datetime.fromisoformat(row.split(']')[0][1:]).tzinfo is not None
+    assert sorted(re.sub(r'^\[[^]]+\] \[pid=\d+\] ', '', row) for row in rows) == sorted(f'row-{n}' for n in range(300))
+    assert (second / 'runtime.log').read_text().endswith('other runtime\n')
 
 
 def test_rollover_failure_does_not_recurse_or_abort_runtime(tmp_path, monkeypatch):
@@ -167,8 +172,10 @@ def test_rollover_failure_does_not_recurse_or_abort_runtime(tmp_path, monkeypatc
     def unavailable(handler):
         raise OSError('disk unavailable')
     monkeypatch.setattr(RotatingFileHandler, 'doRollover', unavailable)
-    with runtime_diagnostics(tmp_path, max_bytes=100):
+    with runtime_diagnostics(tmp_path, max_bytes=256):
         sys.stdout.write('seed\n')
-        sys.stdout.write('x' * 200)
+        sys.stdout.write('x' * 300 + '\n')
         sys.stdout.write('runtime stays alive\n')
-    assert (tmp_path / 'runtime.log').read_text() == 'seed\nruntime stays alive\n'
+    log = (tmp_path / 'runtime.log').read_text()
+    assert 'seed\n' in log and log.endswith('runtime stays alive\n')
+    assert 'xxx' not in log

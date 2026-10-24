@@ -25,6 +25,7 @@ export const releaseHistory: ReleaseHistoryEntry[] = [
       '断电复位可选 1.8V、3.3V、5V，默认 3.3V。',
       'RTT 终端跳过收发解析；SuperWatch 日志可提前开启并选择系统文件夹。',
       '修复连接失败和串口工作进程退出后的资源释放。',
+      '新增连接诊断包导出，记录断开时间、具体错误和重连过程。',
     ],
     changesEn: [
       'SuperWatch supports offline loading, stops capture on reload and retains selections on disconnect; adds formulas, curve colors and quick merge.',
@@ -39,6 +40,7 @@ export const releaseHistory: ReleaseHistoryEntry[] = [
       'Choose 1.8V, 3.3V or 5V for power-cycle reset; default to 3.3V.',
       'Skip traffic parsing in RTT terminal mode; enable SuperWatch logs before capture with a system folder picker.',
       'Release serial resources after failed connections and worker exit.',
+      'Export connection diagnostics with disconnect timestamps, specific errors and recovery events.',
     ],
   },
   {

@@ -35,6 +35,8 @@ def stop_backend(control, body):
 
 
 def install_management(app, control):
+    from mklink.connection_diagnostics import install_export
+    install_export(app)
     api = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
     def no_capture():

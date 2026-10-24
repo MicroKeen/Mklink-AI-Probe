@@ -11,6 +11,7 @@ import secrets
 import struct
 import threading
 import time
+from mklink.connection_diagnostics import event, error_detail
 
 
 class MuxError(ConnectionError):
@@ -51,7 +52,8 @@ class MuxTransport:
     # sustained overload, never block the sole USB reader or command replies.
     WATCH_QUEUE_BYTES = 262144
 
-    def __init__(self, write, command_lock=None):
+    def __init__(self, write, command_lock=None, *, diagnostic_context=None):
+        self._diagnostic_context = diagnostic_context or {}
         self._write = write
         self._condition = threading.Condition()
         self._commands = command_lock or threading.RLock()
@@ -85,6 +87,16 @@ class MuxTransport:
         with self._condition:
             if self._error is None:
                 self._error = MuxError(str(error))
+                now = time.monotonic()
+                event('mux.failed', **self._diagnostic_context,
+                      error=error_detail(error if isinstance(error, BaseException) else self._error),
+                      epoch=self.epoch,
+                      pending=None if self._pending is None else {
+                          'opcode': f'0x{self._pending[0]:02X}', 'request': self._pending[1],
+                          'heartbeat': self._pending[3]},
+                      last_receive_age_ms=None if self._last_receive is None else round((now-self._last_receive)*1000),
+                      last_reply_age_ms=None if self._last_reply is None else round((now-self._last_reply)*1000),
+                      timeout=self._last_timeout, rtt_mask=self.rtt_mask, watch_running=self.watch_running)
             self.ready = False
             self._condition.notify_all()
 

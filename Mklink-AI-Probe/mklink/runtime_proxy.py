@@ -101,6 +101,8 @@ def create_proxy(info, *, port, instance_id, transport=None):
 
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.shutdown = None
+    from mklink.connection_diagnostics import install_export
+    install_export(app)  # Export remains available when the CDC backend is down.
     origins = DESKTOP_ORIGINS | {f"http://127.0.0.1:{port}"}
     app.add_middleware(CORSMiddleware, allow_origins=sorted(origins), allow_methods=["*"],
                        allow_headers=["*"], expose_headers=['X-MKLink-Submission'])
@@ -242,6 +244,16 @@ def serve_desktop_proxy(args):
         server = uvicorn.Server(uvicorn.Config(app, access_log=False, ws="websockets-sansio", ws_per_message_deflate=False))
         app.state.shutdown = lambda: setattr(server, "should_exit", True)
         _write_desktop_runtime_info(args.desktop_runtime_info, port=selected, instance_id=args.desktop_instance_id)
-        server.run(sockets=[listener])
+        from mklink.runtime import runtime_dir
+        from mklink.connection_diagnostics import connection_log
+        directory = runtime_dir() / 'desktops' / view_directory_name(args.desktop_instance_id)
+        with connection_log(directory):
+            server.run(sockets=[listener])
     finally:
         listener.close()
+
+
+def view_directory_name(instance_id):
+    # The launcher identity is metadata, never a filesystem path.
+    import hashlib
+    return hashlib.sha256(instance_id.encode()).hexdigest()[:24]
