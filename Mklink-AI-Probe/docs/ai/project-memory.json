@@ -1,20 +1,20 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-23T23:57:07.312697+08:00",
+  "updated_at": "2026-10-24T09:22:51.632815+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/hpm-isp-deployment-ux",
-    "head": "功能源870471b6；组合源e7c49b04/Web bcdc8474；清理前交接6e02aefc。本次文档提交以Git HEAD为准。",
-    "remote_head": "清理前6e02aefc已fetch核对一致；清理交接随后单独提交推送，核对远端。",
+    "head": "PR42/46/49已整合到PR48，源22ecb186；以Git HEAD为准。",
+    "remote_head": "本轮整合随后推送到microkeen任务分支，未合并main。",
     "working_tree": "唯一工作区E:/software/HPM5300/Mklink-AI-Probe，源码子目录Mklink-AI-Probe；已返回任务分支codex/hpm-isp-deployment-ux。已安装组合在codex/v036-isp-ux-local。"
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "handoff_ready",
-    "current_task": "SuperWatch新功能已实现、验证并覆盖安装，见v036-superwatch-formulas.md。E/F磁盘清理完成：释放12.97/10.38GiB，剩余13.60/37.16GiB；218个含链接测试目录11.55GiB列人工清单。源码/最新包/独有证据保留，见v036-storage-cleanup-20261023.md。"
+    "status": "in_progress",
+    "current_task": "用户授权处理4个PR、清理已合并旧分支并开展0.3.6发布前全功能测试；当前整合PR42/46/49到PR48，保留最新交接，重新验证后合并。V4连接STM32F103原测试工程，允许直接改编测试代码且无需备份。"
   },
   "milestones": [
     {
@@ -95,7 +95,7 @@
     "编译完成不代表目标已下载：文件变化仅发待重载提示，不后台解析。用户明确加载/重载文件时自动停止目标采集，确认worker退出后原子换表，保持停止；失败保留旧目录/选择。不要求连接下载器；断开保留文件和选中变量但清空旧采样。公式只改变可视化，原始记录不变；不恢复旧地址采集或重放写操作。"
   ],
   "hardware": {
-    "state": "本轮仅磁盘清理和文档交接，没有接管探针或操作目标。上轮SuperWatch验收进程已正常退出；当前物理接入不可沿用旧身份推定。",
+    "state": "用户本轮指定V4+STM32F103测试板；待重新发现并核对身份，不能沿用HPM。允许修改编译原测试工程，无需备份；未修改供电。",
     "installer": "已覆盖0.3.6 e7c49b04/Web bcdc8474；最新包在构建根artifacts/v036-watch-formulas-e7c49b04，SHA256 818035c005e02978b0729facd7cafcfba91babc659aa209e6bbc6409495b202b，清理后再次核对一致。",
     "backups": "正式release、原安装包、CI ZIP、唯一硬件证据、Skill备份和当前F盘缓存保留。删除61个可再生旧编译/解压目录；218个含链接测试目录未删。完整人工清单和删除结果在F:/MKLink-Build/reports/cleanup-20261023，见v036-storage-cleanup-20261023.md。"
   },
@@ -110,7 +110,7 @@
     "nRF54L15 GUI保护闭环、全部物理擦除/拔插/休眠/断电场景、电源外部精度校准未全部认证。VCC每次改动必须确认具体电压，HPM已锁定OTP不得重放。 已知无可靠扇区表的26个FLM禁用扇区操作；重叠算法需要匹配Bank模式。 HPM5301组18/19永久锁定的历史状态及用户字先写/组锁最后、全部固件独立校验后才写OTP等边界见docs/ai/hpm-offline-otp-handoff.md；接手重新确认芯片，其他型号不继承验收。 UART OTP已实现ROM write-memory APIv2，独立熔丝/影子/临时锁读语义仍未知并如实显示；以ROM写入状态及回读为准。配套3d96dbb已实机验证HPM5301全部128字读取和用户批准的Word69 0→1单次写入回读；其余型号/区域未实写，新数据须具体授权。多Word顺序执行不可回滚。CSV原生选择器自动化未完成。"
   ],
   "next_actions": [
-    "用户测试新版SuperWatch加载时停采集、断开后选择保留与公式/颜色/合并；安装和网页验证已完成，测试进程已正常退出。当前硬件不可按旧HPM身份推定；本轮未接管探针。V2/V3和ARM真实采集矩阵仍需另行补充，不把协议回归当实体认证。",
+    "完成整合源码全Python/GUI/生产构建、V4+STM32F103原工程实机与实际安装验收；核对必需CI和精确PR头后合并，清理确认进入主线的旧分支。正式发布尚未执行。SuperWatch新功能需本轮F103实机补验，V2/V3和HPM矩阵不能继承。",
     "收集客户N32WB452内外Flash组合实际烧写/回读反馈；本轮主机解析准入及安装包通过，不代替外置SPI硬件验证。不重复使用已消耗的F103单次烧录授权；不主动烧写或改OTP/供电。",
     "用户需重新生成并部署U盘脚本再测完整HPM JTAG连续烧录；旧脚本不会自动更新。实时拔插/LCD已验证，完整多板Flash/蜂鸣次数仍待实测；不重复历史一次性写入授权。",
     "PR48未合并发布。此前联合镜像+OTP实机证据保留，当前Word69=3；本轮未追加目标烧录/OTP/VCC。其他HPM型号继续由用户测试，固件交会话01a15977-1aef-7430-aa11-6e39725f0465。 未知MKLINK_V2任务不得重放。当前接入若为烧好固件的目标板或另一V2.9.0设备，不能误当原下载器升级。",
