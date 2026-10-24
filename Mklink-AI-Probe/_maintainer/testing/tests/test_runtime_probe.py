@@ -123,7 +123,7 @@ def test_firmware_recheck_reuses_probe_query_only_when_disk_version_is_unavailab
         raise AssertionError('Firmware recheck attempted an independent CDC connection')
     monkeypatch.setattr(fc, 'read_device_version', forbidden)
     response = client.get('/api/probe/firmware-check')
-    assert response.status_code == 200 and response.json()['status'] == 'ok', response.text
+    assert response.status_code == 200 and response.json()['status'] == 'revision_unknown', response.text
     assert response.json()['current_version'] == 'V4.5.2'
     assert bridge.commands == ([] if disk_version else ['cmd.get_version()'])
     assert not control.sessions and not state['resource_manager'].get_status()

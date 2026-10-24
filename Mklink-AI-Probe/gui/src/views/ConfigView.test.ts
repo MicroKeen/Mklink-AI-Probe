@@ -885,4 +885,31 @@ describe('ConfigView', () => {
     expect(mocks.toastError).not.toHaveBeenCalled()
     wrapper.unmount()
   })
+
+  it('allows checking and reinstalling an unconfirmed same-version repair', async () => {
+    mocks.api.probeFirmwareCheck.mockResolvedValue({
+      status: 'revision_unknown', current_version: 'V4.7.0', current_build_id: null,
+      recommended_uf2: { build_id: '2026-10-24T23:23:05' }, all_uf2s: [], instructions: '',
+    })
+    const wrapper = await mountView()
+    await wrapper.get('[data-testid="config-section-firmware"]').trigger('click')
+    await wrapper.get('[data-testid="check-firmware"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="firmware-revision-unknown"]').text()).toContain('尚未确认')
+    expect(wrapper.get('[data-testid="firmware-recommended-build"]').text()).toContain('2026-10-24T23:23:05')
+    expect(wrapper.get('[data-testid="upgrade-firmware"]').attributes('disabled')).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('does not offer a manual downgrade when the installed build is newer', async () => {
+    mocks.api.upgradeProbeFirmware.mockResolvedValueOnce({ status: 'downgrade_blocked', message: '当前构建更新，已阻止降级。' })
+    const wrapper = await mountView()
+    await wrapper.get('[data-testid="config-section-firmware"]').trigger('click')
+    await wrapper.get('[data-testid="upgrade-firmware"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="firmware-upgrade-status"]').text()).toContain('已阻止降级')
+    expect(wrapper.find('[data-testid="manual-firmware-download"]').exists()).toBe(false)
+    expect(mocks.toastSuccess).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
 })

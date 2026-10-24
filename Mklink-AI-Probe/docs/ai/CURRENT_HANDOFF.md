@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-25T00:19:01+08:00`
+- 更新时间：`2026-10-25T00:44:02+08:00`
 - 分支：`codex/tencent-update-preview`
 - HEAD：`基于main 303a2667开发腾讯云独立测试更新；精确源码见Git HEAD。`
 - 远端 HEAD：`PR42/46/48/49均已合并；main 303a2667，正式release/firmware引用未变。`
 - 工作树：唯一原工作区及源码子目录保留；测试/构建证据位于F盘。
-- 当前任务：2026-10-25发布准备与当前H743验收完成，源208804e0/产品b2f29322；5467Python/2可选观察库跳过、1102GUI、生产41Web一致、完整Skill通过。冻结安装后台H743在线Flash215716B全回读、RTT8双向、Watch两顺序10/30MHz、调试/HardFault/MCP及实页通过。详见v036-release-readiness-20261025.md；本轮无产品代码变更。正式签名/渠道未执行。用户追加正式完成后撤Tencent测试版并通知Dot；发布时重新申请临时SSH，完成撤销。
-- 状态：`ready_for_release_review`
+- 当前任务：维护者已明确授权0.3.6正式发布、COS香港公开下载并保留GitHub/Gitee；已配置COS并上传四份指定固件及验证三源哈希，正式索引尚未切换。主机新增同版本构建识别、未知可重装、禁止降级和精确构建确认；5478Python/2skip，4个FLM环境包测试补配重跑中，1104GUI/生产构建及真实浏览器隔离场景通过。详见v036-cos-firmware-revisions.md。仍须最终PR合并、正式签名Windows/Skill/SiteAgent及实装、公网验证，再撤preview/通知Dot。临时SSH已当次授权启用，完成须撤销。
+- 状态：`in_progress`
 
 ## 里程碑
 
@@ -53,7 +53,7 @@
 
 ## 下一动作
 
-1. 按v036-release-readiness-20261025.md处理正式发布：PR50/51整合及最终main资格、正式签名Windows/Skill/SiteAgent与更新验签；配套固件最新指定包V2.9.1/V3.6.6/普通与HPMLink V4.7.0，已核哈希/UF2，只有普通V4精确包本轮实测。新临时SSH→stable及备用源验收→撤Tencent preview→通知Dot更新网站→撤销SSH。正式发布前不先撤测试包。
+1. 完成v036-cos-firmware-revisions.md剩余门槛：包测试→精确PR50/51整合→主线签名Windows/Skill/SiteAgent→实装及COS/备用大包验收→正式索引→撤Tencent preview→通知Dot→撤临时SSH；不再次刷探针。
 2. 收集客户N32WB452内外Flash组合实际烧写/回读反馈；本轮主机解析准入及安装包通过，不代替外置SPI硬件验证。不重复使用已消耗的F103单次烧录授权；不主动烧写或改OTP/供电。
 3. 用户需重新生成并部署U盘脚本再测完整HPM JTAG连续烧录；旧脚本不会自动更新。实时拔插/LCD已验证，完整多板Flash/蜂鸣次数仍待实测；不重复历史一次性写入授权。
 4. HPM联合镜像/OTP历史证据保留，Word69=3；本轮使用H743，未写HPM OTP或调整VCC。其他HPM型号继续由用户测试，未知MKLINK_V2任务不得重放，勿将目标板误作下载器升级。

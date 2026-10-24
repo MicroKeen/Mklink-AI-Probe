@@ -8,6 +8,11 @@ from urllib.error import URLError
 from mklink import firmware_check as fc
 
 
+@pytest.fixture(autouse=True)
+def isolated_release_catalog(monkeypatch):
+    monkeypatch.setattr(fc, 'bundled_firmwares', lambda: [])
+
+
 def _valid_uf2(payload: bytes = b"firmware") -> bytes:
     block = bytearray(512)
     block[0:4] = (0x0A324655).to_bytes(4, "little")
@@ -22,7 +27,7 @@ def _valid_uf2(payload: bytes = b"firmware") -> bytes:
 
 def _readme(path: Path, version: str, *, family: str = "microlink") -> None:
     marker = "HPM Firmware Build Date" if family == "hpmlink" else "Firmware Build Date"
-    (path / "readme.txt").write_text(f"{marker}:test\n{version}\n", encoding="utf-8")
+    (path / "readme.txt").write_text(f"{marker}:Oct 24 2026 23:23:05\n{version}\n", encoding="utf-8")
 
 
 def test_read_microkeen_version_uses_first_changelog_version(tmp_path):
@@ -119,6 +124,10 @@ def test_upgrade_probe_firmware_returns_up_to_date_without_reboot(monkeypatch, t
     monkeypatch.setattr(fc, "_probe_disk", lambda: str(disk))
     monkeypatch.setattr(fc, "_remote_firmware", lambda model, **kwargs: None)
 
+    candidate = fc.parse_firmware_filename(firmware_root / 'MicroLink_V3.3.7.uf2')
+    candidate.build_id = '2026-10-24T23:23:05'
+    monkeypatch.setattr(fc, 'latest_firmware', lambda *a, **kw: candidate)
+
     class Device:
         def enter_bootloader(self):
             raise AssertionError("up-to-date firmware must not reboot")
@@ -144,7 +153,7 @@ def test_upgrade_probe_firmware_copies_and_verifies(monkeypatch, tmp_path):
     monkeypatch.setattr(
         fc,
         "_remote_firmware",
-        lambda model, **kwargs: fc.FirmwareInfo("MicroLink_V3.3.8.uf2", fc.Version(3, 3, 8), "V3", firmware),
+        lambda model, **kwargs: fc.FirmwareInfo("MicroLink_V3.3.8.uf2", fc.Version(3, 3, 8), "V3", firmware, build_id='2026-10-24T23:23:05'),
     )
     entered = []
 
@@ -181,6 +190,10 @@ def test_upgrade_probe_firmware_selects_hpmlink_for_hpm_readme(
     monkeypatch.setattr(fc, "_find_bootloader_disk", lambda: str(boot))
     monkeypatch.setattr(fc, "_remote_firmware", lambda model, **kwargs: None)
 
+    candidate = fc.parse_firmware_filename(hpmlink)
+    candidate.build_id = '2026-10-24T23:23:05'
+    monkeypatch.setattr(fc, 'latest_firmware', lambda *a, **kw: candidate)
+
     class Device:
         def enter_bootloader(self):
             _readme(disk, "V4.3.7", family="hpmlink")
@@ -213,7 +226,7 @@ def test_upgrade_probe_firmware_keeps_microlink_for_unmarked_v4_disk(
 
     result = fc.upgrade_probe_firmware(object(), firmware_root, confirm=True)
 
-    assert result["status"] == "up_to_date"
+    assert result["status"] == "manual_required"  # Same version is not proof of the build.
     assert result["firmware"] == microlink.name
 
 
@@ -267,7 +280,7 @@ def test_firmware_check_filters_v4_candidates_by_probe_family(
 
     result = fc.check_probe_firmware(None, firmware_root)
 
-    assert result.status == "ok"
+    assert result.status == "revision_unknown"
     assert result.recommended_uf2 is not None
     assert result.recommended_uf2.name == hpmlink.name
     assert [item.name for item in result.all_uf2s] == [hpmlink.name]
@@ -394,6 +407,9 @@ def test_manual_upgrade_result_includes_latest_download_details(monkeypatch, tmp
         "model": "V3",
         "family": "microlink",
         "download_available": True,
+        "current_build_id": '2026-10-24T23:23:05',
+        "build_id": None,
+        "sha256": None,
     }
 
 
@@ -423,7 +439,7 @@ def test_bound_update_copies_and_verifies_without_global_drive_scan(monkeypatch,
     (boot / 'INFO_UF2.TXT').write_text('Board-ID: MicroKeenLink\n', encoding='ascii')
     firmware = tmp_path / 'MicroLink_V4.6.0.uf2'
     firmware.write_bytes(_valid_uf2())
-    candidate = fc.FirmwareInfo(firmware.name, fc.Version(4, 6, 0), 'V4', firmware)
+    candidate = fc.FirmwareInfo(firmware.name, fc.Version(4, 6, 0), 'V4', firmware, build_id='2026-10-24T23:23:05')
     monkeypatch.setattr(fc, 'latest_firmware', lambda *a, **kw: candidate)
     def forbidden(): pytest.fail('Bound update used global drive scan')
     monkeypatch.setattr(fc, '_probe_disk', forbidden)
@@ -522,7 +538,7 @@ def test_online_firmware_compares_channels_and_keeps_exact_model(monkeypatch, un
         'gitee': [entry('MicroLink_V3.6.4.uf2', 'gitee'), entry('MicroLink_V4.6.8.uf2', 'gitee')],
     }
     monkeypatch.setattr(fc, '_remote_firmwares_from_source',
-                        lambda source, **kwargs: None if source == unavailable else inventories[source])
+        lambda source, **kwargs: None if source == unavailable else inventories.get(source))
     info = fc._remote_firmware('V3')
     assert info.version == fc.Version(3, 6, 3 if unavailable == 'gitee' else 4)
     assert info.model == 'V3' and info.family == 'microlink'
