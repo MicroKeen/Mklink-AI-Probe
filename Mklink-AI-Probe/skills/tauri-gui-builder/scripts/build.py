@@ -346,11 +346,16 @@ def temporary_external_bin(config_path):
 
 
 @contextmanager
-def temporary_bundle_config(config_path, *, signed=True):
+def temporary_bundle_config(config_path, *, signed=True, preview_updates=False):
     """Apply the standard NSIS-only sidecar bundle settings."""
     config_path = Path(config_path)
     original = config_path.read_bytes()
     data = json.loads(original.decode("utf-8"))
+    if preview_updates:
+        endpoints = data["plugins"]["updater"]["endpoints"]
+        if endpoints[0] != "https://download.microkeenai.com/mklink/stable/latest.json":
+            raise ValueError("unexpected primary update endpoint")
+        endpoints[0] = "https://download.microkeenai.com/mklink/preview/latest.json"
     bundle = data.setdefault("bundle", {})
     if not signed:
         bundle["createUpdaterArtifacts"] = False
@@ -424,7 +429,7 @@ def collect_signed_bundle_outputs(bundle_dir, *, signed=True):
     }
 
 
-def build_release_bundle(*, signed=True):
+def build_release_bundle(*, signed=True, preview_updates=False):
     """Build a bundle from the current source with a temporary sidecar config."""
     require_release_builtin_flm_bundle()
     signing_key = load_updater_private_key() if signed else None
@@ -445,7 +450,7 @@ def build_release_bundle(*, signed=True):
                 raise RuntimeError(
                     f"stale bundle outputs still exist: {bundle_dir}"
                 )
-        with temporary_bundle_config(TAURI_DIR / "tauri.conf.json", signed=signed):
+        with temporary_bundle_config(TAURI_DIR / "tauri.conf.json", signed=signed, preview_updates=preview_updates):
             if signed:
                 return build_tauri(bundle=True, signing_key=signing_key)
             return build_tauri(bundle=True, local_bundle=True)
@@ -511,9 +516,12 @@ def main():
     bundle_options.add_argument("--bundle", action="store_true", help="Signed NSIS bundle with sidecar (requires authorization)")
     bundle_options.add_argument("--local-bundle", action="store_true", help="Local NSIS with sidecar, without updater signing")
     parser.add_argument("--check", action="store_true", help="Check prerequisites only")
+    parser.add_argument("--preview-updates", action="store_true", help="Opt this test bundle into the separate Tencent preview channel")
     parser.add_argument("--clean", action="store_true", help="Remove build artifacts")
     parser.add_argument("--project-dir", type=str, default=None, help="mklink-ai-probe project root directory")
     args = parser.parse_args()
+    if args.preview_updates and not (args.bundle or args.local_bundle):
+        parser.error("--preview-updates requires --bundle or --local-bundle")
 
     if IS_WINDOWS and not os.environ.get("MKLINK_BUILD_WORK_DIR"):
         parser.error("run via scripts/build_workspace.ps1 -Action run; C-drive build storage is not permitted")
@@ -564,7 +572,7 @@ def main():
     # Build
     if args.bundle or args.local_bundle:
         print("\n--- Building sidecar (PyInstaller) ---")
-        build_release_bundle(signed=not args.local_bundle)
+        build_release_bundle(signed=not args.local_bundle, preview_updates=args.preview_updates)
         return
 
     print("\n--- Building Tauri application ---")

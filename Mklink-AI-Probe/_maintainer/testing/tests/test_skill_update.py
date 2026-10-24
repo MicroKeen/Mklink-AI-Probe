@@ -92,10 +92,11 @@ def test_release_gui_versions_match_package(updater):
     } == {package_version}
 
 
-def test_manifest_sources_prefer_github_and_fall_back_to_gitee(
+def test_manifest_sources_prefer_tencent_and_fall_back_to_github_gitee(
     updater, monkeypatch,
 ):
-    github, gitee = updater.DEFAULT_MANIFEST_URLS
+    tencent, github, gitee = updater.DEFAULT_MANIFEST_URLS
+    assert tencent == "https://download.microkeenai.com/mklink/stable/latest.json"
     assert github == (
         "https://raw.githubusercontent.com/MicroKeen/"
         "Mklink-AI-Probe/release/latest.json"
@@ -108,7 +109,7 @@ def test_manifest_sources_prefer_github_and_fall_back_to_gitee(
 
     def request(url):
         calls.append(url)
-        if url == github:
+        if url in (tencent, github):
             raise OSError("GitHub unavailable")
         return json.dumps({"version": "0.1.6"}).encode("utf-8")
 
@@ -118,7 +119,7 @@ def test_manifest_sources_prefer_github_and_fall_back_to_gitee(
 
     assert manifest == {"version": "0.1.6"}
     assert manifest_url == gitee
-    assert calls == [github, gitee]
+    assert calls == [tencent, github, gitee]
 
 
 def test_check_uses_24_hour_cache_without_hiding_newer_version(
@@ -148,6 +149,71 @@ def test_extract_rejects_path_traversal(updater, tmp_path):
         stream.writestr("../outside.txt", "bad")
     with pytest.raises(RuntimeError, match="unsafe path"):
         updater.extract_skill_archive(archive, tmp_path / "stage")
+
+
+def test_shared_cache_tracks_channel_and_source_priority(updater, monkeypatch, tmp_path):
+    from mklink import update_check
+
+    root = make_root(tmp_path / "root", "0.3.5")
+    cache = tmp_path / "cache.json"
+    stable = "https://example.test/stable/latest.json"
+    preview = "https://example.test/preview/latest.json"
+    mirror = "https://mirror.test/latest.json"
+    calls = []
+
+    def fetch(urls, **kwargs):
+        calls.append(tuple(urls))
+        return {"version": "0.3.6" if urls[0] == preview else "0.3.5"}, urls[0]
+
+    monkeypatch.setattr(updater, "fetch_manifest", fetch)
+    monkeypatch.setattr(update_check, "fetch_manifest", fetch)
+    monkeypatch.setattr(update_check, "current_version", lambda: "0.3.5")
+    for urls in ((stable, mirror), (preview, mirror), (stable, mirror), (mirror, stable)):
+        result = updater.check_for_update(root=root, urls=urls, cache_file=cache)
+        assert result["cached"] is False
+        assert result["manifest_url"] == urls[0]
+        assert result["update_available"] is (urls[0] == preview)
+        shared = update_check.check_for_update(urls=urls, cache_file=cache)
+        assert shared["cached"] is True
+        assert shared["manifest_url"] == urls[0]
+    assert len(calls) == 4
+
+
+def test_legacy_cache_without_sources_is_refetched(updater, monkeypatch, tmp_path):
+    import time
+
+    root = make_root(tmp_path / "root", "0.3.5")
+    cache = tmp_path / "cache.json"
+    cache.write_text(json.dumps({
+        "checked_at_epoch": time.time(),
+        "manifest_url": "https://example.test/preview/latest.json",
+        "manifest": {"version": "0.3.6"},
+    }), encoding="utf-8")
+    monkeypatch.setattr(updater, "fetch_manifest", lambda urls:
+                        ({"version": "0.3.5"}, urls[0]))
+    result = updater.check_for_update(root=root, cache_file=cache)
+    assert result["cached"] is False
+    assert result["update_available"] is False
+
+
+def test_preview_channel_is_explicit_and_shared(updater, monkeypatch, tmp_path):
+    from mklink import update_check
+
+    root = make_root(tmp_path / "root", "0.3.5")
+    cache = tmp_path / "cache.json"
+    monkeypatch.setattr(update_check, "current_version", lambda: "0.3.5")
+    monkeypatch.setattr(update_check, "fetch_manifest", lambda urls, **kwargs:
+                        ({"version": "0.3.6"}, urls[0]))
+    monkeypatch.setenv("MKLINK_UPDATE_CHANNEL", "preview")
+    assert updater.configured_manifest_urls() == update_check.configured_manifest_urls()
+    result = update_check.check_for_update(cache_file=cache)
+    assert result["manifest_url"] == "https://download.microkeenai.com/mklink/preview/latest.json"
+    assert updater.check_for_update(root=root, cache_file=cache)["cached"] is True
+    monkeypatch.delenv("MKLINK_UPDATE_CHANNEL")
+    assert updater.configured_manifest_urls() == update_check.DEFAULT_MANIFEST_URLS
+    stable = update_check.check_for_update(cache_file=cache)
+    assert stable["cached"] is False
+    assert stable["manifest_url"] == update_check.DEFAULT_MANIFEST_URLS[0]
 
 
 def test_skill_activation_check_force_bypasses_recent_cache(updater, monkeypatch, tmp_path):

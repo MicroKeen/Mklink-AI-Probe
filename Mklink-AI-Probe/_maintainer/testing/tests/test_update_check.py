@@ -49,8 +49,9 @@ def test_runtime_update_cache_uses_build_workspace(monkeypatch, tmp_path):
     )
 
 
-def test_runtime_manifest_sources_prefer_github_and_fall_back_to_gitee(monkeypatch):
-    github, gitee = update_check.DEFAULT_MANIFEST_URLS
+def test_runtime_manifest_sources_prefer_tencent_and_fall_back_to_github_gitee(monkeypatch):
+    tencent, github, gitee = update_check.DEFAULT_MANIFEST_URLS
+    assert tencent == "https://download.microkeenai.com/mklink/stable/latest.json"
     assert github == (
         "https://raw.githubusercontent.com/MicroKeen/"
         "Mklink-AI-Probe/release/latest.json"
@@ -63,7 +64,7 @@ def test_runtime_manifest_sources_prefer_github_and_fall_back_to_gitee(monkeypat
 
     def request(url, timeout):
         calls.append((url, timeout))
-        if url == github:
+        if url in (tencent, github):
             raise OSError("GitHub unavailable")
         return b'{"version":"0.1.6"}'
 
@@ -75,7 +76,7 @@ def test_runtime_manifest_sources_prefer_github_and_fall_back_to_gitee(monkeypat
 
     assert manifest == {"version": "0.1.6"}
     assert manifest_url == gitee
-    assert calls == [(github, 7.5), (gitee, 7.5)]
+    assert calls == [(tencent, 7.5), (github, 7.5), (gitee, 7.5)]
 
 
 def test_runtime_update_check_uses_shared_cache(monkeypatch, tmp_path):

@@ -457,6 +457,7 @@ def test_installed_updaters_share_new_primary_and_unchanged_fallback(publisher):
     config = json.loads((root / "gui/src-tauri/tauri.conf.json").read_text(encoding="utf-8"))
     assert config["plugins"]["updater"]["endpoints"] == list(DEFAULT_MANIFEST_URLS)
     assert DEFAULT_MANIFEST_URLS == (
+        "https://download.microkeenai.com/mklink/stable/latest.json",
         "https://raw.githubusercontent.com/MicroKeen/Mklink-AI-Probe/release/latest.json",
         "https://gitee.com/Aladdin-Wang/Mklink-AI-Probe/raw/updates/latest.json",
     )

@@ -4,12 +4,12 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-24T11:06:34.655929+08:00`
-- 分支：`codex/hpm-isp-deployment-ux`
-- HEAD：`0.3.6候选源码f20fe781；最终交接提交以Git HEAD为准。`
-- 远端 HEAD：`PR42/46/49原历史整合进PR48；最终合并提交与分支清理状态以GitHub/main精确祖先核对为准。`
+- 更新时间：`2026-10-24T11:52:59+08:00`
+- 分支：`codex/tencent-update-preview`
+- HEAD：`基于main 303a2667开发腾讯云独立测试更新；精确源码见Git HEAD。`
+- 远端 HEAD：`PR42/46/48/49均已合并；main 303a2667，正式release/firmware引用未变。`
 - 工作树：唯一原工作区及源码子目录保留；测试/构建证据位于F盘。
-- 当前任务：0.3.6发布前验收完成，PR48保留42/46/49原历史，最终合并和分支清理需以GitHub/main核对。通用MCU模糊搜索完成；5404Python/1090GUI/生产构建/Windows覆盖安装/完整Skill隔离资格、V4+F103实机及浏览器原生文件选择通过。30MHz双采集仍有1次读错，限制保留。默认只构建Windows；本地Unix包896个共16.07GB已清理，线上正式附件保留。正式签名发布未执行。
+- 当前任务：用户授权直接配置现有腾讯云下载服务并进行0.3.6测试发布，暂不正式发布，GitHub/Gitee保留备用。download.microkeenai.com独立HTTPS及每日证书检查已配置，原网站配置SHA未变；stable索引仍404。更新源/preview隔离92项测试通过，全量测试与签名Windows测试包/完整Skill真实升级验证进行中。临时SSH公钥已获用户明确授权，24小时到期、禁用转发，完成后必须撤销。
 - 状态：`in_progress`
 
 ## 里程碑
@@ -23,6 +23,7 @@
 
 ## 验证证据
 
+- **腾讯云下载与更新通道接入**：独立download域名HTTPS health200、stable404、原网站200，Nginx配置验证及证书续期dry check通过；证书覆盖download域名到2027-01-22。更新缓存/三源回退/preview构建恢复92项测试通过。全量与真实升级仍在进行，不能宣称测试发布已完成。详见docs/ai/tencent-updates.md。
 - **0.3.6四PR整合与发布前资格**：源码f20fe781；5404Python/2skip、1090GUI、生产构建；Windows覆盖exit0、206Python/41Web/4载荷、离线完整Skill7059目标/2224FLM/4800外设通过。实机Flash全回读/RTT8/Watch/UART5/TTLModbus/VOFA/SystemView/HardFault/共享MCP及浏览器和原生文件选择通过。30MHz一顺序1读错，10MHz0。详见docs/verification/v036-prerelease-20261024.md。
 - **SuperWatch离线文件与公式颜色**：SuperWatch离线解析/重载先停采集、断开保留变量与数组选择；增加单曲线公式/颜色与快捷合并。源870471b6，组合e7c49b04/Web bcdc8474，188Python、1083全GUI及末次189GUI/TS/Vite通过。真实浏览器离线1480变量、公式x/1000、颜色与合并通过；0.3.6安装包SHA256 818035c005e02978b0729facd7cafcfba91babc659aa209e6bbc6409495b202b。首次UAC取消，用户要求重试后管理员覆盖exit0，解包/实装206Python/41Web与公式静态模块、冻结MCP/SVD/HTTP/离线功能及原生Web/退出通过。未操作硬件或更新固件/全局Skill。见v036-superwatch-formulas.md。
 - **新连接RTT搜索与采集顺序**：修复刚连接RTT搜索未准备MUX的问题，搜索/启动统一通道且保留旧ARM文本读取。462Python、70GUI、TS/Vite通过；原V4+HPM5301源码及实装新连接、两启动顺序、活动搜索和独立重启通过，四组实装读错/丢样0。0.3.6 ef51d4d3/Web5aeb2da2管理员覆盖exit0、冻结/原生/真实网页验收通过，已重新打开。V2/V3及ARM仅协议回归，未换板实测。见v036-rtt-discovery.md。
@@ -30,7 +31,6 @@
 - **RTT与SuperWatch启动顺序及覆盖安装**：77f0f004缓存能力查询，445Python/TS/Vite通过；组合a8a5dfad/Web f579b0c4，NSIS SHA256 90361fe45063167cad76cba2b3b46e574b1390f600aaabb0de3d7834924c6395。管理员覆盖exit0，解包/实装206Python/41Web/四载荷及冻结CLI/MCP/SVD/HTTP/后台正常退出通过。原V4+HPM5301在30MHz、RTT0/1+Watch10ms，两顺序各新连接及逐项停止重开通过；安装观察265/283组、无读错/丢样，网页约88Hz与RTT文本正常。详见v036-capture-start-order.md。
 - **合并HEX及0.3.6安装包**：6c2095c7自定义FLM几何修复；388Python/5GUI/真实浏览器通过。两种算法组合均正确映射外部4MiB+内部4588B，1027扇区；实体N32未写。集成f4221d96（Web d7d2db3d）NSIS SHA256 82f95c6310507fbe832b6749f3752e26be7af07384034f0f66ab80765e404cf7，管理员覆盖exit0、解包与实装冻结运行通过；两条简短版本说明已验证。见v036-combined-hex-fix.md。
 - **在线烧录100%停顿诊断**：35f7da59：391测试含真实pyOCD构建器模拟目标、多Bank稀疏HEX/单双缓冲/失败清理；唯一授权源JobManager实烧通过，写入阶段7.892→5.595s，PROGRAM100%仅一次到完成0.796ms，完整回读通过。初始UnInit推断已纠正。详见v036-online-program-progress-diagnosis.md；已包含f4221d96安装包并覆盖验证。
-- **采集中软件复位实装与实机**：源8e402491：361Python、真实Web/协议及管理员覆盖通过，F103双采集中软件复位保留会话并捕获重启数据，短测零读错/丢样。HPM V4固件8b2a6ce的42回归/双构建及单次35.75ms复位实测通过。完整限制与证据见v036-capture-reset.md、v036-hpm-capture-reset.md；不继承一次性复位授权。
 
 ## 架构决策
 
@@ -38,7 +38,7 @@
 - 后台协议 52：一个 GUI 客户端持有一个固定后台，同窗口切换只改下载器，RTT/Watch/Trace 跟随当前设备并清空旧目标状态；另开客户端才建独立后台。已有 URL 的额外页面共享该后台。工程上下文固定，换工程须停止原后台后重开。
 - 物理探针唯一 OS 所有权、USB 身份核对和 epoch 隔离保留。GUI/AI 明确断开或切换自动停止采集、排空在途操作并释放端口；旧会话不得跨设备，未知结果不得自动重放，不偷取其他后台占用。MCP disconnect 物理断开，detach 仅退出自身；独立 UART 保留。
 - SuperWatch 变量写入只认写应答，不做自动回读；烧录/显式内存校验仍保留，真实写错误不得吞掉或重放。外设 ID 基于 Pack 版本/芯片/SVD 相对路径；失效选择不得阻断物理连接，无法迁移时重选。 在线型号提供脱机/外设默认值，各页可独立修改；Pack操作完成自动刷新。下载先预留唯一物理身份，不要求先连接目标；自身预留不重建下载表单，其他设备切换仍清理。
-- 应用主索引 MicroKeen/release，旧 GitHub/updates 和 Gitee/updates 兼容，固件使用独立索引。Gitee 仅要求 Windows 与 Skill；本次 Windows 超 100MB 被拒，索引指向 GitHub；Skill 已真实镜像，GitHub 不可达回退实测通过。其他平台仅 GitHub。
+- 用户2026-10-24要求腾讯云download.microkeenai.com优先，GitHub release与Gitee updates备用。本次仅/mklink/preview/latest.json测试发布，/mklink/stable/latest.json及GitHub/Gitee正式索引不得更新，不创建正式标签。桌面--preview-updates显式构建；Skill进程MKLINK_UPDATE_CHANNEL=preview，缓存按有序URL隔离。固件索引独立不迁移。
 - 测试直接使用用户原工程及 build/keil/Obj ELF，允许修改且无需备份还原，不复制工程；硬件路径只留本地。HPM 使用 ROM API，不使用 FLM/第二次通用 SWD reset；VCC 每次改动需确认具体电压，固件修改另开会话。
 - 用户2026-10-24明确长期规则：默认只构建Windows安装包；仅在用户明确要求Linux/macOS时才构建对应安装包或触发原生CI，一般构建、全功能验收及发布请求不包含它们。用户Skill仍需完整FLM/Pack资格检查。历史Linux/macOS本地构建包已按用户要求清理，保留日志与验收证据；用户明确保留GitHub已正式发布附件。 构建使用scripts/build_workspace.ps1与F:/MKLink-Build，保留正式包、独有证据和依赖。用户明确清理授权下可删除过时可再生编译输出，链接/不可访问目录交人工处理，不强删。唯一原工作区保持；清理不接管硬件、不重复发布。
 - 工程上下文固定于后台生命周期；被动MI_04枚举不遍历占用设备，底层自动连接只接受唯一候选；本机别名不写固件。未知结果不重放，worker实际退出后才发布串口关闭，取消前保留缓冲寿命，背压错误不隐瞒。
@@ -53,7 +53,7 @@
 
 ## 下一动作
 
-1. 核对最终精确PR头CI后合并48（含42/46/49历史），检查main祖先与清洁状态再清理分支。发布前Windows/Skill/本轮V4+F103验收已完成，正式标签/签名/Release/更新渠道尚未执行；下一步选择正式发布提交并按明确发布授权执行。
+1. 完成腾讯云preview的完整Windows/Skill构建与真实升级验证，记录签名/校验值/回退结果，撤销本次临时SSH授权；提交任务分支PR供检查，保持正式索引和标签不变。不能把已完成的四PR合并或旧HIL当作新更新包资格。
 2. 收集客户N32WB452内外Flash组合实际烧写/回读反馈；本轮主机解析准入及安装包通过，不代替外置SPI硬件验证。不重复使用已消耗的F103单次烧录授权；不主动烧写或改OTP/供电。
 3. 用户需重新生成并部署U盘脚本再测完整HPM JTAG连续烧录；旧脚本不会自动更新。实时拔插/LCD已验证，完整多板Flash/蜂鸣次数仍待实测；不重复历史一次性写入授权。
 4. HPM联合镜像/OTP历史证据保留，Word69=3；本轮使用F103，未写HPM OTP或调整VCC。其他HPM型号继续由用户测试，未知MKLINK_V2任务不得重放，勿将目标板误作下载器升级。

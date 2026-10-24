@@ -92,6 +92,19 @@ def test_local_bundle_disables_updater_artifacts_and_restores_config(builder, tm
     assert config.read_bytes() == original
 
 
+def test_preview_bundle_preserves_fallbacks_and_restores_stable_config(builder, tmp_path):
+    config = tmp_path / "tauri.conf.json"
+    original = (PROJECT_ROOT / "gui/src-tauri/tauri.conf.json").read_bytes()
+    config.write_bytes(original)
+    with pytest.raises(RuntimeError, match="build failed"):
+        with builder.temporary_bundle_config(config, preview_updates=True):
+            endpoints = json.loads(config.read_text())["plugins"]["updater"]["endpoints"]
+            assert endpoints[0] == "https://download.microkeenai.com/mklink/preview/latest.json"
+            assert endpoints[1:] == json.loads(original)["plugins"]["updater"]["endpoints"][1:]
+            raise RuntimeError("build failed")
+    assert config.read_bytes() == original
+
+
 def test_local_bundle_never_reads_signing_key(builder, monkeypatch, tmp_path):
     builder.TAURI_DIR = tmp_path
     configure_stub_stcp(builder, tmp_path)
@@ -476,6 +489,7 @@ def test_stable_product_version_and_signed_updater_are_configured():
     assert all(part.isdigit() for part in config["version"].split("."))
     assert config["bundle"]["createUpdaterArtifacts"] is True
     assert config["plugins"]["updater"]["endpoints"] == [
+        "https://download.microkeenai.com/mklink/stable/latest.json",
         "https://raw.githubusercontent.com/MicroKeen/Mklink-AI-Probe/release/latest.json",
         GITEE_UPDATER_ENDPOINT,
     ]

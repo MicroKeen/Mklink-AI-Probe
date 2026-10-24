@@ -52,6 +52,7 @@
   "plugins": {
     "updater": {
       "endpoints": [
+        "https://download.microkeenai.com/mklink/stable/latest.json",
         "https://raw.githubusercontent.com/MicroKeen/Mklink-AI-Probe/release/latest.json",
         "https://gitee.com/Aladdin-Wang/Mklink-AI-Probe/raw/updates/latest.json"
       ],
