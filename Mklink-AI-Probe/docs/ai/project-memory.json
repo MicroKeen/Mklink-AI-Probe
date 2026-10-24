@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-24T23:41:53.7700135+08:00",
+  "updated_at": "2026-10-24T23:49:33.8317194+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
@@ -13,8 +13,8 @@
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "in_progress",
-    "current_task": "接入BIN/HEX脱机verify_after_download统一开关：默认开启、保存恢复，关闭逐文件传0；部署读取绑定下载器cmd.get_version精确对应能力，缺能力提示升级且不写入，不按版本判断。预览不连接硬件。356后端回归、1101全GUI及末次升级提示62定点、TS/Vite通过。正在Windows本地打包覆盖；用户明确本轮不操作硬件，不重刷固件。"
+    "status": "complete",
+    "current_task": "BIN/HEX脱机烧录后校验开关已接入，默认开启并保存；关闭按绑定下载器和实际格式精确能力检查，缺能力提示升级且写盘前拒绝。源b2f29322已Windows本地覆盖exit0、冻结资格、原生/Web设置保存、正常退出通过。356后端、1101全GUI及末次62定点、TS/Vite/Rust通过。本轮未连接、部署实体U盘、烧写或升级硬件。见v036-offline-verification-option.md。"
   },
   "milestones": [
     {
@@ -50,6 +50,10 @@
   ],
   "verification": [
     {
+      "area": "BIN/HEX脱机校验开关",
+      "result": "BIN/HEX脱机烧录后校验开关已接入，默认开启并保存；关闭按绑定下载器和实际格式精确能力检查，缺能力提示升级且写盘前拒绝。源b2f29322已Windows本地覆盖exit0、冻结资格、原生/Web设置保存、正常退出通过。356后端、1101全GUI及末次62定点、TS/Vite/Rust通过。本轮未连接、部署实体U盘、烧写或升级硬件。见v036-offline-verification-option.md。"
+    },
+    {
       "area": "腾讯云下载与更新通道接入",
       "result": "源码5920c5c5；全Python5412通过2跳过、GUI1090和96项定点通过，CI三项通过；Windows签名、完整FLM/Packs、解包与实装206Python/41Web冻结资格通过。公网安装包8.17秒21.87MiB/s，Skill3.93秒23.94MiB/s；完整SHA/Range通过。Skill真实0.3.5到0.3.6升级2617文件一致、用户文件保留、二次无更新、MCP模糊搜索20候选。GitHub/Gitee实际索引及Gitee完整包通过，无降级。首次UAC未完成；用户要求重试后原生较低版本下载/验签/安装/自动重启成功，启动检查无重复更新或错误提示。临时SSH撤销并验证拒绝，stable404，正式引用未变。详见docs/verification/v036-tencent-preview-20261024.md。"
     },
@@ -62,16 +66,12 @@
       "result": "SuperWatch离线解析/重载先停采集、断开保留变量与数组选择；增加单曲线公式/颜色与快捷合并。源870471b6，组合e7c49b04/Web bcdc8474，188Python、1083全GUI及末次189GUI/TS/Vite通过。真实浏览器离线1480变量、公式x/1000、颜色与合并通过；0.3.6安装包SHA256 818035c005e02978b0729facd7cafcfba91babc659aa209e6bbc6409495b202b。首次UAC取消，用户要求重试后管理员覆盖exit0，解包/实装206Python/41Web与公式静态模块、冻结MCP/SVD/HTTP/离线功能及原生Web/退出通过。未操作硬件或更新固件/全局Skill。见v036-superwatch-formulas.md。"
     },
     {
-      "area": "新连接RTT搜索与采集顺序",
-      "result": "修复刚连接RTT搜索未准备MUX的问题，搜索/启动统一通道且保留旧ARM文本读取。462Python、70GUI、TS/Vite通过；原V4+HPM5301源码及实装新连接、两启动顺序、活动搜索和独立重启通过，四组实装读错/丢样0。0.3.6 ef51d4d3/Web5aeb2da2管理员覆盖exit0、冻结/原生/真实网页验收通过，已重新打开。V2/V3及ARM仅协议回归，未换板实测。见v036-rtt-discovery.md。"
+      "area": "RTT与SuperWatch启动/采集顺序及覆盖安装",
+      "result": "修复刚连接RTT搜索未准备MUX的问题，搜索/启动统一通道且保留旧ARM文本读取。462Python、70GUI、TS/Vite通过；原V4+HPM5301源码及实装新连接、两启动顺序、活动搜索和独立重启通过，四组实装读错/丢样0。0.3.6 ef51d4d3/Web5aeb2da2管理员覆盖exit0、冻结/原生/真实网页验收通过，已重新打开。V2/V3及ARM仅协议回归，未换板实测。见v036-rtt-discovery.md。 77f0f004缓存能力查询，445Python/TS/Vite通过；组合a8a5dfad/Web f579b0c4，NSIS SHA256 90361fe45063167cad76cba2b3b46e574b1390f600aaabb0de3d7834924c6395。管理员覆盖exit0，解包/实装206Python/41Web/四载荷及冻结CLI/MCP/SVD/HTTP/后台正常退出通过。原V4+HPM5301在30MHz、RTT0/1+Watch10ms，两顺序各新连接及逐项停止重开通过；安装观察265/283组、无读错/丢样，网页约88Hz与RTT文本正常。详见v036-capture-start-order.md。"
     },
     {
       "area": "HPM JTAG实时换板与单次配置",
       "result": "c963982c/9442e5b5，332定点Python、53GUI、TS/Vite及真实网页通过。固件7d21040的44回归/Pika/双构建通过并升级一次；只读拔插及时报告且用户确认LCD，第二轮240秒858次0/1522有效ID。首次断开后-4导致采集断言退出，主机补有限重试并保留证据。最终d0b662b9包SHA256 72274ecca51ea790beac8e15a06c24042a42faefb60a5875d41a2c59b99fdc1a，覆盖exit0、解包/实装206Python/41Web/四载荷/冻结MCP-SVD-HTTP/无宿主Python/正常退出通过；解包首次HTTP超时原包重跑通过。原生与安装网页正常。完整实体连续Flash未做。见v036-hpm-jtag-cycles.md。 用户后续要求本地Skill同步：已由0.3.5更新为与安装包一致的d0b662b9/0.3.6，2615文件逐字节/生产Web一致、5339本地配置缓存保留、离线CLI/SVD和实际stdio MCP通过；备份与报告在构建根artifacts/v036-local-skill-d0b662b9，无硬件操作。"
-    },
-    {
-      "area": "RTT与SuperWatch启动顺序及覆盖安装",
-      "result": "77f0f004缓存能力查询，445Python/TS/Vite通过；组合a8a5dfad/Web f579b0c4，NSIS SHA256 90361fe45063167cad76cba2b3b46e574b1390f600aaabb0de3d7834924c6395。管理员覆盖exit0，解包/实装206Python/41Web/四载荷及冻结CLI/MCP/SVD/HTTP/后台正常退出通过。原V4+HPM5301在30MHz、RTT0/1+Watch10ms，两顺序各新连接及逐项停止重开通过；安装观察265/283组、无读错/丢样，网页约88Hz与RTT文本正常。详见v036-capture-start-order.md。"
     },
     {
       "area": "合并HEX及0.3.6安装包",
@@ -96,7 +96,7 @@
   ],
   "hardware": {
     "state": "V4.7.0+STM32F103RE512KiB/UART5实测；当前DAP缺GUID经用户批准定点修复后Keil/pyOCD枚举正常。测试固件保留SystemView CH2/UART5/RTT0和1/PID；无OTP、供电或探针固件变更。全部测试进程正常退出，30MHz1读错保留。",
-    "installer": "本地preview组合源dde3ad01覆盖exit0，SHA256 09db218458f0fc8bcfabacad11d58b2efda6297ecd4c68c690886b7cdc80a77b；3624文件、210Python/41Web、冻结资格与原生/Web/正常退出通过。DAP恢复和纯进度条已安装。原生健康3.227s、首屏3.100s，仅单次检查非性能对照。见v036-dap-integrated-install.md；腾讯云线上仍5920c5c5。",
+    "installer": "本地preview源b2f29322覆盖exit0，SHA256 5211d305d41e7911dbd10e9e20c8b0eab629b1670cbe950b2ff55b76afa71687；3624文件、210Python/41Web、冻结资格和原生/Web/正常退出通过。BIN/HEX校验默认开启、关闭缺能力提示升级。原生健康3.032s、首屏2.944s仅一次检查。见v036-offline-verification-option.md；腾讯云线上仍5920c5c5。",
     "backups": "正式release、原安装包、CI ZIP、唯一硬件证据、Skill备份和当前F盘缓存保留。删除61个可再生旧编译/解压目录；218个含链接测试目录未删。完整人工清单和删除结果在F:/MKLink-Build/reports/cleanup-20261023，见v036-storage-cleanup-20261023.md。 2026-10-24另按明确授权删除896个本地Linux/macOS包/签名/归档/分片，释放16072740412字节；归档证据另存unix-package-cleanup，线上正式附件保留。"
   },
   "known_limits": [
@@ -110,7 +110,7 @@
     "nRF54L15 GUI保护闭环、全部物理擦除/拔插/休眠/断电场景、电源外部精度校准未全部认证。VCC每次改动必须确认具体电压，HPM已锁定OTP不得重放。 已知无可靠扇区表的26个FLM禁用扇区操作；重叠算法需要匹配Bank模式。 HPM5301组18/19永久锁定的历史状态及用户字先写/组锁最后、全部固件独立校验后才写OTP等边界见docs/ai/hpm-offline-otp-handoff.md；接手重新确认芯片，其他型号不继承验收。 UART OTP已实现ROM write-memory APIv2，独立熔丝/影子/临时锁读语义仍未知并如实显示；以ROM写入状态及回读为准。配套3d96dbb已实机验证HPM5301全部128字读取和用户批准的Word69 0→1单次写入回读；其余型号/区域未实写，新数据须具体授权。多Word顺序执行不可回滚。CSV原生选择器自动化未完成。"
   ],
   "next_actions": [
-    "dde3ad01已整合PR51并完成Windows覆盖安装及实装验收，见v036-dap-integrated-install.md。DAP恢复V2/V3与完整SES仍待验证，本轮不继承原分支V4硬件结论。V3再次掉线应先导出诊断ZIP再拔插，根因未定。PR50待审；main合并及正式发布另需明确授权和精确合并源码门禁，不能将preview候选当正式包；GitHub/Gitee备用与线上正式引用未变。",
+    "b2f29322已完成BIN/HEX校验开关、Windows覆盖及无硬件验收，见v036-offline-verification-option.md；真实能力应答及烧录效果须另获硬件授权。此前dde3ad01整合PR51，DAP恢复V2/V3与完整SES待验证。V3再次掉线先导出ZIP再拔插，根因未定。PR50待审；main合并及正式发布需明确授权和精确合并源码门禁，preview非正式包，线上正式引用未变。",
     "收集客户N32WB452内外Flash组合实际烧写/回读反馈；本轮主机解析准入及安装包通过，不代替外置SPI硬件验证。不重复使用已消耗的F103单次烧录授权；不主动烧写或改OTP/供电。",
     "用户需重新生成并部署U盘脚本再测完整HPM JTAG连续烧录；旧脚本不会自动更新。实时拔插/LCD已验证，完整多板Flash/蜂鸣次数仍待实测；不重复历史一次性写入授权。",
     "HPM联合镜像/OTP历史证据保留，Word69=3；本轮使用F103，未写HPM OTP或调整VCC。其他HPM型号继续由用户测试，未知MKLINK_V2任务不得重放，勿将目标板误作下载器升级。",
