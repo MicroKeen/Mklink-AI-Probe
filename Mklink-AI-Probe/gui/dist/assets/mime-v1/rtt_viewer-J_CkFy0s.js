@@ -346,6 +346,22 @@ var watchWorkspace = IS_SUPERWATCH_MODE ? window.__MKLINK_WATCH_WORKSPACE__ || n
 var workspaceY = Object.create(null);
 var workspaceSignature = null;
 function signalStyle(name) { return watchWorkspace && watchWorkspace.signals && watchWorkspace.signals[name] || {}; }
+function calculatedValue(name, raw) {
+  var formula = signalStyle(name).formula;
+  return formula && window.__mklinkSignalFormula ? window.__mklinkSignalFormula(formula)(raw) : raw;
+}
+function calculatedRange(name) {
+  var field = FIELDS[name], low = Infinity, high = -Infinity;
+  var envelope = getBinaryEnvelopeChannelRange(name);
+  if (envelope && !field.isArraySnapshot) return envelope;
+  var values = field.isArraySnapshot ? field.arrayValues || [] : null;
+  var count = values ? values.length : field.ringBuf.count;
+  for (var i = 0; i < count; i++) {
+    var value = calculatedValue(name, values ? values[i] : field.ringBuf.valueAt(i));
+    if (Number.isFinite(value)) { low = Math.min(low, value); high = Math.max(high, value); }
+  }
+  return {min: low, max: high};
+}
 function signalLabel(name) { return signalStyle(name).alias || name; }
 function setWorkspace(value) {
   if (!IS_SUPERWATCH_MODE || !value || !Array.isArray(value.panes) || !value.panes.length) return;
@@ -353,6 +369,12 @@ function setWorkspace(value) {
   if (signature === workspaceSignature) return;
   workspaceSignature=signature;
   watchWorkspace = value;
+  Object.keys(FIELDS).forEach(function(name) {
+    if (/^#[0-9a-fA-F]{6}$/.test(signalStyle(name).color || '')) FIELDS[name].color = signalStyle(name).color;
+  });
+  workspaceY = Object.create(null);
+  frozenSharedYRange = null;
+  requestBinaryVisibleRangeAfterTimelineChange();
   var wrap=document.getElementById('chart-wrap');
   if (wrap) {
     var parent=wrap.parentElement;
@@ -401,6 +423,19 @@ function syncWorkspaceDividers(panels) {
     controls=host.querySelectorAll('.workspace-divider');
   }
   controls.forEach(function(el,index){el.style.top=(panels[index].top+panels[index].height+8)+'px';});
+  var mergeButtons = Array.from(host.querySelectorAll('.workspace-merge'));
+  mergeButtons.forEach(function(el){if (!panels.some(function(p){return p.id === el.dataset.group;})) el.remove();});
+  panels.forEach(function(panel) {
+    if (panel.id === (watchWorkspace.defaultGroup || watchWorkspace.panes[0].id)) return;
+    var button = mergeButtons.find(function(el){return el.dataset.group === panel.id;}) || document.createElement('button');
+    button.dataset.group = panel.id;
+    button.className = 'workspace-merge'; button.type = 'button';
+    button.textContent = t('merge_channel'); button.title = t('merge_channel_tip');
+    button.setAttribute('aria-label', t('merge_channel_tip') + ': ' + panel.name);
+    button.style.top = (panel.top + 2) + 'px';
+    button.onclick = function() { window.dispatchEvent(new CustomEvent('mklink:workspace-merge', {detail: {group: panel.id}})); };
+    if (!button.parentNode) host.appendChild(button);
+  });
 }
 function panelForSignal(name) {
   var panes = chartPanelLayout && chartPanelLayout.panes;
@@ -548,7 +583,7 @@ function visibleChartChannelNames() {
 function updateChartLegend() {
   if (!chartLegend) return;
   var names = visibleChartChannelNames();
-  var signature = (IS_SUPERWATCH_MODE ? 'superwatch:' : 'vofa:') + splitChannelName + ':' + names.join('|');
+  var signature = (IS_SUPERWATCH_MODE ? 'superwatch:' : 'vofa:') + splitChannelName + ':' + names.map(function(name) { return name + ':' + (signalStyle(name).color || FIELDS[name].color); }).join('|');
   if (chartLegend.dataset.signature === signature) return;
   chartLegend.dataset.signature = signature;
   chartLegend.textContent = '';
@@ -565,7 +600,7 @@ function updateChartLegend() {
     row.className = 'chart-legend-row' + (name === splitChannelName ? ' is-split' : '');
     var swatch = document.createElement('span');
     swatch.className = 'chart-legend-swatch';
-    swatch.style.background = meta.color;
+    swatch.style.background = signalStyle(name).color || meta.color;
     var label = document.createElement('span');
     label.className = 'chart-legend-name';
     label.textContent = signalLabel(name); label.title = name; if (signalStyle(name).emphasis) label.style.fontWeight = 'bold';
@@ -3376,7 +3411,7 @@ function getBinaryEnvelopeChannelRange(name) {
   var minimum = Infinity;
   var maximum = -Infinity;
   for (var point = start; point < end; point++) {
-    var value = binaryEnvelope.values[point];
+    var value = calculatedValue(name, binaryEnvelope.values[point]);
     if (value < minimum) minimum = value;
     if (value > maximum) maximum = value;
   }
@@ -3643,6 +3678,7 @@ if (typeof window !== 'undefined') {
   if (!window.__waveformViewers) window.__waveformViewers = {};
   var binaryViewer = window.__waveformViewers[CONFIG.mode] || {};
   binaryViewer.setWorkspace = setWorkspace;
+  binaryViewer.getFormulas = function() { return binaryChannelNames.map(function(name) { return signalStyle(name).formula || ''; }); };
   binaryViewer.beginReplay = beginReplay;
   binaryViewer.setReplayPosition = setReplayPosition;
   binaryViewer.renderReplayView = renderReplayView;
@@ -3757,6 +3793,7 @@ function getChannelYRange(name) {
     (envelopeRange ? envelopeRange.min : m.ringBuf._min);
   var baseMax = m.isArraySnapshot ? Math.max.apply(null, m.arrayValues) :
     (envelopeRange ? envelopeRange.max : m.ringBuf._max);
+  if (signalStyle(name).formula) { var converted = calculatedRange(name); baseMin = converted.min; baseMax = converted.max; }
   if (!Number.isFinite(baseMin)) baseMin = 0;
   if (!Number.isFinite(baseMax)) baseMax = 1;
   var pad = (baseMax - baseMin) * 0.1 || 1;
@@ -3788,6 +3825,12 @@ function getAutoSharedYRange(excludedName) {
     var field = FIELDS[name];
     if (excludedName && name === excludedName) continue;
     if (!field.visible) continue;
+    if (signalStyle(name).formula) {
+      var converted = calculatedRange(name);
+      if (Number.isFinite(converted.min)) yMin = Math.min(yMin, converted.min);
+      if (Number.isFinite(converted.max)) yMax = Math.max(yMax, converted.max);
+      continue;
+    }
     if (field.isArraySnapshot) {
       if (!field.arrayValues || !field.arrayValues.length) continue;
       yMin = Math.min(yMin, Math.min.apply(null, field.arrayValues));
@@ -4313,6 +4356,7 @@ function drawChart() {
   // Per-channel Y: each channel normalized to its own min/max by default
   // (avoids small signals being crushed when channels have very different ranges)
   function tyForChannel(v, name) {
+    v = calculatedValue(name, v);
     if (workspacePanels) {
       var panel=panelForSignal(name), range=panel.range;
       return panel.top+panel.height-(v-range.yMin)/(range.yMax-range.yMin || 1)*panel.height;
@@ -4415,6 +4459,7 @@ function drawChart() {
     ctx.rect(ml, curveTop, pw, curveHeight);
     ctx.clip();
 
+    if (/^#[0-9a-fA-F]{6}$/.test(signalStyle(name).color || '')) meta.color = signalStyle(name).color;
     ctx.strokeStyle = meta.color;
     var pointsOnly = signalStyle(name).renderMode === 'points';
     var pointSize = signalStyle(name).emphasis ? 5 : 3;
@@ -4428,6 +4473,7 @@ function drawChart() {
       for (var arrayIndex = 0; arrayIndex < arrayValues.length; arrayIndex++) {
         var arrayX = ml + (arrayIndex / Math.max(1, arrayValues.length - 1)) * pw;
         var arrayY = tyForChannel(arrayValues[arrayIndex], name);
+        if (!Number.isFinite(arrayY)) { started = false; continue; }
         if (pointsOnly) ctx.fillRect(arrayX-pointSize/2,arrayY-pointSize/2,pointSize,pointSize);
         else if (arrayIndex === 0) { ctx.moveTo(arrayX, arrayY); started = true; }
         else ctx.lineTo(arrayX, arrayY);
@@ -4445,6 +4491,7 @@ function drawChart() {
         var envelopeTime = binaryEnvelope.times[timeIndex] / 1000 - binaryTimeOrigin;
         var envelopeX = tx(envelopeTime);
         var envelopeY = tyForChannel(binaryEnvelope.values[envelopePoint], name);
+        if (!Number.isFinite(envelopeY)) { started = false; continue; }
         if (envelopeX < ml - 10 || envelopeX > ml + pw + 10) continue;
         if (pointsOnly) ctx.fillRect(envelopeX-pointSize/2,envelopeY-pointSize/2,pointSize,pointSize);
         else if (!started) { ctx.moveTo(envelopeX, envelopeY); started = true; }
@@ -4461,6 +4508,7 @@ function drawChart() {
       }
       for (var i = ringStart; i < ringEnd; i += ringStep) {
         var sx = tx(ring.timeAt(i)), sy = tyForChannel(ring.valueAt(i), name);
+        if (!Number.isFinite(sy)) { started = false; continue; }
         if (sx < ml - 10 || sx > ml + pw + 10) continue;
         if (pointsOnly) ctx.fillRect(sx-pointSize/2,sy-pointSize/2,pointSize,pointSize);
         else if (!started) { ctx.moveTo(sx, sy); started = true; }
@@ -4648,6 +4696,10 @@ function drawChart() {
       var bestDist = hoverSample ? hoverSample.distance : Infinity;
       if (bestY !== null && bestDist < (tMax - tMin) / pw * 15) {
         var tipVal = formatTypedValue(bestY, FIELDS[k]);
+        if (signalStyle(k).formula) {
+          var computed = calculatedValue(k, bestY);
+          tipVal = '原始 / Raw: ' + tipVal + ' · 计算 / Calculated: ' + (Number.isFinite(computed) ? String(Number(computed.toPrecision(8))) : '—');
+        }
         var enumName = _resolveEnumName(k, bestY);
         if (enumName) tipVal = enumName + ' (' + tipVal + ')';
         lines.push(
@@ -5125,6 +5177,7 @@ function drawMinimap() {
   for (var ni = 0; ni < names.length; ni++) {
     var meta = FIELDS[names[ni]];
     var replayOverview = replaySession && replaySession.overview[names[ni]];
+    if (replayOverview && signalStyle(names[ni]).formula) replayOverview = replayOverview.map(function(point) { return [point[0], calculatedValue(names[ni], point[1])]; }).filter(function(point) { return Number.isFinite(point[1]); });
     if (meta.visible && replayOverview && replayOverview.length) {
       var overviewMin = Infinity, overviewMax = -Infinity;
       replayOverview.forEach(function(point) { overviewMin = Math.min(overviewMin, point[1]); overviewMax = Math.max(overviewMax, point[1]); });
@@ -5146,11 +5199,13 @@ function drawMinimap() {
     var started = false;
     var bufMin = meta.isArraySnapshot ? Math.min.apply(null, meta.arrayValues) : (Number.isFinite(meta.ringBuf._min) ? meta.ringBuf._min : 0);
     var bufMax = meta.isArraySnapshot ? Math.max.apply(null, meta.arrayValues) : (Number.isFinite(meta.ringBuf._max) ? meta.ringBuf._max : 1);
+    if (signalStyle(names[ni]).formula) { var convertedRange = calculatedRange(names[ni]); bufMin = convertedRange.min; bufMax = convertedRange.max; }
     var yRange = bufMax - bufMin || 1;
     if (meta.isArraySnapshot) {
       for (var arrayPoint = 0; arrayPoint < meta.arrayValues.length; arrayPoint++) {
         var arrayPx = arrayPoint / Math.max(1, meta.arrayValues.length - 1) * W;
-        var arrayPy = H - ((meta.arrayValues[arrayPoint] - bufMin) / yRange) * (H - 4) - 2;
+        var arrayPy = H - ((calculatedValue(names[ni], meta.arrayValues[arrayPoint]) - bufMin) / yRange) * (H - 4) - 2;
+        if (!Number.isFinite(arrayPy)) { started = false; continue; }
         if (pointsOnly) minimapCtx.fillRect(arrayPx-1,arrayPy-1,2,2);
         else if (!started) { minimapCtx.moveTo(arrayPx, arrayPy); started = true; }
         else minimapCtx.lineTo(arrayPx, arrayPy);
@@ -5166,7 +5221,8 @@ function drawMinimap() {
         var minimapTimeIndex = binaryEnvelope.timeIndices[minimapPoint];
         var minimapTime = binaryEnvelope.times[minimapTimeIndex] / 1000 - binaryTimeOrigin;
         var envelopePx = mtx(minimapTime);
-        var envelopePy = H - ((binaryEnvelope.values[minimapPoint] - bufMin) / yRange) * (H - 4) - 2;
+        var envelopePy = H - ((calculatedValue(names[ni], binaryEnvelope.values[minimapPoint]) - bufMin) / yRange) * (H - 4) - 2;
+        if (!Number.isFinite(envelopePy)) { started = false; continue; }
         if (pointsOnly) minimapCtx.fillRect(envelopePx-1,envelopePy-1,2,2);
         else if (!started) { minimapCtx.moveTo(envelopePx, envelopePy); started = true; }
         else minimapCtx.lineTo(envelopePx, envelopePy);
@@ -5176,7 +5232,8 @@ function drawMinimap() {
       var step = Math.max(1, Math.floor(ring.count / W));
       for (var i = 0; i < ring.count; i += step) {
         var px = mtx(ring.timeAt(i));
-        var py = H - ((ring.valueAt(i) - bufMin) / yRange) * (H - 4) - 2;
+        var py = H - ((calculatedValue(names[ni], ring.valueAt(i)) - bufMin) / yRange) * (H - 4) - 2;
+        if (!Number.isFinite(py)) { started = false; continue; }
         if (pointsOnly) minimapCtx.fillRect(px-1,py-1,2,2);
         else if (!started) { minimapCtx.moveTo(px, py); started = true; }
         else minimapCtx.lineTo(px, py);
