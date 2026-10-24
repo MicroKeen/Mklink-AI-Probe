@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-24T19:52:23.181276+08:00`
+- 更新时间：`2026-10-24T20:02:47.121359+08:00`
 - 分支：`codex/tencent-update-preview`
 - HEAD：`基于main 303a2667开发腾讯云独立测试更新；精确源码见Git HEAD。`
 - 远端 HEAD：`PR42/46/48/49均已合并；main 303a2667，正式release/firmware引用未变。`
 - 工作树：唯一原工作区及源码子目录保留；测试/构建证据位于F盘。
-- 当前任务：用户要求进一步分段计时、真实启动阶段提示并重打包安装。源码分段测量已完成，移除新空窗口多余USB枚举与代理完整设备API导入、缩短启动发现轮询；同机源码后台中位数1.904→1.693s。前端模块与后台并行加载，待端点确定再挂载并等首路由/首帧，三阶段替代估算百分比。定点24Python/29GUI与TS/Vite通过；全GUI、Rust和新Windows包实装验收进行中。原60bcc8df已装证据保留。
-- 状态：`in_progress`
+- 当前任务：启动阶段优化源86f9a75d：新空窗口免多余USB枚举、代理轻量依赖、发现50ms，界面与后台并行加载，真实三阶段替代估算百分比。1097GUI/24Python/23Rust/TS-Vite通过；Windows覆盖exit0，3623文件/209Python/41Web、冻结资格和原生/Web/ZIP/正常退出通过。后台同机中位数1.516→1.441s；原生至健康2.746s与前轮基本持平，新增首屏计时2.582s。见v036-desktop-startup.md；仅本地preview，固件/线上未变。
+- 状态：`complete`
 
 ## 里程碑
 
@@ -48,12 +48,12 @@
 ## 真机环境
 
 - **state**：V4.7.0+STM32F103RE512KiB/UART5实测；当前DAP缺GUID经用户批准定点修复后Keil/pyOCD枚举正常。测试固件保留SystemView CH2/UART5/RTT0和1/PID；无OTP、供电或探针固件变更。全部测试进程正常退出，30MHz1读错保留。
-- **installer**：本地preview源60bcc8df已覆盖安装exit0，SHA256 d2fb5482891ce757db83d9522345ffa28bc600924c9cff555023656bbaa133f9；完整_internal树等3621文件一致，冻结MCP/FLM/SVD/健康/ZIP/Web/退出通过。实装原生后台管理导出2条正常启动事件，CRC/JSON通过；正常关闭释放端点与监听。已重开上位机，后台正常、设备未连接。见v036-desktop-startup.md；腾讯云线上仍为5920c5c5。
+- **installer**：本地preview源86f9a75d覆盖exit0，SHA256 a8805b05aa38ca4cc405b5529baf71cf14447970919dacba5b0f4c740ec1d514；3623文件一致，冻结MCP/FLM/SVD/健康/ZIP/Web/正常退出通过。原生ZIP含2条正常启动记录；真实阶段提示、首屏计时及端口释放已验收。原生健康2.746s、首屏2.582s；后台三次中位数1.441s。见v036-desktop-startup.md；腾讯云线上仍为5920c5c5。
 - **backups**：正式release、原安装包、CI ZIP、唯一硬件证据、Skill备份和当前F盘缓存保留。删除61个可再生旧编译/解压目录；218个含链接测试目录未删。完整人工清单和删除结果在F:/MKLink-Build/reports/cleanup-20261023，见v036-storage-cleanup-20261023.md。 2026-10-24另按明确授权删除896个本地Linux/macOS包/签名/归档/分片，释放16072740412字节；归档证据另存unix-package-cleanup，线上正式附件保留。
 
 ## 下一动作
 
-1. 60bcc8df覆盖安装及实装验收已通过，见v036-desktop-startup.md。等待V3再次掉线后先导出诊断ZIP再拔插，当前新版已安装且未连接，需用户连接并开启RTT；历史USB移除混有手动操作，根因未定。PR50待审，正式发布须明确授权，重新跑合并源码完整门禁并构建stable包，不能把preview候选当正式包；保留GitHub/Gitee，线上包及stable/release/firmware/标签未变，临时SSH已撤销。
+1. 86f9a75d阶段优化覆盖安装及实装验收已通过，见v036-desktop-startup.md。等待V3再次掉线后先导出诊断ZIP再拔插，当前新版已安装且未连接，需用户连接并开启RTT；历史USB移除混有手动操作，根因未定。PR50待审，正式发布须明确授权，重新跑合并源码完整门禁并构建stable包，不能把preview候选当正式包；保留GitHub/Gitee，线上包及stable/release/firmware/标签未变，临时SSH已撤销。
 2. 收集客户N32WB452内外Flash组合实际烧写/回读反馈；本轮主机解析准入及安装包通过，不代替外置SPI硬件验证。不重复使用已消耗的F103单次烧录授权；不主动烧写或改OTP/供电。
 3. 用户需重新生成并部署U盘脚本再测完整HPM JTAG连续烧录；旧脚本不会自动更新。实时拔插/LCD已验证，完整多板Flash/蜂鸣次数仍待实测；不重复历史一次性写入授权。
 4. HPM联合镜像/OTP历史证据保留，Word69=3；本轮使用F103，未写HPM OTP或调整VCC。其他HPM型号继续由用户测试，未知MKLINK_V2任务不得重放，勿将目标板误作下载器升级。
