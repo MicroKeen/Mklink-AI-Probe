@@ -25,6 +25,10 @@ directory 找到主工作区，共享同一目录，不另建缓存。Windows �
 
 ## 统一入口
 
+默认只构建 Windows 安装包。Linux/macOS 安装包仅在用户明确要求对应平台时
+构建；一般构建、发布前全功能测试或发布请求不包含这两个平台。对应原生 CI
+仅保留手动触发，不自动随推送构建。用户 Skill ZIP 不受此平台限制影响。
+
 在源目录 `Mklink-AI-Probe/` 中使用 PowerShell 7：
 
 ```powershell

@@ -69,6 +69,12 @@ Build standard NSIS only unless the user explicitly requests MSI or a
 WebView2-offline package. A signed bundle must produce one NSIS `.exe` and its
 adjacent `.exe.sig`.
 
+Windows is the default desktop platform for every release. Build Linux/macOS
+installers only when the user explicitly requests those platforms; a generic
+release or full qualification request does not include them. Do not dispatch
+`desktop-unix.yml` or add native desktop manifests by default. Continue to
+prepare and validate the public Skill ZIP.
+
 ## Prepare Five Payloads And Two Integrity Files
 
 Create an empty directory under the main checkout's ignored `.build/artifacts/`.
