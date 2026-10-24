@@ -4,6 +4,21 @@ from __future__ import annotations
 from typing import Callable
 
 
+def missing_algorithm_details(target: str) -> dict:
+    from mklink.cmsis_dap.builtin_flm_bundle import suggest_builtin_flm_parts
+    targets = suggest_builtin_flm_parts(target)
+    if targets:
+        return {'status': 'needs_target', 'target_candidates': targets,
+                'message': 'Bundled FLM resources include ' + ', '.join(targets)
+                + '. Specify the exact part number including Flash capacity; '
+                'this family mask does not identify a programming target. '
+                'Use inspect_mcu(device=...) to inspect its algorithms.'}
+    return {'status': 'unsupported',
+            'message': 'No local catalog algorithm matches this exact target; '
+            'use inspect_mcu with the exact part number, then install its Pack '
+            'or configure a custom algorithm if it is not bundled'}
+
+
 def _read_idcode(port: str | None) -> int | None:
     if not port:
         return None
@@ -41,8 +56,7 @@ def inspect_mcu(*, project_root=".", device=None, flm=None, port=None,
         } for a in algorithms]
         result.update(backend='flm', candidates=candidates)
         if not candidates:
-            return {**result, 'status': 'unsupported',
-                    'message': 'No local catalog algorithm matches this exact target; install its Pack or configure a custom algorithm'}
+            return {**result, **missing_algorithm_details(target)}
         selected = candidates
         if flm:
             key = str(flm).casefold()

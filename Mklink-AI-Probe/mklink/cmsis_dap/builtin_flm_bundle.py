@@ -261,6 +261,21 @@ def resolve_builtin_flm_part(
     )
 
 
+def suggest_builtin_flm_parts(part_number: str, root: Optional[Path] = None) -> list[str]:
+    """List bundled capacity variants for a family mask, without selecting one."""
+    requested = str(part_number or "").strip()
+    if not requested or not any(c in requested.casefold() for c in ("x", "*")):
+        return []
+    pattern = _generic_part_pattern(requested)
+    bundle_root = Path(root) if root is not None else _default_bundle_root()
+    return sorted({
+        str(raw["part_number"]) for raw in _target_records(bundle_root)
+        if pattern.fullmatch(str(raw.get("part_number", "")))
+        and any(isinstance(a, Mapping) and a.get("automatic", True) is not False
+                for a in raw.get("algorithms", []))
+    }, key=str.casefold)[:20]
+
+
 def load_builtin_flm_targets(root: Optional[Path] = None) -> List[TargetRecord]:
     bundle_root = Path(root) if root is not None else _default_bundle_root()
     records = []

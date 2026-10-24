@@ -976,8 +976,10 @@ class Device:
                     and resolved_key not in (None, "custom")
                     and mcu_profile.get("flm_path")
                 ):
+                    from mklink.mcu_detect import missing_algorithm_details
                     raise DeviceError(
-                        f"Target {resolved_target!r} has no usable Flash algorithm"
+                        f"Target {resolved_target!r} has no usable Flash algorithm: "
+                        + missing_algorithm_details(resolved_target)["message"]
                     )
             except (
                 DeviceError,

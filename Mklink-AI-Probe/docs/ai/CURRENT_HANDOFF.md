@@ -4,12 +4,12 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-24T09:22:51.632815+08:00`
+- 更新时间：`2026-10-24T09:41:20.909187+08:00`
 - 分支：`codex/hpm-isp-deployment-ux`
 - HEAD：`PR42/46/49已整合到PR48，源22ecb186；以Git HEAD为准。`
 - 远端 HEAD：`本轮整合随后推送到microkeen任务分支，未合并main。`
 - 工作树：唯一工作区E:/software/HPM5300/Mklink-AI-Probe，源码子目录Mklink-AI-Probe；已返回任务分支codex/hpm-isp-deployment-ux。已安装组合在codex/v036-isp-ux-local。
-- 当前任务：用户授权处理4个PR、清理已合并旧分支并开展0.3.6发布前全功能测试；当前整合PR42/46/49到PR48，保留最新交接，重新验证后合并。V4连接STM32F103原测试工程，允许直接改编测试代码且无需备份。
+- 当前任务：0.3.6发布前整合4个PR、分支清理与全功能验收进行中。新增用户反馈：Skill常用FLM不得遗漏；已确认安装Skill含F767算法，系列宏STM32F767xx缺容量，补候选诊断和旧MCP工具重启提示。79定点通过；此前5392全量通过/4打包环境错误，补资源后相关6项通过，源码变化后需重跑全量。
 - 状态：`in_progress`
 
 ## 里程碑
@@ -47,7 +47,7 @@
 
 ## 真机环境
 
-- **state**：用户本轮指定V4+STM32F103测试板；待重新发现并核对身份，不能沿用HPM。允许修改编译原测试工程，无需备份；未修改供电。
+- **state**：V4+STM32F103RE 512KiB身份实读确认，UART5已接。原工程测试固件编译0错0警。Keil/pyOCD不可见源于当前DAP接口缺GUID；用户明确批准定点注册表备份修复，已完成且pyOCD恢复枚举。Flash与综合验收继续；不改变供电或探针固件。
 - **installer**：已覆盖0.3.6 e7c49b04/Web bcdc8474；最新包在构建根artifacts/v036-watch-formulas-e7c49b04，SHA256 818035c005e02978b0729facd7cafcfba91babc659aa209e6bbc6409495b202b，清理后再次核对一致。
 - **backups**：正式release、原安装包、CI ZIP、唯一硬件证据、Skill备份和当前F盘缓存保留。删除61个可再生旧编译/解压目录；218个含链接测试目录未删。完整人工清单和删除结果在F:/MKLink-Build/reports/cleanup-20261023，见v036-storage-cleanup-20261023.md。
 

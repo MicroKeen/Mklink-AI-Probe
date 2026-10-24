@@ -17,6 +17,10 @@ description: 使用 MKLink/MicroLink 操作目标 MCU：固件烧录、内存与
   工程已配置的 IDE（Keil 等）编译下载，其次 pyOCD 在线下载，最后脱机下载。
   先读[下载优先级](references/firmware-download-priority.md)，复用已确认可用的 Keil 配置。
 - 优先使用共享 MCP；先读[共享后台](references/shared-runtime.md)，参数以 schema/`--help` 为准。
+  常用 FLM 已随 Skill 打包，无需 Keil。`STM32F767xx` 等系列宏不能确定容量；
+  用完整料号调用 `inspect_mcu`，按返回的候选核对算法。升级后若仍出现旧工具名
+  `detect_mcu_profile` 或导入失败，重新启动该 MCP 服务并核对 Skill 路径，见
+  [安装与更新](references/install.md)；不要据此认定缺 FLM 或改写 custom 配置。
   **GUI 已打开也可连接**：`connect(probe=...)` 复用工程和符号；`gui_call` 调用已声明的共享能力。
   RTT 已运行时无参数 `rtt_start()` 订阅，用 `rtt_read_channel` 读取。
   不发送旧 `RTTView.start/stop`，不另开串口；缺能力不退回独占。
