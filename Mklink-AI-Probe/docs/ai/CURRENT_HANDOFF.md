@@ -4,12 +4,12 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-24T19:15:53.597626+08:00`
+- 更新时间：`2026-10-24T19:19:21.574473+08:00`
 - 分支：`codex/tencent-update-preview`
 - HEAD：`基于main 303a2667开发腾讯云独立测试更新；精确源码见Git HEAD。`
 - 远端 HEAD：`PR42/46/48/49均已合并；main 303a2667，正式release/firmware引用未变。`
 - 工作树：唯一原工作区及源码子目录保留；测试/构建证据位于F盘。
-- 当前任务：诊断导出移至配置→后台管理；Windows onedir避免重复解压，源60bcc8df已推PR50。50打包+53GUI、构建、解包207Python/41Web及冻结资格通过。后台就绪中位数9.765→1.553s。覆盖安装等待Windows UAC，会话89468；旧上位机正常关闭，实装/真实UI验收待续。证据及脚本F:/MKLink-Build/artifacts/v036-startup-20261024，见v036-desktop-startup.md。无固件/线上变更，V3根因未定。
+- 当前任务：诊断导出移至配置→后台管理；Windows onedir避免重复解压，源60bcc8df已推PR50。50打包+53GUI、构建、解包207Python/41Web及冻结资格通过。后台中位数9.765→1.553s，原生启动至健康3.144s；真实原生ZIP/Web与正常退出通过。UAC返回取消，旧安装四载荷未变，所有测试进程已退出；实装待重试。证据F:/MKLink-Build/artifacts/v036-startup-20261024，见v036-desktop-startup.md。无固件/线上变更，V3根因未定。
 - 状态：`in_progress`
 
 ## 里程碑
@@ -53,7 +53,7 @@
 
 ## 下一动作
 
-1. 先完成UAC后的60bcc8df覆盖安装与真实UI验收，见v036-desktop-startup.md。等待V3再次掉线后先导出诊断ZIP再拔插，当前新版已安装但串口列表为空，需用户连接并开启RTT；历史USB移除混有手动操作，根因未定。PR50待审，正式发布须明确授权，重新跑合并源码完整门禁并构建stable包，不能把preview候选当正式包；保留GitHub/Gitee，线上包及stable/release/firmware/标签未变，临时SSH已撤销。
+1. 用户准备好UAC后重试60bcc8df覆盖安装及实装校验；候选原生/Web已过，见v036-desktop-startup.md。等待V3再次掉线后先导出诊断ZIP再拔插，当前新版已安装但串口列表为空，需用户连接并开启RTT；历史USB移除混有手动操作，根因未定。PR50待审，正式发布须明确授权，重新跑合并源码完整门禁并构建stable包，不能把preview候选当正式包；保留GitHub/Gitee，线上包及stable/release/firmware/标签未变，临时SSH已撤销。
 2. 收集客户N32WB452内外Flash组合实际烧写/回读反馈；本轮主机解析准入及安装包通过，不代替外置SPI硬件验证。不重复使用已消耗的F103单次烧录授权；不主动烧写或改OTP/供电。
 3. 用户需重新生成并部署U盘脚本再测完整HPM JTAG连续烧录；旧脚本不会自动更新。实时拔插/LCD已验证，完整多板Flash/蜂鸣次数仍待实测；不重复历史一次性写入授权。
 4. HPM联合镜像/OTP历史证据保留，Word69=3；本轮使用F103，未写HPM OTP或调整VCC。其他HPM型号继续由用户测试，未知MKLINK_V2任务不得重放，勿将目标板误作下载器升级。
