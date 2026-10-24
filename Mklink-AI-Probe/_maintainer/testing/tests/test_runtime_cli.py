@@ -323,7 +323,7 @@ def test_copy_flm_cli_selects_shared_backend_and_never_retries(tmp_path, monkeyp
     if fail:
         assert '不要重新提交' in output
 
-@pytest.mark.parametrize('status,exit_code', [('detected', 0), ('unsupported', 1)])
+@pytest.mark.parametrize('status,exit_code', [('detected', 0), ('matches', 0), ('unsupported', 1)])
 def test_mcu_detect_cli_uses_read_only_catalog_contract(monkeypatch, capsys, status, exit_code):
     import sys, json
     from mklink import cli

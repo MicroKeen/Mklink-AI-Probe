@@ -4,12 +4,12 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-24T09:56:45.078113+08:00`
+- 更新时间：`2026-10-24T10:08:44.558314+08:00`
 - 分支：`codex/hpm-isp-deployment-ux`
 - HEAD：`PR42/46/49已整合到PR48，源22ecb186；以Git HEAD为准。`
 - 远端 HEAD：`本轮整合随后推送到microkeen任务分支，未合并main。`
 - 工作树：唯一工作区E:/software/HPM5300/Mklink-AI-Probe，源码子目录Mklink-AI-Probe；已返回任务分支codex/hpm-isp-deployment-ux。已安装组合在codex/v036-isp-ux-local。
-- 当前任务：0.3.6发布前整合4个PR、分支清理与全功能验收进行中。新增用户反馈：Skill常用FLM不得遗漏；已确认安装Skill含F767算法，系列宏STM32F767xx缺容量，补候选诊断和旧MCP工具重启提示。79定点通过；此前5392全量通过/4打包环境错误，补资源后相关6项通过，源码变化后需重跑全量。 用户后续明确本轮不构建Linux/macOS包，已取消在途三平台构建；仅Windows安装包与用户Skill。 用户进一步要求清理历史Linux/macOS本地包并将默认仅Windows变为长期规则，已移除原生CI自动推送入口。
+- 当前任务：0.3.6发布前整合4个PR、分支清理与全功能验收进行中。PR42/46/49已整合到48。完整Python5397/GUI1089及候选23bf2d57对应Windows解包/覆盖安装/Skill干净环境通过；用户随后要求通用模糊搜索而非F767专门提示，已改inspect_mcu统一片段/通配符搜索+算法几何，217定点及五组跨厂商目录检查通过，需重新全量/打包。仅Windows与Skill；永久默认不构建Linux/macOS，明确要求才构建。历史本地Unix包已清理，线上正式附件保留。
 - 状态：`in_progress`
 
 ## 里程碑

@@ -11,7 +11,6 @@ from mklink.cmsis_dap.builtin_flm_bundle import (
     extract_builtin_flm,
     load_builtin_flm_targets,
     resolve_builtin_flm_part,
-    suggest_builtin_flm_parts,
 )
 
 
@@ -188,13 +187,17 @@ def test_family_mask_reports_bundled_capacities_without_selecting_one(tmp_path, 
     monkeypatch.setenv("MKLINK_BUILTIN_FLM_ROOT", str(root))
 
     assert discover_builtin_flm_algorithms("STM32F767xx", root) == []
-    assert suggest_builtin_flm_parts("STM32F767xx", root) == ["STM32F767xG", "STM32F767xI"]
+    from mklink.cmsis_dap.pack_catalog import PackCatalog
+    from mklink.cmsis_dap.paths import PackPaths
+    catalog = PackCatalog(PackPaths(tmp_path / 'packs'), builtin_provider=lambda: load_builtin_flm_targets(root))
+    monkeypatch.setattr('mklink.cmsis_dap.pack_catalog.PackCatalog', lambda paths: catalog)
     from mklink.mcu_detect import inspect_mcu
     result = inspect_mcu(device="STM32F767xx")
-    assert result["status"] == "needs_target"
+    assert result["status"] == "matches"
     assert result["candidates"] == []
     assert result["target_candidates"] == ["STM32F767xG", "STM32F767xI"]
-    assert "Bundled FLM" in result["message"]
+    assert [m['candidates'][0]['size'] for m in result['target_matches']] == [1024 * 1024, 2048 * 1024]
+    assert 'selected_algorithm' not in result
     exact = discover_builtin_flm_algorithms("STM32F767ZIT6", root)
     assert len(exact) == 1 and exact[0].flash_size == 2048 * 1024
-    assert suggest_builtin_flm_parts("NONEXISTENTxx", root) == []
+    assert inspect_mcu(device="NONEXISTENTxx")['status'] == 'unsupported'

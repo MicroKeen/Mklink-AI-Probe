@@ -375,6 +375,45 @@ def test_hpm_inspection_uses_rom_without_flm_and_idcode_is_optional(monkeypatch)
     assert calls == [('probe_idcode', {'port': 'COM9'})]
 
 
+@pytest.mark.parametrize('query', ['part', 'aRt1', 'PART*', 'partxx', 'Part??'])
+def test_mcu_inspection_searches_fragments_and_wildcards_without_selecting_or_writing(tmp_path, monkeypatch, query):
+    from mklink.mcu_detect import inspect_mcu
+    from mklink.cmsis_dap.pack_catalog import PackCatalog
+    from mklink.cmsis_dap.paths import PackPaths
+    from mklink.cmsis_dap.models import TargetRecord
+    from mklink.cmsis_dap.algorithm_catalog import FlashAlgorithm
+
+    records = [TargetRecord('PART12', 'Vendor A', installed=True, source='daplink-builtin'),
+               TargetRecord('PART13', 'Vendor B', installed=True, source='installed'),
+               TargetRecord('OTHER12', 'Vendor A', installed=True, source='builtin')]
+    paths = PackPaths(tmp_path / 'packs')
+    catalog = PackCatalog(paths, builtin_provider=lambda: records)
+    monkeypatch.setattr('mklink.cmsis_dap.pack_catalog.PackCatalog', lambda received: catalog)
+    def algorithms(target, **kwargs):
+        assert kwargs['paths'] is paths
+        if target not in {'PART12', 'PART13'}:
+            return []
+        size = 65536 if target == 'PART12' else 131072
+        return [FlashAlgorithm(target, target, 'shared.FLM', 0x08000000, size,
+                               0x20000000, 8192, True, 'installed-pack', 'Example', target,
+                               page_size=256, sector_sizes=((0, 1024),))]
+    monkeypatch.setattr('mklink.cmsis_dap.algorithm_catalog.discover_flash_algorithms', algorithms)
+    monkeypatch.setattr('mklink.runtime.query_probe', lambda *a, **k: pytest.fail('Search opened hardware'))
+    result = inspect_mcu(device=query, paths=paths)
+    assert result['status'] == 'matches'
+    assert result['target_candidates'] == ['PART12', 'PART13']
+    assert [m['candidates'][0]['size'] for m in result['target_matches']] == [65536, 131072]
+    assert result['candidates'] == [] and 'selected_algorithm' not in result
+    assert not list(tmp_path.iterdir())
+
+
+def test_mcu_search_requires_a_literal_fragment(monkeypatch):
+    from mklink.mcu_detect import inspect_mcu
+    monkeypatch.setattr('mklink.cmsis_dap.algorithm_catalog.discover_flash_algorithms', lambda *a, **k: [])
+    monkeypatch.setattr('mklink.cmsis_dap.pack_catalog.PackCatalog', lambda *a, **k: pytest.fail('Unbounded search'))
+    assert inspect_mcu(device='*?xx')['status'] == 'unsupported'
+
+
 @pytest.mark.parametrize('field', ['write_profile', 'copy_flm', 'profiles_path'])
 def test_mcu_api_rejects_removed_write_options(probe, field):
     client, _, _, bridge, calls, _, _ = probe

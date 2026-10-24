@@ -2,21 +2,59 @@
 from __future__ import annotations
 
 from typing import Callable
+import re
 
 
-def missing_algorithm_details(target: str) -> dict:
-    from mklink.cmsis_dap.builtin_flm_bundle import suggest_builtin_flm_parts
-    targets = suggest_builtin_flm_parts(target)
-    if targets:
-        return {'status': 'needs_target', 'target_candidates': targets,
-                'message': 'Bundled FLM resources include ' + ', '.join(targets)
-                + '. Specify the exact part number including Flash capacity; '
-                'this family mask does not identify a programming target. '
-                'Use inspect_mcu(device=...) to inspect its algorithms.'}
+def _algorithm_details(algorithm):
+    return {
+        'algorithm_id': algorithm.algorithm_id, 'name': algorithm.file_name,
+        'size': algorithm.flash_size, 'flash_base': algorithm.flash_start,
+        'ram_base': algorithm.ram_start, 'ram_size': algorithm.ram_size,
+        'page_size': algorithm.page_size, 'sector_sizes': list(algorithm.sector_sizes),
+        'source_kind': algorithm.source_kind, 'source_name': algorithm.source_name,
+    }
+
+
+def missing_algorithm_details(target: str, *, paths=None) -> dict:
+    """Search the unified catalog; a search match never selects a flash target."""
+    from mklink.cmsis_dap.pack_catalog import PackCatalog
+    from mklink.cmsis_dap.paths import PackPaths
+    from mklink.cmsis_dap.algorithm_catalog import discover_flash_algorithms
+
+    query = target.strip()
+    literals = [part for part in re.split(r'[xX*?]+', query) if part]
+    matches = []
+    if literals:
+        needle = max(literals, key=len)
+        pattern = re.compile(''.join(
+            '[a-z0-9]' if c in 'xX?' else '[a-z0-9]*' if c == '*' else re.escape(c)
+            for c in query), re.IGNORECASE)
+        records = PackCatalog(paths or PackPaths()).search(needle, limit=10000)
+        seen = set()
+        for record in records:
+            key = record.part_number.casefold()
+            if key in seen or not pattern.search(record.part_number):
+                continue
+            seen.add(key)
+            algorithms = discover_flash_algorithms(record.part_number, paths=paths)
+            matches.append({'device': record.part_number, 'vendor': record.vendor,
+                            'source': record.source, 'installed': record.installed,
+                            'candidates': [_algorithm_details(a) for a in algorithms]})
+            if len(matches) == 20:
+                break
+    if matches:
+        return {'status': 'matches', 'target_candidates': [m['device'] for m in matches],
+                'target_matches': matches, 'match_limit': 20,
+                'message': 'Catalog search matches found; inspect_mcu(device=...) exposes '
+                'their details. Compare their algorithms with '
+                'the project target, IDE/Pack mapping and known device memory geometry, '
+                'then inspect the matching target. Ask the user only if that evidence '
+                'cannot resolve the remaining ambiguity. Search results do not select '
+                'a programming target; narrow the query if more detail is needed.'}
     return {'status': 'unsupported',
-            'message': 'No local catalog algorithm matches this exact target; '
-            'use inspect_mcu with the exact part number, then install its Pack '
-            'or configure a custom algorithm if it is not bundled'}
+            'message': 'No local catalog match. Try a shorter model fragment or wildcard '
+            'with inspect_mcu, check the project/Pack mapping, then install its Pack '
+            'or configure a compatible custom algorithm if needed.'}
 
 
 def _read_idcode(port: str | None) -> int | None:
@@ -28,7 +66,7 @@ def _read_idcode(port: str | None) -> int | None:
 
 def inspect_mcu(*, project_root=".", device=None, flm=None, port=None,
                 read_idcode=False, idcode_reader: Callable | None = None, paths=None):
-    """Inspect an exact target without writing profiles, project files or probe disks.
+    """Inspect a target or search model fragments/wildcards without changing devices.
 
     ``flm`` selects an algorithm ID or an unambiguous filename. IDCODE is optional
     diagnostic data, never used to guess an exact target or choose an algorithm.
@@ -48,15 +86,13 @@ def inspect_mcu(*, project_root=".", device=None, flm=None, port=None,
         result.update(status='detected', backend='hpm-rom', candidates=[])
     else:
         algorithms = discover_flash_algorithms(target, paths=paths)
-        candidates = [{
-            'algorithm_id': a.algorithm_id, 'name': a.file_name, 'size': a.flash_size,
-            'flash_base': a.flash_start, 'ram_base': a.ram_start, 'ram_size': a.ram_size,
-            'page_size': a.page_size, 'sector_sizes': list(a.sector_sizes),
-            'source_kind': a.source_kind, 'source_name': a.source_name,
-        } for a in algorithms]
+        candidates = [_algorithm_details(a) for a in algorithms]
         result.update(backend='flm', candidates=candidates)
         if not candidates:
-            return {**result, **missing_algorithm_details(target)}
+            result.update(missing_algorithm_details(target, paths=paths))
+            if read_idcode:
+                result['idcode'] = (idcode_reader or _read_idcode)(port)
+            return result
         selected = candidates
         if flm:
             key = str(flm).casefold()

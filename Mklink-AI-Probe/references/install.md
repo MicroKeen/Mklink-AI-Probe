@@ -20,7 +20,7 @@ Python 环境；完整安装包含 Web GUI 与 MCP：
 ```powershell
 python -m pip install -e ".[gui,mcp]"
 python -c "import serial, pymodbus, elftools, pycparser, websockets, fastapi, starlette, uvicorn, pyocd, intelhex, multipart, fastmcp, pydantic; print('MKLink dependencies OK')"
-python -c "from pathlib import Path; import mklink; from mklink.mcu_detect import inspect_mcu; assert Path(mklink.__file__).resolve().is_relative_to(Path.cwd().resolve()), mklink.__file__; r = inspect_mcu(device='STM32F767ZIT6'); assert r.get('candidates'), r; print('Bundled FLM OK')"
+python -c "from pathlib import Path; import mklink; from mklink.cmsis_dap.builtin_flm_bundle import load_builtin_flm_targets; assert Path(mklink.__file__).resolve().is_relative_to(Path.cwd().resolve()), mklink.__file__; targets = load_builtin_flm_targets(); assert targets, 'Bundled FLM catalog missing'; print('Bundled FLM targets:', len(targets))"
 python -m mklink web-entry install --quick-launch
 ```
 
@@ -34,8 +34,7 @@ FLM 自检无需连接硬件，也不依赖 Keil、下载器 U 盘或用户 Pack
 `Source code` 压缩包和 Git checkout 不包含这些随发布打包的资源。自检失败时
 核对当前解释器导入的目录并重新安装完整 Skill 包，保留用户工程和配置。
 
-`STM32F767xx` 等编译宏只标识系列，不能区分 Flash 容量。使用完整料号（如
-`STM32F767ZIT6`）调用 `inspect_mcu`；返回多个算法时按实际地址和 Bank 模式选择。
+型号搜索和算法匹配按[固件下载流程](firmware-download-priority.md#flm-兼容性)处理。
 如果工具列表仍含旧名称 `detect_mcu_profile`，或该名称出现导入错误，核对
 MCP 解释器及包目录，重启该 MCP 进程后重新列出工具；当前入口为 `inspect_mcu`。
 
