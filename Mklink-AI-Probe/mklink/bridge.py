@@ -8,6 +8,7 @@ MKLink Serial Bridge — 核心串口通信类。
 from __future__ import annotations
 
 import codecs
+import logging
 import re
 import threading
 import time
@@ -186,6 +187,12 @@ class MKLinkSerialBridge:
             else:
                 print(f"[FAIL] 无法打开端口 {self._port}: {e}")
             return False
+        # A closed IDE can leave the probe's logical DAP session reserved.
+        # OS-exclusive ownership, never idle time, permits HostStatus cleanup.
+        from .dap_recovery import reconcile_dap_owner
+        recovery = reconcile_dap_owner(self._port)
+        logging.getLogger(__name__).info('DAP ownership reconciliation on %s: %s',
+                                         self._port, recovery)
         self._ctx.state = DeviceState.CONNECTING
         self._running = True
 
