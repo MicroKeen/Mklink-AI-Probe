@@ -5,6 +5,12 @@ const FIRMWARE_FILTER = { name: 'BIN / HEX', extensions: ['bin', 'hex'] }
 const FLM_FILTER = { name: 'CMSIS Flash Algorithm', extensions: ['flm'] }
 
 export type PickedFile = string | File | null
+
+export async function pickDirectory(title: string, defaultPath?: string): Promise<string | null> {
+  const { open } = await import('@tauri-apps/plugin-dialog')
+  const result = await open({ directory: true, multiple: false, title, ...(defaultPath ? { defaultPath } : {}) })
+  return typeof result === 'string' ? result : null
+}
 const symbolHandles = new WeakMap<File, BrowserFirmwareFileHandle>()
 
 export function symbolFileHandle(file: File): BrowserFirmwareFileHandle | undefined {
