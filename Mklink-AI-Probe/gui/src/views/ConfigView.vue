@@ -320,7 +320,7 @@ async function refreshRttForSymbols(sourcePath: string) {
 }
 
 async function parseSymbols() {
-  if (!deviceStatus.value.connected || !isSymbolFilePath(settings.value.symbolPath)) return
+  if (!isSymbolFilePath(settings.value.symbolPath)) return
   const requestedPath = settings.value.symbolPath.trim()
   rememberSymbolPath(window.localStorage, requestedPath, settings.value.symbolDisplayPath)
   const generation = ++symbolParseGeneration
@@ -333,7 +333,7 @@ async function parseSymbols() {
         toast.error(tr(`AXF 解析失败: 后端仍在使用 ${result.axf_path || '未知文件'}`, `AXF parsing failed: backend is still using ${result.axf_path || 'an unknown file'}`))
         return
       }
-      await refreshRttForSymbols(requestedPath)
+      if (deviceStatus.value.connected) await refreshRttForSymbols(requestedPath)
       if (!isActiveSymbolParse(generation, requestedPath)) return
       try {
         await symbolCatalog.ensureLoaded(true)

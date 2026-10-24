@@ -638,7 +638,7 @@ def create_offline_download_router(
         finally:
             bridge.close()
 
-    async def _check_isp_capability(port=None):
+    async def _check_isp_capability(port=None, *, otp=False):
         from mklink.discovery import find_mklink_cdc_port
         from mklink.remote.resource_manager import ResourceError
         bridge = _connected_bridge(port)
@@ -650,6 +650,11 @@ def create_offline_download_router(
             resource_manager.acquire_many(_resources(), owner, preempt=False)
             response = await asyncio.to_thread(_send_trigger, CAPABILITY_COMMAND, bridge, resolved, None, 5)
             require_capability(response)
+            if otp:
+                from mklink.hpm_isp import OTP_JOB_CAPABILITY_COMMAND, require_otp_job_capability
+                otp_response = await asyncio.to_thread(_send_trigger, OTP_JOB_CAPABILITY_COMMAND, bridge, resolved, None, 5)
+                require_otp_job_capability(otp_response)
+                response += '\n' + otp_response
             return response
         except ResourceError as error:
             raise HTTPException(409, str(error)) from error
@@ -859,7 +864,7 @@ def create_offline_download_router(
             if not disk:
                 raise OfflineDownloadError("MICROKEEN disk is unavailable")
             disk_root = Path(disk)
-            isp_capability = await _check_isp_capability() if config.hpm_isp is not None else None
+            isp_capability = await _check_isp_capability(otp=config.hpm_isp_otp is not None) if config.hpm_isp is not None else None
             total = [0]
             with tempfile.TemporaryDirectory(prefix="mklink-offline-") as raw_temp:
                 temp = Path(raw_temp)
@@ -1019,7 +1024,7 @@ def create_offline_download_router(
                             raise HTTPException(409, "Finish independent UART operations and detach UART clients before USART ISP")
                         if runtime.current_operation is not None:
                             runtime.current_operation["uart_exclusive"] = True
-                    await _check_isp_capability(resolved_port)
+                    await _check_isp_capability(resolved_port, otp=isp_job.get('otp', False))
             except (ValueError, OSError) as error:
                 raise HTTPException(422, str(error)) from error
         if "application/x-ndjson" in request.headers.get("accept", "").casefold():

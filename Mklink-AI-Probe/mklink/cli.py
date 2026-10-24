@@ -1888,6 +1888,13 @@ def _print_mcu_detect_result(result: dict, *, json_output: bool = False) -> None
         return
 
     status = result.get("status")
+    if status == 'matches':
+        print('[OK] 型号搜索候选；结合工程/Pack 与实际容量核对后继续检查：')
+        for match in result['target_matches']:
+            print(f"  {match['device']}  {match['vendor']}  {match['source']}")
+            for candidate in match['candidates']:
+                print(f"    {candidate['name']}  Flash=0x{candidate['flash_base']:08X}, size={candidate['size']}")
+        return
     if status == 'detected':
         print(f"[OK] MCU: {result['device']} ({result['backend']})")
         selected = result.get('selected_algorithm')
@@ -1949,7 +1956,7 @@ def _cli_mcu_detect(
             )
 
     _print_mcu_detect_result(result, json_output=json_output)
-    return 0 if result.get("status") in {"detected", "needs_selection"} else 1
+    return 0 if result.get("status") in {"detected", "needs_selection", "matches"} else 1
 
 
 def main():
@@ -2048,7 +2055,7 @@ def main():
     _add_project_root_arg(init_parser)
 
     # mcu-detect 子命令
-    mcu_detect_parser = subparsers.add_parser("mcu-detect", help="只读检查精确 MCU 与统一算法目录")
+    mcu_detect_parser = subparsers.add_parser("mcu-detect", help="只读检查 MCU 或模糊搜索统一算法目录")
     _add_project_root_arg(mcu_detect_parser)
     mcu_detect_parser.add_argument("--device", default=None, help="MCU 型号，如 STM32H723ZETx")
     mcu_detect_parser.add_argument("--port", default=None, help="可选：连接目标读取 IDCODE")

@@ -32,6 +32,7 @@ class MuxWatchSession:
         if self.period > 60000000:
             raise MuxWatchCapacityError('Multiplex watch period exceeds 60 seconds')
         self._pending = []
+        self._reset_generation = None
         self._last_clock = None
         self._clock_high = 0
         self.samples = 0
@@ -61,12 +62,21 @@ class MuxWatchSession:
         # budget. Draining 64 KiB expands into thousands of Python sample
         # objects and can stall the next drain long enough to overflow it.
         for event in self.transport.drain(0x41, 255, max_bytes=16384):
+            generation = getattr(event, 'reset_generation', None)
+            if generation != self._reset_generation:
+                self._pending = []
+                self._read_failure_since = None
+                self._reset_generation = generation
             if len(event) < 6:
                 raise RuntimeError('Invalid multiplex watch event')
             index, status = event[:2]
             if status == 7:
                 self._pending = []
                 raise RuntimeError('DAP changed the target; SuperWatch capture was invalidated. Restart capture after debugging.')
+            if status == 8:
+                self._pending = []
+                self.gaps += 1
+                raise RuntimeError('MCU reset recovery timed out; SuperWatch could not read the target within 5 seconds. The reset was not repeated.')
             if status == 5:
                 if len(event) != 6 or index >= len(self.parts):
                     raise RuntimeError('Invalid multiplex watch read-error event')

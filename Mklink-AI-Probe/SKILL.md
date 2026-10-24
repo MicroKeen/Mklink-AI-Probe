@@ -54,7 +54,7 @@ description: 使用 MKLink/MicroLink 操作目标 MCU：固件烧录、内存与
   不循环 stop、`reboot_probe` 或 `reboot()`。
 - **AXF/ELF**：默认使用内置 pyelftools；`readelf_available:false` 不阻塞操作。
   只有用户明确指定 `elf_backend=external` 才调用外部 readelf/addr2line。
-- **未知 MCU / 共享算法**：原生或脱机路径先 `inspect_mcu` / `mcu-detect` 只读检查统一目录；
+- **未知 MCU / 共享算法**：先 `inspect_mcu` / `mcu-detect` 模糊搜索统一目录；
   不能改成 `custom` 绕过匹配。缺少精确型号名称不等于没有兼容算法：先按
   [FLM 兼容性规则](references/firmware-download-priority.md#flm-兼容性)核对工程与 Pack。
   能确定唯一兼容项时显式指定；确有歧义再请用户选择，均不兼容或缺文件才停止。
@@ -91,7 +91,7 @@ description: 使用 MKLink/MicroLink 操作目标 MCU：固件烧录、内存与
 | VPN/局域网 Site Agent | [直连远程](references/commands-remote.md) |
 | Web/桌面应用 | [本地 Web GUI/API](references/commands-remote-gui.md) |
 | GUI 与 AI 共存、多下载器、设备别名 | [共享后台](references/shared-runtime.md) |
-| 安装/更新/依赖 | [安装与更新](references/install.md) |
+| 安装/FLM/MCP | [安装与更新](references/install.md) |
 | U 盘/桌面 HTML 快速入口 | [Web 入口](references/web-entry.md) |
 | Windows USB 端口名称 | [端口命名](references/windows-port-names.md) |
 | 复杂编排或故障排查 | [工作流](references/workflows.md) |

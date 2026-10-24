@@ -234,6 +234,8 @@ def _custom_algorithms(paths: PackPaths, part_number: str) -> list[FlashAlgorith
             source_token="custom:{}:{}".format(_encode_target(part_number), record.algorithm_id),
             custom_path=str(record.file_path),
             custom_sha256=str(record.algorithm_id),
+            page_size=int(record.page_size),
+            sector_sizes=tuple(record.sector_sizes),
         ))
     return result
 

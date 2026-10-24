@@ -6,6 +6,9 @@
 ## 操作
 
 在 SuperWatch 工具栏打开 **日志 → 开始记录**，选择后台电脑的保存目录。
+桌面本机窗口直接弹出系统文件夹选择器；浏览器和远程窗口保留后台目录浏览。
+可以先开启记录，再开始采集；尚未收到采样时显示 **等待数据**。
+取消文件夹选择不会创建日志。
 只有明确开始记录才创建文件；平时只保留有限的内存显示缓冲，不自动保存日志。
 后台将收到的采样连续写入 JSONL，不受显示暂停、页面刷新或显示缓冲区长度影响。
 同一个按钮在记录中变为 **停止记录**，点击后排空待写数据并关闭文件；停止采集、断开设备或关闭后台也会完成保存。
@@ -21,7 +24,7 @@ mklink runtime call superwatch_recording_stop
 ```
 
 MCP 使用 `superwatch(action="recording_start", arguments={"directory":"D:/logs"})`，
-另有 `recording_status`、`recording_stop`。先连接并开始 SuperWatch 采样。
+另有 `recording_status`、`recording_stop`。记录可以在开始 SuperWatch 采样前开启。
 目录必须已存在；重名文件不会覆盖。仅断开 AI 会话不会结束后台的记录。
 
 1. 点击 **日志 → 加载日志**，选择本地 CSV、TXT、LOG、JSONL 或 NDJSON 文件。

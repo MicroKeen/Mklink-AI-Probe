@@ -1,16 +1,6 @@
 name: macOS and Linux desktop packages
 on:
-  push:
-    branches: [codex/0.3.2-fixes]
-    paths:
-      - '.github/workflows/desktop-unix.yml'
-      - 'Mklink-AI-Probe/gui/**'
-      - 'Mklink-AI-Probe/pyproject.toml'
-      - 'Mklink-AI-Probe/skills/tauri-gui-builder/**'
-      - 'Mklink-AI-Probe/scripts/build_workspace.ps1'
-      - 'Mklink-AI-Probe/mklink/**'
-      - 'Mklink-AI-Probe/packaging/linux/**'
-      - 'Mklink-AI-Probe/_maintainer/testing/desktop_unix_smoke.py'
+  # Only dispatch after an explicit maintainer request for these platforms.
   workflow_dispatch:
 permissions:
   contents: read
@@ -79,7 +69,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: mklink-v0.3.5-${{ matrix.target }}
+          name: mklink-v0.3.6-${{ matrix.target }}
           path: |
             .build/artifacts/${{ matrix.target }}
             .build/reports

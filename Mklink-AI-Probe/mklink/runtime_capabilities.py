@@ -73,6 +73,15 @@ def multiplex_enabled(state):
     return getattr(getattr(state.get('device'), '_bridge', None), '_mux_supported', None) is True
 
 
+def capture_reset_supported(state, active):
+    """Only negotiated framed reset may share a running target acquisition."""
+    from mklink.mux import MuxTransport
+    mux = getattr(getattr(state.get('device'), '_bridge', None), '_mux', None)
+    return (set(active) <= {'rtt', 'superwatch'}
+            and isinstance(mux, MuxTransport) and mux.ready
+            and mux.supports_software_reset)
+
+
 for stream in STREAMS:
     for action in ('status', 'start', 'stop', 'pause', 'resume'):
         CAPABILITIES[f'{stream}_{action}'] = ('GET' if action == 'status' else 'POST', f'/api/dash/{stream}/{action}')

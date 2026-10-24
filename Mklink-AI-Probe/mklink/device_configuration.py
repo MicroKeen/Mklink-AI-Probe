@@ -58,6 +58,12 @@ def _profile(part: str, model: str):
             reason="安全配置只读；熔丝值与影子值分别显示。V4 HPMLink 可在下方单独配置已验证型号的用户 OTP。",
             security=None,
         ), None
+    if part.startswith('HPM'):
+        # HPM OTP is never an ARM option-byte recipe. Wider family operations
+        # use the ROM UART profile API; keep the existing JTAG support explicit.
+        return dict(part_number=part, model=model, kind='otp', supported=False,
+                    read_supported=False, fields=[], source='', security=None,
+                    reason='此型号的 OTP 配置请选择 USART ISP 下载类型。'), None
     capability = offline_security_capability(model, part)
     recipe = (
         _offline_profile(part, str(capability["family"]))

@@ -16,6 +16,7 @@ import '../../assets/rtt_viewer.css'
 import i18nUrl from '../../assets/rtt_i18n.js?url'
 import viewerUrl from '../../assets/rtt_viewer.js?url'
 import { DESKTOP_SETTINGS_STORAGE_KEY } from '../../lib/desktopSettings'
+import { signalFormula } from '../../lib/signalFormula'
 import { language } from '../../composables/useLanguage'
 import { API_BASE } from '../../lib/runtimeEndpoint'
 import { saveTextFile, saveImageFile } from '../../lib/downloadTextFile'
@@ -81,7 +82,9 @@ function requestLatestVisibleRange(interactive = false): void {
   visibleRangePendingInteractive = false
   visibleRequestInFlight = ++visibleRequestId
   if (interactive) interactiveVisibleRequests.add(visibleRequestInFlight)
-  binary.requestVisibleRange(visibleRequestInFlight, start, end, pixelWidth)
+  const formulas = viewer.getFormulas?.()
+  if (formulas?.some(Boolean)) binary.requestVisibleRange(visibleRequestInFlight, start, end, pixelWidth, formulas)
+  else binary.requestVisibleRange(visibleRequestInFlight, start, end, pixelWidth)
 }
 
 function resetVisibleRangeRequests(): void {
@@ -671,6 +674,7 @@ function buildTemplate(mode: string): string {
 }
 
 function injectScripts(el: HTMLDivElement, mode: string) {
+  ;(window as any).__mklinkSignalFormula = signalFormula
   const minPoints = mode === 'SuperWatch' ? 50000 : 2
   const maxPoints = mode === 'SuperWatch' ? 50000 : 10000
   // 1. Set CONFIG globally

@@ -67,6 +67,11 @@ These paths are relative to the main checkout, shared across worktrees.
 
 ### Native macOS / Linux candidates
 
+These platforms are opt-in. Build Windows NSIS by default; do not build Linux
+or macOS installers or dispatch their workflow unless the user explicitly
+requests those platforms. General build, prerelease testing, and publication
+requests do not imply that request. `desktop-unix.yml` is manual-dispatch only.
+
 Run `scripts/build_workspace.ps1` with `python` and argument
 `skills/tauri-gui-builder/scripts/build_unix.py` on the target OS/architecture.
 The `desktop-unix.yml` workflow builds Apple Silicon and Intel DMGs and Linux
@@ -85,7 +90,7 @@ Native candidates also contain updater payloads: macOS `.app.tar.gz`, Linux
 AppImage and DEB. `build-manifest.json` declares `darwin-aarch64`,
 `darwin-x86_64`, `linux-x86_64-appimage`, and `linux-x86_64-deb` keys. Candidates
 remain unsigned. Once publication/signing is explicitly authorized, sign each
-payload with the existing Tauri updater key and pass all three build manifests
+requested platform's payload with the existing Tauri updater key and pass its build manifest
 to `prepare_release.py --desktop-manifest ...` (repeat for each target). The
 preparer requires matching source/version, hashes, and nonempty adjacent `.sig`
 files. The publisher validates and includes these platform entries in both

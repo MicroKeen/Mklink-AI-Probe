@@ -19,7 +19,7 @@
       @focus="showFromFocus"
     >
       <History :size="12" aria-hidden="true" />
-      <span>v{{ version }} · {{ buildCommit }}</span>
+      <span>v{{ version }}</span>
     </button>
 
     <section
@@ -34,7 +34,6 @@
       <header class="version-panel-header">
         <div>
           <h2>{{ tr('版本更新', 'Release History') }}</h2>
-          <p>{{ tr('当前构建', 'Current build') }} {{ buildCommit }}</p>
         </div>
         <span class="current-version">v{{ version }}</span>
       </header>
@@ -71,7 +70,6 @@ import { language, tr } from '../composables/useLanguage'
 
 defineProps<{
   version: string
-  buildCommit: string
 }>()
 
 const root = ref<HTMLElement | null>(null)

@@ -104,7 +104,7 @@
         :title="tr('还有其他客户端时后台继续运行；全部退出且无在途任务后约5秒自动停止采集并释放下载器。', 'The backend stays alive for other clients. About 5 seconds after all clients leave and pending work completes, it stops capture and releases the probe.')">
         {{ IS_REMOTE ? tr('远程会话 · 固定目标 · 不回退本地', 'Remote session · Fixed target · No local fallback') : tr('共享后台 · CDC · GUI / AI 共用连接', 'Shared backend · CDC · GUI / AI connection') }}
       </span>
-      <VersionHistoryPopover :version="appVersion" :build-commit="buildCommit" />
+      <VersionHistoryPopover :version="appVersion" />
     </footer>
     <ToastContainer />
   </div>
@@ -168,7 +168,6 @@ watch(() => backendState.value === 'alive' ? sharedRuntime?.value === true : und
   }) : startBrowserSessionLease(!isTauri)
 }, { immediate: true })
 const appVersion = __APP_VERSION__
-const buildCommit = __APP_BUILD_COMMIT__
 
 const currentTab = computed(() => route.name as string)
 const dashboardVisited = ref(false)
@@ -177,8 +176,8 @@ watch(currentTab, name => { if (name === 'dashboard') dashboardVisited.value = t
 const tabs = computed(() => (IS_REMOTE ? [{ key: 'dashboard', label: tr('仪表盘', 'Dashboard') }] : [
   { key: 'config', label: tr('配置', 'Config') },
   { key: 'dashboard', label: tr('仪表盘', 'Dashboard') },
-  { key: 'offline-flash', label: tr('脱机烧录', 'Offline Flash') },
   { key: 'online-flash', label: tr('在线烧录', 'Online Flash') },
+  { key: 'offline-flash', label: tr('脱机烧录', 'Offline Flash') },
   { key: 'remote-service', label: tr('远程服务', 'Remote Service') },
 ]))
 

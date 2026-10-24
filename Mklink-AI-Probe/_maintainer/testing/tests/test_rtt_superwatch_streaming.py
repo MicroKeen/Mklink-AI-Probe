@@ -1280,6 +1280,40 @@ def test_superwatch_layout_change_does_not_wait_for_read_and_discards_stale_cycl
     assert status["read_drops"] == 1
 
 
+def test_superwatch_prearmed_recording_survives_capture_start(monkeypatch, tmp_path):
+    import json
+
+    manager = SuperWatchStreamManager(stream_hub=_RecordingHub(), batch_samples=8)
+    manager._runtime = _MutableWatchRuntime()
+    sampled = threading.Event()
+
+    class Session:
+        stats = {}
+        def __init__(self, *_args, **_kwargs): pass
+        def start(self): pass
+        def stop(self): pass
+        def read_frames(self, **_kwargs):
+            if sampled.is_set():
+                return []
+            sampled.set()
+            return [{"timestamp_us": 1234, "regions": [(0, struct.pack('<f', 42.0))]}]
+
+    monkeypatch.setattr('mklink.dump_memory.DumpMemoryStreamSession', Session)
+    initial = manager.start_recording(str(tmp_path))
+    try:
+        manager.start(SimpleNamespace(_bridge=_SuperWatchDumpBridge()))
+        assert sampled.wait(1)
+        deadline = time.monotonic() + 1
+        while manager.get_status()['read_cycles'] < 1 and time.monotonic() < deadline:
+            time.sleep(.001)
+    finally:
+        manager.stop()
+    result = manager.recording_status()
+    assert result['path'] == initial['path']
+    assert result['state'] == 'completed' and result['samples'] == 1
+    assert json.loads(next(tmp_path.glob('*.jsonl')).read_text(encoding='utf-8')) == {'a': 42.0, '_t': 0.0}
+
+
 def test_superwatch_concurrent_poll_add_remove_pressure_keeps_batches_aligned(monkeypatch):
     hub = _RecordingHub()
     manager = SuperWatchStreamManager(stream_hub=hub, batch_samples=8)

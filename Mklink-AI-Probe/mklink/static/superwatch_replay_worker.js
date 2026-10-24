@@ -15,7 +15,7 @@ self.onmessage = async ({ data: message }) => {
     } else if (message.type === 'view' && data) {
       self.postMessage({ type: 'view', id: message.id, ...replayView(data, message.position, message.span, message.width, message.names) });
     } else if (message.type === 'range' && data) {
-      self.postMessage({ type: 'view', id: message.id, ...replayRange(data, message.start, message.end, message.position, message.width, message.names, message.playing) });
+      self.postMessage({ type: 'view', id: message.id, ...replayRange(data, message.start, message.end, message.position, message.width, message.names, message.playing, message.formulas) });
     }
   } catch (error) { data = null; self.postMessage({ type: 'error', message: error.message }); }
 };

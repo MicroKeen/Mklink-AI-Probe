@@ -279,6 +279,8 @@ class RttChannelDecoder:
         self._numeric_channels = ()
         self._numeric_candidate_channels = ()
         self._numeric_candidate_rows = []
+        self._traffic_requested = None
+        self._traffic_active = True
 
     def set_encoding(self, encoding):
         normalized = normalize_rtt_encoding(encoding)
@@ -291,11 +293,19 @@ class RttChannelDecoder:
         return normalized
 
     def feed_rtt_bytes(self, chunk: bytes, *, final: bool = False) -> None:
+        # Each traffic subscription requests line/waveform decoding. Terminal
+        # and byte-cache readers do not. Keep demand local to each channel so
+        # another window can still use traffic without changing this viewer.
+        traffic = self._traffic_requested is None or self._traffic_requested()
         with self._decode_lock:
             terminal_text = self._terminal_decoder.decode(
                 bytes(chunk), final=final
             )
-            lines = self._line_assembler.feed(chunk, final=final)
+            if traffic != self._traffic_active:
+                # Never join fragments from opposite sides of a mode switch.
+                self._line_assembler.reset()
+                self._traffic_active = traffic
+            lines = self._line_assembler.feed(chunk, final=final) if traffic else []
             if final:
                 self._terminal_decoder = codecs.getincrementaldecoder(
                     self._line_assembler.encoding
@@ -440,6 +450,9 @@ class RttStreamManager(RttChannelDecoder):
 
     def set_stream_hub(self, stream_hub) -> None:
         self._stream_hub = stream_hub
+        self._traffic_requested = lambda: (
+            self._stream_hub is not None and self._stream_hub.has_subscribers
+        )
 
     def set_terminal_stream_hub(self, stream_hub) -> None:
         self._terminal_stream_hub = stream_hub
@@ -528,6 +541,7 @@ class RttStreamManager(RttChannelDecoder):
             decoder.set_encoding(encoding)
             if source in self._channel_hubs:
                 decoder._stream_hub, decoder._terminal_stream_hub = self._channel_hubs[source]
+                decoder._traffic_requested = lambda d=decoder: d._stream_hub.has_subscribers
             self._channel_decoders[source] = decoder
         failure_callback = self._start_failure_callback
 
@@ -557,6 +571,7 @@ class RttStreamManager(RttChannelDecoder):
                         decoder.set_encoding(encoding)
                         if source in self._channel_hubs:
                             decoder._stream_hub, decoder._terminal_stream_hub = self._channel_hubs[source]
+                            decoder._traffic_requested = lambda d=decoder: d._stream_hub.has_subscribers
                         decoders[source] = decoder
                     self._channel_decoders = decoders
                 with self._write_lock:
@@ -2293,8 +2308,8 @@ class SuperWatchStreamManager:
         with self._recording_lock, self._read_lock:
             if self._recorder and self._recorder.status()['active']:
                 raise RuntimeError('SuperWatch recording is already active')
-            if not self.running or not json.loads(self._metadata_cache[1]):
-                raise RuntimeError('Start SuperWatch acquisition before recording')
+            if not self.running and self._thread is not None and self._thread.is_alive():
+                raise RuntimeError('SuperWatch acquisition is still stopping')
             # Exclude samples received before the user pressed Start recording.
             self._flush_binary_batch_locked()
             self._recorder = SuperWatchRecorder(directory)

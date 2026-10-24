@@ -74,19 +74,51 @@ def test_overflow_and_disk_error_are_visible_not_success(tmp_path):
 def test_http_controls_share_manager_and_capture_stop_finalizes(tmp_path, monkeypatch):
     from mklink.remote import api, dashboards
     sw = manager()
+    # Recording can be armed before acquisition, metadata or a device exists.
+    sw._running = False
+    sw._collecting.clear()
+    sw._metadata_cache = (b'', '[]', 0)
     managers = {**dashboards.get_managers(), 'superwatch': sw}
     monkeypatch.setattr(dashboards, 'get_managers', lambda: managers)
     client = TestClient(api.create_app(auth_token=None, project_root=str(tmp_path)))
     base = '/api/dash/superwatch/recording/'
     assert client.post(base + 'start', json={'directory': 'relative'}).status_code == 400
     assert client.post(base + 'start', json={'directory': str(tmp_path)}).status_code == 200
+    assert sw.recording_status()['samples'] == 0
+    assert sw.recording_status()['active'] is True
     assert client.post(base + 'start', json={'directory': str(tmp_path)}).status_code == 409
+    sw._metadata_cache = (b'', '[{"name":"value"}]', 1)
+    sw._running = True
+    sw._collecting.set()
     sw._publish_sample_values_locked([7], channel_count=1, sample_time=100)
     sw.stop()
     result = client.get(base + 'status').json()
     assert result['state'] == 'completed' and result['samples'] == 1
     assert client.post(base + 'stop').json() == result
     assert rows(tmp_path) == [{'value': 7, '_t': .1}]
+
+
+def test_idle_recording_can_stop_and_restart_without_samples(tmp_path):
+    sw = manager()
+    sw._running = False
+    sw._collecting.clear()
+    first = sw.start_recording(str(tmp_path))
+    result = sw.stop_recording()
+    assert result['state'] == 'completed' and not result['active']
+    assert result['samples'] == 0 and rows(tmp_path) == []
+    second = sw.start_recording(str(tmp_path))
+    assert first['path'] != second['path']
+    sw.stop()
+    assert sw.recording_status()['state'] == 'completed'
+
+
+def test_cannot_arm_recording_while_old_acquisition_is_stopping(tmp_path):
+    sw = manager()
+    sw._running = False
+    sw._thread = SimpleNamespace(is_alive=lambda: True)
+    with pytest.raises(RuntimeError, match='still stopping'):
+        sw.start_recording(str(tmp_path))
+    assert not list(tmp_path.iterdir())
 
 
 def test_mcp_recording_actions_use_shared_capabilities(monkeypatch):

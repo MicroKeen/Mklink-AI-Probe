@@ -108,11 +108,6 @@ export function useDashboardSetup() {
   async function parseSelectedSymbols(): Promise<boolean> {
     const path = symbolPath.value.trim()
     if (!isSymbolFilePath(path)) return false
-    if (!api.deviceStatus.value.connected) {
-      toast.info(tr('已保存符号文件，连接设备时将自动加载', 'Symbol file saved and will load when the device connects.'))
-      return true
-    }
-
     loadingSymbols.value = true
     try {
       const result = await api.parseAxf(path) as AxlStatus
@@ -120,7 +115,7 @@ export function useDashboardSetup() {
       if (!isSameFileSourcePath(path, result.axf_path)) {
         throw new Error(tr('后端未切换到所选符号文件', 'The backend did not switch to the selected symbol file'))
       }
-      await refreshRttForSymbols(path)
+      if (api.deviceStatus.value.connected) await refreshRttForSymbols(path)
       await catalog.ensureLoaded(true)
       toast.success(tr(`已加载 ${result.variable_count || 0} 个可读变量`, `Loaded ${result.variable_count || 0} readable variables`))
       return true

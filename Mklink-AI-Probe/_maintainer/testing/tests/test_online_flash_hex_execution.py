@@ -42,7 +42,9 @@ def test_combined_hex_entry_points_preserve_data_and_gaps(tmp_path, monkeypatch,
 
     module = import_pyocd_module("pyocd.flash.file_programmer")
     monkeypatch.setattr(module, "FlashLoader", Loader)
-    backend = PyOcdBackend()
+    # This test isolates HEX decoding/staging; phase execution is exercised
+    # with real pyOCD builders in test_online_flash_programmer.py.
+    backend = PyOcdBackend(programmer_factory=module.FileProgrammer)
     backend._session = SimpleNamespace(target=SimpleNamespace(memory_map=[]))
     try:
         image = inspector.inspect(path, (MemoryRegion("Flash", 0x08000000, 0x10000, True, True),))

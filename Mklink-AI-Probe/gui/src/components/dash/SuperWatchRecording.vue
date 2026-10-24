@@ -1,12 +1,12 @@
 <template>
   <button class="panel-btn" data-testid="sw-record-toggle" :class="{ active: status.active }" :disabled="busy" @click="status.active ? stop() : showPicker()">{{ status.active ? tr('停止记录', 'Stop recording') : tr('开始记录', 'Start recording') }}</button>
-  <span v-if="status.path" class="record-result" :title="status.path">{{ status.active ? tr('记录中', 'Recording') : tr('已保存', 'Saved') }} · {{ status.samples || 0 }} {{ tr('条', 'samples') }}</span>
+  <span v-if="status.path" class="record-result" :title="status.path">{{ status.active ? (status.samples ? tr('记录中', 'Recording') : tr('等待数据', 'Waiting for data')) : tr('已保存', 'Saved') }} · {{ status.samples || 0 }} {{ tr('条', 'samples') }}</span>
   <span v-if="error || status.error" role="alert" class="record-error">{{ error || status.error }}</span>
   <Teleport to="body">
     <dialog ref="dialog" class="record-dialog" @keydown.stop>
       <form @submit.prevent="start">
         <h3>{{ tr('保存 SuperWatch 日志', 'Save SuperWatch log') }}</h3>
-        <p>{{ tr('日志持续写入后台电脑的所选目录，停止采集也会完成保存。', 'Logs are continuously written on the backend computer. Stopping acquisition also completes recording.') }}</p>
+        <p>{{ tr('可先开启记录，再开始采集。日志写入后台电脑的所选目录，停止采集也会完成保存。', 'You can enable recording before acquisition. Logs are saved on the backend computer; stopping acquisition also completes recording.') }}</p>
         <div class="record-path"><input v-model="directory" data-testid="sw-record-directory" :aria-label="tr('保存目录', 'Save directory')"><button type="button" @click="browse(directory)">{{ tr('浏览', 'Browse') }}</button></div>
         <div class="record-drives"><button v-for="drive in drives" :key="drive" type="button" @click="browse(drive)">{{ drive }}</button><button type="button" @click="browse(parent)">↑ {{ tr('上一级', 'Parent') }}</button></div>
         <div class="record-folders"><button v-for="dir in dirs" :key="dir.path" type="button" @click="browse(dir.path)">▸ {{ dir.name }}</button></div>
@@ -20,7 +20,9 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
-import { API_BASE } from '../../lib/runtimeEndpoint'
+import { isTauri } from '@tauri-apps/api/core'
+import { API_BASE, IS_REMOTE } from '../../lib/runtimeEndpoint'
+import { pickDirectory } from '../../lib/filePicker'
 import { language } from '../../composables/useLanguage'
 const emit = defineEmits<{ state: [state: string] }>()
 const tr = (zh: string, en: string) => language.value === 'en' ? en : zh
@@ -36,7 +38,11 @@ async function request(path: string, body?: unknown) {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
   })
   const data = await response.json()
-  if (!response.ok) throw new Error(data.detail || `HTTP ${response.status}`)
+  if (!response.ok) {
+    const detail = data.detail
+    const message = typeof detail === 'string' ? detail : detail?.message
+    throw new Error(typeof message === 'string' && message ? message : `HTTP ${response.status}`)
+  }
   return data
 }
 function update(data: Recording) { status.value = data; emit('state', data.state) }
@@ -54,7 +60,24 @@ async function browse(path: string) {
     error.value = ''
   } catch (caught) { error.value = String(caught) }
 }
-function showPicker() { error.value = ''; dialog.value?.showModal(); void browse(directory.value) }
+async function showPicker() {
+  if (busy.value) return
+  error.value = ''
+  if (!isTauri() || IS_REMOTE) {
+    // A browser/remote window cannot give the backend a local OS path.
+    dialog.value?.showModal()
+    void browse(directory.value)
+    return
+  }
+  busy.value = true
+  try {
+    const selected = await pickDirectory(tr('选择 SuperWatch 日志保存文件夹', 'Choose a SuperWatch log folder'), directory.value)
+    if (!selected || disposed) return
+    directory.value = selected
+    await start()
+  } catch (caught) { error.value = String(caught) }
+  finally { busy.value = false }
+}
 async function start() {
   busy.value = true; error.value = ''
   try {

@@ -66,10 +66,12 @@ def build_server():
 
     @server.tool()
     def inspect_mcu(project_root: str = ".", device: str | None = None, flm: str | None = None) -> dict:
-        """Read local catalog algorithms for an exact target; no profiles, disk copies or CDC I/O.
+        """Inspect or fuzzy-search the unified MCU catalog; no writes or CDC I/O.
 
-        Pass an algorithm_id to select among candidates. This does not configure
-        the attached target. Actual flash jobs still require an exact target and image.
+        device accepts a model fragment or x/*/? wildcard, case-insensitively.
+        Search matches include algorithm geometry and sources. Resolve them using
+        project/IDE/Pack evidence before asking the user; inspect the resolved
+        target and pass an algorithm_id when needed. Search never configures hardware.
         """
         from mklink.mcu_detect import inspect_mcu as inspect
         return inspect(project_root=project_root, device=device, flm=flm)

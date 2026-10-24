@@ -1,3 +1,4 @@
+import { signalFormula } from './signal_formula.js';
 // Shared by the desktop and standalone viewers. All parsing runs in a Worker.
 export const REPLAY_LIMITS = { bytes: 256 * 1024 * 1024, values: 8_000_000, channels: 64, line: 1024 * 1024 };
 const CHUNK = 4096;
@@ -187,7 +188,18 @@ export function lowerBound(times, value, inclusive = false) {
   return lo;
 }
 
-function extrema(channel, from, to) {
+function extrema(channel, from, to, formula) {
+  if (formula) {
+    const convert = signalFormula(formula);
+    let low = Infinity, high = -Infinity, min = -1, max = -1;
+    for (let i = from; i < to; i++) {
+      const value = convert(channel.values[i]);
+      if (!Number.isFinite(value)) continue;
+      if (value < low) { low = value; min = i; }
+      if (value > high) { high = value; max = i; }
+    }
+    return min < 0 ? [] : [...new Set([min, max])].sort((a, b) => a - b);
+  }
   let min = from, max = from, i = from;
   const take = index => { if (channel.values[index] < channel.values[min]) min = index; if (channel.values[index] > channel.values[max]) max = index; };
   while (i < to) {
@@ -205,7 +217,7 @@ export function replayView(data, position, span, width, names) {
 }
 
 // The original chart supplies its viewport; inspect the complete log while paused.
-export function replayRange(data, start, displayEnd, position, width, names, playing = true) {
+export function replayRange(data, start, displayEnd, position, width, names, playing = true, formulas = {}) {
   const end = playing ? Math.min(displayEnd, position) : displayEnd;
   const pixels = Math.max(1, Math.min(2048, Math.floor(width)));
   return { start, end: displayEnd, position, width: pixels, channels: data.channels.filter(c => names.includes(c.name)).map(c => {
@@ -215,7 +227,7 @@ export function replayRange(data, start, displayEnd, position, width, names, pla
       let a = from;
       for (let x = 0; x < pixels && a < to; x++) {
         const b = Math.min(to, lowerBound(c.times, start + (displayEnd - start) * (x + 1) / pixels, true));
-        if (b > a) { for (const i of extrema(c, a, b)) points.push([c.times[i], c.values[i]]); a = b; }
+        if (b > a) { for (const i of extrema(c, a, b, formulas[c.name])) points.push([c.times[i], c.values[i]]); a = b; }
       }
     }
     const last = lowerBound(c.times, position, true) - 1;

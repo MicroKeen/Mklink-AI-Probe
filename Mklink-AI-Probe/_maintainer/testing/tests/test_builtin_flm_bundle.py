@@ -170,3 +170,34 @@ def test_nonautomatic_algorithms_do_not_hide_other_target_sources(tmp_path: Path
 
     assert load_builtin_flm_targets(root) == []
     assert discover_builtin_flm_algorithms("PART-A", root) == []
+
+
+def test_family_mask_reports_bundled_capacities_without_selecting_one(tmp_path, monkeypatch):
+    root, _ = _bundle(tmp_path / "bundle")
+    manifest_path = root / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    small = manifest["targets"][0]
+    small["part_number"] = "STM32F767xG"
+    small["algorithms"][0]["flash_size"] = 1024 * 1024
+    large = json.loads(json.dumps(small))
+    large["part_number"] = "STM32F767xI"
+    large["algorithms"][0]["flash_size"] = 2048 * 1024
+    manifest["targets"].append(large)
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    monkeypatch.setenv("MKLINK_BUILTIN_FLM_ROOT", str(root))
+
+    assert discover_builtin_flm_algorithms("STM32F767xx", root) == []
+    from mklink.cmsis_dap.pack_catalog import PackCatalog
+    from mklink.cmsis_dap.paths import PackPaths
+    catalog = PackCatalog(PackPaths(tmp_path / 'packs'), builtin_provider=lambda: load_builtin_flm_targets(root))
+    monkeypatch.setattr('mklink.cmsis_dap.pack_catalog.PackCatalog', lambda paths: catalog)
+    from mklink.mcu_detect import inspect_mcu
+    result = inspect_mcu(device="STM32F767xx")
+    assert result["status"] == "matches"
+    assert result["candidates"] == []
+    assert result["target_candidates"] == ["STM32F767xG", "STM32F767xI"]
+    assert [m['candidates'][0]['size'] for m in result['target_matches']] == [1024 * 1024, 2048 * 1024]
+    assert 'selected_algorithm' not in result
+    exact = discover_builtin_flm_algorithms("STM32F767ZIT6", root)
+    assert len(exact) == 1 and exact[0].flash_size == 2048 * 1024
+    assert inspect_mcu(device="NONEXISTENTxx")['status'] == 'unsupported'

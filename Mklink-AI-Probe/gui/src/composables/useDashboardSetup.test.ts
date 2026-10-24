@@ -119,11 +119,12 @@ describe('useDashboardSetup', () => {
       rttAddress: '0x20000010',
     })
     mocks.pickSymbolFile.mockResolvedValue('D:\\build\\next.axf')
+    mocks.parseAxf.mockResolvedValue({ loaded: true, axf_path: 'D:\\build\\next.axf' })
 
     const result = await useDashboardSetup().loadSymbolFile()
 
     expect(result).toBe(true)
-    expect(mocks.parseAxf).not.toHaveBeenCalled()
+    expect(mocks.parseAxf).toHaveBeenCalledWith('D:\\build\\next.axf')
     expect(mocks.findRtt).not.toHaveBeenCalled()
     expect(loadDesktopSettings(storage)).toMatchObject({
       symbolPath: 'D:\\build\\next.axf',

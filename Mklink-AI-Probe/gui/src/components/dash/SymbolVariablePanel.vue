@@ -28,7 +28,7 @@
       @primary="quickConnect"
     />
     <SetupHint
-      v-else-if="symbolError || catalog.error.value"
+      v-if="symbolError || catalog.error.value"
       kind="error"
       :message="tr('符号文件解析失败：', 'Symbol parsing failed: ') + (symbolError || catalog.error.value)"
       :primary-label="tr('重新选择', 'Choose Another File')"
@@ -110,7 +110,7 @@
     </div>
       </template>
       <div class="variable-section-rows" tabindex="0" :aria-label="group.title">
-      <template v-if="deviceConnected && symbolLoaded && !symbolError && !catalog.error.value && !catalog.loading.value">
+      <template v-if="symbolLoaded && !symbolError && !catalog.error.value && !catalog.loading.value">
       <div v-if="group.key === 'pinned' && !pins.length" class="pin-help">
         {{ tr('点击图钉，或置顶已选变量；取消采样不影响置顶。', 'Pin a variable or pin the selected set. Unchecking sampling keeps favorites here.') }}
       </div>
@@ -227,7 +227,7 @@
               class="edit-button"
               type="button"
               :data-testid="`edit-${row.node.descriptor.path}`"
-              :disabled="catalog.stale.value || !row.node.descriptor.writable"
+              :disabled="!deviceConnected || catalog.stale.value || !row.node.descriptor.writable"
               :title="row.node.descriptor.bit_size != null ? tr('位域只读，避免改动相邻字段', 'Read-only bit field; protects adjacent fields') : tr('设置变量', 'Set variable')"
               @click="beginEdit(row.node.descriptor)"
             >
@@ -603,7 +603,7 @@ async function request(path: string, options?: RequestInit): Promise<any> {
 }
 
 async function loadWorkspace(): Promise<void> {
-  if (!props.deviceConnected || !props.symbolLoaded) return
+  if (!props.symbolLoaded) return
   try {
     await catalog.ensureLoaded()
     const response = await request('/api/dash/superwatch/items')
@@ -891,7 +891,7 @@ let statusBusy = false
 let disposed = false
 let lastSourceError = 0
 async function refreshSourceStatus(): Promise<void> {
-  if (disposed || statusBusy || !props.deviceConnected || !props.symbolLoaded) return
+  if (disposed || statusBusy || !props.symbolLoaded) return
   statusBusy = true
   try {
     const previousGeneration = catalog.generation.value
@@ -952,11 +952,11 @@ watch(() => props.deviceConnected, connected => {
   if (connected && props.symbolLoaded) void loadWorkspace()
 })
 watch(() => props.symbolLoaded, loaded => {
-  if (loaded && props.deviceConnected) void loadWorkspace()
+  if (loaded) void loadWorkspace()
 })
 watch(catalog.generation, () => {
   pinnedDescriptors.value = new Map()
-  if (props.deviceConnected && props.symbolLoaded) void loadPins()
+  if (props.symbolLoaded) void loadPins()
 })
 watch([query, catalog.generation], ([next], [previous]) => {
   filteredCollapsed.value = new Set()

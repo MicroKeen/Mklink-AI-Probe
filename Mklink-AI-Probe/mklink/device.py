@@ -976,8 +976,10 @@ class Device:
                     and resolved_key not in (None, "custom")
                     and mcu_profile.get("flm_path")
                 ):
+                    from mklink.mcu_detect import missing_algorithm_details
                     raise DeviceError(
-                        f"Target {resolved_target!r} has no usable Flash algorithm"
+                        f"Target {resolved_target!r} has no usable Flash algorithm: "
+                        + missing_algorithm_details(resolved_target)["message"]
                     )
             except (
                 DeviceError,
@@ -1141,6 +1143,13 @@ class Device:
     def reset(self) -> None:
         """Reset the target MCU while keeping the probe session connected."""
         self._require_connected()
+        from mklink.mux import MuxTransport
+        mux = getattr(self._bridge, '_mux', None)
+        if isinstance(mux, MuxTransport):
+            # The framed request shares the command slot with memory access.
+            # Never leave MUX, stop streams, clear queues or replay a reset.
+            mux.software_reset()
+            return
         self._bridge.send_command("cmd.set_reset()", timeout=10.0)
 
     def _stop_active_probe_streams(self) -> None:
@@ -1687,10 +1696,24 @@ class Device:
             "name": descriptor.get("name", ""),
         }
 
+    def _prepare_rtt_transport(self) -> bool:
+        """Use the same target transport for discovery and capture.
+
+        Capability detection is cached per connection by the bridge. Reusing
+        an active MUX leaves RTT/Watch subscriptions intact; legacy firmware
+        keeps its text memory reader. A failed MUX entry must not fall back.
+        """
+        multiplex = (self._bridge.supports_multiplex() is True
+                     if hasattr(self._bridge, 'supports_multiplex') else False)
+        if multiplex:
+            self._bridge.enable_multiplex()
+        return multiplex
+
     def rtt_inspect(self, address: int) -> dict[str, Any]:
         """Inspect initialized target channels without starting or consuming RTT."""
         if not self.connected or not self.idcode:
             raise DeviceError("Connect a target with a valid chip ID before inspecting RTT")
+        self._prepare_rtt_transport()
         info = self._read_rtt_control_block(address)
         return {
             "control_block_addr": hex(address),
@@ -1784,10 +1807,8 @@ class Device:
         self.validate_rtt_channels(channel, channels)
         stage_started = time.monotonic()
         startup_timings = {}
-        multiplex = self._bridge.supports_multiplex() is True if hasattr(self._bridge, 'supports_multiplex') else False
+        multiplex = self._prepare_rtt_transport()
         selected = list(channels) if channels is not None else [channel]
-        if multiplex:
-            self._bridge.enable_multiplex()
         startup_timings['transport_prepare'] = round((time.monotonic()-stage_started)*1000, 2)
         if self._rtt_session and self._rtt_session._running:
             self._rtt_session.stop()

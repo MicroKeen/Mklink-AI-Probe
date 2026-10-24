@@ -5,6 +5,7 @@ import json
 import math
 import os
 import secrets
+import re
 from pathlib import Path
 from .watch_preferences import _LOCK, PreferencesConflict
 
@@ -64,7 +65,10 @@ def normalize_workspace(value):
         if group not in ids: group=pane_groups.get(pane,default) if legacy else default
         mode=row.get('renderMode','line')
         if mode not in ('line','points'): raise ValueError('Invalid signal render mode')
-        result[path]={'alias':text(row.get('alias',''),128),'emphasis':bool(row.get('emphasis',False)),
+        formula=text(row.get('formula',''),256).strip()
+        color=text(row.get('color',''),7)
+        if color and not re.fullmatch(r'#[0-9a-fA-F]{6}',color): raise ValueError('Invalid signal color')
+        result[path]={'formula':formula,'color':color,'alias':text(row.get('alias',''),128),'emphasis':bool(row.get('emphasis',False)),
                       'group':group,'pane':group,'renderMode':mode}
     # Collapse only affects the signal list, never acquisition or plot visibility.
     return {'version':2,'defaultGroup':default,'groups':groups,'panes':[{**g,'collapsed':False} for g in groups],'signals':result}

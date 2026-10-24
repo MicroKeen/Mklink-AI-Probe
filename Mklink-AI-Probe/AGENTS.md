@@ -82,6 +82,9 @@ Paths below are relative to the source root containing this file and
   explicit choice. HPM uses ROM API, never FLM or a second generic SWD reset.
   VCC changes require confirmation of the specific voltage for each operation.
 - Standard installer output is NSIS. MSI/offline WebView2 needs authorization.
+  Build Windows installers by default. Build Linux/macOS installers or dispatch
+  their native CI only when the user explicitly requests those platforms;
+  generic build, prerelease testing, or release requests do not include them.
   Do not commit firmware, Packs, FLM, screenshots, device identifiers, local
   hardware paths, or secrets without a specific applicable exception.
 - Public Skill packages contain only runtime files. Keep maintainer memory,

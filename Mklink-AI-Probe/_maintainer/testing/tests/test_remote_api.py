@@ -215,7 +215,7 @@ def test_source_reload_does_not_stop_unrelated_idle_managers(tmp_path):
         asyncio.run(app.state.check_file_sources(apply=True))
         asyncio.run(app.state.check_file_sources(apply=True))
     assert order == ["parse"]
-    assert app.state.mklink_state["file_source_change"]["rtt_addr"] == "0x20000020"
+    assert app.state.mklink_state["file_source_change"]["symbols_reloaded"]
 
 
 def test_shared_source_reload_defers_without_losing_changes(tmp_path, monkeypatch):
@@ -237,10 +237,12 @@ def test_shared_source_reload_defers_without_losing_changes(tmp_path, monkeypatc
     async def scenario():
         control.sessions['ai'] = Session(str(tmp_path), str(axf))
         axf.write_bytes(b'new')
-        await app.state.check_file_sources(apply=True)
+        async with control.attach_lock:
+            await app.state.check_file_sources(apply=True)
         event = dict(app.state.mklink_state['file_source_change'])
         assert event['state'] == 'deferred' and event['pending']
-        await app.state.check_file_sources(apply=True)
+        async with control.attach_lock:
+            await app.state.check_file_sources(apply=True)
         assert app.state.mklink_state['file_source_change']['sequence'] == event['sequence']
         active.clear()
         # A job, an attaching client and a one-shot operation must also defer it.
@@ -268,13 +270,16 @@ def test_shared_source_reload_defers_without_losing_changes(tmp_path, monkeypatc
 
 def test_failed_source_reload_requires_explicit_retry(tmp_path):
     from unittest.mock import Mock
+    from mklink.remote.dashboards import get_managers
     device, axf = _connected_symbol_device(tmp_path)
     device._axf = str(axf)
     device.parse_axf = Mock(side_effect=ValueError('incomplete build'))
     app = create_app(auth_token=None, project_root=str(tmp_path))
     app.state.mklink_state['device'] = device
     axf.write_bytes(b'broken')
-    with patch('mklink.remote.dashboards.stop_bridge_dashboards', return_value=[]):
+    # Other suites may leave a SuperWatch runtime in the shared manager. This
+    # fixture models an idle reload and only implements parse_axf.
+    with patch('mklink.remote.dashboards.stop_bridge_dashboards', return_value=[]), patch.object(get_managers()['superwatch'], '_runtime', None):
         asyncio.run(app.state.check_file_sources(apply=True))
         asyncio.run(app.state.check_file_sources())
         assert device.parse_axf.call_count == 1, str(app.state.mklink_state['file_source_change'])
