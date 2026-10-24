@@ -196,6 +196,25 @@ def test_legacy_cache_without_sources_is_refetched(updater, monkeypatch, tmp_pat
     assert result["update_available"] is False
 
 
+@pytest.mark.parametrize("invalid", [None, [], 123, "not an object"])
+def test_non_object_cache_cannot_break_update_checks(updater, monkeypatch, tmp_path, invalid):
+    from mklink import update_check
+
+    root = make_root(tmp_path / "root", "0.3.5")
+    cache = tmp_path / "cache.json"
+    monkeypatch.setattr(updater, "fetch_manifest", lambda urls:
+                        ({"version": "0.3.6"}, urls[0]))
+    monkeypatch.setattr(update_check, "fetch_manifest", lambda urls, **kwargs:
+                        ({"version": "0.3.6"}, urls[0]))
+    monkeypatch.setattr(update_check, "current_version", lambda: "0.3.5")
+    for check in (lambda: updater.check_for_update(root=root, cache_file=cache),
+                  lambda: update_check.check_for_update(cache_file=cache)):
+        cache.write_text(json.dumps(invalid), encoding="utf-8")
+        result = check()
+        assert result["status"] == "ok" and not result["cached"]
+        assert result["update_available"] is True
+
+
 def test_preview_channel_is_explicit_and_shared(updater, monkeypatch, tmp_path):
     from mklink import update_check
 

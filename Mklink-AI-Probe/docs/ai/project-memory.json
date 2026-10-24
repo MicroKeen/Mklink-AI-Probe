@@ -14,7 +14,7 @@
   },
   "current_session": {
     "status": "in_progress",
-    "current_task": "用户授权直接配置现有腾讯云下载服务并进行0.3.6测试发布，暂不正式发布，GitHub/Gitee保留备用。download.microkeenai.com独立HTTPS及每日证书检查已配置，原网站配置SHA未变；stable索引仍404。更新源/preview隔离92项测试通过，全量测试与签名Windows测试包/完整Skill真实升级验证进行中。临时SSH公钥已获用户明确授权，24小时到期、禁用转发，完成后必须撤销。"
+    "current_task": "用户授权直接配置现有腾讯云下载服务并进行0.3.6测试发布，暂不正式发布，GitHub/Gitee保留备用。download.microkeenai.com独立HTTPS及每日证书检查已配置，原网站配置SHA未变；stable索引仍404。更新源/preview隔离96项测试通过，全量测试与签名Windows测试包/完整Skill真实升级验证进行中。临时SSH公钥已获用户明确授权，24小时到期、禁用转发，完成后必须撤销。"
   },
   "milestones": [
     {
@@ -51,7 +51,7 @@
   "verification": [
     {
       "area": "腾讯云下载与更新通道接入",
-      "result": "独立download域名HTTPS health200、stable404、原网站200，Nginx配置验证及证书续期dry check通过；证书覆盖download域名到2027-01-22。更新缓存/三源回退/preview构建恢复92项测试通过。全量与真实升级仍在进行，不能宣称测试发布已完成。详见docs/ai/tencent-updates.md。"
+      "result": "独立download域名HTTPS health200、stable404、原网站200，Nginx配置验证及证书续期dry check通过；证书覆盖download域名到2027-01-22。更新缓存/三源回退/preview构建恢复96项测试通过。全量与真实升级仍在进行，不能宣称测试发布已完成。详见docs/ai/tencent-updates.md。"
     },
     {
       "area": "0.3.6四PR整合与发布前资格",

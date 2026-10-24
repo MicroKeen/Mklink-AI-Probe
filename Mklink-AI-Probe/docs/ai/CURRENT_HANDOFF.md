@@ -9,7 +9,7 @@
 - HEAD：`基于main 303a2667开发腾讯云独立测试更新；精确源码见Git HEAD。`
 - 远端 HEAD：`PR42/46/48/49均已合并；main 303a2667，正式release/firmware引用未变。`
 - 工作树：唯一原工作区及源码子目录保留；测试/构建证据位于F盘。
-- 当前任务：用户授权直接配置现有腾讯云下载服务并进行0.3.6测试发布，暂不正式发布，GitHub/Gitee保留备用。download.microkeenai.com独立HTTPS及每日证书检查已配置，原网站配置SHA未变；stable索引仍404。更新源/preview隔离92项测试通过，全量测试与签名Windows测试包/完整Skill真实升级验证进行中。临时SSH公钥已获用户明确授权，24小时到期、禁用转发，完成后必须撤销。
+- 当前任务：用户授权直接配置现有腾讯云下载服务并进行0.3.6测试发布，暂不正式发布，GitHub/Gitee保留备用。download.microkeenai.com独立HTTPS及每日证书检查已配置，原网站配置SHA未变；stable索引仍404。更新源/preview隔离96项测试通过，全量测试与签名Windows测试包/完整Skill真实升级验证进行中。临时SSH公钥已获用户明确授权，24小时到期、禁用转发，完成后必须撤销。
 - 状态：`in_progress`
 
 ## 里程碑
@@ -23,7 +23,7 @@
 
 ## 验证证据
 
-- **腾讯云下载与更新通道接入**：独立download域名HTTPS health200、stable404、原网站200，Nginx配置验证及证书续期dry check通过；证书覆盖download域名到2027-01-22。更新缓存/三源回退/preview构建恢复92项测试通过。全量与真实升级仍在进行，不能宣称测试发布已完成。详见docs/ai/tencent-updates.md。
+- **腾讯云下载与更新通道接入**：独立download域名HTTPS health200、stable404、原网站200，Nginx配置验证及证书续期dry check通过；证书覆盖download域名到2027-01-22。更新缓存/三源回退/preview构建恢复96项测试通过。全量与真实升级仍在进行，不能宣称测试发布已完成。详见docs/ai/tencent-updates.md。
 - **0.3.6四PR整合与发布前资格**：源码f20fe781；5404Python/2skip、1090GUI、生产构建；Windows覆盖exit0、206Python/41Web/4载荷、离线完整Skill7059目标/2224FLM/4800外设通过。实机Flash全回读/RTT8/Watch/UART5/TTLModbus/VOFA/SystemView/HardFault/共享MCP及浏览器和原生文件选择通过。30MHz一顺序1读错，10MHz0。详见docs/verification/v036-prerelease-20261024.md。
 - **SuperWatch离线文件与公式颜色**：SuperWatch离线解析/重载先停采集、断开保留变量与数组选择；增加单曲线公式/颜色与快捷合并。源870471b6，组合e7c49b04/Web bcdc8474，188Python、1083全GUI及末次189GUI/TS/Vite通过。真实浏览器离线1480变量、公式x/1000、颜色与合并通过；0.3.6安装包SHA256 818035c005e02978b0729facd7cafcfba91babc659aa209e6bbc6409495b202b。首次UAC取消，用户要求重试后管理员覆盖exit0，解包/实装206Python/41Web与公式静态模块、冻结MCP/SVD/HTTP/离线功能及原生Web/退出通过。未操作硬件或更新固件/全局Skill。见v036-superwatch-formulas.md。
 - **新连接RTT搜索与采集顺序**：修复刚连接RTT搜索未准备MUX的问题，搜索/启动统一通道且保留旧ARM文本读取。462Python、70GUI、TS/Vite通过；原V4+HPM5301源码及实装新连接、两启动顺序、活动搜索和独立重启通过，四组实装读错/丢样0。0.3.6 ef51d4d3/Web5aeb2da2管理员覆盖exit0、冻结/原生/真实网页验收通过，已重新打开。V2/V3及ARM仅协议回归，未换板实测。见v036-rtt-discovery.md。

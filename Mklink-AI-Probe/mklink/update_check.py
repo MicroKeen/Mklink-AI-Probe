@@ -99,7 +99,7 @@ def fetch_manifest(
 def _read_cache(path: Path, max_age_hours: float, urls: Sequence[str]) -> tuple[dict[str, object], str] | None:
     try:
         cached = json.loads(path.read_text(encoding="utf-8"))
-        if cached.get("manifest_urls") != list(urls):
+        if not isinstance(cached, dict) or cached.get("manifest_urls") != list(urls):
             return None
         checked_at = float(cached["checked_at_epoch"])
         manifest = cached["manifest"]
