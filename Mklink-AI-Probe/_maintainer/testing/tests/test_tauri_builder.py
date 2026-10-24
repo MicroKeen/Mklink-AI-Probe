@@ -47,6 +47,9 @@ def builder(monkeypatch, tmp_path):
         prepare_bundle=lambda _: tmp_path / "builtin_packs",
         validate_bundle=lambda _: {"svd_target_count": 1},
     ))
+    support = tmp_path / "build-work/pyinstaller/dist/mklink-sidecar/_internal"
+    support.mkdir(parents=True)
+    (support / "base_library.zip").write_bytes(b"stdlib")
     return module
 
 
@@ -241,14 +244,15 @@ def test_sidecar_uses_managed_pyinstaller_work_paths(builder, tmp_path, monkeypa
 
     def fake_run(command, **_kwargs):
         calls.append(command)
-        output = Path(command[command.index("--distpath") + 1])
-        output.mkdir(parents=True)
+        output = Path(command[command.index("--distpath") + 1]) / "mklink-sidecar"
+        output.mkdir(parents=True, exist_ok=True)
         (output / "mklink-sidecar.exe").write_bytes(b"sidecar")
         return 0
 
     monkeypatch.setattr(builder, "run", fake_run)
 
     assert builder.build_sidecar(force=True)
+    assert "--onedir" in calls[0] and "--onefile" not in calls[0]
     for option in ("--distpath", "--workpath", "--specpath"):
         assert Path(calls[0][calls[0].index(option) + 1]).is_relative_to(
             tmp_path / "build-work"
@@ -512,7 +516,7 @@ def test_sidecar_collects_pyocd_plugins_metadata_and_hid_binary(builder, monkeyp
 
     def fake_run(command, **_kwargs):
         commands.append(command)
-        output = Path(command[command.index("--distpath") + 1]) / "mklink-sidecar.exe"
+        output = Path(command[command.index("--distpath") + 1]) / "mklink-sidecar" / "mklink-sidecar.exe"
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_bytes(b"sidecar")
         return 0
@@ -1009,13 +1013,13 @@ def test_sidecar_collects_generated_builtin_pack_bundle(builder, monkeypatch, tm
 
     def fake_bundle(_config, roots, output):
         generated.append((list(roots), output))
-        output.mkdir(parents=True)
+        output.mkdir(parents=True, exist_ok=True)
         (output / "manifest.json").write_text('{"schema":1,"packs":[]}', encoding="utf-8")
         return {"target_count": 0, "packs": []}
 
     def fake_run(command, **_kwargs):
         commands.append(command)
-        output = Path(command[command.index("--distpath") + 1]) / "mklink-sidecar.exe"
+        output = Path(command[command.index("--distpath") + 1]) / "mklink-sidecar" / "mklink-sidecar.exe"
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_bytes(b"sidecar")
         return 0
@@ -1043,7 +1047,7 @@ def test_sidecar_collects_local_builtin_flm_bundle(
 
     def fake_run(command, **_kwargs):
         commands.append(command)
-        output = Path(command[command.index("--distpath") + 1]) / "mklink-sidecar.exe"
+        output = Path(command[command.index("--distpath") + 1]) / "mklink-sidecar" / "mklink-sidecar.exe"
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_bytes(b"sidecar")
         return 0
@@ -1123,8 +1127,8 @@ def test_sidecar_includes_web_assets_at_frozen_api_path(builder, monkeypatch, tm
         pairs = list(zip(command, command[1:]))
         assert ("--add-data", str(dist) + builder.os.pathsep + "gui/dist") in pairs
         calls.append("freeze")
-        output = Path(command[command.index("--distpath") + 1])
-        output.mkdir(parents=True)
+        output = Path(command[command.index("--distpath") + 1]) / "mklink-sidecar"
+        output.mkdir(parents=True, exist_ok=True)
         (output / "mklink-sidecar.exe").write_bytes(b"sidecar")
         return 0
     monkeypatch.setattr(builder, "build_web_assets", frontend)
@@ -1158,3 +1162,23 @@ def test_failed_frontend_prevents_sidecar_freeze(builder, monkeypatch, tmp_path)
     monkeypatch.setattr(builder, "build_web_assets", fail)
     with pytest.raises(SystemExit):
         builder.build_sidecar(force=True)
+
+
+def test_windows_bundle_installs_dependencies_beside_sidecar(builder, tmp_path):
+    bundle = {"resources": {"notice.txt": "notice.txt"}}
+    builder.add_stcp_bundle_resource(bundle)
+    support = tmp_path / "build-work/pyinstaller/dist/mklink-sidecar/_internal"
+    (support / "nested").mkdir()
+    (support / "nested/data.bin").write_bytes(b"asset")
+    with builder.temporary_sidecar_resources(bundle, tmp_path):
+        resource = next(key for key, value in bundle["resources"].items() if value == "_internal")
+        assert not Path(resource).is_absolute()
+        staged = tmp_path / resource
+        assert (staged / "base_library.zip").read_bytes() == b"stdlib"
+        assert (staged / "nested/data.bin").read_bytes() == b"asset"
+        assert bundle["resources"]["notice.txt"] == "notice.txt"
+    assert not staged.exists()
+    (support / "base_library.zip").unlink()
+    with pytest.raises(RuntimeError, match="dependency directory is missing"):
+        with builder.temporary_sidecar_resources(bundle, tmp_path):
+            pass

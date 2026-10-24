@@ -30,6 +30,15 @@ Tauri/Rust executable
 
 Development builds may fall back to a Python backend. Release installers must contain `mklink-sidecar.exe`, and the Rust launcher must prefer that bundled sidecar.
 
+Windows uses PyInstaller `onedir`: NSIS installs the executable and its complete
+`_internal` dependency directory together. Both the proxy and independent runtime
+load these installed files directly, avoiding two full extractions per launch.
+Never distribute the executable alone. Unix packaging retains its existing
+`onefile` layout. Windows qualification must compare the entire `_internal`
+tree as well as the executables, and verify startup and normal shutdown with
+only Windows directories on PATH. Keep the existing process ownership and
+installer file-in-use checks; do not reuse another process's temporary files.
+
 The 0.2.0 release sidecar and public Skill ZIP must contain the repository-local
 algorithm assets under `_maintainer/local/builtin_flm`. This directory is
 ignored by Git and is the single local source for both packages. The builder

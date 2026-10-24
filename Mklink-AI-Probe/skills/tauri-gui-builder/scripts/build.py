@@ -201,7 +201,7 @@ def build_sidecar(force=False):
     work_root = Path(os.environ["MKLINK_BUILD_WORK_DIR"]) / "pyinstaller"
     work_root.mkdir(parents=True, exist_ok=True)
     dist_dir = work_root / "dist"
-    built = dist_dir / sidecar_filename()
+    built = dist_dir / "mklink-sidecar" / sidecar_filename() if IS_WINDOWS else dist_dir / sidecar_filename()
 
     if force:
         sidecar_exe.unlink(missing_ok=True)
@@ -262,7 +262,10 @@ def build_sidecar(force=False):
             builtin_args.extend(["--add-binary", f"{native_library}{os.pathsep}."])
         run([
             sys.executable, "-m", "PyInstaller",
-            "--noconfirm", "--clean", "--onefile", "--name", "mklink-sidecar",
+            # NSIS installs the dependencies once. Both the desktop proxy and
+            # independently owned runtime can then start without extracting
+            # the complete Python/FLM/Pack payload on every launch.
+            "--noconfirm", "--clean", "--onedir" if IS_WINDOWS else "--onefile", "--name", "mklink-sidecar",
             "--distpath", str(dist_dir),
             "--workpath", str(work_root / "work"),
             "--specpath", str(work_root),
@@ -325,6 +328,25 @@ def add_stcp_bundle_resource(bundle):
 
 
 @contextmanager
+def temporary_sidecar_resources(bundle, config_directory):
+    """Tauri drops drive prefixes: stage a relative, owned resource directory."""
+    if not IS_WINDOWS:
+        yield
+        return
+    support = Path(os.environ["MKLINK_BUILD_WORK_DIR"]) / "pyinstaller/dist/mklink-sidecar/_internal"
+    if not (support / "base_library.zip").is_file():
+        raise RuntimeError("Windows sidecar dependency directory is missing; rebuild the sidecar")
+    # Like externalBin/STCP staging, this exists only while Tauri consumes it.
+    # Compilation and caches remain in the managed build workspace. Use a new
+    # directory so no user-owned resources can be overwritten or cleaned up.
+    with TemporaryDirectory(prefix=".sidecar-resources-", dir=config_directory) as staged:
+        destination = Path(staged) / "_internal"
+        shutil.copytree(support, destination)
+        bundle["resources"][destination.relative_to(config_directory).as_posix()] = "_internal"
+        yield
+
+
+@contextmanager
 def temporary_external_bin(config_path):
     """Add the release sidecar config and restore the exact original bytes."""
     config_path = Path(config_path)
@@ -335,14 +357,15 @@ def temporary_external_bin(config_path):
         "binaries/mklink-sidecar"
     ]
     add_stcp_bundle_resource(bundle)
-    config_path.write_text(
-        json.dumps(data, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
-    try:
-        yield
-    finally:
-        config_path.write_bytes(original)
+    with temporary_sidecar_resources(bundle, config_path.parent):
+        config_path.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        try:
+            yield
+        finally:
+            config_path.write_bytes(original)
 
 
 @contextmanager
@@ -368,14 +391,15 @@ def temporary_bundle_config(config_path, *, signed=True, preview_updates=False):
         "binaries/mklink-sidecar"
     ]
     add_stcp_bundle_resource(bundle)
-    config_path.write_text(
-        json.dumps(data, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
-    try:
-        yield
-    finally:
-        config_path.write_bytes(original)
+    with temporary_sidecar_resources(bundle, config_path.parent):
+        config_path.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        try:
+            yield
+        finally:
+            config_path.write_bytes(original)
 
 
 def load_updater_private_key(env=None, home=None):

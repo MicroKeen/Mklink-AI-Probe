@@ -3,6 +3,7 @@ import { onMounted, onUnmounted, ref } from 'vue'
 import { API_BASE } from '../../lib/runtimeEndpoint'
 import { tr } from '../../composables/useLanguage'
 import { useMklinkApi } from '../../composables/useMklinkApi'
+import DiagnosticsExport from '../DiagnosticsExport.vue'
 
 interface Client { id: string; name: string; kind: string; streams: string[]; expires_in: number | null }
 interface Runtime {
@@ -120,7 +121,10 @@ onUnmounted(() => { disposed = true; if (timer) clearInterval(timer) })
   <section class="card runtime-panel" data-testid="runtime-panel">
     <header class="runtime-heading">
       <div><h2>{{ tr('共享后台', 'Shared backend') }}</h2><p>{{ tr('同一下载器共享连接，不同下载器独立运行。', 'Clients share one probe connection; different probes run independently.') }}</p></div>
-      <button class="btn btn-sm" @click="refresh">{{ tr('刷新', 'Refresh') }}</button>
+      <div class="runtime-actions">
+        <DiagnosticsExport />
+        <button class="btn btn-sm" @click="refresh">{{ tr('刷新', 'Refresh') }}</button>
+      </div>
     </header>
     <p v-if="error" role="alert" class="runtime-error">{{ error }}</p>
     <p v-if="stopped" role="status">{{ tr('后台已退出。重新打开设备窗口可再次启动。', 'Backend exited. Open a device window to start it again.') }}</p>
@@ -182,6 +186,6 @@ onUnmounted(() => { disposed = true; if (timer) clearInterval(timer) })
 .runtime-details dt { color: var(--muted); }
 .runtime-details dd { margin: 0; overflow-wrap: anywhere; }
 .runtime-row { border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; }
-.runtime-actions { justify-content: flex-start; }
+.runtime-actions { justify-content: flex-start; flex-wrap: wrap; }
 .runtime-error { color: var(--accent); overflow-wrap: anywhere; }
 </style>

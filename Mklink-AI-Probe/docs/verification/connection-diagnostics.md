@@ -1,6 +1,7 @@
 # Connection diagnostics and customer export
 
-The desktop footer provides **Export diagnostics / 导出诊断包**. It saves a ZIP
+Open **Configuration → Backend management / 配置 → 后台管理** to use
+**Export diagnostics / 导出诊断包** at the top of the panel. It saves a ZIP
 locally; sending it to support is a separate user action. Export does not require
 an active probe connection and does not reconnect, reset, flash, or read a target.
 The native desktop proxy can export persisted logs even when its shared backend

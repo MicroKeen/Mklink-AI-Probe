@@ -116,3 +116,13 @@ it('saves the bound probe alias and keeps edits through status refresh', async (
   expect(wrapper.text()).toContain('别名已保存')
   wrapper.unmount()
 })
+
+
+it('keeps diagnostic export available when backend status cannot be read', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
+  const wrapper = mount(RuntimePanel)
+  await flushPromises()
+  expect(wrapper.get('[role="alert"]').text()).toBe('offline')
+  expect(wrapper.get('[data-testid="export-diagnostics"]').attributes('disabled')).toBeUndefined()
+  wrapper.unmount()
+})
