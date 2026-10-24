@@ -4,12 +4,12 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-24T11:52:59+08:00`
+- 更新时间：`2026-10-24T12:30:17+08:00`
 - 分支：`codex/tencent-update-preview`
 - HEAD：`基于main 303a2667开发腾讯云独立测试更新；精确源码见Git HEAD。`
 - 远端 HEAD：`PR42/46/48/49均已合并；main 303a2667，正式release/firmware引用未变。`
 - 工作树：唯一原工作区及源码子目录保留；测试/构建证据位于F盘。
-- 当前任务：用户授权直接配置现有腾讯云下载服务并进行0.3.6测试发布，暂不正式发布，GitHub/Gitee保留备用。download.microkeenai.com独立HTTPS及每日证书检查已配置，原网站配置SHA未变；stable索引仍404。更新源/preview隔离96项测试通过，全量测试与签名Windows测试包/完整Skill真实升级验证进行中。临时SSH公钥已获用户明确授权，24小时到期、禁用转发，完成后必须撤销。
+- 当前任务：腾讯云0.3.6预览包已部署，PR50待审，尚未正式发布。源码5920c5c5；完整Python5412通过2跳过、GUI1090、签名Windows与完整Skill资格通过。公网大小/SHA/Range通过，Skill0.3.5到0.3.6真实升级2617文件一致，GitHub/Gitee回退及不降级通过。原生较低版本已从腾讯云下载并验签，点击安装后UAC未完成，窗口已消失、安装文件仍旧；需用户可操作UAC时重试安装/重启/二次检查。临时SSH公钥已精确撤销，重新登录拒绝；无需重新服务器授权。正式stable仍404，正式引用未变。
 - 状态：`in_progress`
 
 ## 里程碑
@@ -23,7 +23,7 @@
 
 ## 验证证据
 
-- **腾讯云下载与更新通道接入**：独立download域名HTTPS health200、stable404、原网站200，Nginx配置验证及证书续期dry check通过；证书覆盖download域名到2027-01-22。更新缓存/三源回退/preview构建恢复96项测试通过。全量与真实升级仍在进行，不能宣称测试发布已完成。详见docs/ai/tencent-updates.md。
+- **腾讯云下载与更新通道接入**：源码5920c5c5；全Python5412通过2跳过、GUI1090和96项定点通过，CI三项通过；Windows更新签名、完整FLM/Packs、206Python/41Web冻结资格通过。公网安装包8.17秒21.87MiB/s，Skill3.93秒23.94MiB/s；完整SHA/Range通过。Skill真实0.3.5到0.3.6升级2617文件一致、用户文件保留、二次无更新、MCP通用模糊搜索20候选。GitHub/Gitee真实索引与Gitee完整包通过，无降级。原生下载/验签通过，UAC消失但文件未更新，安装/重启尚待重试。临时SSH撤销并验证拒绝，stable404，正式引用未变。详见docs/verification/v036-tencent-preview-20261024.md。
 - **0.3.6四PR整合与发布前资格**：源码f20fe781；5404Python/2skip、1090GUI、生产构建；Windows覆盖exit0、206Python/41Web/4载荷、离线完整Skill7059目标/2224FLM/4800外设通过。实机Flash全回读/RTT8/Watch/UART5/TTLModbus/VOFA/SystemView/HardFault/共享MCP及浏览器和原生文件选择通过。30MHz一顺序1读错，10MHz0。详见docs/verification/v036-prerelease-20261024.md。
 - **SuperWatch离线文件与公式颜色**：SuperWatch离线解析/重载先停采集、断开保留变量与数组选择；增加单曲线公式/颜色与快捷合并。源870471b6，组合e7c49b04/Web bcdc8474，188Python、1083全GUI及末次189GUI/TS/Vite通过。真实浏览器离线1480变量、公式x/1000、颜色与合并通过；0.3.6安装包SHA256 818035c005e02978b0729facd7cafcfba91babc659aa209e6bbc6409495b202b。首次UAC取消，用户要求重试后管理员覆盖exit0，解包/实装206Python/41Web与公式静态模块、冻结MCP/SVD/HTTP/离线功能及原生Web/退出通过。未操作硬件或更新固件/全局Skill。见v036-superwatch-formulas.md。
 - **新连接RTT搜索与采集顺序**：修复刚连接RTT搜索未准备MUX的问题，搜索/启动统一通道且保留旧ARM文本读取。462Python、70GUI、TS/Vite通过；原V4+HPM5301源码及实装新连接、两启动顺序、活动搜索和独立重启通过，四组实装读错/丢样0。0.3.6 ef51d4d3/Web5aeb2da2管理员覆盖exit0、冻结/原生/真实网页验收通过，已重新打开。V2/V3及ARM仅协议回归，未换板实测。见v036-rtt-discovery.md。
@@ -48,12 +48,12 @@
 ## 真机环境
 
 - **state**：V4.7.0+STM32F103RE512KiB/UART5实测；当前DAP缺GUID经用户批准定点修复后Keil/pyOCD枚举正常。测试固件保留SystemView CH2/UART5/RTT0和1/PID；无OTP、供电或探针固件变更。全部测试进程正常退出，30MHz1读错保留。
-- **installer**：已覆盖0.3.6 f20fe781，最终候选构建根artifacts/v036-prerelease-20261024，SHA256 3a4bf6aaa574b4ab91e4fb113a6b62c96f0d7022f8d4b5d855fa582e12d2332f；完整Skill同目录，资格证据可复核。
+- **installer**：仍为前次0.3.6 f20fe781已安装包；本次腾讯云preview源码5920c5c5包已签名并部署，SHA256 b8b9e746586a2e8d8b637ca6967357a61f6725df7584da87cdd83156db589cc3。原生较低版本已下载，UAC未完成，需重试实际安装；证据在构建根artifacts/v036-tencent-preview-20261024。
 - **backups**：正式release、原安装包、CI ZIP、唯一硬件证据、Skill备份和当前F盘缓存保留。删除61个可再生旧编译/解压目录；218个含链接测试目录未删。完整人工清单和删除结果在F:/MKLink-Build/reports/cleanup-20261023，见v036-storage-cleanup-20261023.md。 2026-10-24另按明确授权删除896个本地Linux/macOS包/签名/归档/分片，释放16072740412字节；归档证据另存unix-package-cleanup，线上正式附件保留。
 
 ## 下一动作
 
-1. 完成腾讯云preview的完整Windows/Skill构建与真实升级验证，记录签名/校验值/回退结果，撤销本次临时SSH授权；提交任务分支PR供检查，保持正式索引和标签不变。不能把已完成的四PR合并或旧HIL当作新更新包资格。
+1. 用户可操作Windows UAC时，重启构建根artifacts/v036-tencent-preview-20261024/baseline的0.3.6-preview.0客户端，重试真实腾讯云安装更新，完成覆盖载荷、原生重启、二次无更新检查。服务器和Skill验证已完成，临时SSH已撤销，不重新上传/授权、不推进正式索引/标签。PR50保持待审；不能宣称原生升级已通过。
 2. 收集客户N32WB452内外Flash组合实际烧写/回读反馈；本轮主机解析准入及安装包通过，不代替外置SPI硬件验证。不重复使用已消耗的F103单次烧录授权；不主动烧写或改OTP/供电。
 3. 用户需重新生成并部署U盘脚本再测完整HPM JTAG连续烧录；旧脚本不会自动更新。实时拔插/LCD已验证，完整多板Flash/蜂鸣次数仍待实测；不重复历史一次性写入授权。
 4. HPM联合镜像/OTP历史证据保留，Word69=3；本轮使用F103，未写HPM OTP或调整VCC。其他HPM型号继续由用户测试，未知MKLINK_V2任务不得重放，勿将目标板误作下载器升级。
