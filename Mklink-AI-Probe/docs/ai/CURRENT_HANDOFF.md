@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-24T21:34:38.1009229+08:00`
+- 更新时间：`2026-10-24T21:39:44.7172336+08:00`
 - 分支：`codex/tencent-update-preview`
 - HEAD：`基于main 303a2667开发腾讯云独立测试更新；精确源码见Git HEAD。`
 - 远端 HEAD：`PR42/46/48/49均已合并；main 303a2667，正式release/firmware引用未变。`
 - 工作树：唯一原工作区及源码子目录保留；测试/构建证据位于F盘。
-- 当前任务：已按用户授权整合PR51完整头7aca0480（DAP遗留占用恢复与CI），保留当前诊断和纯进度条。353项定点与1099GUI通过；Python全套5444通过2跳过4项因临时源码缺FLM路径准备失败，补已验证MKLINK_BUILTIN_FLM_ROOT后4项全通过，累计5448通过2跳过。PR51远端三项全通过。正在生成Windows本地preview包并覆盖验收；不合并main、不正式发布。
-- 状态：`in_progress`
+- 当前任务：用户授权整合PR51完整头7aca0480，组合源dde3ad01已生成Windows本地preview并覆盖exit0。保留诊断/启动优化，采用纯30/60/90/100进度条。353定点、1099GUI、Python5444+资源路径修正后4项通过（2跳过）、TS/Vite/Rust构建通过。实装3624文件/210Python/41Web一致，冻结MCP/FLM/SVD/ZIP/HTTP、原生/Web与正常关闭释放通过。详见v036-dap-integrated-install.md；无本轮硬件操作、未合main或正式发布。
+- 状态：`complete`
 
 ## 里程碑
 
@@ -48,12 +48,12 @@
 ## 真机环境
 
 - **state**：V4.7.0+STM32F103RE512KiB/UART5实测；当前DAP缺GUID经用户批准定点修复后Keil/pyOCD枚举正常。测试固件保留SystemView CH2/UART5/RTT0和1/PID；无OTP、供电或探针固件变更。全部测试进程正常退出，30MHz1读错保留。
-- **installer**：本地preview源86f9a75d覆盖exit0，SHA256 a8805b05aa38ca4cc405b5529baf71cf14447970919dacba5b0f4c740ec1d514；3623文件一致，冻结MCP/FLM/SVD/健康/ZIP/Web/正常退出通过。原生ZIP含2条正常启动记录；真实阶段提示、首屏计时及端口释放已验收。原生健康2.746s、首屏2.582s；后台三次中位数1.441s。见v036-desktop-startup.md；腾讯云线上仍为5920c5c5。
+- **installer**：本地preview组合源dde3ad01覆盖exit0，SHA256 09db218458f0fc8bcfabacad11d58b2efda6297ecd4c68c690886b7cdc80a77b；3624文件、210Python/41Web、冻结资格与原生/Web/正常退出通过。DAP恢复和纯进度条已安装。原生健康3.227s、首屏3.100s，仅单次检查非性能对照。见v036-dap-integrated-install.md；腾讯云线上仍5920c5c5。
 - **backups**：正式release、原安装包、CI ZIP、唯一硬件证据、Skill备份和当前F盘缓存保留。删除61个可再生旧编译/解压目录；218个含链接测试目录未删。完整人工清单和删除结果在F:/MKLink-Build/reports/cleanup-20261023，见v036-storage-cleanup-20261023.md。 2026-10-24另按明确授权删除896个本地Linux/macOS包/签名/归档/分片，释放16072740412字节；归档证据另存unix-package-cleanup，线上正式附件保留。
 
 ## 下一动作
 
-1. 进度条UI已完成并同步生产Web，本轮未重打包安装，当前实装仍86f9a75d（勾选版）；如需实装新UI需生成新Windows本地包并验收。86f9a75d阶段优化覆盖安装及实装验收已通过，见v036-desktop-startup.md。等待V3再次掉线后先导出诊断ZIP再拔插，当前新版已安装且未连接，需用户连接并开启RTT；历史USB移除混有手动操作，根因未定。PR50待审，正式发布须明确授权，重新跑合并源码完整门禁并构建stable包，不能把preview候选当正式包；保留GitHub/Gitee，线上包及stable/release/firmware/标签未变，临时SSH已撤销。
+1. dde3ad01已整合PR51并完成Windows覆盖安装及实装验收，见v036-dap-integrated-install.md。DAP恢复V2/V3与完整SES仍待验证，本轮不继承原分支V4硬件结论。V3再次掉线应先导出诊断ZIP再拔插，根因未定。PR50待审；main合并及正式发布另需明确授权和精确合并源码门禁，不能将preview候选当正式包；GitHub/Gitee备用与线上正式引用未变。
 2. 收集客户N32WB452内外Flash组合实际烧写/回读反馈；本轮主机解析准入及安装包通过，不代替外置SPI硬件验证。不重复使用已消耗的F103单次烧录授权；不主动烧写或改OTP/供电。
 3. 用户需重新生成并部署U盘脚本再测完整HPM JTAG连续烧录；旧脚本不会自动更新。实时拔插/LCD已验证，完整多板Flash/蜂鸣次数仍待实测；不重复历史一次性写入授权。
 4. HPM联合镜像/OTP历史证据保留，Word69=3；本轮使用F103，未写HPM OTP或调整VCC。其他HPM型号继续由用户测试，未知MKLINK_V2任务不得重放，勿将目标板误作下载器升级。
