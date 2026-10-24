@@ -86,6 +86,7 @@ class OfflineDownloadConfig:
     hpm_isp_otp: Optional[IspOfflineOtp] = None
     beep_on_completion: bool = True
     reset_after_download: bool = True
+    verify_after_download: bool = True
     beep_duration_ms: int = 1000
     reset_mode: Optional[str] = None
     reset_voltage_mv: Optional[int] = None
@@ -214,6 +215,9 @@ def parse_offline_config(
         raise OfflineDownloadError("Beep duration (ms) must be an integer")
     beep_duration_ms = _positive_int(duration, "Beep duration (ms)", 1, 10000)
     reset_after_download = _strict_bool(payload.get("reset_after_download", True), "completion reset")
+    verify_after_download = _strict_bool(payload.get("verify_after_download", True), "verify after download")
+    if hpm_target and not verify_after_download:
+        raise OfflineDownloadError("Disabling offline verification is only supported for ARM BIN/HEX programming")
     reset_mode = payload.get("reset_mode")
     if reset_mode is not None and reset_mode not in ("software", "hardware", "power_cycle"):
         raise OfflineDownloadError("Unsupported completion reset mode")
@@ -429,6 +433,7 @@ def parse_offline_config(
         reset_mode=reset_mode,
         reset_voltage_mv=reset_voltage_mv,
         reset_after_download=reset_after_download,
+        verify_after_download=verify_after_download,
     )
 
 
@@ -496,6 +501,8 @@ def _program_lines(config: OfflineDownloadConfig, indent: str) -> list[str]:
             call = f'load.hex("{firmware.file_name}")'
         else:
             call = f'load.bin("{firmware.file_name}", 0x{firmware.base_address:08X})'
+        if not config.verify_after_download:
+            call = call[:-1] + ', 0)'
         lines.extend(
             (
                 f"{indent}if {call} != 0:",
@@ -940,6 +947,21 @@ def _transactional_copy(
                 recovery_callback(None)
 
 
+def required_verify_capabilities(config: OfflineDownloadConfig) -> tuple[str, ...]:
+    if config.verify_after_download:
+        return ()
+    return tuple(sorted({f"OFFLINE_{firmware.format.upper()}_VERIFY=1" for firmware in config.firmwares}))
+
+
+def require_verify_capabilities(config: OfflineDownloadConfig, response: str) -> None:
+    lines = {line.strip() for line in response.splitlines()}
+    missing = [capability for capability in required_verify_capabilities(config) if capability not in lines]
+    if missing:
+        raise OfflineDownloadError(
+            "请升级下载器固件后再关闭烧录后校验 / Upgrade downloader firmware: " + ", ".join(missing)
+        )
+
+
 def deploy_offline_bundle(
     config: OfflineDownloadConfig,
     disk_root: Union[str, Path],
@@ -948,7 +970,9 @@ def deploy_offline_bundle(
     algorithm_sources: SourceCollection,
     recovery_callback: Optional[Callable[[Optional[Path]], None]] = None,
     isp_capability_response: Optional[str] = None,
+    firmware_capability_response: Optional[str] = None,
 ) -> dict:
+    require_verify_capabilities(config, firmware_capability_response or "")
     if config.hpm_isp is not None:
         from mklink.hpm_isp import require_capability, require_otp_job_capability
         try:

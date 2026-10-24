@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-24T21:39:44.7172336+08:00`
+- 更新时间：`2026-10-24T23:41:53.7700135+08:00`
 - 分支：`codex/tencent-update-preview`
 - HEAD：`基于main 303a2667开发腾讯云独立测试更新；精确源码见Git HEAD。`
 - 远端 HEAD：`PR42/46/48/49均已合并；main 303a2667，正式release/firmware引用未变。`
 - 工作树：唯一原工作区及源码子目录保留；测试/构建证据位于F盘。
-- 当前任务：用户授权整合PR51完整头7aca0480，组合源dde3ad01已生成Windows本地preview并覆盖exit0。保留诊断/启动优化，采用纯30/60/90/100进度条。353定点、1099GUI、Python5444+资源路径修正后4项通过（2跳过）、TS/Vite/Rust构建通过。实装3624文件/210Python/41Web一致，冻结MCP/FLM/SVD/ZIP/HTTP、原生/Web与正常关闭释放通过。详见v036-dap-integrated-install.md；无本轮硬件操作、未合main或正式发布。
-- 状态：`complete`
+- 当前任务：接入BIN/HEX脱机verify_after_download统一开关：默认开启、保存恢复，关闭逐文件传0；部署读取绑定下载器cmd.get_version精确对应能力，缺能力提示升级且不写入，不按版本判断。预览不连接硬件。356后端回归、1101全GUI及末次升级提示62定点、TS/Vite通过。正在Windows本地打包覆盖；用户明确本轮不操作硬件，不重刷固件。
+- 状态：`in_progress`
 
 ## 里程碑
 

@@ -25,6 +25,8 @@ from mklink.offline_download import (
     generate_offline_script,
     offline_trigger_command,
     parse_offline_config,
+    required_verify_capabilities,
+    require_verify_capabilities,
     script_filename,
 )
 from mklink.offline_security import offline_security_capability
@@ -663,6 +665,32 @@ def create_offline_download_router(
         finally:
             resource_manager.release(owner)
 
+    async def _check_verify_capability(config, runtime, disk_root):
+        if not required_verify_capabilities(config):
+            return None
+        from mklink.probes import select_probe
+        from mklink.probe_volumes import resolve_volume
+        from mklink.remote.resource_manager import ResourceError
+        owner = f"user:offline-download:verify-capability:{uuid.uuid4().hex}"
+        try:
+            if runtime is not None:
+                await asyncio.to_thread(runtime.require_identity)
+            selected = await asyncio.to_thread(select_probe, runtime.info['probe_id'] if runtime else None)
+            volume = await asyncio.to_thread(resolve_volume, selected['probe_id'])
+            if Path(volume['root']).resolve() != disk_root.resolve():
+                raise OfflineDownloadError("Capability probe does not match the deployment disk")
+            resource_manager.acquire_many(_resources(), owner, preempt=False)
+            response = await asyncio.to_thread(_send_trigger, 'cmd.get_version()',
+                _connected_bridge(selected['port']), selected['port'], None, 5)
+            require_verify_capabilities(config, response)
+            return response
+        except ResourceError as error:
+            raise HTTPException(409, str(error)) from error
+        except (ValueError, OSError, ConnectionError, RuntimeError) as error:
+            raise OfflineDownloadError(str(error)) from error
+        finally:
+            resource_manager.release(owner)
+
     def _trigger_stream(
         command: str,
         active_bridge: Optional[object],
@@ -838,6 +866,7 @@ def create_offline_download_router(
                 "model": config.model,
                 "script_name": config.script_name,
                 "script": generate_offline_script(config),
+                "required_capabilities": required_verify_capabilities(config),
             }
         except OfflineDownloadError as error:
             raise HTTPException(status_code=422, detail=str(error))
@@ -935,10 +964,17 @@ def create_offline_download_router(
                             temp / f"pack-{algorithm.id}.flm",
                         )
                 async def perform(recovery=None):
+                    try:
+                        firmware_capability = await _check_verify_capability(config, runtime, disk_root)
+                    except OfflineDownloadError as error:
+                        # No destination has been written: retain a failed receipt,
+                        # not an unknown write that would prevent correcting settings.
+                        raise HTTPException(422, str(error)) from error
                     return await _perform_deployment(runtime, disk_root, lambda callback:
                         deploy_offline_bundle(config, disk_root, firmware_sources=firmware_sources,
                                               algorithm_sources=algorithm_sources, recovery_callback=callback,
-                                              isp_capability_response=isp_capability), recovery)
+                                              isp_capability_response=isp_capability,
+                                              firmware_capability_response=firmware_capability), recovery)
                 runtime = getattr(request.app.state, 'shared_runtime', None)
                 if runtime is None:
                     await asyncio.to_thread(_validate_bin_firmware_ranges, config, online_services, firmware_sources)

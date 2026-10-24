@@ -432,3 +432,39 @@ def test_algorithm_failed_recovery_retains_queryable_directory(algorithm_copy, m
     job = client.get('/api/runtime/jobs/' + detail['job_id']).json()
     assert job['recovery_directory'] == str(recovery)
     assert RuntimeJobs(control).jobs[job['job_id']]['action'] == 'flm_copy'
+
+
+@pytest.mark.parametrize('supported', [True, False])
+def test_verify_capability_is_bound_and_journaled_without_replay(deployment, monkeypatch, supported):
+    _, control, disk, config, submit = deployment
+    config['verify_after_download'] = False
+    control.info['probe_id'] = 'fixture-bound'
+    monkeypatch.setattr(control, 'require_identity', lambda **_: None)
+    selected = []
+    def select(selector):
+        selected.append(selector)
+        return {'probe_id': selector, 'port': 'FIXTURE'}
+    monkeypatch.setattr('mklink.probes.select_probe', select)
+    commands = []
+    class Bridge:
+        def __init__(self, port):
+            assert port == 'FIXTURE'
+        def connect(self):
+            return True
+        def send_command(self, command, **kwargs):
+            commands.append(command)
+            return 'V3.6.6\nOFFLINE_HEX_VERIFY=1' if supported else 'V9.9.9'
+        def close(self):
+            pass
+    monkeypatch.setattr('mklink.bridge.MKLinkSerialBridge', Bridge)
+    first = submit()
+    assert first.status_code == (200 if supported else 409), first.text
+    second = submit()
+    assert second.status_code == first.status_code
+    assert commands == ['cmd.get_version()']
+    assert selected == ['fixture-bound']
+    if supported:
+        assert 'load.hex("rt-thread.hex", 0)' in (disk / 'python' / config['script_name']).read_text()
+    else:
+        assert 'Upgrade downloader firmware' in first.text
+        assert not list(disk.iterdir())
