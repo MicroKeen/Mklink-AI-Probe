@@ -1,20 +1,20 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-24T10:08:44.558314+08:00",
+  "updated_at": "2026-10-24T11:06:34.655929+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/hpm-isp-deployment-ux",
-    "head": "PR42/46/49已整合到PR48，源22ecb186；以Git HEAD为准。",
-    "remote_head": "本轮整合随后推送到microkeen任务分支，未合并main。",
-    "working_tree": "唯一工作区E:/software/HPM5300/Mklink-AI-Probe，源码子目录Mklink-AI-Probe；已返回任务分支codex/hpm-isp-deployment-ux。已安装组合在codex/v036-isp-ux-local。"
+    "head": "0.3.6候选源码f20fe781；最终交接提交以Git HEAD为准。",
+    "remote_head": "PR42/46/49原历史整合进PR48；最终合并提交与分支清理状态以GitHub/main精确祖先核对为准。",
+    "working_tree": "唯一原工作区及源码子目录保留；测试/构建证据位于F盘。"
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
     "status": "in_progress",
-    "current_task": "0.3.6发布前整合4个PR、分支清理与全功能验收进行中。PR42/46/49已整合到48。完整Python5397/GUI1089及候选23bf2d57对应Windows解包/覆盖安装/Skill干净环境通过；用户随后要求通用模糊搜索而非F767专门提示，已改inspect_mcu统一片段/通配符搜索+算法几何，217定点及五组跨厂商目录检查通过，需重新全量/打包。仅Windows与Skill；永久默认不构建Linux/macOS，明确要求才构建。历史本地Unix包已清理，线上正式附件保留。"
+    "current_task": "0.3.6发布前验收完成，PR48保留42/46/49原历史，最终合并和分支清理需以GitHub/main核对。通用MCU模糊搜索完成；5404Python/1090GUI/生产构建/Windows覆盖安装/完整Skill隔离资格、V4+F103实机及浏览器原生文件选择通过。30MHz双采集仍有1次读错，限制保留。默认只构建Windows；本地Unix包896个共16.07GB已清理，线上正式附件保留。正式签名发布未执行。"
   },
   "milestones": [
     {
@@ -50,6 +50,10 @@
   ],
   "verification": [
     {
+      "area": "0.3.6四PR整合与发布前资格",
+      "result": "源码f20fe781；5404Python/2skip、1090GUI、生产构建；Windows覆盖exit0、206Python/41Web/4载荷、离线完整Skill7059目标/2224FLM/4800外设通过。实机Flash全回读/RTT8/Watch/UART5/TTLModbus/VOFA/SystemView/HardFault/共享MCP及浏览器和原生文件选择通过。30MHz一顺序1读错，10MHz0。详见docs/verification/v036-prerelease-20261024.md。"
+    },
+    {
       "area": "SuperWatch离线文件与公式颜色",
       "result": "SuperWatch离线解析/重载先停采集、断开保留变量与数组选择；增加单曲线公式/颜色与快捷合并。源870471b6，组合e7c49b04/Web bcdc8474，188Python、1083全GUI及末次189GUI/TS/Vite通过。真实浏览器离线1480变量、公式x/1000、颜色与合并通过；0.3.6安装包SHA256 818035c005e02978b0729facd7cafcfba91babc659aa209e6bbc6409495b202b。首次UAC取消，用户要求重试后管理员覆盖exit0，解包/实装206Python/41Web与公式静态模块、冻结MCP/SVD/HTTP/离线功能及原生Web/退出通过。未操作硬件或更新固件/全局Skill。见v036-superwatch-formulas.md。"
     },
@@ -76,10 +80,6 @@
     {
       "area": "采集中软件复位实装与实机",
       "result": "源8e402491：361Python、真实Web/协议及管理员覆盖通过，F103双采集中软件复位保留会话并捕获重启数据，短测零读错/丢样。HPM V4固件8b2a6ce的42回归/双构建及单次35.75ms复位实测通过。完整限制与证据见v036-capture-reset.md、v036-hpm-capture-reset.md；不继承一次性复位授权。"
-    },
-    {
-      "area": "ARM每板完成复位和蜂鸣",
-      "result": "源eca8b0b0，组合203dfe51：305Python/51GUI/真实网页及实装通过；2435484固件已升级，软件/硬件/3300mV断电复位各一次验证。完整Flash多板仍待测试；见v036-arm-completion-reset.md。"
     }
   ],
   "decisions": [
@@ -95,29 +95,29 @@
     "编译完成不代表目标已下载：文件变化仅发待重载提示，不后台解析。用户明确加载/重载文件时自动停止目标采集，确认worker退出后原子换表，保持停止；失败保留旧目录/选择。不要求连接下载器；断开保留文件和选中变量但清空旧采样。公式只改变可视化，原始记录不变；不恢复旧地址采集或重放写操作。"
   ],
   "hardware": {
-    "state": "V4+STM32F103RE 512KiB身份实读确认，UART5已接。原工程测试固件编译0错0警。Keil/pyOCD不可见源于当前DAP接口缺GUID；用户明确批准定点注册表备份修复，已完成且pyOCD恢复枚举。Flash与综合验收继续；不改变供电或探针固件。",
-    "installer": "已覆盖0.3.6 e7c49b04/Web bcdc8474；最新包在构建根artifacts/v036-watch-formulas-e7c49b04，SHA256 818035c005e02978b0729facd7cafcfba91babc659aa209e6bbc6409495b202b，清理后再次核对一致。",
-    "backups": "正式release、原安装包、CI ZIP、唯一硬件证据、Skill备份和当前F盘缓存保留。删除61个可再生旧编译/解压目录；218个含链接测试目录未删。完整人工清单和删除结果在F:/MKLink-Build/reports/cleanup-20261023，见v036-storage-cleanup-20261023.md。 2026-10-24另按明确授权删除887个本地Linux/macOS包/签名/归档/分片，释放15076388372字节；归档证据另存unix-package-cleanup，线上正式附件保留。"
+    "state": "V4.7.0+STM32F103RE512KiB/UART5实测；当前DAP缺GUID经用户批准定点修复后Keil/pyOCD枚举正常。测试固件保留SystemView CH2/UART5/RTT0和1/PID；无OTP、供电或探针固件变更。全部测试进程正常退出，30MHz1读错保留。",
+    "installer": "已覆盖0.3.6 f20fe781，最终候选构建根artifacts/v036-prerelease-20261024，SHA256 3a4bf6aaa574b4ab91e4fb113a6b62c96f0d7022f8d4b5d855fa582e12d2332f；完整Skill同目录，资格证据可复核。",
+    "backups": "正式release、原安装包、CI ZIP、唯一硬件证据、Skill备份和当前F盘缓存保留。删除61个可再生旧编译/解压目录；218个含链接测试目录未删。完整人工清单和删除结果在F:/MKLink-Build/reports/cleanup-20261023，见v036-storage-cleanup-20261023.md。 2026-10-24另按明确授权删除896个本地Linux/macOS包/签名/归档/分片，释放16072740412字节；归档证据另存unix-package-cleanup，线上正式附件保留。"
   },
   "known_limits": [
     "0.3.5时钟修复已通过偏差注入及本地Windows3.11/3.14实机短测；客户3.11.9原电脑仍待升级确认。原始CDC首次离线/F405 PROGRAM100%后退出、受限AI/GD32及RTT客户后续MUX超时仍未闭环；不宣称同一根因或任意负载无损。历史unknown操作不得重放。 位域当前仅little-endian、只读；曲线Float32对大整数有舍入。真实ELF只离线回放，F103使用专门测试固件；未把客户固件烧到该板。 原0.3.2故障链见docs/verification/v032-postrelease-incidents.md；CDC传输错误、目标status5与本次DLL解压拒绝不混为同一根因，不靠清空用户配置或全杀后台掩盖原因。 本轮后台HEX下载2% Failed to write file,addr:0x2000，unknown未重放；用户Keil下载后仅重载验证成功，下载故障仍待另案排查。",
-    "V4.6.8 30MHz RTT8/Watch4/UART并行目标读错1kHz +1、最大+273；10MHz0。旧V4.6.6原始+1/+224，报告此前漏记已更正。采集不停止、不误断、UART完整；用户明确继续发布，限制交接下版处理，不写公开发布说明。",
+    "V4.6.8 30MHz RTT8/Watch4/UART并行目标读错1kHz +1、最大+273；10MHz0。旧V4.6.6原始+1/+224，报告此前漏记已更正。采集不停止、不误断、UART完整；用户明确继续发布，限制交接下版处理，不写公开发布说明。 2026-10-24 V4.7.0+F103最终安装测试：30MHz RTT先Watch后11762周期1错，反顺序12297周期0；10MHz两顺序0，限制未关闭。",
     "HPM/SES退出未发送DAP_Disconnect时可遗留占用，后续legacy握手等待；明确退出后正常OpenOCD init/resume/shutdown可恢复，用户可重插USB。禁止任意超时偷取调试所有权。完整SES矩阵和RTT下行未全部覆盖；V3.6.4/V4.6.8仿真中新启采集及负载读回通过，V4.6.8已完成Keil及相关矩阵。详见release handoff；长期目标暂停。 2026-10-17新增RTT status6截图仅证下载器忙返回；用户不清楚IDE占用/固件版本，不能认定与历史问题同因，待现场时序和显式重试结果。",
     "性能和功能证据按docs/verification/v030-release-handoff.md及各精确提交报告解释：采集不是无损通道，缓冲溢出/暂停/调试下载可能丢失观测；多变量不是原子快照，不能保证任意时序上界。",
     "V3无屏幕、不支持HPM；V3.6.4原生Keil先运行再采集、暂停/单步/继续/退出和OpenOCD均通过。V4最终无诊断固件完整SES矩阵未完成。",
     "后台最后会话释放约5秒租约，加排空和退出开销；不保证硬实时5秒。每个GUI客户端一个后台，同窗口切换固定PID/端口；一个物理探针在任一时刻仅由一个后台独占。打开已有URL的额外页面共享当前后台并跟随明确切换；独立操作应启动新客户端。",
-    "跨物理主机Agent、真实Modbus从站及全部芯片组合未完整认证，模拟测试不能替代实体。0.3.5最终独立Windows Site Agent已重新构建并通过两项实际包资格检查；macOS Intel/ARM和Linux原生CI包构建/冻结运行/载荷检查通过，但实体USB/MSC、原生GUI、签名升级未认证。Mac仅ad-hoc无Developer ID公证，Windows无Authenticode。Web真实文件句柄选择/跟踪未完成；新候选原生日志文件选择、回放和PNG已通过。",
+    "本轮UART5 TTL实体Modbus RTU读写通过，RS485电气层未测；跨物理主机Agent、全部芯片组合未完整认证，模拟测试不能替代实体。0.3.5最终独立Windows Site Agent已重新构建并通过两项实际包资格检查；macOS Intel/ARM和Linux原生CI包构建/冻结运行/载荷检查通过，但实体USB/MSC、原生GUI、签名升级未认证。Mac仅ad-hoc无Developer ID公证，Windows无Authenticode。Web真实文件句柄选择/跟踪未完成；新候选原生日志文件选择、回放和PNG已通过。",
     "nRF54L15 GUI保护闭环、全部物理擦除/拔插/休眠/断电场景、电源外部精度校准未全部认证。VCC每次改动必须确认具体电压，HPM已锁定OTP不得重放。 已知无可靠扇区表的26个FLM禁用扇区操作；重叠算法需要匹配Bank模式。 HPM5301组18/19永久锁定的历史状态及用户字先写/组锁最后、全部固件独立校验后才写OTP等边界见docs/ai/hpm-offline-otp-handoff.md；接手重新确认芯片，其他型号不继承验收。 UART OTP已实现ROM write-memory APIv2，独立熔丝/影子/临时锁读语义仍未知并如实显示；以ROM写入状态及回读为准。配套3d96dbb已实机验证HPM5301全部128字读取和用户批准的Word69 0→1单次写入回读；其余型号/区域未实写，新数据须具体授权。多Word顺序执行不可回滚。CSV原生选择器自动化未完成。"
   ],
   "next_actions": [
-    "完成整合源码全Python/GUI/生产构建、V4+STM32F103原工程实机与实际安装验收；核对必需CI和精确PR头后合并，清理确认进入主线的旧分支。正式发布尚未执行。SuperWatch新功能需本轮F103实机补验，V2/V3和HPM矩阵不能继承。",
+    "核对最终精确PR头CI后合并48（含42/46/49历史），检查main祖先与清洁状态再清理分支。发布前Windows/Skill/本轮V4+F103验收已完成，正式标签/签名/Release/更新渠道尚未执行；下一步选择正式发布提交并按明确发布授权执行。",
     "收集客户N32WB452内外Flash组合实际烧写/回读反馈；本轮主机解析准入及安装包通过，不代替外置SPI硬件验证。不重复使用已消耗的F103单次烧录授权；不主动烧写或改OTP/供电。",
     "用户需重新生成并部署U盘脚本再测完整HPM JTAG连续烧录；旧脚本不会自动更新。实时拔插/LCD已验证，完整多板Flash/蜂鸣次数仍待实测；不重复历史一次性写入授权。",
-    "PR48未合并发布。此前联合镜像+OTP实机证据保留，当前Word69=3；本轮未追加目标烧录/OTP/VCC。其他HPM型号继续由用户测试，固件交会话01a15977-1aef-7430-aa11-6e39725f0465。 未知MKLINK_V2任务不得重放。当前接入若为烧好固件的目标板或另一V2.9.0设备，不能误当原下载器升级。",
+    "HPM联合镜像/OTP历史证据保留，Word69=3；本轮使用F103，未写HPM OTP或调整VCC。其他HPM型号继续由用户测试，未知MKLINK_V2任务不得重放，勿将目标板误作下载器升级。",
     "继续排查30MHz并行读错/Flash偶发status5，客户及Mac/Linux实物矩阵仍待补充；低负载测试不关闭限制。人工清理只按reports/cleanup-20261023/manual-cleanup.csv核对临时目录，不沿链接删除目标，最新安装包必须保留。长期验证仍暂停。"
   ],
   "continuation_protocol": [
-    "本轮SuperWatch已覆盖安装并通过冻结、原生和真实Web检查，测试进程已正常退出。包在构建根artifacts/v036-watch-formulas-e7c49b04；源870471b6、组合e7c49b04/Web bcdc8474。未改固件/全局Skill或操作目标；不继承历史一次性写入授权，不发布渠道或标签。",
+    "本轮最终Windows候选f20fe781和完整Skill位于artifacts/v036-prerelease-20261024；冻结、覆盖、原生、真实Web及F103实机通过，测试进程正常退出。用户授权原测试工程改编译烧录无需备份，但不包含OTP/供电或探针固件变化。客户旧MCP导入故障仍缺现场证据，不能认定已闭环。",
     "V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。",
     "CDC 995根因仅保留待排查。恢复只允许同身份CDC故障5秒内；超时不自动接回或新建AI会话，主动断开立即生效，不重放未知写入。测试实例已经全部释放；见v035-transport-recovery.md，不寻找旧现场窗口。",
     "客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。",
