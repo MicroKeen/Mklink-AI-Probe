@@ -108,3 +108,20 @@ def test_diagnostics_open_failure_does_not_prevent_backend_start(tmp_path, monke
     with connection_log(tmp_path):
         event('still.working')
 
+
+def test_export_installed_after_web_spa_fallback_returns_zip(tmp_path, monkeypatch):
+    from fastapi import FastAPI
+    from fastapi.responses import HTMLResponse
+    from mklink.connection_diagnostics import install_export
+    monkeypatch.setenv('MKLINK_RUNTIME_DIR', str(tmp_path))
+    app = FastAPI()
+    @app.get('/{full_path:path}')
+    def spa(full_path: str):
+        return HTMLResponse('<html>app</html>')
+    install_export(app)
+    with TestClient(app) as client:
+        result = client.get('/api/diagnostics/export')
+        assert result.headers['content-type'] == 'application/zip'
+        assert zipfile.is_zipfile(io.BytesIO(result.content))
+        assert client.get('/dashboard').headers['content-type'].startswith('text/html')
+

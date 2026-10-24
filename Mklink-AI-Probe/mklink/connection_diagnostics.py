@@ -128,6 +128,7 @@ def export_bundle():
 
 
 def install_export(app):
+    from fastapi import APIRouter
     from fastapi.responses import Response
     from starlette.concurrency import run_in_threadpool
     from typing import Literal
@@ -141,16 +142,22 @@ def install_export(app):
     class ClientEvents(BaseModel):
         events: list[ClientEvent] = Field(max_length=25)
 
-    @app.post('/api/runtime/diagnostics/events')
+    router = APIRouter()
+
+    @router.post('/api/runtime/diagnostics/events')
     async def record_client_events(body: ClientEvents):
         for row in body.events:
             event('gui.' + row.event, client_time=row.time, message=row.message)
         return {'recorded': len(body.events)}
 
-    @app.get('/api/diagnostics/export')
+    @router.get('/api/diagnostics/export')
     async def export_diagnostics():
         data = await run_in_threadpool(export_bundle)
         return Response(data, media_type='application/zip', headers={
             'Content-Disposition': 'attachment; filename="mklink-diagnostics.zip"',
             'Cache-Control': 'no-store',
         })
+
+    # Runtime controls are installed after the product's SPA fallback route.
+    # Keep these exact endpoints ahead of it in both Web and desktop modes.
+    app.router.routes[0:0] = router.routes
