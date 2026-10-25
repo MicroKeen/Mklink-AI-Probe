@@ -67,14 +67,33 @@ private key, SSH login, firmware operation, binary rebuild or release/tag update
 - Stable application/Skill and both firmware indexes returned 200 and retained
   stable download-domain paths, so the existing clients use the new resolver.
 
-## Remaining closure
+## Old-bucket closure and review
 
-- Closing the old Hong Kong bucket's public ACL requires Tencent's account
-  identity verification. The console was left at the owner's WeChat QR prompt.
-  Do not report the old bucket private until the save completes and public reads
-  are rejected. The retired Shanghai `kk-1300298079` also requires identity
-  verification. Its two 2020 files (`start.png`, `timg.jpg`) remain untouched;
-  permanent deletion requires action-time confirmation under the browser policy.
+- The owner completed Tencent identity verification. The Hong Kong bucket is
+  now private; anonymous HEAD requests to all 11 old formal resource paths
+  returned 403. It remains a private archive, not an active download source.
+- The retired Shanghai `kk-1300298079` was first made private; both `start.png`
+  and `timg.jpg` returned 403. After the owner's explicit action-time confirmation,
+  the two files were permanently cleared and the empty bucket deleted. The
+  console reported success and the bucket list contains only the Hong Kong
+  archive and the new Shanghai download bucket.
+- PR #53 head `96b6818edbc610db5b6354b2022c6d572646a259` passed all three CI
+  jobs (feedback, GUI and runtime). Later closure-record edits change documents
+  only. The PR remains open for maintainer integration; no release/tag changed.
+- Final public HEAD verification found inherited Nginx `proxy_cache cache_one`
+  converting HEAD to GET: loopback HEAD and direct signed HEAD returned 200,
+  but public HEAD received a GET signature and returned 403. All 11 resolver
+  locations now explicitly disable proxy caching and HEAD conversion. The
+  original config was archived, `nginx -t` passed and reload succeeded.
+  All 11 public HEAD redirects now return 200 with exact file sizes; public
+  GET Range redirects return 206 with matching first 16 bytes. This supplements
+  the earlier complete SHA-256 checks rather than repeating large downloads.
+  A subsequent resolver-down test confirmed GET and HEAD both select the exact
+  GitHub/Gitee backups; the service restarted successfully in the test's finally
+  block. Dot was sent the final old-bucket and proxy-fix status at 11:49.
+- After deleting the old Shanghai bucket, its URL returned 404/NoSuchBucket.
+  Later protection runs remained `ready` with cumulative usage 355,040,478 bytes;
+  the deleted bucket's monitoring dimension did not break the current cycle.
 - Monitor data is delayed; ongoing transfers and issued URLs can finish, so this
   is a budget guard with a buffer, not a strict total-cost cap. Health reads,
   storage, requests and SCF costs remain separate.

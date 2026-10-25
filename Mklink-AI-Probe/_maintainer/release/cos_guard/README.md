@@ -59,7 +59,10 @@ readable dedicated directory (not inside a root-only deployment archive). Confir
 the COS hostname resolves through Tencent's same-region internal network. Route
 only exact published file paths through the resolver. Nginx must also have static
 known backup redirects for resolver 502/503/504 failures, with `Cache-Control:
-no-store`. Preserve the update manifests, website, TLS and certificate renewal.
+no-store`. Set `proxy_cache off;` and `proxy_cache_convert_head off;` explicitly
+in every resolver location: an inherited proxy cache otherwise converts HEAD
+to GET, producing a GET signature which COS rejects for the client's HEAD.
+Preserve the update manifests, website, TLS and certificate renewal.
 Save the previous Nginx config outside the web root; validate with `nginx -t`
 before reload and restore on validation failure.
 
@@ -86,7 +89,10 @@ Generate an inline deployment with `python _maintainer/release/cos_guard/bundle.
 CONFIG OUTPUT` through the same wrapper.
 
 Before cutover, verify all signed GET/HEAD downloads and their full SHA-256
-against immutable formal artifacts. Exercise the native alarm using an explicit
+against immutable formal artifacts. Also follow both GET and HEAD redirects
+through the public download domain, checking HEAD size and a small GET Range;
+direct signed-URL checks alone cannot detect proxy method conversion.
+Exercise the native alarm using an explicit
 temporary test threshold, then restore production thresholds. Test resolver-down
 fallback and a real lease-expiry cycle. Restore the timer and verify fresh health
 and the public download host after tests. Do not simulate quota by downloading
