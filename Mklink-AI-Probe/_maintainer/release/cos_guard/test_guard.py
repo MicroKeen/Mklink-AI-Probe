@@ -19,6 +19,20 @@ class GuardTests(unittest.TestCase):
         self.assertTrue(decide(self.config, self.state, 1, 80)["warning"])
         self.assertEqual(decide(self.config, self.state, 1, 90)["stop_reason"], "traffic_limit")
 
+    def test_100gb_package_90gb_warning_95gb_stop_preserves_cycle(self):
+        gib = 1024**3
+        config = {**self.config, "warn_bytes": 90*gib, "stop_bytes": 95*gib}
+        previous = {**self.state, "used_bytes": 4*gib}
+        self.assertEqual(decide(config, previous, 1, 1)["used_bytes"], 4*gib)
+        self.assertFalse(decide(config, previous, 1, 90*gib-1)["warning"])
+        warning = decide(config, previous, 1, 90*gib)
+        self.assertTrue(warning["warning"])
+        self.assertEqual(warning["stop_reason"], "")
+        self.assertEqual(decide(config, previous, 1, 95*gib)["stop_reason"], "traffic_limit")
+        expired = decide(config, previous, config["expires_at"], 1)
+        extended = {**config, "expires_at": 2000}
+        self.assertEqual(decide(extended, expired, 1100, 0)["stop_reason"], "package_expired")
+
     def test_stop_latches_when_metrics_decrease(self):
         stopped = decide(self.config, self.state, 1, 90)
         self.assertEqual(decide(self.config, stopped, 2, 0)["stop_reason"], "traffic_limit")
