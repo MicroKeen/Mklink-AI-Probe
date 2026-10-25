@@ -121,8 +121,8 @@ def main_handler(event, context):
         print("guard_error: " + type(error).__name__)
         raise RuntimeError("COS guard failed closed") from None
     # Use SCF's native invocation-error metric and its notification policy.
-    # Raise outside the fail-closed handler: the 8 GiB warning must leave the
-    # current download lease open; the 9 GiB/expiry latch already closes it.
+    # Raise outside the fail-closed handler: the warning threshold must leave
+    # the current lease open; the stop threshold/expiry latch already closes it.
     if result["used_bytes"] >= config["warn_bytes"] or result["reason"] not in ("ready", "disabled"):
         raise RuntimeError("MKLink COS budget alert: " + result["reason"] +
                            "; used_GiB=" + str(round(result["used_bytes"] / 1024**3, 3)))
