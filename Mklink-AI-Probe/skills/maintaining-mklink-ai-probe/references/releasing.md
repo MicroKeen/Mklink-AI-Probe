@@ -1,13 +1,14 @@
 # Maintainer Release Procedure
 
-Application 0.2.1 prepares the migration to MicroKeen. Only Aladdin-Wang may
+The active GitHub repository is MicroKeen/Mklink-AI-Probe. Only Aladdin-Wang may
 publish. Use reviewed, clean `main` equal to the remote MicroKeen `main` tip.
 The maintainer's latest 2026-09-15 policy removes mandatory second-person
 approval for all PRs. No temporary approval change or restoration is needed.
 Explicit merge/publication authorization, diff review, required CI and release
 qualification remain mandatory; see `docs/ai/repository-governance.md`.
-The application publisher sends identical signed assets to MicroKeen and legacy
-Aladdin-Wang GitHub, and immutable tags to both GitHub repositories and Gitee.
+As of the maintainer instruction on 2026-10-25, publish new assets, tags and
+indexes only to MicroKeen GitHub and Gitee. Stop maintaining the legacy
+Aladdin-Wang GitHub repository; preserve its historical published releases.
 Gitee attachment scope follows the maintainer policy below. The publisher does
 not push source branches. See `docs/ai/repository-governance.md` before publication.
 
@@ -147,19 +148,19 @@ python _maintainer/release/publish_update_release.py `
 The publisher verifies clean reviewed `main`, version agreement, source commit, exact
 asset set, sizes, and hashes. It then:
 
-1. pushes only the immutable annotated version tag to both GitHub repositories and Gitee;
-2. creates or verifies all three Releases, uploads the complete required asset set
-   to both GitHub repositories, and applies the Gitee attachment policy above;
+1. pushes only the immutable annotated version tag to MicroKeen GitHub and Gitee;
+2. creates or verifies the two active Releases, uploads the complete required asset set
+   to MicroKeen GitHub, and applies the Gitee attachment policy above;
 3. anonymously downloads GitHub assets and actual Gitee mirrors, verifying size and SHA-256;
-4. publishes indexes last: MicroKeen `release/latest.json`, legacy GitHub
-   `updates/latest.json`, and unchanged Gitee `updates/latest.json`. GitHub
+4. publishes indexes last: MicroKeen `release/latest.json` and unchanged Gitee
+   `updates/latest.json`. GitHub
    manifests point to MicroKeen release assets; Gitee uses its own Skill URL and
    the verified available installer URL under the policy above.
 
-0.2.0 clients retain their old endpoints and discover the compatibility index.
-The installed 0.2.1 application and Skill contain MicroKeen as their primary
-endpoint and Gitee as fallback. Keep the same updater key and application ID.
-Never remove the old index during migration or change the Gitee URL.
+Older clients may retain the legacy GitHub endpoint. Its historical index remains
+available but receives no new releases; the active Gitee fallback remains unchanged.
+Current application and Skill use the official download service, MicroKeen and Gitee.
+Keep the same updater key and application ID. Do not remove historical public assets.
 
 Publishing `latest.json` last prevents clients from discovering an incomplete
 release. Never move a published tag. Documentation or tooling corrections after

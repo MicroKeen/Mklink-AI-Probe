@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from mklink.firmware_check import _parse_manifest, FIRMWARE_MANIFEST_SCHEMA, parse_firmware_filename, bundled_firmwares
 from mklink.rbl import validate_rbl
-from _maintainer.release.publish_update_release import verify_public_asset
+from _maintainer.release.publish_update_release import verify_public_asset, github_channels
 
 INDEX = 'latest-v2.json'
 
@@ -82,6 +82,8 @@ def snapshot(repo):
 
 
 def publish(file, repos, apply=False):
+    for repo in repos:
+        github_channels(repo)
     plans = []
     for repo in repos:
         head, tree, legacy, previous = snapshot(repo)

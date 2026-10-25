@@ -424,7 +424,7 @@ def test_updates_branch_is_published_only_after_both_releases_and_verification(
         release_dir=tmp_path,
         updater_installer=installer,
         updater_signature=signature,
-        github_repo="Aladdin-Wang/Mklink-AI-Probe",
+        github_repo="MicroKeen/Mklink-AI-Probe",
         gitee_repo="Aladdin-Wang/Mklink-AI-Probe",
         gitee_token="token",
         repository=tmp_path,
@@ -435,7 +435,7 @@ def test_updates_branch_is_published_only_after_both_releases_and_verification(
     ]
 
 
-def test_migration_publishes_old_and_new_github_indexes_and_preserves_gitee(publisher, monkeypatch):
+def test_publisher_uses_canonical_github_index_and_preserves_gitee(publisher, monkeypatch):
     calls = []
     monkeypatch.setattr(publisher, "_run", lambda command, **kw: calls.append(command))
     monkeypatch.setattr(publisher, "_gitee_push", lambda **kw: calls.append(["gitee", kw["refspec"]]))
@@ -447,7 +447,6 @@ def test_migration_publishes_old_and_new_github_indexes_and_preserves_gitee(publ
     assert pushes == [
         ["gitee", "updates:updates"],
         ["git", "push", "--force", "https://github.com/MicroKeen/Mklink-AI-Probe.git", "updates:release"],
-        ["git", "push", "--force", "https://github.com/Aladdin-Wang/Mklink-AI-Probe.git", "updates:updates"],
     ]
 
 
@@ -461,3 +460,8 @@ def test_installed_updaters_share_new_primary_and_unchanged_fallback(publisher):
         "https://raw.githubusercontent.com/MicroKeen/Mklink-AI-Probe/release/latest.json",
         "https://gitee.com/Aladdin-Wang/Mklink-AI-Probe/raw/updates/latest.json",
     )
+
+
+def test_legacy_github_publication_is_rejected(publisher):
+    with pytest.raises(ValueError, match="Legacy GitHub publication is retired"):
+        publisher.github_channels("Aladdin-Wang/Mklink-AI-Probe")
