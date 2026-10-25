@@ -75,6 +75,6 @@ catalog PR does not repack the existing application or Skill: their live remote
 firmware indexes already expose the new versions.
 
 Dot was notified to update the website's current firmware entries and preserve
-old versions, images, categories and backup links. Notification is confirmed;
-website deployment is tracked separately. The separate Thunder download-client
+old versions, images, categories and backup links. The notification appeared in the conversation, but subsequent Dot reads returned
+conversation unavailable. A reply and website deployment are not yet verified. The separate Thunder download-client
 compatibility investigation is not changed by this firmware publication.
