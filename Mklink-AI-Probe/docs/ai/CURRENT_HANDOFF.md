@@ -4,22 +4,22 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-25T01:14:05+08:00`
-- 分支：`codex/v036-readme-handoff`
-- HEAD：`正式源/不可变v0.3.6为d000370b901a72e4f8ec8fe09cf8b837f2579f0c；README与发布交接在后续PR，精确头见Git。`
-- 远端 HEAD：`PR50/51已合并；四个应用索引、固件索引及GitHub/Gitee正式标签已核对。`
-- 工作树：唯一原工作区及源码子目录保留；测试/构建证据位于F盘。
-- 当前任务：0.3.6正式发布完成：香港COS主下载，两个GitHub各7附件，Gitee实际Skill及安装包GitHub备用；正式索引一致，原生更新/实装/Skill升级通过。preview与旧测试包已撤下并保留恢复归档，Dot网站更新任务已发送，临时SSH撤销并验证拒绝。README取消固定版本说明，补齐功能/下载/更新/诊断；与本交接走后续文档PR，不移动发布标签。详见v036-release-handoff.md。
+- 更新时间：`2026-10-25T17:49:24+08:00`
+- 分支：`codex/firmware-keil-coexist`
+- HEAD：`独立固件发布记录与catalog后续PR；精确提交见Git。`
+- 远端 HEAD：`main基础a57bd48b；正式firmware索引已同步，详见验证记录。`
+- 工作树：使用隔离固件发布工作树；构建与发布证据保存在F盘。
+- 当前任务：MicroLink V4.7.1/V3.6.7/V2.9.2独立正式发布：上海COS+双GitHub+Gitee三文件全SHA、8索引一致、GET/HEAD及备用通过；HPMLink V4.7.0与应用/Skill 0.3.6保持。上海保护扩到14资产且周期/state/8/9GiB/到期锁停不变。49项升级回归通过；未重新刷三份升版固件。已通知Dot更新网站，源码catalog/报告走PR待整合。见firmware-keil-coexist-20261025.md。
 - 状态：`complete`
 
 ## 里程碑
 
+- **Keil共存固件独立发布** — `complete`。MicroLink V4.7.1/V3.6.7/V2.9.2正式索引及三渠道同步，HPMLink不变。仅软件/构建与下载渠道验证，未重新操作硬件。
 - **0.3.6正式版** — `complete`。PR50/51正式源d000370b；Windows签名/Skill/SiteAgent、COS+GitHub/Gitee渠道、实装与升级通过，preview撤下、Dot已通知、临时SSH撤销。README与交接单独后续PR。见v036-release-handoff.md。
 - **0.3.5正式版** — `complete`。PR43合并源2f474f60372e。Windows/Skill/三平台/SiteAgent与17附件、5签名、3渠道通过；全局Skill同步、原生退出资源释放。V3.6.5/V4.6.9独立发布。详见v035-release-handoff.md和v035-probe-firmware.md。
 - **0.3.4正式版** — `complete`。不可变源a8fd3fab0403，PR40正式发布；PR41已保存正式Web/交接，合并提交185678c59623。17附件、5份验签、3渠道及实装/Skill通过。07846c1a记录后续清理完成，本次补入0.3.5；见v034-release-handoff.md及v034-workspace-cleanup.md。
 - **0.3.3正式版** — `complete`。源11616f80，PR38；Windows/ARM/Linux/Intel包、五份签名、三渠道核对和本地Skill更新完成。正式归档已回原工作空间；见v033-release-handoff.md。
 - **0.3.2正式版** — `complete`。源3d511e94，PR35/36；三平台原生构建38028928283。Windows实装、五份更新验签、三个渠道已核对，见v032-release-handoff.md。
-- **0.3.1正式版** — `complete`。PR33合并，源1d61159d；签名NSIS/Skill/SiteAgent与三端索引完成，最终提取包检查通过。见v031-release-handoff.md。
 
 ## 验证证据
 

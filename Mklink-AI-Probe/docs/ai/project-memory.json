@@ -1,22 +1,27 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-25T01:14:05+08:00",
+  "updated_at": "2026-10-25T17:49:24+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
-    "branch": "codex/v036-readme-handoff",
-    "head": "正式源/不可变v0.3.6为d000370b901a72e4f8ec8fe09cf8b837f2579f0c；README与发布交接在后续PR，精确头见Git。",
-    "remote_head": "PR50/51已合并；四个应用索引、固件索引及GitHub/Gitee正式标签已核对。",
-    "working_tree": "唯一原工作区及源码子目录保留；测试/构建证据位于F盘。"
+    "branch": "codex/firmware-keil-coexist",
+    "head": "独立固件发布记录与catalog后续PR；精确提交见Git。",
+    "remote_head": "main基础a57bd48b；正式firmware索引已同步，详见验证记录。",
+    "working_tree": "使用隔离固件发布工作树；构建与发布证据保存在F盘。"
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
     "status": "complete",
-    "current_task": "0.3.6正式发布完成：香港COS主下载，两个GitHub各7附件，Gitee实际Skill及安装包GitHub备用；正式索引一致，原生更新/实装/Skill升级通过。preview与旧测试包已撤下并保留恢复归档，Dot网站更新任务已发送，临时SSH撤销并验证拒绝。README取消固定版本说明，补齐功能/下载/更新/诊断；与本交接走后续文档PR，不移动发布标签。详见v036-release-handoff.md。"
+    "current_task": "MicroLink V4.7.1/V3.6.7/V2.9.2独立正式发布：上海COS+双GitHub+Gitee三文件全SHA、8索引一致、GET/HEAD及备用通过；HPMLink V4.7.0与应用/Skill 0.3.6保持。上海保护扩到14资产且周期/state/8/9GiB/到期锁停不变。49项升级回归通过；未重新刷三份升版固件。已通知Dot更新网站，源码catalog/报告走PR待整合。见firmware-keil-coexist-20261025.md。"
   },
   "milestones": [
+    {
+      "name": "Keil共存固件独立发布",
+      "status": "complete",
+      "notes": "MicroLink V4.7.1/V3.6.7/V2.9.2正式索引及三渠道同步，HPMLink不变。仅软件/构建与下载渠道验证，未重新操作硬件。"
+    },
     {
       "name": "0.3.6正式版",
       "status": "complete",
@@ -41,11 +46,6 @@
       "name": "0.3.2正式版",
       "status": "complete",
       "notes": "源3d511e94，PR35/36；三平台原生构建38028928283。Windows实装、五份更新验签、三个渠道已核对，见v032-release-handoff.md。"
-    },
-    {
-      "name": "0.3.1正式版",
-      "status": "complete",
-      "notes": "PR33合并，源1d61159d；签名NSIS/Skill/SiteAgent与三端索引完成，最终提取包检查通过。见v031-release-handoff.md。"
     }
   ],
   "verification": [
