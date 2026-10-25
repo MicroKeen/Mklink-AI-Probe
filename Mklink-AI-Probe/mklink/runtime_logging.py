@@ -199,7 +199,7 @@ def runtime_diagnostics(directory, *, max_bytes=MAX_BYTES, backup_count=BACKUP_C
                 output.write(tail)
                 output.truncate()
     handler = RotatingFileHandler(path, maxBytes=max_bytes, backupCount=backup_count,
-                                  encoding='utf-8', errors='backslashreplace')
+                                  encoding='utf-8', errors='backslashreplace', delay=True)
     handler.terminator = ''
     stream = _DiagnosticStream(handler)
     previous_errors = logging.raiseExceptions
@@ -207,7 +207,10 @@ def runtime_diagnostics(directory, *, max_bytes=MAX_BYTES, backup_count=BACKUP_C
     logging.raiseExceptions = False
     try:
         from mklink.connection_diagnostics import connection_log
-        with connection_log(directory), redirect_stdout(stream), redirect_stderr(stream), _native_diagnostics(stream):
+        # Reserve absent CRT standard descriptors before either log opens a file.
+        # Otherwise Python 3.12 windowless launches can allocate fd 1/2 to a log,
+        # then dup2 redirects that very log into its own diagnostic pipe.
+        with _native_diagnostics(stream), connection_log(directory), redirect_stdout(stream), redirect_stderr(stream):
             try:
                 yield
             except BaseException:

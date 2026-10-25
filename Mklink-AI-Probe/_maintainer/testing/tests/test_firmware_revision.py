@@ -121,6 +121,6 @@ def test_newer_same_version_mirror_wins_and_bad_download_falls_back(monkeypatch,
 def test_packaged_catalog_pins_all_four_delivery_products():
     entries = fc.bundled_firmwares()
     assert {(i.family,i.model,i.version_str) for i in entries} == {
-        ('microlink','V2','V2.9.1'),('microlink','V3','V3.6.6'),
-        ('microlink','V4','V4.7.0'),('hpmlink','V4','V4.7.0')}
+        ('microlink','V2','V2.9.2'),('microlink','V3','V3.6.7'),
+        ('microlink','V4','V4.7.1'),('hpmlink','V4','V4.7.0')}
     assert all(i.sha256 and i.size and i.build_id and 'github' in i.download_urls for i in entries)

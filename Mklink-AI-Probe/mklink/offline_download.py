@@ -13,6 +13,7 @@ import tempfile
 from typing import Callable, Mapping, Optional, Sequence, Union
 
 from mklink.file_content import copy_verified
+from mklink.cmsis_dap.h7_dualcore import uses_cm7_flash
 from mklink.offline_security import OfflineSecurityPlan, resolve_offline_security
 from mklink.hpm_offline_otp import OfflineOtp, resolve as resolve_hpm_otp, script_lines as otp_script_lines
 from mklink.hpm_isp_offline_otp import IspOfflineOtp, resolve as resolve_isp_otp
@@ -223,6 +224,11 @@ def parse_offline_config(
         raise OfflineDownloadError("Unsupported completion reset mode")
     if hpm_target and reset_mode is not None:
         raise OfflineDownloadError("ARM completion reset mode cannot be used with HPM")
+    if uses_cm7_flash(target_part or "") and reset_after_download:
+        if reset_mode == "power_cycle":
+            raise OfflineDownloadError("STM32H7 dual-core completion requires system or hardware reset")
+        # Legacy void reset/run calls cannot report whether both cores recovered.
+        reset_mode = reset_mode or "software"
     reset_voltage_mv = None
     if reset_after_download and reset_mode == "power_cycle":
         reset_voltage_mv = payload.get("reset_voltage_mv")
@@ -466,6 +472,7 @@ def _program_lines(config: OfflineDownloadConfig, indent: str) -> list[str]:
         return lines
 
     algorithms = {algorithm.id: algorithm for algorithm in config.algorithms}
+    core_profile = ", 1" if uses_cm7_flash(config.target_part or "") else ""
     lines = []
     active_algorithm = None
     if config.erase_all_before_download:
@@ -473,7 +480,7 @@ def _program_lines(config: OfflineDownloadConfig, indent: str) -> list[str]:
         lines.extend(
             (
                 f'{indent}if load.flm("FLM/{erase_algorithm.file_name}", '
-                f"0x{erase_algorithm.flash_base:08X}, 0x{erase_algorithm.ram_base:08X}) != 0:",
+                f"0x{erase_algorithm.flash_base:08X}, 0x{erase_algorithm.ram_base:08X}{core_profile}) != 0:",
                 f'{indent}    print("load flm failed: {erase_algorithm.file_name}")',
                 f"{indent}    abort = True",
                 f"{indent}    break",
@@ -490,7 +497,7 @@ def _program_lines(config: OfflineDownloadConfig, indent: str) -> list[str]:
             lines.extend(
                 (
                     f'{indent}if load.flm("FLM/{algorithm.file_name}", '
-                    f"0x{algorithm.flash_base:08X}, 0x{algorithm.ram_base:08X}) != 0:",
+                    f"0x{algorithm.flash_base:08X}, 0x{algorithm.ram_base:08X}{core_profile}) != 0:",
                     f'{indent}    print("load flm failed: {algorithm.file_name}")',
                     f"{indent}    abort = True",
                     f"{indent}    break",
@@ -642,7 +649,8 @@ def generate_offline_script(config: OfflineDownloadConfig) -> str:
     if config.model == "V2":
         return _generate_v2_script(config)
     read_idcode = ("hpm.read_idcode()" if config.is_hpm else
-                   "cmd.read_swd_idcode()" if config.reset_mode is not None else "cmd.get_idcode()")
+                   "cmd.read_swd_idcode()" if config.reset_mode is not None or
+                   uses_cm7_flash(config.target_part or "") else "cmd.get_idcode()")
     # A floating/disconnecting JTAG line can yield an inconsistent scan (-4).
     # It proves neither presence nor absence; retry within the same deadline.
     idcode_error = "idcode < 0 and idcode != -4" if config.is_hpm else "idcode < 0"
@@ -948,9 +956,13 @@ def _transactional_copy(
 
 
 def required_verify_capabilities(config: OfflineDownloadConfig) -> tuple[str, ...]:
-    if config.verify_after_download:
-        return ()
-    return tuple(sorted({f"OFFLINE_{firmware.format.upper()}_VERIFY=1" for firmware in config.firmwares}))
+    """Deployment requirements; retain the existing helper name for callers."""
+    required = set()
+    if not config.verify_after_download:
+        required.update(f"OFFLINE_{firmware.format.upper()}_VERIFY=1" for firmware in config.firmwares)
+    if uses_cm7_flash(config.target_part or ""):
+        required.add("OFFLINE_H7_DUALCORE=1")
+    return tuple(sorted(required))
 
 
 def require_verify_capabilities(config: OfflineDownloadConfig, response: str) -> None:
@@ -958,7 +970,7 @@ def require_verify_capabilities(config: OfflineDownloadConfig, response: str) ->
     missing = [capability for capability in required_verify_capabilities(config) if capability not in lines]
     if missing:
         raise OfflineDownloadError(
-            "请升级下载器固件后再关闭烧录后校验 / Upgrade downloader firmware: " + ", ".join(missing)
+            "请升级下载器固件以支持所选脱机烧录配置 / Upgrade downloader firmware: " + ", ".join(missing)
         )
 
 

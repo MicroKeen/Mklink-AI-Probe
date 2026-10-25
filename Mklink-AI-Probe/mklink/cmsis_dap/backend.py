@@ -18,6 +18,10 @@ from .errors import FlashError, FlashErrorCode
 from .images import ImageInspector
 from .models import ImageInspection, ImageSegment, MemoryRegion
 from .pyocd_runtime import import_pyocd_attr
+from .h7_dualcore import (
+    uses_cm7_flash, install_pack_compatibility, bind_cm7, secondary_core,
+    prepare_flash as prepare_h7_flash, finish_system_reset,
+)
 
 
 _LOCKED_ERROR_PATTERN = re.compile(
@@ -1214,6 +1218,12 @@ class PyOcdBackend:
                     options["reset_type"] = "hardware"
                 if resolved_pack is not None:
                     options["pack"] = resolved_pack
+                if uses_cm7_flash(target):
+                    if resolved_pack is None:
+                        raise FlashError(FlashErrorCode.TARGET_NOT_SUPPORTED,
+                            "STM32H7 dual-core Flash requires its CMSIS-Pack CM7 configuration")
+                    install_pack_compatibility()
+                    options["primary_core"] = 0
                 session = factory(resolved_probe, options)
                 delegate = getattr(session, "delegate", None)
                 if resolved_pack is not None:
@@ -1244,6 +1254,8 @@ class PyOcdBackend:
                     session.target.dp.connect()
                 else:
                     session.open()
+                if uses_cm7_flash(target):
+                    bind_cm7(session.target)
                 core = getattr(session.target, "selected_core", None)
                 if not nrf54l_recovery_connect and core is not None and "xpsr" not in core.core_registers.by_name:
                     # pyOCD can log and swallow component initialization errors.
@@ -2593,7 +2605,20 @@ class PyOcdBackend:
 
         if not self._algorithm_reset_required or self._algorithm_reset_done:
             return
-        target.reset_and_halt()
+        dual_h7 = uses_cm7_flash((self._connection_arguments or {}).get("target", ""))
+        if dual_h7:
+            bind_cm7(target)
+            secondary_core(target)
+            if self._reset_mode == "core":
+                raise FlashError(FlashErrorCode.CONNECT_FAIL,
+                    "STM32H7 dual-core Flash requires system or hardware reset, not core-only reset")
+            # Failed/partial Flash and program-without-reset must never resume
+            # a RAM algorithm or CM4's stale application PC during teardown.
+            self._require_session().options["resume_on_disconnect"] = False
+        if dual_h7:
+            prepare_h7_flash(target, hardware_reset=self._reset_mode == "hardware")
+        else:
+            target.reset_and_halt()
         # Some probes/targets acknowledge a software reset while retaining the
         # running RTOS context. Do not erase and then run an FLM on its PSP or
         # from an exception handler. Do not silently substitute a physical reset.
@@ -2787,7 +2812,12 @@ class PyOcdBackend:
                 "default", "hardware", "software", "core", "system", "power-cycle"
             }:
                 raise ValueError(f"unknown reset mode: {mode}")
+            dual_h7 = self._algorithm_reset_done and uses_cm7_flash(
+                (self._connection_arguments or {}).get("target", ""))
             try:
+                if dual_h7 and mode == "core":
+                    raise FlashError(FlashErrorCode.RESET_FAIL,
+                        "STM32H7 dual-core Flash requires system or hardware reset")
                 if self._nrf54l_lock_pending:
                     if mode != "default":
                         raise ValueError("nRF54L15 lock requires CTRL-AP reset")
@@ -2842,7 +2872,10 @@ class PyOcdBackend:
                                 )
                         self._py32f030_unlock_transition_pending = False
                     return
-                if mode == "default":
+                if dual_h7 and mode in {"default", "software", "system"}:
+                    Target = import_pyocd_attr("pyocd.core.target", "Target")
+                    session.target.reset(Target.ResetType.SYSTEM)
+                elif mode == "default":
                     session.target.reset()
                 else:
                     Target = import_pyocd_attr("pyocd.core.target", "Target")
@@ -2865,6 +2898,9 @@ class PyOcdBackend:
                             "Flash operation finished but reset did not start the target "
                             f"(state={state.name}); check the reset connection/method.",
                         )
+                if dual_h7:
+                    finish_system_reset(session.target)
+                    session.options["resume_on_disconnect"] = True
                 if isinstance(trace_delegate, _TraceStateDelegate) and not self._security_family:
                     trace_delegate.enabled = True
             except FlashError:
