@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-25T22:02:43+08:00",
+  "updated_at": "2026-10-25T22:16:05+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
@@ -14,7 +14,7 @@
   },
   "current_session": {
     "status": "v040_released_handoff",
-    "current_task": "0.4.0正式包、桌面/Web/CLI/MCP与H743回归、公开Skill升级、COS及Gitee备用已验收；正式索引已切换、preview撤下。Dot已确认收到网站更新任务。交接PR记录发布证据，并将应用/UF2/V2发布脚本改为只维护新MicroKeen GitHub和Gitee；正式产品标签不移动。"
+    "current_task": "0.4.0正式包、桌面/Web/CLI/MCP与H743回归、公开Skill升级、COS及Gitee备用已验收；正式索引已切换、preview撤下。Dot已更新网站；实际页面默认三个软件组件均为0.4.0、历史切换与新GitHub备用已核验。交接PR记录发布证据，并将应用/UF2/V2发布脚本改为只维护新MicroKeen GitHub和Gitee；正式产品标签不移动。"
   },
   "milestones": [
     {
@@ -51,7 +51,7 @@
   "verification": [
     {
       "area": "0.4.0正式发布验收",
-      "result": "正式源0c9c2d97：5553Python/2skip、1104GUI、生产构建、精确头三CI通过。签名NSIS覆盖安装exit0，3626载荷/211Python/41Web一致；原生健康3.783秒、无host Python，正常关闭exit0释放端点。桌面/Web后台诊断导出、导航字体和官网链接、冻结CLI/MCP/FLM/SVD/SiteAgent通过。公开0.3.6→0.4.0 Skill实际升级2623文件一致、用户文件保留、二次无更新、MCP模糊20候选；Gitee隔离备用及全局Skill同步通过。"
+      "result": "正式源0c9c2d97：5553Python/2skip、1104GUI、生产构建、精确头三CI通过。签名NSIS覆盖安装exit0，3626载荷/211Python/41Web一致；原生健康3.783秒、无host Python，正常关闭exit0释放端点。桌面/Web后台诊断导出、导航字体和官网链接、冻结CLI/MCP/FLM/SVD/SiteAgent通过。公开0.3.6→0.4.0 Skill实际升级2623文件一致、用户文件保留、二次无更新、MCP模糊20候选；Gitee隔离备用及全局Skill同步通过。 发布工具收尾回归：5553通过/2skip，四项缺DLL环境错误补齐后全部重跑通过，共5557项验证；1104GUI、生产构建通过。网站默认0.4.0与0.3.6历史切换实际验证通过。"
     },
     {
       "area": "上海COS正式0.4.0与90/95保护",
@@ -110,7 +110,6 @@
     "nRF54L15 GUI保护闭环、全部物理擦除/拔插/休眠/断电场景、电源外部精度校准未全部认证。VCC每次改动必须确认具体电压，HPM已锁定OTP不得重放。 已知无可靠扇区表的26个FLM禁用扇区操作；重叠算法需要匹配Bank模式。 HPM5301组18/19永久锁定的历史状态及用户字先写/组锁最后、全部固件独立校验后才写OTP等边界见docs/ai/hpm-offline-otp-handoff.md；接手重新确认芯片，其他型号不继承验收。 UART OTP已实现ROM write-memory APIv2，独立熔丝/影子/临时锁读语义仍未知并如实显示；以ROM写入状态及回读为准。配套3d96dbb已实机验证HPM5301全部128字读取和用户批准的Word69 0→1单次写入回读；其余型号/区域未实写，新数据须具体授权。多Word顺序执行不可回滚。CSV原生选择器自动化未完成。 V3直连USB、RTT空采集约30分钟掉线仍未定因；再次复现先导出诊断再拔插，本轮V4短测不能关闭。"
   ],
   "next_actions": [
-    "确认Dot网站0.4.0默认版本更新的最终回执；任务已经发送且Dot已明确确认。",
     "双核脱机仍需真实M7/M4双核板正向验证与复位后两核运行检查，私有候选不得公开替换正式固件。",
     "V3空RTT约30分钟掉线再次复现先导出诊断，不拔插后再取证；保留历史未闭环项。",
     "公网远程服务中继为下个版本任务；本次不实施。",
