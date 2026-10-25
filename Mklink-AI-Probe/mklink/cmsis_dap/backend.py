@@ -20,7 +20,7 @@ from .models import ImageInspection, ImageSegment, MemoryRegion
 from .pyocd_runtime import import_pyocd_attr
 from .h7_dualcore import (
     uses_cm7_flash, install_pack_compatibility, bind_cm7, secondary_core,
-    halt_other_cores, finish_system_reset,
+    prepare_flash as prepare_h7_flash, finish_system_reset,
 )
 
 
@@ -2615,9 +2615,10 @@ class PyOcdBackend:
             # Failed/partial Flash and program-without-reset must never resume
             # a RAM algorithm or CM4's stale application PC during teardown.
             self._require_session().options["resume_on_disconnect"] = False
-        target.reset_and_halt()
         if dual_h7:
-            halt_other_cores(target)
+            prepare_h7_flash(target, hardware_reset=self._reset_mode == "hardware")
+        else:
+            target.reset_and_halt()
         # Some probes/targets acknowledge a software reset while retaining the
         # running RTOS context. Do not erase and then run an FLM on its PSP or
         # from an exception handler. Do not silently substitute a physical reset.
