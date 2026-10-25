@@ -71,24 +71,33 @@ if os.name=='nt':
 @pytest.mark.parametrize('closed', ['1', '2', '1,2'])
 def test_windowless_missing_descriptors_are_restored(tmp_path, closed):
     result = subprocess.run([sys.executable, '-c', r'''
-import os,sys,threading
+import os,sys,threading,traceback,json
 from pathlib import Path
 from mklink.runtime_logging import runtime_diagnostics
 closed=[int(n) for n in sys.argv[2].split(',')]
 for fd in closed: os.close(fd)
 sys.stdout=sys.stderr=None
-with runtime_diagnostics(sys.argv[1]):
-    print('windowless Python')
-    os.write(1,b'windowless native\n')
-for fd in closed:
-    try: os.fstat(fd)
-    except OSError: pass
-    else: raise AssertionError('originally closed descriptor leaked')
-assert not any(t.name=='runtime-diagnostics' for t in threading.enumerate())
-text=(Path(sys.argv[1])/'runtime.log').read_text()
-assert 'windowless Python' in text and 'windowless native' in text
+try:
+    with runtime_diagnostics(sys.argv[1]):
+        print('windowless Python')
+        os.write(1,b'windowless native\n')
+    for fd in closed:
+        try: os.fstat(fd)
+        except OSError: pass
+        else: raise AssertionError('originally closed descriptor leaked')
+    assert not any(t.name=='runtime-diagnostics' for t in threading.enumerate())
+    text=(Path(sys.argv[1])/'runtime.log').read_text(encoding='utf-8')
+    assert 'windowless Python' in text and 'windowless native' in text, repr(text)
+    assert all(line.count('[pid=') == 1 for line in text.splitlines()), repr(text)
+    events=[json.loads(line)['event'] for line in (Path(sys.argv[1])/'connection.jsonl').read_text(encoding='utf-8').splitlines()]
+    assert events == ['runtime.started','runtime.stopped'], events
+except BaseException:
+    # Both output descriptors may be absent: stderr cannot explain CI failures.
+    (Path(sys.argv[1])/'failure.txt').write_text(traceback.format_exc(),encoding='utf-8')
+    raise SystemExit(1)
 ''', str(tmp_path), closed], capture_output=True, timeout=20)
-    assert result.returncode == 0, result.stderr
+    failure = tmp_path / 'failure.txt'
+    assert result.returncode == 0, failure.read_text(encoding='utf-8') if failure.exists() else result.stderr
 
 
 def test_idle_child_cannot_hold_diagnostic_shutdown_open(tmp_path):
