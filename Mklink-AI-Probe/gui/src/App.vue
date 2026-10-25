@@ -259,17 +259,21 @@ body {
   display: flex;
   gap: 2px;
 }
+.nav-tab, .external-link {
+  height: 44px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+}
 .nav-tab {
   background: none;
   border: none;
   padding: 10px 14px;
-  font-size: 13px;
-  font-weight: 500;
   color: var(--muted);
   cursor: pointer;
   border-bottom: 2px solid transparent;
   transition: color .15s, background-color .15s, border-color .15s;
-  font-family: var(--font-body);
   white-space: nowrap;
 }
 .nav-tab:hover { color: var(--fg); border-bottom-color: var(--border); }
@@ -289,10 +293,8 @@ body {
 .external-link {
   display: inline-flex;
   align-items: center;
-  height: 44px;
   padding: 0 10px;
   color: var(--muted);
-  font-size: 12px;
   text-decoration: none;
   white-space: nowrap;
   border-bottom: 2px solid transparent;
