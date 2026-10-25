@@ -286,3 +286,26 @@ def test_vector_catch_restore_failure_blocks_flash():
     t.cores[9].set_vector_catch = set_catch
     with pytest.raises(RuntimeError, match='reset-catch restore failed; Flash was not erased'):
         prepare_flash(t)
+
+
+def test_failed_halt_evidence_is_in_customer_diagnostic_zip(tmp_path, monkeypatch):
+    import io
+    import json
+    from mklink.connection_diagnostics import connection_log, export_bundle
+    monkeypatch.setattr('mklink.runtime.runtime_dir', lambda: tmp_path)
+    t = Target()
+    t.aps[2].write32 = lambda *args: None
+    with connection_log(tmp_path):
+        with pytest.raises(RuntimeError, match='did not latch'):
+            prepare_flash(t)
+    with ZipFile(io.BytesIO(export_bundle())) as archive:
+        rows = [json.loads(line) for name in archive.namelist() if name.endswith('.jsonl')
+                for line in archive.read(name).decode('utf-8').splitlines()]
+    row = next(row for row in rows if row['event'] == 'flash.h7_preparation_failed')
+    evidence = row['evidence']
+    assert evidence['stage'] == 'debug-domain-setup'
+    assert 'did not latch' in evidence['error']
+    assert evidence['DBGMCU_CR'] == '0x00000000'
+    assert evidence['cores'][0]['core'] == 'CM4' and evidence['cores'][0]['ap'] == 3
+    assert 'DHCSR' in evidence['cores'][0]
+    assert evidence['at'] and row['time']

@@ -13,6 +13,7 @@ import json
 import logging
 from datetime import datetime, timezone
 from threading import RLock
+from mklink.connection_diagnostics import event as diagnostic_event
 
 _LOCK = RLock()
 _PART = re.compile(r"^stm32h7(?:45|47|55|57)[a-z0-9]+$", re.I)
@@ -110,6 +111,7 @@ def prepare_flash(target, *, hardware_reset=False) -> None:
         error = exc
         evidence = _snapshot(target, stage, started)
         evidence["error"] = f"{type(exc).__name__}: {exc}"
+        diagnostic_event("flash.h7_preparation_failed", evidence=evidence)
         _LOG.error("H7 flash preparation failed: %s", json.dumps(evidence))
         raise RuntimeError(f"STM32H7 {stage}: {exc}; Flash was not erased. "
                            "Check CM4 boot/low-power state and NRST; export diagnostics. "
@@ -123,6 +125,7 @@ def prepare_flash(target, *, hardware_reset=False) -> None:
                 if error is None:
                     evidence = _snapshot(target, "CM4-reset-catch-restore", started)
                     evidence["error"] = f"{type(exc).__name__}: {exc}"
+                    diagnostic_event("flash.h7_preparation_failed", evidence=evidence)
                     _LOG.error("H7 flash preparation failed: %s", json.dumps(evidence))
                     raise RuntimeError("STM32H7 CM4 reset-catch restore failed; "
                                        f"Flash was not erased: {exc}. " + json.dumps(evidence)) from exc
