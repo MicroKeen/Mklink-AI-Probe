@@ -61,17 +61,20 @@ private key, SSH login, firmware operation, binary rebuild or release/tag update
   versions, and prohibits hard-coded COS signed URLs or infrastructure changes.
   Dot's earlier deployment report identifies website commit
   `fccbfd41843e5817d77da2fe9ce45c6099dcb980` and MicroBoot draft PR #12; its
-  latest follow-up result is still pending.
+  follow-up confirmed 20 stable-domain links, retained backups/history/model
+  separation, matching metadata, and nine historical downloads returning 200
+  with matching sizes. Dot reported no website changes were needed.
+- Stable application/Skill and both firmware indexes returned 200 and retained
+  stable download-domain paths, so the existing clients use the new resolver.
 
 ## Remaining closure
 
 - Closing the old Hong Kong bucket's public ACL requires Tencent's account
   identity verification. The console was left at the owner's WeChat QR prompt.
   Do not report the old bucket private until the save completes and public reads
-  are rejected. The retired Shanghai `kk-1300298079` also needs closure; permanent
-  deletion requires action-time confirmation under the browser policy.
-- Await Dot's follow-up website link check; notification and fresh-health/meter
-  verification are complete.
+  are rejected. The retired Shanghai `kk-1300298079` also requires identity
+  verification. Its two 2020 files (`start.png`, `timg.jpg`) remain untouched;
+  permanent deletion requires action-time confirmation under the browser policy.
 - Monitor data is delayed; ongoing transfers and issued URLs can finish, so this
   is a budget guard with a buffer, not a strict total-cost cap. Health reads,
   storage, requests and SCF costs remain separate.
