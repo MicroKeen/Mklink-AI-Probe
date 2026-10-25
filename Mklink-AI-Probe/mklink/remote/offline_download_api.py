@@ -133,6 +133,8 @@ def _pack_device_algorithms(pack_path: Path, part_number: str) -> list[tuple[obj
         "pyocd.target.pack.cmsis_pack", "CmsisPack"
     )
 
+    from mklink.cmsis_dap.h7_dualcore import install_pack_compatibility
+    install_pack_compatibility()
     pack = CmsisPack(str(pack_path))
     devices = [
         device for device in pack.devices
