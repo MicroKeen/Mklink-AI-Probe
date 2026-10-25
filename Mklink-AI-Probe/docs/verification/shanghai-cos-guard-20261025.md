@@ -100,3 +100,23 @@ private key, SSH login, firmware operation, binary rebuild or release/tag update
 
 Local evidence and deployment config live under the configured build root's
 `artifacts/shanghai-download-guard`; screenshots and signed URLs are not committed.
+
+## 100 GB package update (2026-10-25)
+
+The maintainer confirmed purchasing the mainland 100 GB outbound package.
+The console shows it valid through 2026-11-25 23:59:59 Asia/Shanghai, with manual
+renewal. The former 10 GB package is also present; the guard nevertheless uses
+only the requested 90 GiB warning and 95 GiB stop thresholds.
+
+The deployed function was read back after deployment and contains warning
+96,636,764,160 bytes and stop 102,005,473,280 bytes. The cycle identifier,
+exclusive expiry 1795622400, monitoring dimensions, state and accumulated usage
+were preserved. A fresh production lease remained ready at 903,210,754 bytes.
+The alarm is now named `MKLink-Shanghai-COS-90GB-95GB`; its existing SCF error
+metric, one-minute evaluation and recipient template remain unchanged.
+
+The guard suite now has 15 passing cases, including the new exact 90/95 GiB
+boundaries, preserved high-water usage and expiry latch even if a later
+configuration extends validity. No calendar reset or unattended reopening was
+introduced. Existing short-lived leases and monitoring delay still mean this is
+a buffered download cutoff, not an absolute billing cap.
