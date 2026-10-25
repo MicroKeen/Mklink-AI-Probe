@@ -32,6 +32,7 @@ from mklink.firmware_check import (  # noqa: E402
 )
 from _maintainer.release.publish_update_release import (  # noqa: E402
     _asset_url,
+    github_channels,
     _gitee_push,
     _run,
     ensure_gitee_release,
@@ -301,6 +302,7 @@ def publish_firmware(
     *, root: Path, github_repo: str, gitee_repo: str, token: str,
     dry_run: bool = False,
 ) -> dict[str, object]:
+    github_channels(github_repo)  # Enforce the same retired-repository boundary.
     local = scan_firmware_directory(root)
     files = [Path(entry["path"]) for entry in local.values()]
     existing = load_github_manifest(github_repo)
@@ -378,7 +380,7 @@ def publish_firmware(
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--firmware-dir", type=Path, default=REPOSITORY / "MK-Firmware")
-    parser.add_argument("--github-repo", default="Aladdin-Wang/Mklink-AI-Probe")
+    parser.add_argument("--github-repo", default="MicroKeen/Mklink-AI-Probe")
     parser.add_argument("--gitee-repo", default="Aladdin-Wang/Mklink-AI-Probe")
     parser.add_argument("--dry-run", action="store_true")
     return parser

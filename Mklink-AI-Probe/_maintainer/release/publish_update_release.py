@@ -35,9 +35,11 @@ LEGACY_GITHUB_REPO = "Aladdin-Wang/Mklink-AI-Probe"
 
 
 def github_channels(repo: str) -> tuple[tuple[str, str], ...]:
-    """Keep the old index reachable for clients that have not upgraded yet."""
+    """Publish only active channels; legacy GitHub was retired by the maintainer."""
+    if repo == LEGACY_GITHUB_REPO:
+        raise ValueError("Legacy GitHub publication is retired; use MicroKeen/Mklink-AI-Probe")
     if repo == PRIMARY_GITHUB_REPO:
-        return ((repo, "release"), (LEGACY_GITHUB_REPO, "updates"))
+        return ((repo, "release"),)
     return ((repo, "updates"),)
 
 
@@ -539,6 +541,7 @@ def publish_update_release(
     updater_installer: Path, updater_signature: Path, github_repo: str,
     gitee_repo: str, gitee_token: str, repository: Path,
 ) -> dict[str, object]:
+    github_channels(github_repo)  # Reject retired targets before any mutation.
     tag = f"v{version}"
     title = f"Mklink AI Probe {tag}"
     required = validate_release_preflight(

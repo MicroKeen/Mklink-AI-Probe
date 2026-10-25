@@ -135,3 +135,18 @@ def test_publish_rejects_manifest_before_remote_asset_writes(
         )
 
     assert writes == []
+
+
+def test_firmware_default_uses_active_github_repository(publisher):
+    assert publisher._parser().parse_args([]).github_repo == "MicroKeen/Mklink-AI-Probe"
+
+
+def test_retired_repository_rejected_before_firmware_read_or_upload(publisher, tmp_path):
+    with pytest.raises(ValueError, match="Legacy GitHub publication is retired"):
+        publisher.publish_firmware(root=tmp_path / "missing", github_repo="Aladdin-Wang/Mklink-AI-Probe", gitee_repo="Aladdin-Wang/Mklink-AI-Probe", token="unused")
+
+
+def test_v2_retired_repository_rejected_before_any_repository_access(tmp_path):
+    from _maintainer.firmware.publish_v2_firmware import publish
+    with pytest.raises(ValueError, match="Legacy GitHub publication is retired"):
+        publish(tmp_path / "missing.rbl", ["MicroKeen/Mklink-AI-Probe", "Aladdin-Wang/Mklink-AI-Probe"], apply=True)
