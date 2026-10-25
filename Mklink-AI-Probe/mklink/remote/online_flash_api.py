@@ -2245,6 +2245,8 @@ def _pack_memory_regions(part_number: str, pack_path: Path) -> List[MemoryRegion
         "pyocd.target.pack.cmsis_pack", "CmsisPack"
     )
 
+    from mklink.cmsis_dap.h7_dualcore import install_pack_compatibility
+    install_pack_compatibility()
     pack = CmsisPack(str(pack_path))
     matches = [
         device for device in pack.devices

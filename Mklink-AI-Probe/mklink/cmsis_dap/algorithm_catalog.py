@@ -42,6 +42,7 @@ class FlashAlgorithm:
     custom_sha256: Optional[str] = None
     builtin_blob_path: Optional[str] = None
     builtin_blob_sha256: Optional[str] = None
+    processor: Optional[str] = None
     page_size: int = 0
     sector_sizes: Tuple[Tuple[int, int], ...] = ()
 
@@ -138,6 +139,8 @@ def _pack_algorithms(record: TargetRecord, part_number: str) -> list[FlashAlgori
         "pyocd.target.pack.cmsis_pack", "CmsisPack"
     )
 
+    from .h7_dualcore import install_pack_compatibility
+    install_pack_compatibility()
     pack = CmsisPack(str(pack_path))
     try:
         devices = [
@@ -203,6 +206,7 @@ def _pack_algorithms(record: TargetRecord, part_number: str) -> list[FlashAlgori
                 pack_sha256=pack_digest,
                 pack_algorithm_index=index,
                 algorithm_path=str(name),
+                processor=element.attrib.get("Pname"),
             ))
         return algorithms
     finally:
@@ -319,6 +323,8 @@ def _extract_bytes(algorithm: FlashAlgorithm) -> bytes:
         "pyocd.target.pack.cmsis_pack", "CmsisPack"
     )
 
+    from .h7_dualcore import install_pack_compatibility
+    install_pack_compatibility()
     pack = CmsisPack(str(pack_path))
     try:
         devices = [

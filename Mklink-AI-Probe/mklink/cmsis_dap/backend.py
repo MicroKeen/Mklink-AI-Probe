@@ -18,6 +18,7 @@ from .errors import FlashError, FlashErrorCode
 from .images import ImageInspector
 from .models import ImageInspection, ImageSegment, MemoryRegion
 from .pyocd_runtime import import_pyocd_attr
+from .h7_dualcore import uses_cm7_flash, install_pack_compatibility, bind_cm7, halt_other_cores
 
 
 _LOCKED_ERROR_PATTERN = re.compile(
@@ -1214,6 +1215,12 @@ class PyOcdBackend:
                     options["reset_type"] = "hardware"
                 if resolved_pack is not None:
                     options["pack"] = resolved_pack
+                if uses_cm7_flash(target):
+                    if resolved_pack is None:
+                        raise FlashError(FlashErrorCode.TARGET_NOT_SUPPORTED,
+                            "STM32H7 dual-core Flash requires its CMSIS-Pack CM7 configuration")
+                    install_pack_compatibility()
+                    options["primary_core"] = 0
                 session = factory(resolved_probe, options)
                 delegate = getattr(session, "delegate", None)
                 if resolved_pack is not None:
@@ -1244,6 +1251,8 @@ class PyOcdBackend:
                     session.target.dp.connect()
                 else:
                     session.open()
+                if uses_cm7_flash(target):
+                    bind_cm7(session.target)
                 core = getattr(session.target, "selected_core", None)
                 if not nrf54l_recovery_connect and core is not None and "xpsr" not in core.core_registers.by_name:
                     # pyOCD can log and swallow component initialization errors.
@@ -2593,7 +2602,12 @@ class PyOcdBackend:
 
         if not self._algorithm_reset_required or self._algorithm_reset_done:
             return
+        dual_h7 = uses_cm7_flash((self._connection_arguments or {}).get("target", ""))
+        if dual_h7:
+            bind_cm7(target)
         target.reset_and_halt()
+        if dual_h7:
+            halt_other_cores(target)
         # Some probes/targets acknowledge a software reset while retaining the
         # running RTOS context. Do not erase and then run an FLM on its PSP or
         # from an exception handler. Do not silently substitute a physical reset.
