@@ -11,11 +11,11 @@
         >{{ tab.label }}</button>
         <a
           class="external-link"
-          data-testid="online-docs-link"
-          href="https://microboot.readthedocs.io/zh-cn/latest/tools/microlink/microlink/"
+          data-testid="official-website-link"
+          href="https://microkeenai.com/"
           target="_blank"
           rel="noopener noreferrer"
-        >{{ tr('在线文档', 'Docs') }}</a>
+        >{{ tr('官方网站', 'Website') }}</a>
         <details class="store-menu" data-testid="taobao-menu">
           <summary class="external-link" data-testid="taobao-link">{{ tr('淘宝店铺', 'Stores') }}</summary>
           <div class="store-menu-panel">
