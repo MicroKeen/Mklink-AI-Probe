@@ -25,6 +25,10 @@ jobs:
         shell: pwsh
         working-directory: Mklink-AI-Probe
         run: ./scripts/build_workspace.ps1 -Action run -Executable python -ArgumentList @('-m', 'pip', 'install', '.[mcp]', 'pytest==8.4.2')
+      - name: Check COS budget guard and fallback leases
+        shell: pwsh
+        working-directory: Mklink-AI-Probe
+        run: ./scripts/build_workspace.ps1 -Action run -Executable python -ArgumentList @('-m', 'unittest', 'discover', '-s', '_maintainer/release/cos_guard', '-p', 'test_guard.py', '-v')
       - name: Check admission, jobs, identity, adapters and process locks
         shell: pwsh
         working-directory: Mklink-AI-Probe
