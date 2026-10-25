@@ -107,4 +107,23 @@ RUNNING、SLEEPING、RESET、LOCKUP 均不当作成功。每个确认窗口最�
 双核非 HALTED 状态、寄存器故障、显式复位选择，以及在线/脱机/诊断回归。
 首轮扩展测试因未设置已有 FLM 资源路径发生 21 项资源白名单失败（519 通过），
 配置已验证资源目录后重跑通过；未删除失败用例或放宽算法白名单。
-Windows 新候选资格检查待完成；旧包证据仅适用于前面的 7c3b2f56。
+补充结构化诊断导出后，末次 50 项受影响用例通过（累计 580 个不同用例）。
+直接生成导出 ZIP 并断言失败阶段、时间、CM4/AP3、DHCSR、DBGMCU_CR 等字段。
+普通 Python 日志不会自动进入诊断 ZIP，因此明确调用结构化事件通道。
+
+第二轮 Windows 产品源 `3b11b286582ad86fd289335e918b665cf2b68fbf`，包名
+`Mklink-AI-Probe-v0.3.6-h7-secondary-halt-3b11b286-Setup.exe`，184431842 字节，
+SHA256 `846ecf90a5cc40b44f38227bbd0608d4991fc90ab5cc55b3ced18002d94285c7`。
+提取包 211 Python/41 Web 与候选源及构建 Web 完全一致；全部 3626 载荷与构建输出核对，
+主程序唯一 3 字节差异为 Tauri 将 BUNDLE_TYPE_VAR_UNK 改为 BUNDLE_TYPE_VAR_NSS。
+共享 Cargo 缓存含历史 Web/egg-info，不能用其文件集合要求新安装器携带过时资源；
+核验以本次提取的完整载荷集合为准，另以本次 Web 构建及生产源校验必需文件。
+
+限制 PATH 后，冻结 MCP、常用 FLM、SVD、四系列双核 Pack/RAM、后台诊断导出、
+BIN/HEX 校验预览和全部 Web 资源通过。隔离原生窗口健康就绪 4.124 秒，
+配置/在线烧录页面正常，无主机 Python 子进程；正常退出 0，后台及端口释放。
+本轮没有连接或烧写硬件，也未覆盖现有安装。构建新包前曾中止一次构建，以补齐
+结构化导出；最终包重新完整构建，未交付中止构建的产物。
+
+产品源 CI 的 feedback-contract/shared-gui-contract 已通过，shared-runtime-contract
+仍在执行；不把前轮 CI 当作本轮通过。旧包资格证据仅适用于前面的 7c3b2f56。
