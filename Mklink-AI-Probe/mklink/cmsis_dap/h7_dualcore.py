@@ -61,9 +61,20 @@ def bind_cm7(target) -> None:
     target.selected_core = matches[0].core_number
 
 
+def secondary_core(target):
+    """Do not erase shared Flash while an undiscovered CM4 may still execute."""
+    matches = [core for core in target.cores.values()
+               if core.node_name == "CM4" and getattr(core.ap.address, "apsel", None) == 3]
+    if len(matches) != 1:
+        raise RuntimeError("STM32H7 dual-core Flash requires an accessible CM4 on AP3 "
+                           "to stop both cores safely; check core boot/debug configuration")
+    return matches[0]
+
+
 def halt_other_cores(target) -> None:
     """Called only for an authorized erase/program, after resetting CM7."""
     bind_cm7(target)
+    secondary_core(target)
     from .pyocd_runtime import import_pyocd_attr
     State = import_pyocd_attr("pyocd.core.target", "Target").State
     for core in target.cores.values():
@@ -75,3 +86,19 @@ def halt_other_cores(target) -> None:
             if time.monotonic() >= deadline:
                 raise RuntimeError("STM32H7 secondary core did not halt; Flash was not erased")
             time.sleep(0.01)
+
+
+def finish_system_reset(target) -> None:
+    """Release CM4's debug halt only after a successful whole-system reset.
+
+    Never use this after a core-only reset or a failed Flash operation: CM4's
+    previous PC could refer to an application that has just been replaced.
+    """
+    from .pyocd_runtime import import_pyocd_attr
+    State = import_pyocd_attr("pyocd.core.target", "Target").State
+    core = secondary_core(target)
+    if core.get_state() == State.HALTED:
+        core.resume()
+    if core.get_state() not in (State.RUNNING, State.SLEEPING):
+        raise RuntimeError("STM32H7 CM4 did not start after system reset; "
+                           "check boot configuration and NRST connection")
