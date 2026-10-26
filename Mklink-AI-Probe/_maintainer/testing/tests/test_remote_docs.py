@@ -226,7 +226,9 @@ def test_all_repository_document_links_resolve_without_a_global_skill():
         outside
     )
     assert missing == [], "Missing documentation links:\n" + "\n".join(missing)
-    assert all(".codex" not in str(path).casefold() for path in DOCUMENTS)
+    # A repository may itself be checked out beneath .codex/worktrees.
+    # Reject global-skill dependencies within the repository-relative paths.
+    assert all(".codex" not in str(path.relative_to(root)).casefold() for path in DOCUMENTS)
 
 
 def test_every_documented_engineer_and_field_command_matches_real_parsers():
