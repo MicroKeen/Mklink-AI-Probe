@@ -1,10 +1,13 @@
-import { flushPromises, mount } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
+import { h, KeepAlive, ref } from 'vue'
 import OfflineFlashView from './OfflineFlashView.vue'
 import DeviceConfigurationPanel from '../components/DeviceConfigurationPanel.vue'
 import router from '../router'
 import { notifyPacksChanged, publishOnlineTarget } from '../lib/targetSelection'
+
+enableAutoUnmount(afterEach)
 
 const offlineMocks = vi.hoisted(() => ({
   getStatus: vi.fn(),
@@ -358,7 +361,7 @@ describe('OfflineFlashView', () => {
     expect(route?.path).toBe('/offline-flash')
   })
 
-  it('requires a manual model selection and forces the V2/V3 script name', async () => {
+  it('allows manual selection when detection is unavailable and forces the V2/V3 script name', async () => {
     const wrapper = mount(OfflineFlashView)
     await flushPromises()
 
@@ -370,6 +373,110 @@ describe('OfflineFlashView', () => {
     expect(wrapper.get('[data-testid="offline-script-name"]').attributes('disabled')).toBeDefined()
     expect(wrapper.find('option[value="auto"]').exists()).toBe(false)
     expect(wrapper.get('[data-testid="offline-deploy"]').attributes('disabled')).toBeDefined()
+  })
+
+  it.each(['V2', 'V3', 'V4'])('detects %s from the connected probe instead of a saved model', async model => {
+    localStorage.setItem('mklink.offlineFlash.settings', JSON.stringify({ model: 'V3' }))
+    offlineMocks.getStatus.mockResolvedValue({ available: true, probe_id: 'probe-a', model, version: `${model}.9.1` })
+    const wrapper = mount(OfflineFlashView)
+    await flushPromises()
+    expect(wrapper.get('[data-testid="offline-model"]').element).toHaveProperty('value', model)
+    expect(wrapper.get('[data-testid="offline-model"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="offline-detected-model"]').text()).toContain(`${model}.9.1`)
+    expect(offlineMocks.deploy).not.toHaveBeenCalled()
+    expect(offlineMocks.trigger).not.toHaveBeenCalled()
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => /runtime\/select|device\/connect/.test(String(url)))).toBe(false)
+  })
+
+  it('detects a newly inserted probe and clears its inferred model after unplugging', async () => {
+    vi.useFakeTimers()
+    const wrapper = mount(OfflineFlashView)
+    try {
+      await flushPromises()
+      offlineMocks.getStatus.mockResolvedValue({ available: true, probe_id: 'probe-a', model: 'V4', version: 'V4.7.1' })
+      await vi.advanceTimersByTimeAsync(3000)
+      await flushPromises()
+      expect(wrapper.get('[data-testid="offline-model"]').element).toHaveProperty('value', 'V4')
+      offlineMocks.getStatus.mockResolvedValue({ available: false, probes: [] })
+      await vi.advanceTimersByTimeAsync(3000)
+      await flushPromises()
+      expect(wrapper.get('[data-testid="offline-model"]').element).toHaveProperty('value', '')
+      expect(wrapper.get('[data-testid="offline-model"]').attributes('disabled')).toBeUndefined()
+      expect(wrapper.find('[data-testid="offline-detected-model"]').exists()).toBe(false)
+      wrapper.unmount()
+      const calls = offlineMocks.getStatus.mock.calls.length
+      await vi.advanceTimersByTimeAsync(9000)
+      expect(offlineMocks.getStatus).toHaveBeenCalledTimes(calls)
+    } finally { wrapper.unmount(); vi.useRealTimers() }
+  })
+
+  it('requires an explicit choice among multiple probes and reads only that choice', async () => {
+    const probes = [{ probe_id: 'a', port: 'COM1', alias: 'Bench A' }, { probe_id: 'b', port: 'COM2', alias: 'Bench B' }]
+    offlineMocks.getStatus.mockImplementation(async probe => probe === 'b'
+      ? { available: true, probes, probe_id: 'b', model: 'V2', version: 'V2.9.2' }
+      : { available: false, probes })
+    const wrapper = mount(OfflineFlashView)
+    await flushPromises()
+    expect(wrapper.get('[data-testid="offline-model"]').element).toHaveProperty('value', '')
+    await wrapper.get('[data-testid="offline-probe"]').setValue('b')
+    await flushPromises()
+    expect(offlineMocks.getStatus).toHaveBeenLastCalledWith('b')
+    expect(wrapper.get('[data-testid="offline-model"]').element).toHaveProperty('value', 'V2')
+    expect(wrapper.get<HTMLInputElement>('[data-testid="offline-script-name"]').element.value).toBe('offline_download.py')
+  })
+
+  it('re-detects a unique replacement when the explicitly selected probe disappears', async () => {
+    const probes = [{ probe_id: 'a', port: 'COM1' }, { probe_id: 'b', port: 'COM2' }]
+    offlineMocks.getStatus.mockResolvedValue({ available: false, probes })
+    const wrapper = mount(OfflineFlashView)
+    await flushPromises()
+    offlineMocks.getStatus.mockResolvedValue({ available: true, probes, probe_id: 'b', model: 'V2' })
+    await wrapper.get('[data-testid="offline-probe"]').setValue('b')
+    await flushPromises()
+    const replacement = [{ probe_id: 'a', port: 'COM1' }]
+    offlineMocks.getStatus.mockResolvedValueOnce({ available: false, probes: replacement })
+      .mockResolvedValueOnce({ available: true, probes: replacement, probe_id: 'a', model: 'V4' })
+    await wrapper.get('[data-testid="offline-refresh-probe"]').trigger('click')
+    await flushPromises()
+    expect(offlineMocks.getStatus).toHaveBeenLastCalledWith()
+    expect(wrapper.get('[data-testid="offline-model"]').element).toHaveProperty('value', 'V4')
+    expect(wrapper.find('[data-testid="offline-probe"]').exists()).toBe(false)
+  })
+
+  it('discards stale discovery after navigation and resumes only one polling loop', async () => {
+    vi.useFakeTimers()
+    let finish!: (value: unknown) => void
+    offlineMocks.getStatus.mockReturnValueOnce(new Promise(resolve => { finish = resolve }))
+    const active = ref(true)
+    const wrapper = mount({ render: () => h(KeepAlive, null, { default: () => active.value ? h(OfflineFlashView) : h('div') }) })
+    try {
+      await flushPromises()
+      active.value = false
+      await flushPromises()
+      active.value = true
+      await flushPromises()
+      finish({ available: true, model: 'V2', version: 'V2.9.2' })
+      await flushPromises()
+      expect(wrapper.get('[data-testid="offline-model"]').element).toHaveProperty('value', '')
+      offlineMocks.getStatus.mockResolvedValue({ available: true, model: 'V4', version: 'V4.7.1' })
+      await vi.advanceTimersByTimeAsync(3000)
+      await flushPromises()
+      expect(offlineMocks.getStatus).toHaveBeenCalledTimes(2)
+      expect(wrapper.get('[data-testid="offline-model"]').element).toHaveProperty('value', 'V4')
+    } finally { wrapper.unmount(); vi.useRealTimers() }
+  })
+
+  it('recovers discovery after a temporary error without leaving a blocking alert', async () => {
+    offlineMocks.getStatus.mockRejectedValueOnce(Error('USB temporarily unavailable'))
+    const wrapper = mount(OfflineFlashView)
+    await flushPromises()
+    expect(wrapper.get('[data-testid="offline-probe-reason"]').text()).toContain('USB temporarily unavailable')
+    offlineMocks.getStatus.mockResolvedValue({ available: true, model: 'V4', version: 'V4.7.1' })
+    await wrapper.get('[data-testid="offline-refresh-probe"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="offline-probe-reason"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="offline-error"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="offline-model"]').element).toHaveProperty('value', 'V4')
   })
 
   it('keeps high clocks available when switching from V3 to updated V2', async () => {

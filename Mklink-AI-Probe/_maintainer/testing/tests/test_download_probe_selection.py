@@ -79,6 +79,52 @@ def test_offline_algorithm_catalog_remains_available_in_lobby(tmp_path, monkeypa
     assert discover.call_args.args[2] is None
 
 
+@pytest.mark.parametrize('version,model', [
+    ('V2.9.2', 'V2'), ('V3.6.7', 'V3'), ('V4.7.1', 'V4'),
+    ('V5.1.0', None), ('unrecognized', None), (None, None),
+])
+def test_offline_status_reads_model_without_opening_device(tmp_path, monkeypatch, version, model):
+    monkeypatch.setattr(probes, 'inventory', lambda: [
+        {'probe_id': A, 'port': 'COM1', 'alias': 'Bench', 'description': 'MicroLink'}])
+    monkeypatch.setattr('mklink.probe_volumes.resolve_volume', lambda probe: {'root': str(tmp_path)})
+    forbidden = Mock(side_effect=AssertionError('Passive discovery must not open the device'))
+    monkeypatch.setattr('mklink.connect', forbidden)
+    monkeypatch.setattr('mklink.firmware_check.read_device_version', forbidden)
+    if version is not None:
+        (tmp_path / 'readme.txt').write_text(f'MicroLink\n{version}\n', encoding='utf-8')
+    app = create_app(auth_token=None, project_root=str(tmp_path))
+    control = app.state.shared_runtime = SimpleNamespace(info={'probe_id': 'lobby'})
+    with TestClient(app) as client:
+        response = client.get('/api/offline-download/status')
+    assert response.status_code == 200
+    data = response.json()
+    assert data['available'] and data['probe_id'] == A
+    assert data['model'] == model
+    assert data['version'] == (version if version and version.startswith('V') else None)
+    assert data['probes'][0]['alias'] == 'Bench'
+    assert control.info['probe_id'] == 'lobby'
+    forbidden.assert_not_called()
+
+
+def test_offline_model_comes_from_the_selected_probes_verified_volume(tmp_path, monkeypatch):
+    monkeypatch.setattr(probes, 'inventory', lambda: [
+        {'probe_id': A, 'port': 'COM1', 'alias': ''}, {'probe_id': B, 'port': 'COM2', 'alias': ''}])
+    for probe, version in [(A, 'V2.9.2'), (B, 'V4.7.1')]:
+        root = tmp_path / probe
+        root.mkdir()
+        (root / 'readme.txt').write_text(version, encoding='utf-8')
+    resolve = Mock(side_effect=lambda probe: {'root': str(tmp_path / probe)})
+    monkeypatch.setattr('mklink.probe_volumes.resolve_volume', resolve)
+    app = create_app(auth_token=None, project_root=str(tmp_path))
+    app.state.shared_runtime = SimpleNamespace(info={'probe_id': A})
+    with TestClient(app) as client:
+        assert client.get('/api/offline-download/status').json()['model'] == 'V2'
+        resolve.assert_called_once_with(A)
+        resolve.reset_mock()
+        assert client.get('/api/offline-download/status', params={'probe': B}).json()['model'] == 'V4'
+        resolve.assert_called_once_with(B)
+
+
 def test_offline_profile_catalog_does_not_rediscover_unbound_disk(tmp_path, monkeypatch):
     from mklink.remote.offline_download_api import _profile_candidates
 

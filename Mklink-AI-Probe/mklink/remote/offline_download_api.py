@@ -810,7 +810,8 @@ def create_offline_download_router(
                 from mklink.probes import inventory, select_probe
                 from mklink.probe_volumes import resolve_volume
                 candidates = await asyncio.to_thread(inventory)
-                choices['probes'] = [{'probe_id': item['probe_id'], 'port': item['port']}
+                choices['probes'] = [{'probe_id': item['probe_id'], 'port': item['port'],
+                                      'alias': item.get('alias', ''), 'description': item.get('description', '')}
                                      for item in candidates]
                 selector = probe or runtime.info.get('probe_id')
                 if not probe and not any(item['probe_id'] == selector for item in candidates):
@@ -824,7 +825,13 @@ def create_offline_download_router(
             return {"available": False, "disk_path": None, "python_dir": None,
                     "flm_dir": None, "reason": str(error), **choices}
         root = Path(disk) if disk else None
+        # Read only the identity-verified application volume. Passive discovery
+        # must not open CDC, interrupt an IDE, or connect/reset the target.
+        from mklink.firmware_check import read_microkeen_version
+        version = await asyncio.to_thread(read_microkeen_version, root) if root else None
         return {
+            "model": f"V{version.major}" if version and version.major in (2, 3, 4) else None,
+            "version": str(version) if version else None,
             "available": root is not None,
             "disk_path": str(root) if root else None,
             "python_dir": str(root / "python") if root else None,

@@ -2,7 +2,9 @@ import type { TargetRecord } from './onlineFlash'
 
 export interface OfflineDiskStatus {
   probe_id?: string
-  probes?: Array<{ probe_id: string; port: string }>
+  probes?: Array<{ probe_id: string; port: string; alias?: string; description?: string }>
+  model?: 'V2' | 'V3' | 'V4' | null
+  version?: string | null
   reason?: string
   available: boolean
   disk_path: string | null

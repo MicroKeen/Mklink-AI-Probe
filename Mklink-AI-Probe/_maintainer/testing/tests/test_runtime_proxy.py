@@ -5,6 +5,32 @@ import httpx
 from mklink.runtime_proxy import create_proxy
 
 
+def test_native_firmware_download_exposes_exact_name_and_metadata():
+    metadata = {
+        'Content-Disposition': 'attachment; filename="MicroLink_V2.9.2.rbl"',
+        'X-MKLink-Firmware-Name': 'MicroLink_V2.9.2.rbl',
+        'X-MKLink-Firmware-Version': 'V2.9.2',
+        'X-MKLink-Firmware-Source': 'tencent',
+        'X-MKLink-Firmware-Family': 'microlink',
+    }
+    def handle(request):
+        if request.url.path == '/api/probe/firmware-download':
+            assert request.headers.get('origin') is None
+            return httpx.Response(200, stream=httpx.ByteStream(b'RBL firmware'), headers=metadata)
+        return httpx.Response(200, json={'registered': True})
+    app = create_proxy({'port': 9001, 'token': 'secret'}, port=8766, instance_id='window',
+                       transport=httpx.MockTransport(handle))
+    with TestClient(app, base_url='http://127.0.0.1:8766') as client:
+        response = client.get('/api/probe/firmware-download?model=V2',
+                              headers={'Origin': 'http://tauri.localhost'})
+        assert response.status_code == 200 and response.content == b'RBL firmware'
+        assert response.headers['access-control-allow-origin'] == 'http://tauri.localhost'
+        exposed = {name.strip().lower() for name in response.headers['access-control-expose-headers'].split(',')}
+        for name, value in metadata.items():
+            assert response.headers[name] == value
+            assert name.lower() in exposed
+
+
 def test_switch_keeps_proxy_endpoint_auth_and_presence(monkeypatch):
     import json
     from mklink import runtime

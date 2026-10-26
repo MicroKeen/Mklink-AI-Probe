@@ -426,6 +426,7 @@ export type ProbeFirmwareCheckStatus =
 
 export interface ProbeFirmwareCheck {
   status: ProbeFirmwareCheckStatus
+  error?: string
   current_version: string | null
   current_build_id?: string | null
   min_required_version: string | null

@@ -1,6 +1,7 @@
 import importlib.util
 import hashlib
 import json
+import re
 from pathlib import Path
 import tomllib
 from zipfile import ZipFile
@@ -460,7 +461,7 @@ def test_tauri_bundle_integrates_mklink_usb_port_naming():
     assert "$INSTDIR\\${MAINBINARYNAME}.exe" not in protocol_block
 
 
-def test_stable_product_version_and_signed_updater_are_configured():
+def test_product_version_and_signed_updater_are_configured():
     pyproject = (PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     cargo = (PROJECT_ROOT / "gui" / "src-tauri" / "Cargo.toml").read_text(
         encoding="utf-8"
@@ -489,8 +490,9 @@ def test_stable_product_version_and_signed_updater_are_configured():
     python_version = tomllib.loads(pyproject)["project"]["version"]
     cargo_version = tomllib.loads(cargo)["package"]["version"]
     assert python_version == cargo_version == config["version"]
-    assert len(config["version"].split(".")) == 3
-    assert all(part.isdigit() for part in config["version"].split("."))
+    # Local test installers may carry rc.N; the tracked signing and stable
+    # channel configuration below must still remain enabled and unchanged.
+    assert re.fullmatch(r"(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-rc\.[1-9]\d*)?", config["version"])
     assert config["bundle"]["createUpdaterArtifacts"] is True
     assert config["plugins"]["updater"]["endpoints"] == [
         "https://download.microkeenai.com/mklink/stable/latest.json",
