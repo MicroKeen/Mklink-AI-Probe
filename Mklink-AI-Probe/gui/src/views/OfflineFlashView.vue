@@ -85,6 +85,12 @@ const { message: confirmationMessage, confirm: confirmRisk, answer: answerConfir
 
 const disk = ref<OfflineDiskStatus | null>(null)
 const diskProbe = ref('')
+const diskLoading = ref(false)
+let requestedDiskProbe = ''
+let diskPollTimer: ReturnType<typeof setTimeout> | null = null
+let diskPollingEnabled = false
+let diskPollGeneration = 0
+let diskRequestRevision = 0
 const model = ref<ProbeModel | ''>(saved.model ?? '')
 const scriptName = ref(saved.scriptName ?? 'factory-download.py')
 const automaticCount = ref(1)
@@ -334,11 +340,67 @@ function targetAction(target: TargetRecord): string {
 }
 
 async function refreshDisk(): Promise<void> {
+  if (diskLoading.value || operationBusy.value) return
+  diskLoading.value = true
+  const revision = ++diskRequestRevision
   try {
-    disk.value = await offline.getStatus()
-    diskProbe.value = disk.value.probe_id || ''
+    let status = await offline.getStatus(requestedDiskProbe)
+    if (requestedDiskProbe && status.probes && !status.probes.some(probe => probe.probe_id === requestedDiskProbe)) {
+      requestedDiskProbe = ''
+      status = await offline.getStatus()
+    }
+    if (revision !== diskRequestRevision || operationBusy.value) return
+    const previous = disk.value
+    disk.value = status
+    diskProbe.value = status.probe_id || ''
+    if (previous?.probe_id && previous.probe_id !== status.probe_id) {
+      preview.value = null
+      deployedScriptName.value = ''
+      deployedModel.value = ''
+      notice.value = ''
+    }
+    const detected = status.available ? status.model : null
+    if (detected && ['V2', 'V3', 'V4'].includes(detected)) {
+      if (model.value !== detected) { model.value = detected; modelChanged() }
+    } else if (previous?.model) {
+      model.value = ''
+      modelChanged()
+    }
   }
-  catch (value) { setError(value) }
+  catch (value) {
+    if (revision !== diskRequestRevision || operationBusy.value) return
+    if (disk.value?.model) { model.value = ''; modelChanged() }
+    preview.value = null
+    deployedScriptName.value = ''
+    deployedModel.value = ''
+    notice.value = ''
+    disk.value = { available: false, disk_path: null, python_dir: null, flm_dir: null, reason: message(value) }
+    diskProbe.value = ''
+  } finally { diskLoading.value = false }
+}
+
+function selectDiskProbe(event: Event): void {
+  requestedDiskProbe = (event.target as HTMLSelectElement).value
+  void refreshDisk()
+}
+
+function startDiskPolling(): void {
+  if (diskPollingEnabled) return
+  diskPollingEnabled = true
+  const generation = ++diskPollGeneration
+  const run = async () => {
+    await refreshDisk()
+    if (diskPollingEnabled && generation === diskPollGeneration) diskPollTimer = setTimeout(run, 3000)
+  }
+  void run()
+}
+
+function stopDiskPolling(): void {
+  diskPollingEnabled = false
+  diskPollGeneration++
+  diskRequestRevision++
+  if (diskPollTimer !== null) clearTimeout(diskPollTimer)
+  diskPollTimer = null
 }
 
 function modelChanged(): void {
@@ -988,20 +1050,24 @@ function refreshPacks(): void {
 onMounted(async () => {
   window.addEventListener(TARGET_SELECTION_CHANGED, syncTarget)
   window.addEventListener(PACKS_CHANGED, refreshPacks)
-  await Promise.all([refreshDisk(), consumerTarget('offline') ? syncTarget() : searchTargets(false)])
+  startDiskPolling()
+  await (consumerTarget('offline') ? syncTarget() : searchTargets(false))
 })
 onActivated(() => {
+  startDiskPolling()
   void syncTarget()
   refreshPacks()
   startSourcePolling()
   void startNativeDrops()
 })
 onDeactivated(() => {
+  stopDiskPolling()
   invalidateOtp()
   stopSourcePolling()
   stopNativeDrops()
 })
 onBeforeUnmount(() => {
+  stopDiskPolling()
   invalidateOtp()
   window.removeEventListener(TARGET_SELECTION_CHANGED, syncTarget)
   window.removeEventListener(PACKS_CHANGED, refreshPacks)
@@ -1019,7 +1085,7 @@ onBeforeUnmount(() => {
       <div><span class="status-label">{{ tr('U 盘', 'USB Drive') }}</span><b :class="disk?.available ? 'ok' : 'bad'">{{ disk?.available ? disk.disk_path : tr('未发现', 'Not found') }}</b></div>
       <div><span class="status-label">{{ tr('脚本', 'Script') }}</span><b>{{ effectiveScriptName }}</b></div>
       <div class="status-actions">
-        <button class="btn" :disabled="operationBusy" @click="refreshDisk">{{ tr('刷新 U 盘', 'Refresh USB Drive') }}</button>
+        <button class="btn" data-testid="offline-refresh-probe" :disabled="operationBusy || diskLoading" @click="refreshDisk">{{ diskLoading ? tr('识别中…', 'Detecting…') : tr('刷新下载器', 'Refresh Probes') }}</button>
       </div>
     </header>
 
@@ -1035,7 +1101,11 @@ onBeforeUnmount(() => {
       <aside class="work-panel shared-device-panel" data-testid="offline-shared-device">
         <h2 class="section-title">{{ tr('设备与连接', 'Device and connection') }}</h2>
         <fieldset :disabled="operationBusy" class="shared-controls">
-        <label class="setting-row"><span>{{ tr('下载器型号', 'Probe Model') }}</span><select v-model="model" class="form-select" data-testid="offline-model" @change="modelChanged"><option value="" disabled>{{ tr('请选择', 'Select') }}</option><option value="V2">V2</option><option value="V3">V3</option><option value="V4">V4</option></select></label>
+        <label v-if="(disk?.probes?.length || 0) > 1" class="setting-row"><span>{{ tr('下载器', 'Probe') }}</span><select :value="diskProbe" class="form-select" data-testid="offline-probe" :disabled="diskLoading" @change="selectDiskProbe"><option value="">{{ tr('请选择下载器', 'Select a probe') }}</option><option v-for="probe in disk?.probes" :key="probe.probe_id" :value="probe.probe_id">{{ probe.alias || probe.description || probe.probe_id }} · {{ probe.port }}</option></select></label>
+        <label class="setting-row"><span>{{ tr('下载器型号', 'Probe Model') }}</span><select v-model="model" class="form-select" data-testid="offline-model" :disabled="!!disk?.model && disk.available" @change="modelChanged"><option value="" disabled>{{ tr('请选择', 'Select') }}</option><option value="V2">V2</option><option value="V3">V3</option><option value="V4">V4</option></select></label>
+        <p v-if="disk?.model && disk.available" class="muted" data-testid="offline-detected-model">{{ tr('已自动识别：', 'Detected: ') }}{{ disk.version || disk.model }}</p>
+        <p v-else class="muted">{{ tr('插入下载器后自动识别；未识别时可手动选择型号。', 'Connect a probe to detect its model, or select a model manually when detection is unavailable.') }}</p>
+        <p v-if="disk?.reason" class="muted" data-testid="offline-probe-reason">{{ disk.reason }}</p>
         <div class="field-title">{{ tr('芯片型号', 'Chip model') }}</div>
         <div ref="targetSearchBox" class="target-combobox" @focusout="targetSearchFocusOut">
           <div class="target-search">
