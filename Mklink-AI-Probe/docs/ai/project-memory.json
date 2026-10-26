@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-27T01:08:08+08:00",
+  "updated_at": "2026-10-27T07:53:59+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.4.1-fixes",
     "head": "0.4.1正式源514efb86；正式Web保存93db90db，最新交接HEAD见Git。0.4.0固定0c9c2d97。",
-    "remote_head": "microkeen/main=514efb86，PR61已合并；0.4.1正式标签不可变，后续交接走任务分支PR。",
+    "remote_head": "microkeen/main=a476a335，PR61/62已合并；v0.4.1正式标签仍固定514efb86。当前补充实装证据继续既有修复分支。",
     "working_tree": "0.4.1在新托管工作树内开发；E盘原main保持干净。旧firmware-keil-coexist detached工作树归属旧聊天，用户要求保留，不强删。"
   },
   "mission": {
@@ -14,7 +14,7 @@
   },
   "current_session": {
     "status": "v041_released",
-    "current_task": "0.4.1 Windows/完整Skill/SiteAgent正式发布完成。用户明确授权合并、现有密钥签名与正式发布，无需再次确认。七资源COS/GitHub、Gitee真实Skill、云端优先及服务故障备用、三稳定索引、公开云端与Gitee的0.4.0→0.4.1 Skill升级全部通过。正式包元数据已修正并验证；本机仍为已验收候选，正式包再次覆盖未执行。见docs/verification/v041-release-handoff.md。"
+    "current_task": "0.4.1正式发布和本机正式覆盖安装均完成。用户退出旧窗口后安装exit0，3626载荷一致、冻结CLI/MCP、原生3.752秒健康/V4自动识别/正常退出通过。发现旧0.3.6 dist-info残留导致更新检查误报，已备份移出后通过；后续版本需补升级清理机制，不能把本机修复当作所有用户均自动修复。云端/Git备用、三索引和官网0.4.1已通过，见v041-release-handoff.md。"
   },
   "milestones": [
     {
@@ -67,7 +67,7 @@
     },
     {
       "area": "0.4.1固件与脱机识别修复",
-      "result": "正式源514efb86，5565Python/2skip、1133GUI、V4.7.2+H743在线/四脱机216036B及19采集调试通过。候选NSIS实装exit0；最终签名包冻结版本/211Python/41Web/7059FLM型号/4800SVD通过，原生3.658秒、V4自动识别、正常退出通过。正式覆盖安装因旧窗口最小化工具阻塞未执行。七资源GitHub/COS完整哈希、HEAD/Range、解析器停止备用并恢复active；三索引0.4.1、preview404；云端及真实Gitee Skill从0.4.0升级各2623文件一致。见v041-release-handoff.md。"
+      "result": "正式源514efb86，5565Python/2skip、1133GUI、V4.7.2+H743在线/四脱机216036B及19采集调试通过。候选NSIS实装exit0；最终签名包冻结版本/211Python/41Web/7059FLM型号/4800SVD通过，原生3.658秒、V4自动识别、正常退出通过。用户退出旧窗口后正式覆盖exit0/3626文件一致，清理已备份的旧dist-info后MCP版本正确，原生3.752秒/正常退出通过。七资源GitHub/COS完整哈希、HEAD/Range、解析器停止备用并恢复active；三索引0.4.1、preview404；云端及真实Gitee Skill从0.4.0升级各2623文件一致。见v041-release-handoff.md。"
     },
     {
       "area": "BIN/HEX脱机校验开关",
@@ -96,7 +96,7 @@
   ],
   "hardware": {
     "state": "2026-10-26晚重新核验：当前V4.7.2/build2026-10-26T22:51:11，保留固件不降级。H743用户原工程编译0错0警告，在线/四脱机/19采集调试通过；当前测试程序留在板上，默认脱机校验已恢复。不改VCC/OTP，不扩大双核实体或V3长期掉线结论。此前本会话真实V4.6.8→4.7.1升级证据仍有效，但不代表当前固件。",
-    "installer": "本机仍为0.4.1已验收候选，源75e65188/Web3140bdb5，实装exit0、3626文件一致；已安装egg-info确认为0.4.1。正式修正包源514efb86位于F:/MKLink-Build/artifacts/v041-release-corrected，签名/冻结/原生3.658秒/正常退出通过。旧窗口最小化工具阻塞，未强杀，未冒称正式包已覆盖安装。",
+    "installer": "已安装正式0.4.1，源514efb86，NSIS SHA30333c33，exit0；3626文件/211Python/41Web一致，冻结CLI/MCP/更新版本0.4.1、原生3.752秒/V4.7.2自动识别/正常退出通过。旧mklink-0.3.6.dist-info八文件已备份并移出安装目录后复验通过；发布包不自动清除该旧目录，后续需修复。证据F:/MKLink-Build/artifacts/v041-release-corrected。",
     "backups": "保留正式release、安装包、CI ZIP、唯一硬件证据、Skill备份和F盘缓存。历史获授权清理结果见v036-storage-cleanup-20261023.md及F盘cleanup-20261023、unix-package-cleanup报告。包含链接的测试目录未强删；本地Unix包清理不影响线上正式附件。两个旧v036候选分支已存入验证过的v036-local-candidates.bundle，恢复前核对前置提交。"
   },
   "known_limits": [
@@ -110,7 +110,7 @@
     "nRF54L15 GUI保护闭环、全部物理擦除/拔插/休眠/断电场景、电源外部精度校准未全部认证。VCC每次改动必须确认具体电压，HPM已锁定OTP不得重放。 已知无可靠扇区表的26个FLM禁用扇区操作；重叠算法需要匹配Bank模式。 HPM5301组18/19永久锁定的历史状态及用户字先写/组锁最后、全部固件独立校验后才写OTP等边界见docs/ai/hpm-offline-otp-handoff.md；接手重新确认芯片，其他型号不继承验收。 UART OTP已实现ROM write-memory APIv2，独立熔丝/影子/临时锁读语义仍未知并如实显示；以ROM写入状态及回读为准。配套3d96dbb已实机验证HPM5301全部128字读取和用户批准的Word69 0→1单次写入回读；其余型号/区域未实写，新数据须具体授权。多Word顺序执行不可回滚。CSV原生选择器自动化未完成。 V3直连USB、RTT空采集约30分钟掉线仍未定因；再次复现先导出诊断再拔插，本轮V4短测不能关闭。"
   ],
   "next_actions": [
-    "用户已授权并完成0.4.1正式发布，不重复发版或询问发布授权。收尾交接继续codex/v0.4.1-fixes并提交PR；若需本机正式覆盖安装，先正常恢复/退出旧客户端，UAC交用户。后续构建固定增加冻结前metadata刷新及冻结后版本断言，防遗留egg-info。",
+    "0.4.1正式发布及本机正式安装已完成，不重复发版或再问授权。后续优先修复覆盖安装残留旧mklink dist-info导致更新检查误报的清理机制，补旧版本覆盖升级回归；冻结前刷新metadata、冻结后断言版本。当前本机已备份移出旧元数据并验收通过。继续codex/v0.4.1-fixes，正式包保持不可变。",
     "双核脱机需真实M7/M4板正向验收；V3空RTT约30分钟掉线再次复现先导出诊断再拔插。两项保持未闭环，私有候选不得公开替换正式固件。",
     "公网远程服务中继为下个版本任务；本次不实施。",
     "下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。",
