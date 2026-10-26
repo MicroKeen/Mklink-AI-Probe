@@ -9,6 +9,25 @@ export interface ReleaseHistoryEntry {
 
 export const releaseHistory: ReleaseHistoryEntry[] = [
   {
+    version: '0.4.1', date: '2026-10-26',
+    summary: '修复固件升级与脱机下载器自动识别',
+    summaryEn: 'Fix firmware updates and automatic offline probe detection',
+    changes: [
+      '修复点击“检查固件”和“升级到最新固件”无响应的问题；未连接目标芯片时也可检查已接入下载器。',
+      '固件操作绑定所选下载器，检查与升级过程中持续显示进度和错误信息。',
+      '手动下载保留最新固件的完整版本文件名；V2 使用 RBL，V3/V4 使用 UF2。',
+      '脱机烧录自动识别已插入下载器的型号和固件版本，多下载器时可明确选择设备。',
+      '修复脱机页面切换、插拔与识别失败后的型号和部署预览状态更新。',
+    ],
+    changesEn: [
+      'Fix unresponsive firmware check and update buttons; detect attached probes without connecting to the target MCU.',
+      'Bind firmware operations to the selected probe and retain progress and error messages during checks and updates.',
+      'Keep the full versioned filename of the latest firmware download: RBL for V2 and UF2 for V3/V4.',
+      'Detect the attached probe model and firmware version on the offline programming page; explicitly select a device when several are attached.',
+      'Refresh detected models and deployment previews correctly after page changes, hot-plug events and detection failures.',
+    ],
+  },
+  {
     version: '0.4.0', date: '2026-10-25',
     summary: '新增 ISP 烧录，优化下载、启动与诊断',
     summaryEn: 'Add ISP programming and improve downloads, startup and diagnostics',
