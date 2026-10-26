@@ -107,7 +107,11 @@ def create_proxy(info, *, port, instance_id, transport=None):
     install_export(app)  # Export remains available when the CDC backend is down.
     origins = DESKTOP_ORIGINS | {f"http://127.0.0.1:{port}"}
     app.add_middleware(CORSMiddleware, allow_origins=sorted(origins), allow_methods=["*"],
-                       allow_headers=["*"], expose_headers=['X-MKLink-Submission'])
+                       allow_headers=["*"], expose_headers=[
+                           'X-MKLink-Submission', 'Content-Disposition',
+                           'X-MKLink-Firmware-Name', 'X-MKLink-Firmware-Version',
+                           'X-MKLink-Firmware-Source', 'X-MKLink-Firmware-Family',
+                       ])
 
     @app.middleware("http")
     async def local_only(request, call_next):

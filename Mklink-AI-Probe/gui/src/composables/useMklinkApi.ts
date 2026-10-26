@@ -1,4 +1,5 @@
 import { ref, readonly } from 'vue'
+import { tr } from './useLanguage'
 import { recordStatusFailure, recordStatusRestored } from '../lib/connectionDiagnostics'
 import type {
   PortInfo,
@@ -150,13 +151,44 @@ export function useMklinkApi() {
     return api('/api/microkeen')
   }
 
-  async function probeFirmwareCheck(): Promise<ProbeFirmwareCheck> {
-    return api<ProbeFirmwareCheck>('/api/probe/firmware-check')
+  async function firmwareProbeHeaders(port?: string): Promise<Record<string, string>> {
+    if (!sharedRuntime.value) return {}
+    const presence = await api<{
+      probe_id: string
+      probes: { probe_id: string; port: string }[]
+    }>('/api/runtime/control/status')
+    // A saved config port is not a user selection. Keep a present binding;
+    // after unplug/replacement, an explicit firmware action may select the
+    // unique current probe, without opening a target/debug connection.
+    const probes = presence.probes
+    const selected = port
+      ? probes.find(probe => probe.port.toLowerCase() === port.toLowerCase())
+      : probes.find(probe => probe.probe_id === presence.probe_id)
+        || (probes.length === 1 ? probes[0] : undefined)
+    if (!selected) throw new Error(port
+      ? tr('所选下载器已离线，请在本地设备页重新选择。', 'The selected probe is offline. Select it again in Local Device.')
+      : probes.length
+        ? tr('检测到多个下载器，请先在本地设备页选择要升级的下载器。', 'Multiple probes found. Select the probe in Local Device first.')
+        : tr('未检测到下载器，请连接 USB 后重试。', 'No probe found. Connect USB and try again.'))
+    const selection = await api<{ probe_id: string; device_generation: number }>('/api/runtime/select', {
+      method: 'POST', body: JSON.stringify({ probe: selected.probe_id }),
+    })
+    return {
+      'X-MKLink-Probe': selection.probe_id,
+      'X-MKLink-Device-Generation': String(selection.device_generation),
+    }
   }
 
-  async function upgradeProbeFirmware(confirm = false): Promise<ProbeFirmwareUpgrade> {
+  async function probeFirmwareCheck(port?: string): Promise<ProbeFirmwareCheck> {
+    const headers = await firmwareProbeHeaders(port)
+    return api<ProbeFirmwareCheck>('/api/probe/firmware-check', { headers })
+  }
+
+  async function upgradeProbeFirmware(confirm = false, port?: string): Promise<ProbeFirmwareUpgrade> {
+    const headers = confirm ? await firmwareProbeHeaders(port) : {}
     return api<ProbeFirmwareUpgrade>('/api/probe/firmware-upgrade', {
       method: 'POST',
+      headers,
       // The FastAPI endpoint declares a scalar bool body, so the wire format
       // must be JSON true/false rather than an object wrapper.
       body: JSON.stringify(confirm),
@@ -173,10 +205,19 @@ export function useMklinkApi() {
       const error = await res.json().catch(() => null)
       throw new Error(typeof error?.detail === 'string' ? error.detail : res.statusText)
     }
+    const filename = res.headers.get('X-MKLink-Firmware-Name')
+      || /filename="([^"]+)"/i.exec(res.headers.get('Content-Disposition') || '')?.[1]
+    // Never save opaque firmware under a guessed model-only name or format.
+    // The backend resolves the latest version and supplies its exact filename.
+    if (!filename) throw new Error(tr('下载响应缺少固件文件名，请重启更新后的应用再试。', 'The download response has no firmware filename. Restart the updated app and try again.'))
+    const prefix = family === 'hpmlink' ? 'HPMLink' : 'MicroLink'
+    const extension = model === 'V2' ? 'rbl' : 'uf2'
+    if (!new RegExp(`^${prefix}_${model}\\.\\d+\\.\\d+\\.${extension}$`, 'i').test(filename)) {
+      throw new Error(tr('下载响应的固件名称或格式与所选型号不匹配。', 'The firmware filename or format does not match the selected probe.'))
+    }
     return {
       blob: await res.blob(),
-      filename: res.headers.get('X-MKLink-Firmware-Name')
-        || `${family === 'hpmlink' ? 'HPMLink' : 'MicroLink'}_${model}.uf2`,
+      filename,
       version: res.headers.get('X-MKLink-Firmware-Version') || '',
       source: (res.headers.get('X-MKLink-Firmware-Source') || 'github') as ProbeFirmwareDownload['source'],
       family: (res.headers.get('X-MKLink-Firmware-Family') || family) as ProbeFirmwareDownload['family'],

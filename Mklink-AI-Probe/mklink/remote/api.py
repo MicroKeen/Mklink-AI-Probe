@@ -811,6 +811,7 @@ def create_app(
             "X-MKLink-Firmware-Name",
             "X-MKLink-Firmware-Version",
             "X-MKLink-Firmware-Source",
+            "X-MKLink-Firmware-Family",
             "X-MKLink-Submission",
         ],
     )

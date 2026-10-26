@@ -166,6 +166,55 @@ describe('RTT API contracts', () => {
     }))
   })
 
+  it.each(['check', 'upgrade'])('reserves the unique replacement before firmware %s without connecting a target', async action => {
+    sharedRuntime.value = true
+    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({
+      probe_id: 'old-probe', probes: [{ probe_id: 'replacement', port: 'COM10' }],
+    }) })
+    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ probe_id: 'replacement', device_generation: 4 }) })
+    const api = useMklinkApi()
+    if (action === 'check') await api.probeFirmwareCheck()
+    else await api.upgradeProbeFirmware(true)
+    expect(fetchMock.mock.calls.map(call => call[0])).toEqual([
+      '/api/runtime/control/status', '/api/runtime/select', `/api/probe/firmware-${action}`,
+    ])
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ probe: 'replacement' })
+    const headers = fetchMock.mock.calls[2][1].headers as Headers
+    expect(headers.get('X-MKLink-Probe')).toBe('replacement')
+    expect(headers.get('X-MKLink-Device-Generation')).toBe('4')
+    if (action === 'upgrade') expect(fetchMock.mock.calls[2][1].body).toBe('true')
+  })
+
+  it.each([undefined, 'COM10'])('respects the bound or explicitly selected firmware probe (%s)', async port => {
+    sharedRuntime.value = true
+    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({
+      probe_id: 'bound', probes: [{ probe_id: 'bound', port: 'COM9' }, { probe_id: 'chosen', port: 'COM10' }],
+    }) })
+    await useMklinkApi().probeFirmwareCheck(port)
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ probe: port ? 'chosen' : 'bound' })
+  })
+
+  it.each([
+    { probes: [], port: undefined },
+    { probes: [{ probe_id: 'a', port: 'COM1' }, { probe_id: 'b', port: 'COM2' }], port: undefined },
+    { probes: [{ probe_id: 'a', port: 'COM1' }], port: 'COM99' },
+  ])('does not guess a firmware destination when selection fails: %j', async ({ probes, port }) => {
+    sharedRuntime.value = true
+    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ probe_id: 'missing', probes }) })
+    await expect(useMklinkApi().upgradeProbeFirmware(true, port)).rejects.toThrow()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not upgrade or retry when another backend owns the selected probe', async () => {
+    sharedRuntime.value = true
+    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({
+      probe_id: 'lobby', probes: [{ probe_id: 'owned', port: 'COM1' }],
+    }) })
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 409, json: async () => ({ detail: 'Probe is owned' }) })
+    await expect(useMklinkApi().upgradeProbeFirmware(true)).rejects.toThrow('Probe is owned')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
   it('downloads the selected probe firmware as a named binary', async () => {
     const blob = new Blob(['uf2'], { type: 'application/octet-stream' })
     fetchMock.mockResolvedValueOnce({
@@ -190,11 +239,38 @@ describe('RTT API contracts', () => {
 
     fetchMock.mockResolvedValueOnce({
       ok: true,
-      headers: new Headers(),
+      headers: new Headers({ 'X-MKLink-Firmware-Name': 'HPMLink_V4.7.0.uf2' }),
       blob: async () => blob,
     })
     await useMklinkApi().downloadProbeFirmware('V4', 'hpmlink')
     expect(fetchMock).toHaveBeenLastCalledWith('/api/probe/firmware-download?model=V4&family=hpmlink')
+  })
+
+  it.each([
+    ['V2', 'MicroLink_V2.9.2.rbl'], ['V3', 'MicroLink_V3.6.7.uf2'],
+    ['V4', 'MicroLink_V4.7.1.uf2'], ['V4', 'MicroLink_V4.8.9.uf2'],
+  ] as const)('preserves the server-provided latest %s filename %s', async (model, filename) => {
+    fetchMock.mockResolvedValueOnce({ ok: true,
+      headers: new Headers({ 'X-MKLink-Firmware-Name': filename }), blob: async () => new Blob(['firmware']),
+    })
+    expect((await useMklinkApi().downloadProbeFirmware(model)).filename).toBe(filename)
+  })
+
+  it('accepts the exact Content-Disposition filename when the custom name is unavailable', async () => {
+    fetchMock.mockResolvedValueOnce({ ok: true,
+      headers: new Headers({ 'Content-Disposition': 'attachment; filename="MicroLink_V2.9.2.rbl"' }),
+      blob: async () => new Blob(['firmware']),
+    })
+    expect((await useMklinkApi().downloadProbeFirmware('V2')).filename).toBe('MicroLink_V2.9.2.rbl')
+  })
+
+  it.each(['', 'MicroLink_V2.uf2', 'MicroLink_V3.6.7.uf2'])('refuses a missing or incorrect V2 filename: %s', async filename => {
+    const blob = vi.fn()
+    fetchMock.mockResolvedValueOnce({ ok: true,
+      headers: new Headers(filename ? { 'X-MKLink-Firmware-Name': filename } : {}), blob,
+    })
+    await expect(useMklinkApi().downloadProbeFirmware('V2')).rejects.toThrow()
+    expect(blob).not.toHaveBeenCalled()
   })
 
   it('refreshes connection state after rebooting the probe', async () => {

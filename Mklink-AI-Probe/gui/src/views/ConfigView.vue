@@ -80,6 +80,8 @@ let disposed = false
 const localSaveState = ref<'idle' | 'saving' | 'saved' | 'unconfirmed'>('idle')
 
 const firmwareCheck = ref<ProbeFirmwareCheck | null>(null)
+const firmwareChecking = ref(false)
+const firmwareCheckStatus = ref('')
 const firmwareUpgrading = ref(false)
 const firmwareUpgradeStatus = ref('')
 const firmwareUpgradeResult = ref<ProbeFirmwareUpgrade | null>(null)
@@ -363,26 +365,46 @@ function isActiveSymbolParse(generation: number, requestedPath: string): boolean
 }
 
 async function recheckFirmware() {
+  if (firmwareChecking.value || firmwareUpgrading.value) return
+  firmwareChecking.value = true
+  firmwareCheck.value = null
+  firmwareCheckStatus.value = tr('正在识别下载器并检查固件...', 'Identifying the probe and checking firmware...')
   try {
-    firmwareCheck.value = await probeFirmwareCheck()
-  } catch {
-    // Firmware checks are advisory and must not block configuration.
+    const result = await probeFirmwareCheck(localPortExplicit.value ? localPort.value : undefined)
+    firmwareCheck.value = result
+    if (result.error) throw new Error(result.error)
+    const latest = result.recommended_uf2?.version
+    firmwareCheckStatus.value = result.status === 'ok'
+      ? tr('当前固件已满足要求', 'The installed firmware meets the requirements')
+      : result.status === 'upgrade_required'
+        ? tr('发现可用固件，请点击“升级到最新固件”', 'Firmware is available. Click Update to Latest Firmware')
+        : result.status === 'revision_unknown'
+          ? tr('版本号相同，但尚未确认已安装的修订', 'The version matches, but the installed build is unconfirmed')
+          : result.instructions || tr('未能读取当前固件版本，请检查下载器连接后重试。', 'Could not read the installed firmware version. Check the probe connection and try again.')
+    if (latest) firmwareCheckStatus.value += tr(`；可用固件：${latest}`, `; available firmware: ${latest}`)
+  } catch (error: any) {
+    firmwareCheckStatus.value = tr('检查固件失败：', 'Firmware check failed: ') + (error?.message || String(error))
+    toast.error(firmwareCheckStatus.value)
+  } finally {
+    firmwareChecking.value = false
   }
 }
 
 async function upgradeFirmware() {
-  if (firmwareUpgrading.value) return
+  if (firmwareUpgrading.value || firmwareChecking.value) return
   if (!window.confirm(tr(
     '将检查并安装所选下载器的最新修复固件；版本号相同但修订未确认时也会重新安装。V2 写入 RBL，V3/V4 进入 UF2 模式。升级会断开连接，请先停止采集，期间不要拔掉 USB。继续吗？',
     'Install the latest repair firmware for the selected probe, including reinstalling the same version when its build cannot be confirmed. V2 uses RBL; V3/V4 use UF2. Stop acquisition first and keep USB connected. Continue?',
   ))) return
   firmwareUpgrading.value = true
+  firmwareCheck.value = null
+  firmwareCheckStatus.value = ''
   firmwareUpgradeResult.value = null
   manualFirmwareChoice.value = ''
   firmwareDownloadStatus.value = ''
   firmwareUpgradeStatus.value = tr('正在检查并升级到最新固件...', 'Upgrading probe firmware...')
   try {
-    const result = await upgradeProbeFirmware(true)
+    const result = await upgradeProbeFirmware(true, localPortExplicit.value ? localPort.value : undefined)
     firmwareUpgradeResult.value = result
     if (result.status === 'updated') {
       firmwareUpgradeStatus.value = tr(
@@ -396,9 +418,11 @@ async function upgradeFirmware() {
     } else {
       firmwareUpgradeStatus.value = result.message || tr('未完成自动升级，请按提示手动升级', 'Automatic update did not complete; follow the manual update instructions')
     }
-    await recheckFirmware()
+    // The updater already verifies the installed build. Do not auto-select a
+    // replacement probe if USB disappears while the update is completing.
   } catch (error: any) {
     firmwareUpgradeStatus.value = error?.message || tr('固件升级失败', 'Firmware update failed')
+    firmwareUpgradeResult.value = { status: 'manual_required', message: firmwareUpgradeStatus.value }
     toast.error(firmwareUpgradeStatus.value)
   } finally {
     firmwareUpgrading.value = false
@@ -605,11 +629,12 @@ onUnmounted(() => {
         </header>
         <div class="firmware-upgrade-content">
           <p>{{ tr('检查并升级所选下载器。V2 使用 RBL，V3/V4 使用 UF2；升级期间请勿拔掉 USB。', 'Check and update the selected probe. V2 uses RBL; V3/V4 use UF2. Keep USB connected during the update.') }}</p>
-          <button class="btn" type="button" data-testid="check-firmware" :disabled="firmwareUpgrading" @click="recheckFirmware">{{ tr('检查固件', 'Check Firmware') }}</button>
+          <button class="btn" type="button" data-testid="check-firmware" :disabled="firmwareUpgrading || firmwareChecking" @click="recheckFirmware">{{ firmwareChecking ? tr('检查中...', 'Checking...') : tr('检查固件', 'Check Firmware') }}</button>
+          <p v-if="firmwareCheckStatus" role="status" data-testid="firmware-check-status">{{ firmwareCheckStatus }}</p>
           <p v-if="firmwareCheck?.status === 'revision_unknown'" data-testid="firmware-revision-unknown">{{ tr('版本号相同，但尚未确认已安装的修订。可以重新安装最新修复包。', 'The version matches, but the installed build is unconfirmed. You can reinstall the latest repair package.') }}</p>
           <p v-if="firmwareCheck?.current_build_id" data-testid="firmware-build-id">{{ tr('当前构建：', 'Installed build: ') }}{{ firmwareCheck.current_build_id }}</p>
           <p v-if="firmwareCheck?.recommended_uf2?.build_id" data-testid="firmware-recommended-build">{{ tr('可用构建：', 'Available build: ') }}{{ firmwareCheck.recommended_uf2.build_id }}</p>
-          <button class="btn" type="button" data-testid="upgrade-firmware" :disabled="firmwareUpgrading" @click="upgradeFirmware">
+          <button class="btn" type="button" data-testid="upgrade-firmware" :disabled="firmwareUpgrading || firmwareChecking" @click="upgradeFirmware">
             {{ firmwareUpgrading ? tr('升级中...', 'Updating...') : tr('升级到最新固件', 'Update to Latest Firmware') }}
           </button>
           <div v-if="manualFirmwareUpgrade" class="manual-firmware-download" data-testid="manual-firmware-download">

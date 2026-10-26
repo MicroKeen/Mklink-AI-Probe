@@ -81,9 +81,12 @@
     <div class="app-main" :inert="IS_REMOTE && backendState !== 'alive'">
       <DashboardView v-if="initialBackendReady && dashboardVisited" v-show="currentTab === 'dashboard'" />
       <router-view v-if="initialBackendReady" v-slot="{ Component, route: viewRoute }">
+        <!-- Firmware selection keeps its pending result visible while a probe
+             switch still invalidates both cached target download forms. -->
+        <component :is="Component" v-if="viewRoute.name === 'config'" :key="viewRoute.path" />
         <!-- Override the shared v-if branch key so cached flash pages stay distinct. -->
         <KeepAlive :key="downloadViewKey" include="OnlineFlashView,OfflineFlashView">
-          <component :is="Component" v-if="viewRoute.name !== 'dashboard'" :key="viewRoute.path" />
+          <component :is="Component" v-if="viewRoute.name !== 'dashboard' && viewRoute.name !== 'config'" :key="viewRoute.path" />
         </KeepAlive>
       </router-view>
       <div v-else-if="backendState === 'starting'" class="backend-starting" data-testid="backend-starting" role="status">

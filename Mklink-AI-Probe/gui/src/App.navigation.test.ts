@@ -65,8 +65,12 @@ describe('App route cache', () => {
       expect(wrapper.get('[data-testid="dashboard-page"]').attributes('style')).toContain('display: none')
       // Switching targets invalidates both cached flash forms, while ordinary
       // route navigation above retains edits for the current device.
+      await router.push({ name: 'config' })
+      await flushPromises()
+      await wrapper.get('[data-testid="config-page"] input').setValue('firmware check pending')
       deviceStatus.value = { device_generation: deviceStatus.value.device_generation + 1 }
       await flushPromises()
+      expect((wrapper.get('[data-testid="config-page"] input').element as HTMLInputElement).value).toBe('firmware check pending')
       for (const name of ['online-flash', 'offline-flash']) {
         await router.push({ name })
         await flushPromises()
