@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-26T11:31:29+08:00",
+  "updated_at": "2026-10-26T11:46:19+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.4.1-fixes",
-    "head": "首批代码94dc25d7；交接单独提交，最终HEAD见Git。v0.4.0标签仍固定0c9c2d97。",
+    "head": "固件修复94dc25d7，脱机识别f4f8a180；交接单独提交，最终HEAD见Git。v0.4.0仍固定0c9c2d97。",
     "remote_head": "microkeen/main=87080ed8，PR60已合并；旧文档的未合并条件失效。",
     "working_tree": "0.4.1在新托管工作树内开发；E盘原main保持干净。旧firmware-keil-coexist detached工作树归属旧聊天，用户要求保留，不强删。"
   },
@@ -13,8 +13,8 @@
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "v041_firmware_fixes",
-    "current_task": "0.4.1首批修复：固件按钮先绑定所选/唯一设备，检查不再静默失败；桌面代理开放固件下载元数据，保存服务端完整版本名称。上海COS三份固件完整哈希正确；真实浏览器完成当前V4.6.8→V4.7.1自动升级和原生来源跨域下载验证。后续任务继续同一分支；本批不合并、不发布、不改正式安装。"
+    "status": "v041_cumulative_fixes",
+    "current_task": "0.4.1累计修复：固件检查/升级绑定与版本文件名已修复；脱机页自动识别V2/V3/V4，支持插拔刷新、多设备选择。真实V4页面显示4.7.1且未连接目标。继续同一分支/草稿PR61；不合并、不发布、不改正式安装。"
   },
   "milestones": [
     {
@@ -66,8 +66,8 @@
       "area": "STM32H7双核Pack候选修复"
     },
     {
-      "area": "0.4.1固件检查与下载修复",
-      "result": "174项Python、1125项GUI、70项反馈/Skill边界、生产构建通过。真实页面恢复missing绑定后检查正常，V4.6.8自动升至V4.7.1/build2026-10-25T17:32:28，复查一致。V2.9.2 RBL/V3.6.7 UF2/V4.7.1 UF2的上海COS完整下载哈希均匹配索引；原生http://tauri.localhost来源真实浏览器能读完整文件名，响应体哈希相同。未做V2/V3实物刷写或新安装器验收。详见docs/verification/v041-firmware-update.md；旧0.3.6资格见其release handoff。"
+      "area": "0.4.1固件与脱机识别修复",
+      "result": "固件：174Python、1125GUI、70反馈/Skill、生产构建通过；真实V4.6.8升4.7.1，COS三型号完整哈希及原生来源文件名通过，见v041-firmware-update.md。脱机：151Python、1133GUI、末次64定点、生产构建通过；真机页面自动显示V4.7.1，切页返回正常，后台lobby且目标未连接。首次缺FLM资源，复用原工作区后全组重跑通过。见docs/verification/v041-offline-probe-detection.md。V2/V3实体、真实插拔/多设备及新安装器未验收。"
     },
     {
       "area": "BIN/HEX脱机校验开关",
