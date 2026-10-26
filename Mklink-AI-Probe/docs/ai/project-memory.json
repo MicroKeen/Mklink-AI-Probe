@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-26T11:46:19+08:00",
+  "updated_at": "2026-10-26T11:57:28+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.4.1-fixes",
-    "head": "固件修复94dc25d7，脱机识别f4f8a180；交接单独提交，最终HEAD见Git。v0.4.0仍固定0c9c2d97。",
+    "head": "测试包源码15adc440，Web资源92e43811；最后HEAD见Git。0.4.0固定0c9c2d97。",
     "remote_head": "microkeen/main=87080ed8，PR60已合并；旧文档的未合并条件失效。",
     "working_tree": "0.4.1在新托管工作树内开发；E盘原main保持干净。旧firmware-keil-coexist detached工作树归属旧聊天，用户要求保留，不强删。"
   },
@@ -13,8 +13,8 @@
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "v041_cumulative_fixes",
-    "current_task": "0.4.1累计修复：固件检查/升级绑定与版本文件名已修复；脱机页自动识别V2/V3/V4，支持插拔刷新、多设备选择。真实V4页面显示4.7.1且未连接目标。继续同一分支/草稿PR61；不合并、不发布、不改正式安装。"
+    "status": "v041_test_install_pending",
+    "current_task": "0.4.1-rc.1 Windows本地测试包已构建，固件/文件名/脱机识别修复齐备。解包及冻结后台通过；安装UAC等待后返回用户取消，当前仍0.4.0，待用户确认重试。继续统一分支/PR61，不正式发布。见v041-windows-rc1.md。"
   },
   "milestones": [
     {
@@ -67,7 +67,7 @@
     },
     {
       "area": "0.4.1固件与脱机识别修复",
-      "result": "固件：174Python、1125GUI、70反馈/Skill、生产构建通过；真实V4.6.8升4.7.1，COS三型号完整哈希及原生来源文件名通过，见v041-firmware-update.md。脱机：151Python、1133GUI、末次64定点、生产构建通过；真机页面自动显示V4.7.1，切页返回正常，后台lobby且目标未连接。首次缺FLM资源，复用原工作区后全组重跑通过。见docs/verification/v041-offline-probe-detection.md。V2/V3实体、真实插拔/多设备及新安装器未验收。"
+      "result": "固件174Python/1125GUI/70反馈，实际V4.6.8升4.7.1及COS文件名/哈希通过；脱机151Python/1133GUI/64定点，真机自动识别V4.7.1且未连接目标。见v041-firmware-update.md和v041-offline-probe-detection.md。rc.1本地NSIS184440324字节，211Python/41Web一致、7059型号/2224FLM/4800SVD、冻结CLI/MCP/健康/退出通过；构建更新60项通过。UAC返回取消，尚未实装/原生验收，见docs/verification/v041-windows-rc1.md。"
     },
     {
       "area": "BIN/HEX脱机校验开关",
@@ -96,7 +96,7 @@
   ],
   "hardware": {
     "state": "2026-10-26重新核对现场：当前接入的是V4.6.8/build2026-10-10T11:24:10，已通过修复页面自动升级并复核为正式V4.7.1/build2026-10-25T17:32:28；未连接目标会话、未写目标固件/VCC/OTP。旧交接的V4.7.2私有候选是先前设备状态，不代表本次设备，不自动降级或发布候选。双核脱机正向验收仍未完成。",
-    "installer": "已覆盖安装正式源0c9c2d97的0.4.0；211Python/41Web/3626载荷、更新签名、原生启动退出通过，桌面与Web官方网站导航及统一13px字体已实测，后台管理诊断包均成功导出。",
+    "installer": "当前仍正式0.4.0；0.4.1-rc.1本地测试包已生成并完成解包/冻结后台资格，UAC返回取消，实装和原生验收待继续。包和脚本保留F:/MKLink-Build/artifacts/v041-rc1-15adc440；无更新签名/正式发布。",
     "backups": "正式release、原安装包、CI ZIP、唯一硬件证据、Skill备份和当前F盘缓存保留。删除61个可再生旧编译/解压目录；218个含链接测试目录未删。完整人工清单和删除结果在F:/MKLink-Build/reports/cleanup-20261023，见v036-storage-cleanup-20261023.md。 2026-10-24另按明确授权删除896个本地Linux/macOS包/签名/归档/分片，释放16072740412字节；归档证据另存unix-package-cleanup，线上正式附件保留。 2026-10-25后续清理仅删除2个无链接临时运行目录4498081字节；271个含链接目录按规则保留。两个v036候选分支存入已验证v036-local-candidates.bundle再删除，恢复前核对bundle前置提交。"
   },
   "known_limits": [
@@ -110,7 +110,7 @@
     "nRF54L15 GUI保护闭环、全部物理擦除/拔插/休眠/断电场景、电源外部精度校准未全部认证。VCC每次改动必须确认具体电压，HPM已锁定OTP不得重放。 已知无可靠扇区表的26个FLM禁用扇区操作；重叠算法需要匹配Bank模式。 HPM5301组18/19永久锁定的历史状态及用户字先写/组锁最后、全部固件独立校验后才写OTP等边界见docs/ai/hpm-offline-otp-handoff.md；接手重新确认芯片，其他型号不继承验收。 UART OTP已实现ROM write-memory APIv2，独立熔丝/影子/临时锁读语义仍未知并如实显示；以ROM写入状态及回读为准。配套3d96dbb已实机验证HPM5301全部128字读取和用户批准的Word69 0→1单次写入回读；其余型号/区域未实写，新数据须具体授权。多Word顺序执行不可回滚。CSV原生选择器自动化未完成。 V3直连USB、RTT空采集约30分钟掉线仍未定因；再次复现先导出诊断再拔插，本轮V4短测不能关闭。"
   ],
   "next_actions": [
-    "后续0.4.1任务继续codex/v0.4.1-fixes；本批尚未构建或安装新Windows应用，不把源码验证宣称为正式包验收。",
+    "用户确认可处理UAC后重试0.4.1-rc.1安装，完成qualify-installed、原生/浏览器检查再交用户测试；继续codex/v0.4.1-fixes，不正式发布。",
     "双核脱机需真实M7/M4板正向验收；V3空RTT约30分钟掉线再次复现先导出诊断再拔插。两项保持未闭环，私有候选不得公开替换正式固件。",
     "公网远程服务中继为下个版本任务；本次不实施。",
     "下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。",
