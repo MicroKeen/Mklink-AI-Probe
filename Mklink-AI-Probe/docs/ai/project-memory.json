@@ -1,20 +1,20 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-27T09:16:04+08:00",
+  "updated_at": "2026-10-27T11:05:49+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
-    "branch": "codex/v0.4.1-fixes",
-    "head": "安装器元数据修复源cb30b703，集成PR63；最新HEAD以Git为准。正式v0.4.1固定514efb86，未重发。",
-    "remote_head": "PR63用于集成覆盖安装元数据修复，实际main合并提交以Git为准；正式v0.4.1标签仍固定514efb86。",
-    "working_tree": "0.4.1在新托管工作树内开发；E盘原main保持干净。旧firmware-keil-coexist detached工作树归属旧聊天，用户要求保留，不强删。"
+    "branch": "main",
+    "head": "PR63已合并d5bb68e3，安装器修复源cb30b703；最新交接提交见Git。正式v0.4.1固定514efb86。",
+    "remote_head": "以最新microkeen/main为准；0.4.1修复均已合入，交接后清理旧分支，下个会话从main新建codex/v0.4.2-fixes。",
+    "working_tree": "回到E盘原main工作区，源码在同名子目录。0.4.1托管树先审计忽略文件再归档；若受保护则保留。旧firmware-keil-coexist detached树继续保留，不强删。最终清理结果见本地v042-session-handoff-20261027/START_HERE.txt。"
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "installer_fix_verified_next_release",
-    "current_task": "安装器自动清理旧元数据已完成并实装验证，PR63集成main，留待下版。真实残留复现误报0.3.6，NSIS清理后0.4.1；依赖和配置未变。5577Python/2skip、1133GUI、本地NSIS、冻结CLI/MCP、原生/Web/正常退出通过。不重发0.4.1或改云端，见installer-metadata-cleanup-20261027.md。"
+    "status": "handoff_ready_for_v042",
+    "current_task": "0.4.1收尾交接，维护者要求清理已合并的修复分支并回main；下个会话从最新main新建codex/v0.4.2-fixes，具体任务另行指定。安装器清理修复已实装验收并合入PR63，留待下版，不重发0.4.1。入口docs/ai/v042-session-handoff.md。"
   },
   "milestones": [
     {
@@ -83,7 +83,7 @@
     }
   ],
   "decisions": [
-    "0.4.1正式发布已获明确授权并完成，PR61已合并，所有后续任务继续codex/v0.4.1-fixes，不逐项建分支。正式v0.4.1源514efb86及标签不可变，旧错误暂存包已撤为草稿，稳定索引未引用它。0.4.0不重发；旧detached工作树保留。双核私有固件不替换公开源，公网中继留后续版本。 2026-10-27用户授权旧元数据清理修复测试后合并main，明确不重发0.4.1，留到下版；实际安装已验证。",
+    "0.4.1正式发布已完成，正式源514efb86及资产不可变，不重发。PR63安装器修复已合并d5bb68e3，留到下版。2026-10-27维护者要求交接后删除无独有工作的0.4.1分支、回原main；下个会话fetch后从最新main新建codex/v0.4.2-fixes，不提前创建。旧detached树保留，私有固件不公开，公网中继等待后续任务。",
     "后台协议 52：一个 GUI 客户端持有一个固定后台，同窗口切换只改下载器，RTT/Watch/Trace 跟随当前设备并清空旧目标状态；另开客户端才建独立后台。已有 URL 的额外页面共享该后台。工程上下文固定，换工程须停止原后台后重开。",
     "物理探针唯一 OS 所有权、USB 身份核对和 epoch 隔离保留。GUI/AI 明确断开或切换自动停止采集、排空在途操作并释放端口；旧会话不得跨设备，未知结果不得自动重放，不偷取其他后台占用。MCP disconnect 物理断开，detach 仅退出自身；独立 UART 保留。",
     "SuperWatch 变量写入只认写应答，不做自动回读；烧录/显式内存校验仍保留，真实写错误不得吞掉或重放。外设 ID 基于 Pack 版本/芯片/SVD 相对路径；失效选择不得阻断物理连接，无法迁移时重选。 在线型号提供脱机/外设默认值，各页可独立修改；Pack操作完成自动刷新。下载先预留唯一物理身份，不要求先连接目标；自身预留不重建下载表单，其他设备切换仍清理。",
@@ -110,14 +110,14 @@
     "nRF54L15 GUI保护闭环、全部物理擦除/拔插/休眠/断电场景、电源外部精度校准未全部认证。VCC每次改动必须确认具体电压，HPM已锁定OTP不得重放。 已知无可靠扇区表的26个FLM禁用扇区操作；重叠算法需要匹配Bank模式。 HPM5301组18/19永久锁定的历史状态及用户字先写/组锁最后、全部固件独立校验后才写OTP等边界见docs/ai/hpm-offline-otp-handoff.md；接手重新确认芯片，其他型号不继承验收。 UART OTP已实现ROM write-memory APIv2，独立熔丝/影子/临时锁读语义仍未知并如实显示；以ROM写入状态及回读为准。配套3d96dbb已实机验证HPM5301全部128字读取和用户批准的Word69 0→1单次写入回读；其余型号/区域未实写，新数据须具体授权。多Word顺序执行不可回滚。CSV原生选择器自动化未完成。 V3直连USB、RTT空采集约30分钟掉线仍未定因；再次复现先导出诊断再拔插，本轮V4短测不能关闭。"
   ],
   "next_actions": [
-    "覆盖升级旧元数据自动清理已修复并验证，PR63集成main，留待下个版本发布。正式0.4.1及其云端/签名/索引不可变，不重发；本机为未发布测试包。继续既有codex/v0.4.1-fixes，后续新任务先核对Git实际状态。",
+    "下个会话在E盘原main工作区读取CURRENT_HANDOFF与v042-session-handoff.md，核对Git并fetch microkeen；从最新main新建codex/v0.4.2-fixes，不直接修改main。0.4.1不重发，安装器修复随下版；具体任务由维护者指定。",
     "双核脱机需真实M7/M4板正向验收；V3空RTT约30分钟掉线再次复现先导出诊断再拔插。两项保持未闭环，私有候选不得公开替换正式固件。",
     "公网远程服务中继为下个版本任务；本次不实施。",
     "下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。",
     "如需减少Windows未知发布者提示，需用户另行提供/办理可信代码签名身份；当前无证书，不重发相同未签名包。下次先核对当前Git及真实硬件，不重复已完成的发布/云迁移。"
   ],
   "continuation_protocol": [
-    "先读CURRENT_HANDOFF.md、docs/verification/v041-release-handoff.md并核对实际Git。0.4.1正式源514efb86，PR61已合并，用户已明确授权发布且已完成；不要再等授权、重复发版或使用v041-release-final中撤回的安装包，正确证据在v041-release-corrected。上海28资源、90/95GiB保护保留账本，套餐北京时间2026-11-26零点到期未续费不自动恢复；监控有延迟非账单硬上限。不申请新私钥，只维护MicroKeen GitHub和Gitee，保留原main与旧detached树。",
+    "先读CURRENT_HANDOFF.md与v042-session-handoff.md，核对实际Git；主工作区E盘main，源码在同名子目录。下个会话从最新microkeen/main新建codex/v0.4.2-fixes。0.4.1正式源514efb86、PR61已发布；PR63安装器修复仅留待下版，不重复发布。正确正式包在v041-release-corrected，禁止用撤回包。上海90/95GiB保护保留账本，2026-11-26北京时间零点到期未续费不恢复，非账单上限。不申请新私钥，旧detached树保留。",
     "硬件以最新现场为准：2026-10-26晚当前V4.7.2/build22:51:11，H743单核在线、四脱机、19采集调试通过；此前V4.6.8→4.7.1真实升级是较早现场。没有双核板，不宣称双核脱机正向通过；不自动降级或发布候选固件。",
     "V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。",
     "CDC 995根因仅保留待排查。恢复只允许同身份CDC故障5秒内；超时不自动接回或新建AI会话，主动断开立即生效，不重放未知写入。测试实例已经全部释放；见v035-transport-recovery.md，不寻找旧现场窗口。",
