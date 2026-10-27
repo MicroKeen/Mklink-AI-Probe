@@ -43,6 +43,7 @@ def builder(monkeypatch, tmp_path):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     monkeypatch.setattr(module, "build_web_assets", lambda: tmp_path / "gui" / "dist")
+    monkeypatch.setattr(module, "refresh_distribution_metadata", lambda: {})
     from types import SimpleNamespace
     monkeypatch.setattr(module, "load_builtin_pack_assets", lambda: SimpleNamespace(
         prepare_bundle=lambda _: tmp_path / "builtin_packs",

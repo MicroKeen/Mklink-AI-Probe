@@ -18,6 +18,8 @@ import shutil
 import argparse
 import platform
 import json
+import tomllib
+from email.parser import Parser
 from contextlib import contextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -194,6 +196,19 @@ def build_web_assets():
     return dist
 
 
+def refresh_distribution_metadata():
+    """Freeze this checkout's version, never an editable install's stale record."""
+    expected = tomllib.loads((SKILL_DIR / "pyproject.toml").read_text("utf-8"))["project"]["version"]
+    run([sys.executable, "-c", "from setuptools import setup; setup(script_args=['egg_info'])"],
+        cwd=str(SKILL_DIR))
+    metadata = Parser().parsestr((SKILL_DIR / "mklink.egg-info/PKG-INFO").read_text("utf-8"))
+    if metadata["Name"] != "mklink" or metadata["Version"] != expected:
+        raise RuntimeError("MKLink distribution metadata does not match pyproject.toml")
+    env = os.environ.copy()
+    env["PYTHONPATH"] = os.pathsep.join(filter(None, [str(SKILL_DIR), env.get("PYTHONPATH")]))
+    return env
+
+
 def build_sidecar(force=False):
     """Build Python sidecar exe with PyInstaller."""
     sidecar_dir = TAURI_DIR / "binaries"
@@ -212,6 +227,7 @@ def build_sidecar(force=False):
         return True
 
     gui_dist = build_web_assets()
+    metadata_env = refresh_distribution_metadata()
     print("[INFO] Building Python sidecar with PyInstaller...")
     try:
         import PyInstaller  # noqa: F401
@@ -283,7 +299,7 @@ def build_sidecar(force=False):
             "--add-data", "{}{}gui/dist".format(gui_dist, os.pathsep),
             "-p", str(SKILL_DIR),
             str(SKILL_DIR / "mklink" / "__main__.py"),
-        ], cwd=str(SKILL_DIR))
+        ], cwd=str(SKILL_DIR), env=metadata_env)
 
     sidecar_dir.mkdir(parents=True, exist_ok=True)
     if built.exists():

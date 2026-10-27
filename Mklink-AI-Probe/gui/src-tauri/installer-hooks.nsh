@@ -1,4 +1,5 @@
 !include "${__FILEDIR__}\installer-file-check.nsh"
+!include "${__FILEDIR__}\installer-metadata.nsh"
 
 ; .onInit has restored the installed directory before MUI initializes its UI.
 ; Check before Tauri's maintenance page can launch an OLD uninstaller, whose
@@ -24,10 +25,12 @@ Var MklinkLegacyInstallDir
 
 !macro NSIS_HOOK_PREINSTALL
   Call MklinkWaitForUpgradeFiles
+  Call MklinkCleanDistributionMetadata
   ; Tauri owns uninstall/reinstall. In /UPDATE mode it deliberately overwrites
   ; in place and preserves shortcuts. Launching another uninstaller here races
   ; file extraction and deletes shortcuts which /UPDATE will not recreate.
-  ; Keep legacy files/registration until a separate, explicit cleanup.
+  ; Keep other legacy files/registration; only our distribution metadata is
+  ; removed above, before the new payload restores its current metadata.
   StrCpy $MklinkLegacyInstallDir ""
   ${If} $UpdateMode = 1
     ReadRegStr $MklinkLegacyInstallDir HKCU "${MANUPRODUCTKEY}" ""
