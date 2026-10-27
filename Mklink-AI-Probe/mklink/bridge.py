@@ -390,7 +390,9 @@ class MKLinkSerialBridge:
         self._running = False
         self._prompt_event.set()  # 唤醒可能等待的线程
         if self._reader_thread and self._reader_thread.is_alive():
-            self._reader_thread.join(timeout=2.0)
+            self._reader_thread.join(timeout=getattr(self, 'reader_close_timeout', 2.0))
+            if getattr(self, 'auto_recovery', True) is False and self._reader_thread.is_alive():
+                raise ConnectionError('Wireless reader still owns IO; transport ownership retained')
         if self._serial and self._serial.is_open:
             try:
                 self._serial.close()
@@ -434,6 +436,7 @@ class MKLinkSerialBridge:
                 return None
             transport = MuxTransport(self._serial.write, self._cmd_lock,
                                      diagnostic_context={'connection': getattr(self, '_diagnostic_id', None), 'port': getattr(self, '_port', None)})
+            transport.command_timeout = getattr(self, 'mux_timeout', 3.0)
             self._mux = transport  # The existing reader changes decoder before entry.
             try:
                 self._mux_marker.parent.mkdir(parents=True, exist_ok=True)
@@ -826,7 +829,7 @@ class MKLinkSerialBridge:
                 self._prompt_event.clear()
 
             stop_prompt_seen = False
-            for _attempt in range(_FAILED_STREAM_STOP_ATTEMPTS):
+            for _attempt in range(getattr(self, 'stream_stop_attempts', _FAILED_STREAM_STOP_ATTEMPTS)):
                 if self._transport_error is not None:
                     self._ctx.state = DeviceState.ERROR
                     return False
@@ -841,7 +844,7 @@ class MKLinkSerialBridge:
                     return False
                 except AttributeError:
                     break
-                if self._prompt_event.wait(timeout=_FAILED_STREAM_STOP_TIMEOUT):
+                if self._prompt_event.wait(timeout=getattr(self, 'stream_stop_timeout', _FAILED_STREAM_STOP_TIMEOUT)):
                     if self._transport_error is not None:
                         self._ctx.state = DeviceState.ERROR
                         return False
@@ -871,7 +874,7 @@ class MKLinkSerialBridge:
                 self._ctx.state = DeviceState.ERROR
                 return False
 
-            deadline = time.monotonic() + _FAILED_STREAM_IDENTITY_TIMEOUT
+            deadline = time.monotonic() + getattr(self, 'stream_identity_timeout', _FAILED_STREAM_IDENTITY_TIMEOUT)
             while True:
                 remaining = deadline - time.monotonic()
                 if remaining <= 0 or not self._prompt_event.wait(timeout=remaining):

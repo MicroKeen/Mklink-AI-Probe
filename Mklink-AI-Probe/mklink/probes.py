@@ -62,6 +62,16 @@ def inventory() -> list[dict]:
         probes.append({"probe_id": probe_id, "port": port.device, "vid": port.vid, "pid": port.pid, "serial_number": port.serial_number or "",
                        "description": port.description, "location": port.location or "", "identity_stable": stable,
                        "alias": aliases.get(probe_id, "") if stable else ""})
+    from mklink.s3_registry import inventory as wireless_inventory
+    try:
+        wireless = wireless_inventory()
+    except (ValueError, TypeError, KeyError, OSError):
+        import logging
+        logging.getLogger(__name__).warning('S3 registration unavailable; inspect local s3-nodes.json. USB discovery remains available.')
+        wireless = []
+    for probe in wireless:
+        probe['alias'] = aliases.get(probe['probe_id'], '')
+        probes.append(probe)
     return sorted(probes, key=lambda p: (p["alias"].casefold(), p["probe_id"]))
 
 

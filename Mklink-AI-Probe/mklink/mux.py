@@ -52,8 +52,9 @@ class MuxTransport:
     # sustained overload, never block the sole USB reader or command replies.
     WATCH_QUEUE_BYTES = 262144
 
-    def __init__(self, write, command_lock=None, *, diagnostic_context=None):
+    def __init__(self, write, command_lock=None, *, diagnostic_context=None, command_timeout=3.0):
         self._diagnostic_context = diagnostic_context or {}
+        self.command_timeout = command_timeout
         self._write = write
         self._condition = threading.Condition()
         self._commands = command_lock or threading.RLock()
@@ -109,7 +110,7 @@ class MuxTransport:
         if self._next_id > 0xffffffff:
             raise MuxError('Request IDs exhausted; close and create a new session')
         req = self._next_id
-        self._pending = (op, req, time.monotonic()+3, heartbeat)
+        self._pending = (op, req, time.monotonic()+self.command_timeout, heartbeat)
         self._reply = None
         wire = packet(op, 0 if op == 1 else self.epoch, req,
                       (self.nonce if 0x10 <= op < 0x40 else b'') + payload)

@@ -35,7 +35,7 @@ def runtime_dir(probe_id=None) -> Path:
         root = platform_data_dir().parent / "runtime"
     if probe_id is not None:
         import re
-        if not re.fullmatch(r"(?:usb-|local-)[0-9a-f]{24}|lobby", probe_id):
+        if not re.fullmatch(r"(?:usb-|local-)[0-9a-f]{24}|s3-[0-9a-f]{12}|lobby", probe_id):
             raise RuntimeErrorResponse("Invalid probe identity")
         root = root / "probes" / probe_id
     return root

@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-27T11:05:49+08:00`
-- 分支：`main`
-- HEAD：`PR63已合并d5bb68e3，安装器修复源cb30b703；最新交接提交见Git。正式v0.4.1固定514efb86。`
-- 远端 HEAD：`以最新microkeen/main为准；0.4.1修复均已合入，交接后清理旧分支，下个会话从main新建codex/v0.4.2-fixes。`
-- 工作树：回到E盘原main工作区，源码在同名子目录。0.4.1托管树先审计忽略文件再归档；若受保护则保留。旧firmware-keil-coexist detached树继续保留，不强删。最终清理结果见本地v042-session-handoff-20261027/START_HERE.txt。
-- 当前任务：0.4.1收尾交接，维护者要求清理已合并的修复分支并回main；下个会话从最新main新建codex/v0.4.2-fixes，具体任务另行指定。安装器清理修复已实装验收并合入PR63，留待下版，不重发0.4.1。入口docs/ai/v042-session-handoff.md。
-- 状态：`handoff_ready_for_v042`
+- 更新时间：`2026-10-28T01:14:17+08:00`
+- 分支：`codex/s3-shared-runtime`
+- HEAD：`任务基于microkeen/main 3cc474bb；精确提交见Git。`
+- 远端 HEAD：`本任务已fetch并核对3cc474bb；未推main或发布。`
+- 工作树：用户原GUI变更保存在具名stash和备份分支，任务生成的GUI产物另存stash；仅提交适配源码与文档。
+- 当前任务：S3在既有Device/runtime/SiteAgent协议下做传输适配，上位机与技能共用会话。STA/AP/BLE实机、硬件恢复及真实浏览器交接通过；提交任务分支供审查，不发布或合并。见s3-shared-adapter.md。
+- 状态：`validated_task_branch`
 
 ## 里程碑
 
@@ -23,17 +23,16 @@
 
 ## 验证证据
 
+- **S3 shared adapter**：346 affected backend tests, then85 entry/site tests; 18 workbench tests. Actual STA/AP/BLE shared stdio MCP+workbench UID, RAM challenge, RTT bidirectional, SuperWatch and Trace pass. STA/BLE APP flash full verify; AP original restore through existing remote MCP flash pass and full512KiB byte comparison. AP/BLE MCP RTT survives workbench detach. C6 original16MiB restored/verified; S3 originalAP config restored; PCWLAN unchanged. Native frozen workbench UID, browser GUI and packaged remote MCP real BLE read pass; standalone workbench installer tracked in its own delivery.
 - **安装器旧元数据自动清理**：源cb30b703：62定点、5577Python/2skip、1133GUI和本地NSIS通过；真实八文件旧dist-info复现误报0.3.6，覆盖exit0自动清理后更新检查0.4.1。207保留文件哈希不变、3626安装载荷一致；冻结CLI/MCP/内置FLM/Pack、原生3.767秒/Web/正常退出通过。PR63集成，留待下版，正式0.4.1不变。见installer-metadata-cleanup-20261027.md。
 - **0.4.0正式发布验收**：0.4.0源0c9c2d97，Windows/完整Skill/SiteAgent七资产、签名、公开下载及升级、实装/原生/Web/冻结CLI/MCP通过。5557Python、1104GUI、三CI，3626载荷/211Python/41Web一致。官网0.4.0和历史切换已验。完整证据见v040-release-handoff.md。
 - **上海COS正式0.4.0与90/95保护**：七正式资源COS和新GitHub完整下载SHA256、COS HEAD/Range及七入口服务停止回退通过；恢复服务active；SCF21资产读回一致，保留原周期累计，90GiB告警/95GiB停COS，180秒租约，套餐到期锁停不自动恢复。正式索引写入0.4.0、preview404；Gitee Skill是真实镜像，安装包明确被100MB限制拒绝。无新私钥/SSH权限。 2026-10-26线上代码读回与发布时完全一致；本地执行该代码验证89/90/95GiB边界、到期及次月不恢复、用量下降不解除锁停全部通过。线上定时器每分钟开启，告警策略启用并关联当前函数版本，短信/邮件全天接收。最新健康状态ready，三项正式入口HEAD跳转上海通过；本次未停生产服务重测备用，备用结论来自发行验收。
 - **H743正式固件与双核候选边界**：正式V4.7.1升级、在线215716B回读、HEX/BIN校验开关四脱机组合、19采集调试、4067样本/52643周期零错、安静RTT60秒通过。私有V4.7.2候选误选双核写前拒绝，完整2MiB未变；单核在线/四脱机/19采集调试通过，4070样本/52847周期零错。当前本机仍候选，公开固件不变；客户在线M7/M4成功，无双核实体正向脱机验收，无UART/VCC/OTP，本轮不关闭V3长期掉线。
 - **STM32H7双核Pack候选修复**：客户在线M7/M4 HEX均成功，在线闭环。V4.7.2/V3.6.8/V2.9.3双核脱机候选已交付，46相关软件回归通过但没有双核实板；上位机能力门槛已实现且在正式4.7.1实际拒绝双核部署、不写脚本。H743候选单核兼容与误选双核拒绝已通过，完整2MiB Flash未变；双核实物正向验收仍未完成。
-- **0.4.1固件与脱机识别修复**：正式源514efb86，5565Python/2skip、1133GUI、V4.7.2+H743在线/四脱机216036B及19采集调试通过。候选NSIS实装exit0；最终签名包冻结版本/211Python/41Web/7059FLM型号/4800SVD通过，原生3.658秒、V4自动识别、正常退出通过。用户退出旧窗口后正式覆盖exit0/3626文件一致，清理已备份的旧dist-info后MCP版本正确，原生3.752秒/正常退出通过。七资源GitHub/COS完整哈希、HEAD/Range、解析器停止备用并恢复active；三索引0.4.1、preview404；云端及真实Gitee Skill从0.4.0升级各2623文件一致。见v041-release-handoff.md。
-- **BIN/HEX脱机校验开关**：源b2f29322：356后端、1101全GUI及末次62定点、TS/Vite/Rust通过；Windows覆盖exit0，3624文件/210Python/41Web及冻结、原生/Web/正常退出通过。独立会话普通V4.7.0+H743实测BIN/HEX默认/关闭四组，212672字节回读一致，默认已恢复；本会话仅核对证据。旧固件拒绝仅模拟覆盖，不扩大其他硬件结论。见v036-offline-verification-option.md。
-- **腾讯云下载与更新通道接入**：源码5920c5c5；全Python5412通过2跳过、GUI1090和96项定点通过，CI三项通过；Windows签名、完整FLM/Packs、解包与实装206Python/41Web冻结资格通过。公网安装包8.17秒21.87MiB/s，Skill3.93秒23.94MiB/s；完整SHA/Range通过。Skill真实0.3.5到0.3.6升级2617文件一致、用户文件保留、二次无更新、MCP模糊搜索20候选。GitHub/Gitee实际索引及Gitee完整包通过，无降级。首次UAC未完成；用户要求重试后原生较低版本下载/验签/安装/自动重启成功，启动检查无重复更新或错误提示。临时SSH撤销并验证拒绝，stable404，正式引用未变。详见docs/verification/v036-tencent-preview-20261024.md。
 
 ## 架构决策
 
+- S3 integration is a transport/file adapter under existing Device, shared runtime, jobs, capture cache and authenticated Site Agent WS protocol. No second debug protocol or replacement global skill. Stable node identity across AP/STA/BLE; no auto-replay/reconnect or USB fallback after uncertain wireless I/O. Per-S3 site budgets60/1200s; defaultUSB unchanged10/300s. Local WS is loopback authenticated; WSS requires operator TLS deployment.
 - 0.4.1正式发布已完成，正式源514efb86及资产不可变，不重发。PR63安装器修复已合并d5bb68e3，留到下版。2026-10-27维护者要求交接后删除无独有工作的0.4.1分支、回原main；下个会话fetch后从最新main新建codex/v0.4.2-fixes，不提前创建。旧detached树保留，私有固件不公开，公网中继等待后续任务。
 - 后台协议 52：一个 GUI 客户端持有一个固定后台，同窗口切换只改下载器，RTT/Watch/Trace 跟随当前设备并清空旧目标状态；另开客户端才建独立后台。已有 URL 的额外页面共享该后台。工程上下文固定，换工程须停止原后台后重开。
 - 物理探针唯一 OS 所有权、USB 身份核对和 epoch 隔离保留。GUI/AI 明确断开或切换自动停止采集、排空在途操作并释放端口；旧会话不得跨设备，未知结果不得自动重放，不偷取其他后台占用。MCP disconnect 物理断开，detach 仅退出自身；独立 UART 保留。
@@ -43,17 +42,17 @@
 - 用户2026-10-24明确长期规则：默认只构建Windows安装包；仅在用户明确要求Linux/macOS时才构建对应安装包或触发原生CI，一般构建、全功能验收及发布请求不包含它们。用户Skill仍需完整FLM/Pack资格检查。历史Linux/macOS本地构建包已按用户要求清理，保留日志与验收证据；用户明确保留GitHub已正式发布附件。 构建使用scripts/build_workspace.ps1与F:/MKLink-Build，保留正式包、独有证据和依赖。用户明确清理授权下可删除过时可再生编译输出，链接/不可访问目录交人工处理，不强删。唯一原工作区保持；清理不接管硬件、不重复发布。
 - 工程上下文固定于后台生命周期；被动MI_04枚举不遍历占用设备，底层自动连接只接受唯一候选；本机别名不写固件。未知结果不重放，worker实际退出后才发布串口关闭，取消前保留缓冲寿命，背压错误不隐瞒。
 - 原MK-Firmware及用户固件工程改动保留，不自动恢复旧备份。2026-10-18授权的0.3.5、V3.6.5/V4.6.9发布已完成；未知操作不重放。用户要求未解决项保留交接，未扩大验收或宣称客户故障已闭环。
-- 编译完成不代表目标已下载：文件变化仅发待重载提示，不后台解析。用户明确加载/重载文件时自动停止目标采集，确认worker退出后原子换表，保持停止；失败保留旧目录/选择。不要求连接下载器；断开保留文件和选中变量但清空旧采样。公式只改变可视化，原始记录不变；不恢复旧地址采集或重放写操作。
 
 ## 真机环境
 
 - **state**：2026-10-26晚重新核验：当前V4.7.2/build2026-10-26T22:51:11，保留固件不降级。H743用户原工程编译0错0警告，在线/四脱机/19采集调试通过；当前测试程序留在板上，默认脱机校验已恢复。不改VCC/OTP，不扩大双核实体或V3长期掉线结论。此前本会话真实V4.6.8→4.7.1升级证据仍有效，但不代表当前固件。
 - **installer**：本机为cb30b703本地测试NSIS（0.4.1版本号，未签名/未发布），真实旧dist-info自动清理覆盖exit0；3626载荷一致，冻结CLI/MCP/更新检查0.4.1，原生3.767秒/Web/正常退出通过。正式0.4.1源514efb86包保持不变。证据F:/MKLink-Build/artifacts/installer-metadata-cleanup-20261027。
 - **backups**：保留正式release、安装包、CI ZIP、唯一硬件证据、Skill备份和F盘缓存。历史获授权清理结果见v036-storage-cleanup-20261023.md及F盘cleanup-20261023、unix-package-cleanup报告。包含链接的测试目录未强删；本地Unix包清理不影响线上正式附件。两个旧v036候选分支已存入验证过的v036-local-candidates.bundle，恢复前核对前置提交。 本轮清理两份可重新解包的旧测试副本约624MiB，保留安装包和全部证据；含链接测试目录未强删。
+- **s3_session**：2026-10-28：S3fw0.7.2/V4.7.2/STM32F411。原始目标512KiB逐字节恢复，Boot/选项字不变；C6原16MiB已恢复验证；S3恢复AP及清除临时STA凭据。未改供电、保护、外部Flash或PCWLAN。早前H743为另一会话历史。
 
 ## 下一动作
 
-1. 下个会话在E盘原main工作区读取CURRENT_HANDOFF与v042-session-handoff.md，核对Git并fetch microkeen；从最新main新建codex/v0.4.2-fixes，不直接修改main。0.4.1不重发，安装器修复随下版；具体任务由维护者指定。
+1. 审查S3适配PR及s3-shared-adapter.md，未经授权不合并或发布；不把短功能采集当作最大吞吐或长稳认证。正式全局技能/发行资产未替换。
 2. 双核脱机需真实M7/M4板正向验收；V3空RTT约30分钟掉线再次复现先导出诊断再拔插。两项保持未闭环，私有候选不得公开替换正式固件。
 3. 公网远程服务中继为下个版本任务；本次不实施。
 4. 下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。
@@ -72,7 +71,7 @@
 
 ## 延续协议
 
-- 先读CURRENT_HANDOFF.md与v042-session-handoff.md，核对实际Git；主工作区E盘main，源码在同名子目录。下个会话从最新microkeen/main新建codex/v0.4.2-fixes。0.4.1正式源514efb86、PR61已发布；PR63安装器修复仅留待下版，不重复发布。正确正式包在v041-release-corrected，禁止用撤回包。上海90/95GiB保护保留账本，2026-11-26北京时间零点到期未续费不恢复，非账单上限。不申请新私钥，旧detached树保留。
+- For this task, read s3-shared-adapter.md and inspect codex/s3-shared-runtime. Preserve original GUI stash/backup branch. Hardware is restored; re-identify live devices before new operations. Earlier v042-session-handoff.md remains historical release-maintenance context.
 - 硬件以最新现场为准：2026-10-26晚当前V4.7.2/build22:51:11，H743单核在线、四脱机、19采集调试通过；此前V4.6.8→4.7.1真实升级是较早现场。没有双核板，不宣称双核脱机正向通过；不自动降级或发布候选固件。
 - V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。
 - CDC 995根因仅保留待排查。恢复只允许同身份CDC故障5秒内；超时不自动接回或新建AI会话，主动断开立即生效，不重放未知写入。测试实例已经全部释放；见v035-transport-recovery.md，不寻找旧现场窗口。

@@ -23,6 +23,7 @@ mklink-site-agent = "mklink.remote.package_agent:main"
 mklink-remote-mcp = "mklink.remote.mcp:main"
 
 [project.optional-dependencies]
+s3 = ["bleak>=1.0,<3", "cryptography>=43"]
 remote = [
     "websockets>=11.0", "intelhex>=2.3", "httpx>=0.27,<1", "pyocd>=0.44,<0.45",
     "fastapi>=0.100", "starlette>=0.40,<0.47", "uvicorn>=0.35",

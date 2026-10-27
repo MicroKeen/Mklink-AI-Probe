@@ -362,7 +362,8 @@ class Device:
             raise DeviceNotConnectedError(
                 'No unique MKLink command port; run mklink probes list and select a probe or explicit port'
             )
-        bridge = MKLinkSerialBridge(candidate)
+        from mklink.transport_factory import create_bridge
+        bridge = create_bridge(candidate)
         try:
             if not bridge.connect():
                 reason = getattr(bridge, 'last_connect_error', None) or 'Command-port handshake failed'
@@ -427,6 +428,13 @@ class Device:
             except Exception:
                 self.close()
                 raise
+
+    def _deploy_flash_algorithm(self, algorithm):
+        provider = getattr(self._bridge, 'upload_algorithm', None)
+        if provider is not None:
+            return provider(algorithm)
+        from mklink.cmsis_dap.algorithm_catalog import deploy_algorithm_to_probe
+        return deploy_algorithm_to_probe(algorithm)
 
     def set_debug_speed(self, profile: str) -> dict:
         """Apply a named 4/10/20/30 MHz profile to an idle connection."""
@@ -936,6 +944,10 @@ class Device:
                 result["verified"] = True
             return result
 
+        prepare = getattr(self._bridge, 'prepare_firmware', None)
+        if prepare is not None:
+            prepare(firmware)  # Radio staging must finish before FLM halts the target.
+
         if resolved_target:
             from mklink.cmsis_dap.algorithm_catalog import (
                 FlashAlgorithmError,
@@ -960,7 +972,7 @@ class Device:
                     )
                     catalog_algorithm = catalog_selections[0].algorithm
                     if len(catalog_selections) == 1:
-                        flm_path = deploy_algorithm_to_probe(catalog_algorithm)
+                        flm_path = self._deploy_flash_algorithm(catalog_algorithm)
                         algorithm_flash_base = _fmt_hex(catalog_algorithm.flash_start)
                         if ext == ".hex":
                             flash_base = algorithm_flash_base
@@ -988,6 +1000,8 @@ class Device:
                 OSError,
                 RuntimeError,
             ):
+                if getattr(self._bridge, 'auto_recovery', True) is False:
+                    raise  # Wireless upload outcome unknown: never use an older FLM.
                 # A verified profile remains a conservative compatibility
                 # fallback when a standalone package omits the catalog or a
                 # catalog payload cannot be deployed to the probe's volume.
@@ -1035,7 +1049,7 @@ class Device:
             with tempfile.TemporaryDirectory(prefix="mklink-flash-regions-") as temporary:
                 for index, selection in enumerate(catalog_selections):
                     algorithm = selection.algorithm
-                    flm_path = deploy_algorithm_to_probe(algorithm)
+                    flm_path = self._deploy_flash_algorithm(algorithm)
                     selected_ram = algorithm.ram_start or int(ram_base, 0)
                     if not self._flash.load_flm(
                         flm_path,
@@ -2672,7 +2686,7 @@ def connect(
     # close() 释放；与 hil_core.lockd 编排器在同一锁名上互斥（T5 原生对齐）。
     from mklink.hil_lock import HilFileLock, transport_lock_name
     hil_lock = HilFileLock(
-        transport_lock_name("usb-serial", dev.port),
+        transport_lock_name("s3" if str(dev.port).startswith("s3-") else "usb-serial", dev.port),
         owner_id=f"mklink-{os.getpid()}",
     )
     try:

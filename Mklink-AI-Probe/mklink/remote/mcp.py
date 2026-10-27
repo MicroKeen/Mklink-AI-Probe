@@ -20,6 +20,11 @@ def register_tools(mcp: Any, registry: Any | None = None) -> None:
         registry = default_registry()
 
     def client_for(site: str):
+        # A workbench can register a site after this MCP process started.
+        # Reload metadata only; existing socket sessions are never replaced.
+        refresh = getattr(registry, 'reload', None)
+        if callable(refresh):
+            refresh()
         return registry.client(site or None)
 
     def supported(client: Any, capability: str) -> None:
@@ -30,6 +35,9 @@ def register_tools(mcp: Any, registry: Any | None = None) -> None:
     def remote_sites() -> list[dict[str, Any]]:
         """List registered direct VPN/LAN sites; authentication tokens are omitted."""
 
+        refresh = getattr(registry, 'reload', None)
+        if callable(refresh):
+            refresh()
         return registry.list()
 
     @mcp.tool()
