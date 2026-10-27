@@ -107,14 +107,14 @@ update indexes. Never use a DMG as the updater payload or an AppImage for a DEB
 installation. Extracted payload qualification does not prove a signed in-place
 upgrade; retain that boundary in release evidence.
 
-`--bundle` must force a fresh PyInstaller sidecar and collect:
-
 The builder refreshes the checkout's distribution metadata from `pyproject.toml`
 before freezing and rejects a mismatched version. Windows overwrite installation
 removes only MKLink's obsolete flat `egg-info`/`dist-info` records before the new
 payload is written. Locks, read-only records, nested directories and reparse
 points block cleanup; dependencies and user settings are preserved. Qualify an
 upgrade with old metadata present and check both runtime and update-check versions.
+
+`--bundle` must force a fresh PyInstaller sidecar and collect:
 
 - freshly built `gui/dist` at the same path inside the frozen sidecar, so the
   installed backend serves the Web GUI as well as the native desktop UI;
