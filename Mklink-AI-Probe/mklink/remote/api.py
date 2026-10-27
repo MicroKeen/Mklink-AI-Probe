@@ -648,7 +648,12 @@ def stop_dashboard_manager(state: dict[str, Any], dashboard: str, manager) -> No
     """Stop a dashboard, retaining leases while its worker remains active."""
     error = None
     try:
-        manager.stop()
+        bridge = getattr(state.get('device'), '_bridge', None)
+        timeout = getattr(bridge, 'capture_stop_timeout', None)
+        if dashboard in {'rtt', 'systemview'} and isinstance(timeout, (int, float)):
+            manager.stop(timeout=timeout)
+        else:
+            manager.stop()
     except Exception as exc:
         error = exc
     if _dashboard_worker_alive(manager):

@@ -2788,7 +2788,16 @@ def main():
             entry.add_argument('name', help='变量名')
         if name == 'write-variable':
             entry.add_argument('value', help='整数值，支持 0x 前缀')
+    subparsers.add_parser('remote-mcp', help='Existing remote Site Agent MCP over stdio')
+    subparsers.add_parser('s3-workbench', help='Private stdio client for the S3 wireless workbench')
     args = parser.parse_args()
+    if args.command == 'remote-mcp':
+        from mklink.remote.mcp import main as remote_mcp_main
+        return remote_mcp_main()
+    if args.command == 's3-workbench':
+        from mklink.s3_workbench import main as workbench_main
+        workbench_main()
+        return
     from mklink.startup_timing import mark
     mark("cli_parsed")
 

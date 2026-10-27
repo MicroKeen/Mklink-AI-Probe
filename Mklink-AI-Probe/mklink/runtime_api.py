@@ -198,9 +198,10 @@ class RuntimeControl:
                      'age_seconds': now-view['joined'], 'expires_in': None if view.get('live') else max(0, view['expires']-now)}
                     for key, view in self.views.items() if key not in represented]
         device = self.app.state.mklink_state.get('device')
+        presence = await asyncio.to_thread(self.presence)
         return {'protocol': PROTOCOL, 'version': VERSION, 'probe_id': self.info.get('probe_id'),
                 'instance_id': self.info['instance_id'], 'pid': self.info.get('pid'),
-                'project_root': self.app.state.mklink_state['project_root'], 'transport': 'cdc',
+                'project_root': self.app.state.mklink_state['project_root'], 'transport': (presence.get('probe') or {}).get('transport', 'cdc'),
                 'uptime_seconds': now-self.started, 'clients': clients, 'busy': bool(self.lifecycle_pending) or self.operation_lock.locked() or self.job_busy(),
                 'connection_changes_pending': self.lifecycle_pending,
                 'jobs': list(reversed(list(self.jobs.jobs.values())))[:8] if self.jobs else [], 'online_job': self.online_job(),
@@ -212,7 +213,7 @@ class RuntimeControl:
                 'streams': [{'name': name, 'running': manager.running, 'owner': self.acquisition_owner(name),
                              'subscribers': sum(name in s.streams for s in self.sessions.values())}
                             for name, manager in get_managers().items()],
-                **await asyncio.to_thread(self.presence)}
+                **presence}
 
     def session(self, session_id):
         self.prune()
@@ -519,6 +520,8 @@ class RuntimeGate:
                 return await reject(422, "Invalid JSON control request")
             if not isinstance(body, dict):
                 return await reject(422, 'Control body must be an object')
+            if online_flash and selected.get('transport', '').startswith('s3-'):
+                return await reject(409, 'S3 target uses shared native flash jobs; local CMSIS-DAP is unavailable')
             if online_flash and str(body.get("probe_id", "")).casefold() != selected["serial_number"].casefold():
                 return await reject(409, "CMSIS-DAP probe does not match this window's physical probe")
             if validated_capability:
@@ -639,8 +642,9 @@ fetch('/_runtime/login', {method:'POST', headers:{'Content-Type':'application/js
     @api.get("/status")
     async def status():
         control.prune()
+        presence = await asyncio.to_thread(control.presence)
         return {"protocol": PROTOCOL, "version": VERSION, "instance_id": info["instance_id"],
-                "pid": info.get("pid"), "project_root": state["project_root"], "transport": "cdc",
+                "pid": info.get("pid"), "project_root": state["project_root"], "transport": (presence.get('probe') or {}).get('transport', 'cdc'),
                 "probe_id": info.get("probe_id"), "clients": len(control.sessions), "busy": control.operation_lock.locked(),
                 "capabilities": sorted(CAPABILITIES)}
 

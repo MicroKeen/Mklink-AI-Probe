@@ -474,6 +474,9 @@ class MKLinkFlash:
         Returns:
             MICROKEEN 上的文件名（不含路径），失败返回 None
         """
+        provider = getattr(self._bridge, 'upload_firmware', None)
+        if provider is not None:
+            return provider(local_path)
         disk = find_microkeen_disk()
         if not disk:
             return None

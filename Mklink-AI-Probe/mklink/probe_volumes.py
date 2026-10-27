@@ -99,6 +99,8 @@ def validated_volume_root(row):
 def resolve_volume(probe_id):
     from mklink.probes import select_probe
     probe = select_probe(probe_id)
+    if probe.get('transport', '').startswith('s3-'):
+        raise RuntimeError('S3 has no local USB volume; use its verified file provider')
     if not probe['identity_stable']:
         raise RuntimeError('MSC requires a unique USB serial number')
     identity = (probe['vid'], probe['pid'], probe['serial_number'].casefold())
