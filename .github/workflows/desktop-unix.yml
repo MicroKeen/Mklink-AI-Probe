@@ -2,6 +2,17 @@ name: macOS and Linux desktop packages
 on:
   # Only dispatch after an explicit maintainer request for these platforms.
   workflow_dispatch:
+    inputs:
+      target:
+        description: Native platform to build (explicitly requested platforms only)
+        required: true
+        default: linux-x64
+        type: choice
+        options:
+          - linux-x64
+          - macos-arm64
+          - macos-x64
+          - all
 permissions:
   contents: read
 concurrency:
@@ -12,13 +23,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - runner: macos-14
-            target: aarch64-apple-darwin
-          - runner: macos-15-intel
-            target: x86_64-apple-darwin
-          - runner: ubuntu-22.04
-            target: x86_64-unknown-linux-gnu
+        include: ${{ fromJSON('{"linux-x64":[{"runner":"ubuntu-22.04","target":"x86_64-unknown-linux-gnu"}],"macos-arm64":[{"runner":"macos-14","target":"aarch64-apple-darwin"}],"macos-x64":[{"runner":"macos-15-intel","target":"x86_64-apple-darwin"}],"all":[{"runner":"macos-14","target":"aarch64-apple-darwin"},{"runner":"macos-15-intel","target":"x86_64-apple-darwin"},{"runner":"ubuntu-22.04","target":"x86_64-unknown-linux-gnu"}]}')[inputs.target] }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     defaults:
@@ -69,7 +74,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: mklink-v0.3.6-${{ matrix.target }}
+          name: mklink-desktop-${{ matrix.target }}-${{ github.sha }}
           path: |
             .build/artifacts/${{ matrix.target }}
             .build/reports
