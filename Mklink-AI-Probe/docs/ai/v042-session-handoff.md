@@ -4,6 +4,8 @@
 创建并切换到共用分支 `codex/v0.4.2-fixes`，无需再次创建。
 按维护者要求保持 0.4.1，已完成 Linux x64 DEB 测试包，待用户实机测试；
 证据见 [Linux 测试包报告](../verification/linux-deb-test-20261028.md)。
+随后按用户确认的 Apple Silicon 架构完成同版本 arm64 DMG，
+见 [macOS 测试包报告](../verification/macos-arm64-test-20261028.md)；两包均等待用户实机反馈。
 平台选择改动及交接记录在草稿 PR #66，未合并、未发布。
 后续多个修复继续共用此分支，正式发布需要本次明确指令。
 以下保留 2026-10-27 收尾时的交接背景，当前断点以 CURRENT_HANDOFF 为准。
