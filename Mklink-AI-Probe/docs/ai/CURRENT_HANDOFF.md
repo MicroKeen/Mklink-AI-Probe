@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-29T17:27:30+08:00`
+- 更新时间：`2026-10-29T17:38:04+08:00`
 - 分支：`codex/v0.4.2-fixes`
 - HEAD：`05e73101为HPM Skill/时钟/CPU调试接口/SystemView修复及本地测试Skill源，仍0.4.1；此前在线烧录Windows包源d1cf16ec、Linux/Mac包源a6bdacbc/eefc6842。最新证据提交见Git。`
 - 远端 HEAD：`microkeen/codex/v0.4.2-fixes；多个后续修复共用此分支。microkeen/main核对为3cc474bb。`
 - 工作树：E盘原工作区已切换codex/v0.4.2-fixes；两个旧detached工作树继续保留。构建产物与验证证据保存在F盘构建根目录。
-- 当前任务：HPM能力核实与Skill改进完成，产品源05e73101；1139相关测试、实机ELF变量/SVD/RTT/Watch/Flash回读/JTAG 4和10MHz/SystemView通过。完整Skill测试包已备份同步全局，2625载荷一致、47 MCP工具；正式资产未改。hpm_debug按指定固件会话契约实现，对方已构建并通过模型/Pika测试，新固件未刷，暂停/单步/断点/核心寄存器正向实体待测。见hpm-skill-audit-20261029.md。
-- 状态：`hpm_skill_verified_firmware_hardware_pending`
+- 当前任务：HPM能力核实/Skill改进完成，产品源05e73101，仍0.4.1。1139相关测试+68包/文档检查，全局完整Skill2625载荷一致、47 MCP工具。用户新增授权后，指定固件会话更新私有V4.7.2/build17:19:37；本会话共享MCP实测halt/resume、核心寄存器、硬件断点命中/清除、step全部通过，恢复运行。ELF/SVD/RTT/Watch/dump/JTAG4和10/SystemView通过；正式资产不变。见hpm-skill-audit-20261029.md。
+- 状态：`hpm_skill_and_cpu_debug_hardware_verified`
 
 ## 里程碑
 
@@ -23,7 +23,7 @@
 
 ## 验证证据
 
-- **HPM AI Skill能力核实**：源05e73101：1139测试+Skill校验通过；V4.7.2/HPM5301 Flash49700B完整一致，ELF1528变量、时钟360MHz、SVD UART0读取、RTT/Watch/dump及JTAG4/10档位通过。SystemView U32修复后38351事件零解析丢弃。hpm_debug旧固件准确拒绝，新固件实体待测。完整Skill包SHA44df3e58，2625文件、7059FLM/4800SVD校验；全局更新保留5339用户文件、47 MCP工具，需重启AI。未刷固件/目标、VCC/OTP或发布。见hpm-skill-audit-20261029.md。
+- **HPM AI Skill能力核实**：源05e73101：1139相关+68包/文档测试；Flash49700B一致、ELF1528变量/360MHz、SVD UART0、JTAG4/10、RTT/Watch/dump通过。SystemView U32修复38351事件；新固件复测22155事件零丢弃。指定会话依新授权更新V4.7.2/build17:19:37后，共享MCP暂停/寄存器/真实断点cause2/单步cause4/恢复运行通过，x31同值写回正确。Skill SHA44df3e58、2625文件/7059FLM/4800SVD校验，全局47工具并保留5339用户文件。无目标烧录/VCC/OTP/发布。见hpm-skill-audit-20261029.md。
 - **在线烧录静默收尾**：源d1cf16ec：124 GUI、29 Python、生产/本地NSIS和三CI通过；V4+HPM5301两次烧录校验成功，运行RTT自动暂停后恢复失败仅留日志，下一次按钮可用且无待确认面板。成功恢复仅自动化覆盖。本机UAC授权后覆盖exit0、3626载荷一致、38 Web资产、冻结CLI/MCP、原生启动/正常退出通过；安装包SHA94eaa298，版本仍0.4.1，未发布。见online-flash-receipt-20261029.md。
 - **Linux/macOS 0.4.1测试包**：Linux源a6bdacbc/CI40637027269、Mac arm64源eefc6842/CI40640511140：各USB58通过/1项Windows专用跳过，冻结CLI/MCP/健康/Web/正常退出通过。DEB SHA7309f377、DMG SHA56dc8e0a。均0.4.1；Mac仅ad-hoc未公证，用户系统安装/原生UI/USB实机待测，不含10月29日在线修复。详见linux-deb-test-20261028.md、macos-arm64-test-20261028.md。
 - **安装器旧元数据自动清理**：源cb30b703：62定点、5577Python/2skip、1133GUI和本地NSIS通过；真实八文件旧dist-info复现误报0.3.6，覆盖exit0自动清理后更新检查0.4.1。207保留文件哈希不变、3626安装载荷一致；冻结CLI/MCP/内置FLM/Pack、原生3.767秒/Web/正常退出通过。PR63集成，留待下版，正式0.4.1不变。见installer-metadata-cleanup-20261027.md。
@@ -39,21 +39,21 @@
 - 物理探针唯一 OS 所有权、USB 身份核对和 epoch 隔离保留。GUI/AI 明确断开或切换自动停止采集、排空在途操作并释放端口；旧会话不得跨设备，未知结果不得自动重放，不偷取其他后台占用。MCP disconnect 物理断开，detach 仅退出自身；独立 UART 保留。
 - SuperWatch 变量写入只认写应答，不做自动回读；烧录/显式内存校验仍保留，真实写错误不得吞掉或重放。外设 ID 基于 Pack 版本/芯片/SVD 相对路径；失效选择不得阻断物理连接，无法迁移时重选。 在线型号提供脱机/外设默认值，各页可独立修改；Pack操作完成自动刷新。下载先预留唯一物理身份，不要求先连接目标；自身预留不重建下载表单，其他设备切换仍清理。
 - 腾讯云优先、GitHub/Gitee备用；上海私有COS签短链，90GiB告警/95GiB锁停，保留累计账本。套餐到期北京时间2026-11-26零点，未核验续费不恢复；监控延迟使阈值非账单上限。只用现有控制台/TAT，不申请私钥/SSH。preview撤下、旧桶获授权清理，香港桶已删除，只留上海；叠加110GB不提高90/95阈值。2026-10-25停止旧Aladdin-Wang GitHub的新发布，保留历史资产；新版本仅MicroKeen GitHub和既有Gitee。旧0.4.0草稿转换未完成，不自动操作。云迁移和Dot确认见v040-release-handoff.md，当前正式版见v041-release-handoff.md。
-- 测试直接使用用户原工程及 build/keil/Obj ELF，允许修改且无需备份还原，不复制工程；硬件路径只留本地。HPM 使用 ROM API，不使用 FLM/第二次通用 SWD reset；VCC 每次改动需确认具体电压，固件修改另开会话。 HPM AI可自行选择受支持的JTAG 4/10/20/30MHz档位，优先4/10，不把8MHz SWD请求当TCK；profile确认不是物理测量。固件修复由用户指定会话01a186cd-c52a-7ea0-af29-8de6775d143b负责，允许协作消息，不代其刷写/发布。
-- 用户2026-10-24明确长期规则：默认只构建Windows安装包；仅在用户明确要求Linux/macOS时才构建对应安装包或触发原生CI，一般构建、全功能验收及发布请求不包含它们。用户Skill仍需完整FLM/Pack资格检查。历史Linux/macOS本地构建包已按用户要求清理，保留日志与验收证据；用户明确保留GitHub已正式发布附件。 构建使用scripts/build_workspace.ps1与F:/MKLink-Build，保留正式包、独有证据和依赖。用户明确清理授权下可删除过时可再生编译输出，链接/不可访问目录交人工处理，不强删。唯一原工作区保持；清理不接管硬件、不重复发布。
+- 测试直接使用用户原工程及 build/keil/Obj ELF，允许修改且无需备份还原，不复制工程；硬件路径只留本地。HPM 使用 ROM API，不使用 FLM/第二次通用 SWD reset；VCC 每次改动需确认具体电压，固件修改另开会话。 HPM AI可自行选择受支持的JTAG 4/10/20/30MHz档位，优先4/10，不把8MHz SWD请求当TCK；profile确认不是物理测量。固件修复由用户指定会话01a186cd-c52a-7ea0-af29-8de6775d143b负责，用户后续允许提供本会话ID、通知和更新固件；指定会话已据此刷入本次私有测试包。双向协同核对占用，本授权不含正式发布。
+- 默认只构建Windows；仅明确要求Linux/macOS时才构建或触发对应原生CI。完整Skill仍须FLM/Pack资格检查。构建使用scripts/build_workspace.ps1和F:/MKLink-Build，保留正式包、唯一证据、依赖与缓存。历史获授权本地Unix清理不影响线上正式附件；过时可再生产物仅依清理授权处理，链接/不可访问目录不强删。
 - 工程上下文固定于后台生命周期；被动MI_04枚举不遍历占用设备，底层自动连接只接受唯一候选；本机别名不写固件。未知结果不重放，worker实际退出后才发布串口关闭，取消前保留缓冲寿命，背压错误不隐瞒。
 - 原MK-Firmware及用户固件工程改动保留，不自动恢复旧备份。2026-10-18授权的0.3.5、V3.6.5/V4.6.9发布已完成；未知操作不重放。用户要求未解决项保留交接，未扩大验收或宣称客户故障已闭环。
 - 编译完成不代表目标已下载：文件变化仅发待重载提示，不后台解析。用户明确加载/重载文件时自动停止目标采集，确认worker退出后原子换表，保持停止；失败保留旧目录/选择。不要求连接下载器；断开保留文件和选中变量但清空旧采样。公式只改变可视化，原始记录不变；不恢复旧地址采集或重放写操作。
 
 ## 真机环境
 
-- **state**：2026-10-29现场V4/私有V4.7.2接HPM5301；当前用户程序Flash49700B与对应BIN一致，本轮仅读取及RTT/Watch/SystemView，结束均停止并detach。新HPM_DEBUG v1固件尚未刷，旧固件能力拒绝已验；不改VCC/OTP。此前H743/双核资格仍按历史报告，不扩大。
+- **state**：2026-10-29 V4/私有V4.7.2已由指定固件会话依新增授权更新build17:19:37；接HPM5301。共享MCP halt/核心寄存器/槽0断点命中cause2及清除/step cause4/resume通过，最终state1运行。新固件RTT/Watch/dump/SystemView通过，均停止detach；无活动测试断点。不改VCC/OTP/目标程序。此次未重新USB断电冷启动，H743/双核按历史报告。
 - **installer**：本机Windows为d1cf16ec在线烧录修复测试包，版本0.4.1未发布；上一轮覆盖exit0、3626载荷、CLI/MCP/Web/原生通过。本轮未重建安装器；全局Skill已备份更新05e73101本地测试包，正式0.4.1资产不变。
 - **backups**：保留正式release、安装包、CI ZIP、唯一硬件证据、Skill备份及F盘缓存。含链接/不可访问目录不强删。历史获授权清理见v036-storage-cleanup-20261023.md及本机START_HERE；本地Unix清理不影响正式附件。旧detached树保留；本轮Skill备份在F盘cache/mklink-ai-probe/skill-backups。
 
 ## 下一动作
 
-1. 重新加载AI/MCP使用已同步本地测试Skill；新hpm_debug需要配套共享后台及固件。与指定固件会话完成后续实体调试验收，刷写须另获授权。Windows安装包d1cf16ec和此前Unix包不含本轮HPM改动。继续共用分支/草稿PR66，合并/正式发布需明确指令。
+1. 重新加载AI/MCP使用已同步的本地测试Skill。新hpm_debug共享后台/配套私有固件已实测通过；本机Windows安装包d1cf16ec和此前Unix包不含本轮HPM上位机改动，需要使用新源码/Skill后台。继续共用分支/草稿PR66；正式发布/合并需明确指令，不公开私有固件。
 2. 双核脱机需真实M7/M4板正向验收；V3空RTT约30分钟掉线再次复现先导出诊断再拔插。两项保持未闭环，私有候选不得公开替换正式固件。
 3. 公网远程服务中继为下个版本任务；本次不实施。
 4. 下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。
@@ -61,7 +61,7 @@
 
 ## 已知限制
 
-- HPM新CPU调试接口等待配套固件实体资格：指定会话已完成构建/模型/Pika测试，未刷；20/30MHz未本轮实测，TCK无仪器测量。97个失效runtime endpoint串行探测导致首次状态超时，显式探针连接可用，未清记录。历史客户3.11.9仍待升级验证；原始CDC首次离线、F405 PROGRAM100%退出、受限AI/GD32及RTT后续MUX超时未闭环，不认定同因。后台HEX在2%写入失败unknown未重放，Keil重载成功不等于修好。客户PyInstaller ucrtbase.dll拒绝访问/重启恢复仅记录现象。位域仅little-endian只读，Float32大整数有舍入；客户ELF离线回放不算板上验收。详见v032-postrelease-incidents.md及各版本交接；不以清配置/全杀后台掩盖故障。
+- HPM CPU调试新固件已实测通过，仅RV32/hart0/HPM5301及槽0执行断点；新寄存器值写入、其他触发器/型号、20/30MHz及本次USB断电冷启动未扩展验收，TCK无仪器测量。97个失效runtime endpoint串行探测导致首次状态超时，显式探针连接可用，未清记录。历史客户3.11.9仍待升级验证；原始CDC首次离线、F405 PROGRAM100%退出、受限AI/GD32及RTT后续MUX超时未闭环，不认定同因。后台HEX在2%写入失败unknown未重放，Keil重载成功不等于修好。客户PyInstaller ucrtbase.dll拒绝访问/重启恢复仅记录现象。位域仅little-endian只读，Float32大整数有舍入；客户ELF离线回放不算板上验收。详见v032-postrelease-incidents.md及各版本交接；不以清配置/全杀后台掩盖故障。
 - V4.6.8 30MHz RTT8/Watch4/UART并行目标读错1kHz +1、最大+273；10MHz0。旧V4.6.6原始+1/+224，报告此前漏记已更正。采集不停止、不误断、UART完整；用户明确继续发布，限制交接下版处理，不写公开发布说明。 2026-10-24 V4.7.0+F103最终安装测试：30MHz RTT先Watch后11762周期1错，反顺序12297周期0；10MHz两顺序0，限制未关闭。
 - HPM/SES退出未发送DAP_Disconnect时可遗留占用，后续legacy握手等待；明确退出后正常OpenOCD init/resume/shutdown可恢复，用户可重插USB。禁止任意超时偷取调试所有权。完整SES矩阵和RTT下行未全部覆盖；V3.6.4/V4.6.8仿真中新启采集及负载读回通过，V4.6.8已完成Keil及相关矩阵。详见release handoff；长期目标暂停。 2026-10-17新增RTT status6截图仅证下载器忙返回；用户不清楚IDE占用/固件版本，不能认定与历史问题同因，待现场时序和显式重试结果。
 - 性能和功能证据按docs/verification/v030-release-handoff.md及各精确提交报告解释：采集不是无损通道，缓冲溢出/暂停/调试下载可能丢失观测；多变量不是原子快照，不能保证任意时序上界。 COS监控延迟、已发短链和在途传输可能带来超额，95GiB是保护阈值而非账单硬上限；存储/请求/SCF另计，香港旧桶已删除，新下载桶仅health公开。 0.4.0固件客户端仍内置旧GitHub备用索引，COS主入口及Gitee正常；停止旧仓库维护后该备用可能停留历史版本，下版改为MicroKeen，当前签名产品不重写。
@@ -72,8 +72,8 @@
 
 ## 延续协议
 
-- 先读CURRENT_HANDOFF.md与v042-session-handoff.md并核对Git；E盘原工作区当前codex/v0.4.2-fixes，多项修复共用该分支。已构建Linux x64和macOS arm64的0.4.1测试包，等待用户实机反馈，不升级版本。正式0.4.1源514efb86不可变，PR63修复留待下版；发布需本会话明确指令。上海90/95GiB保护保留账本，2026-11-26北京时间零点到期未续费不恢复，非账单上限。不申请新私钥，旧detached树保留。
-- 硬件以最新现场为准：2026-10-29 V4.7.2/HPM5301，程序/ELF匹配，读取和采集实测见HPM报告，未刷固件。新HPM_DEBUG v1实现及构建由01a186cd-c52a-7ea0-af29-8de6775d143b完成，实体资格待授权验证；H743及双核为此前现场，不宣称新板通过。
+- 读取CURRENT_HANDOFF和v042-session-handoff并核对Git；E盘原工作区共用codex/v0.4.2-fixes。版本仍0.4.1，正式源514efb86不可变、安装器PR63留待下版；本次未发布。Unix包等待用户实机反馈。保留上海90/95GiB和到期锁停约束、现有账本及旧detached树；不申请私钥。
+- 硬件最新现场为2026-10-29 V4.7.2/build17:19:37 + HPM5301。用户在本会话授权通知与固件更新，01a186cd-c52a-7ea0-af29-8de6775d143b完成更新后释放；本会话新共享MCP CPU调试及采集正向通过。恢复运行/清测试断点/停止采集/detach。旧H743/双核证据不等于当前板认证，未来接手仍重新确认。
 - V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。
 - CDC 995根因仅保留待排查。恢复只允许同身份CDC故障5秒内；超时不自动接回或新建AI会话，主动断开立即生效，不重放未知写入。测试实例已经全部释放；见v035-transport-recovery.md，不寻找旧现场窗口。
 - 客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。
