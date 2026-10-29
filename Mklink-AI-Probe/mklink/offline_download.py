@@ -237,6 +237,12 @@ def parse_offline_config(
     protocol = payload.get("programming_protocol", "debug")
     if protocol not in ("debug", "hpm_rom_isp_uart"):
         raise OfflineDownloadError("Unsupported offline programming protocol")
+    if hpm_target and protocol == 'debug':
+        from mklink.debug_speed import validate_hpm_clock_hz
+        try:
+            validate_hpm_clock_hz(swd_clock)
+        except ValueError as error:
+            raise OfflineDownloadError(str(error)) from error
     try:
         isp_otp = resolve_isp_otp(payload.get('hpm_isp_otp'), target_part or '', model, protocol)
     except ValueError as error:

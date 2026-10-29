@@ -11,6 +11,7 @@ CAPABILITIES = {
     'device_status': ('GET', '/api/device/status'),
     'debug_speed': ('GET', '/api/device/debug-speed'),
     'set_debug_speed': ('POST', '/api/device/debug-speed'),
+    'hpm_debug': ('POST', '/api/device/hpm-debug'),
     'halt': ('POST', '/api/device/halt'),
     'resume': ('POST', '/api/device/resume'),
     'step': ('POST', '/api/device/step'),
@@ -134,6 +135,12 @@ UART_CAPABILITIES = frozenset(name for name, (_, path) in CAPABILITIES.items() i
 def validate_arguments(capability, arguments):
     """Reject malformed/range-overflow writes before a device is touched."""
     arguments = dict(arguments)
+    if capability == 'hpm_debug':
+        from mklink.hpm_debug import command_arguments
+        try:
+            command_arguments(arguments)
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from error
     if capability == 'rtt_inspect':
         try:
             if set(arguments) != {'address'}:

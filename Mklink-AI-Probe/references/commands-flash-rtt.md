@@ -225,6 +225,8 @@ python -m mklink rtt --visualize --port-http 8888 --no-browser
 
 ### HPMicro BIN / HEX 下载
 
+HPM 任务先读 [HPM 下载与调试](hpm.md)，区分 JTAG、UART ISP 和 ARM 调试接口。
+
 HPM SDK 工程会走设备端 `hpm.program()` 下载路径。HPM 型号不使用 FLM，也不需要 Pack；算法发现必须直接返回空。`project-init` 识别到 HPM board 后，会把 `hpm_flash_cfg` 写入 `project_info.json`；手动配置时必须使用 4 个参数：
 
 HPM5301 也可以在脱机界面显式选择 [USART ISP](hpm-usart-isp.md)，由支持该能力的 HPMLINK V4 固件使用独立 UART 执行。该协议使用单独的 NOR 配置，不沿用下述 JTAG 四字参数，也不自动改变现有下载路径。
@@ -238,12 +240,13 @@ HPM5301 也可以在脱机界面显式选择 [USART ISP](hpm-usart-isp.md)，由
 MCP/AI 调用示例：
 
 ```text
-flash(
-  firmware="build/demo.bin",
-  target_part="HPM5301xEGx",
-  base_address=0x80000400,
-  board="hpm5301evklite"
+start_job(
+  action="flash", request_id="<本次唯一请求ID>", confirm=true,
+  arguments={"firmware": "<固件绝对路径.bin>", "target_part": "HPM5301",
+             "base_address": "0x80000400", "board": "hpm5301evklite",
+             "swd_clock": 10000000, "verify": true, "reset_after": true}
 )
+job_status(job_id="<返回的job_id>")
 ```
 
 BIN 未提供工程配置时必须显式传 `base_address`。新版 V4 固件支持 HEX：把 `firmware` 改为 HEX 文件，省略 `base_address`，数据使用文件内绝对地址。工具复用解析器校验并规范化文件，使用独立 `hpm.program_hex` 入口；旧固件拒绝，不得改用原始 `hpm.program` 绕过检查。`board` 未知时改传四字 `hpm_flash_cfg`。成功结果包含 `algorithm_source: "hpm-rom-api"`，不得安装 Pack 或加载 FLM。

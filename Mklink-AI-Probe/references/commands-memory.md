@@ -3,6 +3,9 @@
 > 触发词：read-ram、read-reg、dump-memory、flush-memory、vofa、watch、superwatch、hardfault、typeinfo、symbols、memmap
 > 返回索引：[SKILL.md](../SKILL.md)
 
+HPM/RISC-V 先读 [HPM 下载与调试](hpm.md)。下文 STM32 地址、SCB/HardFault、
+FPB 和 CPU 核心寄存器示例不适用于 HPM；地址须取自当前工程 ELF/链接脚本及总线映射。
+
 ## 内存操作
 
 ### 共享变量与 C 布局（0.3.0）
@@ -112,18 +115,10 @@ V4.3.8 在 STM32H743 上实测旧入口、bytes 字面量、重复字节折叠�
 `11 22 33 44 -> 00 00 00 00` 并回读。为防旧固件或偶发静默失败，自动化写入必须以回读
 一致作为成功条件，不能只看 `>>>` 或命令回显。
 
-**避免覆盖活跃内存区**:写入前先核对 `build/keil/List/rt-thread.map` 与 AXF 符号:
-- `0x20000000..0x200000DC`: `.mklink_res` (test fixture 控制块, magic 0x4D4B5245 "ERKM")
-- `0x20000200..0x20001374`: `.data`
-- `0x20001374..0x20001774`: `s_tf_data_buf` (test fixture 数据缓冲,**20ms 周期被覆写**)
-- `0x200017F8..0x200018F8`: `rt_thread_stack` (256B, RT-Thread 主线程栈,**绝不可覆盖**)
-- `0x20001908+`: `_heap` (RT-Thread 堆起点, **运行时向上增长**, .bss 之后未必真空闲)
-- `0x20001774..0x2000FAB0`: `.bss` (含 dbcortex 参数库 1600B 等活跃变量)
-- `0x2001F800..0x20020000`: 主线程栈 (2KB)
-
-**安全测试区**:`0x20001000..0x20001374`(.data 之前的空闲区, 896 字节) 是稳定的。
-
-`.bss` 之后的 `0x2000FA10..0x2001F800` (~65KB) **理论上是空闲的**,但**实际不可信**——RT-Thread 堆可向上分配到此处。务必先用 `python -m mklink symbols --source <axf> --filter "heap"` 看运行时堆的实际位置;或在写入前用 `vofa` / `superwatch` 读一段确认未被业务覆写。**血泪教训:不查就直接写,会撞 heap 元数据导致 HardFault → 整机重启**。
+**避免覆盖活跃内存区**：按当前固件的 ELF/AXF、链接脚本和 map 确认写入对象、
+范围及用途。以上 STM32 地址仅用于展示语法，不能当作 HPM 或其他工程的测试区。
+验证写入应使用工程明确预留的测试缓冲；`.bss` 之后、读到全零或短时间未变化都不
+证明空闲，堆、栈、DMA 和业务代码仍可能使用该地址。没有已确认的缓冲时先做只读验证。
 
 #### `python -m mklink dump-memory <region> [<region> ...] [--period SEC] [--frames N] [--duration SEC] [--save FILE] [--json]`
 公共高速内存 dump，直接调用固件 `cmd.dump_memory(addr1, size1, ..., period)` 并解析 `MPMDMPMD` 二进制帧。别名：`python -m mklink dump ...`。
@@ -320,7 +315,11 @@ python -m mklink superwatch TIM2.CNT,ADC1.DR --svd path/to/device.svd --visualiz
 
 CLI 使用 `python -m mklink debug-speed ultra --project-root <工程目录>`；加 `--save` 可保存供后续连接使用。`dump-memory` 和 `dump-benchmark` 的 `--speed ultra` 可为本次采样选择 30 MHz。MCP 使用 `set_debug_speed(profile="ultra")`，或 `measure_dump_memory(..., speed_profile="ultra")`。
 
-ARM SWD 和 HPM JTAG 使用相同的 4/10/20/30 MHz 档位；20/30 MHz 必须由配套探针固件明确确认相应接口与内核，旧固件仅回显设置时钟不算确认。确认失败会恢复 1 MHz 并报错。档位回执不证明任意目标或接线稳定，应按对应板卡和固件的实测结果选择。CLI/MCP 切档前先停止流；Web 应用档位会先停止当前采集。默认保持 10 MHz。
+ARM SWD 和 HPM JTAG 提供 4/10/20/30 MHz 档位；检查 `interface` 和
+`profile_confirmed`，仅设置回显不代表已确认内核或实测频率。明确拒绝时 SWD 尝试
+恢复 1 MHz，HPM JTAG 尝试恢复已确认的 4 MHz 档位；恢复也未确认则时钟状态未知。
+HPM 任意 8 MHz/1 MHz 请求会回退固定延时 C 路径，不能声称按请求改变了 TCK。
+档位回执不证明目标或接线稳定，应按板卡实测选择；采集期间切档会拒绝，不自动抢停。
 
 档位设置改变探针的调试时钟，同一连接中的 RTT、SystemView 等内存访问也使用该时钟。Keil、在线烧录和脱机脚本会按各自配置重新设置时钟；不能用 SuperWatch 的档位代替下载配置。采样报告应分别注明包含批间空隙的持续速率与批内速率，不能混用。
 

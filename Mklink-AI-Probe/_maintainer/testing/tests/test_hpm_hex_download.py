@@ -120,7 +120,7 @@ def test_online_backend_programs_and_verifies_only_sparse_hex_spans(tmp_path):
             calls.append(options);return {'success':True}
         def close(self): pass
     backend=HpmRomBackend(device_factory=lambda **kwargs:Device(),port_resolver=lambda _: 'probe',verify_chunk_size=3)
-    backend.connect('probe','HPM6E80',1000000,board='hpm6e00evk')
+    backend.connect('probe','HPM6E80',10000000,board='hpm6e00evk')
     image=ImageInspection('hex',file_path=str(path),format='hex')
     backend.program(image)
     assert calls[0]['base_address'] is None

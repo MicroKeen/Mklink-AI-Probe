@@ -214,11 +214,11 @@ def initialize_target(
     project_root: str = ".",
     timeout: float = 2.0,
 ) -> int:
-    """Initialize the target SWD DP, read IDCODE, and match the MCU profile.
+    """Read the probe's cached target ID and match the MCU profile.
 
-    Sends ``cmd.get_idcode()`` (the probe firmware's SWD line-switch + DP
-    init + IDCODE read), writes the result into the bridge context, and
-    resolves ``current_mcu`` with priority
+    ``cmd.get_idcode()`` is a cache read in current firmware. It does not
+    initialize JTAG/SWD or prove live target presence/SBA readiness. Store
+    the reported identity and resolve ``current_mcu`` with priority
     ``mcu_hint > .mklink/config.json:mcu_key > idcode match``.
 
     Call this on a freshly ``bridge.connect()``-ed session for **every path
@@ -231,10 +231,8 @@ def initialize_target(
     broken SWD, timeout, or a mock bridge in tests), the bridge context keeps
     its default (``idcode`` 0) and ``0`` is returned — the caller stays
     connected. This preserves the historical "connect succeeds even without a
-    target" semantics while fixing the bug where ``idcode`` was *always* 0
-    even with a target present (e.g. MCP ``connect``'s long-lived session that
-    never re-opened the serial port and so missed the firmware's startup DP
-    init window).
+    target" semantics. Actual target accesses must establish their own
+    transport/session readiness; repeated cached identity reads cannot do so.
     """
     from mklink.profiles import load_mcu_profiles, match_mcu_by_idcode
     from mklink.project_config import load_config
@@ -859,8 +857,10 @@ class Device:
                 raise DeviceError("Flash base address must be nonnegative")
             flash_base = _fmt_hex(parsed_base_address)
 
-        # Setup SWD clock (prefer config, fallback to profile default)
-        resolved_swd_clock = 1000000
+        # HPM's private JTAG backend only has named DMI timing kernels.
+        # The legacy parameter name does not make arbitrary SWD rates valid.
+        hpm_clock = project_hpm or is_hpm_profile
+        resolved_swd_clock = 10000000 if hpm_clock else 1000000
         if swd_clock is not None:
             resolved_swd_clock = swd_clock
         elif cfg:
@@ -869,6 +869,12 @@ class Device:
                 resolved_swd_clock = int(cfg_clock)
         elif mcu_profile:
             resolved_swd_clock = mcu_profile.get("swd_clock_default", resolved_swd_clock)
+        if hpm_clock:
+            from mklink.debug_speed import validate_hpm_clock_hz
+            try:
+                validate_hpm_clock_hz(resolved_swd_clock)
+            except ValueError as error:
+                raise DeviceError(str(error)) from error
         self._flash.set_swd_clock(resolved_swd_clock)
 
         # Prefer the unified user/builtin Pack catalog when an exact target is
@@ -2428,6 +2434,11 @@ class Device:
     # ------------------------------------------------------------------
     # Debug control
     # ------------------------------------------------------------------
+    def hpm_debug(self, **arguments) -> dict:
+        """Explicit RV32 control through capability-checked HPM_DEBUG firmware."""
+        from mklink.hpm_debug import execute
+        return execute(self, arguments)
+
     def _require_cortex_m_debug(self):
         self._require_connected()
         if "HPM" in self.mcu_name.upper() or getattr(self._bridge, "idcode", None) == 0x1000563D:

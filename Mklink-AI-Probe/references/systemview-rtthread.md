@@ -14,6 +14,10 @@ mklink 把 SystemView 做成**原生功能**：RTOS 的 `SEGGER_SYSVIEW` 集成�
 探针内部对 SWD 和 RISC-V/JTAG 使用同一个 SystemView 转发模块，因此 ARM 与 HPM
 目标共用同一条上位机实现，不需要按 CPU 架构切换后端。
 
+这只说明采集和解析通路支持 HPM，不代表 Cortex-M 集成模板能直接用于 RISC-V。
+HPM 需要目标工程已有或正确移植的 RTT、RTOS 钩子和时间戳实现；不能复制 DWT/SCB
+访问代码。先读 [HPM 下载与调试](hpm.md)，按真实 ELF 和目标时钟核对通道与时间基准。
+
 ## 工作原理
 
 ```

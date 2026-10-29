@@ -124,6 +124,10 @@ low/medium/high/ultra；持续采集期间拒绝，需先显式停止采集。�
 同一下载器的所有客户端共享该速度。`gui_call("debug_speed")` 读取后台缓存的时钟和
 可用档位，采集期间也可调用；这是后台记录值，不是独立硬件测量。
 
+HPM 必须先看 [HPM 调试速度](hpm.md)：`set_swd_clock(8000000)` 的设置回显
+不能证明 JTAG 为 8 MHz；当前私有 JTAG DMI 路径只提供 4/10/20/30 MHz 档位。
+`ping.capabilities` 是服务入口清单，HPM 不能因此使用 Cortex-M 单步/断点/HardFault。
+
 连接下载器与设置速度均不要求连接目标板或取得有效 IDCODE。USB 身份匹配、命令口
 握手成功即可建立下载器会话；目标识别仅补充信息，目标读写/采样仍需有效目标通信。
 各档位接受下载器精确的 `set clock <Hz>` 设置确认；`profile_confirmed` 单独表示

@@ -132,7 +132,7 @@ def test_hpm_flash_does_not_require_mcu_profile(tmp_path: Path, monkeypatch):
     save_config(str(tmp_path), {
         "com_port": "COM9",
         "mcu_key": None,
-        "swd_clock": 1000000,
+        "swd_clock": 10000000,
     })
     save_project_info(str(tmp_path), {
         "vendor": "HPMicro",
@@ -176,7 +176,7 @@ def test_hpm_custom_mcu_burn_hex_file_routes_to_hpm_program(tmp_path: Path, monk
     save_config(str(tmp_path), {
         "com_port": "COM9",
         "mcu_key": "custom",
-        "swd_clock": 1000000,
+        "swd_clock": 10000000,
     })
     save_project_info(str(tmp_path), {
         "vendor": "HPMicro",

@@ -58,9 +58,8 @@ description: 使用 MKLink/MicroLink 操作目标 MCU：固件烧录、内存与
   不能改成 `custom` 绕过匹配。缺少精确型号名称不等于没有兼容算法：先按
   [FLM 兼容性规则](references/firmware-download-priority.md#flm-兼容性)核对工程与 Pack。
   能确定唯一兼容项时显式指定；确有歧义再请用户选择，均不兼容或缺文件才停止。
-- **HPM**：限 V4，只用 ROM API，不用 Pack/FLM 或通用 SWD reset。传精确 `target_part`
-  及 `board` 或四字 `hpm_flash_cfg`。BIN 需 `base_address`；HEX 用文件内地址，
-  需新版 V4 固件，工具自动检查能力。
+- **HPM**：先读 [HPM 指南](references/hpm.md)。V4/ROM API，禁用 FLM；AI 自选
+  JTAG 4/10/20/30 MHz 档位，不套用任意 SWD 频率或 Cortex-M 调试命令。
 - **供电**：`set_power_on` 每次都先确认 1800/3300/5000 mV 并传
   `confirm_user=True`。5000 mV 还须确认供电路径和负载耐压，并传 `confirm_5v=True`。
 - **加锁/解锁**：先调用 `security_status`，只有返回 `supported:true` 的精确型号才可

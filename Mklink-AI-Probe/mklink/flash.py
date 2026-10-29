@@ -8,6 +8,7 @@ MKLink Serial Bridge — 烧录功能模块。
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import tempfile
 import time
@@ -168,7 +169,7 @@ class MKLinkFlash:
         raise IDCODEError(f"获取 IDCODE 失败（超时 {timeout}s）")
 
     def set_swd_clock(self, clock_hz: int) -> None:
-        """设置 SWD 时钟频率。
+        """Set the legacy clock request; HPM JTAG requires a named DMI profile.
 
         Args:
             clock_hz: 时钟频率（Hz），如 10000000 表示 10MHz
@@ -182,18 +183,26 @@ class MKLinkFlash:
             validate_clock_hz(parsed_clock)
         except ValueError as error:
             raise FlashError(str(error)) from error
+        if getattr(self._bridge, 'idcode', None) == 0x1000563D:
+            from mklink.debug_speed import validate_hpm_clock_hz
+            try:
+                validate_hpm_clock_hz(parsed_clock)
+            except ValueError as error:
+                raise FlashError(str(error)) from error
         if parsed_clock > 10_000_000:
             try:
                 apply_bridge_profile(self._bridge, next(p for p, hz in PROFILES.items() if hz == parsed_clock))
             except ValueError as error:
                 raise FlashError(str(error)) from error
             return
+        self._bridge._ctx.swd_clock_hz = 0
         response = self._bridge.send_command(f"cmd.set_swd_clock({parsed_clock})", echo=True)
-        if not isinstance(response, str) or not any(
-            line.strip() == f"set clock {parsed_clock}" for line in response.splitlines()
-        ):
-            self._bridge._ctx.swd_clock_hz = 0
-            raise FlashError("Probe did not acknowledge the requested SWD clock")
+        lines = response.splitlines() if isinstance(response, str) else []
+        profile = re.search(r"(?m)^(SWD|JTAG) profile=(\d+)\b", response if isinstance(response, str) else '')
+        if (not any(line.strip() == f"set clock {parsed_clock}" for line in lines)
+                or any(line.strip() == '-1' or line.strip().lower().startswith('error') for line in lines)
+                or (profile is not None and int(profile.group(2)) != parsed_clock)):
+            raise FlashError("Probe did not confirm the requested debug clock/profile; HPM JTAG uses 4/10/20/30 MHz profiles")
         self._bridge._ctx.swd_clock_hz = parsed_clock
 
     def load_flm(self, flm_path: str, flash_base: str, ram_base: str) -> bool:
@@ -606,7 +615,13 @@ def burn_hex_file(
     try:
         # 0. 如果未指定 SWD 时钟，从 config.json 读取
         if swd_clock is None:
-            swd_clock = config.get("swd_clock", 1000000) if config else 1000000
+            swd_clock = config.get("swd_clock", 10000000 if is_hpm_project else 1000000)
+        if is_hpm_project:
+            from mklink.debug_speed import validate_hpm_clock_hz
+            try:
+                validate_hpm_clock_hz(swd_clock)
+            except ValueError as error:
+                raise FlashError(str(error)) from error
 
         print(f"[*] 烧录配置: MCU={mcu_key}, Flash={flash_base}, SWD={swd_clock}Hz")
 

@@ -297,8 +297,34 @@ def build_server():
         Changes this probe's debug clock and saves the project profile after success.
         All attached clients share it. Inspect gui_call('debug_speed') for cached status.
         No target MCU is required; profile_confirmed reports the optional timing-profile ACK.
+        low=4 MHz, medium=10 MHz, high=20 MHz, ultra=30 MHz. For HPM JTAG use
+        these profiles, not arbitrary SWD rates such as 8 MHz. A setting/profile
+        ACK is not a measured TCK frequency; inspect interface and qualification.
         """
         return client().call('set_debug_speed', {'profile': profile})
+
+    @server.tool()
+    def hpm_debug(action: Literal['capabilities', 'status', 'halt', 'resume', 'step',
+                                  'read-register', 'write-register', 'breakpoint-query',
+                                  'breakpoint-set', 'breakpoint-clear'] = 'status',
+                  timeout_ms: StrictInt | None = None, register: str | None = None,
+                  value: StrictInt | None = None, slot: StrictInt | None = None,
+                  address: StrictInt | None = None) -> dict:
+        """HPM RV32 hart 0 debug; requires firmware advertising HPM_DEBUG v1.
+
+        capabilities/status do not halt/reset. halt/resume/step accept timeout_ms
+        1..1000 (default 500); step, register and trigger access require an already
+        halted hart. Registers: x0..x31, pc/dpc, sp/ra/fp or supported machine CSRs
+        (mstatus, mepc, mcause, mtval, etc). Only x1..x31/PC are writable.
+        Breakpoints use explicit slot 0..7; query actual slots first. set and clear
+        require a 2-byte-aligned address; clear verifies the expected address.
+        Requires idle capture and exclusive target admission; never auto-stops,
+        resets, falls back to ARM or retries unknown outcomes. Preserve issued/
+        cleanup/uncertainty on failure. Peripheral registers use read_register/SVD.
+        """
+        options = dict(action=action, timeout_ms=timeout_ms, register=register,
+                       value=value, slot=slot, address=address)
+        return client().call('hpm_debug', {key: val for key, val in options.items() if val is not None})
 
     @server.tool()
     def read_memory(address: int, size: int) -> dict:
@@ -535,6 +561,8 @@ def build_server():
         Optional target_part, base_address (32-bit integer or integer string), board,
         hpm_flash_cfg (four 32-bit hexadecimal strings) and swd_clock (integer Hz)
         are passed to the existing flash backend. HPM uses ROM API, never FLM.
+        For HPM swd_clock is a legacy parameter name: use only 4000000,
+        10000000, 20000000 or 30000000 for JTAG DMI profiles, not 8000000.
         reset_after=false does not prevent the HPM ROM routine's own reset/resume.
         erase and erase_sector accept target_part and algorithm_id; erase_sector requires address.
         Erasure loads the exact target algorithm first; family IDCODE alone is insufficient.

@@ -241,6 +241,7 @@ def peripheral_capture(device, body, *, cancelled=None):
 
 
 def create_debug_router(state, lease):
+    from mklink.hpm_debug import HpmDebugError
     router = APIRouter(prefix='/api/device')
 
     def add(path, operation, *, cancellable=False):
@@ -255,6 +256,8 @@ def create_debug_router(state, lease):
                     return await run_in_threadpool(operation, device, body)
                 except SymbolSourceChangedError as error:
                     raise HTTPException(409, str(error)) from error
+                except HpmDebugError as error:
+                    raise HTTPException(409, error.detail) from error
                 except (ValueError, KeyError) as error:
                     raise HTTPException(422, str(error)) from error
                 except Exception as error:
@@ -270,6 +273,7 @@ def create_debug_router(state, lease):
     add('register-snapshot', register_snapshot)
     add('fault-snapshot', fault_snapshot)
     add('breakpoints', breakpoints)
+    add('hpm-debug', lambda device, body: device.hpm_debug(**body))
     add('peripherals/read', peripheral_read)
     add('peripherals/capture', peripheral_capture, cancellable=True)
     return router
