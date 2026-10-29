@@ -145,6 +145,7 @@ async function recoverJob(): Promise<void> {
   canEndTracking.value = false
   const generation = recoveryGeneration
   const current = () => !disposed && generation === recoveryGeneration && probe === probeId.value && requestId === pendingRequest.value
+  let retry = false
   try {
     const retained = await api.retainedJob(requestId)
     if (!current()) return
@@ -178,18 +179,34 @@ async function recoverJob(): Promise<void> {
       if (!alreadyFinished) { jobState.value = snapshot.state; totalProgress.value = snapshot.total_progress }
       if (changed) lastSequence.value = 0
       if (!alreadyFinished && !TERMINAL.has(snapshot.state) && (changed || !subscription)) subscribe(lastSequence.value)
-      recoveryMessage.value = tr('已关联原任务；完成后查询持久结果。', 'Original job attached; query its retained result after completion.')
+      // Capture restoration and journal finalization are automatic. A terminal
+      // worker with a still-running receipt does not need user confirmation.
+      recoveryMessage.value = ''
+    } else if (retained.state === 'running') {
+      recoveryMessage.value = ''
     } else {
       canEndTracking.value = retained.state === 'unknown'
       recoveryMessage.value = tr('任务结果尚未确认，请查询原任务并检查目标；不会自动重新提交。', 'Outcome is unconfirmed. Query the original job and inspect the target; no automatic resubmission.')
     }
-    if (retained.state === 'running') {
-      clearTimeout(recoveryTimer)
-      recoveryTimer = setTimeout(() => { if (current()) void recoverJob() }, 750)
-    }
+    retry = retained.state === 'running' || (!!pendingRequest.value && requestId !== pendingRequest.value)
   } catch (error) {
-    if (current()) recoveryMessage.value = message(error)
-  } finally { if (generation === recoveryGeneration) recoveryBusy.value = false }
+    if (current()) {
+      // A transient lookup failure must not strand the receipt after SSE closes.
+      retry = true
+      if (jobState.value && TERMINAL.has(jobState.value)) {
+        recoveryMessage.value = ''
+        appendLog(`[JOB] ${message(error)}`)
+      } else recoveryMessage.value = message(error)
+    }
+  } finally {
+    if (generation === recoveryGeneration) recoveryBusy.value = false
+    if (!disposed && generation === recoveryGeneration && probe === probeId.value && retry) {
+      clearTimeout(recoveryTimer)
+      recoveryTimer = setTimeout(() => {
+        if (!disposed && generation === recoveryGeneration && probe === probeId.value) void recoverJob()
+      }, 750)
+    }
+  }
 }
 async function endTracking(): Promise<void> {
   if (!canEndTracking.value || recoveryBusy.value || creatingJob.value) return
@@ -990,6 +1007,8 @@ function subscribe(after = lastSequence.value): void {
   subscription = api.subscribeJob(jobId.value, after, receiveEvent, error => {
     streamDisconnected.value = true
     appendLog(`[SSE:${error.code}] ${error.message}`)
+    subscription = null
+    void recoverJob()
   })
 }
 function receiveEvent(event: JobStreamEvent): void {
@@ -1046,6 +1065,7 @@ async function startJob(customActions = actions.value, sectorAddresses?: number[
     localStorage.setItem(receiptKey, requestId)
     pendingRequest.value = requestId
     progressOwner.value = 'flash'
+    jobId.value = ''; jobState.value = null
     logs.value = []; lastSequence.value = 0; totalProgress.value = 0
     const result = await api.createJob({ actions: orderedActions, image_id: inspection.value?.image_id, algorithm_id: selectedAlgorithmId.value || null, algorithm_ids: [...selectedAlgorithmIds.value], probe_id: probeId.value, target_part: selectedTarget.value.part_number, frequency: frequency.value, connect_mode: connectMode.value, reset_mode: selectedResetMode, reset_voltage_mv: selectedResetVoltage, base_address: isBin.value ? parsedBase.value : null, sector_addresses: hpmMode.value ? [] : resolvedSectors, board: hpmMode.value ? hpmBoard.value : null }, requestId, current)
     if (!current() || pendingRequest.value !== requestId) return
@@ -1058,7 +1078,7 @@ async function startJob(customActions = actions.value, sectorAddresses?: number[
     }
     if (current()) {
       appendLog(`[ERROR] ${message(error)}`)
-      if (error instanceof OnlineFlashApiError && !error.notStarted) void recoverJob()
+      if (receiptKey && !(error instanceof OnlineFlashApiError && error.notStarted)) void recoverJob()
     }
   }
   finally { creatingJob.value = false }
@@ -1075,6 +1095,7 @@ async function stopJob(): Promise<void> {
     if (!current()) return
     if ((!jobState.value || !TERMINAL.has(jobState.value)) && TERMINAL.has(snapshot.state)) {
       jobState.value = snapshot.state
+      void recoverJob()
     }
   }
   catch (error) {
@@ -1135,7 +1156,7 @@ onBeforeUnmount(() => {
     <main class="workspace-zone firmware-zone" data-zone="firmware">
       <MemoryReadPanel ref="memoryReadRef" embedded :probe-id="probeId" :target-part="selectedTarget?.part_number || ''" :hpm="hpmMode" :board="hpmBoard || undefined" :frequency="frequency" :connect-mode="connectMode" :reset-mode="resetMode" :memory-regions="targetMemoryRegions" :memory-map-busy="targetMemoryMapBusy" :disabled="memoryReadDisabled" @progress="onMemoryReadProgress" @log="onMemoryReadLog" @data="onMemoryReadData" />
       <FirmwareWorkspace :file="firmware" :source-path="firmwarePath" :native-drop-active="nativeDropActive" :base-address="baseAddress" :base-error="baseError" :inspection="inspection" :rows="rows" :padding-top="paddingTop" :padding-bottom="paddingBottom" :loading="inspectBusy" :error="inspectError" :memory-data="memoryReadData" :memory-address="memoryReadAddress" :read-disabled="memoryReadDisabled" :read-busy="memoryReadBusy" @file="setFirmware" @browse="browseFirmware" @drop-files="acceptFirmwareSources" @base="setBase" @scroll="loadVisible" @read="openMemoryReadDialog" @save="saveMemoryFile" @clear-data="clearDataWindow" />
-      <section v-if="recoveryBlocked && !active && !creatingJob" role="status" data-testid="online-recovery">
+      <section v-if="recoveryMessage && !active && !creatingJob" role="status" data-testid="online-recovery">
         <p>{{ tr('已有待确认的在线请求，暂不允许新任务。', 'An online request awaits confirmation; new jobs are disabled.') }}</p>
         <code>{{ pendingRequest }}</code>
         <p>{{ recoveryMessage }}</p>

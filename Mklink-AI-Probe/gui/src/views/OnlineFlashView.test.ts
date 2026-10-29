@@ -1110,6 +1110,76 @@ describe('online flash task workspace behavior', () => {
     restored.unmount()
   })
 
+  it.each([false, true])('silently settles a completed flash while capture restoration fails: transient query error %s', async transientError => {
+    const fallback = viewFetch()
+    let requestId = ''
+    let settled = false
+    let reads = 0
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
+      const url = String(input)
+      if (url.endsWith('/jobs') && options?.method === 'POST') {
+        requestId = new Headers(options.headers).get('X-MKLink-Request-Id')!
+      }
+      if (url.endsWith('/api/runtime/jobs/')) {
+        reads++
+        if (transientError && reads === 2) throw new Error('temporary connection failure')
+        return new Response(JSON.stringify({ jobs: [{
+          request_id: requestId, action: 'online_flash', state: settled ? 'succeeded' : 'running',
+          online_job_id: 'job-1', result: settled ? {
+            job: { job_id: 'job-1', state: 'succeeded', total_progress: 1 },
+            acquisition: { errors: ['rtt: RTT channel is not active'] },
+          } : null,
+        }] }))
+      }
+      if (url.endsWith('/jobs/job-1')) return new Response(JSON.stringify({ job_id: 'job-1', state: 'succeeded', total_progress: 1 }))
+      return fallback(input, options)
+    }))
+    const wrapper = mount(await onlineFlashView())
+    try {
+      await readyAndStart(wrapper)
+      FakeEventSource.instances[0]!.emit('state', {
+        job_id: 'job-1', sequence: 100, event: 'state', state: 'succeeded', progress: 1,
+      })
+      await flushPromises()
+      expect(wrapper.get('[data-testid="job-state"]').text()).toContain('烧录完成')
+      expect(wrapper.find('[data-testid="online-recovery"]').exists()).toBe(false)
+      expect(wrapper.get('[data-testid="start-job"]').attributes('disabled')).toBeDefined()
+      // A poll may fail once while the backend reconnects/restores capture.
+      if (transientError) await vi.waitFor(() => expect(reads).toBeGreaterThanOrEqual(2), { timeout: 2000 })
+      expect(wrapper.find('[data-testid="online-recovery"]').exists()).toBe(false)
+      settled = true
+      await vi.waitFor(() => expect(wrapper.get('[data-testid="start-job"]').attributes('disabled')).toBeUndefined(), { timeout: 3000 })
+      expect(wrapper.find('[data-testid="online-recovery"]').exists()).toBe(false)
+      expect(localStorage.getItem(`mklink.onlineFlash.pending.mklink-1.${requestId}`)).toBeNull()
+      expect(wrapper.get('[data-zone="logs"]').text()).toContain('RTT channel is not active')
+      expect(vi.mocked(fetch).mock.calls.filter(([url, options]) => String(url).endsWith('/jobs') && options?.method === 'POST')).toHaveLength(1)
+    } finally { wrapper.unmount() }
+  })
+
+  it('reconciles a completed job automatically after its event stream disconnects', async () => {
+    const fallback = viewFetch()
+    let requestId = ''
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
+      const url = String(input)
+      if (url.endsWith('/jobs') && options?.method === 'POST') requestId = new Headers(options.headers).get('X-MKLink-Request-Id')!
+      if (url.endsWith('/api/runtime/jobs/')) return new Response(JSON.stringify({ jobs: [{
+        request_id: requestId, action: 'online_flash', state: 'succeeded', result: null,
+      }] }))
+      return fallback(input, options)
+    }))
+    const wrapper = mount(await onlineFlashView())
+    try {
+      await readyAndStart(wrapper)
+      FakeEventSource.instances[0]!.emitNativeError()
+      await flushPromises()
+      expect(wrapper.get('[data-testid="job-state"]').text()).toContain('烧录完成')
+      expect(wrapper.get('[data-testid="start-job"]').attributes('disabled')).toBeUndefined()
+      expect(wrapper.find('[data-testid="online-recovery"]').exists()).toBe(false)
+      expect(localStorage.getItem(`mklink.onlineFlash.pending.mklink-1.${requestId}`)).toBeNull()
+      expect(vi.mocked(fetch).mock.calls.filter(([url, options]) => String(url).endsWith('/jobs') && options?.method === 'POST')).toHaveLength(1)
+    } finally { wrapper.unmount() }
+  })
+
   it('clears a definite rejection without manual acknowledgement or resubmission', async () => {
     const fallback = viewFetch()
     let requestId = ''
@@ -1260,11 +1330,8 @@ describe('online flash task workspace behavior', () => {
     await readyToStart(wrapper)
     await wrapper.get('[data-testid="start-job"]').trigger('click')
     await flushPromises()
-    expect(wrapper.text()).toContain(requestId)
-    expect(wrapper.get('[data-testid="start-job"]').attributes('disabled')).toBeDefined()
-    expect(localStorage.getItem(`mklink.onlineFlash.pending.mklink-1.${requestId}`)).toBe(requestId)
-    await wrapper.get('[data-testid="query-online-request"]').trigger('click')
-    await flushPromises()
+    expect(wrapper.get('[data-testid="start-job"]').attributes('disabled')).toBeUndefined()
+    expect(localStorage.getItem(`mklink.onlineFlash.pending.mklink-1.${requestId}`)).toBeNull()
     expect(wrapper.find('[data-testid="online-recovery"]').exists()).toBe(false)
     expect(vi.mocked(fetch).mock.calls.filter(([url, options]) => String(url).endsWith('/jobs') && options?.method === 'POST')).toHaveLength(1)
     wrapper.unmount()
