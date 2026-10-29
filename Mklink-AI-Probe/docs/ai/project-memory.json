@@ -55,7 +55,7 @@
     },
     {
       "area": "Linux/macOS 0.4.1测试包",
-      "result": "Linux源a6bdacbc/CI40637027269：USB58通过/1项Windows专用跳过，冻结CLI/MCP、健康、Web及5.016秒启动/正常退出通过，DEB版本/amd64/ELF/udev/SHA7309f377核验通过。Mac源eefc6842/CI40640511140：Apple Silicon、USB58通过/1项Windows专用跳过，实际DMG挂载后的冻结CLI/MCP、健康/Web、5.17秒启动/正常退出通过，本地DMG格式和SHA56dc8e0a核验通过。两包均0.4.1，Mac仅ad-hoc且未Apple公证；用户系统安装、原生界面和USB实机待测。见两份20261028测试包报告。"
+      "result": "Linux源a6bdacbc/CI40637027269、Mac arm64源eefc6842/CI40640511140：各USB58通过/1项Windows专用跳过，冻结CLI/MCP/健康/Web/正常退出通过。DEB SHA7309f377、DMG SHA56dc8e0a。均0.4.1；Mac仅ad-hoc未公证，用户系统安装/原生UI/USB实机待测，不含10月29日在线修复。详见linux-deb-test-20261028.md、macos-arm64-test-20261028.md。"
     },
     {
       "area": "安装器旧元数据自动清理",
