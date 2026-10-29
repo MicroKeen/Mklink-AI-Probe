@@ -34,3 +34,25 @@
 
 本地日志和截图保存在 `F:/MKLink-Build/artifacts/online-receipt-fix-20261029`；
 截图、设备标识和用户固件不提交仓库。测试产生的链接目录由构建入口保留，未强删。
+
+## Windows 本地测试包与覆盖安装
+
+- 构建源 `d1cf16ec`，使用仓库构建入口与 `build.py --local-bundle`。
+  初次因工作区缺少内置 SVD Pack 停止；显式使用已有安装中的 Pack bundle，
+  构建器完整校验后重试通过，未伪造资源或降低校验要求。
+- 内置资源校验：7,059 个 FLM 目标、2,224 个算法 blob、4,800 个 SVD 目标。
+- 本地 NSIS：`Mklink-AI-Probe-v0.4.1-d1cf16ec-online-fix-x64-Setup.exe`，
+  184,483,540 字节，SHA-256
+  `94eaa2984e201a763468eb2be3387702d539834cd904687c9e9f22567f260aeb`。
+- 备份原安装后，用 Windows-only PATH 执行 `/S /UPDATE /P` 覆盖本机测试安装。
+  用户完成 Windows UAC 授权，安装 exit 0；保留设置文件哈希未变。
+- 从 NSIS 解出的 3,626 个实际安装载荷逐文件 SHA-256 一致。
+- 冻结 CLI、真实 stdio MCP 的 `inspect_mcu` / `security_status`、无硬件连接的
+  独立后台健康和正常退出通过；38 个 Web 资产与生产构建一致。
+- 原生 Windows-only PATH 启动成功，无宿主 Python 子进程；在线页面保留
+  HPM5301、BIN、地址与连接参数，开始按钮可用，无待确认提示。
+  安装版 Web 页面在真实浏览器正常加载，无 console error。
+- 原生窗口正常关闭后 MKLink 进程及本次端口全部释放；随后重新打开供用户测试。
+- 三项 GitHub 检查在产品修复提交 `d1cf16ec` 上通过；草稿 PR #66 未合并。
+- 正式 0.4.1 安装包哈希仍为 `30333c33...56c621`。本包无更新签名，
+  Windows 未知发布者限制不变，没有发布、修改索引或重建此前 Linux/macOS 测试包。

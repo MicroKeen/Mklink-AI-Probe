@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-29T15:53:03+08:00",
+  "updated_at": "2026-10-29T16:06:38+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.4.2-fixes",
-    "head": "本次在线烧录静默收尾修复基于966fa7cf；版本保持0.4.1，最新提交以Git为准。Linux/macOS测试包源仍分别为a6bdacbc/eefc6842。",
+    "head": "d1cf16ec为在线烧录静默收尾修复和本机Windows测试包源；版本保持0.4.1，最新验收文档提交见Git。此前Linux/macOS测试包源仍为a6bdacbc/eefc6842。",
     "remote_head": "microkeen/codex/v0.4.2-fixes；多个后续修复共用此分支。microkeen/main核对为3cc474bb。",
     "working_tree": "E盘原工作区已切换codex/v0.4.2-fixes；两个旧detached工作树继续保留。构建产物与验证证据保存在F盘构建根目录。"
   },
@@ -13,8 +13,8 @@
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "online_flash_receipt_fix_verified",
-    "current_task": "2026-10-29修复在线烧录结束后正常恢复采集/保存结果阶段误显示待确认，补充短暂查询失败、SSE断开及丢失响应自动核对。124 GUI、29 Python、生产构建通过；V4/HPM5301实机复现RTT恢复失败，仅留日志且下一次烧录按钮可用。共用分支和草稿PR66，保持0.4.1；本地Windows测试包准备中。见online-flash-receipt-20261029.md。"
+    "status": "online_flash_fix_installed_ready_for_user",
+    "current_task": "2026-10-29在线烧录静默收尾修复完成并覆盖本机测试安装，版本仍0.4.1。124 GUI、29 Python、生产/NSIS构建、V4+HPM5301真机RTT暂停/恢复失败静默收尾、3626安装载荷一致、冻结CLI/MCP/Web和原生正常退出通过；窗口已重开。产品源d1cf16ec、三CI通过，共用分支/草稿PR66未合并或发布。见online-flash-receipt-20261029.md。"
   },
   "milestones": [
     {
@@ -51,7 +51,7 @@
   "verification": [
     {
       "area": "在线烧录静默收尾",
-      "result": "124 GUI、29 Python、生产构建通过；现场V4/HPM5301两次真实烧录校验成功，第二次运行RTT后自动暂停，恢复失败仅写日志，开始按钮自动可用、无待确认面板。成功恢复仅自动化覆盖。版本仍0.4.1；没有VCC/OTP/固件升级。见docs/verification/online-flash-receipt-20261029.md。"
+      "result": "源d1cf16ec：124 GUI、29 Python、生产/本地NSIS和三CI通过；V4+HPM5301两次烧录校验成功，运行RTT自动暂停后恢复失败仅留日志，下一次按钮可用且无待确认面板。成功恢复仅自动化覆盖。本机UAC授权后覆盖exit0、3626载荷一致、38 Web资产、冻结CLI/MCP、原生启动/正常退出通过；安装包SHA94eaa298，版本仍0.4.1，未发布。见online-flash-receipt-20261029.md。"
     },
     {
       "area": "Linux/macOS 0.4.1测试包",
@@ -110,7 +110,7 @@
     "nRF54L15 GUI保护闭环、全部物理擦除/拔插/休眠/断电场景、电源外部精度校准未全部认证。VCC每次改动必须确认具体电压，HPM已锁定OTP不得重放。 已知无可靠扇区表的26个FLM禁用扇区操作；重叠算法需要匹配Bank模式。 HPM5301组18/19永久锁定的历史状态及用户字先写/组锁最后、全部固件独立校验后才写OTP等边界见docs/ai/hpm-offline-otp-handoff.md；接手重新确认芯片，其他型号不继承验收。 UART OTP已实现ROM write-memory APIv2，独立熔丝/影子/临时锁读语义仍未知并如实显示；以ROM写入状态及回读为准。配套3d96dbb已实机验证HPM5301全部128字读取和用户批准的Word69 0→1单次写入回读；其余型号/区域未实写，新数据须具体授权。多Word顺序执行不可回滚。CSV原生选择器自动化未完成。 V3直连USB、RTT空采集约30分钟掉线仍未定因；再次复现先导出诊断再拔插，本轮V4短测不能关闭。"
   ],
   "next_actions": [
-    "交付在线烧录静默收尾修复的本地Windows测试包供用户验证；此前Linux x64 DEB/Apple Silicon DMG不包含本次修复。继续共用codex/v0.4.2-fixes、草稿PR66，不直接修改main。合并和正式发布需维护者明确指令，正式0.4.1不重发。",
+    "用户继续测试已覆盖安装的在线烧录静默收尾修复（产品源d1cf16ec，仍0.4.1）。此前Linux x64 DEB/Apple Silicon DMG不包含本次修复。继续共用codex/v0.4.2-fixes、草稿PR66，等待下个具体任务；合并和正式发布需要明确指令，正式0.4.1不重发。",
     "双核脱机需真实M7/M4板正向验收；V3空RTT约30分钟掉线再次复现先导出诊断再拔插。两项保持未闭环，私有候选不得公开替换正式固件。",
     "公网远程服务中继为下个版本任务；本次不实施。",
     "下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。",
