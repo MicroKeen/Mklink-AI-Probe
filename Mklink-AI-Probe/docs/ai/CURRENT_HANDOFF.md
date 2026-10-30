@@ -4,12 +4,12 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-30T23:52:52+08:00`
+- 更新时间：`2026-10-30T23:58:12+08:00`
 - 分支：`codex/v0.4.2-fixes`
 - HEAD：`4be6ab66：共享RTT/SystemView、480量子和count64兼容；前序6ce79923读取提示/4551687d发现修复均源码未安装。已装Windows dce17d3e/Skill归档0d680d90不变。`
 - 远端 HEAD：`microkeen/codex/v0.4.2-fixes；多个后续修复共用此分支。microkeen/main核对为3cc474bb。`
 - 工作树：E盘原工作区已切换codex/v0.4.2-fixes；两个旧detached工作树继续保留。构建产物与验证证据保存在F盘构建根目录。
-- 当前任务：描述符/SBA候选HPM限定证据已核对：30MHz双10MiB最高661.208KiB/s，SV独立62.679秒零丢失计数，共存SV15/drop1442保留。UF2 c995a6ea及十源快照通过。H7未接未验；宿主4be及安装包不变。
+- 当前任务：control候选HPM及交付核对完：RTT最高661.208KiB/s、SV独立62.679秒零计数，共存SV15/drop1442保留；UF2 c995a6ea/十源一致，ZIP43b44dae/46文件通过。H7未接未验，宿主4be及安装包不变。
 - 状态：`firmware_control_hpm_verified_h7_hardware_pending`
 
 ## 里程碑
@@ -47,13 +47,13 @@
 
 ## 真机环境
 
-- **state**：指定固件会话协调HPMLink/HPM，control三个报告已停止/10MHz/device_closed；H7尚未接，接线通知由其统一发出。本会话仅离线复核，不从报告推定新现场空闲。
+- **state**：指定固件会话确认control三项停止/10MHz/设备关闭；当前HPMLink后续换接H7，尚未切换，接线通知由其发出。本会话仅离线核对；新ZIP43b44dae含H7待测标记，后续先协调。
 - **installer**：Windows/完整Skill均已覆盖安装0.4.2本地候选；NSIS SHAf70e4960/Skill SHAa126d967，3640/2638文件一致、47工具、5339用户文件保留。41Web一致，更新记录11条。完整产物见v042-combined-20261030，未正式发布。
 - **backups**：保留正式release、安装包、CI ZIP、唯一硬件证据、Skill备份及F盘缓存。含链接/不可访问目录不强删。历史获授权清理见v036-storage-cleanup-20261023.md及本机START_HERE；本地Unix清理不影响正式附件。旧detached树保留；本轮Skill备份在F盘cache/mklink-ai-probe/skill-backups。
 
 ## 下一动作
 
-1. HPM control限定证据通过，等新交付包和同HPMLink换接H7后实板证据；HPM/模型不替代ARM实测。宿主4be6ab66-verified不变，不重建/安装/占硬件。
+1. HPM control及新交付ZIP核对完成，等同HPMLink换接H7后实板证据；HPM/模型不替代ARM实测。宿主4be6ab66-verified不变，不重建/安装/占硬件。
 2. 下次明确授权构建带入共享MUX/Skill、4551687d发现与6ce79923读取提示；已装0.4.2两包SHA不变。374目录扫描慢、995/10048、双核脱机实板及V3历史根因仍待办。PR66合并/正式发布须新明确指令，私有固件不公开替换。
 3. 公网远程服务中继为下个版本任务；本次不实施。
 4. 下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。

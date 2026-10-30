@@ -217,6 +217,8 @@
 
 HPM 本轮限定证据已通过；STM32H7 尚未接入，模型及 HPM 结果不证明 ARM/H7 实板通过。H7 接线通知由指定固件会话统一发出，后续硬件状态先协调。前一 `5396eedb…` 及其交付 ZIP 保留为历史证据，不当作新候选交付；宿主仍为 `4be6ab66-verified`，本会话不占硬件、不构建或覆盖安装。
 
+新 control 交付 ZIP 已独立核对：`HPMLink_RTT_SystemView_latest.zip` 为 **1343637 字节**，SHA256 `43b44dae23f36d139e0824a6cc201db8561ba120ba98de2070d2381e8036db12`，manifest SHA256 `fb5f739b5568176878810a822e9610145891478ce0cc7f6b6cd3635a6f03a213`。46 个载荷文件加 manifest 共 47 项，全部大小/哈希一致；10 份源快照、三份 control 报告及五份原始载荷/DAP 日志与已核对证据一致，UF2/BIN/目标镜像和最新摘要吻合。摘要最高吞吐比值 1.062169 是本轮最高值相对前轮最高值；与上述按相同块长比较的两个比值口径不同。包内仅包含本候选报告，保留非零并行 SV 计数及 `stm32h7_hardware_verified=false`；H7 文档是待执行计划，不能当作实测证据。审阅 diff 已统一行尾，原始源码字节和 audit 未变。指定会话确认三项测试停止、10 MHz、设备关闭；本会话未触碰硬件。复核结果为 `control-delivery-independent-review.json`。此包是本地固件复测资料，未公开发布。
+
 本机证据目录为 `F:/MKLink-Build/artifacts/rtt-shared-20261030`；候选 ZIP 为源码导出，不是安装包或完整发行 Skill：
 
 | 源码候选 | ZIP SHA256 |
