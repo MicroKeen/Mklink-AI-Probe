@@ -186,6 +186,12 @@
 
 指定会话最终报告本轮硬件均已释放，目标保留 SystemView fixture、压力负载关闭。其交付 ZIP `HPMLink_RTT_SystemView_latest.zip`（1327623 字节）已独立核对：SHA256 `79cee1e7ae79d831739868ff6ca5325ae58668a9318b6a2e9919afb71f326283`；43 个载荷文件加一份 manifest，所有大小/哈希匹配，manifest SHA256 为 `e17c7737e5f1822c4e7fbe3f948d5b47fa1214b8cc81d18a80afb63b2ab61022`。9 份源码快照、3 份报告、5 份原始载荷/DAP 日志与已核对文件一致，RTT 目标 BIN 与报告镜像 SHA 一致，最新数据摘要和非零并行溢出均正确；不含旧轮/身份失败试跑报告或 runtime 认证/所有权文件。该包是本地固件复测交付资料，含本机复测路径，未公开发布；不是宿主安装包或正式 Skill。核对记录为 `burst-delivery-independent-review.json`。
 
+### 后续描述符与 SBA 复用候选（待验证）
+
+指定固件会话随后报告用户继续要求优化描述符、读指针及 SBA 复用，并兼顾 ARM；当前仍用 HPMLink，后续将换接 STM32H7。其正在完整编译的新改动包括：共享描述符只读取 buffer/size/Wr/Rd 的 16 字节，保留双快照校验；HPM 仅复用已验证 quiet 状态，普通 DMI/所有权变化使其失效，读指针写前仍实时核验 SBCS；ARM 仅在同一 RTT 锁范围复用 prepared 状态，下一服务冷启动，保留 CSW/TAR/DRW/drain 路径。所谓读指针正常 6 次扫描对旧 11 次，是固件会话的扫描次数模型，不是本会话测得的耗时或性能结果。
+
+固件会话报告生产模型已覆盖相关故障及 ARM 一致性/上下文，本会话尚未取得该候选身份、快照或实机报告作独立核对。HPM 实板测试由指定会话继续，STM32H7 尚未接入；H7 接线通知也由该会话统一发出。前一候选 `5396eedb…` 的 622.507 KiB/s、独立 SV 零丢失计数及并行溢出仅作为历史基线，不能证明新候选或 ARM 已通过。宿主仍为 `4be6ab66-verified`，本会话不占硬件、不构建或覆盖安装。
+
 本机证据目录为 `F:/MKLink-Build/artifacts/rtt-shared-20261030`；候选 ZIP 为源码导出，不是安装包或完整发行 Skill：
 
 | 源码候选 | ZIP SHA256 |

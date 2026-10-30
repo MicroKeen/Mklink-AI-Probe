@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-30T23:37:09+08:00",
+  "updated_at": "2026-10-30T23:46:36+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
@@ -13,8 +13,8 @@
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "firmware_burst_scoped_evidence_verified_host_not_rebuilt",
-    "current_task": "最终burst限定证据已核对：30MHz RTT最高622.507KiB/s较前轮+7.79%；SV独立62.965秒零丢失计数，共存SV overflow26/drop1164保留。UF2 SHA5396eedb、九源快照一致。宿主4be及安装包不变。"
+    "status": "firmware_descriptor_sba_reuse_hpm_arm_followup_pending",
+    "current_task": "指定固件会话继续描述符16B、读指针/SBA复用及ARM锁内prepared优化，完整编译/HPM实测中，H7未接。旧burst622.507KiB/s与SV证据仅基线；新候选待身份/载荷/故障与共存核对。宿主4be及安装包不变。"
   },
   "milestones": [
     {
@@ -95,7 +95,7 @@
     "编译完成不代表目标已下载：文件变化仅发待重载提示，不后台解析。用户明确加载/重载文件时自动停止目标采集，确认worker退出后原子换表，保持停止；失败保留旧目录/选择。不要求连接下载器；断开保留文件和选中变量但清空旧采样。公式只改变可视化，原始记录不变；不恢复旧地址采集或重放写操作。"
   ],
   "hardware": {
-    "state": "指定固件会话报告burst全部结束、硬件已释放、10MHz、目标保留SV fixture且负载关闭；三个报告收尾通过。UF2 SHA5396eedb，源未提交；交付ZIP SHA79cee1e7/43文件已核对。本会话仅离线复核，后续先协调。",
+    "state": "指定固件会话协调HPMLink及当前HPM板，正准备新描述符/SBA候选测试；后续STM32H7尚未接，接线通知由其统一发出。本会话仅离线复核、不连接；旧burst释放记录不代表当前空闲。",
     "installer": "Windows/完整Skill均已覆盖安装0.4.2本地候选；NSIS SHAf70e4960/Skill SHAa126d967，3640/2638文件一致、47工具、5339用户文件保留。41Web一致，更新记录11条。完整产物见v042-combined-20261030，未正式发布。",
     "backups": "保留正式release、安装包、CI ZIP、唯一硬件证据、Skill备份及F盘缓存。含链接/不可访问目录不强删。历史获授权清理见v036-storage-cleanup-20261023.md及本机START_HERE；本地Unix清理不影响正式附件。旧detached树保留；本轮Skill备份在F盘cache/mklink-ai-probe/skill-backups。"
   },
@@ -110,7 +110,7 @@
     "nRF54L15保护闭环、全部擦除/拔插/休眠/断电、电源精度未全测。每次VCC需确认具体电压。26个无可靠扇区FLM禁用扇区操作，Bank模式须匹配。HPM5301 OTP组18/19历史永久锁定；128字读取及批准Word69 0→1已实测，其余型号/区域不继承授权，锁最后写/逐项校验，多Word不可回滚；熔丝/影子/临时锁语义未知，UART按ROM状态及回读为准。详见hpm-offline-otp-handoff.md及known-limits-20261030.md。"
   ],
   "next_actions": [
-    "最终burst限定证据已核对，等待下一任务；宿主4be6ab66-verified（SHA cb3c43fc）不变，新UF2 SHA5396eedb及九源快照未提交。本次不重建/安装/占硬件。",
+    "等新描述符/SBA候选身份、原字节快照、HPM完整载荷/SV/共存及H7接线后实板证据；模型不代替H7实测，6对11扫描非耗时。宿主4be6ab66-verified不变，不重建/安装/占硬件。",
     "下次明确授权构建带入共享MUX/Skill、4551687d发现与6ce79923读取提示；已装0.4.2两包SHA不变。374目录扫描慢、995/10048、双核脱机实板及V3历史根因仍待办。PR66合并/正式发布须新明确指令，私有固件不公开替换。",
     "公网远程服务中继为下个版本任务；本次不实施。",
     "下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。",

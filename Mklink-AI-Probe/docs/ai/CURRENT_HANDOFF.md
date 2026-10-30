@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-30T23:37:09+08:00`
+- 更新时间：`2026-10-30T23:46:36+08:00`
 - 分支：`codex/v0.4.2-fixes`
 - HEAD：`4be6ab66：共享RTT/SystemView、480量子和count64兼容；前序6ce79923读取提示/4551687d发现修复均源码未安装。已装Windows dce17d3e/Skill归档0d680d90不变。`
 - 远端 HEAD：`microkeen/codex/v0.4.2-fixes；多个后续修复共用此分支。microkeen/main核对为3cc474bb。`
 - 工作树：E盘原工作区已切换codex/v0.4.2-fixes；两个旧detached工作树继续保留。构建产物与验证证据保存在F盘构建根目录。
-- 当前任务：最终burst限定证据已核对：30MHz RTT最高622.507KiB/s较前轮+7.79%；SV独立62.965秒零丢失计数，共存SV overflow26/drop1164保留。UF2 SHA5396eedb、九源快照一致。宿主4be及安装包不变。
-- 状态：`firmware_burst_scoped_evidence_verified_host_not_rebuilt`
+- 当前任务：指定固件会话继续描述符16B、读指针/SBA复用及ARM锁内prepared优化，完整编译/HPM实测中，H7未接。旧burst622.507KiB/s与SV证据仅基线；新候选待身份/载荷/故障与共存核对。宿主4be及安装包不变。
+- 状态：`firmware_descriptor_sba_reuse_hpm_arm_followup_pending`
 
 ## 里程碑
 
@@ -47,13 +47,13 @@
 
 ## 真机环境
 
-- **state**：指定固件会话报告burst全部结束、硬件已释放、10MHz、目标保留SV fixture且负载关闭；三个报告收尾通过。UF2 SHA5396eedb，源未提交；交付ZIP SHA79cee1e7/43文件已核对。本会话仅离线复核，后续先协调。
+- **state**：指定固件会话协调HPMLink及当前HPM板，正准备新描述符/SBA候选测试；后续STM32H7尚未接，接线通知由其统一发出。本会话仅离线复核、不连接；旧burst释放记录不代表当前空闲。
 - **installer**：Windows/完整Skill均已覆盖安装0.4.2本地候选；NSIS SHAf70e4960/Skill SHAa126d967，3640/2638文件一致、47工具、5339用户文件保留。41Web一致，更新记录11条。完整产物见v042-combined-20261030，未正式发布。
 - **backups**：保留正式release、安装包、CI ZIP、唯一硬件证据、Skill备份及F盘缓存。含链接/不可访问目录不强删。历史获授权清理见v036-storage-cleanup-20261023.md及本机START_HERE；本地Unix清理不影响正式附件。旧detached树保留；本轮Skill备份在F盘cache/mklink-ai-probe/skill-backups。
 
 ## 下一动作
 
-1. 最终burst限定证据已核对，等待下一任务；宿主4be6ab66-verified（SHA cb3c43fc）不变，新UF2 SHA5396eedb及九源快照未提交。本次不重建/安装/占硬件。
+1. 等新描述符/SBA候选身份、原字节快照、HPM完整载荷/SV/共存及H7接线后实板证据；模型不代替H7实测，6对11扫描非耗时。宿主4be6ab66-verified不变，不重建/安装/占硬件。
 2. 下次明确授权构建带入共享MUX/Skill、4551687d发现与6ce79923读取提示；已装0.4.2两包SHA不变。374目录扫描慢、995/10048、双核脱机实板及V3历史根因仍待办。PR66合并/正式发布须新明确指令，私有固件不公开替换。
 3. 公网远程服务中继为下个版本任务；本次不实施。
 4. 下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。
