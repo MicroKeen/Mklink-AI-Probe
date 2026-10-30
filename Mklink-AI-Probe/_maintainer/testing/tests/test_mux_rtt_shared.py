@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from mklink.mux import MuxTransport, MuxTargetError, packet
+from mklink.mux import MuxTransport, MuxTargetError, MuxError, packet
 from mklink.mux_rtt import MuxRTTSession, MuxRTTManager
 from mklink.systemview import SystemViewSession
 from test_shared_runtime import runtime
@@ -161,6 +161,23 @@ def test_start_counts_are_not_channel_masks():
     assert calls[0][1][-2:] == b'\x03\x01'
     emit(1, b'first')
     assert session.read_channels(0)[1] == b'first'
+
+
+@pytest.mark.parametrize('counts', [(33, 33), (64, 64), (65, 1), (1, 65)])
+def test_start_reply_descriptor_count_follows_firmware_bounds(counts):
+    t, calls, options, emit, info, _ = rig()
+    options['start_reply'] = bytes(counts)
+    session = MuxRTTSession(t, info)
+    if max(counts) > 64:
+        with pytest.raises(MuxError, match='Invalid RTT configuration response'):
+            session.start('0x20000000')
+        assert not t.ready and not t._rtt_manager.consumers
+        assert len(calls) == 1  # Unknown outcome is never replayed.
+    else:
+        session.start('0x20000000')
+        emit(0, b'alive')
+        assert session.read_output_bytes(0) == b'alive'
+        session.stop()
 
 
 def test_busy_stop_keeps_device_subscription_reachable_and_other_stream_alive():

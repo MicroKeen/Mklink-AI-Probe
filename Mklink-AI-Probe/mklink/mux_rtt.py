@@ -26,7 +26,9 @@ class MuxRTTManager:
         valid = answer == b''
         if op == 0x20:
             # Legacy START returns descriptor counts, NOT selected masks.
-            valid = (len(answer) == 2 and 1 <= answer[0] <= 32 and answer[1] <= 32
+            # Firmware accepts up to 64 target descriptors per direction;
+            # the independently bounded subscription still selects only 0..7.
+            valid = (len(answer) == 2 and 1 <= answer[0] <= 64 and answer[1] <= 64
                      and not data[4] >> answer[0] and not data[5] >> answer[1])
             if valid and info is not None:
                 valid = all(info.get(key, value) == value for key, value in
