@@ -174,6 +174,12 @@ python -m mklink runtime stop --probe "电机板" --confirm
 旧 `/api/session/acquire`、`release`、`status` 已删除，不提供兼容转发。
 程序接入使用共享客户端的 connect/close；资源占用查询统一使用 `/api/resources/status`。
 
+连接响应的 `target_initializing=true` 表示目标初始化尚在后台执行。紧接着调用
+`probe_idcode` 等目标命令可能得到 `target_debug held by user:api:connect-init`
+的 409；先等待资源状态中的该初始化持有者释放，再发起后续操作。等待应有超时，
+超时保留诊断信息，不强制夺取资源或重放结果未知的操作。这种初始化竞争不代表
+RTT/SystemView 传输丢包，吞吐测试也应在初始化完成后开始计时。
+
 ## 跨进程端口锁
 
 CMD、通用串口和 Modbus 共用同一端口锁，按端口分别互斥。默认注册目录在当前用户的
