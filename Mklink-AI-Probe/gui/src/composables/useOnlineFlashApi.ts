@@ -72,8 +72,23 @@ function errorMessage(detail: unknown, fallback: string): string {
   }
   if (isRecord(detail)) {
     const message = stringField(detail, 'message')
-    if (message) return message
     const code = stringField(detail, 'code')
+    if (code === 'CONNECT_FAIL') {
+      if (message && /no\s+ack/i.test(message)) return tr(
+        '连接目标芯片失败：SWD/JTAG 未收到芯片应答（No ACK）。请确认目标板已连接并供电，检查 SWD/JTAG 接线；必要时降低调试频率后重试。',
+        'Target connection failed: no SWD/JTAG acknowledgement (No ACK). Check that the target board is connected and powered, check SWD/JTAG wiring, and try a lower debug clock if needed.',
+      )
+      return `${tr('连接目标芯片失败', 'Target connection failed')}${message ? `: ${message}` : ''}`
+    }
+    if (code === 'PROBE_BUSY') return `${tr(
+      '下载器被占用，请先结束占用它的调试或下载任务后重试。',
+      'The probe is busy. End the debug or download task using it, then retry.',
+    )}${message ? ` ${message}` : ''}`
+    if (code === 'MKLINK_DAP_NOT_FOUND') return tr(
+      '未找到所选下载器，请检查 USB 连接并刷新设备列表。',
+      'The selected probe was not found. Check its USB connection and refresh the device list.',
+    )
+    if (message) return message
     const owner = stringField(detail, 'owner')
     const resource = stringField(detail, 'resource')
     if (code && owner && resource) return `${code}: ${resource} is owned by ${owner}`
