@@ -109,3 +109,36 @@ CPUID 与 H74x/H75x 设备组。DTCM 4 KiB、请求周期 1 us、每轮 1.5 s：
 
 本轮未写目标 Flash、VCC 或 OTP。客户 F411、九系列 HPM 实板外设及旧 Linux/macOS
 包均不在此次硬件/构建结论范围内；旧 Unix 包未包含这些后续修复。
+
+## HPM5301 XML 外设实板补测
+
+用户接回原 HPMLINK 后，使用同一安装版冻结 MCP/后台进行只读验证。
+重新枚举并明确选择 V4，固件仍私有 V4.7.2，本轮未升级。实时 HPM_DEBUG 状态
+确认 RV32 hart 0 运行；选择 medium/10 MHz JTAG，收到 profile 确认，未测物理 TCK。
+
+通过共享 `select_peripherals(svd=...)` 手动加载 SDK 1.13.0 的
+`HPM5301_svd.xml`，SHA-256
+`0c521ac65876c0dc9781eadceb4961526229b8603159eb15f7c9073bdd3851fd`。
+目录来源返回 local/HPM5301，215 个不符合读取条件的寄存器被过滤。
+按 XML 名称读取 GPIO0，地址与同 SDK 的 GPIO 头文件一致：
+
+| 寄存器 | 地址 | 单次读值 |
+|---|---|---|
+| GPIO0.DI[gpioa].VALUE | 0xF00D0000 | 0x00000560 |
+| GPIO0.DO[gpioa].VALUE | 0xF00D0100 | 0x00000000 |
+| GPIO0.OE[gpioa].VALUE | 0xF00D0200 | 0x00000000 |
+| GPIO0.DI[gpiob].VALUE | 0xF00D0010 | 0x00000300 |
+| GPIO0.DO[gpiob].VALUE | 0xF00D0110 | 0x00000000 |
+| GPIO0.OE[gpiob].VALUE | 0xF00D0210 | 0x00000000 |
+
+共享 `capture_peripherals` 同时采六通道，时长 2 秒、请求间隔 10 ms，
+返回 **193 个完整样本**。invalid samples、读取错误、丢字节/帧、CRC 和固件错误
+标志均为零。GPIOA 输入在 0x520/0x560 之间变化（PA6），GPIOB 输入保持 0x300。
+输入电平与输出锁存值分别报告；OE=0 不说明外设复用的引脚必然为输入。
+结束时 hart 仍运行、后台 READY，显式断开返回 device_closed=true，进程正常退出。
+
+初次全局 runtime_status 在访问硬件前因旧 endpoint 扫描超时。确认无在用后台/串口
+worker 后，本次冻结 MCP 使用独立测试 endpoint 目录，保留全局物理探针锁；
+未清除旧记录、抢占连接或重放硬件命令。该历史发现延迟仍待修复。
+原始结果与统计在 `F:/MKLink-Build/artifacts/hpm-xml-io-20261030`。
+本次补上 HPM5301 XML 实板读取和连续采集，不代表其他系列、IO 输出驱动或电气层验证。
