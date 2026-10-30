@@ -153,7 +153,38 @@
 
 ### 后续 DMI burst 候选
 
-上述流水线候选完成后，指定固件会话报告用户继续要求优化 RTT/SystemView，已新增仅 RTT/SV 启用的 DMI read burst，普通内存/Watch 仍走原路径。固件会话正在编译，随后提供同条件双 10 MiB、SV 独立及共存报告；本会话尚未核对此新改动或取得新硬件证据。上面的 577 KiB/s、SV 独立与共存结果只属于 UF2 SHA `8ff28361…` 流水线候选，保留作基线，不能证明后续 burst 候选。宿主保持 `4be6ab66-verified`，硬件由指定会话协调，不以旧轮释放记录推定当前设备空闲。
+上述流水线候选完成后，指定固件会话继续用户授权的 RTT/SystemView 优化，新增仅 RTT/SV 启用的 DMI read burst。差异快照显示每块只进行一次资格判断及扫描函数选择，仍逐扫描检查 DMI ACK，以 NOP 收尾；最后一个字仍由原 SBA 路径关闭 autoread 后读取。普通 stream 包装保留原路径，普通内存/Watch 不启用 burst。宿主保持 `4be6ab66-verified`，本会话仅离线核对，硬件操作仍由指定会话完成。
+
+最终候选编译时间为 `2026-10-30 23:29:38`，UF2 SHA256 为 `5396eedb0c777e2ba15f6e30e2dce8ca219e1e3846e689044f3c218745637232`；对应 BIN SHA256 为 `30ee8f3fbe1535e5fb99d309b065c677854765eaf4bdeb21e8feea06e9cb0262`。本会话独立核对 UF2 全部块头、地址边界、载荷与 BIN 一致，并核对保存的升级记录与 BIN 编译时间一致且早于测试开始；没有读取设备自身哈希或重新构建固件。此前 `burst30m` 试跑因增量编译时间戳未更新、升级身份断言失败，不计入最终验收；只采信全量重编译、身份通过后的 `burst-final30m`。
+
+候选仍来自未提交工作区。最初归档用文本读写转换换行，导致两个测试脚本原始哈希不符；本会话严格检查发现后，固件会话改用原始字节保存，产品源码及 UF2 均未改变。重新核对全部 9 份产品/测试源码快照与修正清单一致，其中 SBA 测试另补 24/480 字节模型用例；该测试补充不改变固件。最终 audit SHA256 为 `4df7cf38229603e331466a2846f24d801533c3411096e41fbccfec4418f0cf69`，记录相对流水线候选 Flash 分配 +428 B、ILM 代码 +402 B、AHB/DLM 分配不变。
+
+#### Burst RTT 完整载荷核对
+
+两份各 10 MiB 数据所有字节、块序号及 SHA 均通过，载荷 SHA 与前两轮一致；目标周期计时、两端吞吐重算、完成字节/块数、同一 streaming session、零 MUX gap/drop 及正常停止/10 MHz 恢复/设备关闭记录均通过。
+
+| 目标块长 | 目标耗时 | 主机耗时 | 目标吞吐 | 主机吞吐 | 相对上一流水线同配置主机实测 |
+| --- | --- | --- | --- | --- | --- |
+| 1024 B | 16.408666 s | 16.463591 s | 624.060476 KiB/s | 621.978526 KiB/s | +7.7889% |
+| 2048 B | 16.417518 s | 16.449609 s | 623.724009 KiB/s | 622.507201 KiB/s | +7.7864% |
+
+宿主、目标镜像 SHA、JTAG 30 MHz 档位、仅 CH1、250 MHz 目标、16 KiB 环形缓冲和 480 量子均与上一流水线轮相同。**622.507201 KiB/s** 是当前受测配置的主机最高观测值，不能称为通用极限，也未复现用户提供的 J-Link 对比值。
+
+#### Burst SystemView 与并行边界
+
+- 独立 SV：62.964688 秒，13 个同会话样本，最终累计 850153 事件/3734919 原始字节，首尾新增 849772 事件；target、parser、MUX 的全部丢失计数为 0。JTAG 20 MHz、目标 250 MHz、RTT 压力关闭、不运行 Watch，与前轮独立条件相同；正常停止/恢复 10 MHz/设备关闭记录通过。此为计数器验收，没有完整原始 SV 归档逐字节比较。
+- 并行：32 ms RTT 负载、1 kHz Wave、Watch 请求 1 ms；两份 103424/256000 字节 RTT 数据（序号 0..100 / 101..350）逐字节及 SHA 通过。12 个控制阶段、50 次 DAP 64 字节读、写回恢复、halt/step/resume、480 字节内存及 256 字节 RTT 回显记录通过。
+- 全报告递归核对 81 个 SV、126 个 MUX、46 个 Watch 状态：中间 SV 会话 target overflow **26**、baseline 后 dropped packets **1164**，parser/MUX/Watch 错误及丢失为 0。最终重启后的零值不抹去中间溢出；仅认定控制共存和 RTT 完整性通过，仍不宣称并行 SV 无损。
+
+| 最终报告 | SHA256 |
+| --- | --- |
+| `burst-final30m.json` | `6a2c383c0718eae917c021ab8e65ed799453fa9a5d171bcada869df1e8df4e3d` |
+| `burst-sv-60s.json` | `973a41c41d50d3630e297b43df46367a11c924b017fb3ff1193db29f04d87405` |
+| `burst-coexist.json` | `dca3577a38706c9ce74f4b71cc4ac1ec1cd79475050f6e96d23435e08542fa38` |
+
+两份并行载荷 SHA256 为 `08a7ac6bef88ed0c8f337a4adf8a204a708428c7e529826e5557be75c85e9469`、`c0ea5e9ac6f7f4f1ac8d0419d5a4aa03883a83ee1a37e1824dda212b7b8b63d8`。完整本机复核记录为 `burst-final30m-independent-review.json`、`burst-sv-independent-review.json`、`burst-coexist-independent-review.json`。各轮报告的设备释放只证明对应收尾，后续操作仍先与指定会话协调。已装宿主及 Skill 均未重建或覆盖，未正式发布。
+
+指定会话最终报告本轮硬件均已释放，目标保留 SystemView fixture、压力负载关闭。其交付 ZIP `HPMLink_RTT_SystemView_latest.zip`（1327623 字节）已独立核对：SHA256 `79cee1e7ae79d831739868ff6ca5325ae58668a9318b6a2e9919afb71f326283`；43 个载荷文件加一份 manifest，所有大小/哈希匹配，manifest SHA256 为 `e17c7737e5f1822c4e7fbe3f948d5b47fa1214b8cc81d18a80afb63b2ab61022`。9 份源码快照、3 份报告、5 份原始载荷/DAP 日志与已核对文件一致，RTT 目标 BIN 与报告镜像 SHA 一致，最新数据摘要和非零并行溢出均正确；不含旧轮/身份失败试跑报告或 runtime 认证/所有权文件。该包是本地固件复测交付资料，含本机复测路径，未公开发布；不是宿主安装包或正式 Skill。核对记录为 `burst-delivery-independent-review.json`。
 
 本机证据目录为 `F:/MKLink-Build/artifacts/rtt-shared-20261030`；候选 ZIP 为源码导出，不是安装包或完整发行 Skill：
 
