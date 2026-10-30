@@ -101,6 +101,7 @@ jobs:
           $tests += 'test_gui_connect_handoff'
           $tests += 'test_peripheral_restore'
           $tests += @('test_hpm_peripherals', 'test_peripheral_import')
+          $tests += 'test_dump_control'
           $tests += 'test_runtime_switch'
           $tests += 'test_hpm_isp_offline'
           $tests += @('test_hpm_debug_protocol', 'test_hpm_clock_contract', 'test_debug_speed', 'test_systemview_parser')

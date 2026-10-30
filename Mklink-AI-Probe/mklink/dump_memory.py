@@ -158,6 +158,12 @@ def _enter_dump_stream(bridge) -> None:
     if callable(leave_multiplex):
         leave_multiplex()
 
+    # Feature negotiation is a command-mode operation. Never query firmware
+    # while another stream owns the bridge.
+    prepare_stop = getattr(bridge, 'prepare_dump_stop', None)
+    if callable(prepare_stop) and getattr(bridge, 'state', None) is DeviceState.READY:
+        prepare_stop()
+
     try_enter = getattr(bridge, "_try_enter_stream", None)
     if callable(try_enter):
         if try_enter(DeviceState.DUMP_STREAM):
@@ -188,6 +194,38 @@ _NEED_MORE = object()
 _RETRY = object()
 
 
+class DumpStartupEcho:
+    """Remove one exact generated command echo, only at stream startup.
+
+    Keep arbitrary preambles, later echoes and all damaged bytes observable.
+    Candidate buffering is bounded by the generated REPL command length.
+    """
+    def __init__(self, command: str):
+        echo = command.encode('ascii')
+        self.candidates = tuple(sorted({
+            echo + ending + separator + prompt
+            for ending in (b'\n', b'\r\n')
+            for separator in (b'', b'\n', b'\r\n')
+            for prompt in (b'', b'>>>', b'>>> ')
+        }, key=len, reverse=True))
+        self.pending = bytearray()
+        self.control_bytes = 0
+        self.done = False
+
+    def feed(self, data: bytes) -> bytes:
+        if self.done:
+            return data
+        self.pending.extend(data)
+        raw = bytes(self.pending)
+        if any(candidate.startswith(raw) for candidate in self.candidates):
+            return b''
+        prefix = next((candidate for candidate in self.candidates if raw.startswith(candidate)), b'')
+        self.control_bytes = len(prefix)
+        self.pending.clear()
+        self.done = True
+        return raw[len(prefix):]
+
+
 class DumpMemoryParser:
     """Streaming binary parser for dump_memory frames (OLD + B1).
 
@@ -208,8 +246,9 @@ class DumpMemoryParser:
         "block_crc_ok": bool  (B1 region data payload CRC result)
     """
 
-    def __init__(self, region_sizes: list[int] | None = None):
+    def __init__(self, region_sizes: list[int] | None = None, *, startup_command: str | None = None):
         self._buf = bytearray()
+        self._startup = DumpStartupEcho(startup_command) if startup_command else None
         self._region_sizes = region_sizes or []
         self._expected_count = len(self._region_sizes)
         self._dropped_bytes: int = 0
@@ -228,8 +267,18 @@ class DumpMemoryParser:
     def crc_errors(self) -> int:
         return self._crc_errors
 
+    @property
+    def startup_control_bytes(self) -> int:
+        return self._startup.control_bytes if self._startup else 0
+
+    @property
+    def pending_bytes(self) -> bytes:
+        return bytes(self._startup.pending if self._startup else b'') + bytes(self._buf)
+
     def feed(self, data: bytes) -> list[dict]:
         """Feed raw bytes, return list of parsed frame dicts."""
+        if self._startup:
+            data = self._startup.feed(data)
         self._buf.extend(data)
         frames: list[dict] = []
         while True:
@@ -506,8 +555,8 @@ def read_dump_memory_range_once(
         )
     from mklink._types import DeviceState
 
-    parser = DumpMemoryParser(region_sizes=[size])
     command = build_dump_mem_command([(address, size)], 0)
+    parser = DumpMemoryParser(region_sizes=[size], startup_command=command)
     stop_command = build_dump_mem_command(
         [(address, 1)], DUMP_MEMORY_STOP_PERIOD,
     )
@@ -515,7 +564,7 @@ def read_dump_memory_range_once(
     blocks: dict[int, bytes] = {}
     expected_blocks: int | None = None
     raw_tail = bytearray()
-    bridge._enter_stream(DeviceState.DUMP_STREAM)
+    _enter_dump_stream(bridge)
     try:
         # ``period=0`` emits one complete sample before the firmware returns
         # to idle.  The previous request is stopped in the finally block with
@@ -592,14 +641,17 @@ def read_dump_memory_range_once(
             raise DumpMemoryUnsupported("cmd.dump_memory is not supported by the probe")
         raise TimeoutError("timed out waiting for one complete dump-memory range")
     finally:
-        _stop_dump_read(bridge, stop_command)
+        _stop_dump_read(bridge, stop_command, parser)
 
 
-def _stop_dump_read(bridge, stop_command):
+def _stop_dump_read(bridge, stop_command, parser=None):
     # Use the current bridge contract; a delay cannot prove command readiness.
     # Failed confirmation leaves the bridge in ERROR and must invalidate success.
-    if not bridge._stop_stream_and_sync((stop_command + "\n").encode("utf-8")):
-        raise TimeoutError("dump-memory stop did not restore command mode")
+    prefix = parser.pending_bytes if parser is not None else b''
+    options = {'dump_prefix': prefix} if prefix else {}
+    if not bridge._stop_stream_and_sync((stop_command + "\n").encode("utf-8"), **options):
+        detail = getattr(bridge, 'last_stream_stop_error', None)
+        raise TimeoutError("dump-memory stop did not restore command mode" + (f": {detail}" if detail else ""))
 
 
 def read_dump_memory_regions_once(
@@ -826,8 +878,8 @@ def _read_dump_memory_regions_once_locked(
         normalized.append((address, size))
 
     region_sizes = [size for _, size in normalized]
-    parser = DumpMemoryParser(region_sizes=region_sizes)
     command = build_dump_mem_command(normalized, 0)
+    parser = DumpMemoryParser(region_sizes=region_sizes, startup_command=command)
     stop_command = build_dump_mem_command([(normalized[0][0], 1)], -1)
     deadline = time.monotonic() + max(0.001, float(timeout))
     assembler = DumpSampleAssembler(region_sizes)
@@ -889,7 +941,7 @@ def _read_dump_memory_regions_once_locked(
             gap_count=missing,
         )
     finally:
-        _stop_dump_read(bridge, stop_command)
+        _stop_dump_read(bridge, stop_command, parser)
 
 
 def validate_dump_capture(regions, sample_count=1, timeout=10.0, speed_profile=None):
@@ -1159,6 +1211,9 @@ class DumpMemoryStreamSession:
                 return
 
         command = build_dump_mem_command(self.region_pairs, self.period)
+        self.parser = DumpMemoryParser(
+            region_sizes=[size for _, size in self.region_pairs], startup_command=command,
+        )
         _enter_dump_stream(self.bridge)
         try:
             self.bridge._write_raw((command + "\n").encode("utf-8"))
@@ -1249,7 +1304,7 @@ class DumpMemoryStreamSession:
             self.region_pairs, DUMP_MEMORY_STOP_PERIOD,
         )
         try:
-            _stop_dump_read(self.bridge, command)
+            _stop_dump_read(self.bridge, command, self.parser)
         finally:
             self.started = False
 
@@ -1266,6 +1321,7 @@ class DumpMemoryStreamSession:
             "protocol_frames": self._protocol_frames,
             "complete_samples": self._complete_samples,
             "parser_dropped_bytes": self.parser.dropped_bytes,
+            "startup_control_bytes": self.parser.startup_control_bytes,
             "parser_dropped_frames": self.parser.dropped_frames,
             "parser_crc_errors": self.parser.crc_errors,
             "firmware_flagged_frames": self._firmware_flagged_frames,

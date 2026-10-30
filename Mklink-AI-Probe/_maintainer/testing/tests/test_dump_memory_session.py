@@ -120,7 +120,7 @@ class FakeBridge:
         self.calls.append(("exit",))
         return ""
 
-    def _stop_stream_and_sync(self, command):
+    def _stop_stream_and_sync(self, command, **options):
         self._write_raw(command)
         self.drain_stream_bytes()
         self._exit_stream()
@@ -354,6 +354,7 @@ def test_dump_session_reuses_parser_and_owns_exact_stream_lifecycle():
         "protocol_frames": 1,
         "complete_samples": 1,
         "parser_dropped_bytes": 5,
+        "startup_control_bytes": 0,
         "parser_dropped_frames": 0,
         "parser_crc_errors": 0,
         "firmware_flagged_frames": 0,
@@ -395,14 +396,15 @@ def test_dump_stop_consumes_delayed_prompt_before_next_memory_command():
                 return b""
 
     bridge._mux_supported = False  # This fixture emulates the legacy wire protocol.
+    bridge._firmware_capabilities = frozenset()
     bridge._serial = SerialPort()
     bridge._ctx.state = DeviceState.READY
     bridge._running = True
     reader = threading.Thread(target=bridge._reader_loop)
     reader.start()
     session = DumpMemoryStreamSession(bridge, [(0x20000000, 4)], 0.001)
-    session.start()
     try:
+        session.start()
         session.stop()
         assert bridge.state is DeviceState.READY
         assert bridge.send_command("next()", timeout=0.3) == "MEMORY_OK"

@@ -103,6 +103,7 @@ class MKLinkSerialBridge:
         self._echo_callback: Callable[[str], None] | None = None
         self._transport_error: Exception | None = None
         self.last_connect_error: str | None = None
+        self.last_stream_stop_error: str | None = None
         self._diagnostic_id = uuid.uuid4().hex[:12]
         self._diagnostic_started = time.monotonic()
         self._diagnostic_failure_logged = False
@@ -129,6 +130,10 @@ class MKLinkSerialBridge:
 
     def supports_hpm_dump_write(self) -> bool:
         return "DUMP_WRITE_HPM=1" in self._get_firmware_capabilities()
+
+    def prepare_dump_stop(self) -> None:
+        """Cache the stop-ACK contract before entering the binary stream."""
+        self._get_firmware_capabilities()
 
     def _get_firmware_capabilities(self) -> frozenset[str]:
         # Capture all advertised features before entering MUX. Later dashboard
@@ -803,7 +808,7 @@ class MKLinkSerialBridge:
     def _recover_failed_stream_start(self, stop_command: bytes) -> bool:
         return self._stop_stream_and_sync(stop_command)
 
-    def _stop_stream_and_sync(self, stop_command: bytes) -> bool:
+    def _stop_stream_and_sync(self, stop_command: bytes, *, dump_prefix: bytes = b'') -> bool:
         """Stop a stream and verify command mode within a bounded timeout.
 
         A raw stop may return its ``>>>`` well after the write.  Returning as
@@ -815,6 +820,9 @@ class MKLinkSerialBridge:
         earlier stop reply before this method reports READY.
         """
         with self._cmd_lock:
+            if stop_command.startswith(b'cmd.dump_memory('):
+                from .dump_control import stop_dump_and_sync
+                return stop_dump_and_sync(self, stop_command, dump_prefix)
             self._cancel_stream_arm()
             if self._transport_error is not None:
                 self._ctx.state = DeviceState.ERROR

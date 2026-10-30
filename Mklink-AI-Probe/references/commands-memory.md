@@ -163,9 +163,19 @@ python -m mklink dump-memory 0x08000000:256 --frames 0 --duration 1 --save flash
 - B1 样本使用第一块的时间戳，所有块及区域完整后才计数；周期 `dump-memory`
   也使用这一时间戳语义。CRC、区域、顺序或停止确认失败则整次请求失败，不重试。
 - 到时停止可能留下一个不完整样本，结果用 `incomplete_tail` 标记并排除该样本；
-  `integrity` 保留协议统计。`parser_dropped_bytes` 可包含命令回显，不能单独当作丢帧数。
+  `integrity` 保留协议统计。配套修复后台将本次精确启动回显单列为
+  `startup_control_bytes`，不计入 `parser_dropped_bytes`；后者仍检查异常字节，
+  不能为了通过测量忽略所有非零计数。旧后台没有这个区分，先核对实际构建。
 - 省略 `--speed` 保持后台当前时钟；显式指定会改变共享下载器的当前时钟，不写工程配置。
   测量只保留间隔计数，不积累全部原始样本；完成后确认恢复命令模式再返回。
+
+legacy/B1 停止收到 `Error: DAP busy`、超时或其他错误，整次采集无有效性能结论。
+提示符或身份查询成功仅说明解释器有响应。固件声明 `DUMP_STOP=1` 时，配套后台必须
+在有效二进制帧之外收到完整 `DUMP_STOPPED` 行，再完成命令同步；不得手工查找 RAM
+内容中的同名字节作确认。没有该能力的旧固件仍需无错误且停止产生帧。
+失败后保持错误状态，不继续读写、循环发停止、重跑基准或自动更改时钟；保留原始错误，
+按 [控制权与恢复](runtime-recovery.md#dump-停止失败) 处理。固件与上位机都需要配套修复，
+仅更新 Skill 文本不能修复旧后台。命令明确返回的 busy/SBA 错误也不能解释为“读到 0 字节”。
 
 #### `python -m mklink flush-memory <item> [<item> ...] [--probe ID] [--no-verify] [--repeat N] [--interval-ms MS]`
 
