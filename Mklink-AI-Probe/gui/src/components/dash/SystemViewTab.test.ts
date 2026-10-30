@@ -280,6 +280,49 @@ describe('SystemViewTab asynchronous lifecycle', () => {
     wrapper.unmount()
   })
 
+  it('keeps a validated quiet capture running beyond the startup deadline and resumes', async () => {
+    vi.useFakeTimers()
+    const wrapper = mount(SystemViewTab, { props: { deviceConnected: true } })
+    await flushPromises()
+    mocks.dash.getStatus.mockResolvedValue({
+      running: true, progress_state: 'waiting', stats: { bytes: 0, events: 0 },
+    })
+    mocks.dash.start.mockImplementationOnce(async () => {
+      mocks.dash.syncState(true)
+      return true
+    })
+    await wrapper.get('.control-toolbar .btn-primary').trigger('click')
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(65_000)
+    expect(mocks.dash.stop).not.toHaveBeenCalled()
+    expect(wrapper.get('[data-testid="systemview-waiting"]').text()).toContain('等待目标事件')
+    expect(wrapper.text()).not.toContain('准备超时')
+    mocks.dash.getStatus.mockResolvedValue({
+      running: true, progress_state: 'streaming', stats: { bytes: 128, events: 4 },
+    })
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(wrapper.find('[data-testid="systemview-waiting"]').exists()).toBe(false)
+    expect(mocks.dash.start).toHaveBeenCalledOnce()
+    expect(mocks.dash.stop).not.toHaveBeenCalled()
+    wrapper.unmount()
+    vi.useRealTimers()
+  })
+
+  it('shows a real transport error after waiting instead of treating it as idle', async () => {
+    const wrapper = mount(SystemViewTab, { props: { deviceConnected: true } })
+    await flushPromises()
+    mocks.status.data.value = [{ _streamSeq: 1, event: 'status', progress_state: 'waiting' }] as never[]
+    await nextTick()
+    mocks.status.data.value = [
+      ...mocks.status.data.value,
+      { _streamSeq: 2, event: 'status', progress_state: 'error', progress_error: 'MUX heartbeat timed out' },
+    ] as never[]
+    await nextTick()
+    expect(wrapper.text()).toContain('MUX heartbeat timed out')
+    expect(wrapper.find('[data-testid="systemview-waiting"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
   it('coalesces visible-range requests while the Worker is still processing one', async () => {
     mocks.dash.getStatus.mockResolvedValue({ running: false })
     const wrapper = mount(SystemViewTab, { props: { deviceConnected: true } })

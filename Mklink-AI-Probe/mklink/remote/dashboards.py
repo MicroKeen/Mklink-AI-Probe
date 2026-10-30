@@ -993,11 +993,12 @@ class SystemViewStreamManager:
                 self._apply_cpu_freq_hint(device, start_result)
                 shared_mux = isinstance(start_result, dict) and start_result.get('transport') == 'cdc-mux'
                 self._mux_transport_stats = None
-                # 会话总时长与空闲看门狗分离:deadline 只管理 duration,任何
-                # 恢复动作都不延长它;看门狗以"最后一次收到数据"为基准,统一
-                # 裁决空读与读异常——START 突发排空后的亚秒级静默(探针按批
-                # 转发的正常间隙)和单次瞬时读异常都不会误杀健康流,而持续
-                # 无数据会按"从未收到过 / 流中断"如实终止。
+                # Duration is independent of target activity. Framed reads
+                # already check heartbeat/claim failures and target errors;
+                # an empty healthy read cannot distinguish a halted CPU from
+                # a running application that emits no trace. Keep its parser,
+                # history and recorder intact, including before the first
+                # event. Only legacy streams need the idle watchdog/retry.
                 deadline_mono = time.monotonic() + max(0.0, duration)
                 last_data_mono = time.monotonic()
                 had_data = False
@@ -1030,6 +1031,16 @@ class SystemViewStreamManager:
                     if not raw:
                         idle = time.monotonic() - last_data_mono
                         if idle >= self._startup_no_data_timeout_s:
+                            if shared_mux:
+                                if self._progress_state != "waiting":
+                                    self._progress_state = "waiting"
+                                    self._bridge.put({
+                                        "event": "status",
+                                        "stats": dict(self._stats),
+                                        "history_size": len(self._history),
+                                        **self._status_meta(),
+                                    })
+                                continue
                             # 探针固件的首次附着可能复位目标(表现为 START
                             # 突发排干后流静默,第二次启动即正常)。范围严格限定
                             # 为每个 Device 连接首会话的一次可见自动重试；达到
@@ -1139,6 +1150,10 @@ class SystemViewStreamManager:
                     self._stats["bytes"] += len(raw)
                     now = time.time()
                     evs = self._parser.feed(raw)
+                    if self._progress_state == "waiting":
+                        self._progress_state = (
+                            "streaming" if self._stats["events"] else "starting"
+                        )
                     if evs:
                         self._progress_state = "streaming"
                         self._raw_bytes_without_events = 0
