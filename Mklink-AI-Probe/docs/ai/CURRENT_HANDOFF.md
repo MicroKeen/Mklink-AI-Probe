@@ -4,7 +4,7 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-31T01:04:00+08:00`
+- 更新时间：`2026-10-31T01:06:13+08:00`
 - 分支：`codex/v0.4.2-fixes`
 - HEAD：`7843de8c：SystemView静默保持；e4d5fc4f FPBv2、76307f05模板、6ce读取/455发现均未安装。已装Windows dce17d3e/Skill归档0d680d90不变。`
 - 远端 HEAD：`microkeen/codex/v0.4.2-fixes；多个后续修复共用此分支。microkeen/main核对为3cc474bb。`
@@ -47,7 +47,7 @@
 
 ## 真机环境
 
-- **state**：指定固件会话独占实机/Keil；7843最终共享断点及三路共存通过，报告收尾目标运行/断点清除/device_closed。固件仍c995/23:46:18；首次未使能debug失败、5秒误停及409中止报告均保留。H7 ZIP7f3e0c4c及HPM历史不改。
+- **state**：指定会话完成7843断点/Keil三路共存及12阶段回归；两份RTT全字节、内存/缓存/下行哈希已核对。原Keil断点恢复/测试断点清除，退出调试留窗口；目标运行、10MHz、流停止、device_closed。固件c995及失败证据保留。
 - **installer**：Windows/完整Skill均已覆盖安装0.4.2本地候选；NSIS SHAf70e4960/Skill SHAa126d967，3640/2638文件一致、47工具、5339用户文件保留。41Web一致，更新记录11条。完整产物见v042-combined-20261030，未正式发布。
 - **backups**：保留正式release、安装包、CI ZIP、唯一硬件证据、Skill备份及F盘缓存。含链接/不可访问目录不强删。历史获授权清理见v036-storage-cleanup-20261023.md及本机START_HERE；本地Unix清理不影响正式附件。旧detached树保留；本轮Skill备份在F盘cache/mklink-ai-probe/skill-backups。
 

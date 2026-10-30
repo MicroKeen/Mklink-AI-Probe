@@ -79,6 +79,10 @@ Keil 首轮实测中，目标暂停后 RTT 和 Watch 保持，而 SystemView 在
 
 同一最终候选的独立共享断点复测也通过：`fpbv2-7843-acceptance.json` SHA256 `346c3a485935819fa21d140815088aedb84efe4000e5cc71b45fc8e85c13129f`。独立重新核对了与 e4 首轮相同的两个半字地址、精确 PC/DFSR、比较器编码、占用拒绝后 40 字节不变、清除读回零、恢复运行计数、480 字节写入及完整 4096 字节恢复。最终目标运行、无断点且 device_closed=true；结果文件 `fpbv2-7843-acceptance-independent-review.json` 同在 F 盘证据目录。
 
+补充回归 `fpbv2-7843-other-regression.json` SHA256 `1c85a67dcef5f8acf94755cfc1cf0ca3b5b9b66fefc2751ca5e5dd1fe4fd68d2`：内存 10/30 MHz 读写恢复、两组 D-cache 脏行与 CPU 参照一致、RTT 下行 256 字节的目标计数和滚动哈希、12 阶段采集启停/暂停/反序启动及同 SystemView 通道观察者均通过。保存的并行 RTT 333824 字节全部数据/序号/SHA 独立核对；递归 34 份 SV、59 份 MUX、24 份 Watch 状态的相关丢失/读取错误为零。独立 DAP 的 50 次读取、写入恢复及 halt/step/resume 由报告记录通过，不替代共享 `step` 验收。对应 `verify_fpbv2_other.py` / `fpbv2-other-independent-review.json` 同在 F 盘目录。
+
+指定会话报告收尾已恢复 Keil 原 0..8 号断点的启用状态、删除本次 9 号测试断点并退出调试，窗口保留；最终流已停止、目标运行、恢复 10 MHz、设备释放。原断点恢复列表保存在本机 `keil-restored-breakpoints.txt`，不提交用户工程或截图。
+
 额外调用共享 `breakpoints status` 的中途试验因既有准入返回 409，报告 `keil-7843-final.json` 按失败保留。`runtime_api.py` 仅豁免受支持 MUX 内存操作及复位，断点 status/list/set/clear 都要求先停止采集；本轮未修改此边界。最终应分别报告共享断点独立验收和 Keil CMSIS-DAP 与 MUX 采集共存，不能将后者解读为共享 debug API 可在采集中调用。
 
 已装 0.4.2 Windows 源 `dce17d3e`、Skill 归档源 `0d680d90` 不包含本轮修复；正式 0.4.1 和旧 Linux/macOS 包不变。先前 HPM/H7 速率、丢包、单次 API 延迟及失败试验边界仍见 [H7 control 验证](h7-rtt-control-20261031.md)，不因断点通过而关闭。
