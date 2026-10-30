@@ -21,8 +21,17 @@ class MuxRTTManager:
         self.up = self.down = 0
         self.recorders = set()
 
-    def _configure(self, op, data=b''):
-        if self.transport.request(op, data):
+    def _configure(self, op, data=b'', *, info=None):
+        answer = self.transport.request(op, data)
+        valid = answer == b''
+        if op == 0x20:
+            # Legacy START returns descriptor counts, NOT selected masks.
+            valid = (len(answer) == 2 and 1 <= answer[0] <= 32 and answer[1] <= 32
+                     and not data[4] >> answer[0] and not data[5] >> answer[1])
+            if valid and info is not None:
+                valid = all(info.get(key, value) == value for key, value in
+                            zip(('max_up_buffers', 'max_down_buffers'), answer))
+        if not valid:
             self.transport.fail('Invalid RTT configuration response; outcome unknown, do not replay')
             self.transport._check()
 
@@ -48,7 +57,7 @@ class MuxRTTManager:
                 self.consumers[session] = (up, down)
             try:
                 if self.address is None:
-                    self._configure(0x20, struct.pack('<IBB', address, up, down))
+                    self._configure(0x20, struct.pack('<IBB', address, up, down), info=session.info)
                 elif (new_up, new_down) != (self.up, self.down):
                     self._configure(0x23, bytes([new_up, new_down]))
             except BaseException:
@@ -202,12 +211,15 @@ class MuxRTTSession:
             with self.transport._commands:
                 if not self._running:
                     raise RuntimeError(f'RTT stopped; {offset} bytes accepted, do not replay')
-                answer = self.transport.request(0x21, bytes([channel]) + data[offset:offset+128])
-                if len(answer) != 1 or answer[0] > min(128, len(data)-offset):
+                size = self.transport.transfer_quantum
+                fast = size == self.transport.FAST_TRANSFER_BYTES
+                answer = self.transport.request(0x24 if fast else 0x21, bytes([channel]) + data[offset:offset+size])
+                accepted = int.from_bytes(answer, 'little')
+                if len(answer) != (2 if fast else 1) or accepted > min(size, len(data)-offset):
                     self.transport.fail('Invalid RTT acceptance count; do not replay')
                     self.transport._check()
-                offset += answer[0]
-            if not answer[0]:
+                offset += accepted
+            if not accepted:
                 if time.monotonic() >= deadline:
                     raise RuntimeError(f'RTT target buffer full; {offset} bytes accepted, do not replay the whole request')
                 time.sleep(.005)

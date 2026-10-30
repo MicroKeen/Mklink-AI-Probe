@@ -17,7 +17,7 @@ def peer():
         _, _, op, size, epoch, req = struct.unpack_from('<4sBBHII', wire)
         payload = wire[16:16+size]
         calls.append((op, payload))
-        answer = {1: struct.pack('<IHH', 15, 256, 1), 4: payload}.get(op, b'')
+        answer = {1: struct.pack('<IHH', 15, 256, 1), 4: payload, 0x20: b'\x08\x08'}.get(op, b'')
         raw = packet(op | 0x80, 17, req, b'\0'+answer)
         transport.feed(raw[:9])
         transport.feed(raw[9:])

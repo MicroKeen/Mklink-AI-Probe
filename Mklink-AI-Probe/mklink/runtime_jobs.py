@@ -107,7 +107,7 @@ class RuntimeJobs:
         sharing_reset = action == 'reset' and capture_reset_supported(c.app.state.mklink_state, active)
         if active and action != 'flash' and not sharing_reset:
             if action == 'reset':
-                raise HTTPException(409, 'In-stream software reset requires supported probe firmware and RTT/SuperWatch multiplex capture; acquisition was left running')
+                raise HTTPException(409, 'In-stream software reset requires supported probe firmware and shared MUX capture; acquisition was left running')
             raise HTTPException(409, 'Stop acquisition explicitly before an exclusive job')
         device = c.app.state.mklink_state.get('device')
         if action != 'security' and (not device or not device.connected):

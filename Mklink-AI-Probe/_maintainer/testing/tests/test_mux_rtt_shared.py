@@ -18,7 +18,7 @@ def rig(caps=255):
         payload = wire[16:16+size]
         data = payload[8:] if 0x10 <= op < 0x40 else payload
         calls.append((op, data))
-        answer = {1: struct.pack('<IHH', caps, 256, 1), 4: payload}.get(op, b'')
+        answer = {1: struct.pack('<IHH', caps, 256, 1), 4: payload, 0x20: reject.get('start_reply', b'\x08\x08')}.get(op, b'')
         if op == 0x21:
             answer = bytes([len(data)-1])
         t.feed(packet(op | 0x80, 17, req, bytes([reject.get(op, 0)]) + answer))
@@ -141,7 +141,7 @@ def test_first_payload_in_same_read_as_start_ack_is_not_discarded():
     t, _, _, _, info, _ = rig()
     def write(wire):
         _, _, op, _, _, request = struct.unpack_from('<4sBBHII', wire)
-        t.feed(packet(op | 0x80, 17, request, b'\0')
+        t.feed(packet(op | 0x80, 17, request, b'\0\x08\x08')
                + packet(0x40, 17, 1, struct.pack('<BBI', 0, 0, 1)+bytes(range(128))))
         return len(wire)
     t._write = write
@@ -149,6 +149,18 @@ def test_first_payload_in_same_read_as_start_ack_is_not_discarded():
     session.start('0x20000000')
     assert session.read_output_bytes(0) == bytes(range(128))
     assert t.stats()['rtt_dropped_bytes'][0] == 0
+
+
+def test_start_counts_are_not_channel_masks():
+    t, calls, options, emit, _, _ = rig()
+    options['start_reply'] = b'\x03\x03'
+    info = {'max_up_buffers':3, 'max_down_buffers':3,
+            'down_buffers':[{'channel':0,'active':True}, {'channel':1,'active':False}]}
+    session = MuxRTTSession(t, info, channels=[0,1])
+    session.start('0x20000000')
+    assert calls[0][1][-2:] == b'\x03\x01'
+    emit(1, b'first')
+    assert session.read_channels(0)[1] == b'first'
 
 
 def test_busy_stop_keeps_device_subscription_reachable_and_other_stream_alive():

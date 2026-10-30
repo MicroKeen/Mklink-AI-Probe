@@ -1070,7 +1070,7 @@ def _register_systemview_tools(mcp: Any) -> None:
         Args:
             addr: RTT control-block address (resolved from
                 .mklink/rtt_config.json when omitted, shared with RTT).
-            channel: SystemView up-channel, 0..2 on V4 firmware (default 1).
+            channel: SystemView up/down channel, 0..7 with shared MUX firmware (default 1).
             search_size: Scan window in bytes; 0 (default) scans up to 1024 bytes within trusted RAM.
             mode: "auto"/"dynamic"/"static" — same semantics as rtt_start.
         """

@@ -201,7 +201,7 @@ def test_recovery_timeout_reports_reset_context_without_poisoning_other_stream(s
     transport.epoch = 17
     if stream == 'rtt':
         session = MuxRTTSession(transport, {'down_buffers': []}, channels=[0])
-        transport.request = Mock(return_value=b'')
+        transport.request = Mock(return_value=b'\x01\x00')
         session.start('0x20000000')
         opcode, read = 0x40, lambda: session.read_channels(0)
     else:
