@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-30T17:51:16+08:00",
+  "updated_at": "2026-10-30T17:56:53+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
@@ -104,7 +104,7 @@
     "30MHz RTT/Watch/UART并行历史存在目标读错：V4.6.8 1kHz +1/最大+273，10MHz0；V4.7.0/F103先Watch后RTT11762周期1错、反顺序12297周期0，10MHz两顺序0。发布接受不等于问题关闭，完整记录见known-limits-20261030.md。",
     "HPM/SES未发DAP_Disconnect可遗留占用；显式退出后OpenOCD init/resume/shutdown或用户拔插可恢复，超时不得偷占。完整SES矩阵/RTT下行未覆盖。RTT status6截图只证busy，不推断与历史故障同因，待现场时序/显式重试。",
     "采集非无损、多变量非原子快照，无任意时序上界；记录溢出/暂停/下载会丢观测。COS监控/短链/在途延迟可超额，95GiB非账单硬上限，存储/请求/SCF另计。旧0.4.0固件GitHub备用未迁移，新版再改，签名产品不可重写。完整证据及边界见known-limits-20261030.md。",
-    "V3无屏幕且不支持HPM；V3.6.4 Keil/OpenOCD调试共存已测。V4最终无诊断固件完整SES矩阵未完成。V3直连USB空RTT约30分钟掉线未定因，再现先导出诊断再拔插，本轮V4短测不能关闭。",
+    "V3无屏幕且不支持HPM；V3.6.4 Keil/OpenOCD调试共存已测。V4最终无诊断固件完整SES矩阵未完成。V3直连USB空RTT约30分钟掉线未定因，再现先导出诊断再拔插，本轮V4短测不能关闭。 指定固件会话报告V3.6.8候选B1/4KiB丢7B、启动控制45B，疑CRLF重复转换；已断开，待固件修复复测。主机不放宽完整性检查，见known-limits-20261030.md。",
     "最后客户端退出约5秒租约后开始排空/关闭，不保证硬实时5秒。每GUI独立后台；单探针仅一个后台持有；已有URL共享页面跟随明确切换。独立操作另开客户端。",
     "UART5 TTL Modbus读写通过，RS485电气层未测；跨物理主机Agent/全芯片矩阵未认证。Unix包仅CI构建/冻结检查，真实USB/原生UI/升级待测；Mac仅ad-hoc未公证，Windows无Authenticode，UAC/企业策略可拦截。Tauri更新验签仍有效；不得承诺消除SmartScreen。文件句柄选择/跟踪未全测；原生日志选择/回放/PNG已测。",
     "nRF54L15保护闭环、全部擦除/拔插/休眠/断电、电源精度未全测。每次VCC需确认具体电压。26个无可靠扇区FLM禁用扇区操作，Bank模式须匹配。HPM5301 OTP组18/19历史永久锁定；128字读取及批准Word69 0→1已实测，其余型号/区域不继承授权，锁最后写/逐项校验，多Word不可回滚；熔丝/影子/临时锁语义未知，UART按ROM状态及回读为准。详见hpm-offline-otp-handoff.md及known-limits-20261030.md。"
