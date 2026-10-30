@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-31T00:29:04+08:00`
+- 更新时间：`2026-10-31T00:33:25+08:00`
 - 分支：`codex/v0.4.2-fixes`
 - HEAD：`76307f05：RTThread模板有界名称/布局/钩子修复；4be共享MUX，6ce读取提示/455发现修复均未安装。已装Windows dce17d3e/Skill归档0d680d90不变。`
 - 远端 HEAD：`microkeen/codex/v0.4.2-fixes；多个后续修复共用此分支。microkeen/main核对为3cc474bb。`
 - 工作树：E盘原工作区已切换codex/v0.4.2-fixes；两个旧detached工作树继续保留。构建产物与验证证据保存在F盘构建根目录。
-- 当前任务：连接提示已修复；RTThread模板104回归及真实头文件ARM语法检查通过。H7八份10MiB/61秒SV/共存及65文件交付核对完成；宿主HIL仍4be，模板76307f05未实装，不重建。单次API延迟退化未定位。
-- 状态：`source_fixes_and_h7_control_review_complete_no_rebuild`
+- 当前任务：指定会话按用户要求复测H7 FPBv2：已装0.4.2与4be候选status/list/set/clear均422，比较器不变、目标运行；两报告和源码离线核对完成。仅登记宿主待修，未实施兼容修复。前序读取提示/模板及H7采集核对完成，不重建。
+- 状态：`fpbv2_retest_confirmed_host_fix_pending`
 
 ## 里程碑
 
@@ -18,8 +18,8 @@
 - **0.4.0正式版** — `complete`。PR58产品源0c9c2d97，Windows/完整Skill/SiteAgent七附件及签名、实装、公开升级通过；21资源COS路由和服务故障备用通过，索引最后切换。Gitee真实Skill，安装包100MB限制明确使用MicroKeen备用。Dot已更新网站，默认0.4.0、历史选择及备用链接已实际核验。详见v040-release-handoff.md。
 - **0.3.6正式版** — `complete`。PR50/51正式源d000370b；Windows签名/Skill/SiteAgent、COS+GitHub/Gitee渠道、实装与升级通过，preview撤下、Dot已通知、临时SSH撤销。README与交接单独后续PR。见v036-release-handoff.md。
 - **0.3.5正式版** — `complete`。PR43合并源2f474f60372e。Windows/Skill/三平台/SiteAgent与17附件、5签名、3渠道通过；全局Skill同步、原生退出资源释放。V3.6.5/V4.6.9独立发布。详见v035-release-handoff.md和v035-probe-firmware.md。
-- **0.3.4正式版** — `complete`。不可变源a8fd3fab0403，PR40正式发布；PR41已保存正式Web/交接，合并提交185678c59623。17附件、5份验签、3渠道及实装/Skill通过。07846c1a记录后续清理完成，本次补入0.3.5；见v034-release-handoff.md及v034-workspace-cleanup.md。
-- **0.3.3正式版** — `complete`。源11616f80，PR38；Windows/ARM/Linux/Intel包、五份签名、三渠道核对和本地Skill更新完成。正式归档已回原工作空间；见v033-release-handoff.md。 更早0.3.2/0.3.1见对应release-handoff文档。
+- **0.3.4正式版** — `complete`。不可变源a8fd3fab0403/PR40已发布；PR41正式Web/交接、三渠道验签及实装通过，后续清理完成。详细提交、资产和证据见v034-release-handoff.md及v034-workspace-cleanup.md。
+- **0.3.3正式版** — `complete`。源11616f80/PR38已发布，跨平台包验签、三渠道和本地Skill更新完成，归档已回原工作区；见v033-release-handoff.md。更早0.3.2/0.3.1见对应交接。
 
 ## 验证证据
 
@@ -47,13 +47,13 @@
 
 ## 真机环境
 
-- **state**：指定固件会话完成同HPMLink/H7实测，最终c995/23:46:18；记录采集停止、10MHz、设备关闭，目标为功能测试程序。本会话仅离线复核，后续硬件仍须协调。H7 ZIP7f3e0c4c通过，HPM历史保留。
+- **state**：指定固件会话完成同HPMLink/H7采集及FPBv2拒绝复测，最终c995/23:46:18；断点四操作422，比较器不变、目标运行，10MHz、device_closed。本会话仅离线核对；后续实机仍须协调。H7 ZIP7f3e0c4c及HPM历史保留。
 - **installer**：Windows/完整Skill均已覆盖安装0.4.2本地候选；NSIS SHAf70e4960/Skill SHAa126d967，3640/2638文件一致、47工具、5339用户文件保留。41Web一致，更新记录11条。完整产物见v042-combined-20261030，未正式发布。
 - **backups**：保留正式release、安装包、CI ZIP、唯一硬件证据、Skill备份及F盘缓存。含链接/不可访问目录不强删。历史获授权清理见v036-storage-cleanup-20261023.md及本机START_HERE；本地Unix清理不影响正式附件。旧detached树保留；本轮Skill备份在F盘cache/mklink-ai-probe/skill-backups。
 
 ## 下一动作
 
-1. 源码和HPM/H7限定证据已完成并保留失败边界，等待用户下一任务。单次API延迟本轮未证无退化，后续再评估主机调度/USB/固件贡献；不以吞吐提升代替延迟结论。不可变HIL宿主4be不替换、不占硬件。
+1. H7 FPBv2共享断点待宿主修复：按版本设置/解析/清除/回读，未知REV写前拒绝，保留FPBv1及槽位/占用保护；不能只删guard。当前用户要求复测，未实施修复，详见h7-fpbv2-retest-20261031.md。已有HIL宿主4be不替换、不占硬件。
 2. 下次明确授权构建带入共享MUX/Skill、76307f05模板、4551687d发现与6ce79923读取提示；已装0.4.2两包SHA不变。374目录扫描慢、995/10048、双核脱机实板及V3历史根因仍待办。PR66合并/正式发布须新明确指令。
 3. 公网远程服务中继为下个版本任务；本次不实施。
 4. 下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。
@@ -61,7 +61,7 @@
 
 ## 已知限制
 
-- 新MUX整块读普通V4/H7已实测，V3/H7指定会话候选复测通过；HPM本轮映像回读及480B RAM核对通过，未扩全内存区矩阵。安装后20次调用仍有明显调度抖动，当前0.4.2包4KiB最大39.074ms，不承诺固定低延迟。HPM九系列XML已解析/匹配/浏览器导入；用户接回HPM5301后的六GPIO寄存器实读/采集通过，其他系列及IO输出驱动未测；客户F411仍待实板复测。dump定时截止可留半个样本，完整性门槛保留。HPM CPU仅RV32/hart0/HPM5301/槽0实测，其他触发器/型号、新值写入、20/30MHz及断电冷启未扩展，TCK未测。374个历史probe目录启动扫描慢未修复；4551687d仅修复端口复用时HTTP异常中止发现，未安装，见runtime-endpoint-errors-20261030.md。客户3.11.9、CDC首次离线、F405 PROGRAM100%退出、GD32受限AI、RTT后MUX、HEX2%未知结果及PyInstaller权限故障保持未闭环，详见known-limits-20261030.md及v032-postrelease-incidents.md；不重放未知操作。
+- 新MUX整块读普通V4/H7已实测，V3/H7指定会话候选复测通过；HPM本轮映像回读及480B RAM核对通过，未扩全内存区矩阵。安装后20次调用仍有明显调度抖动，当前0.4.2包4KiB最大39.074ms，不承诺固定低延迟。HPM九系列XML已解析/匹配/浏览器导入；用户接回HPM5301后的六GPIO寄存器实读/采集通过，其他系列及IO输出驱动未测；客户F411仍待实板复测。dump定时截止可留半个样本，完整性门槛保留。HPM CPU仅RV32/hart0/HPM5301/槽0实测，其他触发器/型号、新值写入、20/30MHz及断电冷启未扩展，TCK未测。374个历史probe目录启动扫描慢未修复；4551687d仅修复端口复用时HTTP异常中止发现，未安装，见runtime-endpoint-errors-20261030.md。客户3.11.9、CDC首次离线、F405 PROGRAM100%退出、GD32受限AI、RTT后MUX、HEX2%未知结果及PyInstaller权限故障保持未闭环，详见known-limits-20261030.md及v032-postrelease-incidents.md；不重放未知操作。 H7 FPBv2 REV1/8槽的共享断点仍全422；已装及4be均复现未修，见h7-fpbv2-retest-20261031.md。
 - 30MHz RTT/Watch/UART并行历史存在目标读错：V4.6.8 1kHz +1/最大+273，10MHz0；V4.7.0/F103先Watch后RTT11762周期1错、反顺序12297周期0，10MHz两顺序0。发布接受不等于问题关闭，完整记录见known-limits-20261030.md。
 - HPM/SES未发DAP_Disconnect可遗留占用；显式退出后OpenOCD init/resume/shutdown或用户拔插可恢复，超时不得偷占。完整SES矩阵/RTT下行未覆盖。RTT status6截图只证busy，不推断与历史故障同因，待现场时序/显式重试。
 - 共享MUX并行SV仍有容量边界：旧饱和768/drop17371，流水线28/1330、burst26/1164、control15/1442，重启归零不抹去；control独立62.679秒零丢失计数通过。RTT661.208KiB/s为特定配置观测值，H7限定实测新799–801KiB/s、独立/有限并行SV零计数；单次API20样本中位有12.90→20.03ms等退化未归因，旧Watch末组失败保留。采集暂停/下载丢观测、多变量非原子、无时序保证。COS95GiB非账单上限，存储/请求/SCF另计；旧0.4.0固件Git备用未迁，签名资产不改。
