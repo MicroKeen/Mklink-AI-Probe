@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-30T23:16:17+08:00`
+- 更新时间：`2026-10-30T23:28:01+08:00`
 - 分支：`codex/v0.4.2-fixes`
 - HEAD：`4be6ab66：共享RTT/SystemView、480量子和count64兼容；前序6ce79923读取提示/4551687d发现修复均源码未安装。已装Windows dce17d3e/Skill归档0d680d90不变。`
 - 远端 HEAD：`microkeen/codex/v0.4.2-fixes；多个后续修复共用此分支。microkeen/main核对为3cc474bb。`
 - 工作树：E盘原工作区已切换codex/v0.4.2-fixes；两个旧detached工作树继续保留。构建产物与验证证据保存在F盘构建根目录。
-- 当前任务：用户继续要求加速RTT/SV；指定固件会话正将共享RTT io.read接入已有stream pipeline，480量子/普通内存/Watch/DAP仲裁保留。宿主仍4be不可变候选，不改代码/占硬件/安装。前一固件169.21KiB/s及SV独立验收仅作基线；等新固件同条件完整载荷与独立SV/共存证据。
-- 状态：`firmware_rtt_pipeline_followup_host_candidate_unchanged`
+- 当前任务：流水线577.54KiB/s及SV独立63.130秒已验，共存SV溢出保留。指定固件会话继续RTT/SV专用DMI burst编译实测，尚无新证据；577仅前轮基线。宿主4be及安装包不变，不占硬件。
+- 状态：`firmware_dmi_burst_followup_pipeline_baseline_verified`
 
 ## 里程碑
 
@@ -30,7 +30,7 @@
 - **安装器旧元数据自动清理**：源cb30b703：62定点、5577Python/2skip、1133GUI和NSIS通过。八文件旧dist-info复现误报0.3.6，覆盖exit0清理后识别0.4.1；207保留文件及3626载荷一致，冻结/原生/退出通过。PR63已集成下版，正式0.4.1不变。见installer-metadata-cleanup-20261027.md。
 - **上海COS正式0.4.0与90/95保护**：正式0.4.0七资源COS/GitHub哈希与备用实测、SCF21资产及三个索引一致；Gitee完整Skill通过，安装包受100MB限制。累计账本保留，90GiB告警/95GiB锁停、180秒租约、到期未续费及用量回落不恢复。2026-10-26线上代码与发布一致，本地边界/到期回归通过；每分钟监控和全天告警开启，三正式入口上海HEAD通过。未新建私钥，未重测生产停服备用。详见v040-release-handoff.md。
 - **H743正式固件与双核候选边界**：H743正式V4.7.1在线/四脱机/19采集调试通过。私有V4.7.2单核兼容、双核误选写前拒绝、2MiB不变及M7/M4 HEX在线通过；V4.7.2/V3.6.8/V2.9.3双核候选交付，46回归通过。无双核实板正向脱机，V3历史掉线未闭环，候选不公开替换。见known-limits-20261030.md。
-- **共享RTT/SystemView及480量子**：共享MUX/480/二进制订阅996回归及Skill/浏览器通过。a441双10MiB约127.24KiB/s；4be共存/DAP50次读写与halt/step/resume、262144B+1263616B全载荷核对通过。饱和SV overflow768/drop17371保留，原passed漏验不得称全无损。新范围SV独立62.837秒/13样本、累计847588事件，target/parser/MUX零丢失；30MHz仅CH1两块长各10MiB全序号/字节/SHA与耗时吞吐独立复核，主机169.211/169.173KiB/s，零gap/drop及停止/10MHz/释放通过。非理论上限，20MHz通道范围不同。见rtt-systemview-mux-20261030.md；只用4be verified归档，已装包未变。
+- **共享RTT/SystemView及480量子**：宿主4be共享MUX/480/二进制订阅996回归及Skill/浏览器通过。新固件23:15:39/UF2 SHA8ff28361和源快照已核对；30MHz仅CH1双10MiB字节/序号/SHA/计时通过，主机577.034/577.538KiB/s约同配置旧轮3.41倍。SV独立63.130秒/852087事件/13样本三层丢失0。共存两载荷完整、12阶段/DAP50读写和halt/step/resume通过；递归79SV/124MUX/46Watch发现SV overflow28/drop1330，其他零错。停止/10MHz/释放已核对。旧证据及限定范围见rtt-systemview-mux-20261030.md；未改安装包。
 
 ## 架构决策
 
@@ -47,13 +47,13 @@
 
 ## 真机环境
 
-- **state**：指定固件会话负责新RTT读取流水线编译/升级及30MHz双10MiB、SV独立/共存实测，当前硬件由其协调。本会话不连接；旧候选已释放记录仅属前轮，不推定新现场可占用。995/10048及旧饱和SV溢出保留。
+- **state**：前轮UF2 SHA8ff28361报告停止/10MHz/释放；指定固件会话现继续DMI burst新候选编译及实机，硬件由其协调，不推定仍空闲。本会话仅离线复核。995/10048及共存SV溢出保留。
 - **installer**：Windows/完整Skill均已覆盖安装0.4.2本地候选；NSIS SHAf70e4960/Skill SHAa126d967，3640/2638文件一致、47工具、5339用户文件保留。41Web一致，更新记录11条。完整产物见v042-combined-20261030，未正式发布。
 - **backups**：保留正式release、安装包、CI ZIP、唯一硬件证据、Skill备份及F盘缓存。含链接/不可访问目录不强删。历史获授权清理见v036-storage-cleanup-20261023.md及本机START_HERE；本地Unix清理不影响正式附件。旧detached树保留；本轮Skill备份在F盘cache/mklink-ai-probe/skill-backups。
 
 ## 下一动作
 
-1. 等待并独立核对新固件stream pipeline的同条件30MHz RTT双10MiB、SV独立/共存和释放证据；169.21KiB/s仅前轮基线，不与用户J-Link820KB/s作未控制变量的严格对比。宿主保持4be6ab66-verified（SHA cb3c43fc），不构建/安装。
+1. 等待DMI burst新固件同条件双10MiB、SV独立/共存及身份释放证据；577仅前轮基线。宿主4be6ab66-verified（SHA cb3c43fc）不变，不重建/安装/占硬件。
 2. 下次明确授权构建带入共享MUX/Skill、4551687d发现与6ce79923读取提示；已装0.4.2两包SHA不变。374目录扫描慢、995/10048、双核脱机实板及V3历史根因仍待办。PR66合并/正式发布须新明确指令，私有固件不公开替换。
 3. 公网远程服务中继为下个版本任务；本次不实施。
 4. 下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。
@@ -64,7 +64,7 @@
 - 新MUX整块读普通V4/H7已实测，V3/H7指定会话候选复测通过；HPM本轮映像回读及480B RAM核对通过，未扩全内存区矩阵。安装后20次调用仍有明显调度抖动，当前0.4.2包4KiB最大39.074ms，不承诺固定低延迟。HPM九系列XML已解析/匹配/浏览器导入；用户接回HPM5301后的六GPIO寄存器实读/采集通过，其他系列及IO输出驱动未测；客户F411仍待实板复测。dump定时截止可留半个样本，完整性门槛保留。HPM CPU仅RV32/hart0/HPM5301/槽0实测，其他触发器/型号、新值写入、20/30MHz及断电冷启未扩展，TCK未测。374个历史probe目录启动扫描慢未修复；4551687d仅修复端口复用时HTTP异常中止发现，未安装，见runtime-endpoint-errors-20261030.md。客户3.11.9、CDC首次离线、F405 PROGRAM100%退出、GD32受限AI、RTT后MUX、HEX2%未知结果及PyInstaller权限故障保持未闭环，详见known-limits-20261030.md及v032-postrelease-incidents.md；不重放未知操作。
 - 30MHz RTT/Watch/UART并行历史存在目标读错：V4.6.8 1kHz +1/最大+273，10MHz0；V4.7.0/F103先Watch后RTT11762周期1错、反顺序12297周期0，10MHz两顺序0。发布接受不等于问题关闭，完整记录见known-limits-20261030.md。
 - HPM/SES未发DAP_Disconnect可遗留占用；显式退出后OpenOCD init/resume/shutdown或用户拔插可恢复，超时不得偷占。完整SES矩阵/RTT下行未覆盖。RTT status6截图只证busy，不推断与历史故障同因，待现场时序/显式重试。
-- 共享MUX共存控制及RTT载荷已通过，但4be/7d7a6480饱和RTT+DAP下SV目标overflow768/drop17371，宿主parser/MUX零丢失不代表目标无丢事件，按新范围SV独立62.837秒零丢失计数已通过。采集暂停/下载会丢观测，多变量非原子且无时序上界。COS监控/在途可超额，95GiB非账单硬上限；存储/请求/SCF另计。旧0.4.0固件GitHub备用未迁，签名产品不可重写。详见known-limits-20261030.md。
+- 共享MUX并行SV仍有容量边界：旧固件饱和overflow768/drop17371，新流水线32ms压力任务+DAP中间overflow28/drop1330，末次重启归零不抹去；新SV独立63.130秒零丢失计数通过。RTT577.54KiB/s是特定配置实测非上限。采集暂停/下载丢观测、多变量非原子、无时序保证。COS95GiB非账单硬上限，存储/请求/SCF另计；旧0.4.0固件Git备用未迁，签名资产不改。详见known-limits-20261030.md。
 - V3无屏幕且不支持HPM；V3.6.4 Keil/OpenOCD共存已测。V4最终无诊断固件完整SES矩阵未完成。V3.6.8/build17:56:49（SHA751120c4）CRLF候选六轮B1/4KiB丢弃0，证据核对见v3-crlf-final-review-20261030.md，无原始B1抓包。后续V3/H7、SWD30MHz、已装0.4.2/MUX通道0空RTT1800.028秒通过：887状态/178被动USB正常、原会话恢复六条连续记录、设备释放。仅核对保存证据，未新增修复；历史掉线根因未定位，其他版本/legacy/睡眠拔插/更长时长未测，见v3-empty-rtt-review-20261030.md；再现先保存现场。
 - 最后客户端退出约5秒租约后开始排空/关闭，不保证硬实时5秒。每GUI独立后台；单探针仅一个后台持有；已有URL共享页面跟随明确切换。独立操作另开客户端。
 - UART5 TTL Modbus读写通过，RS485电气层未测；跨物理主机Agent/全芯片矩阵未认证。Unix包仅CI构建/冻结检查，真实USB/原生UI/升级待测；Mac仅ad-hoc未公证，Windows无Authenticode，UAC/企业策略可拦截。Tauri更新验签仍有效；不得承诺消除SmartScreen。文件句柄选择/跟踪未全测；原生日志选择/回放/PNG已测。

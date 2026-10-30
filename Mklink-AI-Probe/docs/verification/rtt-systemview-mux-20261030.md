@@ -110,9 +110,50 @@
 ## 固件读取流水线后续优化
 
 上述限定验收完成后，用户继续要求优化 RTT/SystemView，并提供 J-Link 15 MHz 约 820 KB/s 作为比较线索；该数字未在本会话独立复现，不能与 KiB/s 结果直接作严格对比。
-指定固件会话报告共享 RTT 的 `io.read` 仍走普通 sysbus，正在接入已有 `riscv_debug_sysbus_read_mem_stream` 读取流水线；适配范围为共享 RTT/SystemView，保持 480 量子、普通内存/Watch 路径、写指针提交和 DAP 仲裁。
-这是进行中的固件改动，不是已验证的新性能结果。宿主继续使用不可变 `4be6ab66-verified`，本会话不改代码或操作硬件。固件会话完成升级后，将按相同 30 MHz/仅 CH1/双 10 MiB 条件及 SV 独立、共存测试提供新报告。
-现有 169.211203 KiB/s、SV 独立和饱和溢出记录归属于前一固件候选并完整保留，不挪作新固件验收；新增硬件占用由指定会话负责协调。
+指定固件会话报告共享 RTT 的 `io.read` 原先仍走普通 sysbus，现候选已接入已有 `riscv_debug_sysbus_read_mem_stream` 读取流水线；分离 1..3 字节首尾和对齐主体，适配范围为共享 RTT/SystemView，保持 480 量子、普通内存/Watch 路径、写指针提交和 DAP 仲裁。
+固件会话提供的候选标识为编译时间 `2026-10-30 23:15:39`，UF2 SHA256 `8ff28361456dcf54e4a5f26bb876bb5f4e8ecb35ce601b079adcb324de05ef2a`；来源仍是未提交的固件工作区，不能归为之前的 `7d7a6480` 提交。本会话独立核对提供的 UF2 文件及源码快照哈希，没有重新构建固件或读取设备自身的固件哈希。
+源码快照 `mux_runtime.c` SHA256 为 `d3783c9da715af4902ef609c8fc20507ded046a03b37d6d81abac400259d5266`，对应测试文件 SHA256 为 `92afaf9ae750b8a3c0596644f47143be0804d468d6a14fdbb50c2a4764a2901c`；与候选 audit 记录一致。差异快照显示增加 RTT 读适配，原普通读和写路径不变。固件审计记录 Flash 分配增加 154 字节，AHB/DLM 分配无增加。
+宿主继续使用不可变 `4be6ab66-verified`，本会话只核对报告及保存载荷，没有连接硬件。新 RTT、SV 独立及共存结果如下；之前约 169 KiB/s、SV 独立和饱和溢出记录仍属于前一固件候选。
+
+### 流水线候选 RTT 证据
+
+`pipeline30m.json` 的 SHA256 为 `60900538c029525f98df9de2b5053f8b2d46be17163e5f49cf308c4ee79fabf3`；本机独立复核记录为 `pipeline30m-independent-review.json`。
+两份各 10485760 字节载荷逐字节模式、每块递增序号及 SHA 全部一致，载荷 SHA 与前一 30 MHz 表中相同。
+
+| 目标块长 | 目标耗时 | 主机耗时 | 目标吞吐 | 主机吞吐 | 对上一相同配置主机实测比值 |
+| --- | --- | --- | --- | --- | --- |
+| 1024 B | 17.701149 s | 17.745925 s | 578.493532 KiB/s | 577.033895 KiB/s | 3.41014 |
+| 2048 B | 17.685276 s | 17.730440 s | 579.012727 KiB/s | 577.537826 KiB/s | 3.41389 |
+
+本次与 `rtt30m-max` 的宿主源码、目标镜像 SHA、JTAG 30 MHz 档位、仅 CH1、目标 250 MHz、16 KiB 环形缓冲和 480 量子均一致。独立复核还从周期计数重算目标耗时，并按完整载荷重算两端吞吐。
+两组完成状态、字节数、块数一致，保持同一 streaming session；MUX gap/drop 为 0，无超时记录。报告记录 RTT 停止、JTAG 恢复 10 MHz、`device_closed=true`。
+因此当前 RTT 实测最高主机吞吐为 **577.537826 KiB/s**；这仍是该配置下的观测值，不是通用上限。
+
+### 流水线候选 SystemView 与共存证据
+
+`pipeline-sv-60s.json` 的 13 个状态样本独立复核通过：63.129936 秒，最终累计 852087 个事件、3743416 原始字节，首尾样本间新增 851397 个事件。全部样本的 target overflow/drop、parser 和 MUX 丢失计数均为 0。配置仍为 JTAG 20 MHz、目标 250 MHz，只启动 SV、目标 RTT 压力负载关闭；报告记录正常停止、10 MHz 恢复及设备关闭。这满足用户本轮独立 SV 零丢失计数要求，不据此承诺任意负载或无限时长无损。
+
+对 `pipeline-coexist.json` 做了全报告递归审查，包含 79 个 SV、124 个 MUX、46 个 Watch 状态对象，而不是只看会因重启归零的末次状态：
+
+- 目标压力任务周期为 **32 ms**，Wave 任务为 1 kHz、Watch 请求间隔 1 ms。虽然脚本沿用 `After saturated channel2` 标签，不能据该名字把本轮描述为饱和测试。
+- 两份 RTT 原始载荷分别为 102400 字节（序号 0..99）和 264192 字节（序号 100..357），所有模式字节、连续序号及 SHA 一致，且与目标接受计数吻合。
+- 12 个启停/共享阶段、50 次 DAP 64 字节读取、写入恢复、halt/step/resume、480 字节内存写读恢复、256 字节 RTT 二进制回显及退出恢复通过。
+- MUX、SV parser、Watch read error/drop 为 0；但 session generation 2 的中间状态出现 target overflow **28**、baseline 后 target dropped packets **1330**。最后状态为零不抹去该事实：控制共存及 RTT 完整性通过，**并行 SV 无损未通过**，按用户范围保留容量边界。
+- 两个新报告均记录正常停止、恢复 10 MHz、`device_closed=true`；固件会话最终说明目标保留 SV fixture、压力负载关闭且运行实例已释放。本会话没有连接硬件作额外验证。
+
+新报告 SHA256：
+
+| 报告 | SHA256 |
+| --- | --- |
+| `pipeline-sv-60s.json` | `5af9b135dbbe3db0829a4074c70924b85d438c0fd720faec80f50dcafa05d230` |
+| `pipeline-coexist.json` | `ea92cf5812ffd01df1a39836a9261cc16950381b776a6b4583f901276c6a8e73` |
+
+两份共存载荷 SHA256 为 `26bd57c9af96eeb28dc19e9200a7263833ed9be6c2c786e96672ac2487609b4a`、`cf4ccd9d74873d468cc55bbd54abb08f24d96a0ef0cc54fbbeb2664055cd8536`。本机完整复核记录为 `pipeline-sv-independent-review.json` 和 `pipeline-coexist-independent-review.json`。
+本轮按更新后的用户范围完成；宿主源码候选及已安装包保持不变，固件源码快照未提交，正式发布仍未获本轮指令。
+
+### 后续 DMI burst 候选
+
+上述流水线候选完成后，指定固件会话报告用户继续要求优化 RTT/SystemView，已新增仅 RTT/SV 启用的 DMI read burst，普通内存/Watch 仍走原路径。固件会话正在编译，随后提供同条件双 10 MiB、SV 独立及共存报告；本会话尚未核对此新改动或取得新硬件证据。上面的 577 KiB/s、SV 独立与共存结果只属于 UF2 SHA `8ff28361…` 流水线候选，保留作基线，不能证明后续 burst 候选。宿主保持 `4be6ab66-verified`，硬件由指定会话协调，不以旧轮释放记录推定当前设备空闲。
 
 本机证据目录为 `F:/MKLink-Build/artifacts/rtt-shared-20261030`；候选 ZIP 为源码导出，不是安装包或完整发行 Skill：
 
