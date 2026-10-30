@@ -186,11 +186,36 @@
 
 指定会话最终报告本轮硬件均已释放，目标保留 SystemView fixture、压力负载关闭。其交付 ZIP `HPMLink_RTT_SystemView_latest.zip`（1327623 字节）已独立核对：SHA256 `79cee1e7ae79d831739868ff6ca5325ae58668a9318b6a2e9919afb71f326283`；43 个载荷文件加一份 manifest，所有大小/哈希匹配，manifest SHA256 为 `e17c7737e5f1822c4e7fbe3f948d5b47fa1214b8cc81d18a80afb63b2ab61022`。9 份源码快照、3 份报告、5 份原始载荷/DAP 日志与已核对文件一致，RTT 目标 BIN 与报告镜像 SHA 一致，最新数据摘要和非零并行溢出均正确；不含旧轮/身份失败试跑报告或 runtime 认证/所有权文件。该包是本地固件复测交付资料，含本机复测路径，未公开发布；不是宿主安装包或正式 Skill。核对记录为 `burst-delivery-independent-review.json`。
 
-### 后续描述符与 SBA 复用候选（待验证）
+### 描述符与 SBA 复用候选（HPM 已核对，H7 待实板）
 
 指定固件会话随后报告用户继续要求优化描述符、读指针及 SBA 复用，并兼顾 ARM；当前仍用 HPMLink，后续将换接 STM32H7。其正在完整编译的新改动包括：共享描述符只读取 buffer/size/Wr/Rd 的 16 字节，保留双快照校验；HPM 仅复用已验证 quiet 状态，普通 DMI/所有权变化使其失效，读指针写前仍实时核验 SBCS；ARM 仅在同一 RTT 锁范围复用 prepared 状态，下一服务冷启动，保留 CSW/TAR/DRW/drain 路径。所谓读指针正常 6 次扫描对旧 11 次，是固件会话的扫描次数模型，不是本会话测得的耗时或性能结果。
 
-固件会话报告生产模型已覆盖相关故障及 ARM 一致性/上下文，本会话尚未取得该候选身份、快照或实机报告作独立核对。HPM 实板测试由指定会话继续，STM32H7 尚未接入；H7 接线通知也由该会话统一发出。前一候选 `5396eedb…` 的 622.507 KiB/s、独立 SV 零丢失计数及并行溢出仅作为历史基线，不能证明新候选或 ARM 已通过。宿主仍为 `4be6ab66-verified`，本会话不占硬件、不构建或覆盖安装。
+固件会话后续明确把复用边界命名为 `rtt_memory_scope`；本会话从原字节快照生成统一行尾的可读差异，核对每次 poll 进出及失败出口均清除状态，非 scope 命令不复用 HPM quiet 缓存，ARM prepared 仅限锁内。固件会话报告生产模型覆盖相关故障及 ARM 一致性/上下文；其日志中完整 480 B 正常调用为 22+136+20+6=184 次扫描，对旧轮 197 次减少约 6.6%。该次数模型不代表实测耗时分布。本会话未重新执行固件构建或硬件测试。
+
+新候选编译时间 `2026-10-30 23:46:18`，UF2 SHA256 `c995a6ea2a3ec708f22add355ca33fc897f4e80f01f40ebdc133cbcac24c1699`，BIN SHA256 `a1de025766029be2fd5698f382938183c34894d9a7c6f024acc822bfcbee1d94`。UF2 块头/地址边界/载荷与 BIN 一致、保存的升级身份与测试时序、10 份源码/测试快照哈希均独立核对通过。该版本仍来自未提交固件工作区；audit SHA256 为 `8af2c624fd47fee9067a8fb911e6f5a7ee8a9ab06c0f84c358a39bf6f5091fd8`，相对 burst 候选记录 Flash +1750 B、AHB +8 B、DLM +1 B、ILM +26 B，不再表述为数据 RAM 无增量。
+
+#### HPM control 结果
+
+两份各 10 MiB RTT 载荷的完整模式字节、块序号、SHA、目标周期计时和两端吞吐重算均通过；保持相同目标镜像及宿主、30 MHz 仅 CH1、250 MHz 目标、16 KiB ring、480 量子，零 MUX gap/drop。载荷 SHA 与前两轮相同。
+
+| 目标块长 | 目标耗时 | 主机耗时 | 目标吞吐 | 主机吞吐 | 相对 burst 同块长主机实测 |
+| --- | --- | --- | --- | --- | --- |
+| 1024 B | 15.445134 s | 15.486803 s | 662.992002 KiB/s | 661.208148 KiB/s | +6.3072% |
+| 2048 B | 15.444629 s | 15.489375 s | 663.013675 KiB/s | 661.098325 KiB/s | +6.1993% |
+
+最高主机观测值为 **661.208148 KiB/s**，仍不是通用极限。独立 SystemView 在相同 20 MHz/250 MHz、无额外 RTT 压力及 Watch 条件下运行 **62.679469 秒**，13 个同会话样本累计 **846407 事件/3718463 字节**，首尾新增 845517 事件；所有样本 target、parser、MUX 丢失计数均为 0。该结论来自记录及计数器核对，不是原始 SV 事件逐条真值比较。
+
+并行报告的 106496/271360 字节 RTT 载荷（序号 0..103 / 104..368）全部字节/序号/SHA 通过；12 个控制阶段、50 次 DAP 读取、写回恢复、halt/step/resume、480 字节内存与 256 字节 RTT 回显记录通过。全报告递归 75 个 SV、120 个 MUX、46 个 Watch 状态仍出现 SV 目标 overflow **15**、baseline 后 dropped packets **1442**，其他层计数为 0；有限并行控制及 RTT 数据完整，仍不认定并行 SV 无损。三项报告均记录停止/恢复 10 MHz/设备关闭。
+
+| HPM control 报告 | SHA256 |
+| --- | --- |
+| `control30m.json` | `df03810f6180a1e7601b53ce22b83f211e2dd0d743f14dc8e6dace43efa3b5aa` |
+| `control-sv-60s.json` | `b87061826fa1f83af28feaf7a9d38dab3c2fa10581bb243d73967a87f15a448f` |
+| `control-coexist.json` | `eb9b751e3e3bfa8d0486639f3530a28448895a7fc59756c923fae56c3d1cf84c` |
+
+并行载荷 SHA256 分别为 `0051521ae248947344a8a21f8cf8538b3b5c4b0f11089ac2f0be25a12a55a0d8`、`8e715b72cc5d376311f2766da2914aec5730033fc82a033bd999db0b54cddf7a`。本机独立核对记录为 `control30m-independent-review.json`、`control-sv-independent-review.json`、`control-coexist-independent-review.json`。
+
+HPM 本轮限定证据已通过；STM32H7 尚未接入，模型及 HPM 结果不证明 ARM/H7 实板通过。H7 接线通知由指定固件会话统一发出，后续硬件状态先协调。前一 `5396eedb…` 及其交付 ZIP 保留为历史证据，不当作新候选交付；宿主仍为 `4be6ab66-verified`，本会话不占硬件、不构建或覆盖安装。
 
 本机证据目录为 `F:/MKLink-Build/artifacts/rtt-shared-20261030`；候选 ZIP 为源码导出，不是安装包或完整发行 Skill：
 
