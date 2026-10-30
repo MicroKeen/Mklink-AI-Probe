@@ -429,6 +429,15 @@ class MKLinkSerialBridge:
             self._mux_supported = 'MUX_TARGET=1' in self._get_firmware_capabilities()
         return self._mux_supported
 
+    @property
+    def live_connection_token(self):
+        """Identity may be reused only while this exact locked handle is live."""
+        if (self._transport_error is not None or self.state in (DeviceState.DISCONNECTED, DeviceState.ERROR)
+                or not self._running or not self._port_lock._locked
+                or self._serial is None or not self._serial.is_open):
+            return None
+        return (self._diagnostic_id, id(self._serial), self._port.casefold())
+
     def enable_multiplex(self):
         from mklink.mux import MuxTargetError, MuxTransport
         with self._cmd_lock:

@@ -44,6 +44,8 @@ def packet(op, epoch, request, payload=b''):
 
 
 class MuxTransport:
+    BLOCK_READ_CAPABILITY = 1 << 6
+    BLOCK_READ_COMMAND = 0x16
     SOFTWARE_RESET_CAPABILITY = 1 << 5
     SOFTWARE_RESET_COMMAND = 0x15
     MAX_QUEUE_BYTES = 65536
@@ -207,6 +209,8 @@ class MuxTransport:
                     return
                 _, version, op, n, epoch, req = struct.unpack_from('<4sBBHII', self._rx)
                 limit = 1024 if op == 0x41 and self.capabilities & 8 else 256
+                if op == 0x96 and self.capabilities & self.BLOCK_READ_CAPABILITY:
+                    limit = 4097  # Status plus one bounded block; CRC v1 only.
                 # Version 2 is restricted to advertised Watch events. Commands,
                 # replies and RTT retain their CRC-protected version 1 framing.
                 watch_raw = version == 2 and op == 0x41 and bool(self.capabilities & 16)
@@ -304,9 +308,12 @@ class MuxTransport:
         if not 0 <= address <= 0xffffffff or size < 0 or address+size > 0x100000000:
             raise ValueError('Invalid memory range')
         result = bytearray()
-        for offset in range(0, size, 128):
-            n = min(128, size-offset)
-            data = self.request(0x11, struct.pack('<IH', address+offset, n))
+        block_read = bool(self.capabilities & self.BLOCK_READ_CAPABILITY)
+        chunk_size = 4096 if block_read else 128
+        command = self.BLOCK_READ_COMMAND if block_read else 0x11
+        for offset in range(0, size, chunk_size):
+            n = min(chunk_size, size-offset)
+            data = self.request(command, struct.pack('<IH', address+offset, n))
             if len(data) != n:
                 self.fail('Incomplete memory response')
                 raise self._error
