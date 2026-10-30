@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-30T14:55:43+08:00",
+  "updated_at": "2026-10-30T16:19:31+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.4.2-fixes",
-    "head": "d59dbceb为最新Windows和完整Skill产品源，已构建/安装/真机验收，仍0.4.1本地候选。文档提交另列Git；旧Unix包a6bdacbc/eefc6842未重建。",
+    "head": "836d8ea3为最新Windows/完整Skill产品源，已安装并完成冻结实机验收，仍0.4.1本地候选。文档提交另查Git；旧Unix包未重建。",
     "remote_head": "microkeen/codex/v0.4.2-fixes；多个后续修复共用此分支。microkeen/main核对为3cc474bb。",
     "working_tree": "E盘原工作区已切换codex/v0.4.2-fixes；两个旧detached工作树继续保留。构建产物与验证证据保存在F盘构建根目录。"
   },
@@ -13,8 +13,8 @@
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "memory_mux_installed_next_latency_work",
-    "current_task": "d59dbceb已完成首个内存读写自动协商MUX、线程复用HTTP opener、旧固件写超时预算及Skill指引；Windows/完整Skill已同步，冻结MCP首读首写/128B写/全4KiB恢复、原生退出通过。用户经固件会话追加后台/串口/USB/MUX分层延迟优化及单请求4KiB读；双方已确认bit6/0x16最终契约，下一步主机实现及联合验证。固件会话已获设备占用，本会话暂不连接硬件。"
+    "status": "block_read_latency_installed_verified",
+    "current_task": "836d8ea3完成cap bit6/0x16单请求4KiB读、250ms同一活跃句柄身份复用及Windows接收优化；临时计时模块/钩子已删除。Windows/Skill已安装、冻结MCP/SDK读写及全区恢复、原生退出通过。普通V4/H7已明确交给指定固件会话做只读SuperWatch周期/吞吐及ST-Link客户AI复测文档，本会话不再占硬件。"
   },
   "milestones": [
     {
@@ -50,8 +50,8 @@
   ],
   "verification": [
     {
-      "area": "内存MUX优先及HPM XML联合候选",
-      "result": "d59dbceb：2155相关通过，旧1MHz HPM fixture改4MHz后26项通过；最终207定点及Skill校验通过。普通V4+H7共享SDK首读/首写自动MUX，20次中位read4 16.73ms/write128 16.41ms，Flash216776B与AXF一致，只改专用128B并验证全4KiB恢复。NSIS SHA02f3a3e1/Skill SHA7215c18b，3640/2638文件一致、5339用户文件保留；冻结MCP真机/47工具/41Web/原生退出通过。此前HPM5301 XML六GPIO/193样本零错保留，其他系列未实板。见memory-mux-20261030.md及hpm-svd-dump-stop-20261030.md。"
+      "area": "整块读取、内存MUX及HPM XML候选",
+      "result": "836d8ea3：1224相关测试、Skill校验、产品源两项CI通过。Windows NSIS SHAc7da398e/Skill SHA683c417f已装，3640/2638文件一致、5339用户文件保留；冻结PYZ确认无临时trace模块/钩子。H7首读/首写自动MUX、128B写后全4KiB恢复、4轮连续采集停启零CRC/丢帧通过。安装后SDK每项20次零失败，read4/4096中位15.09/21.57ms，4KiB最大48.57ms；保留抖动与源码轮次，不择优宣传。47工具/41Web/原生退出通过；HPM XML六GPIO/193样本历史证据保留。见mux-block-latency-20261030.md、memory-mux-20261030.md和hpm-svd-dump-stop-20261030.md。"
     },
     {
       "area": "HPM AI Skill能力核实",
@@ -90,17 +90,17 @@
     "腾讯云优先、GitHub/Gitee备用；上海私有COS签短链，90GiB告警/95GiB锁停，保留累计账本。套餐到期北京时间2026-11-26零点，未核验续费不恢复；监控延迟使阈值非账单上限。只用现有控制台/TAT，不申请私钥/SSH。preview撤下、旧桶获授权清理，香港桶已删除，只留上海；叠加110GB不提高90/95阈值。2026-10-25停止旧Aladdin-Wang GitHub的新发布，保留历史资产；新版本仅MicroKeen GitHub和既有Gitee。旧0.4.0草稿转换未完成，不自动操作。云迁移和Dot确认见v040-release-handoff.md，当前正式版见v041-release-handoff.md。",
     "测试直接使用用户原工程及 build/keil/Obj ELF，允许修改且无需备份还原，不复制工程；硬件路径只留本地。HPM 使用 ROM API，不使用 FLM/第二次通用 SWD reset；VCC 每次改动需确认具体电压，固件修改另开会话。 HPM AI可自行选择受支持的JTAG 4/10/20/30MHz档位，优先4/10，不把8MHz SWD请求当TCK；profile确认不是物理测量。固件修复由用户指定会话01a186cd-c52a-7ea0-af29-8de6775d143b负责，用户后续允许提供本会话ID、通知和更新固件；指定会话已据此刷入本次私有测试包。双向协同核对占用，本授权不含正式发布。",
     "默认只构建Windows；仅明确要求Linux/macOS时才构建或触发对应原生CI。完整Skill仍须FLM/Pack资格检查。构建使用scripts/build_workspace.ps1和F:/MKLink-Build，保留正式包、唯一证据、依赖与缓存。历史获授权本地Unix清理不影响线上正式附件；过时可再生产物仅依清理授权处理，链接/不可访问目录不强删。",
-    "工程上下文固定于后台生命周期；被动MI_04枚举不遍历占用设备，底层自动连接只接受唯一候选；本机别名不写固件。未知结果不重放，worker实际退出后才发布串口关闭，取消前保留缓冲寿命，背压错误不隐瞒。",
+    "工程上下文固定于后台生命周期；被动MI_04枚举不遍历占用设备，底层自动连接只接受唯一候选；本机别名不写固件。未知结果不重放，worker实际退出后才发布串口关闭，取消前保留缓冲寿命，背压错误不隐瞒。 普通内存调用身份检查最多复用250ms，须同一活跃CDC句柄/OS锁/probe/generation且未恢复；断线/错误/替换立即失效，生命周期请求仍全枚举。新读仅按bit6用0x16/CRC v1，4097B应答上限，旧读/写128B不变。修复完成必须删除临时日志代码，不仅关闭开关；保留修复说明供固件会话后续移植V3。",
     "原MK-Firmware及用户固件工程改动保留，不自动恢复旧备份。2026-10-18授权的0.3.5、V3.6.5/V4.6.9发布已完成；未知操作不重放。用户要求未解决项保留交接，未扩大验收或宣称客户故障已闭环。",
     "编译完成不代表目标已下载：文件变化仅发待重载提示，不后台解析。用户明确加载/重载文件时自动停止目标采集，确认worker退出后原子换表，保持停止；失败保留旧目录/选择。不要求连接下载器；断开保留文件和选中变量但清空旧采样。公式只改变可视化，原始记录不变；不恢复旧地址采集或重放写操作。"
   ],
   "hardware": {
-    "state": "2026-10-30最新普通V4+STM32H7，固件会话已释放后本会话用已有私有固件做MUX验收；源码和冻结MCP均成功，专用128B写后全4KiB原图案恢复、device_closed=true，原生及后台已退出。固件会话接手下一轮4KiB/唤醒优化，未经它再次释放不抢占。此前原HPMLINK/HPM5301 XML实读属于另一硬件；不混淆固件能力。无Flash/VCC/OTP。",
-    "installer": "Windows及完整Skill均源d59dbceb，NSIS SHA02f3a3e1/Skill SHA7215c18b，已安装的0.4.1本地候选；3640/2638文件一致，47工具/5339用户文件保留。新4KiB/延迟优化尚未打包。旧Unix未重建。",
+    "state": "2026-10-30普通V4+STM32H7，指定固件会话更新私有build14:55:53后完成主机源码/冻结MCP/SDK验收；只改专用128B，全4KiB恢复且device_closed=true。已释放并由固件会话接手只读SuperWatch采样，不抢占。本会话原生窗口/后台正常退出。此前HPMLINK/HPM5301 XML为另一硬件。无目标Flash/VCC/OTP。",
+    "installer": "Windows和完整Skill源836d8ea3，NSIS SHAc7da398e/Skill SHA683c417f，已装0.4.1本地候选；3640/2638文件一致，47工具/5339用户文件保留，PYZ无临时trace。旧Unix未重建，未正式发布。",
     "backups": "保留正式release、安装包、CI ZIP、唯一硬件证据、Skill备份及F盘缓存。含链接/不可访问目录不强删。历史获授权清理见v036-storage-cleanup-20261023.md及本机START_HERE；本地Unix清理不影响正式附件。旧detached树保留；本轮Skill备份在F盘cache/mklink-ai-probe/skill-backups。"
   },
   "known_limits": [
-    "本轮新MUX优先仅普通V4/H7实测，HPM需重新实板验证；128B分块尚未改4KiB，新固件契约/分层延迟优化进行中。HPM九系列XML已解析/匹配/浏览器导入；用户接回HPM5301后的六GPIO寄存器实读/采集通过，其他系列及IO输出驱动未测；客户F411仍待实板复测。dump定时截止可留半个样本，完整性门槛保留。HPM CPU仅RV32/hart0/HPM5301/槽0实测，其他触发器/型号、新值写入、20/30MHz及断电冷启未扩展，TCK未测。97个失效endpoint使首次探测慢未清记录。客户3.11.9、CDC首次离线、F405 PROGRAM100%退出、GD32受限AI、RTT后MUX、HEX2%未知结果及PyInstaller权限故障保持未闭环，详见known-limits-20261030.md及v032-postrelease-incidents.md；不重放未知操作。",
+    "新MUX整块读与身份复用仅普通V4/H7实测；HPM/V3需各自实板。安装后20次调用仍有明显调度抖动，4KiB最大48.57ms，不承诺固定低延迟。HPM九系列XML已解析/匹配/浏览器导入；用户接回HPM5301后的六GPIO寄存器实读/采集通过，其他系列及IO输出驱动未测；客户F411仍待实板复测。dump定时截止可留半个样本，完整性门槛保留。HPM CPU仅RV32/hart0/HPM5301/槽0实测，其他触发器/型号、新值写入、20/30MHz及断电冷启未扩展，TCK未测。97个失效endpoint使首次探测慢未清记录。客户3.11.9、CDC首次离线、F405 PROGRAM100%退出、GD32受限AI、RTT后MUX、HEX2%未知结果及PyInstaller权限故障保持未闭环，详见known-limits-20261030.md及v032-postrelease-incidents.md；不重放未知操作。",
     "30MHz RTT/Watch/UART并行历史存在目标读错：V4.6.8 1kHz +1/最大+273，10MHz0；V4.7.0/F103先Watch后RTT11762周期1错、反顺序12297周期0，10MHz两顺序0。发布接受不等于问题关闭，完整记录见known-limits-20261030.md。",
     "HPM/SES未发DAP_Disconnect可遗留占用；显式退出后OpenOCD init/resume/shutdown或用户拔插可恢复，超时不得偷占。完整SES矩阵/RTT下行未覆盖。RTT status6截图只证busy，不推断与历史故障同因，待现场时序/显式重试。",
     "采集非无损、多变量非原子快照，无任意时序上界；记录溢出/暂停/下载会丢观测。COS监控/短链/在途延迟可超额，95GiB非账单硬上限，存储/请求/SCF另计。旧0.4.0固件GitHub备用未迁移，新版再改，签名产品不可重写。完整证据及边界见known-limits-20261030.md。",
@@ -110,7 +110,7 @@
     "nRF54L15保护闭环、全部擦除/拔插/休眠/断电、电源精度未全测。每次VCC需确认具体电压。26个无可靠扇区FLM禁用扇区操作，Bank模式须匹配。HPM5301 OTP组18/19历史永久锁定；128字读取及批准Word69 0→1已实测，其余型号/区域不继承授权，锁最后写/逐项校验，多Word不可回滚；熔丝/影子/临时锁语义未知，UART按ROM状态及回读为准。详见hpm-offline-otp-handoff.md及known-limits-20261030.md。"
   ],
   "next_actions": [
-    "继续用户追加的分层时间戳、IPC/调度优化及cap bit6/0x16单请求4KiB读，遵守最终协议边界及未知结果不重放；与固件会话串行占用普通V4。d59dbceb为已装基线，后续改完联合验证再构建。共用分支/PR66；正式发布/合并仍须明确指令。",
+    "主机修复/实装已完成；与指定固件会话核对后续SuperWatch实测速率及给用户AI的ST-Link对比文档，区分4B样本/s和有效B/s，保留抖动/失败及协议路径。V3移植由固件会话负责，遵守无临时日志要求。共用分支/PR66，合并及正式发布须明确指令。",
     "双核脱机需真实M7/M4板正向验收；V3空RTT约30分钟掉线再次复现先导出诊断再拔插。两项保持未闭环，私有候选不得公开替换正式固件。",
     "公网远程服务中继为下个版本任务；本次不实施。",
     "下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。",
@@ -118,7 +118,7 @@
   ],
   "continuation_protocol": [
     "读取CURRENT_HANDOFF和v042-session-handoff并核对Git；E盘原工作区共用codex/v0.4.2-fixes。版本仍0.4.1，正式源514efb86不可变、安装器PR63留待下版；本次未发布。Unix包等待用户实机反馈。保留上海90/95GiB和到期锁停约束、现有账本及旧detached树；不申请私钥。",
-    "最新已装Windows/Skill d59dbceb，0.4.1本地候选；普通V4+H7首读/写MUX及恢复通过且已释放，固件会话正在新4KiB/唤醒优化。当前主机下一步开发不能误报已装。原HPMLINK/HPM5301 XML6寄存器/193样本零错及RTT两次烧录恢复证据保留。每次先核对真实硬件及占用。",
+    "最新已装Windows/Skill源836d8ea3，0.4.1本地候选，临时trace模块/钩子已删除；普通V4/H7读写/采集停启及全4KiB恢复通过，硬件已交指定固件会话做SuperWatch和客户复测文档。HPM XML6寄存器/193样本及RTT两次烧录恢复证据保留，新路径HPM未复测。先核对真实硬件/占用，V3移植不保留临时日志代码。",
     "V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。",
     "CDC 995根因仅保留待排查。恢复只允许同身份CDC故障5秒内；超时不自动接回或新建AI会话，主动断开立即生效，不重放未知写入。测试实例已经全部释放；见v035-transport-recovery.md，不寻找旧现场窗口。",
     "客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。"
