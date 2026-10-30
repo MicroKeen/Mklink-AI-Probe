@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-30T23:05:23+08:00`
+- 更新时间：`2026-10-30T23:16:17+08:00`
 - 分支：`codex/v0.4.2-fixes`
 - HEAD：`4be6ab66：共享RTT/SystemView、480量子和count64兼容；前序6ce79923读取提示/4551687d发现修复均源码未安装。已装Windows dce17d3e/Skill归档0d680d90不变。`
 - 远端 HEAD：`microkeen/codex/v0.4.2-fixes；多个后续修复共用此分支。microkeen/main核对为3cc474bb。`
 - 工作树：E盘原工作区已切换codex/v0.4.2-fixes；两个旧detached工作树继续保留。构建产物与验证证据保存在F盘构建根目录。
-- 当前任务：按最新范围验收完成：4be候选SV独立62.837秒/13样本零丢失；30MHz仅CH1双10MiB全字节/序号/SHA核对通过，主机169.21/169.17KiB/s。相对20MHz还改变采集通道，不能全归因频率。已停止/恢复10MHz/释放；并行SV溢出保留。本轮不重建安装。
-- 状态：`shared_mux_scoped_hardware_verified_not_packaged`
+- 当前任务：用户继续要求加速RTT/SV；指定固件会话正将共享RTT io.read接入已有stream pipeline，480量子/普通内存/Watch/DAP仲裁保留。宿主仍4be不可变候选，不改代码/占硬件/安装。前一固件169.21KiB/s及SV独立验收仅作基线；等新固件同条件完整载荷与独立SV/共存证据。
+- 状态：`firmware_rtt_pipeline_followup_host_candidate_unchanged`
 
 ## 里程碑
 
@@ -47,13 +47,13 @@
 
 ## 真机环境
 
-- **state**：固件会话完成4be候选SV独立及30MHz RTT限定验收，报告记录已停止采集、JTAG恢复10MHz、device_closed=true；本会话只做离线复核，未连接。再次操作先核对实际占用。995/10048未定因，并行饱和SV溢出保留。
+- **state**：指定固件会话负责新RTT读取流水线编译/升级及30MHz双10MiB、SV独立/共存实测，当前硬件由其协调。本会话不连接；旧候选已释放记录仅属前轮，不推定新现场可占用。995/10048及旧饱和SV溢出保留。
 - **installer**：Windows/完整Skill均已覆盖安装0.4.2本地候选；NSIS SHAf70e4960/Skill SHAa126d967，3640/2638文件一致、47工具、5339用户文件保留。41Web一致，更新记录11条。完整产物见v042-combined-20261030，未正式发布。
 - **backups**：保留正式release、安装包、CI ZIP、唯一硬件证据、Skill备份及F盘缓存。含链接/不可访问目录不强删。历史获授权清理见v036-storage-cleanup-20261023.md及本机START_HERE；本地Unix清理不影响正式附件。旧detached树保留；本轮Skill备份在F盘cache/mklink-ai-probe/skill-backups。
 
 ## 下一动作
 
-1. 限定SV独立/30MHz RTT验收和宿主证据已完成，等待用户下一具体任务；本次不构建/覆盖安装。产品源码4be6ab66，唯一有效导出candidate-4be6ab66-verified（SHA cb3c43fc）；旧空包/中间失败目录不使用。
+1. 等待并独立核对新固件stream pipeline的同条件30MHz RTT双10MiB、SV独立/共存和释放证据；169.21KiB/s仅前轮基线，不与用户J-Link820KB/s作未控制变量的严格对比。宿主保持4be6ab66-verified（SHA cb3c43fc），不构建/安装。
 2. 下次明确授权构建带入共享MUX/Skill、4551687d发现与6ce79923读取提示；已装0.4.2两包SHA不变。374目录扫描慢、995/10048、双核脱机实板及V3历史根因仍待办。PR66合并/正式发布须新明确指令，私有固件不公开替换。
 3. 公网远程服务中继为下个版本任务；本次不实施。
 4. 下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。
