@@ -284,7 +284,10 @@ python -m mklink break --clear 0 --probe "电机板"
 
 `breakpoints` 参数为 `action`（status/list/set/clear/clear_all）；set 需要 `target`
 （0x 地址或函数名）及可选整数 `slot`，clear 必须提供 slot。函数按后台 AXF 解析；
-当前只支持 Cortex-M FPBv1、低于 0x20000000 的偶数字节地址。设置只能使用空闲
+支持 Cortex-M FPBv1（REV=0，地址低于 0x20000000）与 FPBv2（REV=1，32 位地址），
+都要求两字节对齐，按目标 FP_CTRL 识别版本和槽位数；不按芯片名猜测，也不固定为六槽。
+`status/list` 返回 `fpb_version`（1 或 2）与 `fpb_enabled`（全局使能），原有字段保留。
+未知版本明确拒绝；设置和清除均检查回读，不重试结果未知的写入。设置只能使用空闲
 槽位，已有断点需显式清除后替换；设置和清除都读回校验，失败后先检查状态。
 `break` 输出 JSON，同一探针的所有客户端共享物理断点；客户端退出保留断点，
 任何客户端显式清除都会影响其他客户端。`--clear` 不带槽位明确表示清除全部。

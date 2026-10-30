@@ -108,17 +108,15 @@ def breakpoints(device, body):
             if address is None:
                 raise ValueError("Function not found: " + target)
             address &= ~1  # ELF Thumb function symbols may carry bit zero.
-        if address % 2 or not 0 <= address < 0x20000000:
-            raise ValueError("FPBv1 requires an even code address below 0x20000000")
+        debug._validate_breakpoint_address(address)
     device._require_cortex_m_debug()
-    if debug._read_u32(device._bridge, debug.FP_CTRL) >> 28:
-        raise ValueError("Shared breakpoints currently support FPBv1 only")
     state = debug.read_debug_state(device._bridge)
     if slot is not None and slot >= state.num_breakpoints:
         raise ValueError("Breakpoint slot is out of range")
     if action in {'list', 'status'}:
         return asdict(state)
     if action == 'set':
+        expected = debug.encode_breakpoint(address, state.fpb_version)
         occupied = {bp.index for bp in state.breakpoints}
         if slot is None:
             slot = next((i for i in range(state.num_breakpoints) if i not in occupied), None)
@@ -127,8 +125,9 @@ def breakpoints(device, body):
         slot = device.set_breakpoint(address, slot)
         # Readback detects silent bridge failures, without replaying writes.
         actual = debug._read_u32(device._bridge, debug.FP_COMP_BASE + slot * 4)
-        expected = (address & 0x1ffffffc) | (0x80000000 if address & 2 else 0x40000000) | 1
-        if actual != expected or not debug._read_u32(device._bridge, debug.FP_CTRL) & debug.FP_CTRL_ENABLE:
+        fp_ctrl = debug._read_u32(device._bridge, debug.FP_CTRL)
+        if (actual != expected or not fp_ctrl & debug.FP_CTRL_ENABLE
+                or ((fp_ctrl >> 28) & 0xF) != state.fpb_version - 1):
             raise RuntimeError("Breakpoint verification failed; inspect status before another operation")
         return {'action': action, 'slot': slot, 'address': address, 'verified': True}
     slots = [slot] if action == 'clear' else [bp.index for bp in state.breakpoints]

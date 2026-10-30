@@ -48,6 +48,8 @@ class DebugState:
     dhcsr_raw: int = 0
     num_breakpoints: int = 0
     breakpoints: list[BreakpointSlot] = field(default_factory=list)
+    fpb_version: int = 1  # FP_CTRL.REV + 1, not the raw zero-based field.
+    fpb_enabled: bool = False
 
 
 def _read_u32(bridge: MKLinkSerialBridge, addr: int) -> int:
@@ -81,6 +83,35 @@ def _wait_regrdy(bridge: MKLinkSerialBridge, timeout: float = 0.5) -> None:
             raise TimeoutError("DHCSR.S_REGRDY never asserted after DCRSR write")
 
 
+def _fpb_version(fp_ctrl: int) -> int:
+    revision = (fp_ctrl >> 28) & 0xF
+    if revision not in (0, 1):
+        raise ValueError(f"Unsupported FPB revision {revision}; only FPBv1/v2 are supported")
+    return revision + 1
+
+
+def _num_code_comparators(fp_ctrl: int) -> int:
+    return ((fp_ctrl >> 4) & 0x0F) | ((fp_ctrl >> 8) & 0x70)
+
+
+def _validate_breakpoint_address(address: int) -> None:
+    if type(address) is not int or not 0 <= address < 0x100000000 or address & 1:
+        raise ValueError("FPB address must be an even integer in [0, 0x100000000)")
+
+
+def encode_breakpoint(address: int, fpb_version: int) -> int:
+    """Encode one halfword breakpoint for a known FPB architecture version."""
+    _validate_breakpoint_address(address)
+    if fpb_version == 1:
+        if address >= 0x20000000:
+            raise ValueError("FPBv1 requires an even code address below 0x20000000")
+        replace = 0x80000000 if address & 2 else 0x40000000
+        return (address & 0x1FFFFFFC) | replace | 1
+    if fpb_version == 2:
+        return address | 1  # FPBv2 COMP[31:1], ENABLE[0]; no REPLACE field.
+    raise ValueError(f"Unsupported FPB version {fpb_version}")
+
+
 def read_debug_state(bridge: MKLinkSerialBridge) -> DebugState:
     """Read current CPU debug state."""
     dhcsr = _read_u32(bridge, DHCSR)
@@ -92,7 +123,9 @@ def read_debug_state(bridge: MKLinkSerialBridge) -> DebugState:
 
     # Read FP_CTRL to get number of comparators
     fp_ctrl = _read_u32(bridge, FP_CTRL)
-    state.num_breakpoints = ((fp_ctrl >> 4) & 0x0F) | ((fp_ctrl >> 8) & 0x70)  # NUM_CODE field [7:4]
+    state.fpb_version = _fpb_version(fp_ctrl)
+    state.fpb_enabled = bool(fp_ctrl & FP_CTRL_ENABLE)
+    state.num_breakpoints = _num_code_comparators(fp_ctrl)
 
     # Read each comparator
     for i in range(state.num_breakpoints):
@@ -101,7 +134,10 @@ def read_debug_state(bridge: MKLinkSerialBridge) -> DebugState:
         if comp_val & 0x01:  # ENABLE bit
             # FPBv1: address in bits [28:2], REPLACE in [31:30]
             # FPBv2: address in bits [31:1]
-            bp_addr = (comp_val & 0x1FFFFFFC) | (2 if comp_val >> 30 == 2 else 0)
+            if state.fpb_version == 2:
+                bp_addr = comp_val & 0xFFFFFFFE
+            else:
+                bp_addr = (comp_val & 0x1FFFFFFC) | (2 if comp_val >> 30 == 2 else 0)
             state.breakpoints.append(BreakpointSlot(index=i, address=bp_addr, enabled=True))
 
     return state
@@ -134,59 +170,52 @@ def step_cpu(bridge: MKLinkSerialBridge) -> DebugState:
 def get_num_breakpoints(bridge: MKLinkSerialBridge) -> int:
     """Get the number of FPB hardware breakpoint comparators available."""
     fp_ctrl = _read_u32(bridge, FP_CTRL)
-    return ((fp_ctrl >> 4) & 0x0F) | ((fp_ctrl >> 8) & 0x70)
+    _fpb_version(fp_ctrl)  # Reject unknown revisions before any comparator access/write.
+    return _num_code_comparators(fp_ctrl)
 
 
 def set_breakpoint(bridge: MKLinkSerialBridge, address: int, slot: int | None = None) -> int:
-    """Set a hardware breakpoint at the given Flash address.
+    """Set a hardware breakpoint at a halfword-aligned instruction address.
 
     Args:
         bridge: Connected MKLink bridge
-        address: Flash address (must be in code region, < 0x20000000)
-        slot: Specific comparator slot (0-5), or None for auto-assign
+        address: FPBv1 code region (< 0x20000000), or FPBv2 32-bit address
+        slot: Free comparator slot within the target's count, or None for auto-assign
 
     Returns:
         The slot index used
 
     Raises:
-        ValueError: If address is not in Flash or no free slot available
+        ValueError: If address/version/slot is unsupported or no free slot is available
     """
-    if isinstance(address, bool) or not isinstance(address, int) or not 0 <= address < 0x20000000:
-        raise ValueError("FPB address must be an integer in [0, 0x20000000)")
+    _validate_breakpoint_address(address)
     if slot is not None and (isinstance(slot, bool) or not isinstance(slot, int) or slot < 0):
         raise ValueError("Breakpoint slot must be a non-negative integer")
-    num_comp = get_num_breakpoints(bridge)
+    fp_ctrl = _read_u32(bridge, FP_CTRL)
+    comp_val = encode_breakpoint(address, _fpb_version(fp_ctrl))
+    num_comp = _num_code_comparators(fp_ctrl)
     if num_comp == 0:
         raise RuntimeError("FPB reports 0 comparators — hardware may not support breakpoints")
 
     if slot is not None:
         if slot >= num_comp:
             raise ValueError(f"Slot {slot} out of range (max {num_comp - 1})")
+        if _read_u32(bridge, FP_COMP_BASE + slot * 4) & 1:
+            raise ValueError("Breakpoint slot is occupied; clear it explicitly before replacing")
     else:
         # Find first free slot
         for i in range(num_comp):
-            comp_val = _read_u32(bridge, FP_COMP_BASE + i * 4)
-            if not (comp_val & 0x01):
+            existing = _read_u32(bridge, FP_COMP_BASE + i * 4)
+            if not (existing & 0x01):
                 slot = i
                 break
         if slot is None:
             raise ValueError(f"All {num_comp} breakpoint slots are in use")
 
     # Only enable FPB after the requested slot has been validated/allocated.
-    fp_ctrl = _read_u32(bridge, FP_CTRL)
     if not (fp_ctrl & FP_CTRL_ENABLE):
         _write_u32(bridge, FP_CTRL, FP_CTRL_KEY | FP_CTRL_ENABLE)
 
-    # FPBv1 encoding: address[28:2] | REPLACE[31:30] | ENABLE[0]
-    # For Thumb instructions: if bit[1] of address is 0 → REPLACE=01 (lower halfword)
-    #                         if bit[1] of address is 1 → REPLACE=10 (upper halfword)
-    addr_aligned = address & 0x1FFFFFFC
-    if address & 0x02:
-        replace = 0x80000000  # REPLACE = 10 → upper halfword
-    else:
-        replace = 0x40000000  # REPLACE = 01 → lower halfword
-
-    comp_val = replace | addr_aligned | 0x01  # ENABLE
     _write_u32(bridge, FP_COMP_BASE + slot * 4, comp_val)
 
     return slot
