@@ -57,13 +57,31 @@ C 路径，**不是把 JTAG TCK 设为 8 MHz**。`set clock 8000000` 只是接�
 | RAM / Flash 快照 | `read_memory`、`read_memory_regions`；使用工程已知地址。Flash 读取不需要 FLM；RAM 局部/全局映射、总线可访问性和缓存一致性以实际 HPM 工程为准。 |
 | RAM / 变量写入 | `write_memory` / `flush_memory` / 共享类型化写入；先确定用户允许修改的对象和范围。RAM 写命令不是 Flash 编程器。未知结果不重放。 |
 | ELF、符号、源码行、变量 | 使用 RISC-V 构建产物，通过 `search_symbols`、`gui_call("symbol_status")`、内存/变量接口。仅解析 ELF 不等于具备 CPU 调试控制。 |
-| 外设寄存器 | 先 `peripheral_targets(query="HPM...")`，选择精确 HPM SVD，再 `read_register` / `capture_peripherals`。没有目录时可导入匹配 SVD；不使用 SCB/NVIC/CoreDebug 名称。 |
+| 外设寄存器 | 先 `peripheral_targets(query="HPM...")`，选择 HPM 系列或匹配 SVD，再 `read_register` / `capture_peripherals`。内置系列共用目录，支持手动导入厂家 `*_svd.xml`；不使用 SCB/NVIC/CoreDebug 名称。 |
 | RTT、SuperWatch、VOFA | 使用共享采集接口；地址来自当前 ELF 或板级 RAM，不套用 STM32 的 `0x20000000`。已有采集先订阅，连续曲线不用循环 `read_ram` 替代。 |
 | SystemView | 目标须有适配 HPM/RISC-V 的 RTT/RTOS 跟踪实现；上位机可接收解析，自动移植模板并不因此支持 HPM。时间基准取目标真实时钟，不能套用 Cortex-M DWT。 |
 | 目标复位 | 显式 `start_job(action="reset", ...)` 由后端路由；运行采集时受固件复位能力约束。烧录 ROM API 自带复位/运行，不额外补 ARM SWD reset。 |
 | halt / resume / step / 断点 / CPU 寄存器 | 配套上位机的 `hpm_debug` 经 HPM_DEBUG v1 固件接口操作 RV32 hart 0，先查 capabilities。旧固件/旧工具缺少此入口时明确说明接口缺失；可协调释放探针后使用工程已有 HPM IDE/OpenOCD/GDB。不能据旧 ARM API 的拒绝判定 HPM 硬件不支持。 |
 | 异常分析 | 使用 HPM 异常现场和对应 ELF；配套 `hpm_debug` 可在已暂停 hart 上读 PC、mepc、mcause、mtval、mstatus。Cortex-M HardFault / CFSR / HFSR / MSP / PSP 不适用，当前没有自动 RISC-V 异常报告，不能把 ARM 检测结果称为 HPM“无异常”。 |
 | OTP、保护、供电 | `configuration_description` / `read_configuration` 只限声明支持的字段。OTP 写入/锁定使用专用受控流程，VCC 每次单独确认具体电压；不以通用 ARM `security_lock/unlock` 替代 HPM OTP。 |
+
+## HPM 外设 XML 与 SuperWatch
+
+内置 HPM SDK 1.13.0 的九个系列：HPM5100、HPM5300、HPM5E00、HPM6200、
+HPM6300、HPM6700、HPM6800、HPM6E00、HPM6P00。无需本机安装 SDK 或精确到型号。
+例如 `select_peripherals(chip="HPM5300")` 可直接加载；输入 HPM5301、HPM5361、
+HPM53M1 也会匹配 HPM5300。若已安装精确型号的 Pack，优先选择该 Pack；有多个版本时
+使用 `peripheral_targets` 返回的 `target_id` 明确选择。
+
+SuperWatch 的外设面板可输入系列或型号，点击“加载外设”。“加载 SVD / XML 文件”
+支持厂家 `soc/<系列>/<型号>/*_svd.xml`，桌面和浏览器均可手动添加；MCP 使用
+`select_peripherals(svd="<后台可访问的XML绝对路径>")`。它是标准 CMSIS-SVD，
+不是 `hpm_ses_riscv_cpu_regs.xml`，后者不能用于外设目录。
+
+内置目录采用系列共用定义。HPM5361/53M1 的扩展外设需手动加载对应型号 XML。
+更换目录前停止 SuperWatch；选择保存在项目中，重连会恢复。仅做只读寄存器/字段采集，
+沿用只写与读取副作用过滤。系列目录覆盖不代表所有外设都已在每种芯片上实测；
+实际外设是否存在、是否开启时钟仍以目标工程为准。
 
 ## 可执行的共享 MCP 烧录流程
 

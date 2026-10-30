@@ -42,7 +42,8 @@ def test_project_is_fixed_for_backend_lifetime(tmp_path, monkeypatch, shared, co
     roots = []
     def discover(root):
         roots.append(root)
-        return [SimpleNamespace(target='CHIP', key='chip', public=lambda: {'project': root})]
+        return [SimpleNamespace(target='CHIP', key='chip', public=lambda: {'project': root},
+                                matches_query=lambda query: query.casefold() in 'chip')]
     monkeypatch.setattr('mklink.peripheral_watch.discover_svd_targets', discover)
     if shared:
         install_runtime(app, {'port': 8765, 'token': 'test-secret', 'instance_id': 'test-instance'})

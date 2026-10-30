@@ -1819,7 +1819,7 @@ def create_app(
     @app.post("/api/files/svd")
     async def upload_svd_file(file: UploadFile = File(...)):
         from mklink.peripheral_watch import MAX_XML_BYTES, load_catalog
-        return await _upload_file_source(file, (".svd",), max_bytes=MAX_XML_BYTES,
+        return await _upload_file_source(file, (".svd", ".xml"), max_bytes=MAX_XML_BYTES,
                                          validate=lambda path: load_catalog(svd=path))
 
     # ===================================================================
@@ -3000,7 +3000,7 @@ def create_app(
                 _svd_targets.update({target.key: target for target in targets})
                 _svd_revision = revision
         matches = [target.public() for target in _svd_targets.values()
-                   if q.casefold() in target.target.casefold()]
+                   if target.matches_query(q)]
         return {"targets": matches[:200], "total": len(matches)}
 
     @app.post("/api/dash/superwatch/peripherals/select")

@@ -64,7 +64,9 @@ python -m mklink peripherals capture UART0.GPR.DATA --duration 3 --period 0.001 
 python -m mklink read-reg UART0.GPR.DATA --project-root . --format dec
 ```
 
-自备 SVD 可用 `peripherals select --svd <文件>`，ARM 型号从已安装 CMSIS-Pack 的
+HPM 可直接选择内置系列（如 `--chip HPM5300`），具体型号也会匹配其系列。
+覆盖系列和扩展外设规则见 [HPM](hpm.md#hpm-外设-xml-与-superwatch)。
+自备 `.svd` 或厂家 `*_svd.xml` 可用 `peripherals select --svd <文件>`，ARM 型号从已安装 CMSIS-Pack 的
 PDSC 精确映射发现。`superwatch --chip/--target-id/--svd` 也使用此目录；省略选择参数时恢复项目选择。
 已选芯片后，不在该目录里的寄存器名或裸地址不会回退到其他芯片的定义。
 显式裸内存操作仍由 `read-ram` / `dump-memory` 提供，不受 SVD 副作用过滤保护。
@@ -83,7 +85,7 @@ MCP 对应 `peripheral_targets(project_root, query)`、连接后
 ARM 内置寄存器名仅用于未选择目录的兼容快照入口，不应套用到 HPM。
 
 目录支持 SVD 的继承、cluster、寄存器/字段数组、字母索引和 bitRange。
-型号覆盖取决于本地描述文件；本机 HPM SDK 1.11.0 的 43 个型号描述已验证可加载，
+HPM 内置九个系列的 SDK 1.13.0 描述；其他型号覆盖取决于安装或手动加载的描述文件，
 不代表每个外设都已做实板验证。GUI 波形传输为 Float32，大整数曲线可能舍入；
 需要精确寄存器值时使用单次 `read` / `read_register`。
 

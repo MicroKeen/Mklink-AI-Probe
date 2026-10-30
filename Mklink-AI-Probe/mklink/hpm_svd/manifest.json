@@ -1,0 +1,71 @@
+{
+  "schema": 1,
+  "vendor": "HPMicro",
+  "sdk_version": "1.13.0",
+  "license": "BSD-3-Clause",
+  "series": [
+    {
+      "series": "HPM5100",
+      "reference_device": "HPM5151",
+      "file": "HPM5151_svd.xml",
+      "sha256": "b226a3f76f43556a86c97cc7b50ffec9307b02a6b0cec7ecebd5e0f4e930725f",
+      "sdk_path": "soc/HPM5100/HPM5151/HPM5151_svd.xml"
+    },
+    {
+      "series": "HPM5300",
+      "reference_device": "HPM5301",
+      "file": "HPM5301_svd.xml",
+      "sha256": "0c521ac65876c0dc9781eadceb4961526229b8603159eb15f7c9073bdd3851fd",
+      "sdk_path": "soc/HPM5300/HPM5301/HPM5301_svd.xml"
+    },
+    {
+      "series": "HPM5E00",
+      "reference_device": "HPM5E31",
+      "file": "HPM5E31_svd.xml",
+      "sha256": "473a3aa185f72bb5fb779e63103e47acfd60cf72a97cc367c1ed09e26e7659c8",
+      "sdk_path": "soc/HPM5E00/HPM5E31/HPM5E31_svd.xml"
+    },
+    {
+      "series": "HPM6200",
+      "reference_device": "HPM6280",
+      "file": "HPM6280_svd.xml",
+      "sha256": "2088f0b9f9cef05693538fd1aa62a220d15171caab308672ccf9ca43cc192da9",
+      "sdk_path": "soc/HPM6200/HPM6280/HPM6280_svd.xml"
+    },
+    {
+      "series": "HPM6300",
+      "reference_device": "HPM6360",
+      "file": "HPM6360_svd.xml",
+      "sha256": "4fff203718e8d084eb6d64615d6a2fb176d40a5576e4c01b585600df5d8a9e8b",
+      "sdk_path": "soc/HPM6300/HPM6360/HPM6360_svd.xml"
+    },
+    {
+      "series": "HPM6700",
+      "reference_device": "HPM6750",
+      "file": "HPM6750_svd.xml",
+      "sha256": "23b78593b4cc3004bd68a6515ac1295a22a6f1a87a28441d9cc4b2ef415502d3",
+      "sdk_path": "soc/HPM6700/HPM6750/HPM6750_svd.xml"
+    },
+    {
+      "series": "HPM6800",
+      "reference_device": "HPM6880",
+      "file": "HPM6880_svd.xml",
+      "sha256": "8c2fbd063a62399a7da2ecf855338f803fd445480597dfe5ed7e52b73dcd25d4",
+      "sdk_path": "soc/HPM6800/HPM6880/HPM6880_svd.xml"
+    },
+    {
+      "series": "HPM6E00",
+      "reference_device": "HPM6E80",
+      "file": "HPM6E80_svd.xml",
+      "sha256": "bbaa255d7c9ee3eb404dc75fc02c218ced0e8e3e8c24aed0848017709060bb5d",
+      "sdk_path": "soc/HPM6E00/HPM6E80/HPM6E80_svd.xml"
+    },
+    {
+      "series": "HPM6P00",
+      "reference_device": "HPM6P81",
+      "file": "HPM6P81_svd.xml",
+      "sha256": "b1ffb1edbded202b234da13068a9d5cd51e8bb71e59ae87dd621a4e34a6159dd",
+      "sdk_path": "soc/HPM6P00/HPM6P81/HPM6P81_svd.xml"
+    }
+  ]
+}

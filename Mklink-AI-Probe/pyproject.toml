@@ -65,4 +65,4 @@ include = ["mklink*"]
 "" = "."
 
 [tool.setuptools.package-data]
-"mklink" = ["*.json", "*.ps1", "modbus/*.html", "modbus/profiles/*.json", "modbus/prompts/*.md"]
+"mklink" = ["*.json", "*.ps1", "modbus/*.html", "modbus/profiles/*.json", "modbus/prompts/*.md", "hpm_svd/*.xml", "hpm_svd/*.json", "hpm_svd/*.txt"]

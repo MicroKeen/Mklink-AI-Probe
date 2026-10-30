@@ -91,7 +91,7 @@ export function pickFlmFile(): Promise<PickedFile> {
 }
 
 export function pickSvdFile(): Promise<PickedFile> {
-  return pickFile({ name: 'CMSIS SVD', extensions: ['svd'] })
+  return pickFile({ name: 'CMSIS SVD / HPM XML', extensions: ['svd', 'xml'] })
 }
 
 export async function pickFirmwareFiles(multiple = false): Promise<Array<string | File>> {
