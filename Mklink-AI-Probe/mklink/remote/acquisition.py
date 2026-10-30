@@ -40,16 +40,9 @@ async def suspend_acquisition(state, control=None):
                 if name == 'vofa':
                     channels, interval = deepcopy(manager._channel_specs), manager._interval
                     restart = lambda m=manager, ch=channels, dt=interval: m.start(state['device'], ch, dt)
-                elif name == 'rtt' and hasattr(manager, '_line_assembler'):
-                    encoding = manager._line_assembler.encoding
-                    encodings = {ch: decoder._line_assembler.encoding
-                                 for ch, decoder in manager._channel_decoders.items()}
-                    def restart_rtt(start=restart, m=manager, default=encoding, per_channel=encodings):
-                        start()
-                        m.set_encoding(default)
-                        for channel, value in per_channel.items():
-                            m.set_encoding(value, channel)
-                    restart = restart_rtt
+                elif name == 'rtt' and hasattr(manager, 'restart_options'):
+                    options = manager.restart_options()
+                    restart = lambda m=manager, opts=options: m.start(state['device'], **opts)
                 elif name == 'systemview' and getattr(manager, '_recording', None) is not None:
                     def restart_recording(start=restart, m=manager):
                         start()

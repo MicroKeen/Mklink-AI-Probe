@@ -435,7 +435,14 @@ class RttStreamManager(RttChannelDecoder):
 
     def restart_options(self) -> dict:
         """Capture settings for a source-address refresh, without old target data."""
-        return {**getattr(self, '_start_options', {}), 'encoding': self._line_assembler.encoding}
+        options = copy.deepcopy(getattr(self, '_start_options', {}))
+        options['encoding'] = self._line_assembler.encoding
+        options['channel_encodings'] = {
+            **options.get('channel_encodings', {}),
+            **{ch: decoder._line_assembler.encoding
+               for ch, decoder in self._channel_decoders.items()},
+        }
+        return options
 
     @property
     def running(self) -> bool:
@@ -476,7 +483,8 @@ class RttStreamManager(RttChannelDecoder):
     def start(self, device, *, addr: str | None = None, channel: int = 0,
               mode: int = 0, search_size: int = 0,
               duration: float = 86400, encoding: str = "utf-8",
-              channels: list[int] | None = None, all_channels: bool = False) -> None:
+              channels: list[int] | None = None, all_channels: bool = False,
+              channel_encodings: dict[int, str] | None = None) -> None:
         with self._lifecycle_lock:
             self._start_locked(
                 device,
@@ -488,18 +496,25 @@ class RttStreamManager(RttChannelDecoder):
                 encoding=encoding,
                 channels=channels,
                 all_channels=all_channels,
+                channel_encodings=channel_encodings,
             )
 
     def _start_locked(self, device, *, addr: str | None = None, channel: int = 0,
                       mode: int = 0, search_size: int = 0,
                       duration: float = 86400, encoding: str = "utf-8",
-                      channels: list[int] | None = None, all_channels: bool = False) -> None:
+                      channels: list[int] | None = None, all_channels: bool = False,
+                      channel_encodings: dict[int, str] | None = None) -> None:
         """Start RTT polling in a background thread."""
         if self._thread is not None and self._thread.is_alive():
             if self.running:
                 return
             raise RuntimeError("RTT worker thread is still active")
 
+        # Apply saved encodings when each actual channel is created, including
+        # channels discovered asynchronously. Never require old channels to
+        # already exist immediately after starting the worker.
+        channel_encodings = {ch: normalize_rtt_encoding(value)
+                             for ch, value in (channel_encodings or {}).items()}
         self._clear_active_session()
         stop_event = threading.Event()
         generation = object()
@@ -515,7 +530,8 @@ class RttStreamManager(RttChannelDecoder):
         self._startup_started = time.monotonic()
         self._start_options = dict(addr=addr, channel=channel, channels=channels,
                                    mode=mode, search_size=search_size, duration=duration,
-                                   encoding=encoding, all_channels=all_channels)
+                                   encoding=encoding, all_channels=all_channels,
+                                   channel_encodings=channel_encodings)
         with self._decode_lock:
             self._line_assembler.reset(encoding)
             self._terminal_decoder = codecs.getincrementaldecoder(
@@ -538,7 +554,7 @@ class RttStreamManager(RttChannelDecoder):
         for source in channels or [channel]:
             decoder = RttChannelDecoder(raw_batch_lines=self._raw_batch_lines,
                                         waveform_batch_samples=self._waveform_batch_samples)
-            decoder.set_encoding(encoding)
+            decoder.set_encoding(channel_encodings.get(source, encoding))
             if source in self._channel_hubs:
                 decoder._stream_hub, decoder._terminal_stream_hub = self._channel_hubs[source]
                 decoder._traffic_requested = lambda d=decoder: d._stream_hub.has_subscribers
@@ -568,7 +584,7 @@ class RttStreamManager(RttChannelDecoder):
                             continue
                         decoder = RttChannelDecoder(raw_batch_lines=self._raw_batch_lines,
                                                     waveform_batch_samples=self._waveform_batch_samples)
-                        decoder.set_encoding(encoding)
+                        decoder.set_encoding(channel_encodings.get(source, encoding))
                         if source in self._channel_hubs:
                             decoder._stream_hub, decoder._terminal_stream_hub = self._channel_hubs[source]
                             decoder._traffic_requested = lambda d=decoder: d._stream_hub.has_subscribers
