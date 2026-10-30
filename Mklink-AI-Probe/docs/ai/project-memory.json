@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-30T21:13:36+08:00",
+  "updated_at": "2026-10-30T21:17:46+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
@@ -95,7 +95,7 @@
     "编译完成不代表目标已下载：文件变化仅发待重载提示，不后台解析。用户明确加载/重载文件时自动停止目标采集，确认worker退出后原子换表，保持停止；失败保留旧目录/选择。不要求连接下载器；断开保留文件和选中变量但清空旧采样。公式只改变可视化，原始记录不变；不恢复旧地址采集或重放写操作。"
   ],
   "hardware": {
-    "state": "指定固件会话独占HPMLink/HPM6E80；10MiB RTT约2.7MiB处995，USB复合设备同秒重新到达，恢复data_gap=true，失败未定因，见hpm6e80-rtt-995-review-20261030.md。未收到最终释放勿操作。此前V3/H7候选CRLF及30分钟空RTT通过已释放，与本次分开。",
+    "state": "指定固件会话独占HPMLink/HPM6E80。两次995及USB重新到达未定因；continuation另遇SDK socket.connect10048，无串口失败日志，端口压力仅假设，计划20ms缓存轮询复测。旧后台已断开，新测试未最终释放，勿操作或改安装。见hpm6e80-rtt-995-review-20261030.md。",
     "installer": "Windows/完整Skill均已覆盖安装0.4.2本地候选；NSIS SHAf70e4960/Skill SHAa126d967，3640/2638文件一致、47工具、5339用户文件保留。41Web一致，更新记录11条。完整产物见v042-combined-20261030，未正式发布。",
     "backups": "保留正式release、安装包、CI ZIP、唯一硬件证据、Skill备份及F盘缓存。含链接/不可访问目录不强删。历史获授权清理见v036-storage-cleanup-20261023.md及本机START_HERE；本地Unix清理不影响正式附件。旧detached树保留；本轮Skill备份在F盘cache/mklink-ai-probe/skill-backups。"
   },
@@ -111,7 +111,7 @@
   ],
   "next_actions": [
     "下次授权构建带入4551687d后台发现与6ce79923读取错误提示；已装0.4.2两包SHA不变，本次不重建。133离线回归及前序211 Python/15 GUI/浏览器通过。历史374目录启动慢待办。先等固件会话释放HPMLink/HPM6E80。PR66合并/发布须明确指令。",
-    "HPM6E80/HPMLink RTT 995由指定会话继续定位，重连不算轮次通过；保存connection.jsonl及原始失败。双核脱机仍需实板；V3当前候选30分钟空RTT未复现但历史根因未定位。再现先导出诊断，私有候选不公开替换。",
+    "指定会话继续区分HPM6E80两次USB/995与SDK10048，重连及调整轮询不算根因修复；保留失败证据。双核脱机需实板，V3空RTT未复现但历史根因未定位。私有候选不公开替换。",
     "公网远程服务中继为下个版本任务；本次不实施。",
     "下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。",
     "如需减少Windows未知发布者提示，需用户另行提供/办理可信代码签名身份；当前无证书，不重发相同未签名包。下次先核对当前Git及真实硬件，不重复已完成的发布/云迁移。"
