@@ -4,8 +4,8 @@
 仍为 0.4.1 本地候选。包含 RTT 烧录后恢复、九系列 HPM XML、dump 停止确认、
 首次内存访问自动 MUX、单请求 4 KiB 读、连接身份短期复用和串口接收优化。
 1,224 项回归、冻结 MCP/SDK 实机、安装及原生退出通过；临时计时模块和钩子已删除。
-当前普通 V4/H7 已释放给指定固件会话继续只读 SuperWatch 采样和客户复测文档，
-不要抢占。HPM5301 XML 六 GPIO 实读证据保留，但新 4 KiB 路径未在 HPM 实板复测。
+指定固件会话追加 51 组只读 SuperWatch 采样也已通过，普通 V4/H7 已释放；
+客户复测文档由该会话收尾。HPM5301 XML 六 GPIO 实读证据保留，但新 4 KiB 路径未在 HPM 实板复测。
 详见 [延迟及整块读取验收](../verification/mux-block-latency-20261030.md)
 和 [XML 实机记录](../verification/hpm-svd-dump-stop-20261030.md)。
 旧 Unix 包未随本轮重建。以下各日期是历史记录，最新状态以 CURRENT_HANDOFF 为准。

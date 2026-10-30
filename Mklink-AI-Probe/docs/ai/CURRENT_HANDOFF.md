@@ -4,12 +4,12 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-30T16:19:31+08:00`
+- 更新时间：`2026-10-30T16:24:14+08:00`
 - 分支：`codex/v0.4.2-fixes`
 - HEAD：`836d8ea3为最新Windows/完整Skill产品源，已安装并完成冻结实机验收，仍0.4.1本地候选。文档提交另查Git；旧Unix包未重建。`
 - 远端 HEAD：`microkeen/codex/v0.4.2-fixes；多个后续修复共用此分支。microkeen/main核对为3cc474bb。`
 - 工作树：E盘原工作区已切换codex/v0.4.2-fixes；两个旧detached工作树继续保留。构建产物与验证证据保存在F盘构建根目录。
-- 当前任务：836d8ea3完成cap bit6/0x16单请求4KiB读、250ms同一活跃句柄身份复用及Windows接收优化；临时计时模块/钩子已删除。Windows/Skill已安装、冻结MCP/SDK读写及全区恢复、原生退出通过。普通V4/H7已明确交给指定固件会话做只读SuperWatch周期/吞吐及ST-Link客户AI复测文档，本会话不再占硬件。
+- 当前任务：836d8ea3主机修复/Windows与Skill实装完成，临时计时模块及钩子已删除。指定固件会话追加51组只读SuperWatch参考全部通过并释放V4/H7，完整4KiB不变；本会话核对结果及安装exe哈希。客户ST-Link复测文档由固件会话收尾；历史endpoint启动扫描慢仅记录待办，未改产品或删记录。
 - 状态：`block_read_latency_installed_verified`
 
 ## 里程碑
@@ -23,7 +23,7 @@
 
 ## 验证证据
 
-- **整块读取、内存MUX及HPM XML候选**：836d8ea3：1224相关测试、Skill校验、产品源两项CI通过。Windows NSIS SHAc7da398e/Skill SHA683c417f已装，3640/2638文件一致、5339用户文件保留；冻结PYZ确认无临时trace模块/钩子。H7首读/首写自动MUX、128B写后全4KiB恢复、4轮连续采集停启零CRC/丢帧通过。安装后SDK每项20次零失败，read4/4096中位15.09/21.57ms，4KiB最大48.57ms；保留抖动与源码轮次，不择优宣传。47工具/41Web/原生退出通过；HPM XML六GPIO/193样本历史证据保留。见mux-block-latency-20261030.md、memory-mux-20261030.md和hpm-svd-dump-stop-20261030.md。
+- **整块读取、内存MUX及HPM XML候选**：836d8ea3：1224测试、Skill校验/两项CI通过；NSIS SHAc7da398e、Skill SHA683c417f已装，3640/2638文件匹配、5339用户文件保留、冻结PYZ无临时trace。冻结MCP/SDK写后全4KiB恢复、原生退出通过；20次read4/4096中位15.09/21.57ms，最大48.57ms，保留抖动。固件会话51组只读SuperWatch：30MHz4B为268–270k样本/s、1.072–1.080MB/s；16/64B仅151–153kB/s；MUX CRC字段固定0非独立计数。全区不变、停后读/断开通过。HPM XML六GPIO/193样本历史证据保留。完整软件/安装/采样表见mux-block-latency-20261030.md；前序见memory-mux及hpm-svd-dump-stop报告。
 - **HPM AI Skill能力核实**：源05e73101：1139相关+68包/文档测试；Flash49700B一致、ELF1528变量/360MHz、SVD UART0、JTAG4/10、RTT/Watch/dump通过。SystemView U32修复38351事件；新固件复测22155事件零丢弃。指定会话依新授权更新V4.7.2/build17:19:37后，共享MCP暂停/寄存器/真实断点cause2/单步cause4/恢复运行通过，x31同值写回正确。Skill SHA44df3e58、2625文件/7059FLM/4800SVD校验，全局47工具并保留5339用户文件。无目标烧录/VCC/OTP/发布。见hpm-skill-audit-20261029.md。
 - **RTT自动恢复与在线静默收尾**：14417715：347相关+17发现测试通过。V4/HPM5301连续两次49700B烧录校验成功，自动暂停/恢复RTT与SuperWatch、零恢复错误；新增RTT349/466字节、Watch3005/3712周期且零读取错。Windows NSIS SHA56830303，覆盖exit0、3627载荷一致、冻结MCP/41Web/正常退出通过；完整Skill SHAbb05fbde、2625文件/47工具已同步。仍0.4.1未发布。旧静默面板修复d1cf16ec的124GUI/29Python证据保留。见rtt-auto-restore-20261030.md及online-flash-receipt-20261029.md。
 - **Linux/macOS 0.4.1测试包**：Linux源a6bdacbc/CI40637027269、Mac arm64源eefc6842/CI40640511140：各USB58通过/1项Windows专用跳过，冻结CLI/MCP/健康/Web/正常退出通过。DEB SHA7309f377、DMG SHA56dc8e0a。均0.4.1；Mac仅ad-hoc未公证，用户系统安装/原生UI/USB实机待测，不含10月29日在线修复。详见linux-deb-test-20261028.md、macos-arm64-test-20261028.md。
@@ -47,13 +47,13 @@
 
 ## 真机环境
 
-- **state**：2026-10-30普通V4+STM32H7，指定固件会话更新私有build14:55:53后完成主机源码/冻结MCP/SDK验收；只改专用128B，全4KiB恢复且device_closed=true。已释放并由固件会话接手只读SuperWatch采样，不抢占。本会话原生窗口/后台正常退出。此前HPMLINK/HPM5301 XML为另一硬件。无目标Flash/VCC/OTP。
+- **state**：2026-10-30普通V4+STM32H7、私有build14:55:53；主机冻结MCP/SDK读写全4KiB恢复通过。固件会话后续51组只读采样也已完成，全区不变、ultra/save=false、device_closed=true，当前双方均已释放。HPM5301 XML为另一硬件。无目标Flash/VCC/OTP。
 - **installer**：Windows和完整Skill源836d8ea3，NSIS SHAc7da398e/Skill SHA683c417f，已装0.4.1本地候选；3640/2638文件一致，47工具/5339用户文件保留，PYZ无临时trace。旧Unix未重建，未正式发布。
 - **backups**：保留正式release、安装包、CI ZIP、唯一硬件证据、Skill备份及F盘缓存。含链接/不可访问目录不强删。历史获授权清理见v036-storage-cleanup-20261023.md及本机START_HERE；本地Unix清理不影响正式附件。旧detached树保留；本轮Skill备份在F盘cache/mklink-ai-probe/skill-backups。
 
 ## 下一动作
 
-1. 主机修复/实装已完成；与指定固件会话核对后续SuperWatch实测速率及给用户AI的ST-Link对比文档，区分4B样本/s和有效B/s，保留抖动/失败及协议路径。V3移植由固件会话负责，遵守无临时日志要求。共用分支/PR66，合并及正式发布须明确指令。
+1. 主机实装与51组协调采样完成；客户AI的ST-Link对比文档由指定固件会话收尾，保留16/64B速度限制及CRC计数边界。后续可优化selected_runtime扫描374个历史probe目录造成的启动慢，当前未改产品/删历史；不同于已修复的内存调用重复枚举。V3移植由固件会话负责且不保留临时日志。PR66合并/正式发布须明确指令。
 2. 双核脱机需真实M7/M4板正向验收；V3空RTT约30分钟掉线再次复现先导出诊断再拔插。两项保持未闭环，私有候选不得公开替换正式固件。
 3. 公网远程服务中继为下个版本任务；本次不实施。
 4. 下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。
@@ -61,7 +61,7 @@
 
 ## 已知限制
 
-- 新MUX整块读与身份复用仅普通V4/H7实测；HPM/V3需各自实板。安装后20次调用仍有明显调度抖动，4KiB最大48.57ms，不承诺固定低延迟。HPM九系列XML已解析/匹配/浏览器导入；用户接回HPM5301后的六GPIO寄存器实读/采集通过，其他系列及IO输出驱动未测；客户F411仍待实板复测。dump定时截止可留半个样本，完整性门槛保留。HPM CPU仅RV32/hart0/HPM5301/槽0实测，其他触发器/型号、新值写入、20/30MHz及断电冷启未扩展，TCK未测。97个失效endpoint使首次探测慢未清记录。客户3.11.9、CDC首次离线、F405 PROGRAM100%退出、GD32受限AI、RTT后MUX、HEX2%未知结果及PyInstaller权限故障保持未闭环，详见known-limits-20261030.md及v032-postrelease-incidents.md；不重放未知操作。
+- 新MUX整块读与身份复用仅普通V4/H7实测；HPM/V3需各自实板。安装后20次调用仍有明显调度抖动，4KiB最大48.57ms，不承诺固定低延迟。HPM九系列XML已解析/匹配/浏览器导入；用户接回HPM5301后的六GPIO寄存器实读/采集通过，其他系列及IO输出驱动未测；客户F411仍待实板复测。dump定时截止可留半个样本，完整性门槛保留。HPM CPU仅RV32/hart0/HPM5301/槽0实测，其他触发器/型号、新值写入、20/30MHz及断电冷启未扩展，TCK未测。最新报告374个历史probe目录使selected_runtime启动扫描慢，未清历史或修复；旧97个endpoint记录见历史。客户3.11.9、CDC首次离线、F405 PROGRAM100%退出、GD32受限AI、RTT后MUX、HEX2%未知结果及PyInstaller权限故障保持未闭环，详见known-limits-20261030.md及v032-postrelease-incidents.md；不重放未知操作。
 - 30MHz RTT/Watch/UART并行历史存在目标读错：V4.6.8 1kHz +1/最大+273，10MHz0；V4.7.0/F103先Watch后RTT11762周期1错、反顺序12297周期0，10MHz两顺序0。发布接受不等于问题关闭，完整记录见known-limits-20261030.md。
 - HPM/SES未发DAP_Disconnect可遗留占用；显式退出后OpenOCD init/resume/shutdown或用户拔插可恢复，超时不得偷占。完整SES矩阵/RTT下行未覆盖。RTT status6截图只证busy，不推断与历史故障同因，待现场时序/显式重试。
 - 采集非无损、多变量非原子快照，无任意时序上界；记录溢出/暂停/下载会丢观测。COS监控/短链/在途延迟可超额，95GiB非账单硬上限，存储/请求/SCF另计。旧0.4.0固件GitHub备用未迁移，新版再改，签名产品不可重写。完整证据及边界见known-limits-20261030.md。
@@ -73,7 +73,7 @@
 ## 延续协议
 
 - 读取CURRENT_HANDOFF和v042-session-handoff并核对Git；E盘原工作区共用codex/v0.4.2-fixes。版本仍0.4.1，正式源514efb86不可变、安装器PR63留待下版；本次未发布。Unix包等待用户实机反馈。保留上海90/95GiB和到期锁停约束、现有账本及旧detached树；不申请私钥。
-- 最新已装Windows/Skill源836d8ea3，0.4.1本地候选，临时trace模块/钩子已删除；普通V4/H7读写/采集停启及全4KiB恢复通过，硬件已交指定固件会话做SuperWatch和客户复测文档。HPM XML6寄存器/193样本及RTT两次烧录恢复证据保留，新路径HPM未复测。先核对真实硬件/占用，V3移植不保留临时日志代码。
+- 最新已装Windows/Skill源836d8ea3，0.4.1本地候选，无临时trace；主机读写恢复及固件会话51组只读SuperWatch测试完成，V4/H7已释放。客户对比文档由固件会话收尾，启动历史endpoint扫描慢另列待办。HPM XML6寄存器/193样本与RTT两次恢复证据保留，新路径HPM未复测；操作前重核硬件占用，V3移植不保留临时日志。
 - V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。
 - CDC 995根因仅保留待排查。恢复只允许同身份CDC故障5秒内；超时不自动接回或新建AI会话，主动断开立即生效，不重放未知写入。测试实例已经全部释放；见v035-transport-recovery.md，不寻找旧现场窗口。
 - 客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。

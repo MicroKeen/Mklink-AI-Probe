@@ -143,3 +143,64 @@ released the probe to the firmware session for the separately requested
 SuperWatch period/throughput comparison. No merge, version bump, signing, tag,
 release, update pointer or firmware publication. The product-source Feedback
 and Shared runtime CI runs both passed; documentation commits are separate.
+
+## Coordinated SuperWatch reference
+
+After hardware handoff, the designated firmware session completed 51 read-only
+measurements using the final installed frozen backend and global Skill at product
+source `836d8ea3`. This host session independently checked the result file,
+installed executable hash, all 51 stop/read successes, unchanged 4 KiB buffer,
+restored 30 MHz profile without saving, and physical disconnect.
+
+The public `measure_dump_memory` capability selected MUX Watch (the SuperWatch
+sampling stream) for configurations within its 15 × 128-byte capacity; the 4096-byte
+case used legacy/B1. Each configuration ran three times for 3 seconds, excluding
+the initial 200 ms warmup. Rates use complete samples and probe timestamps,
+not the configured period, USB wire rate or GUI rendering frequency. No RTT/UART
+concurrency or customer F407 motor workload was exercised.
+
+| SWD MHz | Bytes/sample | Requested period µs | Samples/s range | Effective B/s range | Median interval µs | Largest interval µs |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 10 | 4 | 1 | 149271–150150 | 597084–600602 | 6 | 96 |
+| 10 | 16 | 1 | 5087–5099 | 81389–81577 | 190 | 301 |
+| 10 | 64 | 1 | 1280–1285 | 81951–82256 | 779, 780, 784 | 855 |
+| 10 | 128 | 1 | 3796–3847 | 485897–492450 | 257, 258, 260 | 336 |
+| 10 | 512 | 1 | 962–965 | 492711–494312 | 1034, 1037 | 1114 |
+| 10 | 1920 | 1 | 255–256 | 489123–490876 | 3908, 3912, 3922 | 4022 |
+| 10 | 4096 | 1 | 119–120 | 489096–491219 | 8339, 8356, 8375 | 8520 |
+| 30 | 4 | 1 | 268018–270017 | 1072072–1080066 | 3 | 81 |
+| 30 | 4 | 10 | 96335–97269 | 385340–389077 | 10 | 86 |
+| 30 | 4 | 100 | 10000–10000 | 40000–40000 | 100 | 135 |
+| 30 | 4 | 1000 | 1000–1000 | 4000–4000 | 1000 | 1020 |
+| 30 | 16 | 1 | 9456–9484 | 151288–151746 | 102 | 200 |
+| 30 | 64 | 1 | 2385–2395 | 152667–153309 | 416, 418 | 526 |
+| 30 | 128 | 1 | 6765–6934 | 865928–887570 | 142, 145 | 244 |
+| 30 | 512 | 1 | 1722–1739 | 881650–890113 | 577, 584, 585 | 654 |
+| 30 | 1920 | 1 | 459–460 | 880622–883931 | 2169, 2172, 2177 | 2277 |
+| 30 | 4096 | 1 | 198–198 | 809814–811468 | 5043, 5049, 5060 | 5204 |
+
+At 30 MHz, a single 4-byte variable sustained about 268–270 k samples/s, or
+1.072–1.080 MB/s of effective payload (decimal units). The 3 µs median interval
+does not establish sustained throughput above 300 k samples/s: occasional
+71–81 µs gaps remained in these three runs. The 16/64-byte configurations were
+only about 151–153 kB/s; this limitation must remain visible in comparisons.
+The 128–1920-byte MUX configurations achieved roughly 866–890 kB/s; the 4096-byte
+B1 case achieved roughly 810–811 kB/s. These measurements do not establish
+performance superiority over an unmeasured ST-Link setup.
+
+Reported dropped-byte/frame, firmware read-error and sample-drop/error counters
+were zero. The MUX statistics currently expose CRC errors as a fixed zero, not an
+independent measured CRC counter; do not present that field as additional proof
+of zero CRC faults. Raw evidence remains in the local
+`superwatch-reference-20261030/results.json`, including every sample count and
+interval statistic. The configured GUI period still does not guarantee a maximum
+sampling interval or lossless observation.
+
+The firmware session also reported slow initial runtime selection while scanning
+374 historical probe directories. Its first attempt stopped at setup without
+benchmark data. The measured runs used an isolated evidence runtime directory
+with the default physical serial locks preserved. This startup discovery issue
+is distinct from the fixed repeated identity enumeration on active memory calls;
+it is recorded for a future host task, with no product change or history deletion
+in this follow-up. Customer-facing comparison instructions remain owned by the
+firmware session.
