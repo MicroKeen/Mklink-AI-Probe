@@ -2271,9 +2271,11 @@ class Device:
     # ------------------------------------------------------------------
     def read_memory(self, address: int, size: int) -> bytes:
         self._require_connected()
-        from mklink.mux import MuxTransport
-        mux = getattr(self._bridge, '_mux', None)
-        if isinstance(mux, MuxTransport):
+        # Negotiate on the first snapshot too; no dummy RTT/Watch is required.
+        # Only an explicitly unsupported bridge returns None. Transition and
+        # target failures propagate without replaying through the legacy path.
+        mux = self._bridge.enable_multiplex()
+        if mux is not None:
             return mux.read_memory(address, size)
         from mklink.memory_access import parse_read_ram_response
         cmd = f"cmd.read_ram(0x{address:08X}, {size})"
@@ -2333,9 +2335,8 @@ class Device:
         self._require_connected()
         if not data:
             return
-        from mklink.mux import MuxTransport
-        mux = getattr(self._bridge, '_mux', None)
-        if isinstance(mux, MuxTransport):
+        mux = self._bridge.enable_multiplex()
+        if mux is not None:
             mux.write_memory(address, data)
             return
         from mklink.memory_write import execute_flush, validate_writes

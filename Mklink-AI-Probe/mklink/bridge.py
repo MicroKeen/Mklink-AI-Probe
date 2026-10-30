@@ -435,6 +435,12 @@ class MKLinkSerialBridge:
             if self._mux is not None:
                 self._mux._check()
                 return self._mux
+            # Cached capabilities do not permit entering MUX while a legacy
+            # binary stream is active, or after the command port has failed.
+            if self._transport_error is not None:
+                raise ConnectionError('Command port failed; cannot enter MUX') from self._transport_error
+            if self._ctx.state not in (DeviceState.READY, DeviceState.BUSY):
+                raise ConnectionError(f'Device is not ready for MUX: {self._ctx.state.value}')
             if not self.supports_multiplex():
                 return None
             transport = MuxTransport(self._serial.write, self._cmd_lock,

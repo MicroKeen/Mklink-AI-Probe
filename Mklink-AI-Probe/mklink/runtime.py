@@ -18,6 +18,11 @@ PROTOCOL = 52  # Explicit lifecycle requests drain work and retire target sessio
 VERSION = "0.4.1"
 STARTUP_TIMEOUT_SECONDS = 60
 
+# urllib's default opener builds an HTTPS context even for loopback HTTP.
+# Keep one per thread: no shared mutable handlers and no per-call Windows
+# certificate-store scan. Proxy isolation and default TLS verification remain.
+_local_http = threading.local()
+
 
 class RuntimeErrorResponse(RuntimeError):
     def __init__(self, message, *, status_code=None, detail=None):
@@ -92,7 +97,10 @@ def request(info: dict, method: str, path: str, payload=None, *, timeout=35, for
     req = Request(f"http://127.0.0.1:{port}{path}", data=data, headers=headers, method=method)
     # Local IPC must never travel through environment-configured HTTP proxies.
     try:
-        with build_opener(ProxyHandler({})).open(req, timeout=timeout) as response:
+        opener = getattr(_local_http, 'opener', None)
+        if opener is None:
+            opener = _local_http.opener = build_opener(ProxyHandler({}))
+        with opener.open(req, timeout=timeout) as response:
             return json.load(response)
     except HTTPError as exc:
         detail = exc.read(65536).decode("utf-8", "replace")
@@ -437,6 +445,24 @@ class RuntimeClient:
             if not self.session_id:
                 raise RuntimeErrorResponse("Call connect first")
             transport_options = {}
+            if capability == 'write_memory':
+                from mklink.memory_write import validate_writes, plan_flush_batches
+                args = arguments if isinstance(arguments, dict) else {}
+                try:
+                    raw = args.get('data_hex')
+                    if not isinstance(raw, str) or not 2 <= len(raw) <= 8192:
+                        raise ValueError('Invalid memory payload')
+                    parsed = validate_writes([{'address': int(str(args.get('address')), 0), 'data_hex': raw}])
+                except (TypeError, ValueError):
+                    pass  # The server returns the existing validation response.
+                else:
+                    # The backend chooses MUX or legacy, so budget for both.
+                    # Legacy nonrepeat data splits at 30B; native frames at 128B.
+                    # Increasing the deadline never retries an unknown write.
+                    native_budget = 3 * ((len(parsed[0][1]) + 127) // 128)
+                    write_budget = max(10 * len(plan_flush_batches(parsed)), native_budget)
+                    read_budget = max(10, native_budget) if args.get('verify') else 0
+                    transport_options['timeout'] = max(35, write_budget + read_budget + 15)
             if capability == 'flush_memory':
                 from mklink.memory_write import validate_writes, plan_flush_batches
                 args = arguments or {}

@@ -328,7 +328,10 @@ def build_server():
 
     @server.tool()
     def read_memory(address: int, size: int) -> dict:
-        """Read 1..4096 bytes through the shared backend. Busy during continuous acquisition."""
+        """Read 1..4096 bytes; backend negotiates MUX without starting capture.
+
+        Legacy exclusive capture is busy. No fallback or replay after a failure.
+        """
         return client().call("read_memory", {"address": hex(address), "size": size})
 
     @server.tool()
@@ -338,7 +341,10 @@ def build_server():
 
     @server.tool()
     def write_memory(address: int, data_hex: str) -> dict:
-        """Write 1..4096 bytes via shared admission. Busy during capture; never retries."""
+        """Write 1..4096 bytes; backend prefers native MUX without starting capture.
+
+        Legacy exclusive capture is busy. Never retries an unknown write outcome.
+        """
         return client().call('write_memory', {'address': hex(address), 'data_hex': data_hex})
 
     @server.tool()

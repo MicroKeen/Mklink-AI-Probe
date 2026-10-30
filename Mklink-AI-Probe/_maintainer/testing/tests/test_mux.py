@@ -56,7 +56,9 @@ def test_bridge_mux_attach_respects_reported_debug_port(monkeypatch, tmp_path, p
     transport = Mock()
     transport.request.return_value = bytes(15) + bytes([port])
     monkeypatch.setattr('mklink.mux.MuxTransport', Mock(return_value=transport))
-    bridge = MKLinkSerialBridge.__new__(MKLinkSerialBridge)
+    from mklink._types import DeviceState
+    bridge = MKLinkSerialBridge('TEST_MUX_ATTACH')
+    bridge._ctx.state = DeviceState.READY
     bridge._cmd_lock = threading.RLock()
     bridge._mux = None
     bridge._mux_supported = True
@@ -115,7 +117,9 @@ def test_bridge_mux_rejects_unknown_or_malformed_debug_port(monkeypatch, tmp_pat
     transport = Mock()
     transport.request.return_value = status
     monkeypatch.setattr('mklink.mux.MuxTransport', Mock(return_value=transport))
-    bridge = MKLinkSerialBridge.__new__(MKLinkSerialBridge)
+    from mklink._types import DeviceState
+    bridge = MKLinkSerialBridge('TEST_MUX_PORT')
+    bridge._ctx.state = DeviceState.READY
     bridge._cmd_lock = threading.RLock()
     bridge._mux = None
     bridge._mux_supported = True

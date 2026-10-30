@@ -377,7 +377,7 @@ def test_unknown_hpm_target_requires_board_or_flash_configuration(tmp_path: Path
 def test_device_flash_recognizes_hpm_project_without_target_part(tmp_path: Path):
     firmware = tmp_path / "firmware.bin"
     firmware.write_bytes(b"hpm")
-    save_config(str(tmp_path), {"mcu_key": None, "swd_clock": 1_000_000})
+    save_config(str(tmp_path), {"mcu_key": None, "swd_clock": 4_000_000})
     save_project_info(str(tmp_path), {
         "vendor": "HPMicro",
         "board": "hpm5301evklite",
