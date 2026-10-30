@@ -237,6 +237,10 @@ def _build_skill_archive(
     output.parent.mkdir(parents=True, exist_ok=True)
     command = [
         "git",
+        # Subtree archives cannot see the Git root's .gitattributes. Preserve
+        # committed runtime bytes even when Windows enables core.autocrlf.
+        "-c",
+        "core.autocrlf=false",
         "-C",
         str(git_root),
         "archive",
