@@ -422,6 +422,8 @@ class RttStreamManager(RttChannelDecoder):
         self._channel_cache = RttChannelCache()
         self._channel_decoders = {}
         self._channel_hubs = {}
+        self._byte_hubs = {}
+        self._byte_offsets = {}
         self._interval = 0.0
         self._error = None
         self._start_failure_callback = None
@@ -521,6 +523,7 @@ class RttStreamManager(RttChannelDecoder):
         self._stop_event = stop_event
         self._generation = generation
         self._capture_session = uuid.uuid4().hex
+        self._byte_offsets = {}
         self._channel_cache.reset(self._capture_session, channels or [channel])
         self._paused.set()
         self._running = True
@@ -715,8 +718,21 @@ class RttStreamManager(RttChannelDecoder):
 
     def set_channel_stream_hubs(self, registry):
         self._channel_hubs = {ch: (registry[f"rtt-{ch}"], registry[f"rtt-terminal-{ch}"]) for ch in range(8)}
+        self._byte_hubs = {ch: registry[f'rtt-bytes-{ch}'] for ch in range(8) if f'rtt-bytes-{ch}' in registry}
 
     def feed_channel_bytes(self, channel, chunk):
+        from mklink.remote.stream_protocol import RTT_CHANNEL_BYTES, RTT_BYTES_HEADER
+        offset = self._byte_offsets.get(channel, 0)
+        self._byte_offsets[channel] = offset + len(chunk)
+        hub = self._byte_hubs.get(channel)
+        if chunk and hub is not None and hub.has_subscribers and self._capture_session:
+            session = getattr(self._device, '_rtt_session', None)
+            losses = getattr(session, 'dropped_bytes', {})
+            lost = losses.get(channel, 0) if isinstance(losses, dict) else 0
+            for start in range(0, len(chunk), 16384):
+                data = chunk[start:start+16384]
+                header = RTT_BYTES_HEADER.pack(bytes.fromhex(self._capture_session), offset+start, lost)
+                hub.publish(header+data, item_count=len(data), flags=RTT_CHANNEL_BYTES, stream_type=StreamType.RTT_RAW)
         decoder = self._channel_decoders.get(channel)
         if decoder is not None:
             decoder.feed_rtt_bytes(chunk)
@@ -875,6 +891,7 @@ class SystemViewStreamManager:
         self._recording_summary_path = ""
         self._recording_error = ""
         self._recording_device = None
+        self._mux_transport_stats = None
         self._recording_meta: dict[str, Any] = {}
         self._target_overflow_events = 0
         self._target_drop_count_baseline: int | None = None
@@ -974,6 +991,8 @@ class SystemViewStreamManager:
                 )
                 initialized = True
                 self._apply_cpu_freq_hint(device, start_result)
+                shared_mux = isinstance(start_result, dict) and start_result.get('transport') == 'cdc-mux'
+                self._mux_transport_stats = None
                 # 会话总时长与空闲看门狗分离:deadline 只管理 duration,任何
                 # 恢复动作都不延长它;看门狗以"最后一次收到数据"为基准,统一
                 # 裁决空读与读异常——START 突发排空后的亚秒级静默(探针按批
@@ -990,13 +1009,18 @@ class SystemViewStreamManager:
                         break
                     if not self._paused.is_set():
                         time.sleep(0.05)
+                        last_data_mono = time.monotonic()
                         continue
                     try:
                         raw = device.systemview_read_bytes(
                             duration=_SYSTEMVIEW_DELIVERY_INTERVAL,
                             max_bytes=64 * 1024,
                         )
+                        if shared_mux:
+                            self._mux_transport_stats = device._bridge._mux.stats()
                     except Exception as exc:
+                        if shared_mux:
+                            raise  # Framed errors are terminal; never replay START.
                         if time.monotonic() - last_data_mono >= self._startup_no_data_timeout_s:
                             raise RuntimeError(
                                 f"SystemView 读取失败: {exc}"
@@ -1012,6 +1036,7 @@ class SystemViewStreamManager:
                             # 上限后如实终止并注明。
                             if (
                                 had_data
+                                and not shared_mux
                                 and first_start_on_connection
                                 and retry_count < _SYSTEMVIEW_FIRST_START_MAX_RETRIES
                             ):
@@ -1469,6 +1494,7 @@ class SystemViewStreamManager:
     def _status_meta(self) -> dict:
         p = self._parser
         session_status = {
+            "transport_stats": self._mux_transport_stats,
             "connection_generation": self._connection_generation,
             "session_generation": self._session_generation,
             "first_start_on_connection": self._first_start_on_connection,
@@ -1599,6 +1625,16 @@ class SystemViewStreamManager:
             return False
         self._last_name_resolution = now
         self._name_resolution_attempted.update(ids)
+
+        session = getattr(device, '_systemview_session', None)
+        from mklink.systemview import SystemViewSession
+        if isinstance(session, SystemViewSession):
+            # MUX memory requests share the transport; do not stop or restart
+            # a recorder merely to fill missing RT-Thread metadata.
+            resolved = self._resolve_task_names(device, ids)
+            if not resolved:
+                self._name_resolution_disabled = True
+            return False
 
         try:
             device.systemview_stop()

@@ -585,10 +585,11 @@ class RuntimeGate:
         # Download operations temporarily yield captures inside shared admission.
         from mklink.remote.dashboards import BRIDGE_DASHBOARD_TYPES, active_bridge_dashboards
         active = active_bridge_dashboards()
-        from mklink.runtime_capabilities import multiplex_enabled, MUX_MEMORY_PATHS, capture_reset_supported
-        mux_active = multiplex_enabled(c.app.state.mklink_state) and set(active) <= {'rtt', 'superwatch'}
+        from mklink.runtime_capabilities import multiplex_captures, MUX_MEMORY_PATHS, capture_reset_supported
+        mux_active = multiplex_captures(c.app.state.mklink_state, active)
         if path in {f"/api/dash/{name}/start" for name in BRIDGE_DASHBOARD_TYPES}:
-            if active and not (mux_active and path in {'/api/dash/rtt/start', '/api/dash/superwatch/start'}):
+            requested = path.split('/')[-2]
+            if active and not multiplex_captures(c.app.state.mklink_state, [*active, requested]):
                 return await reject(409, "A CDC acquisition is already running; subscribe to its cached data or stop it explicitly")
         if (path.startswith(("/api/device/", "/api/probe/")) and path not in {"/api/device/connect", "/api/device/flash", "/api/device/parse-axf"}) or path in {'/api/dash/superwatch/inspect', '/api/mcu-detect'}:
             sharing_reset = path == '/api/device/reset' and capture_reset_supported(c.app.state.mklink_state, active)

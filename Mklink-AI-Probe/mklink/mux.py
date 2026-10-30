@@ -44,6 +44,7 @@ def packet(op, epoch, request, payload=b''):
 
 
 class MuxTransport:
+    RTT_UPDATE_CAPABILITY = 1 << 7
     BLOCK_READ_CAPABILITY = 1 << 6
     BLOCK_READ_COMMAND = 0x16
     SOFTWARE_RESET_CAPABILITY = 1 << 5
@@ -70,6 +71,7 @@ class MuxTransport:
         self.capabilities = 0
         self._reset_generation = 0
         self.rtt_mask = 0
+        self._rtt_manager = None
         self.watch_running = False
         self._last_command = time.monotonic()
         self._queues = {}
@@ -259,6 +261,10 @@ class MuxTransport:
                     if self._event_id is not None:
                         self.event_gaps += (req-self._event_id-1) & 0xffffffff
                     self._event_id = req
+                    if op == 0x40 and self._rtt_manager is not None:
+                        self._rtt_manager.publish(payload)
+                        self._condition.notify_all()
+                        continue
                     key = (op, payload[0] if op == 0x40 else 255)
                     if op == 0x41:
                         payload = MuxWatchEvent(payload, self._reset_generation)

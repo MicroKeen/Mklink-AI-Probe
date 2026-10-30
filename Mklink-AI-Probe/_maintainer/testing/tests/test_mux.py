@@ -268,7 +268,8 @@ def test_watch_bound_and_memory_write_without_readback_or_retry():
 def test_dap_takeover_invalidates_each_rtt_channel_without_poisoning_transport(channel):
     transport, _ = peer()
     transport.handshake()
-    session = MuxRTTSession(transport, {}, channel=channel)
+    session = MuxRTTSession(transport, {'down_buffers': []}, channel=channel)
+    session.start('0x20000000')
     transport.feed(packet(0x40, 17, 1, struct.pack('<BBI', channel, 7, 100)))
     with pytest.raises(RuntimeError, match='DAP changed the target'):
         session.read_channels(0)

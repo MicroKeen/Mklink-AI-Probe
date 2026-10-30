@@ -478,7 +478,7 @@ def _target_resources(operation):
     resources = [ResourceGroup.TARGET_DEBUG]
     from mklink.runtime_capabilities import MUX_MEMORY_CAPABILITIES
     if operation != 'capture-reset' and operation.replace('-', '_') not in MUX_MEMORY_CAPABILITIES:
-        resources += [ResourceGroup.MUX_RTT, ResourceGroup.MUX_WATCH]
+        resources += [ResourceGroup.MUX_RTT, ResourceGroup.MUX_WATCH, ResourceGroup.MUX_SYSTEMVIEW]
     return resources
 
 
@@ -488,13 +488,14 @@ def acquire_dashboard_resources(state: dict[str, Any], dashboard: str) -> list[s
 
     owner = f"user:dashboard:{dashboard}"
     manager = state["resource_manager"]
-    multiplex = dashboard in ('rtt', 'superwatch') and _multiplex_device(state)
+    multiplex = dashboard in ('rtt', 'superwatch', 'systemview') and _multiplex_device(state)
     resources = {
-        "rtt": [ResourceGroup.MUX_RTT] if multiplex else [ResourceGroup.MKLINK_BRIDGE, ResourceGroup.TARGET_DEBUG, ResourceGroup.MUX_RTT, ResourceGroup.MUX_WATCH],
-        "superwatch": [ResourceGroup.MUX_WATCH] if multiplex else [ResourceGroup.MKLINK_BRIDGE, ResourceGroup.TARGET_DEBUG, ResourceGroup.MUX_RTT, ResourceGroup.MUX_WATCH],
+        "rtt": [ResourceGroup.MUX_RTT] if multiplex else [ResourceGroup.MKLINK_BRIDGE, ResourceGroup.TARGET_DEBUG, ResourceGroup.MUX_RTT, ResourceGroup.MUX_WATCH, ResourceGroup.MUX_SYSTEMVIEW],
+        "superwatch": [ResourceGroup.MUX_WATCH] if multiplex else [ResourceGroup.MKLINK_BRIDGE, ResourceGroup.TARGET_DEBUG, ResourceGroup.MUX_RTT, ResourceGroup.MUX_WATCH, ResourceGroup.MUX_SYSTEMVIEW],
+        "systemview": [ResourceGroup.MUX_SYSTEMVIEW] if multiplex else [ResourceGroup.MKLINK_BRIDGE, ResourceGroup.TARGET_DEBUG, ResourceGroup.MUX_RTT, ResourceGroup.MUX_WATCH, ResourceGroup.MUX_SYSTEMVIEW],
         "serial": [ResourceGroup.SERIAL_PORT],
         "modbus": [ResourceGroup.MODBUS_PORT],
-    }.get(dashboard, [ResourceGroup.MKLINK_BRIDGE, ResourceGroup.TARGET_DEBUG, ResourceGroup.MUX_RTT, ResourceGroup.MUX_WATCH])
+    }.get(dashboard, [ResourceGroup.MKLINK_BRIDGE, ResourceGroup.TARGET_DEBUG, ResourceGroup.MUX_RTT, ResourceGroup.MUX_WATCH, ResourceGroup.MUX_SYSTEMVIEW])
     manager.acquire_many(
         resources,
         owner,
@@ -2544,8 +2545,8 @@ def create_app(
             n for n in BRIDGE_DASHBOARD_TYPES
             if n != type and managers.get(n) and managers[n].running
         ]
-        from mklink.runtime_capabilities import multiplex_enabled
-        conflicts = [name for name in running if not (multiplex_enabled(_state) and {type, name} <= {'rtt', 'superwatch'})]
+        from mklink.runtime_capabilities import multiplex_captures
+        conflicts = [name for name in running if not multiplex_captures(_state, {type, name})]
         return {"conflicts": conflicts, "running": running}
 
     @app.get("/api/dash/rtt/stream")

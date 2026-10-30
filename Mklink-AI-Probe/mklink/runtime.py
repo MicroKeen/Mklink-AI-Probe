@@ -443,6 +443,13 @@ class RuntimeClient:
                 if exc.status_code not in (None, 500, 502, 503, 504) or failures >= 3:
                     return
 
+    def rtt_subscribe_bytes(self, channel=0, *, session=None):
+        """Subscribe to raw channel bytes through this backend, without polling."""
+        from mklink.rtt_subscription import RttByteSubscription
+        if self.info is None or not self.session_id:
+            raise RuntimeErrorResponse('Attach to the shared runtime before subscribing to RTT')
+        return RttByteSubscription(self.info, channel, session=session)
+
     def call(self, capability: str, arguments=None):
         with self._lock:
             if not self.session_id:

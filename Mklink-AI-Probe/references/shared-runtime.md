@@ -521,9 +521,11 @@ V2.9.0 或配套 V3/V4 固件报告 `MUX_TARGET=1` 后，GUI/CLI/MCP 自动使�
 - CLI `python -m mklink rtt --probe <设备> --channels 0 1 --addr <RTT地址> --duration 3`
   创建有限采集；读取已有采集可用 `runtime call rtt_read_channel --probe <设备>
   --arguments '{"channel":1}'`。共享 Python SDK 使用相同的 `call()` 能力。
-- 多路复用 RTT、SuperWatch 可并行；内存/变量及外设寄存器读写、批量内存读取可
-  同时发命令。下载由新版后台自动暂停恢复；独立复位、调试控制、修改时钟、
-  独立 SystemView/VOFA 仍需先停流。
+- 配套固件协商增量 RTT（bit 7）后，RTT、SystemView、SuperWatch 可并行，
+  RTT/SystemView 须同一控制块；同通道一次读取再扇出。缺少能力时不回退独占流。
+  内存/变量读写、批量内存读取可同时发命令。下载由后台自动暂停恢复；
+  软件复位按能力协商，调试控制、修改时钟、VOFA 仍需遵守停流边界。
+  大量二进制数据使用 [SDK 持久字节订阅](rtt-binary-stream.md)，不要紧循环 HTTP 轮询。
 - SuperWatch 最多 15 个物理区域、每区 128 字节；大区域会拆分并计入 15 区预算。
   当前开发固件协商微秒周期：1 μs（`0.000001` 秒）全速，更长周期按实际读取能力定时；早期开发固件采用过 20 μs 分界。实际速率受目标、
   区域数量、USB 和调度影响，不保证 200 kHz。旧固件仍最短 2 ms。多区域不是原子快照。

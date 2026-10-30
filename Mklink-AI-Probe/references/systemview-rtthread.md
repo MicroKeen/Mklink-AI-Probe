@@ -7,11 +7,11 @@ SEGGER SystemView 是 RTOS 实时跟踪的事实标准：捕获**任务切换、
 饥饿、ISR 延迟、调度抖动。传统上依赖正版 J-Link。
 
 mklink 把 SystemView 做成**原生功能**：RTOS 的 `SEGGER_SYSVIEW` 集成把跟踪包写进
-**RTT 上行通道 1**，探针固件的 `SystemView.*` 模块负责读取并转发这个通道，PC 端
+**RTT 上行通道 1**，探针固件的共享 MUX RTT 引擎负责读取并转发这个通道，PC 端
 用自带解码器（`SystemViewParser`）解出 SEGGER 事件。整条链路**不依赖 J-Link，
 也不依赖 SEGGER PC 工具**。
 
-探针内部对 SWD 和 RISC-V/JTAG 使用同一个 SystemView 转发模块，因此 ARM 与 HPM
+探针内部对 SWD 和 RISC-V/JTAG 使用同一个 MUX RTT 引擎，因此 ARM 与 HPM
 目标共用同一条上位机实现，不需要按 CPU 架构切换后端。
 
 这只说明采集和解析通路支持 HPM，不代表 Cortex-M 集成模板能直接用于 RISC-V。
@@ -23,9 +23,9 @@ HPM 需要目标工程已有或正确移植的 RTT、RTOS 钩子和时间戳实�
 ```
 RT-Thread (SEGGER_SYSVIEW 钩子) ──事件包──▶ RTT 上行通道 1 ("SysView" 缓冲)
                                               │ SWD 或 RISC-V/JTAG
-                              MKLink 探针 SystemView 转发 ──CDC──▶ PC
+                              MKLink 探针共享 MUX RTT ──CDC──▶ PC
                                                                   │
-                                           Recorder 握手 + SystemViewParser
+                                           通道分发 + SystemViewParser
                                                                   │
                    CLI 实时打印 / systemview-analyze / HTML 报告 / GUI 时间轴
 ```
@@ -33,9 +33,16 @@ RT-Thread (SEGGER_SYSVIEW 钩子) ──事件包──▶ RTT 上行通道 1 ("
 - **地址发现**：RTT View 与 RTOS Trace 优先从已加载的 AXF/ELF 搜索
   `_SEGGER_RTT`；未手动选择文件时由工程配置自动发现构建产物。两边共享最近一次
   搜索或手工输入的地址，用户不需要额外加载 MAP 文件。
-- **数据获取**：PC 端调用 `SystemView.start(addr, search_size, channel=1)`，随后完成
-  SEGGER UART Recorder 的 `SV` 握手并发送开始命令。停止时发送 Recorder 停止命令和
-  `SystemView.stop()`，让探针恢复命令行。所以目标工程**必须先集成 RTT**。
+- **数据获取**：调用共享后台 `systemview_start`；后台验证上行和下行描述符，通过
+  MUX RTT 下行发送 START、STOP 和任务列表命令，原始上行字节进入现有解析器。
+  不进行 UART Recorder `SV` 握手，不发送 Pika `SystemView.start/stop`。
+  目标工程**必须先集成 RTT**，所选通道的 UpBuffer/DownBuffer 都须已初始化。
+- **并行**：需探针协商增量 RTT 能力（bit 7）。RTT/SystemView 共用同一个控制块，
+  不同控制块会被拒绝；同通道只读一次再分别送给各消费者。停止一方不停止其他
+  RTT/SuperWatch；同通道仍有观察者时，目标 STOP 延迟到最后一个消费者退出。
+  暂停只暂停本采集消费，缓冲有界，长时间暂停可能丢数据。缺能力不自动回退独占流。
+- **速率**：配套固件有数据时按预算尽快处理，空闲时让出总线，与其他通道公平调度。
+  并行共享总线，不承诺固定吞吐或无损；检查目标、解析器、MUX 和客户端的丢失计数。
 - **协议解码**：`mklink/systemview_parser.py`，逐字节对照 `SEGGER_SYSVIEW.c`
   （`_SendPacket`/`_EncodeU32`/`_SendSync`）实现；连续模式（无同步头）从任意位置对齐解析。
 - **嵌入式端**：用户固件集成 `SEGGER_SYSVIEW` + RT-Thread 钩子（下述）。
@@ -135,18 +142,18 @@ MCP（Agent）等价：`systemview_start` / `capture_systemview` / `systemview_a
 | AC5 `#59 function call in constant expression` | `RT_VERSION_CHECK()` 在 4.x 未定义 | 改用 `RT_VERSION >= 5` 整数比较 |
 | 链接 `SYSVIEW_X_OS_TraceAPI undefined` | 适配器未提供 OS API | 适配器内置 `_cbGetTime`/`_cbSendTaskList` + 该符号（注意大小写 `TraceAPI`） |
 | RTT 控制块被 `###` 覆盖 | RT-Thread `HEAP_END=0x20020000` 越界覆盖静态 RTT 区 | `HEAP_END=0x2001F000` |
-| `RTTView.start` 与 Recorder 协议不匹配 | SystemView 需要双向控制命令和握手 | 改用探针 `SystemView.start` + `SV` Recorder 握手 |
+| 使用旧 Recorder 原始流 | 旧路径独占命令口 | 使用共享后台 SystemView；缺少增量 RTT 能力时更新配套固件 |
 | 解码 0 事件 | 连续模式无同步头 | 解码器改为从任意位置对齐解析 |
 | CPU% 跨次翻倍 | 32 位 CYCCNT 翻卷 | `abs_time` 单调累加（不掩码） |
 | 缓冲裁掉 40KB 喂入 | `_MAX_BUF=32KB` 太小 | 调到 1MB |
-| `systemview_stop` 置 bridge ERROR | 流模式无 prompt | raw 写 Recorder Stop + `SystemView.stop()`，固件恢复命令行 |
+| 停止一项影响其他 RTT | 旧停止命令停止整组 | 共享通道管理仅释放自身，最后一个消费者才停组 |
 
 ## 故障排查
 
 | 现象 | 排查 |
 |---|---|
 | `未找到 RTT 控制块` | 在 RTOS Trace 中 Auto Search；确认 AXF/ELF 已加载或工程构建产物可被自动发现，并检查 `rtt-integrate` 和 `HEAP_END`；必要时重连探针 |
-| `Recorder 握手超时/失败` | 确认探针固件包含 `SystemView.*` 转发并已更新；停止旧会话后重试 |
+| `incremental RTT firmware support` | 配套固件缺能力，更新后显式重连；不发送 raw 握手绕过 |
 | 启动后一直无数据 | 检查 RTT 地址、通道 1、`USE_SYSTEMVIEW` 和目标是否正在运行；后端会在超时后报告错误，不会永久停在 starting |
 | 解码 0 事件 / `未同步` | 确认 `USE_SYSTEMVIEW` 已定义、固件已重烧；`rt_trace_init` 自动注册（看启动 `kprintf`）|
 | 任务名全 `0x...` | 检查 axf 已加载；`task_id` 是否还原成真实指针（`ram_base` 对不对）|

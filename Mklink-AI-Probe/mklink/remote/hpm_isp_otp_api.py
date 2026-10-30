@@ -173,7 +173,7 @@ def create_hpm_isp_otp_router(resource_manager, device_provider):
         try:
             resource_manager.acquire_many([
                 ResourceGroup.MKLINK_BRIDGE, ResourceGroup.TARGET_DEBUG,
-                ResourceGroup.MUX_RTT, ResourceGroup.MUX_WATCH,
+                ResourceGroup.MUX_RTT, ResourceGroup.MUX_WATCH, ResourceGroup.MUX_SYSTEMVIEW,
                 ResourceGroup.SERIAL_PORT, ResourceGroup.MODBUS_PORT,
             ], owner, preempt=False)
             # HTTP cancellation must not expose UART while the read is running.

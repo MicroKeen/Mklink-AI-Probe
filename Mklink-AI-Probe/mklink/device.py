@@ -64,6 +64,15 @@ class _InvalidRTTControlBlock(DeviceError):
 _ram_validation_snapshot = ContextVar('ram_validation_snapshot', default=None)
 
 
+def _live_mux_capture(session):
+    """A target rejection must leave an owned subscription reachable for stop."""
+    from mklink.mux import MuxTransport
+    inner = getattr(session, '_session', session)
+    transport = getattr(inner, 'transport', None)
+    return (isinstance(transport, MuxTransport) and transport._error is None
+            and bool(getattr(inner, '_running', False)))
+
+
 def _with_ram_snapshot(operation):
     """Resolve trusted memory once per operation, never across starts/threads."""
     @wraps(operation)
@@ -1919,7 +1928,7 @@ class Device:
                 # Preserve the original start failure.  reset_failed_start()
                 # already applies a raw-stop fallback before returning.
                 pass
-            if self._rtt_session is session:
+            if self._rtt_session is session and not _live_mux_capture(session):
                 self._rtt_session = None
             self._rtt_control_block_info = None
             self._rtt_write_guard_tail = b""
@@ -1979,10 +1988,10 @@ class Device:
                 return ""
             return session.stop()
         finally:
-            if self._rtt_session is session:
+            if self._rtt_session is session and not _live_mux_capture(session):
                 self._rtt_session = None
-            self._rtt_control_block_info = None
-            self._rtt_write_guard_tail = b""
+                self._rtt_control_block_info = None
+                self._rtt_write_guard_tail = b""
 
     def wait_for_rtt(
         self,
@@ -2048,24 +2057,22 @@ class Device:
             self._project_root,
             source_path=self._axf,
         )
-        if channel > 2:
-            raise DeviceError('Legacy SystemView supports channels 0..2')
+        if not 0 <= channel < 8:
+            raise DeviceError('SystemView supports channels 0..7')
+        if not self._prepare_rtt_transport():
+            raise DeviceError('SystemView requires shared MUX firmware; update the probe firmware')
+        from mklink.mux import MuxTransport
+        if not self._bridge._mux.capabilities & MuxTransport.RTT_UPDATE_CAPABILITY:
+            raise DeviceError('SystemView requires incremental RTT firmware support; update the probe firmware')
         old_systemview_session = self._systemview_session
         if old_systemview_session is not None:
             try:
                 if old_systemview_session._running:
                     old_systemview_session.stop()
             finally:
-                if self._systemview_session is old_systemview_session:
+                if self._systemview_session is old_systemview_session and not _live_mux_capture(old_systemview_session):
                     self._systemview_session = None
                 self._systemview_parser = None
-
-        # SystemView 与 RTT 共用同一探针 bridge，二者互斥
-        if self._rtt_session and self._rtt_session._running:
-            self._rtt_session.stop()
-            self._rtt_session = None
-        self._rtt_control_block_info = None
-        self._rtt_write_guard_tail = b""
 
         requested_addr = int(addr, 0)
         self.validate_rtt_stream_request(
@@ -2081,7 +2088,7 @@ class Device:
         else:
             control_block_addr = requested_addr
         control_info = self._read_rtt_control_block(control_block_addr)
-        self._validate_rtt_channel(control_info, channel)
+        self._validate_rtt_channel(control_info, channel, require_down=True)
 
         # SystemView firmware always scans even in static mode.  Passing the
         # exact host-validated address with the smallest aligned window avoids
@@ -2097,7 +2104,7 @@ class Device:
 
         from mklink.systemview import SystemViewSession
         from mklink.systemview_parser import SystemViewParser
-        session = SystemViewSession(self._bridge, channel=channel)
+        session = SystemViewSession(self._bridge, channel=channel, info=control_info)
         self._systemview_session = session
         self._systemview_parser = None
         try:
@@ -2132,8 +2139,7 @@ class Device:
             # 会覆盖为同值。非 STM32 工程可后续从 MCU profile 取 ram base。
             self._systemview_parser._ram_base = int(sv_defaults["ram_base"])
             self._systemview_parser._id_shift = int(sv_defaults["id_shift"])
-            # SystemCoreClock must be read before SystemView switches the bridge
-            # into binary stream mode; command/variable reads are unavailable there.
+            # MUX memory access remains available during shared capture.
             if cpu_freq_hint:
                 set_cpu_freq = getattr(self._systemview_parser, "set_cpu_freq", None)
                 if callable(set_cpu_freq):
@@ -2160,7 +2166,7 @@ class Device:
             except Exception:
                 # Cleanup must not replace the actual startup/parser failure.
                 pass
-            if self._systemview_session is session:
+            if self._systemview_session is session and not _live_mux_capture(session):
                 self._systemview_session = None
             self._systemview_parser = None
             raise
@@ -2210,7 +2216,7 @@ class Device:
             if session:
                 session.stop()
         finally:
-            if self._systemview_session is session:
+            if self._systemview_session is session and not _live_mux_capture(session):
                 self._systemview_session = None
             self._systemview_parser = None
 

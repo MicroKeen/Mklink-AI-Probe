@@ -17,6 +17,7 @@ class ResourceGroup(Enum):
     MKLINK_BRIDGE = "mklink_bridge"
     TARGET_DEBUG = "target_debug"
     MUX_RTT = "mux_rtt"
+    MUX_SYSTEMVIEW = "mux_systemview"
     MUX_WATCH = "mux_watch"
     SERIAL_PORT = "serial_port"
     MODBUS_PORT = "modbus_port"

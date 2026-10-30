@@ -74,11 +74,23 @@ def multiplex_enabled(state):
     return getattr(getattr(state.get('device'), '_bridge', None), '_mux_supported', None) is True
 
 
+def multiplex_captures(state, active):
+    """SystemView requires negotiated incremental RTT, never a raw fallback."""
+    from mklink.mux import MuxTransport
+    if not multiplex_enabled(state) or not set(active) <= {'rtt', 'superwatch', 'systemview'}:
+        return False
+    if 'systemview' not in active:
+        return True
+    mux = getattr(getattr(state.get('device'), '_bridge', None), '_mux', None)
+    return (isinstance(mux, MuxTransport) and mux.ready
+            and bool(mux.capabilities & MuxTransport.RTT_UPDATE_CAPABILITY))
+
+
 def capture_reset_supported(state, active):
     """Only negotiated framed reset may share a running target acquisition."""
     from mklink.mux import MuxTransport
     mux = getattr(getattr(state.get('device'), '_bridge', None), '_mux', None)
-    return (set(active) <= {'rtt', 'superwatch'}
+    return (multiplex_captures(state, active)
             and isinstance(mux, MuxTransport) and mux.ready
             and mux.supports_software_reset)
 
