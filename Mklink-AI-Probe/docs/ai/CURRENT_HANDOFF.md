@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-30T20:29:53+08:00`
+- 更新时间：`2026-10-30T21:07:38+08:00`
 - 分支：`codex/v0.4.2-fixes`
-- HEAD：`6ce79923：在线读取连接错误提示已修源码，未重建；已装0.4.2仍Windows源dce17d3e/Skill归档0d680d90。文档提交另查Git。`
+- HEAD：`4551687d：历史endpoint协议异常修复；6ce79923在线读取提示。两项仅源码未打包，已装0.4.2仍Windows源dce17d3e/Skill归档0d680d90。`
 - 远端 HEAD：`microkeen/codex/v0.4.2-fixes；多个后续修复共用此分支。microkeen/main核对为3cc474bb。`
 - 工作树：E盘原工作区已切换codex/v0.4.2-fixes；两个旧detached工作树继续保留。构建产物与验证证据保存在F盘构建根目录。
-- 当前任务：用户确认V3/H7未接板导致No ACK、接板后能读取；按要求只改善错误提示。6ce79923将连接/首读错误在流响应开始前映射并提供中英文无应答/占用/未找到提示，取消或失败释放会话。211 Python/15 GUI/类型检查及隔离浏览器真实源码联调通过；无硬件操作，不重建、不覆盖已装0.4.2。
-- 状态：`online_read_error_source_verified_not_packaged`
+- 当前任务：4551687d捕获历史端口复用的HTTP协议异常，发现可继续，133离线回归通过。6ce79923读取连接/首读错误在响应前映射，中英文提示及取消释放，211 Python/15 GUI/类型检查/隔离浏览器通过。两项均仅源码，不重建、不安装、不访问硬件；指定会话独占HPMLink/HPM6E80测RTT，勿干扰。
+- 状态：`runtime_endpoint_and_online_read_source_verified_not_packaged`
 
 ## 里程碑
 
@@ -23,7 +23,7 @@
 
 ## 验证证据
 
-- **0.4.2本地Windows与完整Skill候选**：产品源dce17d3e/Skill归档0d680d90，NSIS SHAf70e4960/Skill SHAa126d967。覆盖exit0，3640/2638文件匹配，5339用户文件保留、47工具、九系列XML原字节、41Web一致。冻结PYZ无临时trace；普通V4/H7首次读写MUX及9组各20次通过，首128B写后全4KiB恢复并物理断开。read4/4096中位7.514/21.353ms、4KiB最大39.074ms，抖动保留。原生v0.4.2/11条记录、无主机Python、正常退出通过。14元数据/5界面/10归档回归通过；前序1224运行时回归保留。详见v042-local-candidate-20261030.md；历史HPM XML六GPIO/193样本见hpm-svd-dump-stop报告，旧性能不冒充新包。 后续6ce79923仅源码：读取连接错误提示211 Python/15 GUI/类型检查及隔离浏览器通过，待下次构建；见online-read-errors-20261030.md。
+- **0.4.2本地Windows与完整Skill候选**：Windows源dce17d3e/Skill归档0d680d90，NSIS SHAf70e4960/Skill SHAa126d967。覆盖exit0，3640/2638文件匹配，5339用户文件保留、47工具、九XML/41Web一致。冻结PYZ无临时trace；普通V4/H7首次读写MUX、180次调用及4KiB恢复/断开通过；4KiB中位21.353ms/最大39.074ms，不保证延迟。原生0.4.2/11条记录/正常退出及14元数据/5界面/10归档回归通过，前序1224运行时回归保留。见v042-local-candidate-20261030.md；历史HPM六GPIO/193样本不冒充新包。后续4551687d发现异常133回归、6ce79923读取提示211 Python/15 GUI/类型/浏览器通过，均未打包，见各专项报告。
 - **HPM AI Skill能力核实**：源05e73101：1139相关+68包/文档测试；Flash49700B一致、ELF1528变量/360MHz、SVD UART0、JTAG4/10、RTT/Watch/dump通过。SystemView U32修复38351事件；新固件复测22155事件零丢弃。指定会话依新授权更新V4.7.2/build17:19:37后，共享MCP暂停/寄存器/真实断点cause2/单步cause4/恢复运行通过，x31同值写回正确。Skill SHA44df3e58、2625文件/7059FLM/4800SVD校验，全局47工具并保留5339用户文件。无目标烧录/VCC/OTP/发布。见hpm-skill-audit-20261029.md。
 - **RTT自动恢复与在线静默收尾**：14417715：347相关+17发现测试通过。V4/HPM5301连续两次49700B烧录校验成功，自动暂停/恢复RTT与SuperWatch、零恢复错误；新增RTT349/466字节、Watch3005/3712周期且零读取错。Windows NSIS SHA56830303，覆盖exit0、3627载荷一致、冻结MCP/41Web/正常退出通过；完整Skill SHAbb05fbde、2625文件/47工具已同步。仍0.4.1未发布。旧静默面板修复d1cf16ec的124GUI/29Python证据保留。见rtt-auto-restore-20261030.md及online-flash-receipt-20261029.md。
 - **Linux/macOS 0.4.1测试包**：Linux源a6bdacbc/CI40637027269、Mac arm64源eefc6842/CI40640511140：各USB58通过/1项Windows专用跳过，冻结CLI/MCP/健康/Web/正常退出通过。DEB SHA7309f377、DMG SHA56dc8e0a。均0.4.1；Mac仅ad-hoc未公证，用户系统安装/原生UI/USB实机待测，不含10月29日在线修复。详见linux-deb-test-20261028.md、macos-arm64-test-20261028.md。
@@ -47,13 +47,13 @@
 
 ## 真机环境
 
-- **state**：指定固件会话完成普通V4/H7及V3/H7测试并释放；V3私有3.6.8/build17:56:49（SHA751120c4）CRLF复测及30分钟空RTT通过，本会话仅核对保存证据。历史掉线根因仍未定位；操作前重新枚举并协调。HPM5301为前序另一硬件，本轮未重测。
+- **state**：指定固件会话现报告独占HPMLink/HPM6E80测RTT，释放前勿操作或改安装。此前V3/H7私有3.6.8/build17:56:49（SHA751120c4）CRLF及30分钟空RTT通过并释放，历史掉线根因未定位。本会话仅核对保存证据；HPM5301为前序另一硬件。
 - **installer**：Windows/完整Skill均已覆盖安装0.4.2本地候选；NSIS SHAf70e4960/Skill SHAa126d967，3640/2638文件一致、47工具、5339用户文件保留。41Web一致，更新记录11条。完整产物见v042-combined-20261030，未正式发布。
 - **backups**：保留正式release、安装包、CI ZIP、唯一硬件证据、Skill备份及F盘缓存。含链接/不可访问目录不强删。历史获授权清理见v036-storage-cleanup-20261023.md及本机START_HERE；本地Unix清理不影响正式附件。旧detached树保留；本轮Skill备份在F盘cache/mklink-ai-probe/skill-backups。
 
 ## 下一动作
 
-1. 下次授权构建带入6ce79923在线读取错误提示修复，当前0.4.2两包仍是此前验收版本，SHA不变。仅源码211 Python/15 GUI/隔离浏览器通过；用户本次明确不重建。历史374目录启动慢待办；V3移植不得带临时日志。PR66合并/正式发布须明确指令。
+1. 下次授权构建带入4551687d后台发现与6ce79923读取错误提示；已装0.4.2两包SHA不变，本次不重建。133离线回归及前序211 Python/15 GUI/浏览器通过。历史374目录启动慢待办。先等固件会话释放HPMLink/HPM6E80。PR66合并/发布须明确指令。
 2. 双核脱机需真实M7/M4板正向验收；V3当前候选30分钟空RTT复测未复现，历史根因仍未定位，再现先导出诊断再拔插。两项保持未闭环，私有候选不得公开替换正式固件。
 3. 公网远程服务中继为下个版本任务；本次不实施。
 4. 下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。
@@ -61,7 +61,7 @@
 
 ## 已知限制
 
-- 新MUX整块读普通V4/H7已实测，V3/H7指定会话候选复测通过；HPM新路径仍待实板。安装后20次调用仍有明显调度抖动，当前0.4.2包4KiB最大39.074ms，不承诺固定低延迟。HPM九系列XML已解析/匹配/浏览器导入；用户接回HPM5301后的六GPIO寄存器实读/采集通过，其他系列及IO输出驱动未测；客户F411仍待实板复测。dump定时截止可留半个样本，完整性门槛保留。HPM CPU仅RV32/hart0/HPM5301/槽0实测，其他触发器/型号、新值写入、20/30MHz及断电冷启未扩展，TCK未测。最新报告374个历史probe目录使selected_runtime启动扫描慢，未清历史或修复；旧97个endpoint记录见历史。客户3.11.9、CDC首次离线、F405 PROGRAM100%退出、GD32受限AI、RTT后MUX、HEX2%未知结果及PyInstaller权限故障保持未闭环，详见known-limits-20261030.md及v032-postrelease-incidents.md；不重放未知操作。
+- 新MUX整块读普通V4/H7已实测，V3/H7指定会话候选复测通过；HPM新路径仍待实板。安装后20次调用仍有明显调度抖动，当前0.4.2包4KiB最大39.074ms，不承诺固定低延迟。HPM九系列XML已解析/匹配/浏览器导入；用户接回HPM5301后的六GPIO寄存器实读/采集通过，其他系列及IO输出驱动未测；客户F411仍待实板复测。dump定时截止可留半个样本，完整性门槛保留。HPM CPU仅RV32/hart0/HPM5301/槽0实测，其他触发器/型号、新值写入、20/30MHz及断电冷启未扩展，TCK未测。374个历史probe目录启动扫描慢未修复；4551687d仅修复端口复用时HTTP异常中止发现，未安装，见runtime-endpoint-errors-20261030.md。客户3.11.9、CDC首次离线、F405 PROGRAM100%退出、GD32受限AI、RTT后MUX、HEX2%未知结果及PyInstaller权限故障保持未闭环，详见known-limits-20261030.md及v032-postrelease-incidents.md；不重放未知操作。
 - 30MHz RTT/Watch/UART并行历史存在目标读错：V4.6.8 1kHz +1/最大+273，10MHz0；V4.7.0/F103先Watch后RTT11762周期1错、反顺序12297周期0，10MHz两顺序0。发布接受不等于问题关闭，完整记录见known-limits-20261030.md。
 - HPM/SES未发DAP_Disconnect可遗留占用；显式退出后OpenOCD init/resume/shutdown或用户拔插可恢复，超时不得偷占。完整SES矩阵/RTT下行未覆盖。RTT status6截图只证busy，不推断与历史故障同因，待现场时序/显式重试。
 - 采集非无损、多变量非原子快照，无任意时序上界；记录溢出/暂停/下载会丢观测。COS监控/短链/在途延迟可超额，95GiB非账单硬上限，存储/请求/SCF另计。旧0.4.0固件GitHub备用未迁移，新版再改，签名产品不可重写。完整证据及边界见known-limits-20261030.md。
