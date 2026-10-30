@@ -1,4 +1,2 @@
 # Preserve the exact generated runtime bytes used in released packages.
 Mklink-AI-Probe/gui/dist/** -text whitespace=cr-at-eol
-# Vendor SVD digests cover original bytes, including line endings.
-Mklink-AI-Probe/mklink/hpm_svd/*.xml -text whitespace=cr-at-eol

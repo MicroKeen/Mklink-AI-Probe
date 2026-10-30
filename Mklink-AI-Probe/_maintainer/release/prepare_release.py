@@ -183,6 +183,16 @@ def _validate_skill_archive(path: Path, version: str) -> None:
         plugin = json.loads(archive.read(str(plugin_path)))
         if str(plugin.get("version")) != version:
             raise ValueError("Skill archive plugin version does not match the release")
+        hpm_manifest = f"{root}/mklink/hpm_svd/manifest.json"
+        if PurePosixPath(hpm_manifest) in files:
+            hpm = json.loads(archive.read(hpm_manifest))
+            for entry in hpm["series"]:
+                name = f"{root}/mklink/hpm_svd/{entry['file']}"
+                if (
+                    PurePosixPath(name) not in files
+                    or hashlib.sha256(archive.read(name)).hexdigest() != entry["sha256"]
+                ):
+                    raise ValueError("Skill archive contains missing or changed HPM SVD bytes")
         if _requires_builtin_flm(version):
             bundle_prefix = PurePosixPath(root, "mklink", "builtin_flm")
             bundle_files = [

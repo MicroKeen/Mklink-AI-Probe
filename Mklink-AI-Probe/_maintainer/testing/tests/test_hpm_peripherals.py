@@ -1,6 +1,10 @@
 """Vendor XML payloads and series selection shared by CLI, MCP and SuperWatch."""
 import asyncio
 from dataclasses import replace
+import io
+from pathlib import Path
+import subprocess
+from zipfile import ZipFile
 
 import pytest
 
@@ -83,3 +87,20 @@ def test_modified_vendor_xml_is_rejected_before_parsing(tmp_path):
     (tmp_path / target.svd).write_bytes(target.read() + b'\n')
     with pytest.raises(ValueError, match='integrity'):
         pw.load_catalog(target=replace(target, source=tmp_path / 'manifest.json'))
+
+
+def test_subtree_skill_archive_preserves_vendor_bytes_with_windows_autocrlf(tmp_path):
+    def git(*args):
+        return subprocess.check_output(['git', '-c', 'core.autocrlf=true', '-c', 'user.name=Test',
+            '-c', 'user.email=test@example.invalid', *args], cwd=tmp_path)
+    git('init', '-q')
+    source = tmp_path / 'project'
+    assets = source / 'mklink/hpm_svd'
+    assets.mkdir(parents=True)
+    (source / '.gitattributes').write_bytes((Path(pw.__file__).parents[1] / '.gitattributes').read_bytes())
+    original = b'<device>\n<name>Vendor</name>\n</device>\n'
+    (assets / 'test.xml').write_bytes(original)
+    git('add', '.')
+    git('commit', '-qm', 'fixture')
+    with ZipFile(io.BytesIO(git('archive', '--format=zip', 'HEAD:project', '--', 'mklink'))) as archive:
+        assert archive.read('mklink/hpm_svd/test.xml') == original
