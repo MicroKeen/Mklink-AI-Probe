@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-31T00:55:44+08:00`
+- 更新时间：`2026-10-31T01:04:00+08:00`
 - 分支：`codex/v0.4.2-fixes`
 - HEAD：`7843de8c：SystemView静默保持；e4d5fc4f FPBv2、76307f05模板、6ce读取/455发现均未安装。已装Windows dce17d3e/Skill归档0d680d90不变。`
 - 远端 HEAD：`microkeen/codex/v0.4.2-fixes；多个后续修复共用此分支。microkeen/main核对为3cc474bb。`
-- 工作树：E盘原工作区已切换codex/v0.4.2-fixes；两个旧detached工作树继续保留。构建产物与验证证据保存在F盘构建根目录。
-- 当前任务：用户授权修复FPBv2并验Keil共存。e4首轮H7双半字命中/查询/清除/占用保护及RAM恢复证据独立核对通过。7843de8c修复MUX无事件5秒误停，616Python/27GUI/TS/浏览器及导出113通过；新候选9ea57f92/1262文件全blob核对，等待指定会话最终HIL。无安装包重建。
-- 状态：`fpbv2_fixed_systemview_idle_candidate_hil_pending`
+- 工作树：E盘主工作区；旧detached树保留。构建/证据在F盘。
+- 当前任务：7843/e4修复及H7实板限定通过：双半字断点命中/清除/占用保护；Keil暂停23.48s、断点停95.16s后SV恢复+122815事件，历史同session且旧游标连续。1902592B RTT全字节/序号及4369零计数核对。616Python/27GUI/TS/浏览器/导出113通过。候选9ea57f92，详见h7-fpbv2-systemview-idle-20261031.md；未重建安装包。
+- 状态：`fpbv2_and_keil_capture_hil_verified_source_only`
 
 ## 里程碑
 
@@ -47,13 +47,13 @@
 
 ## 真机环境
 
-- **state**：实机/Keil仍归指定固件会话。e4 H7断点双半字命中，收尾运行/清除/关闭；现交7843de8c最终复测RTT/SV/Watch暂停继续，不能宣称通过。原c995/23:46:18固件、H7 ZIP7f3e0c4c和失败基线保留。
+- **state**：指定固件会话独占实机/Keil；7843最终共享断点及三路共存通过，报告收尾目标运行/断点清除/device_closed。固件仍c995/23:46:18；首次未使能debug失败、5秒误停及409中止报告均保留。H7 ZIP7f3e0c4c及HPM历史不改。
 - **installer**：Windows/完整Skill均已覆盖安装0.4.2本地候选；NSIS SHAf70e4960/Skill SHAa126d967，3640/2638文件一致、47工具、5339用户文件保留。41Web一致，更新记录11条。完整产物见v042-combined-20261030，未正式发布。
 - **backups**：保留正式release、安装包、CI ZIP、唯一硬件证据、Skill备份及F盘缓存。含链接/不可访问目录不强删。历史获授权清理见v036-storage-cleanup-20261023.md及本机START_HERE；本地Unix清理不影响正式附件。旧detached树保留；本轮Skill备份在F盘cache/mklink-ai-probe/skill-backups。
 
 ## 下一动作
 
-1. 等待指定会话7843de8c最终H7断点/Keil长暂停与继续+RTT/SV/Watch报告；核对SV waiting→streaming、事件/字节增量、原会话/历史及零自动重启，保留此前5秒误停失败基线。不占硬件、不改不可变候选。
+1. 保留7843源码候选和H7最终证据；首次启动已halt及真实断链由离线回归覆盖，硬件未扩全矩阵。共享断点API仍须先停止采集；共享step单独验证待后续授权。硬件占用继续由指定会话协调，不改不可变候选。
 2. 下次明确构建带入7843静默/e4 FPBv2、共享MUX/Skill、76307模板、455发现和6ce读取提示；已装两包SHA不变。374目录扫描慢、995/10048、双核实板及V3历史根因保留。PR66合并/发布须新指令。
 3. 公网远程服务中继为下个版本任务；本次不实施。
 4. 下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。
@@ -61,7 +61,7 @@
 
 ## 已知限制
 
-- 新MUX整块读普通V4/H7已实测，V3/H7指定会话候选复测通过；HPM本轮映像回读及480B RAM核对通过，未扩全内存区矩阵。安装后20次调用仍有明显调度抖动，当前0.4.2包4KiB最大39.074ms，不承诺固定低延迟。HPM九系列XML已解析/匹配/浏览器导入；用户接回HPM5301后的六GPIO寄存器实读/采集通过，其他系列及IO输出驱动未测；客户F411仍待实板复测。dump定时截止可留半个样本，完整性门槛保留。HPM CPU仅RV32/hart0/HPM5301/槽0实测，其他触发器/型号、新值写入、20/30MHz及断电冷启未扩展，TCK未测。374个历史probe目录启动扫描慢未修复；4551687d仅修复端口复用时HTTP异常中止发现，未安装，见runtime-endpoint-errors-20261030.md。客户3.11.9、CDC首次离线、F405 PROGRAM100%退出、GD32受限AI、RTT后MUX、HEX2%未知结果及PyInstaller权限故障保持未闭环，详见known-limits-20261030.md及v032-postrelease-incidents.md；不重放未知操作。 已装/4be FPBv2仍422；新e4首轮命中通过，7843最终共存待验。共享step未修改，不能用Keil单步替代其验收；见h7-fpbv2-systemview-idle-20261031.md。
+- 新MUX整块读普通V4/H7已实测，V3/H7指定会话候选复测通过；HPM本轮映像回读及480B RAM核对通过，未扩全内存区矩阵。安装后20次调用仍有明显调度抖动，当前0.4.2包4KiB最大39.074ms，不承诺固定低延迟。HPM九系列XML已解析/匹配/浏览器导入；用户接回HPM5301后的六GPIO寄存器实读/采集通过，其他系列及IO输出驱动未测；客户F411仍待实板复测。dump定时截止可留半个样本，完整性门槛保留。HPM CPU仅RV32/hart0/HPM5301/槽0实测，其他触发器/型号、新值写入、20/30MHz及断电冷启未扩展，TCK未测。374个历史probe目录启动扫描慢未修复；4551687d仅修复端口复用时HTTP异常中止发现，未安装，见runtime-endpoint-errors-20261030.md。客户3.11.9、CDC首次离线、F405 PROGRAM100%退出、GD32受限AI、RTT后MUX、HEX2%未知结果及PyInstaller权限故障保持未闭环，详见known-limits-20261030.md及v032-postrelease-incidents.md；不重放未知操作。 已装/4be FPBv2仍422；7843双半字命中及Keil共存已验。采集中共享断点仍409；共享step未改，Keil单步不代替其验收；见h7-fpbv2-systemview-idle-20261031.md。
 - 30MHz RTT/Watch/UART并行历史存在目标读错：V4.6.8 1kHz +1/最大+273，10MHz0；V4.7.0/F103先Watch后RTT11762周期1错、反顺序12297周期0，10MHz两顺序0。发布接受不等于问题关闭，完整记录见known-limits-20261030.md。
 - HPM/SES未发DAP_Disconnect可遗留占用；显式退出后OpenOCD init/resume/shutdown或用户拔插可恢复，超时不得偷占。完整SES矩阵/RTT下行未覆盖。RTT status6截图只证busy，不推断与历史故障同因，待现场时序/显式重试。
 - 共享MUX并行SV仍有容量边界：旧饱和768/drop17371，流水线28/1330、burst26/1164、control15/1442，重启归零不抹去；control独立62.679秒零丢失计数通过。RTT661.208KiB/s为特定配置观测值，H7限定实测新799–801KiB/s、独立/有限并行SV零计数；单次API20样本中位有12.90→20.03ms等退化未归因，旧Watch末组失败保留。采集暂停/下载丢观测、多变量非原子、无时序保证。COS95GiB非账单上限，存储/请求/SCF另计；旧0.4.0固件Git备用未迁，签名资产不改。

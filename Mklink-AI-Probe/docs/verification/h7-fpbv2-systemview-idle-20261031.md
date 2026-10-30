@@ -62,6 +62,23 @@ Keil 首轮实测中，目标暂停后 RTT 和 Watch 保持，而 SystemView 在
 
 ## 最终共存验收状态
 
-已向指定固件会话交付 `7843de8c`，等待重跑断点及真实 Keil 暂停超过 5 秒/单步/继续期间 RTT、SystemView、Watch 的保存报告。通过标准包含 SystemView `waiting→streaming`、事件/字节恢复增长、原历史与会话代次不变且自动重试次数为零。尚不能据离线测试宣称这轮真机共存完成。
+`7843de8c` 的真实 Keil CMSIS-DAP 与 MUX RTT/SystemView/Watch 共存复测通过。独立核对 `keil-7843-acceptance.json`（SHA256 `0f46533a36abd6eac69740a4477a5eebfdda3f74cedc83a15a2ef364b856a868`）全部 161 个样本、保存的 RTT 原始数据和历史游标：
+
+| 阶段 | 采样跨度 | 实测结果 |
+| --- | --- | --- |
+| Keil 暂停 | 23.480 秒 | SV 等待；RTT、目标计数均不增长，Watch 增长 23401 周期 |
+| Keil 单步后 | 36.495 秒 | 目标保持暂停，产生 2 个 SV 事件；Watch 增长 36317 周期 |
+| Keil 断点命中保持 | 95.160 秒 | 命中截图停在 `0x0802b9e8`；SV 等待不退出，Watch 增长 94951 周期 |
+| 继续运行 | 24.536 秒 | RTT 增加 784384 字节、SV 增加 122815 事件/589512 字节、Watch 增加 24434 周期 |
+
+完整 RTT 为 1902592 字节，1024 字节块序号 974..2831，每块所有数据和总 SHA256 `33f0867edcf364620bceaf9a638d9ad59b47e6473e7df5a6578b84494ce92a67` 独立核对通过。样本及历史状态递归 4369 处丢失/读取错误计数均为零；无心跳超时。此结论依赖当前 H7 镜像、HPMLink control 固件及有限测试配置，不是所有工作负载无损保证。
+
+`history-halted.json` / `history-resumed.json` 的历史 session 一致，next_seq 从 162188 增至 228171；旧游标增量首条为 162189，连续 10 条且 dropped=0。SystemView 的连接/采集代次保持 1、auto_retry_count=0；RTT session 同样不变。对应 SHA256 为 `6828fafaed3a6bcc4c5d42e396b501e9b52da4051c5053a6a1dcb021f54561ee` / `b08d267c1f182dc7afe050d9d68f06ba63b2df55561cf074831cb355658bc4d3`。
+
+共存报告收尾记录目标运行、比较器恢复且 device_closed=true。本机独立核对脚本 `verify_keil_idle.py` 和 `keil-7843-acceptance-independent-review.json` 位于上述 F 盘证据目录；没有访问在线后端。首次启动就已暂停的情形及真实故障退出由离线回归覆盖，本轮真机只验证先采集再暂停。
+
+同一最终候选的独立共享断点复测也通过：`fpbv2-7843-acceptance.json` SHA256 `346c3a485935819fa21d140815088aedb84efe4000e5cc71b45fc8e85c13129f`。独立重新核对了与 e4 首轮相同的两个半字地址、精确 PC/DFSR、比较器编码、占用拒绝后 40 字节不变、清除读回零、恢复运行计数、480 字节写入及完整 4096 字节恢复。最终目标运行、无断点且 device_closed=true；结果文件 `fpbv2-7843-acceptance-independent-review.json` 同在 F 盘证据目录。
+
+额外调用共享 `breakpoints status` 的中途试验因既有准入返回 409，报告 `keil-7843-final.json` 按失败保留。`runtime_api.py` 仅豁免受支持 MUX 内存操作及复位，断点 status/list/set/clear 都要求先停止采集；本轮未修改此边界。最终应分别报告共享断点独立验收和 Keil CMSIS-DAP 与 MUX 采集共存，不能将后者解读为共享 debug API 可在采集中调用。
 
 已装 0.4.2 Windows 源 `dce17d3e`、Skill 归档源 `0d680d90` 不包含本轮修复；正式 0.4.1 和旧 Linux/macOS 包不变。先前 HPM/H7 速率、丢包、单次 API 延迟及失败试验边界仍见 [H7 control 验证](h7-rtt-control-20261031.md)，不因断点通过而关闭。

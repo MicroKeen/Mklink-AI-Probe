@@ -295,6 +295,9 @@ python -m mklink break --clear 0 --probe "电机板"
 `DHCSR.C_DEBUGEN`。IDE 退出后该位可能关闭；应先检查 `status.dhcsr_raw` 的 bit 0，
 需要时按用户授权通过 `halt` / `resume` 建立调试状态，再验证命中，不能把比较器
 回读成功当作已命中。
+活动采集期间共享 `breakpoints`（含 status/list）仍返回 busy/409，须先显式停止
+采集；FPBv2 支持不改变该准入边界。Keil 等独立 CMSIS-DAP 调试器与 MUX 采集的
+共存能力由配套固件提供，不能据此推断共享调试控制接口也允许在采集中调用。
 
 ## Python 共享 SDK
 
