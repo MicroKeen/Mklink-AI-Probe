@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from http.client import HTTPException
 import json
 import os
 from pathlib import Path
@@ -111,7 +112,9 @@ def request(info: dict, method: str, path: str, payload=None, *, timeout=35, for
             structured_detail = None
         raise RuntimeErrorResponse(f"Runtime HTTP {exc.code}: {detail}",
                                    status_code=exc.code, detail=structured_detail) from exc
-    except (URLError, TimeoutError, OSError) as exc:
+    except (URLError, TimeoutError, OSError, HTTPException) as exc:
+        # A stale endpoint's port may now speak another protocol. Treat failed
+        # HTTP parsing like other transport failures, without replaying work.
         raise RuntimeErrorResponse("Shared runtime is unavailable; no direct CDC fallback was attempted") from exc
 
 
