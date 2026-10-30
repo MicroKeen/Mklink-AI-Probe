@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-30T22:45:44+08:00",
+  "updated_at": "2026-10-30T22:49:13+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
@@ -110,7 +110,7 @@
     "nRF54L15保护闭环、全部擦除/拔插/休眠/断电、电源精度未全测。每次VCC需确认具体电压。26个无可靠扇区FLM禁用扇区操作，Bank模式须匹配。HPM5301 OTP组18/19历史永久锁定；128字读取及批准Word69 0→1已实测，其余型号/区域不继承授权，锁最后写/逐项校验，多Word不可回滚；熔丝/影子/临时锁语义未知，UART按ROM状态及回读为准。详见hpm-offline-otp-handoff.md及known-limits-20261030.md。"
   ],
   "next_actions": [
-    "固件会话完成共享RTT/SystemView/Watch/DAP并行与单独停止实机验收，核对载荷后补rtt-systemview-mux-20261030.md。a441当前实测、4be新增count64仅离线通过；不要改动运行候选或抢硬件。历史995/10048不得因测速通过关闭。",
+    "指定固件会话继续RTT/SystemView/Watch/DAP并行验收并补报告；a441测速已独立核对。4be首次ZIP空包已在硬件前拦截，只用candidate-4be6ab66-verified（1255文件全blob核对/导入通过，SHA cb3c43fc）。勿抢硬件或改运行候选。995/10048未关闭。",
     "下次授权构建带入共享MUX、4551687d发现与6ce79923读取提示；当前已装0.4.2两包SHA不变，本次不重建。374目录启动慢、双核脱机实板和V3历史掉线根因仍待办。PR66合并/发布须明确指令；私有固件不公开替换。",
     "公网远程服务中继为下个版本任务；本次不实施。",
     "下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。",
