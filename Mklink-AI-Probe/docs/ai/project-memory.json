@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-30T23:58:12+08:00",
+  "updated_at": "2026-10-31T00:29:04+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.4.2-fixes",
-    "head": "4be6ab66：共享RTT/SystemView、480量子和count64兼容；前序6ce79923读取提示/4551687d发现修复均源码未安装。已装Windows dce17d3e/Skill归档0d680d90不变。",
+    "head": "76307f05：RTThread模板有界名称/布局/钩子修复；4be共享MUX，6ce读取提示/455发现修复均未安装。已装Windows dce17d3e/Skill归档0d680d90不变。",
     "remote_head": "microkeen/codex/v0.4.2-fixes；多个后续修复共用此分支。microkeen/main核对为3cc474bb。",
     "working_tree": "E盘原工作区已切换codex/v0.4.2-fixes；两个旧detached工作树继续保留。构建产物与验证证据保存在F盘构建根目录。"
   },
@@ -13,8 +13,8 @@
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "firmware_control_hpm_verified_h7_hardware_pending",
-    "current_task": "control候选HPM及交付核对完：RTT最高661.208KiB/s、SV独立62.679秒零计数，共存SV15/drop1442保留；UF2 c995a6ea/十源一致，ZIP43b44dae/46文件通过。H7未接未验，宿主4be及安装包不变。"
+    "status": "source_fixes_and_h7_control_review_complete_no_rebuild",
+    "current_task": "连接提示已修复；RTThread模板104回归及真实头文件ARM语法检查通过。H7八份10MiB/61秒SV/共存及65文件交付核对完成；宿主HIL仍4be，模板76307f05未实装，不重建。单次API延迟退化未定位。"
   },
   "milestones": [
     {
@@ -79,7 +79,7 @@
     },
     {
       "area": "共享RTT/SystemView及480量子",
-      "result": "宿主4be共享MUX/480/二进制订阅996回归及Skill/浏览器通过。新control固件23:46:18/UF2 c995a6ea、BIN、升级身份及十源快照核对；30MHz CH1双10MiB全字节/序号/SHA/计时通过，主机661.208/661.098KiB/s较burst同块长+6.31%/+6.20%。SV独立62.679秒/846407事件/13样本三层丢失0。并行106496B+271360B完整、12阶段/DAP50读写及停核单步恢复通过，递归75SV/120MUX/46Watch见目标15/drop1442，其他零错。三报告停止/10MHz/释放通过；H7未测。旧证据及资源增量见rtt-systemview-mux-20261030.md；未改安装包。"
+      "result": "宿主4be共享MUX/480/二进制订阅996回归及浏览器通过；76307f05模板有界名称/4.x-5.x布局/钩子104回归和真实H7头文件ARM检查通过。control固件c995/十源一致，HPM RTT661.208KiB/s、独立SV62.679秒零计数，共存15/drop1442保留。H7同镜像8份10MiB全字节/序号/SHA/计时通过，新799.191–801.112、旧527.625–633.380KiB/s，均值+38.43%；SV61.444秒/307134事件零计数，共存334848B完整/12阶段/DAP50及递归32SV/58MUX/24Watch零错。60000Watch样本核对，旧末组失败保留；显式复位后重启通过。H7 ZIP7f3e0c4c的65文件/8报告/摘要通过。见h7-rtt-control-20261031.md与systemview-rtthread-template-20261031.md；未改安装包。"
     }
   ],
   "decisions": [
@@ -95,7 +95,7 @@
     "编译完成不代表目标已下载：文件变化仅发待重载提示，不后台解析。用户明确加载/重载文件时自动停止目标采集，确认worker退出后原子换表，保持停止；失败保留旧目录/选择。不要求连接下载器；断开保留文件和选中变量但清空旧采样。公式只改变可视化，原始记录不变；不恢复旧地址采集或重放写操作。"
   ],
   "hardware": {
-    "state": "指定固件会话确认control三项停止/10MHz/设备关闭；当前HPMLink后续换接H7，尚未切换，接线通知由其发出。本会话仅离线核对；新ZIP43b44dae含H7待测标记，后续先协调。",
+    "state": "指定固件会话完成同HPMLink/H7实测，最终c995/23:46:18；记录采集停止、10MHz、设备关闭，目标为功能测试程序。本会话仅离线复核，后续硬件仍须协调。H7 ZIP7f3e0c4c通过，HPM历史保留。",
     "installer": "Windows/完整Skill均已覆盖安装0.4.2本地候选；NSIS SHAf70e4960/Skill SHAa126d967，3640/2638文件一致、47工具、5339用户文件保留。41Web一致，更新记录11条。完整产物见v042-combined-20261030，未正式发布。",
     "backups": "保留正式release、安装包、CI ZIP、唯一硬件证据、Skill备份及F盘缓存。含链接/不可访问目录不强删。历史获授权清理见v036-storage-cleanup-20261023.md及本机START_HERE；本地Unix清理不影响正式附件。旧detached树保留；本轮Skill备份在F盘cache/mklink-ai-probe/skill-backups。"
   },
@@ -103,15 +103,15 @@
     "新MUX整块读普通V4/H7已实测，V3/H7指定会话候选复测通过；HPM本轮映像回读及480B RAM核对通过，未扩全内存区矩阵。安装后20次调用仍有明显调度抖动，当前0.4.2包4KiB最大39.074ms，不承诺固定低延迟。HPM九系列XML已解析/匹配/浏览器导入；用户接回HPM5301后的六GPIO寄存器实读/采集通过，其他系列及IO输出驱动未测；客户F411仍待实板复测。dump定时截止可留半个样本，完整性门槛保留。HPM CPU仅RV32/hart0/HPM5301/槽0实测，其他触发器/型号、新值写入、20/30MHz及断电冷启未扩展，TCK未测。374个历史probe目录启动扫描慢未修复；4551687d仅修复端口复用时HTTP异常中止发现，未安装，见runtime-endpoint-errors-20261030.md。客户3.11.9、CDC首次离线、F405 PROGRAM100%退出、GD32受限AI、RTT后MUX、HEX2%未知结果及PyInstaller权限故障保持未闭环，详见known-limits-20261030.md及v032-postrelease-incidents.md；不重放未知操作。",
     "30MHz RTT/Watch/UART并行历史存在目标读错：V4.6.8 1kHz +1/最大+273，10MHz0；V4.7.0/F103先Watch后RTT11762周期1错、反顺序12297周期0，10MHz两顺序0。发布接受不等于问题关闭，完整记录见known-limits-20261030.md。",
     "HPM/SES未发DAP_Disconnect可遗留占用；显式退出后OpenOCD init/resume/shutdown或用户拔插可恢复，超时不得偷占。完整SES矩阵/RTT下行未覆盖。RTT status6截图只证busy，不推断与历史故障同因，待现场时序/显式重试。",
-    "共享MUX并行SV仍有容量边界：旧饱和768/drop17371，流水线28/1330、burst26/1164、control15/1442，重启归零不抹去；control独立62.679秒零丢失计数通过。RTT661.208KiB/s为特定配置观测值，H7未测。采集暂停/下载丢观测、多变量非原子、无时序保证。COS95GiB非账单上限，存储/请求/SCF另计；旧0.4.0固件Git备用未迁，签名资产不改。",
+    "共享MUX并行SV仍有容量边界：旧饱和768/drop17371，流水线28/1330、burst26/1164、control15/1442，重启归零不抹去；control独立62.679秒零丢失计数通过。RTT661.208KiB/s为特定配置观测值，H7限定实测新799–801KiB/s、独立/有限并行SV零计数；单次API20样本中位有12.90→20.03ms等退化未归因，旧Watch末组失败保留。采集暂停/下载丢观测、多变量非原子、无时序保证。COS95GiB非账单上限，存储/请求/SCF另计；旧0.4.0固件Git备用未迁，签名资产不改。",
     "V3无屏幕且不支持HPM；V3.6.4 Keil/OpenOCD共存已测。V4最终无诊断固件完整SES矩阵未完成。V3.6.8/build17:56:49（SHA751120c4）CRLF候选六轮B1/4KiB丢弃0，证据核对见v3-crlf-final-review-20261030.md，无原始B1抓包。后续V3/H7、SWD30MHz、已装0.4.2/MUX通道0空RTT1800.028秒通过：887状态/178被动USB正常、原会话恢复六条连续记录、设备释放。仅核对保存证据，未新增修复；历史掉线根因未定位，其他版本/legacy/睡眠拔插/更长时长未测，见v3-empty-rtt-review-20261030.md；再现先保存现场。",
     "最后客户端退出约5秒租约后开始排空/关闭，不保证硬实时5秒。每GUI独立后台；单探针仅一个后台持有；已有URL共享页面跟随明确切换。独立操作另开客户端。",
     "UART5 TTL Modbus读写通过，RS485电气层未测；跨物理主机Agent/全芯片矩阵未认证。Unix包仅CI构建/冻结检查，真实USB/原生UI/升级待测；Mac仅ad-hoc未公证，Windows无Authenticode，UAC/企业策略可拦截。Tauri更新验签仍有效；不得承诺消除SmartScreen。文件句柄选择/跟踪未全测；原生日志选择/回放/PNG已测。",
     "nRF54L15保护闭环、全部擦除/拔插/休眠/断电、电源精度未全测。每次VCC需确认具体电压。26个无可靠扇区FLM禁用扇区操作，Bank模式须匹配。HPM5301 OTP组18/19历史永久锁定；128字读取及批准Word69 0→1已实测，其余型号/区域不继承授权，锁最后写/逐项校验，多Word不可回滚；熔丝/影子/临时锁语义未知，UART按ROM状态及回读为准。详见hpm-offline-otp-handoff.md及known-limits-20261030.md。"
   ],
   "next_actions": [
-    "HPM control及新交付ZIP核对完成，等同HPMLink换接H7后实板证据；HPM/模型不替代ARM实测。宿主4be6ab66-verified不变，不重建/安装/占硬件。",
-    "下次明确授权构建带入共享MUX/Skill、4551687d发现与6ce79923读取提示；已装0.4.2两包SHA不变。374目录扫描慢、995/10048、双核脱机实板及V3历史根因仍待办。PR66合并/正式发布须新明确指令，私有固件不公开替换。",
+    "源码和HPM/H7限定证据已完成并保留失败边界，等待用户下一任务。单次API延迟本轮未证无退化，后续再评估主机调度/USB/固件贡献；不以吞吐提升代替延迟结论。不可变HIL宿主4be不替换、不占硬件。",
+    "下次明确授权构建带入共享MUX/Skill、76307f05模板、4551687d发现与6ce79923读取提示；已装0.4.2两包SHA不变。374目录扫描慢、995/10048、双核脱机实板及V3历史根因仍待办。PR66合并/正式发布须新明确指令。",
     "公网远程服务中继为下个版本任务；本次不实施。",
     "下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。",
     "如需减少Windows未知发布者提示，需用户另行提供/办理可信代码签名身份；当前无证书，不重发相同未签名包。下次先核对当前Git及真实硬件，不重复已完成的发布/云迁移。"
