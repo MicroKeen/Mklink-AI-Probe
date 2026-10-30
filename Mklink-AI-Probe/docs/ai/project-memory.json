@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-30T21:51:57+08:00",
+  "updated_at": "2026-10-30T22:45:44+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.4.2-fixes",
-    "head": "4551687d：历史endpoint协议异常修复；6ce79923在线读取提示。两项仅源码未打包，已装0.4.2仍Windows源dce17d3e/Skill归档0d680d90。",
+    "head": "4be6ab66：共享RTT/SystemView、480量子和count64兼容；前序6ce79923读取提示/4551687d发现修复均源码未安装。已装Windows dce17d3e/Skill归档0d680d90不变。",
     "remote_head": "microkeen/codex/v0.4.2-fixes；多个后续修复共用此分支。microkeen/main核对为3cc474bb。",
     "working_tree": "E盘原工作区已切换codex/v0.4.2-fixes；两个旧detached工作树继续保留。构建产物与验证证据保存在F盘构建根目录。"
   },
@@ -13,8 +13,8 @@
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "runtime_endpoint_and_online_read_source_verified_not_packaged",
-    "current_task": "4551687d后台发现HTTP异常133回归、6ce79923读取提示211 Python/15 GUI/类型/浏览器通过，均仅源码未重建安装。指定固件会话已完成HPM6E80截图两项复测并释放，交付文件已离线核对；用户要求不扩展硬件矩阵，历史995/10048未定因。"
+    "status": "shared_mux_host_verified_firmware_coexistence_in_progress",
+    "current_task": "按指定固件会话中的新授权实施共享RTT/SystemView及整帧≤512的480量子。宿主996回归、Skill校验、隔离浏览器通过；a44128f9两种块长各10MiB实测约3.06倍由固件会话报告，并行/DAP验收中。该会话独占硬件，本会话只离线核对；本轮不重建安装包。"
   },
   "milestones": [
     {
@@ -51,7 +51,7 @@
   "verification": [
     {
       "area": "0.4.2本地Windows与完整Skill候选",
-      "result": "Windows源dce17d3e/Skill归档0d680d90，NSIS SHAf70e4960/Skill SHAa126d967。覆盖exit0，3640/2638文件匹配，5339用户文件保留、47工具、九XML/41Web一致。冻结PYZ无临时trace；普通V4/H7首次读写MUX、180次调用及4KiB恢复/断开通过；4KiB中位21.353ms/最大39.074ms，不保证延迟。原生0.4.2/11条记录/正常退出及14元数据/5界面/10归档回归通过，前序1224运行时回归保留。见v042-local-candidate-20261030.md；历史HPM六GPIO/193样本不冒充新包。后续4551687d发现异常133回归、6ce79923读取提示211 Python/15 GUI/类型/浏览器通过，均未打包，见各专项报告。"
+      "result": "Windows源dce17d3e/Skill归档0d680d90，NSIS SHAf70e4960/Skill SHAa126d967。覆盖exit0，3640/2638载荷匹配、5339用户文件保留、47工具、九XML/41Web一致。冻结PYZ无临时trace；普通V4/H7首次读写MUX、180调用、4KiB恢复/断开通过；4KiB中位21.353ms/最大39.074ms非延迟保证。原生0.4.2/11记录/退出、14元数据/5界面/10归档通过；前序1224回归保留。详见v042-local-candidate-20261030.md。后续4551687d发现异常133回归、6ce79923读取提示211Python/15GUI/类型/浏览器通过，均源码未打包；见各专项报告。"
     },
     {
       "area": "HPM AI Skill能力核实",
@@ -63,23 +63,23 @@
     },
     {
       "area": "Linux/macOS 0.4.1测试包",
-      "result": "Linux源a6bdacbc/CI40637027269、Mac arm64源eefc6842/CI40640511140：各USB58通过/1项Windows专用跳过，冻结CLI/MCP/健康/Web/正常退出通过。DEB SHA7309f377、DMG SHA56dc8e0a。均0.4.1；Mac仅ad-hoc未公证，用户系统安装/原生UI/USB实机待测，不含10月29日在线修复。详见linux-deb-test-20261028.md、macos-arm64-test-20261028.md。"
+      "result": "Linux源a6bdacbc/CI40637027269、Mac arm64源eefc6842/CI40640511140：USB各58通过/1skip，冻结CLI/MCP/健康/Web/退出通过。DEB SHA7309f377、DMG SHA56dc8e0a，均旧0.4.1未带后续修复；Mac ad-hoc未公证，实机安装/UI/USB待测。见linux-deb-test-20261028.md、macos-arm64-test-20261028.md。"
     },
     {
       "area": "安装器旧元数据自动清理",
-      "result": "源cb30b703：62定点、5577Python/2skip、1133GUI和本地NSIS通过；真实八文件旧dist-info复现误报0.3.6，覆盖exit0自动清理后更新检查0.4.1。207保留文件哈希不变、3626安装载荷一致；冻结CLI/MCP/内置FLM/Pack、原生3.767秒/Web/正常退出通过。PR63集成，留待下版，正式0.4.1不变。见installer-metadata-cleanup-20261027.md。"
+      "result": "源cb30b703：62定点、5577Python/2skip、1133GUI和NSIS通过。八文件旧dist-info复现误报0.3.6，覆盖exit0清理后识别0.4.1；207保留文件及3626载荷一致，冻结/原生/退出通过。PR63已集成下版，正式0.4.1不变。见installer-metadata-cleanup-20261027.md。"
     },
     {
       "area": "上海COS正式0.4.0与90/95保护",
-      "result": "七正式资源COS和新GitHub完整下载SHA256、COS HEAD/Range及七入口服务停止回退通过；恢复服务active；SCF21资产读回一致，保留原周期累计，90GiB告警/95GiB停COS，180秒租约，套餐到期锁停不自动恢复。正式索引写入0.4.0、preview404；Gitee Skill是真实镜像，安装包明确被100MB限制拒绝。无新私钥/SSH权限。 2026-10-26线上代码读回与发布时完全一致；本地执行该代码验证89/90/95GiB边界、到期及次月不恢复、用量下降不解除锁停全部通过。线上定时器每分钟开启，告警策略启用并关联当前函数版本，短信/邮件全天接收。最新健康状态ready，三项正式入口HEAD跳转上海通过；本次未停生产服务重测备用，备用结论来自发行验收。"
+      "result": "正式0.4.0七资源COS/GitHub哈希与备用实测、SCF21资产及三个索引一致；Gitee完整Skill通过，安装包受100MB限制。累计账本保留，90GiB告警/95GiB锁停、180秒租约、到期未续费及用量回落不恢复。2026-10-26线上代码与发布一致，本地边界/到期回归通过；每分钟监控和全天告警开启，三正式入口上海HEAD通过。未新建私钥，未重测生产停服备用。详见v040-release-handoff.md。"
     },
     {
       "area": "H743正式固件与双核候选边界",
-      "result": "H743正式V4.7.1在线/四脱机/19采集调试通过。私有V4.7.2单核兼容与双核误选写前拒绝通过，完整2MiB未变；客户M7/M4 HEX在线成功。V4.7.2/V3.6.8/V2.9.3双核脱机候选已交付，46软件回归通过，正式4.7.1实际拒绝双核部署。无双核实板正向脱机验收；V3长期掉线未闭环，不公开替换候选。详见known-limits-20261030.md。"
+      "result": "H743正式V4.7.1在线/四脱机/19采集调试通过。私有V4.7.2单核兼容、双核误选写前拒绝、2MiB不变及M7/M4 HEX在线通过；V4.7.2/V3.6.8/V2.9.3双核候选交付，46回归通过。无双核实板正向脱机，V3历史掉线未闭环，候选不公开替换。见known-limits-20261030.md。"
     },
     {
-      "area": "0.4.1固件与脱机识别修复",
-      "result": "正式源514efb86：5565Python/2skip、1133GUI、H743在线/四脱机/19采集调试通过。最终签名包冻结MCP/211Python/41Web/7059FLM/4800SVD、原生3.658秒/退出、覆盖安装和3626载荷一致。七资源GitHub/COS哈希与备用、三索引0.4.1/preview404、云端及Gitee Skill升级各2623文件一致。完整证据见v041-release-handoff.md。"
+      "area": "共享RTT/SystemView及480量子",
+      "result": "70841886/a44128f9/4be6ab66：唯一MUX读线程、增量掩码/独立有界消费者、SystemView走RTT down、SDK持续二进制WebSocket。最终996回归及Skill校验通过，真实loopback10MiB SHA一致、隔离浏览器新旧能力冲突判断/256字节保真通过。708启动count回复错误已修正；旧128试验少128B保留失败。固件会话实测、本会话独立复核a441+7d7a6480能力0x1ff，两块长各10MiB完整、gap/drop0、约127.24KiB/s对41.60约3.06倍；并行/DAP进行中。4be仅count64兼容尚未实机，不覆盖当前运行候选。源码导出/证据见rtt-systemview-mux-20261030.md，安装包/全局Skill未改。正式0.4.1全部证据仍见v041-release-handoff.md。"
     }
   ],
   "decisions": [
@@ -90,12 +90,12 @@
     "腾讯云优先、GitHub/Gitee备用；上海私有COS签短链，90GiB告警/95GiB锁停，保留累计账本。套餐到期北京时间2026-11-26零点，未核验续费不恢复；监控延迟使阈值非账单上限。只用现有控制台/TAT，不申请私钥/SSH。preview撤下、旧桶获授权清理，香港桶已删除，只留上海；叠加110GB不提高90/95阈值。2026-10-25停止旧Aladdin-Wang GitHub的新发布，保留历史资产；新版本仅MicroKeen GitHub和既有Gitee。旧0.4.0草稿转换未完成，不自动操作。云迁移和Dot确认见v040-release-handoff.md，当前正式版见v041-release-handoff.md。",
     "测试直接使用用户原工程及 build/keil/Obj ELF，允许修改且无需备份还原，不复制工程；硬件路径只留本地。HPM 使用 ROM API，不使用 FLM/第二次通用 SWD reset；VCC 每次改动需确认具体电压，固件修改另开会话。 HPM AI可自行选择受支持的JTAG 4/10/20/30MHz档位，优先4/10，不把8MHz SWD请求当TCK；profile确认不是物理测量。固件修复由用户指定会话01a186cd-c52a-7ea0-af29-8de6775d143b负责，用户后续允许提供本会话ID、通知和更新固件；指定会话已据此刷入本次私有测试包。双向协同核对占用，本授权不含正式发布。",
     "默认只构建Windows；仅明确要求Linux/macOS时才构建或触发对应原生CI。完整Skill仍须FLM/Pack资格检查。构建使用scripts/build_workspace.ps1和F:/MKLink-Build，保留正式包、唯一证据、依赖与缓存。历史获授权本地Unix清理不影响线上正式附件；过时可再生产物仅依清理授权处理，链接/不可访问目录不强删。",
-    "工程上下文固定于后台生命周期；被动MI_04枚举不遍历占用设备，底层自动连接只接受唯一候选；本机别名不写固件。未知结果不重放，worker实际退出后才发布串口关闭，取消前保留缓冲寿命，背压错误不隐瞒。 普通内存调用身份检查最多复用250ms，须同一活跃CDC句柄/OS锁/probe/generation且未恢复；断线/错误/替换立即失效，生命周期请求仍全枚举。新读仅按bit6用0x16/CRC v1，4097B应答上限，旧读/写128B不变。修复完成必须删除临时日志代码，不仅关闭开关；保留修复说明供固件会话后续移植V3。",
+    "工程上下文固定；物理唯一OS锁/身份/epoch保留。被动枚举不遍历占用设备；普通内存身份检查同活跃CDC最多复用250ms，错误/恢复即失效，生命周期仍全枚举。共享RTT/SV同CB掩码合并、独立有界队列；bit7增量，bit8协商480，短帧含CRC≤512；bit6独立4096读不变，旧量子128。未知操作不重放，失败不自动raw回退，worker退出才关串口，背压/丢失不隐瞒。固件会话独占硬件，宿主只导出不可变源码/离线验收；清除临时日志代码，保留移植说明。",
     "原MK-Firmware及用户固件工程改动保留，不自动恢复旧备份。2026-10-18授权的0.3.5、V3.6.5/V4.6.9发布已完成；未知操作不重放。用户要求未解决项保留交接，未扩大验收或宣称客户故障已闭环。",
     "编译完成不代表目标已下载：文件变化仅发待重载提示，不后台解析。用户明确加载/重载文件时自动停止目标采集，确认worker退出后原子换表，保持停止；失败保留旧目录/选择。不要求连接下载器；断开保留文件和选中变量但清空旧采样。公式只改变可视化，原始记录不变；不恢复旧地址采集或重放写操作。"
   ],
   "hardware": {
-    "state": "HPMLink/HPM6E80已释放，20MHz两块长各10MiB载荷/ZIP已核对，目标回idle gate并保留测速程序，JTAG恢复10MHz。换USB口未换线，不作严格A/B；21:33拔插及额外30MHz主动停止409不算自然故障。995/10048未定因，本轮不再硬件验证。见hpm6e80-rtt-995-review-20261030.md。",
+    "state": "指定固件会话01a186cd-c52a-7ea0-af29-8de6775d143b据新授权独占HPMLink/HPM6E80，运行a44128f9+480固件候选，双10MiB通过并行验收中；本会话不得连接、重启其后台或覆盖安装。历史995/10048未定因，旧换口/人为拔插边界见hpm6e80-rtt-995-review-20261030.md。",
     "installer": "Windows/完整Skill均已覆盖安装0.4.2本地候选；NSIS SHAf70e4960/Skill SHAa126d967，3640/2638文件一致、47工具、5339用户文件保留。41Web一致，更新记录11条。完整产物见v042-combined-20261030，未正式发布。",
     "backups": "保留正式release、安装包、CI ZIP、唯一硬件证据、Skill备份及F盘缓存。含链接/不可访问目录不强删。历史获授权清理见v036-storage-cleanup-20261023.md及本机START_HERE；本地Unix清理不影响正式附件。旧detached树保留；本轮Skill备份在F盘cache/mklink-ai-probe/skill-backups。"
   },
@@ -110,17 +110,17 @@
     "nRF54L15保护闭环、全部擦除/拔插/休眠/断电、电源精度未全测。每次VCC需确认具体电压。26个无可靠扇区FLM禁用扇区操作，Bank模式须匹配。HPM5301 OTP组18/19历史永久锁定；128字读取及批准Word69 0→1已实测，其余型号/区域不继承授权，锁最后写/逐项校验，多Word不可回滚；熔丝/影子/临时锁语义未知，UART按ROM状态及回读为准。详见hpm-offline-otp-handoff.md及known-limits-20261030.md。"
   ],
   "next_actions": [
-    "下次授权构建带入4551687d后台发现与6ce79923读取提示；已装0.4.2两包SHA不变，本次不重建。相关回归/浏览器通过。历史374目录启动慢待办。PR66合并/发布须明确指令。",
-    "HPM截图两项已收尾释放，不扩矩阵；995与SDK10048根因待查，不因单轮通过关闭。保留失败、21:33人为拔插/主动停止及USB换口边界。双核脱机需实板，V3空RTT未复现但历史根因未定位。私有候选不公开替换。",
+    "固件会话完成共享RTT/SystemView/Watch/DAP并行与单独停止实机验收，核对载荷后补rtt-systemview-mux-20261030.md。a441当前实测、4be新增count64仅离线通过；不要改动运行候选或抢硬件。历史995/10048不得因测速通过关闭。",
+    "下次授权构建带入共享MUX、4551687d发现与6ce79923读取提示；当前已装0.4.2两包SHA不变，本次不重建。374目录启动慢、双核脱机实板和V3历史掉线根因仍待办。PR66合并/发布须明确指令；私有固件不公开替换。",
     "公网远程服务中继为下个版本任务；本次不实施。",
     "下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。",
     "如需减少Windows未知发布者提示，需用户另行提供/办理可信代码签名身份；当前无证书，不重发相同未签名包。下次先核对当前Git及真实硬件，不重复已完成的发布/云迁移。"
   ],
   "continuation_protocol": [
     "读取CURRENT_HANDOFF/v042-session-handoff并核对Git，共用codex/v0.4.2-fixes。本机Windows/Skill现为0.4.2本地候选，产品源dce17d3e/归档0d680d90；正式514efb86及0.4.1资产不可变，未正式发布0.4.2。保留上海90/95GiB、到期锁停、账本和旧detached树，不申请私钥。",
-    "当前0.4.2包冻结实机/原生退出通过，无临时trace，普通V4/H7已归还固件会话；重连前协调占用。固件16/64B优化raw51组+1600有效载荷核对通过，但其主机0.4.1；客户只交付最新数据。本次0.4.2另有180次SDK测量。HPM XML及RTT前序证据保留，新整块读HPM未复测；历史目录启动扫描慢待办。 后续6ce79923仅改读取错误提示，用户明确不重新构建，不能称已安装生效。",
+    "已装0.4.2冻结/原生验收保留：Windows dce17d3e、Skill0d680d90，两包SHA见v042-local-candidate-20261030.md。后续源码修复未打包，不能称已安装生效。共享MUX新授权由指定固件会话实施固件及实机，本会话仅宿主/Skill/离线核对；先协调占用。候选源码固定路径见rtt-systemview-mux-20261030.md，不在验收中替换文件。",
     "V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。",
-    "CDC 995根因仅保留待排查。恢复只允许同身份CDC故障5秒内；超时不自动接回或新建AI会话，主动断开立即生效，不重放未知写入。测试实例已经全部释放；见v035-transport-recovery.md，不寻找旧现场窗口。",
+    "CDC995和SDK10048根因保留待排查。恢复仅同身份CDC故障5秒内；超时不自动接回/新建AI会话，主动断开立即生效，未知写入不重放。历史实例释放记录见v035-transport-recovery.md；当前硬件占用以本交接真机状态及指定固件会话为准。",
     "客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。"
   ]
 }
