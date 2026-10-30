@@ -9,6 +9,35 @@ export interface ReleaseHistoryEntry {
 
 export const releaseHistory: ReleaseHistoryEntry[] = [
   {
+    version: '0.4.2', date: '2026-10-30',
+    summary: '完善 HPM 调试与外设观察，修复采集恢复并优化内存访问',
+    summaryEn: 'Improve HPM debugging and peripherals, capture recovery and memory access',
+    changes: [
+      'Windows 覆盖升级自动清理旧版 MKLink 元数据，修复安装后仍显示旧版本的问题。',
+      '在线烧录自动暂停相关采集，完成后恢复原任务；已完成的在线请求自动收尾，避免残留待确认提示。',
+      '修复 HPM 烧录复位后 RTT 自动恢复失败，包括自动发现通道及原有编码设置；实际恢复错误保留在任务日志。',
+      '完善 HPM AI Skill 的暂停、单步、断点、核心寄存器和 ELF 变量调试指引，按固件能力开放操作。',
+      'HPM 调试使用受支持的 JTAG 4/10/20/30 MHz 档位，区分 JTAG 与 SWD 频率设置。',
+      'SuperWatch 内置九个 HPM 系列的厂家 XML 外设目录，按系列匹配，并支持手动导入 SVD/XML 文件。',
+      '内存读写首次访问自动选择二进制 MUX；配套固件支持单次请求读取最多 4 KiB，旧固件保持原有分块方式。',
+      '减少连续内存请求的重复设备枚举和本地通信开销，优化 Windows 串口接收响应。',
+      '修复连续内存采集停止确认与错误传递，避免停止失败后误报可用；采样统计区分启动回显和未完成的尾部样本。',
+      '修复 HPM SystemView 的 U32 数据解析，改善 RTOS Trace 事件显示。',
+    ],
+    changesEn: [
+      'Remove obsolete MKLink metadata during Windows overwrite upgrades so the installed version is reported correctly.',
+      'Pause related captures for online programming and restore them afterward; settle completed requests automatically to avoid stale pending-confirmation prompts.',
+      'Fix RTT restoration after HPM programming and reset, including discovered channels and saved encodings; retain actual restoration errors in the task log.',
+      'Improve HPM AI Skill guidance for halt, step, breakpoints, core registers and ELF variables, with operations gated by firmware capabilities.',
+      'Use supported HPM JTAG profiles at 4/10/20/30 MHz and distinguish JTAG clock selection from SWD settings.',
+      'Bundle vendor peripheral XML catalogs for nine HPM series in SuperWatch, with series matching and manual SVD/XML import.',
+      'Select binary MUX on the first memory access; compatible firmware reads up to 4 KiB in one request, while older firmware retains its existing chunks.',
+      'Reduce repeated device enumeration and local communication overhead for consecutive memory requests, and improve Windows serial receive responsiveness.',
+      'Validate continuous-memory capture stop receipts and propagate errors instead of reporting a failed stop as ready; distinguish startup echoes and incomplete final samples in statistics.',
+      'Fix HPM SystemView U32 decoding to improve RTOS Trace event display.',
+    ],
+  },
+  {
     version: '0.4.1', date: '2026-10-26',
     summary: '修复固件升级与脱机下载器自动识别',
     summaryEn: 'Fix firmware updates and automatic offline probe detection',

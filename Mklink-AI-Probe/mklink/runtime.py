@@ -15,7 +15,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, build_opener, ProxyHandler
 
 PROTOCOL = 52  # Explicit lifecycle requests drain work and retire target sessions.
-VERSION = "0.4.1"
+VERSION = "0.4.2"
 STARTUP_TIMEOUT_SECONDS = 60
 
 # urllib's default opener builds an HTTPS context even for loopback HTTP.
