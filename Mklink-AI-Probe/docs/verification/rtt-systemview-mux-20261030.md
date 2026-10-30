@@ -73,8 +73,20 @@
 
 2026-10-30，用户在指定固件会话明确调整为：“SystemView只要独立运行不丢数据就可以，另外测一下30M下RTT的最大速度”。
 因此不再要求修到并行饱和场景全无损，也不抹去上面的溢出记录。
-固件会话继续独占硬件，以同一 `4be6ab66-verified` 宿主进行 SV 独立连续 60 秒的目标溢出/解析丢失检查，并用原 250 MHz 目标、16 KiB 环形缓冲、两种块长各 10 MiB 载荷，在 JTAG 30 MHz 下仅订阅 RTT CH1 测量。
-这些是待完成的计划，不作为已通过结果；“最大速度”只报告该条件下完整性通过的实测吞吐，不推断理论上限。本会话只复核最终报告和载荷，不占硬件、不改候选、不打包安装。
+固件会话使用同一 `4be6ab66-verified` 宿主完成了下述 SV 独立检查；随后继续独占硬件，用原 250 MHz 目标、16 KiB 环形缓冲、两种块长各 10 MiB 载荷，在 JTAG 30 MHz 下仅订阅 RTT CH1 测量。
+30 MHz 结果仍待完成；“最大速度”只报告该条件下完整性通过的实测吞吐，不推断理论上限。本会话只复核报告和载荷，不占硬件、不改候选、不打包安装。
+
+## SystemView 独立运行验收
+
+`sv-standalone-60s.json` 的 13 个连续状态样本与脚本已独立离线核对通过，报告 SHA256 为 `c6bd4e997d8cee62d4881c80ed3992e02ead49896e19ac5685a05ad048deab58`。
+本机复核记录为 `sv-standalone-independent-review.json`。
+
+- 宿主 `4be6ab66-verified`，配套 480 量子固件，JTAG 配置 20 MHz、目标/SV 时钟 250 MHz；未启动 RTT 或 SuperWatch，目标 RTT 压力负载关闭。
+- 持续 62.837 秒，同一采集 session 的 13 个样本事件/字节计数持续增长。最终累计 847588 个解析事件、3723652 原始字节；首尾样本间新增 847098 个事件。
+- 全部样本的 target overflow、baseline 后 target drop、parser drop、MUX event gap/RTT drop/Watch drop 均为 0，无暂停或自动重启。
+- 报告记录采集正常停止、JTAG 恢复 10 MHz、`device_closed=true`，该轮收尾通过。
+
+这满足本次限定时长、目标程序和配置下的独立运行零丢失计数要求。复核依据为状态计数及测试脚本，未对完整 SystemView 原始事件文件作逐字节对照；滚动历史容量和并行饱和溢出边界保持原说明。
 
 本机证据目录为 `F:/MKLink-Build/artifacts/rtt-shared-20261030`；候选 ZIP 为源码导出，不是安装包或完整发行 Skill：
 
