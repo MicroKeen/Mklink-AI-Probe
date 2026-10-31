@@ -4,7 +4,7 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-31T14:41:09+08:00`
+- 更新时间：`2026-10-31T14:42:51+08:00`
 - 分支：`codex/v0.4.2-fixes`
 - HEAD：`产品源e29d7809已推送并打包安装；后续提交同步dist/验收记录及工作区按钮字体源码小修（未重构建）。`
 - 远端 HEAD：`microkeen/codex/v0.4.2-fixes；多个后续修复共用此分支。microkeen/main核对为3cc474bb。`
@@ -47,7 +47,7 @@
 
 ## 真机环境
 
-- **state**：指定会话独占V3/H7/Keil调查1ms SuperWatch相位跳变，固定7843宿主；根因未定，不操作硬件或8765。V3.6.8/build14:10:28 edc40176各14档已校准；本会话仅离线核对。1kHz并行DAP中位约730ms，不称无延迟影响。
+- **state**：指定固件会话完成V3/H7 Watch时序调查并报告停止采集、恢复10MHz、disconnect/close释放，未改代码或固件。固定7843下1ms轮询漏读部分目标更新，0.5ms对照无漏读；根因未定。本会话未重跑硬件。V3 edc40176各14档已校准，1kHz并行DAP中位约730ms边界保留。
 - **installer**：Windows0.4.2已覆盖安装源e29d7809，NSIS SHAa8c367d4、3642文件/47工具/41Web/15版本项及退出通过。完整Skill仍0d680d90/SHAa126d967。产物v042-clock-20261031；后续按钮字体小修未打包，未正式发布。
 - **backups**：保留正式release、安装包、CI ZIP、唯一硬件证据、Skill备份及F盘缓存。含链接/不可访问目录不强删。历史获授权清理见v036-storage-cleanup-20261023.md及本机START_HERE；本地Unix清理不影响正式附件。旧detached树保留；本轮Skill备份在F盘cache/mklink-ai-probe/skill-backups。
 
@@ -73,7 +73,7 @@
 ## 延续协议
 
 - 读取CURRENT_HANDOFF/v042-session-handoff并核对Git，共用codex/v0.4.2-fixes。本机Windows/Skill现为0.4.2本地候选，Windows源e29d7809/Skill归档0d680d90；正式514efb86及0.4.1资产不可变，未正式发布0.4.2。保留上海90/95GiB、到期锁停、账本和旧detached树，不申请私钥。
-- 已装Windows e29d源0.4.2验收见acquisition-clock-20261031.md；完整Skill仍0d680d90。后续工作区按钮字体仅源码，按用户指令未重建。指定固件会话独占V3/H7/Keil查Watch时序，固定7843对照；本会话不操作硬件或替换候选，先协调占用。
+- 已装Windows e29d源0.4.2验收见acquisition-clock-20261031.md；完整Skill仍0d680d90。后续工作区按钮字体仅源码，按用户指令未重建。指定固件会话固定7843完成ARM Watch调查并报告释放；本会话未复测，后续操作前重新协调占用。1ms轮询不保证每次目标更新必达，不改插值/硬编码校准，不外推HPM已修复。
 - V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。
 - CDC995和SDK10048根因保留待排查。恢复仅同身份CDC故障5秒内；超时不自动接回/新建AI会话，主动断开立即生效，未知写入不重放。历史实例释放记录见v035-transport-recovery.md；当前硬件占用以本交接真机状态及指定固件会话为准。
 - 客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。
