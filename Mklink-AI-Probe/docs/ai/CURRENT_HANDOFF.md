@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-31T14:54:54+08:00`
+- 更新时间：`2026-10-31T14:59:15+08:00`
 - 分支：`codex/v0.4.2-fixes`
-- HEAD：`产品源e29d7809已推送并打包安装；后续提交同步dist/验收记录及工作区按钮字体源码小修（未重构建）。`
+- HEAD：`产品已装e29d；字体115ca0ce及SDK显式fastest/ACK d08bf1dc仅源码。固定7843两文件隔离候选已交固件会话，未改原候选。`
 - 远端 HEAD：`microkeen/codex/v0.4.2-fixes；多个后续修复共用此分支。microkeen/main核对为3cc474bb。`
 - 工作树：E盘主工作区；旧detached树保留。构建/证据在F盘。
-- 当前任务：已核对用户在固件会话新增的最快采样/动态周期限制要求，离线接入草案见superwatch-period-contract-draft.md；待固件协议/多点证据，未改采样代码。Windows仍已装e29d源0.4.2；工具栏字体115ca0ce仅源码，按指令未重构建。
-- 状态：`superwatch_period_contract_drafted`
+- 当前任务：d08bf1dc显式fastest与bit9/8B ACK已实现，主源/隔离imports各227回归；7843+两文件候选SHA61d8a34b已交指定固件会话，原1262blob不变。见superwatch-timing-sdk-20261031.md。产品动态周期下限待多点实测，未构建或接硬件。
+- 状态：`watch_timing_sdk_delivered_waiting_calibration`
 
 ## 里程碑
 
@@ -53,7 +53,7 @@
 
 ## 下一动作
 
-1. 动态周期/最快模式接入先等指定固件会话给最终能力、编码/ACK、周期语义和配置下限证据；旧period=0是单次，不能改为最快。见superwatch-period-contract-draft.md。不接硬件、不改插值；Windows/字体交付状态保留。正式发布/合并须新指令，Keil2→9及相位跳变未闭环。
+1. 等待固件多点周期/最快实测与配置下限依据，再接产品GUI/API动态限制。SDK候选已交付见superwatch-timing-sdk-20261031.md，period=0旧单次保留。不接硬件、不改插值；已装Windows e29d/Skill旧包不变，字体及SDK仅源码。正式发布/合并须新指令。
 2. 新V3已校准edc40176/build14:10:28，配置需明确ACK与applied/configured；无LIVE能力，采集中改频拒绝且不停任务。低频并行可明显增加DAP延迟。旧NOBITS机器码哈希结论撤回，硬件证据保留，见专项文档。
 3. 公网远程服务中继为下个版本任务；本次不实施。
 4. 下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。
