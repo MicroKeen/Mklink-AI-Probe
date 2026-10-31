@@ -2604,7 +2604,7 @@ def main():
     break_parser.add_argument("--source", help="ELF/AXF 文件路径（用于符号解析）")
     break_parser.add_argument("--project-root", default=".", help="项目根目录")
     _add_elf_backend_arg(break_parser)
-    break_parser.add_argument("--slot", type=int, default=None, help="指定断点槽位 (0-5)")
+    break_parser.add_argument("--slot", type=int, default=None, help="指定空闲断点槽位（范围由目标 FPB 决定）")
     break_parser.add_argument("--list", action="store_true", help="列出当前已设置的断点")
     break_parser.add_argument("--clear", nargs="?", const="all", help="清除断点：指定槽位号或 all")
     break_parser.add_argument("--status", action="store_true", help="显示 CPU 调试状态")

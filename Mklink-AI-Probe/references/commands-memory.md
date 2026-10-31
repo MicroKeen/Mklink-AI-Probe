@@ -3,7 +3,18 @@
 > 触发词：read-ram、read-reg、dump-memory、flush-memory、vofa、watch、superwatch、hardfault、typeinfo、symbols、memmap
 > 返回索引：[SKILL.md](../SKILL.md)
 
+HPM/RISC-V 先读 [HPM 下载与调试](hpm.md)。下文 STM32 地址、SCB/HardFault、
+FPB 和 CPU 核心寄存器示例不适用于 HPM；地址须取自当前工程 ELF/链接脚本及总线映射。
+
 ## 内存操作
+
+快照读写优先调用共享 `read_memory` / `write_memory`。后台按固件能力自动建立并
+复用 MUX，使用二进制内存命令；首次调用不需要启动 RTT、SuperWatch 或其他采集。
+固件声明整块读取能力时，单次最多 4096B 的快照只发一个读取请求；旧固件按原有
+128B 分块。共享 API 不变，AI 无需手工选择协议。写入仍按原有上限分块。
+变量、SVD/XML 外设快照和批量读取也复用这条路径。只有确认固件不支持 MUX 才使用
+旧文本协议；协商失败、超时、部分写入或结果未知时禁止改用原始命令重发。
+显式 `flush_memory` 仍使用其批写规则，不用于强制选择 MUX。
 
 ### 共享变量与 C 布局（0.3.0）
 
@@ -61,7 +72,9 @@ python -m mklink peripherals capture UART0.GPR.DATA --duration 3 --period 0.001 
 python -m mklink read-reg UART0.GPR.DATA --project-root . --format dec
 ```
 
-自备 SVD 可用 `peripherals select --svd <文件>`，ARM 型号从已安装 CMSIS-Pack 的
+HPM 可直接选择内置系列（如 `--chip HPM5300`），具体型号也会匹配其系列。
+覆盖系列和扩展外设规则见 [HPM](hpm.md#hpm-外设-xml-与-superwatch)。
+自备 `.svd` 或厂家 `*_svd.xml` 可用 `peripherals select --svd <文件>`，ARM 型号从已安装 CMSIS-Pack 的
 PDSC 精确映射发现。`superwatch --chip/--target-id/--svd` 也使用此目录；省略选择参数时恢复项目选择。
 已选芯片后，不在该目录里的寄存器名或裸地址不会回退到其他芯片的定义。
 显式裸内存操作仍由 `read-ram` / `dump-memory` 提供，不受 SVD 副作用过滤保护。
@@ -80,7 +93,7 @@ MCP 对应 `peripheral_targets(project_root, query)`、连接后
 ARM 内置寄存器名仅用于未选择目录的兼容快照入口，不应套用到 HPM。
 
 目录支持 SVD 的继承、cluster、寄存器/字段数组、字母索引和 bitRange。
-型号覆盖取决于本地描述文件；本机 HPM SDK 1.11.0 的 43 个型号描述已验证可加载，
+HPM 内置九个系列的 SDK 1.13.0 描述；其他型号覆盖取决于安装或手动加载的描述文件，
 不代表每个外设都已做实板验证。GUI 波形传输为 Float32，大整数曲线可能舍入；
 需要精确寄存器值时使用单次 `read` / `read_register`。
 
@@ -112,18 +125,10 @@ V4.3.8 在 STM32H743 上实测旧入口、bytes 字面量、重复字节折叠�
 `11 22 33 44 -> 00 00 00 00` 并回读。为防旧固件或偶发静默失败，自动化写入必须以回读
 一致作为成功条件，不能只看 `>>>` 或命令回显。
 
-**避免覆盖活跃内存区**:写入前先核对 `build/keil/List/rt-thread.map` 与 AXF 符号:
-- `0x20000000..0x200000DC`: `.mklink_res` (test fixture 控制块, magic 0x4D4B5245 "ERKM")
-- `0x20000200..0x20001374`: `.data`
-- `0x20001374..0x20001774`: `s_tf_data_buf` (test fixture 数据缓冲,**20ms 周期被覆写**)
-- `0x200017F8..0x200018F8`: `rt_thread_stack` (256B, RT-Thread 主线程栈,**绝不可覆盖**)
-- `0x20001908+`: `_heap` (RT-Thread 堆起点, **运行时向上增长**, .bss 之后未必真空闲)
-- `0x20001774..0x2000FAB0`: `.bss` (含 dbcortex 参数库 1600B 等活跃变量)
-- `0x2001F800..0x20020000`: 主线程栈 (2KB)
-
-**安全测试区**:`0x20001000..0x20001374`(.data 之前的空闲区, 896 字节) 是稳定的。
-
-`.bss` 之后的 `0x2000FA10..0x2001F800` (~65KB) **理论上是空闲的**,但**实际不可信**——RT-Thread 堆可向上分配到此处。务必先用 `python -m mklink symbols --source <axf> --filter "heap"` 看运行时堆的实际位置;或在写入前用 `vofa` / `superwatch` 读一段确认未被业务覆写。**血泪教训:不查就直接写,会撞 heap 元数据导致 HardFault → 整机重启**。
+**避免覆盖活跃内存区**：按当前固件的 ELF/AXF、链接脚本和 map 确认写入对象、
+范围及用途。以上 STM32 地址仅用于展示语法，不能当作 HPM 或其他工程的测试区。
+验证写入应使用工程明确预留的测试缓冲；`.bss` 之后、读到全零或短时间未变化都不
+证明空闲，堆、栈、DMA 和业务代码仍可能使用该地址。没有已确认的缓冲时先做只读验证。
 
 #### `python -m mklink dump-memory <region> [<region> ...] [--period SEC] [--frames N] [--duration SEC] [--save FILE] [--json]`
 公共高速内存 dump，直接调用固件 `cmd.dump_memory(addr1, size1, ..., period)` 并解析 `MPMDMPMD` 二进制帧。别名：`python -m mklink dump ...`。
@@ -166,9 +171,19 @@ python -m mklink dump-memory 0x08000000:256 --frames 0 --duration 1 --save flash
 - B1 样本使用第一块的时间戳，所有块及区域完整后才计数；周期 `dump-memory`
   也使用这一时间戳语义。CRC、区域、顺序或停止确认失败则整次请求失败，不重试。
 - 到时停止可能留下一个不完整样本，结果用 `incomplete_tail` 标记并排除该样本；
-  `integrity` 保留协议统计。`parser_dropped_bytes` 可包含命令回显，不能单独当作丢帧数。
+  `integrity` 保留协议统计。配套修复后台将本次精确启动回显单列为
+  `startup_control_bytes`，不计入 `parser_dropped_bytes`；后者仍检查异常字节，
+  不能为了通过测量忽略所有非零计数。旧后台没有这个区分，先核对实际构建。
 - 省略 `--speed` 保持后台当前时钟；显式指定会改变共享下载器的当前时钟，不写工程配置。
   测量只保留间隔计数，不积累全部原始样本；完成后确认恢复命令模式再返回。
+
+legacy/B1 停止收到 `Error: DAP busy`、超时或其他错误，整次采集无有效性能结论。
+提示符或身份查询成功仅说明解释器有响应。固件声明 `DUMP_STOP=1` 时，配套后台必须
+在有效二进制帧之外收到完整 `DUMP_STOPPED` 行，再完成命令同步；不得手工查找 RAM
+内容中的同名字节作确认。没有该能力的旧固件仍需无错误且停止产生帧。
+失败后保持错误状态，不继续读写、循环发停止、重跑基准或自动更改时钟；保留原始错误，
+按 [控制权与恢复](runtime-recovery.md#dump-停止失败) 处理。固件与上位机都需要配套修复，
+仅更新 Skill 文本不能修复旧后台。命令明确返回的 busy/SBA 错误也不能解释为“读到 0 字节”。
 
 #### `python -m mklink flush-memory <item> [<item> ...] [--probe ID] [--no-verify] [--repeat N] [--interval-ms MS]`
 
@@ -316,11 +331,20 @@ python -m mklink superwatch TIM2.CNT,ADC1.DR --svd path/to/device.svd --visualiz
 
 **Dump Memory 连续采样协议**
 
-调试时钟分为 `low`（4 MHz）、`medium`（10 MHz，默认）、`high`（20 MHz）、`ultra`（30 MHz）。SuperWatch 的“采样调试速率”与 CLI/MCP 使用同一组档位；原 `high` 配置继续表示 20 MHz。它调整调试链路时钟，实际采样率应以 dump 时间戳测量。
+采集时钟在仪表盘统一选择，SuperWatch 不再单独提供速率配置。MCP 可先查询
+`gui_call("debug_speed")` 的 `clocks_hz`，再传 `set_debug_speed(clock_hz=...)`；
+新 V3 的 14 档、旧 4→2 MHz 显式迁移和待应用状态见 [共享时钟](shared-runtime.md)。
+兼容档位仍为 `low`（4 MHz）、`medium`（10 MHz，默认）、`high`（20 MHz）、`ultra`（30 MHz）；
+新 V3 拒绝 `low`，HPM/其他旧固件保留。时钟不等于采样率，实际速率以 dump 时间戳测量。
 
 CLI 使用 `python -m mklink debug-speed ultra --project-root <工程目录>`；加 `--save` 可保存供后续连接使用。`dump-memory` 和 `dump-benchmark` 的 `--speed ultra` 可为本次采样选择 30 MHz。MCP 使用 `set_debug_speed(profile="ultra")`，或 `measure_dump_memory(..., speed_profile="ultra")`。
 
-ARM SWD 和 HPM JTAG 使用相同的 4/10/20/30 MHz 档位；20/30 MHz 必须由配套探针固件明确确认相应接口与内核，旧固件仅回显设置时钟不算确认。确认失败会恢复 1 MHz 并报错。档位回执不证明任意目标或接线稳定，应按对应板卡和固件的实测结果选择。CLI/MCP 切档前先停止流；Web 应用档位会先停止当前采集。默认保持 10 MHz。
+旧 ARM SWD 和 HPM JTAG 提供 4/10/20/30 MHz 档位；检查 `interface` 和
+`profile_confirmed`，仅设置回显不代表已确认内核或实测频率。明确拒绝时 SWD 尝试
+恢复 1 MHz，HPM JTAG 尝试恢复已确认的 4 MHz 档位；恢复也未确认则时钟状态未知。
+新 V3 采用明确的 configured/applied 应答，失败时不自动回退或重放命令。
+HPM 任意 8 MHz/1 MHz 请求会回退固定延时 C 路径，不能声称按请求改变了 TCK。
+档位回执不证明目标或接线稳定，应按板卡实测选择；采集期间切档会拒绝，不自动抢停。
 
 档位设置改变探针的调试时钟，同一连接中的 RTT、SystemView 等内存访问也使用该时钟。Keil、在线烧录和脱机脚本会按各自配置重新设置时钟；不能用 SuperWatch 的档位代替下载配置。采样报告应分别注明包含批间空隙的持续速率与批内速率，不能混用。
 

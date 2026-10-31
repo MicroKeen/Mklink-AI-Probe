@@ -1,4 +1,5 @@
 import importlib.util
+import hashlib
 import json
 import subprocess
 import zipfile
@@ -112,6 +113,24 @@ def test_prepare_release_rejects_missing_inputs(release_module, tmp_path):
         )
 
 
+@pytest.mark.parametrize("payload", [None, b"<device>\r\n</device>\r\n", b"<device>\n</device>\n"])
+def test_skill_archive_checks_original_vendor_xml_bytes(release_module, tmp_path, payload):
+    _, _, skill, _, _ = release_inputs(tmp_path)
+    original = b"<device>\n</device>\n"
+    prefix = "Mklink-AI-Probe-v0.1.0/mklink/hpm_svd/"
+    with zipfile.ZipFile(skill, "a") as archive:
+        archive.writestr(prefix + "manifest.json", json.dumps({"series": [{
+            "file": "vendor.xml", "sha256": hashlib.sha256(original).hexdigest(),
+        }]}))
+        if payload is not None:
+            archive.writestr(prefix + "vendor.xml", payload)
+    if payload == original:
+        release_module._validate_skill_archive(skill, "0.1.0")
+    else:
+        with pytest.raises(ValueError, match="missing or changed HPM SVD bytes"):
+            release_module._validate_skill_archive(skill, "0.1.0")
+
+
 def test_prepare_release_rejects_nested_repository_skill_layout(
     release_module, tmp_path,
 ):
@@ -144,6 +163,9 @@ def test_prepare_release_rejects_nested_repository_skill_layout(
 def test_public_skill_archive_excludes_repository_maintenance(
     release_module, monkeypatch, tmp_path,
 ):
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", "core.autocrlf")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_0", "true")
     monkeypatch.setattr(release_module, "_requires_builtin_flm", lambda _version: False)
     monkeypatch.setattr(release_module, "_requires_builtin_packs", lambda _version: False)
     source_commit = subprocess.check_output(
@@ -172,6 +194,13 @@ def test_public_skill_archive_excludes_repository_maintenance(
             for info in archive.infolist()
             if not info.is_dir()
         }
+        for path in files:
+            if path.startswith("gui/dist/"):
+                committed = subprocess.check_output(
+                    ["git", "show", f"{source_commit}:./{path}"],
+                    cwd=release_module.REPO_ROOT,
+                )
+                assert archive.read(root + path) == committed, path
     assert {
         "SKILL.md",
         "agents/openai.yaml",

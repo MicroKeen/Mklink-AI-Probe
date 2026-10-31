@@ -104,7 +104,10 @@ GUI 已在采集时，AI 使用以下能力：
   不得通过独占工具或循环读取绕过。
 
 内存读写限制为 1..4096 字节且不能越过 32 位地址范围。`write_memory` 使用
-偶数位十六进制字符串；`write_variable` 只接受整数。采集期间需要修改变量时，
+偶数位十六进制字符串。后台首次内存读写即按 `MUX_TARGET=1` 协商二进制快速通道，
+无需预先启动采集；后续复用同一连接。仅未声明支持的固件走文本，协议切换失败或
+命令结果未知不自动回退或重放。AI 保持使用共享 API，不自行选择原始帧或串口。
+`write_variable` 只接受整数。采集期间需要修改变量时，
 使用已有的类型化 `superwatch(action="write")`：参数为 `path`、`value` 和
 从 `gui_call("symbol_status")` 取得的 `generation`，执行实时写入及校验。
 RTT 输入限制为 1..256 字节；旧映射模式拒绝保留的停止命令，新多路复用模式支持二进制。
@@ -119,10 +122,23 @@ MCP 的 `systemview_decode(hex_bytes=...)` 和 `systemview_analyze_events(events
 `read_configuration(part_number=..., model="V4")` 通过已连接的共享后台读取受限配置快照，
 须先停止 CDC 采集；保留芯片身份、容量与字段范围校验，不改变保护状态或写入 OTP。
 
-`set_debug_speed(profile="low")` 通过同一后台修改调试速度，支持
-low/medium/high/ultra；持续采集期间拒绝，需先显式停止采集。成功后保存工程配置，
-同一下载器的所有客户端共享该速度。`gui_call("debug_speed")` 读取后台缓存的时钟和
-可用档位，采集期间也可调用；这是后台记录值，不是独立硬件测量。
+仪表盘的“采集时钟”统一管理当前下载器的 RTT、SystemView、SuperWatch 与普通内存访问。
+先用 `gui_call("debug_speed")` 读取缓存的 `clocks_hz`、`interface` 和 `apply_state`，
+再调用 `set_debug_speed(clock_hz=2000000)`，或保留兼容的 `profile="medium"`；两参数只能选一个。
+新 V3 明确声明能力时提供 1/5/10/20/50/100/200/500 kHz、1/2/5/10/20/30 MHz。
+旧 4 MHz 配置需显式选择 2 MHz 并成功应用后保存；不要把这些档位套到 V2、V4 或 HPM JTAG。
+旧固件仍使用 low/medium/high/ultra 四个档位。持续采集期间拒绝改频，原任务保持运行，
+不要自动停流或重放失败请求。状态查询不访问 USB，采集期间也可调用。
+
+新固件须同时确认精确 Hz 和 `SWD clock_state`。`configured` 表示已保存、尚未确认应用，
+不是 Keil 时钟变化；`applied` 才表示应用时序已设置，仍不是物理频率测量。
+若需确认应用，退出 Keil、停止采集后显式重新设置；不能因后续有采样数据就推断已应用。
+Keil/DAP 时钟独立，低频采集可能明显增加并行调试等待时间。成功后保存工程配置，
+同一下载器的客户端共享当前设置；失败或应答丢失保持未知状态，不伪报成功。
+
+HPM 必须先看 [HPM 调试速度](hpm.md)：`set_swd_clock(8000000)` 的设置回显
+不能证明 JTAG 为 8 MHz；当前私有 JTAG DMI 路径只提供 4/10/20/30 MHz 档位。
+`ping.capabilities` 是服务入口清单，HPM 不能因此使用 Cortex-M 单步/断点/HardFault。
 
 连接下载器与设置速度均不要求连接目标板或取得有效 IDCODE。USB 身份匹配、命令口
 握手成功即可建立下载器会话；目标识别仅补充信息，目标读写/采样仍需有效目标通信。
@@ -166,6 +182,12 @@ python -m mklink runtime stop --probe "电机板" --confirm
 
 旧 `/api/session/acquire`、`release`、`status` 已删除，不提供兼容转发。
 程序接入使用共享客户端的 connect/close；资源占用查询统一使用 `/api/resources/status`。
+
+连接响应的 `target_initializing=true` 表示目标初始化尚在后台执行。紧接着调用
+`probe_idcode` 等目标命令可能得到 `target_debug held by user:api:connect-init`
+的 409；先等待资源状态中的该初始化持有者释放，再发起后续操作。等待应有超时，
+超时保留诊断信息，不强制夺取资源或重放结果未知的操作。这种初始化竞争不代表
+RTT/SystemView 传输丢包，吞吐测试也应在初始化完成后开始计时。
 
 ## 跨进程端口锁
 
@@ -271,10 +293,20 @@ python -m mklink break --clear 0 --probe "电机板"
 
 `breakpoints` 参数为 `action`（status/list/set/clear/clear_all）；set 需要 `target`
 （0x 地址或函数名）及可选整数 `slot`，clear 必须提供 slot。函数按后台 AXF 解析；
-当前只支持 Cortex-M FPBv1、低于 0x20000000 的偶数字节地址。设置只能使用空闲
+支持 Cortex-M FPBv1（REV=0，地址低于 0x20000000）与 FPBv2（REV=1，32 位地址），
+都要求两字节对齐，按目标 FP_CTRL 识别版本和槽位数；不按芯片名猜测，也不固定为六槽。
+`status/list` 返回 `fpb_version`（1 或 2）与 `fpb_enabled`（全局使能），原有字段保留。
+未知版本明确拒绝；设置和清除均检查回读，不重试结果未知的写入。设置只能使用空闲
 槽位，已有断点需显式清除后替换；设置和清除都读回校验，失败后先检查状态。
 `break` 输出 JSON，同一探针的所有客户端共享物理断点；客户端退出保留断点，
 任何客户端显式清除都会影响其他客户端。`--clear` 不带槽位明确表示清除全部。
+设置比较器不会隐式暂停目标或使能 halting debug；命中还需要调试连接已经使能
+`DHCSR.C_DEBUGEN`。IDE 退出后该位可能关闭；应先检查 `status.dhcsr_raw` 的 bit 0，
+需要时按用户授权通过 `halt` / `resume` 建立调试状态，再验证命中，不能把比较器
+回读成功当作已命中。
+活动采集期间共享 `breakpoints`（含 status/list）仍返回 busy/409，须先显式停止
+采集；FPBv2 支持不改变该准入边界。Keil 等独立 CMSIS-DAP 调试器与 MUX 采集的
+共存能力由配套固件提供，不能据此推断共享调试控制接口也允许在采集中调用。
 
 ## Python 共享 SDK
 
@@ -482,6 +514,13 @@ python -m mklink systemview-report --probe "电机板" --duration 6 --out report
 暂停、停止、后台/会话变化或历史缺口会报错，不输出截断的新报告。
 目标自身丢包仍受原始跟踪协议和分析器能力限制，不保证无损。
 
+共享 MUX 采集在目标暂停或没有事件时保持原会话，连续 5 秒空读后状态为
+`progress_state=waiting`；目标恢复产出后继续原解析器、历史和录制，不重发
+START、不复位目标。等待也适用于首个事件到达前，不代表目标已经生成有效跟踪；
+目标运行但一直等待时，应检查 SystemView 初始化、录制开关、RTT 地址和通道。
+传输心跳超时、CRC/会话错误、目标读取失败和持续无法解码仍终止并报告真实原因。
+会话时长上限及显式停止仍生效，旧非 MUX 采集保留原空闲超时语义。
+
 `gui_call("systemview_capture_history", {})` 建立当前末尾游标；之后传入
 `session`、`after=next_seq` 与可选 `limit`（1..500）增量读取 `points`。
 同一历史供多个读者独立读取，`dropped` 表示本页跨过的缺失事件数；会话更换返回409，
@@ -514,9 +553,11 @@ V2.9.0 或配套 V3/V4 固件报告 `MUX_TARGET=1` 后，GUI/CLI/MCP 自动使�
 - CLI `python -m mklink rtt --probe <设备> --channels 0 1 --addr <RTT地址> --duration 3`
   创建有限采集；读取已有采集可用 `runtime call rtt_read_channel --probe <设备>
   --arguments '{"channel":1}'`。共享 Python SDK 使用相同的 `call()` 能力。
-- 多路复用 RTT、SuperWatch 可并行；内存/变量及外设寄存器读写、批量内存读取可
-  同时发命令。下载由新版后台自动暂停恢复；独立复位、调试控制、修改时钟、
-  独立 SystemView/VOFA 仍需先停流。
+- 配套固件协商增量 RTT（bit 7）后，RTT、SystemView、SuperWatch 可并行，
+  RTT/SystemView 须同一控制块；同通道一次读取再扇出。缺少能力时不回退独占流。
+  内存/变量读写、批量内存读取可同时发命令。下载由后台自动暂停恢复；
+  软件复位按能力协商，调试控制、修改时钟、VOFA 仍需遵守停流边界。
+  大量二进制数据使用 [SDK 持久字节订阅](rtt-binary-stream.md)，不要紧循环 HTTP 轮询。
 - SuperWatch 最多 15 个物理区域、每区 128 字节；大区域会拆分并计入 15 区预算。
   当前开发固件协商微秒周期：1 μs（`0.000001` 秒）全速，更长周期按实际读取能力定时；早期开发固件采用过 20 μs 分界。实际速率受目标、
   区域数量、USB 和调度影响，不保证 200 kHz。旧固件仍最短 2 ms。多区域不是原子快照。

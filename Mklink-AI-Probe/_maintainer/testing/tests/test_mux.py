@@ -17,7 +17,7 @@ def peer():
         _, _, op, size, epoch, req = struct.unpack_from('<4sBBHII', wire)
         payload = wire[16:16+size]
         calls.append((op, payload))
-        answer = {1: struct.pack('<IHH', 15, 256, 1), 4: payload}.get(op, b'')
+        answer = {1: struct.pack('<IHH', 15, 256, 1), 4: payload, 0x20: b'\x08\x08'}.get(op, b'')
         raw = packet(op | 0x80, 17, req, b'\0'+answer)
         transport.feed(raw[:9])
         transport.feed(raw[9:])
@@ -56,7 +56,9 @@ def test_bridge_mux_attach_respects_reported_debug_port(monkeypatch, tmp_path, p
     transport = Mock()
     transport.request.return_value = bytes(15) + bytes([port])
     monkeypatch.setattr('mklink.mux.MuxTransport', Mock(return_value=transport))
-    bridge = MKLinkSerialBridge.__new__(MKLinkSerialBridge)
+    from mklink._types import DeviceState
+    bridge = MKLinkSerialBridge('TEST_MUX_ATTACH')
+    bridge._ctx.state = DeviceState.READY
     bridge._cmd_lock = threading.RLock()
     bridge._mux = None
     bridge._mux_supported = True
@@ -115,7 +117,9 @@ def test_bridge_mux_rejects_unknown_or_malformed_debug_port(monkeypatch, tmp_pat
     transport = Mock()
     transport.request.return_value = status
     monkeypatch.setattr('mklink.mux.MuxTransport', Mock(return_value=transport))
-    bridge = MKLinkSerialBridge.__new__(MKLinkSerialBridge)
+    from mklink._types import DeviceState
+    bridge = MKLinkSerialBridge('TEST_MUX_PORT')
+    bridge._ctx.state = DeviceState.READY
     bridge._cmd_lock = threading.RLock()
     bridge._mux = None
     bridge._mux_supported = True
@@ -264,7 +268,8 @@ def test_watch_bound_and_memory_write_without_readback_or_retry():
 def test_dap_takeover_invalidates_each_rtt_channel_without_poisoning_transport(channel):
     transport, _ = peer()
     transport.handshake()
-    session = MuxRTTSession(transport, {}, channel=channel)
+    session = MuxRTTSession(transport, {'down_buffers': []}, channel=channel)
+    session.start('0x20000000')
     transport.feed(packet(0x40, 17, 1, struct.pack('<BBI', channel, 7, 100)))
     with pytest.raises(RuntimeError, match='DAP changed the target'):
         session.read_channels(0)

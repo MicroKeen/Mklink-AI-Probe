@@ -158,6 +158,12 @@ def _enter_dump_stream(bridge) -> None:
     if callable(leave_multiplex):
         leave_multiplex()
 
+    # Feature negotiation is a command-mode operation. Never query firmware
+    # while another stream owns the bridge.
+    prepare_stop = getattr(bridge, 'prepare_dump_stop', None)
+    if callable(prepare_stop) and getattr(bridge, 'state', None) is DeviceState.READY:
+        prepare_stop()
+
     try_enter = getattr(bridge, "_try_enter_stream", None)
     if callable(try_enter):
         if try_enter(DeviceState.DUMP_STREAM):
@@ -188,6 +194,38 @@ _NEED_MORE = object()
 _RETRY = object()
 
 
+class DumpStartupEcho:
+    """Remove one exact generated command echo, only at stream startup.
+
+    Keep arbitrary preambles, later echoes and all damaged bytes observable.
+    Candidate buffering is bounded by the generated REPL command length.
+    """
+    def __init__(self, command: str):
+        echo = command.encode('ascii')
+        self.candidates = tuple(sorted({
+            echo + ending + separator + prompt
+            for ending in (b'\n', b'\r\n')
+            for separator in (b'', b'\n', b'\r\n')
+            for prompt in (b'', b'>>>', b'>>> ')
+        }, key=len, reverse=True))
+        self.pending = bytearray()
+        self.control_bytes = 0
+        self.done = False
+
+    def feed(self, data: bytes) -> bytes:
+        if self.done:
+            return data
+        self.pending.extend(data)
+        raw = bytes(self.pending)
+        if any(candidate.startswith(raw) for candidate in self.candidates):
+            return b''
+        prefix = next((candidate for candidate in self.candidates if raw.startswith(candidate)), b'')
+        self.control_bytes = len(prefix)
+        self.pending.clear()
+        self.done = True
+        return raw[len(prefix):]
+
+
 class DumpMemoryParser:
     """Streaming binary parser for dump_memory frames (OLD + B1).
 
@@ -208,8 +246,9 @@ class DumpMemoryParser:
         "block_crc_ok": bool  (B1 region data payload CRC result)
     """
 
-    def __init__(self, region_sizes: list[int] | None = None):
+    def __init__(self, region_sizes: list[int] | None = None, *, startup_command: str | None = None):
         self._buf = bytearray()
+        self._startup = DumpStartupEcho(startup_command) if startup_command else None
         self._region_sizes = region_sizes or []
         self._expected_count = len(self._region_sizes)
         self._dropped_bytes: int = 0
@@ -228,8 +267,18 @@ class DumpMemoryParser:
     def crc_errors(self) -> int:
         return self._crc_errors
 
+    @property
+    def startup_control_bytes(self) -> int:
+        return self._startup.control_bytes if self._startup else 0
+
+    @property
+    def pending_bytes(self) -> bytes:
+        return bytes(self._startup.pending if self._startup else b'') + bytes(self._buf)
+
     def feed(self, data: bytes) -> list[dict]:
         """Feed raw bytes, return list of parsed frame dicts."""
+        if self._startup:
+            data = self._startup.feed(data)
         self._buf.extend(data)
         frames: list[dict] = []
         while True:
@@ -506,8 +555,8 @@ def read_dump_memory_range_once(
         )
     from mklink._types import DeviceState
 
-    parser = DumpMemoryParser(region_sizes=[size])
     command = build_dump_mem_command([(address, size)], 0)
+    parser = DumpMemoryParser(region_sizes=[size], startup_command=command)
     stop_command = build_dump_mem_command(
         [(address, 1)], DUMP_MEMORY_STOP_PERIOD,
     )
@@ -515,7 +564,7 @@ def read_dump_memory_range_once(
     blocks: dict[int, bytes] = {}
     expected_blocks: int | None = None
     raw_tail = bytearray()
-    bridge._enter_stream(DeviceState.DUMP_STREAM)
+    _enter_dump_stream(bridge)
     try:
         # ``period=0`` emits one complete sample before the firmware returns
         # to idle.  The previous request is stopped in the finally block with
@@ -592,14 +641,17 @@ def read_dump_memory_range_once(
             raise DumpMemoryUnsupported("cmd.dump_memory is not supported by the probe")
         raise TimeoutError("timed out waiting for one complete dump-memory range")
     finally:
-        _stop_dump_read(bridge, stop_command)
+        _stop_dump_read(bridge, stop_command, parser)
 
 
-def _stop_dump_read(bridge, stop_command):
+def _stop_dump_read(bridge, stop_command, parser=None):
     # Use the current bridge contract; a delay cannot prove command readiness.
     # Failed confirmation leaves the bridge in ERROR and must invalidate success.
-    if not bridge._stop_stream_and_sync((stop_command + "\n").encode("utf-8")):
-        raise TimeoutError("dump-memory stop did not restore command mode")
+    prefix = parser.pending_bytes if parser is not None else b''
+    options = {'dump_prefix': prefix} if prefix else {}
+    if not bridge._stop_stream_and_sync((stop_command + "\n").encode("utf-8"), **options):
+        detail = getattr(bridge, 'last_stream_stop_error', None)
+        raise TimeoutError("dump-memory stop did not restore command mode" + (f": {detail}" if detail else ""))
 
 
 def read_dump_memory_regions_once(
@@ -826,8 +878,8 @@ def _read_dump_memory_regions_once_locked(
         normalized.append((address, size))
 
     region_sizes = [size for _, size in normalized]
-    parser = DumpMemoryParser(region_sizes=region_sizes)
     command = build_dump_mem_command(normalized, 0)
+    parser = DumpMemoryParser(region_sizes=region_sizes, startup_command=command)
     stop_command = build_dump_mem_command([(normalized[0][0], 1)], -1)
     deadline = time.monotonic() + max(0.001, float(timeout))
     assembler = DumpSampleAssembler(region_sizes)
@@ -889,7 +941,7 @@ def _read_dump_memory_regions_once_locked(
             gap_count=missing,
         )
     finally:
-        _stop_dump_read(bridge, stop_command)
+        _stop_dump_read(bridge, stop_command, parser)
 
 
 def validate_dump_capture(regions, sample_count=1, timeout=10.0, speed_profile=None):
@@ -977,7 +1029,7 @@ def capture_memory(device, regions, *, sample_count=1, timeout=10.0, speed_profi
 MAX_DUMP_RESULT_JSON_BYTES = 16 * 1024 * 1024
 
 
-def validate_dump_stream(regions, period=0.0, frames=1, duration=2.0, speed_profile=None):
+def validate_dump_stream(regions, period=0.0, frames=1, duration=2.0, speed_profile=None, *, fastest=False):
     """Validate the finite CLI capture contract before a bridge or clock is touched."""
     import math
     if not isinstance(regions, list) or not 1 <= len(regions) <= MAX_SAFE_REPL_REGIONS:
@@ -988,7 +1040,9 @@ def validate_dump_stream(regions, period=0.0, frames=1, duration=2.0, speed_prof
         raise ValueError('period and duration must be finite numbers')
     if period < 0 or not 0 <= duration <= 300 or (not frames and not duration):
         raise ValueError('Use period >= 0, duration 0..300, and at least one capture bound')
-    if period == 0 and frames not in (0, 1):
+    if type(fastest) is not bool or (fastest and period != 0):
+        raise ValueError('Fastest sampling requires fastest=True and period=0')
+    if not fastest and period == 0 and frames not in (0, 1):
         raise ValueError('period=0 produces one sample; choose a positive period for multiple samples')
     if speed_profile is not None and speed_profile not in ('low', 'medium', 'high', 'ultra'):
         raise ValueError('speed_profile must be low/medium/high/ultra')
@@ -1006,20 +1060,24 @@ def check_capture_cancelled(cancelled):
         raise InterruptedError('Dump capture cancelled: owning session ended or request disconnected')
 
 
-def capture_dump_stream(device, regions, *, period=0.0, frames=1, duration=2.0, speed_profile=None, cancelled=None):
+def capture_dump_stream(device, regions, *, period=0.0, frames=1, duration=2.0, speed_profile=None,
+                        fastest=False, cancelled=None):
     """Collect complete samples using the existing session and shared assembler.
 
     First sample has a 2s startup allowance; duration starts at that sample.
     A count-only capture still ends within 300s. Serialized samples are bounded
     by 16 MiB; overflow fails instead of returning or saving an incomplete result.
+    Explicit fastest=True requires period=0 and negotiated timing-v2 firmware.
+    Without the flag, period=0 retains its single-sample meaning. Returned timing
+    is the accepted START configuration, not a measured sampling-rate guarantee.
     """
     import json
     from mklink.mux_watch import PackedWatchSample
-    pairs = validate_dump_stream(regions, period, frames, duration, speed_profile)
+    pairs = validate_dump_stream(regions, period, frames, duration, speed_profile, fastest=fastest)
     check_capture_cancelled(cancelled)
     if speed_profile is not None:
         device.set_debug_speed(speed_profile)
-    session = DumpMemoryStreamSession(device._bridge, pairs, period, allow_legacy_bulk=True)
+    session = DumpMemoryStreamSession(device._bridge, pairs, period, allow_legacy_bulk=True, fastest=fastest)
     session.packed_frames = True
     assembler = DumpSampleAssembler([size for _, size in pairs], ordered=True)
     region_metadata = [{'address': f'0x{address:08X}', 'size': size} for address, size in pairs]
@@ -1034,6 +1092,7 @@ def capture_dump_stream(device, regions, *, period=0.0, frames=1, duration=2.0, 
     stopped_by = 'duration'
     try:
         session.start()
+        timing = session.timing
         while time.monotonic() < deadline:
             check_capture_cancelled(cancelled)
             batch = session.read_frames(max_bytes=1024 * 1024)
@@ -1057,7 +1116,7 @@ def capture_dump_stream(device, regions, *, period=0.0, frames=1, duration=2.0, 
                 if result_bytes > MAX_DUMP_RESULT_JSON_BYTES:
                     raise ValueError('Dump result exceeds 16 MiB JSON limit; reduce frames, duration or regions')
                 samples.append(sample)
-                if period == 0 or (frames and len(samples) >= frames):
+                if (period == 0 and not fastest) or (frames and len(samples) >= frames):
                     stopped_by = 'frames'
                     break
             if stopped_by == 'frames':
@@ -1091,7 +1150,7 @@ def capture_dump_stream(device, regions, *, period=0.0, frames=1, duration=2.0, 
     return {'sample_count': len(samples), 'region_count': len(pairs),
             'total_bytes': sum(size for _, size in pairs) * len(samples), 'samples': samples,
             'stopped_by': stopped_by, 'incomplete_tail': bool(assembler.blocks or assembler.incomplete_region_count),
-            'stats': stats}
+            'stats': stats, 'timing': timing}
 
 
 class DumpMemoryStreamSession:
@@ -1111,6 +1170,7 @@ class DumpMemoryStreamSession:
         *,
         write_ranges: tuple[tuple[int, int], ...] = ARM_WRITE_RANGES,
         allow_legacy_bulk: bool = False,
+        fastest: bool = False,
     ):
         if not region_pairs:
             raise ValueError("dump-memory requires at least one region")
@@ -1122,11 +1182,14 @@ class DumpMemoryStreamSession:
         import math
         if not math.isfinite(period) or period < 0:
             raise ValueError("dump period must be nonnegative and finite")
+        if type(fastest) is not bool or (fastest and period != 0):
+            raise ValueError("Fastest sampling requires fastest=True and period=0")
         self.bridge = bridge
         self.region_pairs = list(region_pairs)
         self.period = float(period)
         self.write_ranges = tuple(write_ranges)
         self.allow_legacy_bulk = allow_legacy_bulk
+        self.fastest = fastest
         self.parser = DumpMemoryParser(region_sizes=[size for _, size in region_pairs])
         self.started = False
         self._mux_watch = None
@@ -1144,11 +1207,11 @@ class DumpMemoryStreamSession:
         if callable(capability) and capability() is True:
             from mklink.mux_watch import MuxWatchSession, MuxWatchCapacityError
             try:
-                watch = MuxWatchSession(None, self.region_pairs, self.period)
+                watch = MuxWatchSession(None, self.region_pairs, self.period, fastest=self.fastest)
             except MuxWatchCapacityError:
                 # Only exclusive finite bulk callers opt in. This is selection
                 # before starting IO, never recovery from a failed MUX request.
-                if not self.allow_legacy_bulk:
+                if self.fastest or not self.allow_legacy_bulk:
                     raise
             else:
                 watch.transport = self.bridge.enable_multiplex()
@@ -1158,7 +1221,12 @@ class DumpMemoryStreamSession:
                 self.started = True
                 return
 
+        if self.fastest:
+            raise RuntimeError('Fastest sampling requires WATCH_TIMING=2 multiplex firmware; legacy dump has no equivalent mode')
         command = build_dump_mem_command(self.region_pairs, self.period)
+        self.parser = DumpMemoryParser(
+            region_sizes=[size for _, size in self.region_pairs], startup_command=command,
+        )
         _enter_dump_stream(self.bridge)
         try:
             self.bridge._write_raw((command + "\n").encode("utf-8"))
@@ -1166,6 +1234,12 @@ class DumpMemoryStreamSession:
             self.bridge._exit_stream()
             raise
         self.started = True
+
+    @property
+    def timing(self) -> dict | None:
+        """Accepted wire timing, not a measurement or sustainable-rate guarantee."""
+        value = self._mux_watch.timing if self._mux_watch is not None else None
+        return dict(value) if value is not None else None
 
     def request_write(self, address: int, data: bytes, future: Future) -> None:
         """Called by the sole stream owner; ACKs arrive through read_frames()."""
@@ -1249,7 +1323,7 @@ class DumpMemoryStreamSession:
             self.region_pairs, DUMP_MEMORY_STOP_PERIOD,
         )
         try:
-            _stop_dump_read(self.bridge, command)
+            _stop_dump_read(self.bridge, command, self.parser)
         finally:
             self.started = False
 
@@ -1266,6 +1340,7 @@ class DumpMemoryStreamSession:
             "protocol_frames": self._protocol_frames,
             "complete_samples": self._complete_samples,
             "parser_dropped_bytes": self.parser.dropped_bytes,
+            "startup_control_bytes": self.parser.startup_control_bytes,
             "parser_dropped_frames": self.parser.dropped_frames,
             "parser_crc_errors": self.parser.crc_errors,
             "firmware_flagged_frames": self._firmware_flagged_frames,

@@ -31,9 +31,9 @@ it('adopts the online chip while disconnected and preserves a manual choice afte
   wrapper.unmount()
 })
 
-it.each(['desktop', 'browser'])('loads a manual SVD through the %s picker', async mode => {
-  const path = '/project/persistent.svd'
-  const file = new File(['<device/>'], 'device.svd')
+it.each([['desktop', 'svd'], ['browser', 'svd'], ['desktop', 'xml'], ['browser', 'xml']])('loads a manual file through %s as %s', async (mode, extension) => {
+  const path = `/project/persistent.${extension}`
+  const file = new File(['<device/>'], `device.${extension}`)
   files.pick.mockResolvedValue(mode === 'desktop' ? path : file)
   files.upload.mockResolvedValue({ path })
   const fetchMock = vi.fn(async (url: string, options?: RequestInit) => {
@@ -53,6 +53,35 @@ it.each(['desktop', 'browser'])('loads a manual SVD through the %s picker', asyn
     expect(wrapper.find('[data-testid="peripheral-GPIOB.12"]').exists()).toBe(true)
     if (mode === 'browser') expect(files.upload).toHaveBeenCalledWith('svd', file)
     else expect(files.upload).not.toHaveBeenCalled()
+  } finally { wrapper.unmount() }
+})
+
+it('selects the HPM series for a concrete part and explains the shared catalog', async () => {
+  vi.useFakeTimers()
+  const family = { id: 'hpm53', target: 'HPM5300', series: 'HPM5300', pack: 'HPMicro.SDK@1.13.0', svd: 'HPM5301_svd.xml' }
+  const fetchMock = vi.fn(async (url: string, options?: RequestInit) => {
+    if (url.endsWith('/select')) {
+      expect(JSON.parse(String(options?.body))).toEqual({ target_id: family.id })
+      return { ok: true, json: async () => ({ selection: family, items: [] }) }
+    }
+    return { ok: true, json: async () => ({ items: [], targets: url.endsWith('q=HPM53M1') ? [family] : [] }) }
+  })
+  vi.stubGlobal('fetch', fetchMock)
+  const wrapper = mount(PeripheralWatchPanel, { props: { deviceConnected: true, latestValues: {} } })
+  try {
+    await flushPromises()
+    const input = wrapper.get('[data-testid="peripheral-chip-search"]')
+    await input.setValue('HPM53M1')
+    await vi.advanceTimersByTimeAsync(160); await flushPromises()
+    expect((wrapper.get('[data-testid="peripheral-svd"]').element as HTMLSelectElement).value).toBe(family.id)
+    expect(wrapper.get('[data-testid="peripheral-svd"]').text()).toContain('HPM5300')
+    await wrapper.get('[data-testid="peripheral-load"]').trigger('click'); await flushPromises()
+    expect(wrapper.get('[data-testid="peripheral-series-note"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="peripheral-source"]').text()).toContain('HPM5301_svd.xml')
+    await input.setValue('HPM9901')
+    await vi.advanceTimersByTimeAsync(160); await flushPromises()
+    expect(wrapper.get('[data-testid="peripheral-load"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="peripheral-source"]').text()).toContain('HPM5300')
   } finally { wrapper.unmount() }
 })
 

@@ -14,6 +14,8 @@ def _prime_validated_rtt_control_block(device, address):
         "down_buffers": [],
     }
     device._validate_rtt_channel = lambda *_args, **_kwargs: None
+    device._prepare_rtt_transport = lambda: True
+    device._bridge._mux = type('Mux', (), {'capabilities': 255})()
 
 
 def test_systemview_start_reads_system_core_clock_before_stream(monkeypatch):
@@ -25,7 +27,7 @@ def test_systemview_start_reads_system_core_clock_before_stream(monkeypatch):
     class FakeSystemViewSession:
         _running = False
 
-        def __init__(self, bridge, channel=1):
+        def __init__(self, bridge, channel=1, *, info=None):
             self._bridge = bridge
 
         def start(self, addr, search_size=1024, project_root=".", *, mode=0):
@@ -75,7 +77,7 @@ def test_systemview_start_reads_hpm_core_clock_before_project_default(tmp_path, 
     class FakeSystemViewSession:
         _running = False
 
-        def __init__(self, bridge, channel=1):
+        def __init__(self, bridge, channel=1, *, info=None):
             self._bridge = bridge
 
         def start(self, addr, search_size=1024, project_root=".", *, mode=0):
@@ -141,7 +143,7 @@ def test_hpm_project_seeds_systemview_id_base_without_guessing_clock(tmp_path, m
     class FakeSystemViewSession:
         _running = False
 
-        def __init__(self, bridge, channel=1):
+        def __init__(self, bridge, channel=1, *, info=None):
             self._bridge = bridge
 
         def start(self, addr, search_size=1024, project_root=".", *, mode=0):

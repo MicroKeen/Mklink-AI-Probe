@@ -615,7 +615,7 @@ describe('WaveformViewer VOFA binary transport', () => {
       expect(bufferInput.max).toBe('1000000')
       expect(bufferInput.step).toBe('1')
       expect(input.value).toBe('0.001')
-      expect(input.min).toBe('0.000001')
+      expect(input.min).toBe('0.000004')
       expect(input.step).toBe('0.000001')
       expect(runtime.probe.currentInterval()).toBe(0.001)
 
@@ -625,15 +625,15 @@ describe('WaveformViewer VOFA binary transport', () => {
       const fetchMock = vi.fn().mockResolvedValue({
         ok: true,
         status: 200,
-        json: async () => ({ interval: 0.000001 }),
+        json: async () => ({ interval: 0.000004 }),
       })
       vi.stubGlobal('fetch', fetchMock)
       input.focus()
-      input.value = '0.000001'
+      input.value = '0.000004'
       input.dispatchEvent(new Event('input', { bubbles: true }))
       input.blur()
       runtime.probe.syncStatus({ state: 'running', interval: 0.001, items: [] })
-      expect(input.value).toBe('0.000001')
+      expect(input.value).toBe('0.000004')
       document.getElementById('btn-apply-interval')?.click()
       for (let turn = 0; turn < 6; turn++) await Promise.resolve()
 
@@ -641,15 +641,39 @@ describe('WaveformViewer VOFA binary transport', () => {
         '/api/dash/superwatch/interval',
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify({ interval: 0.000001 }),
+          body: JSON.stringify({ interval: 0.000004 }),
         }),
       )
-      expect(runtime.probe.currentInterval()).toBe(0.000001)
-      expect(input.value).toBe('0.000001')
+      expect(runtime.probe.currentInterval()).toBe(0.000004)
+      expect(input.value).toBe('0.000004')
       expect(runtime.probe.collectionState().state).toBe('running')
     } finally {
       runtime.cleanup()
     }
+  })
+
+  it('rejects SuperWatch intervals below 4 us without changing a running acquisition', async () => {
+    const runtime = await loadRttViewerRuntime('SuperWatch')
+    try {
+      await flushPromises()
+      runtime.probe.syncStatus({ state: 'running', interval: 0.001, items: [] })
+      const requests = vi.fn()
+      vi.stubGlobal('fetch', requests)
+      vi.stubGlobal('alert', vi.fn())
+      const input = document.getElementById('interval-input') as HTMLInputElement
+      for (const value of ['0', '0.000001', '0.000003', '0.000003999']) {
+        input.value = value
+        expect(input.validity.rangeUnderflow).toBe(true)
+        document.getElementById('btn-apply-interval')!.click()
+        expect(requests).not.toHaveBeenCalled()
+        expect(runtime.probe.currentInterval()).toBe(0.001)
+        expect(runtime.probe.collectionState().state).toBe('running')
+      }
+      input.value = '0.000004'
+      expect(input.checkValidity()).toBe(true)
+      input.stepUp()
+      expect(input.valueAsNumber).toBeCloseTo(0.000005, 12)
+    } finally { runtime.cleanup() }
   })
 
   it('accepts integer point boundaries without truncating fractional or invalid input', async () => {
@@ -2954,6 +2978,26 @@ describe('VOFA viewer hot path source guard', () => {
         expect(JSON.parse(start[1]!.body as string)).toEqual({ interval: 0.00001 })
         expect(document.getElementById('conn-status')!.textContent).toContain('Interval rejected')
       }
+    } finally { runtime.cleanup(); vi.unstubAllGlobals() }
+  })
+
+  it.each([0.000001, 0.000003, 0.000003999])('does not replay a saved SuperWatch interval below 4 us (%s)', async interval => {
+    vi.stubGlobal('localStorage', {
+      getItem: () => JSON.stringify({ channels: [], interval }), setItem: vi.fn(),
+    })
+    const requests = vi.fn(async (_url: any, _options?: RequestInit) => ({
+      ok: true, json: async () => ({ state: 'stopped', interval: 0.001, items: [] }),
+    }))
+    const runtime = await loadRttViewerRuntime('SuperWatch', 4, requests as typeof fetch)
+    try {
+      await flushPromises()
+      expect((document.getElementById('interval-input') as HTMLInputElement).value).toBe('0.001')
+      expect(requests.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false)
+      document.getElementById('btn-start')!.click()
+      await flushPromises()
+      const start = requests.mock.calls.find(([url]) => String(url).endsWith('/start'))!
+      expect(start).toBeDefined()
+      expect(start[1]!.body).toBeUndefined()
     } finally { runtime.cleanup(); vi.unstubAllGlobals() }
   })
 

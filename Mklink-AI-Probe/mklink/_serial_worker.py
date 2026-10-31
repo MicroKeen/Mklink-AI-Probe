@@ -48,7 +48,7 @@ class _WindowsReadQueue:
             raise serial.SerialException('Cannot read CDC timeouts')
         # A quiet command reply completes promptly; continuous acquisition fills
         # requests without depending on a new user-space ReadFile every 4 KiB.
-        timeout.ReadIntervalTimeout = 2
+        timeout.ReadIntervalTimeout = 1
         timeout.ReadTotalTimeoutMultiplier = 0
         timeout.ReadTotalTimeoutConstant = 100
         if not win32.SetCommTimeouts(port._port_handle, ctypes.byref(timeout)):
@@ -92,10 +92,19 @@ class _WindowsReadQueue:
         if not ok and error == 996:  # ERROR_IO_INCOMPLETE; buffer is still live
             # Wait for completion without imposing a polling delay on arriving
             # data. The short bound also lets reset/close take the read lock.
-            if api.WaitForSingleObject(ov.hEvent, 5) == 0xFFFFFFFF:
+            waited = api.WaitForSingleObject(ov.hEvent, 5)
+            if waited == 0xFFFFFFFF:
                 error = api.GetLastError()
                 raise serial.SerialException(f'CDC receive event failed (WinError {error})')
-            return b''
+            if waited != 0:
+                return b''
+            # Completion is already signalled; consume it in this read instead
+            # of returning empty and cycling through the receiver locks again.
+            ok = api.GetOverlappedResult(self._port._port_handle, ctypes.byref(ov),
+                                         ctypes.byref(count), False)
+            error = api.GetLastError() if not ok else 0
+            if not ok and error == 996:
+                return b''
         slot[2] = False
         if not ok:
             if self._closed and error == api.ERROR_OPERATION_ABORTED:

@@ -9,6 +9,27 @@ export interface ReleaseHistoryEntry {
 
 export const releaseHistory: ReleaseHistoryEntry[] = [
   {
+    version: '0.4.2', date: '2026-10-31',
+    summary: '完善 HPM 调试、采集恢复与界面体验',
+    summaryEn: 'Improve HPM debugging, capture recovery and the interface',
+    changes: [
+      '完善 HPM 烧录与调试，修复烧录后 RTT 恢复及遗留请求提示。',
+      'SuperWatch 内置九个 HPM 系列外设目录，支持手动导入 SVD/XML。',
+      '连接配置统一选择时钟，默认 10 MHz；精简 SuperWatch 工具栏，最低周期 4 µs。',
+      '支持 RTT 与 RTOS Trace 并行采集，改善暂停恢复和 STM32H7 硬件断点；需配套固件。',
+      '优化内存读写与设备识别，连接失败提示更明确。',
+      '修复 Windows 覆盖升级后仍显示旧版本的问题。',
+    ],
+    changesEn: [
+      'Improve HPM programming and debugging; fix RTT recovery after flashing and stale request prompts.',
+      'Add peripheral catalogs for nine HPM series and manual SVD/XML import in SuperWatch.',
+      'Select the shared clock in connection settings, defaulting to 10 MHz. Simplify SuperWatch controls with a 4 µs minimum interval.',
+      'Support parallel RTT and RTOS Trace capture, improve pause/resume and STM32H7 hardware breakpoints; requires compatible firmware.',
+      'Improve memory access and device detection, with clearer connection errors.',
+      'Fix incorrect version display after Windows overwrite upgrades.',
+    ],
+  },
+  {
     version: '0.4.1', date: '2026-10-26',
     summary: '修复固件升级与脱机下载器自动识别',
     summaryEn: 'Fix firmware updates and automatic offline probe detection',

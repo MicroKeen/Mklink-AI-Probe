@@ -52,6 +52,7 @@ jobs:
           $tests += 'test_runtime_spawn'
           $tests += 'test_runtime_reconnect'
           $tests += 'test_download_acquisition'
+          $tests += 'test_rtt_restore'
           $tests += 'test_firmware_upgrade'
           $tests += 'test_rtt_legacy_preflight'
           $tests += 'test_capture_startup_regressions'
@@ -99,8 +100,11 @@ jobs:
           $tests += 'test_superwatch_alignment'
           $tests += 'test_gui_connect_handoff'
           $tests += 'test_peripheral_restore'
+          $tests += @('test_hpm_peripherals', 'test_peripheral_import')
+          $tests += 'test_dump_control'
           $tests += 'test_runtime_switch'
           $tests += 'test_hpm_isp_offline'
+          $tests += @('test_hpm_debug_protocol', 'test_hpm_clock_contract', 'test_debug_speed', 'test_systemview_parser')
           $tests += 'test_offline_verify'
           $tests += 'test_offline_h7_dualcore'
           $arguments = @('-m', 'pytest', '-q', '--tb=short', "--junitxml=$($paths.reports)/shared-runtime.xml")

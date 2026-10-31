@@ -5,29 +5,30 @@
 
 ## MCP tool 速查（按能力域）
 
-下表保留 0.2.x 工具名称。0.3.0 开发分支的共享入口及参数差异见
-[共享后台说明](shared-runtime.md)，实际可用工具以 MCP `tools/list` 为准。
-共享入口已提供离线 `systemview_decode`、`systemview_analyze_events` 和
-后台 `set_debug_speed`；其他旧名称不能据此视为全部兼容。
+下表对应共享 MCP。直接工具以 `tools/list` 为准，`gui_call` 名称以
+`ping.capabilities` 为准。HPM 先读 [HPM 指南](hpm.md)，服务列出能力不等于所有
+架构都适用；旧固件可能没有配套的 HPM CPU 调试接口。
 
 | 域 | Tools | 备注 |
 |---|---|---|
 | 健康 | `ping` | 无需连接，首调确认 server 活着 |
 | 供电测量（0.2.3） | `get_power` | 只读 VCC 快照；V3 仅电压，V4 电压/电流/计算功率；需配套新固件，详见 [供电测量](power-telemetry.md) |
 | 器件检查（0.3） | `inspect_mcu` | 只读检查精确器件和统一算法目录，不写 profile/设备文件 |
-| 连接 | `discover_probes` · `connect` · `disconnect` · `detach` · `device_status` | connect 传 `axf=` 才能读变量 |
-| Flash / 探针控制 | `flash` · `erase_chip` · `erase_sector` · `reset` · `set_power_on` · `reboot_probe` | `reset` 复位目标；VCC 任意电压均须逐次确认，5 V 另须耐压确认；`reboot_probe` 会断连 |
+| 连接 | `discover_probes` · `connect` · `disconnect` · `detach` · `device_status` | 变量需后台已加载对应 ELF/AXF；已有 GUI 符号时不重复覆盖 |
+| 烧录/擦除/复位 | `start_job` · `job_status` | action 为 flash/erase/erase_sector/reset；保存 request_id、确认本次操作并查询终态。HPM 烧录走 ROM，独立 FLM 擦除不适用 |
+| 采集时钟 | `set_debug_speed` · `gui_call("debug_speed")` | 先读可用档位，再传 Hz 或兼容 profile；新 V3 14 档、HPM 4/10/20/30 MHz，详见共享运行与 HPM 指南 |
 | 安全保护 | `security_status` · `security_lock` · `security_unlock` | 活动共享 MCP：先查精确型号；必须提供 request_id，返回后台任务后用 job_status 查询。加锁校验固件，解锁确认永久数据丢失，按明确电压复位；nRF54L15省略电压 |
 | 内存 | `read_memory` · `read_memory_regions` · `write_memory` · `flush_memory` | 快照 regions 最多 16 项/总计 4096B；flush 单批最多 12 KiB/8 项，超额由调用方串行分批 |
 | 变量/寄存器 | `read_variable` · `write_variable` · `read_register` | 变量需 AXF；外设字段使用项目所选目录，无需 AXF |
 | 外设目录/采集（0.2.1 开发） | `peripheral_targets` · `select_peripherals` · `list_peripherals` · `capture_peripherals` | 与 CLI/Web 共用项目选择，采集 ≤30 秒、≤15 区域 |
-| 调试 | `halt` · `resume` · `step` · `set_breakpoint` · `clear_breakpoint` · `clear_all_breakpoints` · `read_core_registers` | FPB 硬件断点 |
-| 符号 | `load_symbols` · `symbols_status` · `memory_map` | DWARF 段表 |
+| HPM 核心调试 | `hpm_debug` | 配套 HPM_DEBUG v1 固件；能力/实时状态、暂停/继续/单步、RV32 核心寄存器/CSR、硬件执行断点 |
+| Cortex-M 调试 | `gui_call("halt"/"resume"/"step"/"core_registers"/"breakpoints")` | ARM 核心寄存器与 FPB；不用于 HPM |
+| 符号 | `search_symbols` · `gui_call("symbol_status"/"symbol_typeinfo"/"memory_map")` | 连接时 `axf=` 加载 RISC-V ELF 或 ARM AXF；不是只支持 ARM |
 | RTT（共享） | `rtt_start` · `rtt_read_channel` · `rtt_history` · `rtt_write` · `rtt_write_hex` · `rtt_stop` | 已运行时无参数 start 订阅；未运行传 addr/channels；逐通道保留 cursor/session。不得使用旧 RTTView 原始命令，见 [共享后台](shared-runtime.md) |
-| **SystemView** | `systemview_integrate` · `systemview_start` · `systemview_read` · `systemview_stop` · `capture_systemview` · `systemview_decode` · `systemview_analyze` · `systemview_analyze_events` · `systemview_report` | RTOS 跟踪（任务切换/ISR/CPU%）；集成见 [systemview-rtthread.md](systemview-rtthread.md)；先 rtt-integrate |
-| HardFault | `check_hardfault` · `decode_hardfault` | decode 自动 CFSR 展开 + 内置 DWARF 源码回溯 |
-| Modbus | `modbus_open` · `modbus_close` · `modbus_read` · `modbus_write` · `modbus_scan` | 独立串口（非探针） |
-| 串口 | `serial_list` · `serial_open` · `serial_close` · `serial_send` · `serial_read` | 独立串口（非探针） |
+| SystemView | `systemview` · `systemview_decode` · `systemview_analyze_events` | 采集用 action=start/history/stop 等；目标先集成对应架构的跟踪实现 |
+| HardFault | `gui_call("fault_snapshot"/"hardfault_check"/"hardfault_decode")` | 仅 Cortex-M；不将不支持解释为无异常 |
+| Modbus | `gui_call("modbus_start"/"modbus_transaction"/"modbus_probe"/"modbus_stop")` | 见 [Modbus](commands-modbus.md) |
+| 串口 | `gui_call("uart_ports"/"serial_start"/"serial_send"/"serial_history"/"serial_stop")` | 见 [串口](commands-serial.md) |
 
 > bytes 在 MCP 经 hex 字符串往返（`read_memory`→hex，`write_memory`/`serial_send`/`flush_memory`←hex）。
 

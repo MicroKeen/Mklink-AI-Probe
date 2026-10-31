@@ -84,6 +84,27 @@ def test_ordered_completion_reposts_and_cancel_reaps_before_free(native_reads):
     assert not state.pending and not state.events
 
 
+def test_signalled_pending_read_is_consumed_without_empty_receive_cycle(native_reads, monkeypatch):
+    from serial import win32
+    from mklink._serial_worker import _WindowsReadQueue
+    state = native_reads
+    reader = _WindowsReadQueue(state.port)
+    complete = win32.GetOverlappedResult
+    calls = []
+    def result(*args):
+        calls.append(1)
+        if len(calls) == 1:
+            state.error = 996
+            return False
+        return complete(*args)
+    monkeypatch.setattr(win32, 'GetOverlappedResult', result)
+    monkeypatch.setattr(win32, 'WaitForSingleObject', lambda *args: 0)
+    assert reader.read() == bytes(7)
+    assert len(calls) == 2 and len(state.pending) == 8
+    reader.close()
+    assert not state.pending and not state.events
+
+
 def test_reset_drains_old_requests_before_purge_and_new_generation(native_reads):
     from mklink._serial_worker import _WindowsReadQueue
     state = native_reads

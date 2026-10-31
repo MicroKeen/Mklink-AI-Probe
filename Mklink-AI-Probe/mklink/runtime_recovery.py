@@ -99,16 +99,9 @@ class TransportRecovery:
                     continue
                 restart = getattr(manager, '_restart_after_operation', None)
                 if callable(restart):
-                    if name == 'rtt' and hasattr(manager, '_line_assembler'):
-                        encoding = manager._line_assembler.encoding
-                        encodings = {ch: decoder._line_assembler.encoding
-                                     for ch, decoder in manager._channel_decoders.items()}
-                        def restart_rtt(start=restart, m=manager, default=encoding, channels=encodings):
-                            start()
-                            m.set_encoding(default)
-                            for channel, value in channels.items():
-                                m.set_encoding(value, channel)
-                        restart = restart_rtt
+                    if name == 'rtt' and hasattr(manager, 'restart_options'):
+                        options = manager.restart_options()
+                        restart = lambda m=manager, opts=options: m.start(state['device'], **opts)
                     collecting = getattr(manager, '_collecting', None)
                     paused = (not collecting.is_set() if collecting is not None
                               else bool(getattr(manager, 'paused', False)))

@@ -178,14 +178,37 @@ class RuntimeControl:
             status = 'unselected'
         elif selected and device and device.connected and device.port.casefold() != selected['port'].casefold():
             status = 'port_changed'
+        if status != 'present':
+            self._memory_identity_cache = None
         return {'status': status, 'probe': selected, 'probes': probes}
 
-    def require_identity(self, *, reconnect=False):
+    def _memory_identity_key(self):
+        state = self.app.state.mklink_state
+        device = state.get('device')
+        recovery = state.get('connection_recovery') or {}
+        if device is None or not device.connected or recovery.get('state') not in (None, 'idle'):
+            return None
+        bridge = getattr(device, '_bridge', None)
+        token = getattr(bridge, 'live_connection_token', None)
+        if type(token) is not tuple or len(token) != 3 or (device.port or '').casefold() != token[2]:
+            return None
+        return (self.info.get('probe_id'), state.get('device_generation', 0), id(device), id(bridge), token)
+
+    def require_identity(self, *, reconnect=False, memory_snapshot=False):
         if not self.info.get('probe_id'):  # isolated API fixtures
             return
+        key = self._memory_identity_key() if memory_snapshot and not reconnect else None
+        cached = getattr(self, '_memory_identity_cache', None)
+        if key is not None and cached and cached[0] == key and time.monotonic() < cached[1]:
+            return
+        self._memory_identity_cache = None
         presence = self.presence()
         if presence['status'] != 'present' and not (reconnect and presence['status'] == 'port_changed'):
             raise HTTPException(409, {'reason': presence['status'], 'message': 'Bound probe unavailable or port changed; release the old connection and reconnect this same identity explicitly'})
+        if key is not None and key == self._memory_identity_key():
+            # A short cache is scoped to the unchanged, continuously owned CDC
+            # handle. Lifecycle/probe operations always perform full discovery.
+            self._memory_identity_cache = (key, time.monotonic() + 0.25)
 
     async def snapshot(self):
         from mklink.remote.dashboards import get_managers
@@ -484,7 +507,8 @@ class RuntimeGate:
         local_symbols = path in {'/api/device/parse-axf', '/api/dash/superwatch/add', '/api/dash/superwatch/remove', '/api/dash/superwatch/workspace'}
         if (path.startswith(('/api/device/', '/api/dash/', '/api/probe/')) or path == '/api/mcu-detect') and not path.endswith(('/stop', '/disconnect')) and path != '/api/probe/firmware-upgrade' and not local_symbols:
             try:
-                c.require_identity(reconnect=path == '/api/device/connect')
+                from mklink.runtime_capabilities import MUX_MEMORY_PATHS
+                c.require_identity(reconnect=path == '/api/device/connect', memory_snapshot=path in MUX_MEMORY_PATHS)
             except HTTPException as exc:
                 return await reject(exc.status_code, exc.detail)
         if path in {'/api/offline-download/deploy', '/api/offline-download/trigger', '/api/offline-download/algorithm'}:
@@ -561,10 +585,11 @@ class RuntimeGate:
         # Download operations temporarily yield captures inside shared admission.
         from mklink.remote.dashboards import BRIDGE_DASHBOARD_TYPES, active_bridge_dashboards
         active = active_bridge_dashboards()
-        from mklink.runtime_capabilities import multiplex_enabled, MUX_MEMORY_PATHS, capture_reset_supported
-        mux_active = multiplex_enabled(c.app.state.mklink_state) and set(active) <= {'rtt', 'superwatch'}
+        from mklink.runtime_capabilities import multiplex_captures, MUX_MEMORY_PATHS, capture_reset_supported
+        mux_active = multiplex_captures(c.app.state.mklink_state, active)
         if path in {f"/api/dash/{name}/start" for name in BRIDGE_DASHBOARD_TYPES}:
-            if active and not (mux_active and path in {'/api/dash/rtt/start', '/api/dash/superwatch/start'}):
+            requested = path.split('/')[-2]
+            if active and not multiplex_captures(c.app.state.mklink_state, [*active, requested]):
                 return await reject(409, "A CDC acquisition is already running; subscribe to its cached data or stop it explicitly")
         if (path.startswith(("/api/device/", "/api/probe/")) and path not in {"/api/device/connect", "/api/device/flash", "/api/device/parse-axf"}) or path in {'/api/dash/superwatch/inspect', '/api/mcu-detect'}:
             sharing_reset = path == '/api/device/reset' and capture_reset_supported(c.app.state.mklink_state, active)

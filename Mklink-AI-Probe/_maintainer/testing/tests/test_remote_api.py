@@ -42,7 +42,8 @@ def test_project_is_fixed_for_backend_lifetime(tmp_path, monkeypatch, shared, co
     roots = []
     def discover(root):
         roots.append(root)
-        return [SimpleNamespace(target='CHIP', key='chip', public=lambda: {'project': root})]
+        return [SimpleNamespace(target='CHIP', key='chip', public=lambda: {'project': root},
+                                matches_query=lambda query: query.casefold() in 'chip')]
     monkeypatch.setattr('mklink.peripheral_watch.discover_svd_targets', discover)
     if shared:
         install_runtime(app, {'port': 8765, 'token': 'test-secret', 'instance_id': 'test-instance'})
@@ -115,7 +116,7 @@ def test_debug_speed_four_profiles_persist_only_after_success(tmp_path):
         assert options['profiles']=={'low':4000000,'medium':10000000,'high':20000000,'ultra':30000000}
         assert options['default']=='medium'
         result=client.post('/api/device/debug-speed',json={'profile':'ultra'})
-        assert result.status_code==200 and result.json()['stopped']==['superwatch']
+        assert result.status_code==200 and result.json()['stopped']==[]
         assert load_config(str(tmp_path))['debug_speed']=='ultra'
         device.set_debug_speed.side_effect=ValueError('Probe firmware does not confirm this JTAG profile')
         result=client.post('/api/device/debug-speed',json={'profile':'high'})
@@ -507,6 +508,7 @@ def test_config_clock_applies_before_persisting_and_rejection_keeps_old_value(tm
     app = create_app(auth_token=None, project_root=str(tmp_path))
     device, _ = _connected_symbol_device(tmp_path)
     device._flash = SimpleNamespace(set_swd_clock=Mock())
+    device.set_debug_clock = lambda hz: device._flash.set_swd_clock(hz)
     app.state.mklink_state['device'] = device
     with patch('mklink.remote.dashboards.stop_bridge_dashboards', return_value=[]), TestClient(app) as client:
         assert client.put('/api/config', json={'swd_clock': '4000000'}).status_code == 200
@@ -526,6 +528,7 @@ def test_clock_fallback_is_visible_without_persisting_the_rejected_request(tmp_p
     device, _ = _connected_symbol_device(tmp_path)
     device.clock_hz = 1_000_000
     device._flash = SimpleNamespace(set_swd_clock=Mock(side_effect=FlashError('profile unavailable; restored 1 MHz')))
+    device.set_debug_clock = lambda hz: device._flash.set_swd_clock(hz)
     app.state.mklink_state['device'] = device
     with patch('mklink.remote.dashboards.stop_bridge_dashboards', return_value=[]), TestClient(app) as client:
         assert client.put('/api/config', json={'swd_clock': '20000000'}).status_code == 422

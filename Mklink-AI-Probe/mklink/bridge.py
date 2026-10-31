@@ -103,6 +103,7 @@ class MKLinkSerialBridge:
         self._echo_callback: Callable[[str], None] | None = None
         self._transport_error: Exception | None = None
         self.last_connect_error: str | None = None
+        self.last_stream_stop_error: str | None = None
         self._diagnostic_id = uuid.uuid4().hex[:12]
         self._diagnostic_started = time.monotonic()
         self._diagnostic_failure_logged = False
@@ -129,6 +130,10 @@ class MKLinkSerialBridge:
 
     def supports_hpm_dump_write(self) -> bool:
         return "DUMP_WRITE_HPM=1" in self._get_firmware_capabilities()
+
+    def prepare_dump_stop(self) -> None:
+        """Cache the stop-ACK contract before entering the binary stream."""
+        self._get_firmware_capabilities()
 
     def _get_firmware_capabilities(self) -> frozenset[str]:
         # Capture all advertised features before entering MUX. Later dashboard
@@ -424,12 +429,27 @@ class MKLinkSerialBridge:
             self._mux_supported = 'MUX_TARGET=1' in self._get_firmware_capabilities()
         return self._mux_supported
 
+    @property
+    def live_connection_token(self):
+        """Identity may be reused only while this exact locked handle is live."""
+        if (self._transport_error is not None or self.state in (DeviceState.DISCONNECTED, DeviceState.ERROR)
+                or not self._running or not self._port_lock._locked
+                or self._serial is None or not self._serial.is_open):
+            return None
+        return (self._diagnostic_id, id(self._serial), self._port.casefold())
+
     def enable_multiplex(self):
         from mklink.mux import MuxTargetError, MuxTransport
         with self._cmd_lock:
             if self._mux is not None:
                 self._mux._check()
                 return self._mux
+            # Cached capabilities do not permit entering MUX while a legacy
+            # binary stream is active, or after the command port has failed.
+            if self._transport_error is not None:
+                raise ConnectionError('Command port failed; cannot enter MUX') from self._transport_error
+            if self._ctx.state not in (DeviceState.READY, DeviceState.BUSY):
+                raise ConnectionError(f'Device is not ready for MUX: {self._ctx.state.value}')
             if not self.supports_multiplex():
                 return None
             transport = MuxTransport(self._serial.write, self._cmd_lock,
@@ -803,7 +823,7 @@ class MKLinkSerialBridge:
     def _recover_failed_stream_start(self, stop_command: bytes) -> bool:
         return self._stop_stream_and_sync(stop_command)
 
-    def _stop_stream_and_sync(self, stop_command: bytes) -> bool:
+    def _stop_stream_and_sync(self, stop_command: bytes, *, dump_prefix: bytes = b'') -> bool:
         """Stop a stream and verify command mode within a bounded timeout.
 
         A raw stop may return its ``>>>`` well after the write.  Returning as
@@ -815,6 +835,9 @@ class MKLinkSerialBridge:
         earlier stop reply before this method reports READY.
         """
         with self._cmd_lock:
+            if stop_command.startswith(b'cmd.dump_memory('):
+                from .dump_control import stop_dump_and_sync
+                return stop_dump_and_sync(self, stop_command, dump_prefix)
             self._cancel_stream_arm()
             if self._transport_error is not None:
                 self._ctx.state = DeviceState.ERROR

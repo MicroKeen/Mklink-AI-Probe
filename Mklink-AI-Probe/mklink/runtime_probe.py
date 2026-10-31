@@ -20,7 +20,7 @@ def _query(state, capability):
         raise HTTPException(409, 'Release the stale connection explicitly before querying this probe')
     manager = state['resource_manager']
     owner = 'user:api:' + capability
-    manager.acquire_many((ResourceGroup.MKLINK_BRIDGE, ResourceGroup.TARGET_DEBUG, ResourceGroup.MUX_RTT, ResourceGroup.MUX_WATCH), owner)
+    manager.acquire_many((ResourceGroup.MKLINK_BRIDGE, ResourceGroup.TARGET_DEBUG, ResourceGroup.MUX_RTT, ResourceGroup.MUX_WATCH, ResourceGroup.MUX_SYSTEMVIEW), owner)
     bridge = None
     owned = device is None
     try:
@@ -81,7 +81,7 @@ def upgrade_firmware(state, firmware_root):
             manager = state['resource_manager']
             owner = 'user:api:firmware-upgrade'
             manager.acquire_many((ResourceGroup.MKLINK_BRIDGE, ResourceGroup.TARGET_DEBUG,
-                                  ResourceGroup.MUX_RTT, ResourceGroup.MUX_WATCH), owner)
+                                  ResourceGroup.MUX_RTT, ResourceGroup.MUX_WATCH, ResourceGroup.MUX_SYSTEMVIEW), owner)
             try:
                 current = select_probe(state['shared_probe_id'])
                 if (not current.get('identity_stable') or current['probe_id'] != selected['probe_id']
@@ -115,7 +115,7 @@ def upgrade_firmware(state, firmware_root):
             manager = state['resource_manager']
             owner = 'user:api:firmware-upgrade'
             manager.acquire_many((ResourceGroup.MKLINK_BRIDGE, ResourceGroup.TARGET_DEBUG,
-                                  ResourceGroup.MUX_RTT, ResourceGroup.MUX_WATCH), owner)
+                                  ResourceGroup.MUX_RTT, ResourceGroup.MUX_WATCH, ResourceGroup.MUX_SYSTEMVIEW), owner)
             device = state.get('device')
             bridge = None
             try:

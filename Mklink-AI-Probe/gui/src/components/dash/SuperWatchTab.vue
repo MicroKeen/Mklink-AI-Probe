@@ -31,22 +31,6 @@
       :title="tr('拖动或使用方向键调整目录宽度', 'Drag or use arrow keys to resize catalog')"
       @mousedown.prevent="startResize" @keydown="resizeByKey"></div>
     <div class="waveform-pane">
-      <div class="watch-topbar">
-        <div class="workspace-actions">
-          <button @click="focusMode = !focusMode">{{ focusMode ? tr('退出专注', 'Exit focus') : tr('展开工作区', 'Focus workspace') }}</button>
-        </div>
-        <div v-show="!replayChannels" class="speed-controls">
-          <label for="superwatch-speed">{{ tr('调试速率', 'Debug clock') }}</label>
-          <select id="superwatch-speed" v-model="speedProfile" @change="speedDirty = true" data-testid="superwatch-speed" class="form-select" :disabled="applyingSpeed">
-            <option value="low">{{ tr('低速 · 4 MHz', 'Low · 4 MHz') }}</option>
-            <option value="medium">{{ tr('中速 · 10 MHz（默认）', 'Medium · 10 MHz (default)') }}</option>
-            <option value="high">{{ tr('高速 · 20 MHz', 'High · 20 MHz') }}</option>
-            <option value="ultra">{{ tr('超高速 · 30 MHz', 'Ultra · 30 MHz') }}</option>
-          </select>
-          <button class="btn btn-sm" data-testid="apply-superwatch-speed" :disabled="!deviceConnected || applyingSpeed" @click="applySpeed">{{ tr('应用档位', 'Apply speed') }}</button>
-          <span role="status">{{ speedMessage }}</span>
-        </div>
-      </div>
       <WaveformViewer
         mode="SuperWatch"
         :device-connected="deviceConnected"
@@ -54,7 +38,13 @@
         :array-snapshot-path="snapshotPath"
         @latest-values="latestValues = $event"
         @replay-channels="setReplayChannels"
-      />
+      >
+        <template #actions>
+          <span class="workspace-actions">
+            <button type="button" class="panel-btn" @click="focusMode = !focusMode">{{ focusMode ? tr('退出专注', 'Exit focus') : tr('展开工作区', 'Focus workspace') }}</button>
+          </span>
+        </template>
+      </WaveformViewer>
     </div>
   </div>
 </template>
@@ -112,52 +102,6 @@ watch([panelWidth, source, hiddenChannels], () => {
   } catch { /* Do not block the shared viewer when storage is unavailable. */ }
 })
 const snapshotPath = ref<string | null>(null)
-const speedProfile = ref('medium')
-const applyingSpeed = ref(false)
-const speedMessage = ref('')
-const speedDirty = ref(false)
-let speedTimer: ReturnType<typeof setTimeout> | null = null
-let speedDisposed = false
-async function pollSpeed() {
-  if (!speedDirty.value && !applyingSpeed.value) await loadSpeed()
-  if (!speedDisposed) speedTimer = setTimeout(pollSpeed, 1000)
-}
-onUnmounted(() => { speedDisposed = true; if (speedTimer !== null) clearTimeout(speedTimer) })
-
-async function loadSpeed(): Promise<void> {
-  try {
-    const response = await fetch(`${API_BASE}/api/device/debug-speed`)
-    if (!response.ok) return
-    const payload = await response.json()
-    if (speedDisposed || speedDirty.value || applyingSpeed.value) return
-    if (['low', 'medium', 'high', 'ultra'].includes(payload.profile)) speedProfile.value = payload.profile
-  } catch { /* The backend can still be starting. */ }
-}
-
-async function applySpeed(): Promise<void> {
-  applyingSpeed.value = true
-  speedMessage.value = ''
-  try {
-    const response = await fetch(`${API_BASE}/api/device/debug-speed`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ profile: speedProfile.value }),
-    })
-    const payload = await response.json()
-    if (!response.ok) {
-      const detail = payload.detail
-      if (Array.isArray(detail?.busy) && detail.busy.length) {
-        throw new Error(tr('请先停止采集，再应用调试速率。', 'Stop acquisition before applying the debug speed.'))
-      }
-      throw new Error(typeof detail === 'string' ? detail : detail?.message || response.statusText)
-    }
-    speedDirty.value = false
-    speedMessage.value = ''
-  } catch (error: any) {
-    speedMessage.value = error.message
-  } finally {
-    applyingSpeed.value = false
-  }
-}
 let resizeStartX = 0
 let resizeStartWidth = 0
 
@@ -236,15 +180,11 @@ async function loadSnapshotSelection(): Promise<void> {
 
 onMounted(loadSnapshotSelection)
 watch(() => props.deviceConnected, loadSnapshotSelection)
-onMounted(pollSpeed)
-watch(() => props.deviceConnected, loadSpeed)
 </script>
 
 <style scoped>
 .focused { position:fixed; inset:0; z-index:900; background:var(--bg); height:100dvh !important; padding:8px; box-sizing:border-box; }
-.watch-topbar { display:flex; align-items:center; flex:0 0 44px; gap:8px; overflow-x:auto; overflow-y:hidden; white-space:nowrap; }
-.workspace-actions { display:flex; gap:6px; padding:4px; flex-shrink:0; }
-.workspace-actions button { background:var(--surface);color:var(--text);border:1px solid var(--border);padding:5px 8px;border-radius:4px; }
+.workspace-actions { display:inline-flex; flex-shrink:0; }
 
 .watch-catalog-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
 .replay-catalog { padding: 12px; overflow: auto; }
@@ -275,9 +215,6 @@ watch(() => props.deviceConnected, loadSpeed)
   overflow: hidden;
 }
 .waveform-pane > :last-child { flex: 1; min-height: 0; }
-.speed-controls { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; padding: 6px 12px; flex: 0 0 auto; font-size: 12px; }
-.speed-controls select { flex:none; width:180px; }
-.speed-controls [role="status"] { color: var(--muted); }
 
 @media (max-width: 760px) {
   .superwatch-workspace {

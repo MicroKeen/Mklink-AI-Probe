@@ -595,7 +595,7 @@ def create_offline_download_router(
     def _resources(isp_job=None):
         from mklink.remote.resource_manager import ResourceGroup
         result = [ResourceGroup.MKLINK_BRIDGE, ResourceGroup.TARGET_DEBUG,
-                  ResourceGroup.MUX_RTT, ResourceGroup.MUX_WATCH]
+                  ResourceGroup.MUX_RTT, ResourceGroup.MUX_WATCH, ResourceGroup.MUX_SYSTEMVIEW]
         if isp_job is not None:
             result += [ResourceGroup.SERIAL_PORT, ResourceGroup.MODBUS_PORT]
         return result

@@ -64,6 +64,15 @@ class _InvalidRTTControlBlock(DeviceError):
 _ram_validation_snapshot = ContextVar('ram_validation_snapshot', default=None)
 
 
+def _live_mux_capture(session):
+    """A target rejection must leave an owned subscription reachable for stop."""
+    from mklink.mux import MuxTransport
+    inner = getattr(session, '_session', session)
+    transport = getattr(inner, 'transport', None)
+    return (isinstance(transport, MuxTransport) and transport._error is None
+            and bool(getattr(inner, '_running', False)))
+
+
 def _with_ram_snapshot(operation):
     """Resolve trusted memory once per operation, never across starts/threads."""
     @wraps(operation)
@@ -98,7 +107,7 @@ _RTT_DEFAULT_SEARCH_SIZE = 1024
 _RTT_MAX_SEARCH_SIZE = 64 * 1024
 _RTT_DESCRIPTOR_SIZE = 24
 _RTT_FIRMWARE_MAX_CHANNELS = 8
-_RTT_MAX_TARGET_BUFFERS = 16
+_RTT_MAX_TARGET_BUFFERS = 64  # Target table size, not the MUX subscription limit.
 _RTT_MAX_BUFFER_SIZE = 1024 * 1024
 _RTT_RESERVED_STOP = b"RTTView.stop()"
 _SUPPORTED_POWER_VOLTAGES_MV = frozenset({1800, 3300, 5000})
@@ -214,11 +223,11 @@ def initialize_target(
     project_root: str = ".",
     timeout: float = 2.0,
 ) -> int:
-    """Initialize the target SWD DP, read IDCODE, and match the MCU profile.
+    """Read the probe's cached target ID and match the MCU profile.
 
-    Sends ``cmd.get_idcode()`` (the probe firmware's SWD line-switch + DP
-    init + IDCODE read), writes the result into the bridge context, and
-    resolves ``current_mcu`` with priority
+    ``cmd.get_idcode()`` is a cache read in current firmware. It does not
+    initialize JTAG/SWD or prove live target presence/SBA readiness. Store
+    the reported identity and resolve ``current_mcu`` with priority
     ``mcu_hint > .mklink/config.json:mcu_key > idcode match``.
 
     Call this on a freshly ``bridge.connect()``-ed session for **every path
@@ -231,10 +240,8 @@ def initialize_target(
     broken SWD, timeout, or a mock bridge in tests), the bridge context keeps
     its default (``idcode`` 0) and ``0`` is returned — the caller stays
     connected. This preserves the historical "connect succeeds even without a
-    target" semantics while fixing the bug where ``idcode`` was *always* 0
-    even with a target present (e.g. MCP ``connect``'s long-lived session that
-    never re-opened the serial port and so missed the firmware's startup DP
-    init window).
+    target" semantics. Actual target accesses must establish their own
+    transport/session readiness; repeated cached identity reads cannot do so.
     """
     from mklink.profiles import load_mcu_profiles, match_mcu_by_idcode
     from mklink.project_config import load_config
@@ -378,10 +385,21 @@ class Device:
         self._flash = MKLinkFlash(self._bridge)
         self.clock_warning = None
 
+        # Negotiate once per USB connection, before applying a saved clock or
+        # entering MUX. Dashboard status only reads this cache, never USB.
+        prepare_clock = getattr(self._bridge, '_get_firmware_capabilities', None)
+        if callable(prepare_clock):
+            try:
+                prepare_clock()
+            except Exception:
+                self.close()
+                raise
+
         # The configuration page's raw SWD clock also applies to deferred GUI
         # connections. Previously it was only consumed by flash(), so a new
         # connection silently inherited whatever clock the probe last used.
-        if config.get("swd_clock") or config.get("debug_speed"):
+        split_clocks = config.get('clock_interface') in ('SWD', 'JTAG')
+        if not split_clocks and (config.get("swd_clock") or config.get("debug_speed")):
             try:
                 from mklink.debug_speed import profile_clock
                 clock = config.get("swd_clock") or profile_clock(config["debug_speed"])
@@ -397,15 +415,12 @@ class Device:
                 self.close()
                 raise
 
-        # SWD DP init + IDCODE read + MCU match. This was previously only done
-        # by the remote API layer; every other connect path (MCP, SDK users,
-        # legacy socket server, SystemView CLI, pytest fixtures) skipped it, so
-        # the DAP was never initialized in long-lived sessions and idcode read
-        # 0. Doing it here fixes all of them at once. Tolerant: a missing
-        # target leaves idcode at 0 rather than failing connect (see
-        # initialize_target docstring).
+        # Cached identity selects the matching independent clock. Read it even
+        # for otherwise deferred GUI connections when split settings exist;
+        # this does not initialize or switch the target's debug transport.
+        # Missing identity keeps USB connected without applying either clock.
         detected_idcode = 0
-        if self._initialize_target_now:
+        if self._initialize_target_now or split_clocks:
             detected_idcode = initialize_target(
                 self._bridge,
                 self._flash,
@@ -416,9 +431,18 @@ class Device:
         if self._axf and load_symbols:
             self._load_dwarf_info()
 
-        if detected_idcode == 0x1000563D and not (config.get("swd_clock") or config.get("debug_speed")):
+        # A new connection uses the configuration page's default 10 MHz for
+        # both ARM and HPM, rather than inheriting the probe's previous clock.
+        if split_clocks or not (config.get("swd_clock") or config.get("debug_speed")):
             try:
-                self.set_debug_speed("medium")
+                if split_clocks:
+                    from mklink.capture_clock import active_clock_interface, requested_clock
+                    interface = active_clock_interface(bridge)
+                    if interface == 'unknown':
+                        raise ValueError('下载器接口尚未确认，已保留 SWD/JTAG 时钟配置；连接目标后重新应用。')
+                    self.set_debug_clock(requested_clock(config, interface), interface=interface)
+                else:
+                    self.set_debug_clock(10_000_000)
             except ValueError as error:
                 if not self.connected:
                     self.close()
@@ -430,7 +454,13 @@ class Device:
 
     def set_debug_speed(self, profile: str) -> dict:
         """Apply a named 4/10/20/30 MHz profile to an idle connection."""
-        from mklink.debug_speed import apply_profile
+        from mklink.debug_speed import apply_profile, profile_clock
+        from mklink.capture_clock import clock_options, prepare_clock_capabilities
+        self._require_connected()
+        prepare_clock_capabilities(self._bridge)
+        if (clock_options(self._bridge)['clock_source'] in ('v3-advertised', 'swd-advertised')
+                and profile_clock(profile) not in clock_options(self._bridge)['clocks_hz']):
+            raise ValueError('The old 4 MHz profile requires explicit migration to 2 MHz on this firmware; use clock_hz=2000000')
         try:
             result = apply_profile(self, profile)
         except ValueError as error:
@@ -438,6 +468,35 @@ class Device:
             raise
         self.clock_warning = None
         return result
+
+    def set_debug_clock(self, clock_hz: int, *, interface: str | None = None) -> dict:
+        """Configure the shared acquisition clock while captures are stopped.
+
+        New V3 firmware distinguishes saved application timing from applied
+        timing. Neither acknowledgement promises electrical calibration.
+        """
+        from mklink.capture_clock import active_clock_interface, clock_options, clock_snapshot, prepare_clock_capabilities
+        from mklink.debug_speed import validate_clock_hz
+        from mklink.flash import FlashError
+        self._require_connected()
+        if interface is not None:
+            active = active_clock_interface(self._bridge)
+            if interface not in ('SWD', 'JTAG') or interface != active:
+                raise ValueError(f'当前下载器接口为 {active}，不能应用 {interface} 时钟；请连接匹配的目标后重新应用。')
+        validate_clock_hz(clock_hz)
+        if self._bridge.state != DeviceState.READY:
+            raise ValueError('Stop acquisition before changing the shared clock; no stream was stopped')
+        prepare_clock_capabilities(self._bridge)
+        options = clock_options(self._bridge, hpm=str(self._mcu_hint or '').upper().startswith('HPM'), interface=interface)
+        if options['clock_source'] != 'legacy' and clock_hz not in options['clocks_hz']:
+            raise ValueError('Unsupported acquisition clock for this probe/interface; choose an advertised clock')
+        try:
+            self._flash.set_swd_clock(clock_hz)
+        except (FlashError, ValueError) as error:
+            self.clock_warning = str(error)
+            raise ValueError(str(error)) from error
+        self.clock_warning = None
+        return clock_snapshot(self, {})
 
     @property
     def clock_hz(self) -> int | None:
@@ -859,16 +918,25 @@ class Device:
                 raise DeviceError("Flash base address must be nonnegative")
             flash_base = _fmt_hex(parsed_base_address)
 
-        # Setup SWD clock (prefer config, fallback to profile default)
-        resolved_swd_clock = 1000000
+        # HPM's private JTAG backend only has named DMI timing kernels.
+        # The legacy parameter name does not make arbitrary SWD rates valid.
+        hpm_clock = project_hpm or is_hpm_profile
+        resolved_swd_clock = 10000000 if hpm_clock else 1000000
         if swd_clock is not None:
             resolved_swd_clock = swd_clock
         elif cfg:
-            cfg_clock = cfg.get("swd_clock")
+            from mklink.capture_clock import requested_clock
+            cfg_clock = requested_clock(cfg, 'JTAG' if hpm_clock else 'SWD') if cfg.get('clock_interface') else cfg.get("swd_clock")
             if cfg_clock:
                 resolved_swd_clock = int(cfg_clock)
         elif mcu_profile:
             resolved_swd_clock = mcu_profile.get("swd_clock_default", resolved_swd_clock)
+        if hpm_clock:
+            from mklink.debug_speed import validate_hpm_clock_hz
+            try:
+                validate_hpm_clock_hz(resolved_swd_clock, self._bridge)
+            except ValueError as error:
+                raise DeviceError(str(error)) from error
         self._flash.set_swd_clock(resolved_swd_clock)
 
         # Prefer the unified user/builtin Pack catalog when an exact target is
@@ -1913,7 +1981,7 @@ class Device:
                 # Preserve the original start failure.  reset_failed_start()
                 # already applies a raw-stop fallback before returning.
                 pass
-            if self._rtt_session is session:
+            if self._rtt_session is session and not _live_mux_capture(session):
                 self._rtt_session = None
             self._rtt_control_block_info = None
             self._rtt_write_guard_tail = b""
@@ -1973,10 +2041,10 @@ class Device:
                 return ""
             return session.stop()
         finally:
-            if self._rtt_session is session:
+            if self._rtt_session is session and not _live_mux_capture(session):
                 self._rtt_session = None
-            self._rtt_control_block_info = None
-            self._rtt_write_guard_tail = b""
+                self._rtt_control_block_info = None
+                self._rtt_write_guard_tail = b""
 
     def wait_for_rtt(
         self,
@@ -2042,24 +2110,22 @@ class Device:
             self._project_root,
             source_path=self._axf,
         )
-        if channel > 2:
-            raise DeviceError('Legacy SystemView supports channels 0..2')
+        if not 0 <= channel < 8:
+            raise DeviceError('SystemView supports channels 0..7')
+        if not self._prepare_rtt_transport():
+            raise DeviceError('SystemView requires shared MUX firmware; update the probe firmware')
+        from mklink.mux import MuxTransport
+        if not self._bridge._mux.capabilities & MuxTransport.RTT_UPDATE_CAPABILITY:
+            raise DeviceError('SystemView requires incremental RTT firmware support; update the probe firmware')
         old_systemview_session = self._systemview_session
         if old_systemview_session is not None:
             try:
                 if old_systemview_session._running:
                     old_systemview_session.stop()
             finally:
-                if self._systemview_session is old_systemview_session:
+                if self._systemview_session is old_systemview_session and not _live_mux_capture(old_systemview_session):
                     self._systemview_session = None
                 self._systemview_parser = None
-
-        # SystemView 与 RTT 共用同一探针 bridge，二者互斥
-        if self._rtt_session and self._rtt_session._running:
-            self._rtt_session.stop()
-            self._rtt_session = None
-        self._rtt_control_block_info = None
-        self._rtt_write_guard_tail = b""
 
         requested_addr = int(addr, 0)
         self.validate_rtt_stream_request(
@@ -2075,7 +2141,7 @@ class Device:
         else:
             control_block_addr = requested_addr
         control_info = self._read_rtt_control_block(control_block_addr)
-        self._validate_rtt_channel(control_info, channel)
+        self._validate_rtt_channel(control_info, channel, require_down=True)
 
         # SystemView firmware always scans even in static mode.  Passing the
         # exact host-validated address with the smallest aligned window avoids
@@ -2091,7 +2157,7 @@ class Device:
 
         from mklink.systemview import SystemViewSession
         from mklink.systemview_parser import SystemViewParser
-        session = SystemViewSession(self._bridge, channel=channel)
+        session = SystemViewSession(self._bridge, channel=channel, info=control_info)
         self._systemview_session = session
         self._systemview_parser = None
         try:
@@ -2126,8 +2192,7 @@ class Device:
             # 会覆盖为同值。非 STM32 工程可后续从 MCU profile 取 ram base。
             self._systemview_parser._ram_base = int(sv_defaults["ram_base"])
             self._systemview_parser._id_shift = int(sv_defaults["id_shift"])
-            # SystemCoreClock must be read before SystemView switches the bridge
-            # into binary stream mode; command/variable reads are unavailable there.
+            # MUX memory access remains available during shared capture.
             if cpu_freq_hint:
                 set_cpu_freq = getattr(self._systemview_parser, "set_cpu_freq", None)
                 if callable(set_cpu_freq):
@@ -2154,7 +2219,7 @@ class Device:
             except Exception:
                 # Cleanup must not replace the actual startup/parser failure.
                 pass
-            if self._systemview_session is session:
+            if self._systemview_session is session and not _live_mux_capture(session):
                 self._systemview_session = None
             self._systemview_parser = None
             raise
@@ -2204,7 +2269,7 @@ class Device:
             if session:
                 session.stop()
         finally:
-            if self._systemview_session is session:
+            if self._systemview_session is session and not _live_mux_capture(session):
                 self._systemview_session = None
             self._systemview_parser = None
 
@@ -2265,9 +2330,11 @@ class Device:
     # ------------------------------------------------------------------
     def read_memory(self, address: int, size: int) -> bytes:
         self._require_connected()
-        from mklink.mux import MuxTransport
-        mux = getattr(self._bridge, '_mux', None)
-        if isinstance(mux, MuxTransport):
+        # Negotiate on the first snapshot too; no dummy RTT/Watch is required.
+        # Only an explicitly unsupported bridge returns None. Transition and
+        # target failures propagate without replaying through the legacy path.
+        mux = self._bridge.enable_multiplex()
+        if mux is not None:
             return mux.read_memory(address, size)
         from mklink.memory_access import parse_read_ram_response
         cmd = f"cmd.read_ram(0x{address:08X}, {size})"
@@ -2327,9 +2394,8 @@ class Device:
         self._require_connected()
         if not data:
             return
-        from mklink.mux import MuxTransport
-        mux = getattr(self._bridge, '_mux', None)
-        if isinstance(mux, MuxTransport):
+        mux = self._bridge.enable_multiplex()
+        if mux is not None:
             mux.write_memory(address, data)
             return
         from mklink.memory_write import execute_flush, validate_writes
@@ -2428,6 +2494,11 @@ class Device:
     # ------------------------------------------------------------------
     # Debug control
     # ------------------------------------------------------------------
+    def hpm_debug(self, **arguments) -> dict:
+        """Explicit RV32 control through capability-checked HPM_DEBUG firmware."""
+        from mklink.hpm_debug import execute
+        return execute(self, arguments)
+
     def _require_cortex_m_debug(self):
         self._require_connected()
         if "HPM" in self.mcu_name.upper() or getattr(self._bridge, "idcode", None) == 0x1000563D:

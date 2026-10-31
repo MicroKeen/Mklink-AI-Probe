@@ -97,7 +97,7 @@ def test_readback_failure_never_replays_or_sends_next_batch(readback):
 def test_device_write_uses_common_planner_and_reports_errors():
     device = Device()
     device._connected = True
-    device._bridge = SimpleNamespace(send_command=Mock(return_value='flush fail'))
+    device._bridge = SimpleNamespace(send_command=Mock(return_value='flush fail'), enable_multiplex=lambda: None)
     with pytest.raises(DeviceError, match='no remaining batches'):
         device.write_memory(0, bytes(range(90)))
     device._bridge.send_command.assert_called_once()

@@ -11,6 +11,7 @@ CAPABILITIES = {
     'device_status': ('GET', '/api/device/status'),
     'debug_speed': ('GET', '/api/device/debug-speed'),
     'set_debug_speed': ('POST', '/api/device/debug-speed'),
+    'hpm_debug': ('POST', '/api/device/hpm-debug'),
     'halt': ('POST', '/api/device/halt'),
     'resume': ('POST', '/api/device/resume'),
     'step': ('POST', '/api/device/step'),
@@ -18,6 +19,7 @@ CAPABILITIES = {
     'read_memory': ('POST', '/api/device/read-memory'),
     'measure_dump_memory': ('POST', '/api/device/dump-memory/measure'),
     'capture_dump': ('POST', '/api/device/dump-memory/capture'),
+    'watch_runtime_stats': ('POST', '/api/device/dump-memory/runtime-stats'),
     'flush_memory': ('POST', '/api/device/flush-memory'),
     'dump_memory': ('POST', '/api/device/dump-memory'),
     'read_memory_regions': ('POST', '/api/device/read-memory-regions'),
@@ -73,11 +75,23 @@ def multiplex_enabled(state):
     return getattr(getattr(state.get('device'), '_bridge', None), '_mux_supported', None) is True
 
 
+def multiplex_captures(state, active):
+    """SystemView requires negotiated incremental RTT, never a raw fallback."""
+    from mklink.mux import MuxTransport
+    if not multiplex_enabled(state) or not set(active) <= {'rtt', 'superwatch', 'systemview'}:
+        return False
+    if 'systemview' not in active:
+        return True
+    mux = getattr(getattr(state.get('device'), '_bridge', None), '_mux', None)
+    return (isinstance(mux, MuxTransport) and mux.ready
+            and bool(mux.capabilities & MuxTransport.RTT_UPDATE_CAPABILITY))
+
+
 def capture_reset_supported(state, active):
     """Only negotiated framed reset may share a running target acquisition."""
     from mklink.mux import MuxTransport
     mux = getattr(getattr(state.get('device'), '_bridge', None), '_mux', None)
-    return (set(active) <= {'rtt', 'superwatch'}
+    return (multiplex_captures(state, active)
             and isinstance(mux, MuxTransport) and mux.ready
             and mux.supports_software_reset)
 
@@ -134,6 +148,14 @@ UART_CAPABILITIES = frozenset(name for name, (_, path) in CAPABILITIES.items() i
 def validate_arguments(capability, arguments):
     """Reject malformed/range-overflow writes before a device is touched."""
     arguments = dict(arguments)
+    if capability == 'watch_runtime_stats' and arguments:
+        raise HTTPException(422, 'Watch runtime statistics take no arguments')
+    if capability == 'hpm_debug':
+        from mklink.hpm_debug import command_arguments
+        try:
+            command_arguments(arguments)
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from error
     if capability == 'rtt_inspect':
         try:
             if set(arguments) != {'address'}:

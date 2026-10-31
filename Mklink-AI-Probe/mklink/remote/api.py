@@ -478,7 +478,7 @@ def _target_resources(operation):
     resources = [ResourceGroup.TARGET_DEBUG]
     from mklink.runtime_capabilities import MUX_MEMORY_CAPABILITIES
     if operation != 'capture-reset' and operation.replace('-', '_') not in MUX_MEMORY_CAPABILITIES:
-        resources += [ResourceGroup.MUX_RTT, ResourceGroup.MUX_WATCH]
+        resources += [ResourceGroup.MUX_RTT, ResourceGroup.MUX_WATCH, ResourceGroup.MUX_SYSTEMVIEW]
     return resources
 
 
@@ -488,13 +488,14 @@ def acquire_dashboard_resources(state: dict[str, Any], dashboard: str) -> list[s
 
     owner = f"user:dashboard:{dashboard}"
     manager = state["resource_manager"]
-    multiplex = dashboard in ('rtt', 'superwatch') and _multiplex_device(state)
+    multiplex = dashboard in ('rtt', 'superwatch', 'systemview') and _multiplex_device(state)
     resources = {
-        "rtt": [ResourceGroup.MUX_RTT] if multiplex else [ResourceGroup.MKLINK_BRIDGE, ResourceGroup.TARGET_DEBUG, ResourceGroup.MUX_RTT, ResourceGroup.MUX_WATCH],
-        "superwatch": [ResourceGroup.MUX_WATCH] if multiplex else [ResourceGroup.MKLINK_BRIDGE, ResourceGroup.TARGET_DEBUG, ResourceGroup.MUX_RTT, ResourceGroup.MUX_WATCH],
+        "rtt": [ResourceGroup.MUX_RTT] if multiplex else [ResourceGroup.MKLINK_BRIDGE, ResourceGroup.TARGET_DEBUG, ResourceGroup.MUX_RTT, ResourceGroup.MUX_WATCH, ResourceGroup.MUX_SYSTEMVIEW],
+        "superwatch": [ResourceGroup.MUX_WATCH] if multiplex else [ResourceGroup.MKLINK_BRIDGE, ResourceGroup.TARGET_DEBUG, ResourceGroup.MUX_RTT, ResourceGroup.MUX_WATCH, ResourceGroup.MUX_SYSTEMVIEW],
+        "systemview": [ResourceGroup.MUX_SYSTEMVIEW] if multiplex else [ResourceGroup.MKLINK_BRIDGE, ResourceGroup.TARGET_DEBUG, ResourceGroup.MUX_RTT, ResourceGroup.MUX_WATCH, ResourceGroup.MUX_SYSTEMVIEW],
         "serial": [ResourceGroup.SERIAL_PORT],
         "modbus": [ResourceGroup.MODBUS_PORT],
-    }.get(dashboard, [ResourceGroup.MKLINK_BRIDGE, ResourceGroup.TARGET_DEBUG, ResourceGroup.MUX_RTT, ResourceGroup.MUX_WATCH])
+    }.get(dashboard, [ResourceGroup.MKLINK_BRIDGE, ResourceGroup.TARGET_DEBUG, ResourceGroup.MUX_RTT, ResourceGroup.MUX_WATCH, ResourceGroup.MUX_SYSTEMVIEW])
     manager.acquire_many(
         resources,
         owner,
@@ -1365,8 +1366,21 @@ def create_app(
         mcu_key: str | None = Body(default=None),
         swd_clock: str | None = Body(default=None),
         debug_speed: str | None = Body(default=None),
+        clock_interface: str | None = Body(default=None),
+        clock_hz: int | None = Body(default=None, strict=True),
     ):
         config = load_config(_state["project_root"]) or {}
+        if clock_interface is not None or clock_hz is not None:
+            from mklink.capture_clock import configuration_clock_options, save_interface_clock
+            if clock_interface not in ('SWD', 'JTAG') or swd_clock is not None or debug_speed is not None:
+                raise HTTPException(422, 'Provide SWD or JTAG with clock_hz; do not mix legacy clock fields')
+            device = _state.get('device')
+            bridge = getattr(device, '_bridge', None) if device and device.connected else None
+            if clock_hz is not None and clock_hz not in configuration_clock_options(bridge, interface=clock_interface)['clocks_hz']:
+                raise HTTPException(422, 'Unsupported clock for the selected interface')
+            # This path edits an interface's saved configuration only. Applying
+            # to hardware uses debug-speed with an explicit, matching interface.
+            save_interface_clock(config, clock_interface, clock_hz)
         if debug_speed is not None:
             from mklink.debug_speed import profile_clock
             if debug_speed:
@@ -1408,9 +1422,12 @@ def create_app(
                 from mklink.flash import FlashError
                 try:
                     async with _exclusive_probe_control("config-clock") as (device, _):
-                        await run_in_threadpool(device._flash.set_swd_clock, parsed_swd_clock)
+                        if config.get('clock_interface'):
+                            await run_in_threadpool(device.set_debug_clock, parsed_swd_clock, interface='SWD')
+                        else:
+                            await run_in_threadpool(device.set_debug_clock, parsed_swd_clock)
                         device.clock_warning = None
-                except FlashError as error:
+                except (FlashError, ValueError) as error:
                     device.clock_warning = str(error)
                     raise HTTPException(status_code=422, detail=str(error)) from error
         save_config(_state["project_root"], config)
@@ -1819,7 +1836,7 @@ def create_app(
     @app.post("/api/files/svd")
     async def upload_svd_file(file: UploadFile = File(...)):
         from mklink.peripheral_watch import MAX_XML_BYTES, load_catalog
-        return await _upload_file_source(file, (".svd",), max_bytes=MAX_XML_BYTES,
+        return await _upload_file_source(file, (".svd", ".xml"), max_bytes=MAX_XML_BYTES,
                                          validate=lambda path: load_catalog(svd=path))
 
     # ===================================================================
@@ -2299,32 +2316,47 @@ def create_app(
         return {"status": "ok", "stopped": []}
 
     @app.post("/api/device/debug-speed")
-    async def set_debug_speed(profile: str = Body(..., embed=True), save: bool = Body(True, strict=True)):
-        from mklink.debug_speed import profile_clock
+    async def set_debug_speed(profile: str | None = Body(None), clock_hz: int | None = Body(None, strict=True), save: bool = Body(True, strict=True), interface: str | None = Body(None)):
+        from mklink.debug_speed import profile_clock, validate_clock_hz, PROFILES
+        if (profile is None) == (clock_hz is None):
+            raise HTTPException(422, 'Provide exactly one of profile or clock_hz')
         try:
-            profile_clock(profile)
+            requested_hz = profile_clock(profile) if profile is not None else validate_clock_hz(clock_hz)
             async with _exclusive_probe_control("debug-speed") as (device, stopped):
-                result = await run_in_threadpool(device.set_debug_speed, profile)
+                if interface is not None:
+                    result = await run_in_threadpool(device.set_debug_clock, requested_hz, interface=interface)
+                else:
+                    result = (await run_in_threadpool(device.set_debug_speed, profile) if profile is not None
+                          else await run_in_threadpool(device.set_debug_clock, requested_hz))
         except ValueError as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
         if save:
             config = load_config(_state["project_root"]) or {}
-            config["debug_speed"] = profile
-            config["swd_clock"] = str(profile_clock(profile))
+            mode = interface or (result.get('interface') if config.get('clock_interface') else None)
+            if mode in ('SWD', 'JTAG'):
+                from mklink.capture_clock import save_interface_clock
+                save_interface_clock(config, mode, requested_hz)
+            else:
+                matching = next((key for key, value in PROFILES.items() if value == requested_hz), None)
+                if matching:
+                    config["debug_speed"] = matching
+                else:
+                    config.pop("debug_speed", None)
+                config["swd_clock"] = str(requested_hz)
             save_config(_state["project_root"], config)
         return {**result, "stopped": stopped, "saved": save}
 
     @app.get("/api/device/debug-speed")
     async def get_debug_speed():
         from mklink.debug_speed import PROFILES
+        from mklink.capture_clock import clock_snapshot
         config = load_config(_state["project_root"]) or {}
-        profile = config.get("debug_speed", "medium")
         device = _state.get("device")
-        hz = PROFILES.get(profile, PROFILES["medium"])
-        if device and device.connected:
-            hz = device._bridge._ctx.swd_clock_hz or None
-            profile = next((name for name, value in PROFILES.items() if value == hz), None)
-        return {"profile": profile, "clock_hz": hz, "default": "medium", "profiles": PROFILES}
+        snapshot = clock_snapshot(device, config)
+        hz = snapshot['clock_hz']
+        profile = next((name for name, value in PROFILES.items() if value == hz), None)
+        return {**snapshot, "profile": profile, "default": "medium", "profiles": PROFILES,
+                "device_generation": _state.get('device_generation', 0)}
 
     @asynccontextmanager
     async def _exclusive_probe_control(operation: str):
@@ -2333,7 +2365,7 @@ def create_app(
         from mklink.remote.dashboards import BRIDGE_DASHBOARD_TYPES, stop_bridge_dashboards
 
         async with _dashboard_start_lock(_state):
-            if _state.get("shared_runtime"):
+            if _state.get("shared_runtime") or operation in ('debug-speed', 'config-clock'):
                 active = [name for name in BRIDGE_DASHBOARD_TYPES
                           if _dashboard_worker_alive(get_managers().get(name))]
                 if active:
@@ -2531,7 +2563,7 @@ def create_app(
     # Integrated Dashboard SSE — all dashboards
     # ===================================================================
 
-    from mklink.remote.dashboards import get_managers
+    from mklink.remote.dashboards import SUPERWATCH_MIN_INTERVAL, get_managers
 
     @app.get("/api/dash/conflict-check")
     async def dash_conflict_check(type: str):
@@ -2544,8 +2576,8 @@ def create_app(
             n for n in BRIDGE_DASHBOARD_TYPES
             if n != type and managers.get(n) and managers[n].running
         ]
-        from mklink.runtime_capabilities import multiplex_enabled
-        conflicts = [name for name in running if not (multiplex_enabled(_state) and {type, name} <= {'rtt', 'superwatch'})]
+        from mklink.runtime_capabilities import multiplex_captures
+        conflicts = [name for name in running if not multiplex_captures(_state, {type, name})]
         return {"conflicts": conflicts, "running": running}
 
     @app.get("/api/dash/rtt/stream")
@@ -2878,7 +2910,7 @@ def create_app(
 
     @app.post("/api/dash/superwatch/start")
     async def superwatch_start(
-        interval: float | None = Body(None, embed=True, ge=0.000001, le=60),
+        interval: float | None = Body(None, embed=True, ge=SUPERWATCH_MIN_INTERVAL, le=60),
     ):
         if not _state["device"] or not _state["device"].connected:
             raise HTTPException(status_code=400, detail="Device not connected")
@@ -3000,7 +3032,7 @@ def create_app(
                 _svd_targets.update({target.key: target for target in targets})
                 _svd_revision = revision
         matches = [target.public() for target in _svd_targets.values()
-                   if q.casefold() in target.target.casefold()]
+                   if target.matches_query(q)]
         return {"targets": matches[:200], "total": len(matches)}
 
     @app.post("/api/dash/superwatch/peripherals/select")

@@ -10,7 +10,7 @@ from mklink.runtime_api import install_runtime
 from mklink.runtime_capabilities import CAPABILITIES, validate_arguments
 
 
-def discovery_device(tmp_path, *, mux, jtag=False, read_status=0):
+def discovery_device(tmp_path, *, mux, jtag=False, read_status=0, counts=(1, 1)):
     """Real bridge/framing and Device parser, with bounded target RAM replies."""
     from mklink._types import DeviceState
     from mklink.bridge import MKLinkSerialBridge
@@ -18,8 +18,12 @@ def discovery_device(tmp_path, *, mux, jtag=False, read_status=0):
     from mklink.mux import packet
 
     base = 0x880DC if jtag else 0x20000100
-    ram = b'SEGGER RTT'.ljust(16, b'\0') + struct.pack('<II', 1, 1)
-    ram += struct.pack('<6I', 0, base + 128, 64, 4, 0, 0) * 2
+    ram = b'SEGGER RTT'.ljust(16, b'\0') + struct.pack('<II', *counts)
+    buffer_offset = 128 if counts == (1, 1) else 3500
+    descriptor = struct.pack('<6I', 0, base + buffer_offset, 64, 4, 0, 0)
+    for count in counts:
+        if count:
+            ram += descriptor + bytes(24 * (count - 1))
     bridge = MKLinkSerialBridge('TEST_RTT_DISCOVERY')
     bridge._ctx.state = DeviceState.READY
     bridge._ctx.idcode = 0x1000563D if jtag else 0x1BA01477
@@ -48,7 +52,7 @@ def discovery_device(tmp_path, *, mux, jtag=False, read_status=0):
         if 0x10 <= op < 0x40:
             assert payload[:8] == bridge._mux.nonce
             payload = payload[8:]
-        answer = {1: struct.pack('<IHH', 15, 256, 1), 4: payload,
+        answer = {1: struct.pack('<IHH', 15, 256, 1), 4: payload, 0x20: bytes(counts),
                   0x10: bytes(15) + bytes([2 if jtag else 1])}.get(op, b'')
         if op == 0x11:
             address, length = struct.unpack('<IH', payload)
@@ -108,6 +112,29 @@ def test_inspect_during_both_start_orders_preserves_streams(tmp_path, jtag, firs
     assert commands.count('cmd.get_version()') == 1
     watch.stop()
     device.rtt_stop()
+
+
+@pytest.mark.parametrize('count', [33, 64])
+def test_large_target_descriptor_table_keeps_eight_channel_subscription_limit(tmp_path, count):
+    device, base, commands = discovery_device(tmp_path, mux=True, counts=(count, count))
+    info = device.rtt_inspect(base)
+    assert info['max_up_buffers'] == info['max_down_buffers'] == count
+    assert len(info['up_buffers']) == len(info['down_buffers']) == count
+    assert info['channels'] == [0]
+    device.rtt_start(base, mode=1)
+    assert device._bridge._mux.rtt_mask == 1
+    device.rtt_stop()
+    assert commands.count(0x20) == commands.count(0x22) == 1
+
+
+@pytest.mark.parametrize('counts', [(65, 1), (1, 65)])
+def test_out_of_bounds_target_descriptor_count_fails_before_capture(tmp_path, counts):
+    from mklink.device import DeviceError
+    device, base, commands = discovery_device(tmp_path, mux=True, counts=counts)
+    with pytest.raises(DeviceError, match='invalid .*Buffer count'):
+        device.rtt_inspect(base)
+    assert commands.count(0x11) == 1
+    assert 0x20 not in commands
 
 
 def test_inspect_mux_read_failure_does_not_fallback_or_start_capture(tmp_path):

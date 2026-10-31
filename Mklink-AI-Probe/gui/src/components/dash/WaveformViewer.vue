@@ -5,6 +5,7 @@
     :class="{ 'superwatch-desktop': props.mode === 'SuperWatch' }"
   ></div>
   <Teleport v-if="recordHost" :to="recordHost"><SuperWatchRecording @state="updateRecordingLabel" /></Teleport>
+  <Teleport v-if="actionsHost" :to="actionsHost"><slot name="actions" /></Teleport>
 </template>
 
 <script setup lang="ts">
@@ -38,6 +39,7 @@ const emit = defineEmits<{
 
 const container = ref<HTMLDivElement>()
 const recordHost = ref<HTMLElement>()
+const actionsHost = ref<HTMLElement>()
 function updateRecordingLabel(state: string) {
   const summary = container.value?.querySelector('.watch-log-controls summary')
   if (!summary) return
@@ -447,13 +449,17 @@ function compactSuperwatchControls(el: HTMLElement): void {
   dialog.querySelector('button')!.onclick = () => dialog.close()
   dialog.addEventListener('keydown', event => event.stopPropagation())
   actions.prepend(open)
+  const extra = document.createElement('span')
+  extra.className = 'watch-extra-actions'
+  actions.prepend(extra)
+  actionsHost.value = extra
 }
 
 function buildTemplate(mode: string): string {
   const minPoints = mode === 'SuperWatch' ? 50000 : 2
   const maxPoints = mode === 'SuperWatch' ? 50000 : 10000
   const intervalValue = mode === 'SuperWatch' ? '0.001' : '0'
-  const intervalMinimum = mode === 'SuperWatch' ? '0.000001' : '0'
+  const intervalMinimum = mode === 'SuperWatch' ? '0.000004' : '0'
   const intervalStep = mode === 'SuperWatch' ? '0.000001' : '0.001'
   return `
 <header>

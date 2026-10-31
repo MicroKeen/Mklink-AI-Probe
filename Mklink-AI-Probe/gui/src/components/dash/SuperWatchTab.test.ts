@@ -16,99 +16,29 @@ describe('SuperWatchTab', () => {
       ? JSON.stringify({ panelWidth: 420, hideSettings: true, hideCatalog: true }) : null, setItem: vi.fn() })
     const wrapper = mount(SuperWatchTab, {
       props: { deviceConnected: false },
-      global: { stubs: { SymbolVariablePanel: true, PeripheralWatchPanel: true, WaveformViewer: true } },
+      global: { stubs: { SymbolVariablePanel: true, PeripheralWatchPanel: true, WaveformViewer: { template: '<div><slot name="actions" /></div>' } } },
     })
     expect(wrapper.get('.superwatch-workspace').classes()).not.toContain('compact')
     expect(wrapper.get('.superwatch-workspace').classes()).not.toContain('catalog-hidden')
     expect(wrapper.get('.superwatch-workspace').attributes('style')).toContain('420px')
     expect(wrapper.get('.workspace-actions').findAll('button')).toHaveLength(1)
-    expect(wrapper.get('#superwatch-speed').isVisible()).toBe(true)
+    expect(wrapper.find('#superwatch-speed').exists()).toBe(false)
     wrapper.unmount()
   })
-  it.each([
-    [{ busy: ['superwatch'] }, '请先停止采集，再应用调试速率'],
-    [{ message: 'Target is busy debugging' }, 'Target is busy debugging'],
-  ])('explains a rejected speed change without stopping shared capture', async (detail, message) => {
-    const fetchMock = vi.fn(async (_url: any, init?: RequestInit) => ({
-      ok: !init, statusText: 'Conflict',
-      json: async () => init ? { detail } : { profile: 'medium' },
-    }))
+  it('uses the Dashboard clock without its own polling or setter', async () => {
+    vi.useFakeTimers()
+    const fetchMock = vi.fn(async (_url: unknown) => ({ ok: true, json: async () => ({}) }))
     vi.stubGlobal('fetch', fetchMock)
     const wrapper = mount(SuperWatchTab, {
       props: { deviceConnected: true },
       global: { stubs: { SymbolVariablePanel: true, PeripheralWatchPanel: true, WaveformViewer: true } },
     })
-    try {
-      await flushPromises()
-      await wrapper.get('[data-testid="superwatch-speed"]').setValue('ultra')
-      await wrapper.get('[data-testid="apply-superwatch-speed"]').trigger('click')
-      await flushPromises()
-      expect(wrapper.get('[role="status"]').text()).toContain(message)
-      expect(wrapper.get<HTMLSelectElement>('#superwatch-speed').element.value).toBe('ultra')
-      expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1)
-      expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/stop'))).toBe(false)
-    } finally { wrapper.unmount() }
-  })
-  it('follows external clock changes but preserves an unapplied user choice', async () => {
-    vi.useFakeTimers()
-    let profile = 'medium'
-    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ profile }) })))
-    const wrapper = mount(SuperWatchTab, {
-      props: { deviceConnected: true },
-      global: { stubs: { SymbolVariablePanel: true, PeripheralWatchPanel: true, WaveformViewer: true } },
-    })
     await flushPromises()
-    profile = 'ultra'
-    await vi.advanceTimersByTimeAsync(1000)
-    expect(wrapper.get<HTMLSelectElement>('#superwatch-speed').element.value).toBe('ultra')
-    await wrapper.get('#superwatch-speed').setValue('high')
-    await vi.advanceTimersByTimeAsync(1000)
-    expect(wrapper.get<HTMLSelectElement>('#superwatch-speed').element.value).toBe('high')
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(wrapper.find('[data-testid="superwatch-speed"]').exists()).toBe(false)
+    expect(fetchMock.mock.calls.some(call => String(call[0]).includes('debug-speed'))).toBe(false)
     wrapper.unmount()
     vi.useRealTimers()
-  })
-  it('restores ultra while retaining high as the existing 20 MHz choice', async () => {
-    const fetchMock = vi.fn(async (_url: any, init?: RequestInit) => ({
-      ok: true, json: async () => init ? { clock_hz: 30000000 } : { profile: 'ultra' },
-    }))
-    vi.stubGlobal('fetch', fetchMock)
-    const wrapper = mount(SuperWatchTab, {
-      props: { deviceConnected: true },
-      global: { stubs: { SymbolVariablePanel: true, PeripheralWatchPanel: true, WaveformViewer: true } },
-    })
-    await flushPromises()
-    const select = wrapper.get<HTMLSelectElement>('[data-testid="superwatch-speed"]')
-    expect(select.element.value).toBe('ultra')
-    expect(select.findAll('option').map(option => option.attributes('value'))).toEqual(['low', 'medium', 'high', 'ultra'])
-    expect(select.get('option[value="high"]').text()).toContain('20 MHz')
-    await wrapper.get('[data-testid="apply-superwatch-speed"]').trigger('click')
-    await flushPromises()
-    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/api/device/debug-speed'), expect.objectContaining({
-      method: 'POST', body: JSON.stringify({ profile: 'ultra' }),
-    }))
-    wrapper.unmount()
-    vi.unstubAllGlobals()
-  })
-  it('defaults to medium and applies the selected memory sampling clock', async () => {
-    const fetchMock = vi.fn(async (_url: any, init?: RequestInit) => ({
-      ok: true, json: async () => init ? { clock_hz: 20000000 } : { profile: 'medium' },
-    }))
-    vi.stubGlobal('fetch', fetchMock)
-    const wrapper = mount(SuperWatchTab, {
-      props: { deviceConnected: true },
-      global: { stubs: { SymbolVariablePanel: true, PeripheralWatchPanel: true, WaveformViewer: true } },
-    })
-    await flushPromises()
-    expect(wrapper.get<HTMLSelectElement>('[data-testid="superwatch-speed"]').element.value).toBe('medium')
-    await wrapper.get('[data-testid="superwatch-speed"]').setValue('high')
-    await wrapper.get('[data-testid="apply-superwatch-speed"]').trigger('click')
-    await flushPromises()
-    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/api/device/debug-speed'), expect.objectContaining({
-      method: 'POST', body: JSON.stringify({ profile: 'high' }),
-    }))
-    expect(wrapper.get('[role="status"]').text()).toBe('')
-    wrapper.unmount()
-    vi.unstubAllGlobals()
   })
   it('shares waveform values and channel visibility between both workspace panes', async () => {
     const wrapper = mount(SuperWatchTab, {

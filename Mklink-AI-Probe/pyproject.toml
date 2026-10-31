@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mklink"
-version = "0.4.1"
+version = "0.4.2"
 description = "Mklink AI Probe - Embedded Debug Toolkit"
 requires-python = ">=3.9"
 dependencies = [
@@ -65,4 +65,4 @@ include = ["mklink*"]
 "" = "."
 
 [tool.setuptools.package-data]
-"mklink" = ["*.json", "*.ps1", "modbus/*.html", "modbus/profiles/*.json", "modbus/prompts/*.md"]
+"mklink" = ["*.json", "*.ps1", "modbus/*.html", "modbus/profiles/*.json", "modbus/prompts/*.md", "hpm_svd/*.xml", "hpm_svd/*.json", "hpm_svd/*.txt"]

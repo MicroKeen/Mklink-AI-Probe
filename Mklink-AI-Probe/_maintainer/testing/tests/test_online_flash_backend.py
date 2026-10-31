@@ -123,7 +123,7 @@ def test_hpm_rom_backend_reads_via_dump_memory(monkeypatch) -> None:
     backend.connect(
         probe="probe",
         target="HPM5300",
-        frequency=1_000_000,
+        frequency=10_000_000,
         board="hpm5300evk",
     )
     calls = []
@@ -1078,7 +1078,7 @@ def test_hpm_power_cycle_reset_restores_selected_voltage(monkeypatch) -> None:
     backend.connect(
         "probe",
         "HPM5300",
-        1_000_000,
+        10_000_000,
         board="hpm5300evk",
         reset_mode="power-cycle",
         reset_voltage_mv=5000,
@@ -1109,7 +1109,7 @@ def test_hpm_rom_backend_rejects_hex_and_reports_verify_mismatch(tmp_path: Path)
         device_factory=lambda **_kwargs: Device(),
         port_resolver=lambda _probe: "probe-port",
     )
-    backend.connect("probe", "HPM5300", 1_000_000, board="hpm5300evk")
+    backend.connect("probe", "HPM5300", 10_000_000, board="hpm5300evk")
 
     backend.read_memory = backend._device.read_memory
     mismatch = assert_error(
@@ -1142,7 +1142,7 @@ def test_hpm_rom_backend_verify_reports_progress(tmp_path: Path) -> None:
         port_resolver=lambda _probe: "probe-port",
         verify_chunk_size=4,
     )
-    backend.connect("probe", "HPM5300", 1_000_000, board="hpm5300evk")
+    backend.connect("probe", "HPM5300", 10_000_000, board="hpm5300evk")
     backend.read_memory = backend._device.read_memory
     backend.verify(
         ImageInspection(

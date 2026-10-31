@@ -5,7 +5,7 @@ description: 使用 MKLink/MicroLink 操作目标 MCU：固件烧录、内存与
 
 # MKLink 用户入口
 
-用于目标 MCU；不读仓库维护流程，按需读参考页。
+仅用于目标 MCU，按需读参考页。
 
 ## 开始前
 
@@ -24,15 +24,14 @@ description: 使用 MKLink/MicroLink 操作目标 MCU：固件烧录、内存与
 - **占用先查后台**：`runtime_status(probe=...)` 无需连接，查询会话、采集和任务。
   GUI 关闭不等于后台退出，AI 任务完成须 `detach`。占用/失败时读
   [控制权与恢复](references/runtime-recovery.md)。
-- 首次需要生成脚本、日志、采集或报告时，工作根目录固定为用户指定的非系统盘
-  目录；用户未指定时使用目标项目 `.mklink/`。项目在系统盘或没有项目时先询问，
-  不写 Skill 目录、AI 客户端目录、桌面或系统临时目录。按需读取
-  [工作目录与清理](references/work-files.md)，并报告实际路径。
+- 脚本、日志、报告写入用户指定的非系统盘目录，默认目标项目 `.mklink/`。
+  项目在系统盘或缺失时先询问；不写 Skill、AI 客户端、桌面或系统临时目录。
+  见[工作目录与清理](references/work-files.md)，报告实际路径。
 
 ## 不可绕过的设备边界
 
 - **单探针串行**：先读 `ping.limits`。同一下载器、命令口或目标串口同一时刻只
-  执行一个命令；新版 RTT/SuperWatch 统一调度并行，旧固件采集独占。共享客户端可
+  执行一个命令；配套固件 RTT/SystemView/SuperWatch 统一调度并行，按实际协商能力判断。共享客户端可
   同时读缓存。多下载器用 `discover_probes` 明确 ID/别名，不默认选第一台。
   `detach` 仅退出本客户端；明确 `disconnect` 自动停采集并断开设备；读变量不停止他人采集。独立工具复用连接，停流再断开。
 - **VOFA 与 dump**：`read_memory`/`read_ram` 只做快照；连续曲线用
@@ -40,15 +39,16 @@ description: 使用 MKLink/MicroLink 操作目标 MCU：固件烧录、内存与
   VOFA 最多 **64 路**、对齐合并后最多 **15 个读取分组**，连续 float 简写最多
   **16 路**；发送给 Pika 的完整命令最多
   **511 UTF-8 字节**。不得用循环 `read_ram` 绕过流边界。
+- **内存通道**：共享读写自动优先 MUX，无需先启动采集；失败不改道重发。
 - **flush**：单批总数据最多 **12 KiB**、最多 **8 个地址项**。超额时按批串行，
   每批等待提示符；不得与 dump、VOFA、RTT 或 SystemView 并发。
 - **RTT/SystemView**：地址只允许省略或传目标已知可写 RAM 内的 4 字节对齐地址，
-  不得拼接 Pika 表达式；旧固件/SystemView 通道为 **0~2**；报告 `MUX_TARGET=1` 的 V2.9.0 及配套 V3/V4 固件可订阅 RTT **0~7**，以目标实际活动通道为准。搜索窗口为 **0~65536 字节**且不得
-  越出已知目标 RAM。让工具拒绝越界参数，不得改用
-  原始命令绕过，也不得对失败的启动循环重试。MCP `rtt_write` 单次最多 **256
+  不得拼接 Pika 表达式；旧固件 RTT 通道为 **0~2**；MUX RTT/SystemView 支持 **0~7**，以目标实际活动通道为准。SystemView 需增量 RTT 能力，缺失不回退 raw。搜索窗口为 **0~65536 字节**且不得
+  越出已知目标 RAM。越界由工具拒绝，不绕过、不循环重试失败启动。MCP `rtt_write` 单次最多 **256
   字节**（文本 `rtt_write` 或二进制 `rtt_write_hex`），超限不得自动拆分；文件或日志走 YMODEM/串口专用传输，禁止拆分
   绕过；旧串口映射模式的输入不得包含或跨调用拼接探针保留串 `RTTView.stop()`；多路复用模式按二进制传输。`capture_rtt` 的
   `pattern` 是 1~256 UTF-8 字节的字面子串，不是正则表达式。
+  大流量采集见[原始字节订阅](references/rtt-binary-stream.md)。
 - **MCP Timeout**：查 `runtime_status`/`job_status`；无在途任务才显式
   `disconnect` → `connect` 恢复原设备。失败按控制权参考页处理；不重放未知结果，
   不循环 stop、`reboot_probe` 或 `reboot()`。
@@ -58,9 +58,8 @@ description: 使用 MKLink/MicroLink 操作目标 MCU：固件烧录、内存与
   不能改成 `custom` 绕过匹配。缺少精确型号名称不等于没有兼容算法：先按
   [FLM 兼容性规则](references/firmware-download-priority.md#flm-兼容性)核对工程与 Pack。
   能确定唯一兼容项时显式指定；确有歧义再请用户选择，均不兼容或缺文件才停止。
-- **HPM**：限 V4，只用 ROM API，不用 Pack/FLM 或通用 SWD reset。传精确 `target_part`
-  及 `board` 或四字 `hpm_flash_cfg`。BIN 需 `base_address`；HEX 用文件内地址，
-  需新版 V4 固件，工具自动检查能力。
+- **HPM**：先读 [HPM 指南](references/hpm.md)。V4/ROM API，禁用 FLM；AI 自选
+  JTAG 4/10/20/30 MHz 档位，不套用任意 SWD 频率或 Cortex-M 调试命令。
 - **供电**：`set_power_on` 每次都先确认 1800/3300/5000 mV 并传
   `confirm_user=True`。5000 mV 还须确认供电路径和负载耐压，并传 `confirm_5v=True`。
 - **加锁/解锁**：先调用 `security_status`，只有返回 `supported:true` 的精确型号才可

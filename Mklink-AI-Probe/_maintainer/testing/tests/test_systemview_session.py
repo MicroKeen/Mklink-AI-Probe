@@ -11,7 +11,7 @@ from mklink._types import (
 )
 from mklink.bridge import MKLinkSerialBridge
 from mklink.device import Device
-from mklink.systemview import SystemViewSession
+from mklink.systemview import LegacySystemViewSession as SystemViewSession
 
 
 @pytest.fixture(autouse=True)
@@ -375,7 +375,7 @@ class _DeviceSystemViewSession:
     calls = []
     _running = False
 
-    def __init__(self, _bridge, channel=1):
+    def __init__(self, _bridge, channel=1, *, info=None):
         self.channel = channel
 
     def start(self, addr, search_size=1024, project_root=".", *, mode=0):
@@ -397,7 +397,7 @@ def _systemview_control_block_memory(max_up=2):
     header = (
         b"SEGGER RTT" + b"\x00" * 6
         + max_up.to_bytes(4, "little")
-        + (0).to_bytes(4, "little")
+        + max_up.to_bytes(4, "little")
     )
 
     def descriptor(address):
@@ -410,13 +410,20 @@ def _systemview_control_block_memory(max_up=2):
 
     return header, b"".join(
         descriptor(0x20001000 + channel * 0x100)
-        for channel in range(max_up)
+        for channel in range(max_up * 2)
     )
 
 
 def _systemview_device(monkeypatch, read_memory):
     class Bridge:
         state = DeviceState.READY
+        _mux = type('Mux', (), {'capabilities': 255})()
+
+        def supports_multiplex(self):
+            return True
+
+        def enable_multiplex(self):
+            return self._mux
 
     _DeviceSystemViewSession.calls = []
     monkeypatch.setattr(
@@ -637,7 +644,7 @@ def test_device_systemview_start_clears_failed_session_and_preserves_error(
     class FailingSession:
         _running = False
 
-        def __init__(self, _bridge, channel=1):
+        def __init__(self, _bridge, channel=1, *, info=None):
             self.channel = channel
             self.reset_calls = 0
             instances.append(self)
@@ -652,6 +659,8 @@ def test_device_systemview_start_clears_failed_session_and_preserves_error(
     monkeypatch.setattr("mklink.systemview.SystemViewSession", FailingSession)
     device = Device(project_root=".")
     device._bridge = type("Bridge", (), {"state": DeviceState.READY})()
+    device._bridge._mux = type('Mux', (), {'capabilities': 255})()
+    device._prepare_rtt_transport = lambda: True
     device._connected = True
     device._read_cpu_clock_hint = lambda: (0, "")
     device._systemview_defaults = lambda: {

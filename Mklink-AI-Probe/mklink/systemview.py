@@ -2,9 +2,8 @@
 MKLink Serial Bridge — SystemView 会话管理。
 
 RTOS 的 SEGGER_SYSVIEW 集成把跟踪事件包写入 RTT 上行通道 1（"SysView" 缓冲）。
-SystemViewSession 通过探针固件的 ``SystemView.start`` 打开转发，完成
-SEGGER UART Recorder 的 ``SV`` 握手后进入 ``SYSTEMVIEW_STREAM`` 二进制流模式，
-把原始字节交给 SystemViewParser 解码。
+SystemViewSession 与 RTT 共用 MUX 引擎，把原始目标字节交给 SystemViewParser。
+LegacySystemViewSession 仅保留给显式旧协议调用；主路径不会自动回退。
 
 依赖: 无外部依赖
 内部依赖: mklink.bridge, mklink._types, mklink.rtt（复用解析）,
@@ -21,6 +20,69 @@ from mklink.rtt import RTTSession
 
 
 class SystemViewSession:
+    """SystemView commands and data use a shared framed RTT subscription."""
+    def __init__(self, bridge, channel=1, *, info=None):
+        self._bridge = bridge
+        self._channel = channel
+        self._info = info
+        self._session = None
+        self._running = False
+        self._tasklist_requested = False
+
+    def start(self, addr, search_size=1024, project_root='.', *, mode=0):
+        from mklink.mux import MuxTransport
+        from mklink.mux_rtt import MuxRTTSession
+        if self._running:
+            raise RuntimeError('SystemView already started')
+        if mode not in (0, 1):
+            raise ValueError('RTT storage mode must be 0 or 1')
+        if self._info is None:
+            raise RuntimeError('SystemView requires validated RTT descriptors; use Device.systemview_start')
+        if self._bridge.supports_multiplex() is not True:
+            raise RuntimeError('SystemView requires shared MUX firmware; update the probe firmware')
+        transport = self._bridge.enable_multiplex()
+        if not transport.capabilities & MuxTransport.RTT_UPDATE_CAPABILITY:
+            raise RuntimeError('SystemView requires incremental RTT firmware support; update the probe firmware')
+        session = MuxRTTSession(transport, self._info, self._channel)
+        self._session = session
+        result = session.start(addr)
+        self._running = True
+        try:
+            session.manager.start_recorder(session)
+        except Exception:
+            # A timed-out write poisons MUX; never send raw recovery or replay.
+            try:
+                self.stop()
+            except Exception:
+                pass
+            raise
+        self._running = True
+        self._started_at = time.monotonic()
+        self._tasklist_requested = False
+        return {**result, 'storage_mode': mode, 'channel': self._channel}
+
+    def read_bytes(self, duration=2.0, max_bytes=None):
+        if not self._running:
+            raise RuntimeError('SystemView not started')
+        result = self._session.read_channels(duration, max_bytes=max_bytes)[self._channel]
+        if not self._tasklist_requested and time.monotonic() - self._started_at >= .15:
+            self._tasklist_requested = True  # Unknown results must not be replayed.
+            self._session.send_input(b'\x04')
+        return result
+
+    def stop(self):
+        if self._session is not None:
+            self._session.stop()
+        self._running = False
+        return ''
+
+    def reset_failed_start(self, *, cause=None):
+        if self._session is not None and self._session._running:
+            self.stop()
+        return ''
+
+
+class LegacySystemViewSession:
     """SystemView 跟踪流会话（RTT 通道 1，二进制）。"""
 
     def __init__(self, bridge: MKLinkSerialBridge, channel: int = 1):

@@ -508,7 +508,9 @@ class SystemViewParser:
                 val, pos = self._read_str_bounded(pos, end)
             elif ftype == "id":
                 raw, pos = self._read_varint(pos)
-                val = (raw << self._id_shift) + self._ram_base
+                # SEGGER shrinks IDs using U32 subtraction. Addresses below
+                # RAMBase wrap on the target; expand with the same U32 width.
+                val = ((raw << self._id_shift) + self._ram_base) & 0xFFFFFFFF
                 out[fname + "_raw"] = raw
             else:  # u32
                 val, pos = self._read_varint(pos)
@@ -523,7 +525,7 @@ class SystemViewParser:
                 val, pos = self._read_str(pos)
             elif ftype == "id":
                 raw, pos = self._read_varint(pos)
-                val = (raw << self._id_shift) + self._ram_base
+                val = ((raw << self._id_shift) + self._ram_base) & 0xFFFFFFFF
                 out[fname + "_raw"] = raw
             else:
                 val, pos = self._read_varint(pos)
