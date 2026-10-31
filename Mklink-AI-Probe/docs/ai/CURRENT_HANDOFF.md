@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-31T18:08:20+08:00`
+- 更新时间：`2026-10-31T18:16:39+08:00`
 - 分支：`codex/v0.4.2-fixes`
-- HEAD：`当前安装源509ef9b8，NSIS SHAa3074e47；用户追加未连接14档和90px接口框修正，392Python/65GUI通过，准备重建。固定bd636 SDK/固件SHAebbc11f2保持。`
+- HEAD：`产品源8a09b32e；离线14档/90px接口框/旧固件升级提示，392Python/65GUI通过，Windows覆盖安装完成，NSIS SHA868b146c。固定bd636 SDK及固件SHAebbc11f2保持。`
 - 远端 HEAD：`microkeen/codex/v0.4.2-fixes；多个后续修复共用此分支。microkeen/main核对为3cc474bb。`
 - 工作树：E盘主工作区；旧detached树保留。构建/证据在F盘。
-- 当前任务：首个509ef9b8包覆盖安装通过。用户追加离线完整14档、90px接口框和旧固件更新提示，代码与392Python/65GUI通过。旧固件提示只导航升级页，不下载/刷写；中止冻结中的c12中间包以纳入补充，继续重建覆盖。见v042-clock-install-20261031.md。
-- 状态：`offline_full_clock_menu_ready_for_rebuild`
+- 当前任务：用户追加的离线完整14档、90px接口框、旧固件更新提示已修复，Windows8a09b32e本地包覆盖安装及真实界面/冻结/退出验证完成。旧固件提示按钮只导航升级页，不下载/刷写。安装版首次枚举3秒超时保留，复查1.134秒通过。见v042-clock-install-20261031.md；未发布。
+- 状态：`clock_menu_upgrade_prompt_installed_verified`
 
 ## 里程碑
 
@@ -23,7 +23,7 @@
 
 ## 验证证据
 
-- **0.4.2界面更新与Windows覆盖安装**：Windows509ef9b8/NSIS SHAa3074e47已覆盖，3642文件一致、两设置保留、47工具/41Web/原生退出通过。实际页面JTAG20M刷新保存且SWD30M独立，测试后恢复30M。追加离线14档/90px及旧固件升级提示修复392Python/65GUI通过，待新包。见v042-clock-install-20261031.md。此前bd636源408/SDK813及HPM5301并行/周期/收尾报告通过见clock-interfaces-20261031.md。完整Skill0d680d90/SHAa126d967不变。
+- **0.4.2界面更新与Windows覆盖安装**：Windows8a09b32e/NSIS SHA868b146c已覆盖，3642文件一致/两设置保留，47工具/41Web及原生退出通过。392Python/65GUI；真实页面两接口14档、90px接口框、JTAG5k刷新独立保存通过；旧固件提示和导航隔离浏览器通过。首次枚举3秒超时保留，复查1.134秒。见v042-clock-install-20261031.md；此前bd636源408/SDK813及限定HPM5301矩阵见clock-interfaces-20261031.md。完整Skill0d680d90/SHAa126d967不变。
 - **HPM AI Skill能力核实**：源05e73101：1139相关+68包/文档测试；Flash49700B一致、ELF1528变量/360MHz、SVD UART0、JTAG4/10、RTT/Watch/dump通过。SystemView U32修复38351事件；新固件复测22155事件零丢弃。指定会话依新授权更新V4.7.2/build17:19:37后，共享MCP暂停/寄存器/真实断点cause2/单步cause4/恢复运行通过，x31同值写回正确。Skill SHA44df3e58、2625文件/7059FLM/4800SVD校验，全局47工具并保留5339用户文件。无目标烧录/VCC/OTP/发布。见hpm-skill-audit-20261029.md。
 - **RTT自动恢复与在线静默收尾**：14417715：347相关+17发现测试通过。V4/HPM5301连续两次49700B烧录校验成功，自动暂停/恢复RTT与SuperWatch、零恢复错误；新增RTT349/466字节、Watch3005/3712周期且零读取错。Windows NSIS SHA56830303，覆盖exit0、3627载荷一致、冻结MCP/41Web/正常退出通过；完整Skill SHAbb05fbde、2625文件/47工具已同步。仍0.4.1未发布。旧静默面板修复d1cf16ec的124GUI/29Python证据保留。见rtt-auto-restore-20261030.md及online-flash-receipt-20261029.md。
 - **Linux/macOS 0.4.1测试包**：Linux源a6bdacbc/CI40637027269、Mac arm64源eefc6842/CI40640511140：USB各58通过/1skip，冻结CLI/MCP/健康/Web/退出通过。DEB SHA7309f377、DMG SHA56dc8e0a，均旧0.4.1未带后续修复；Mac ad-hoc未公证，实机安装/UI/USB待测。见linux-deb-test-20261028.md、macos-arm64-test-20261028.md。
@@ -34,7 +34,7 @@
 
 ## 架构决策
 
-- 0.4.1正式源514efb86及资产不可变，不重发。PR63安装器修复已合并留待下版；codex/v0.4.2-fixes共用。用户授权0.4.2重建覆盖安装已完成，Windows源509ef9b8已覆盖，追加离线菜单修正继续重建，完整Skill仍0d680d90。正式发布/合并须明确指令，旧Unix/旧detached树/私有固件保留，公网中继延期。
+- 0.4.1正式源514efb86及资产不可变。PR63安装器修复留待下版；codex/v0.4.2-fixes共用。Windows0.4.2产品源8a09b32e已按用户要求覆盖安装，含独立时钟/离线14档/紧凑接口框/旧固件升级提示；完整Skill仍0d680d90。发布/合并须明确指令；旧Unix/SDK/私有固件保留，公网中继延期。
 - 后台协议 52：一个 GUI 客户端持有一个固定后台，同窗口切换只改下载器，RTT/Watch/Trace 跟随当前设备并清空旧目标状态；另开客户端才建独立后台。已有 URL 的额外页面共享该后台。工程上下文固定，换工程须停止原后台后重开。
 - 物理探针唯一 OS 所有权、USB 身份核对和 epoch 隔离保留。GUI/AI 明确断开或切换自动停止采集、排空在途操作并释放端口；旧会话不得跨设备，未知结果不得自动重放，不偷取其他后台占用。MCP disconnect 物理断开，detach 仅退出自身；独立 UART 保留。
 - SuperWatch 变量写入只认写应答，不做自动回读；烧录/显式内存校验仍保留，真实写错误不得吞掉或重放。外设 ID 基于 Pack 版本/芯片/SVD 相对路径；失效选择不得阻断物理连接，无法迁移时重选。 在线型号提供脱机/外设默认值，各页可独立修改；Pack操作完成自动刷新。下载先预留唯一物理身份，不要求先连接目标；自身预留不重建下载表单，其他设备切换仍清理。 HPM SDK的*_svd.xml按CMSIS-SVD支持；九系列共用目录不要求精确型号，精确Pack优先，型号扩展可手动导入XML；SES CPU寄存器XML不作为外设SVD。保留厂家原始字节/许可证及SHA校验。dump停止根据DUMP_STOP能力验证回执，旧固件错误不得凭身份token误报READY；启动命令回显独立计数，duration尾部不算完整样本。
@@ -48,12 +48,12 @@
 ## 真机环境
 
 - **state**：固件会话已释放HPM5301/HPMLink；本轮最终V4.7.2/build20261031-17:41:04，UF2 SHAebbc11f2d429e815e6c1a2b67ac1a53c821b17af89aed38ab29677be1f7ecec0已核对。并行/周期/收尾报告通过，10MHz恢复、三流停止、负载关闭、tick运行且设备已断开。宿主仅核对报告，未操作探针。 固件会话随后报告板上已换GPTMR测试镜像并释放，不能再假设为RTOS wave_task；见其GPTMR-1ms-0.5ms-test.md，本轮未复验或连接。
-- **installer**：Windows0.4.2已装源509ef9b8，NSIS SHAa3074e47，3642载荷/两设置/47工具/41Web/原生退出通过；产物v042-clock-interfaces-20261031。用户追加离线档位和接口宽度，准备新包。完整Skill0d680d90/SHAa126d967不变；未发布。
+- **installer**：Windows0.4.2已装源8a09b32e，NSIS SHA868b146c，3642载荷/两设置/47工具/41Web/14档/90px及独立窗口正常退出通过。产物v042-clock-menu-20261031；首次枚举超时证据保留。完整Skill0d680d90/SHAa126d967不变；未发布。
 - **backups**：保留正式release、安装包、CI ZIP、唯一硬件证据、Skill备份及F盘缓存。含链接/不可访问目录不强删。历史获授权清理见v036-storage-cleanup-20261023.md及本机START_HERE；本地Unix清理不影响正式附件。旧detached树保留；本轮Skill备份在F盘cache/mklink-ai-probe/skill-backups。
 
 ## 下一动作
 
-1. 继续构建覆盖安装含离线14档、90px接口框及旧固件更新提示的Windows本地包，验证真实页面。旧509ef9b8包已通过并保留；c12中间构建主动中止、未安装。不改固定SDK/Skill/固件，不发布。
+1. 本轮Windows8a09b32e覆盖安装验收已完成，等待用户测试反馈或下一任务；离线完整14档保存不解锁旧固件，连接后按实际能力校验并提示更新。旧固件按钮仅导航。不自动更新固件、重建Skill或发布。
 2. 新V3已校准edc40176/build14:10:28，配置需明确ACK与applied/configured；无LIVE能力，采集中改频拒绝且不停任务。低频并行可明显增加DAP延迟。旧NOBITS机器码哈希结论撤回，硬件证据保留，见专项文档。
 3. 公网远程服务中继为下个版本任务；本次不实施。
 4. 下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。
@@ -72,8 +72,8 @@
 
 ## 延续协议
 
-- 读取CURRENT_HANDOFF/v042-session-handoff并核对Git，共用codex/v0.4.2-fixes。本机Windows/Skill为0.4.2本地候选，Windows产品源509ef9b8/Skill归档0d680d90；正式514efb86及0.4.1资产不可变。保留上海90/95GiB、到期锁停、账本和旧detached树，不申请私钥。
-- clock-interfaces-20261031.md记录固件SHAebbc11f2、SDK SHA2058e1ca及限定HPM5301矩阵；硬件已释放且后来换GPTMR镜像。v042-clock-install-20261031.md记录Windows509ef9b8安装及用户追加的离线14档/90px修正，待重建；旧失败/原始证据保留。
+- 读取CURRENT_HANDOFF/v042-session-handoff并核对Git，共用codex/v0.4.2-fixes。本机Windows/Skill为0.4.2本地候选，Windows产品源8a09b32e/Skill归档0d680d90；正式514efb86及0.4.1资产不可变。保留上海90/95GiB、到期锁停、账本和旧detached树，不申请私钥。
+- clock-interfaces-20261031.md记录固件SHAebbc11f2、SDK SHA2058e1ca及限定HPM5301矩阵；硬件后来换GPTMR镜像。v042-clock-install-20261031.md记录最新Windows8a09b32e/SHA868b146c覆盖验收、离线14档/90px/旧固件提示及一次枚举超时，不混同旧包或历史失败。
 - V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。
 - CDC995和SDK10048根因保留待排查。恢复仅同身份CDC故障5秒内；超时不自动接回/新建AI会话，主动断开立即生效，未知写入不重放。历史实例释放记录见v035-transport-recovery.md；当前硬件占用以本交接真机状态及指定固件会话为准。
 - 客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。
