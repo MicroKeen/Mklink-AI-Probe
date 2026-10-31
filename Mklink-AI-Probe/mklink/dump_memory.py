@@ -1029,7 +1029,7 @@ def capture_memory(device, regions, *, sample_count=1, timeout=10.0, speed_profi
 MAX_DUMP_RESULT_JSON_BYTES = 16 * 1024 * 1024
 
 
-def validate_dump_stream(regions, period=0.0, frames=1, duration=2.0, speed_profile=None):
+def validate_dump_stream(regions, period=0.0, frames=1, duration=2.0, speed_profile=None, *, fastest=False):
     """Validate the finite CLI capture contract before a bridge or clock is touched."""
     import math
     if not isinstance(regions, list) or not 1 <= len(regions) <= MAX_SAFE_REPL_REGIONS:
@@ -1040,7 +1040,9 @@ def validate_dump_stream(regions, period=0.0, frames=1, duration=2.0, speed_prof
         raise ValueError('period and duration must be finite numbers')
     if period < 0 or not 0 <= duration <= 300 or (not frames and not duration):
         raise ValueError('Use period >= 0, duration 0..300, and at least one capture bound')
-    if period == 0 and frames not in (0, 1):
+    if type(fastest) is not bool or (fastest and period != 0):
+        raise ValueError('Fastest sampling requires fastest=True and period=0')
+    if not fastest and period == 0 and frames not in (0, 1):
         raise ValueError('period=0 produces one sample; choose a positive period for multiple samples')
     if speed_profile is not None and speed_profile not in ('low', 'medium', 'high', 'ultra'):
         raise ValueError('speed_profile must be low/medium/high/ultra')
@@ -1058,20 +1060,24 @@ def check_capture_cancelled(cancelled):
         raise InterruptedError('Dump capture cancelled: owning session ended or request disconnected')
 
 
-def capture_dump_stream(device, regions, *, period=0.0, frames=1, duration=2.0, speed_profile=None, cancelled=None):
+def capture_dump_stream(device, regions, *, period=0.0, frames=1, duration=2.0, speed_profile=None,
+                        fastest=False, cancelled=None):
     """Collect complete samples using the existing session and shared assembler.
 
     First sample has a 2s startup allowance; duration starts at that sample.
     A count-only capture still ends within 300s. Serialized samples are bounded
     by 16 MiB; overflow fails instead of returning or saving an incomplete result.
+    Explicit fastest=True requires period=0 and negotiated timing-v2 firmware.
+    Without the flag, period=0 retains its single-sample meaning. Returned timing
+    is the accepted START configuration, not a measured sampling-rate guarantee.
     """
     import json
     from mklink.mux_watch import PackedWatchSample
-    pairs = validate_dump_stream(regions, period, frames, duration, speed_profile)
+    pairs = validate_dump_stream(regions, period, frames, duration, speed_profile, fastest=fastest)
     check_capture_cancelled(cancelled)
     if speed_profile is not None:
         device.set_debug_speed(speed_profile)
-    session = DumpMemoryStreamSession(device._bridge, pairs, period, allow_legacy_bulk=True)
+    session = DumpMemoryStreamSession(device._bridge, pairs, period, allow_legacy_bulk=True, fastest=fastest)
     session.packed_frames = True
     assembler = DumpSampleAssembler([size for _, size in pairs], ordered=True)
     region_metadata = [{'address': f'0x{address:08X}', 'size': size} for address, size in pairs]
@@ -1086,6 +1092,7 @@ def capture_dump_stream(device, regions, *, period=0.0, frames=1, duration=2.0, 
     stopped_by = 'duration'
     try:
         session.start()
+        timing = session.timing
         while time.monotonic() < deadline:
             check_capture_cancelled(cancelled)
             batch = session.read_frames(max_bytes=1024 * 1024)
@@ -1109,7 +1116,7 @@ def capture_dump_stream(device, regions, *, period=0.0, frames=1, duration=2.0, 
                 if result_bytes > MAX_DUMP_RESULT_JSON_BYTES:
                     raise ValueError('Dump result exceeds 16 MiB JSON limit; reduce frames, duration or regions')
                 samples.append(sample)
-                if period == 0 or (frames and len(samples) >= frames):
+                if (period == 0 and not fastest) or (frames and len(samples) >= frames):
                     stopped_by = 'frames'
                     break
             if stopped_by == 'frames':
@@ -1143,7 +1150,7 @@ def capture_dump_stream(device, regions, *, period=0.0, frames=1, duration=2.0, 
     return {'sample_count': len(samples), 'region_count': len(pairs),
             'total_bytes': sum(size for _, size in pairs) * len(samples), 'samples': samples,
             'stopped_by': stopped_by, 'incomplete_tail': bool(assembler.blocks or assembler.incomplete_region_count),
-            'stats': stats}
+            'stats': stats, 'timing': timing}
 
 
 class DumpMemoryStreamSession:

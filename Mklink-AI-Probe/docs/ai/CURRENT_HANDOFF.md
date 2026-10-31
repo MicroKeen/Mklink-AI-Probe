@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-31T14:59:15+08:00`
+- 更新时间：`2026-10-31T15:02:51+08:00`
 - 分支：`codex/v0.4.2-fixes`
-- HEAD：`产品已装e29d；字体115ca0ce及SDK显式fastest/ACK d08bf1dc仅源码。固定7843两文件隔离候选已交固件会话，未改原候选。`
+- HEAD：`产品已装e29d；字体115ca0ce及SDK显式fastest/ACK d08bf1dc仅源码。共享capture_dump已透传模式/ACK，固定7843四文件候选待导出；原候选不变。`
 - 远端 HEAD：`microkeen/codex/v0.4.2-fixes；多个后续修复共用此分支。microkeen/main核对为3cc474bb。`
 - 工作树：E盘主工作区；旧detached树保留。构建/证据在F盘。
-- 当前任务：d08bf1dc显式fastest与bit9/8B ACK已实现，主源/隔离imports各227回归；7843+两文件候选SHA61d8a34b已交指定固件会话，原1262blob不变。见superwatch-timing-sdk-20261031.md。产品动态周期下限待多点实测，未构建或接硬件。
-- 状态：`watch_timing_sdk_delivered_waiting_calibration`
+- 当前任务：共享capture_dump支持显式fastest及timing ACK；16项新回归通过，真实ASGI/MUX夹具各采10000帧。首轮350项中3项夹具超256B失败、修正31样本后重测通过；其余347通过。待导出固定7843四文件候选给指定固件会话，动态下限仍待多点证据。未构建或接硬件。
+- 状态：`watch_timing_shared_capture_validated`
 
 ## 里程碑
 
@@ -53,7 +53,7 @@
 
 ## 下一动作
 
-1. 等待固件多点周期/最快实测与配置下限依据，再接产品GUI/API动态限制。SDK候选已交付见superwatch-timing-sdk-20261031.md，period=0旧单次保留。不接硬件、不改插值；已装Windows e29d/Skill旧包不变，字体及SDK仅源码。正式发布/合并须新指令。
+1. 导出共享capture_dump四文件隔离候选；等待固件多点周期/最快实测及配置下限依据，再接产品GUI/API动态限制。见superwatch-timing-sdk-20261031.md；period=0旧单次保留。不接硬件、不改插值，已装Windows/Skill不变。正式发布/合并须新指令。
 2. 新V3已校准edc40176/build14:10:28，配置需明确ACK与applied/configured；无LIVE能力，采集中改频拒绝且不停任务。低频并行可明显增加DAP延迟。旧NOBITS机器码哈希结论撤回，硬件证据保留，见专项文档。
 3. 公网远程服务中继为下个版本任务；本次不实施。
 4. 下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。

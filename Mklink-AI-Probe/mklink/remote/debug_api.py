@@ -147,10 +147,11 @@ def memory_measure(device, body, *, cancelled=None):
 
 def memory_dump_stream(device, body, *, cancelled=None):
     from mklink.dump_memory import capture_dump_stream
-    _fields(body, {'regions', 'period', 'frames', 'duration', 'speed_profile'})
+    _fields(body, {'regions', 'period', 'frames', 'duration', 'speed_profile', 'fastest'})
     return capture_dump_stream(device, body.get('regions'), period=body.get('period', 0.0),
                                frames=body.get('frames', 1), duration=body.get('duration', 2.0),
-                               speed_profile=body.get('speed_profile'), cancelled=cancelled)
+                               speed_profile=body.get('speed_profile'), fastest=body.get('fastest', False),
+                               cancelled=cancelled)
 
 
 async def _run_cancellable_capture(operation, device, body, request):

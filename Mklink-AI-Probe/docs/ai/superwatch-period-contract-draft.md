@@ -10,7 +10,7 @@
 
 SDK入口为`DumpMemoryStreamSession(bridge, regions, 0, fastest=True)`或对应`MuxWatchSession(..., fastest=True)`。最快标志必须是布尔且period为0；旧调用不带标志时保持原单次适配。无bit9时不发送最快START，也不退回旧REPL。bit9固件的普通周期也严格检查8B ACK；错误ACK对已启动的本次Watch发送一次STOP，清理失败保留未知状态并使传输失效，均不重发START。已有RTT订阅不受STOP Watch影响。
 
-`session.timing`返回已接受模式、线上请求/接受的µs周期、timebase_hz；旧固件为None，不伪造确认。此阶段不更改产品周期输入、批次、采样解码或插值。基于固定7843导出时只覆盖`mklink/mux_watch.py`与`mklink/dump_memory.py`，不混入时钟UI和其他后续产品修复；原不可变候选不改写。
+`session.timing`返回已接受模式、线上请求/接受的µs周期、timebase_hz；旧固件为None，不伪造确认。共享`RuntimeClient.call('capture_dump', {..., 'period': 0, 'fastest': True})`现已透传显式模式并返回`result['timing']`，原零周期单次、计数/时长/大小边界及租约保留；measure/CLI/MCP工具签名/GUI不在此次扩展中。此阶段不更改产品周期输入、批次、采样解码或插值。首个固定7843候选仅覆盖`mklink/mux_watch.py`与`mklink/dump_memory.py`；后续共享候选另加`mklink/runtime.py`及`mklink/remote/debug_api.py`，不混入时钟UI和其他后续产品修复，原不可变候选不改写。
 
 ## 当前路径与缺口
 

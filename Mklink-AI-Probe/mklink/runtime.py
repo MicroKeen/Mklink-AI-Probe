@@ -499,7 +499,8 @@ class RuntimeClient:
                 from mklink.dump_memory import validate_dump_stream
                 args = arguments or {}
                 validate_dump_stream(args.get('regions'), args.get('period', 0.0), args.get('frames', 1),
-                                     args.get('duration', 2.0), args.get('speed_profile'))
+                                     args.get('duration', 2.0), args.get('speed_profile'),
+                                     fastest=args.get('fastest', False))
                 transport_options['timeout'] = max(35, (args.get('duration', 2.0) or 300) + 20)
             return request(self.info, "POST", "/_runtime/call", {
                 "session_id": self.session_id, "capability": capability, "arguments": arguments or {},

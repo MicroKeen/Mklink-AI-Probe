@@ -4,7 +4,7 @@
 
 ## 实现边界
 
-- `MuxWatchSession`与`DumpMemoryStreamSession`新增独立关键字`fastest=True`，同时要求传入period=0；普通正周期保持秒参数。不带标志的旧period=0单次适配保持不变，未改CLI/high-level capture_dump接口。
+- `MuxWatchSession`与`DumpMemoryStreamSession`新增独立关键字`fastest=True`，同时要求传入period=0；普通正周期保持秒参数。不带标志的旧period=0单次适配保持不变。首个d08候选仅接低层；后续共享capture_dump扩展见下文，CLI仍未增加最快选项。
 - 以实际MUX HELLO capability bit9（0x200）协商`WATCH_TIMING=2`。最快模式线上period_us=0，周期模式仍是整数µs；旧固件无此能力时明确拒绝最快模式，不自动改成1µs或退回REPL。
 - 新固件所有START成功应答必须有精确8B `<II accepted_period_us, timebase_hz>`，周期与线上请求相等且频率非零。timebase_hz是固件报告值，可为24MHz、360MHz等；样本timestamp仍按µs使用，不作二次缩放。
 - `session.timing`仅记录已接受的线协议配置，旧固件为None，不表示实测达标。无效ACK对已启动的本次Watch只发送一次STOP，保留RTT；清理失败使传输失效并保留未知采集状态。没有自动重发START或写操作。
@@ -23,3 +23,23 @@
 - 初次无`-verified`后缀的导出被Git自动CRLF转换影响，逐blob检查拒绝，保留为失败产物，未交给硬件测试。最终导出显式关闭该次Git archive的autocrlf，未改全局Git设置。
 
 已将验证后的路径、哈希、接口和范围交给指定固件会话。它报告计划修正CPU PLL参考时钟初始化，同时保留高速计时与SWD实现；这是固件侧尚在验证的方案，本会话不声明已修复偏差。旧固件隐式最快基线与新固件显式最快应分别标注语义，不能称为相同线请求。Windows仍已装e29d候选，工作区按钮字体115ca0ce及本SDK改动都未打包；正式发布/合并无授权。
+
+## 共享capture_dump扩展
+
+固件会话实际使用RuntimeClient共享后台，需要从同一入口比较旧固件period=1µs与新固件显式最快的10,000帧，不能因测试改用独占bridge。因此增加共享客户端预校验、现有API透传和有限采集循环支持：
+
+```python
+result = client.call('capture_dump', {
+    'regions': regions, 'period': 0, 'fastest': True,
+    'frames': 10000, 'duration': 0,
+})
+print(result['timing'])
+# {'mode': 'fastest', 'requested_period_us': 0,
+#  'accepted_period_us': 0, 'timebase_hz': <firmware ACK>}
+```
+
+client仍须按原流程连接已明确选择的共享后台。未提供fastest时保持旧语义；新字段必须是bool，True时period必须为0。frames/duration至少一个有界，原100,000帧/300秒/16MiB限制、会话取消检查、共享租约与互斥、完整性和STOP确认继续生效。duration=0表示按帧数采集但最多300秒，RuntimeClient预算320秒，不自动重试。结果的timing为START确认，不是实测周期；旧固件为null。measure_dump_memory、CLI、MCP工具签名和GUI这轮不扩展。
+
+新增16项回归通过真实共享ASGI路由、RuntimeClient、MUX CRC/批帧解析和采集器，旧/新周期模式及新最快模式各采10,000帧，核对所有值、跨uint32回绕后的µs时间戳、计数及单次START/STOP。另测旧零周期单次、错误类型/冲突参数、能力不足、无效ACK、STOP失败、忙时保留RTT、超时预算和不重试。首轮350项中347通过，三个10,000帧夹具因把64样本装入协商256B帧而失败；夹具按31样本上限修正后16项重测全过，未修改生产解码或放宽帧限制。
+
+需另导出固定7843的四文件候选：此前两文件加`mklink/runtime.py`和`mklink/remote/debug_api.py`，不覆盖已交付目录。真实硬件时序与吞吐仍由指定固件会话验收。
