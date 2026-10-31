@@ -41,7 +41,7 @@
       >
         <template #actions>
           <span class="workspace-actions">
-            <button @click="focusMode = !focusMode">{{ focusMode ? tr('退出专注', 'Exit focus') : tr('展开工作区', 'Focus workspace') }}</button>
+            <button type="button" class="panel-btn" @click="focusMode = !focusMode">{{ focusMode ? tr('退出专注', 'Exit focus') : tr('展开工作区', 'Focus workspace') }}</button>
           </span>
         </template>
       </WaveformViewer>
@@ -185,7 +185,6 @@ watch(() => props.deviceConnected, loadSnapshotSelection)
 <style scoped>
 .focused { position:fixed; inset:0; z-index:900; background:var(--bg); height:100dvh !important; padding:8px; box-sizing:border-box; }
 .workspace-actions { display:inline-flex; flex-shrink:0; }
-.workspace-actions button { background:var(--surface);color:var(--text);border:1px solid var(--border);padding:5px 8px;border-radius:4px; }
 
 .watch-catalog-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
 .replay-catalog { padding: 12px; overflow: auto; }
