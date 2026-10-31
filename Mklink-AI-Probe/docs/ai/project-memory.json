@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-31T15:22:09+08:00",
+  "updated_at": "2026-10-31T15:32:37+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.4.2-fixes",
-    "head": "已装e29d；字体115ca0ce/SDK644acc2b仅源码。最新纠正时钟统一到配置→连接设备，下拉默认10MHz，81GUI/181Python/类型/隔离浏览器通过；未重建。",
+    "head": "已装e29d；字体115ca0ce/SDK644acc2b仅源码。00aca9bc时钟回连接配置、默认10MHz。最新SuperWatch统一4us输入下限，263Python/122GUI/类型/实际浏览器通过，未重建。",
     "remote_head": "microkeen/codex/v0.4.2-fixes；多个后续修复共用此分支。microkeen/main核对为3cc474bb。",
     "working_tree": "E盘主工作区；旧detached树保留。构建/证据在F盘。"
   },
@@ -13,8 +13,8 @@
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "connection_clock_location_fixed_waiting_uniform_period",
-    "current_task": "用户纠正已完成：移除仪表盘时钟，下拉统一到连接配置，默认10MHz、离线自动保存/连接应用，既有选择及忙保护保留。见connection-clock-config-20261031.md。用户在固件会话改为按单变量最快值设统一输入下限，不做动态适用域缓存/提示；约4us待最终确认。"
+    "status": "uniform_period_fixed_firmware_diagnostics_pending",
+    "current_task": "00aca9bc时钟回连接配置、默认10MHz已完成。SuperWatch统一4us下限已验证，步长1us、默认1ms，无动态缓存/额外提示，见superwatch-uniform-period-20261031.md。固件会话请求共享只读MUX 0x14统计，待补新独立候选，硬件仍归其独占。"
   },
   "milestones": [
     {
@@ -51,7 +51,7 @@
   "verification": [
     {
       "area": "0.4.2统一时钟Windows本地候选及字体小修",
-      "result": "Windows源e29d7809/NSIS SHAa8c367d4，覆盖exit0、3642载荷匹配/设置保留，47工具/九XML/38编译及41原生Web一致，Windows-only PATH无宿主Python。1920px单行、15版本条目、专注/正常退出通过。294Python/196GUI/类型通过。后续字体11px/24px高统一，仅源码未重建。完整Skill仍0d680d90/SHAa126d967；前包V4/H7硬件证据见v042-local-candidate-20261030.md，本包未接硬件；本次见acquisition-clock-20261031.md。 后续入口纠正移回连接配置、默认10MHz，81GUI/181Python/类型及实际浏览器夹具通过，仅源码；见connection-clock-config-20261031.md。"
+      "result": "Windows源e29d7809/NSIS SHAa8c367d4，覆盖exit0、3642载荷/设置、47工具/九XML/38编译/41Web、1920px单行/15版本/退出通过；294Python/196GUI/类型通过。字体115ca0ce仅源码。完整Skill仍0d680d90/SHAa126d967。00aca9bc时钟回连接配置、默认10MHz：81GUI/181Python/类型/浏览器通过。SuperWatch统一4us：263Python/122GUI/类型/浏览器通过。后两项未重建，见acquisition-clock-20261031.md、connection-clock-config-20261031.md、superwatch-uniform-period-20261031.md；硬件证据见v042-local-candidate-20261030.md。"
     },
     {
       "area": "HPM AI Skill能力核实",
@@ -79,7 +79,7 @@
     },
     {
       "area": "共享RTT/SystemView及480量子",
-      "result": "4be共享MUX/480/二进制订阅996回归及浏览器通过；76307模板104回归/真实H7头文件检查通过。control c995固件：HPM RTT661.208KiB/s、独立SV62.679秒零计数，共存15/drop1442保留。H7同镜像8份10MiB全字节/序号/SHA/计时通过，新799–801、旧528–633KiB/s，均值+38.43%；独立SV307134事件零计数，共存334848B完整/DAP50及SV/MUX/Watch零错。60000Watch样本核对，旧末组失败保留；显式复位重启通过。H7 ZIP7f3e0c4c全部65文件/8报告/摘要核对。见h7-rtt-control-20261031.md与systemview-rtthread-template-20261031.md；已含于本次Windows e29d候选。"
+      "result": "4be共享MUX/480/二进制订阅996回归及浏览器通过，76307模板104回归/真实H7头文件通过，已含Windows e29d。H7同镜像8份10MiB全字节/序号/SHA/计时，新799–801、旧528–633KiB/s，均值+38.43%；独立SV307134事件零计数，共存334848B完整/DAP50及SV/MUX/Watch零错。60000Watch样本/65文件8报告核对；旧Watch末组失败及并行丢失保留。详细HPM/RTT/SV证据见h7-rtt-control-20261031.md、systemview-rtthread-template-20261031.md与known-limits-20261030.md。"
     }
   ],
   "decisions": [
@@ -110,7 +110,7 @@
     "nRF54L15保护闭环、全部擦除/拔插/休眠/断电、电源精度未全测。每次VCC需确认具体电压。26个无可靠扇区FLM禁用扇区操作，Bank模式须匹配。HPM5301 OTP组18/19历史永久锁定；128字读取及批准Word69 0→1已实测，其余型号/区域不继承授权，锁最后写/逐项校验，多Word不可回滚；熔丝/影子/临时锁语义未知，UART按ROM状态及回读为准。详见hpm-offline-otp-handoff.md及known-limits-20261030.md。"
   ],
   "next_actions": [
-    "按用户最新简化要求等待最终单变量最快复测值，向上取整为统一输入下限；停止动态下限/复杂适用域缓存/提示方案。4us暂待定。固件整体性能/Keil及最终hash待验收，不接硬件；连接入口纠正已完成源码验证，已装Windows/Skill不变。正式发布/合并须新指令。",
+    "统一4us输入下限已完成源码验证，不新增动态限制/提示。协助固件会话补共享只读MUX 0x14统计并另导固定候选；不接硬件、不改原候选。固件性能/Keil及最终hash待验收，已装Windows/Skill不变。正式发布/合并须新指令。",
     "新V3已校准edc40176/build14:10:28，配置需明确ACK与applied/configured；无LIVE能力，采集中改频拒绝且不停任务。低频并行可明显增加DAP延迟。旧NOBITS机器码哈希结论撤回，硬件证据保留，见专项文档。",
     "公网远程服务中继为下个版本任务；本次不实施。",
     "下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。",
@@ -118,7 +118,7 @@
   ],
   "continuation_protocol": [
     "读取CURRENT_HANDOFF/v042-session-handoff并核对Git，共用codex/v0.4.2-fixes。本机Windows/Skill现为0.4.2本地候选，Windows源e29d7809/Skill归档0d680d90；正式514efb86及0.4.1资产不可变，未正式发布0.4.2。保留上海90/95GiB、到期锁停、账本和旧detached树，不申请私钥。",
-    "已装Windows e29d见acquisition-clock-20261031.md，Skill仍0d680d90。字体115ca0ce及最新连接配置时钟纠正仅源码，未重建。共享fastest644acc2b固定候选不改。指定固件会话独占V3/H7/Keil/逻分；用户已撤销动态下限，改统一单变量最快值输入限制，最终值待复测。",
+    "已装Windows e29d见acquisition-clock-20261031.md，Skill仍0d680d90。字体115ca0ce及最新连接配置时钟纠正仅源码，未重建。共享fastest644acc2b固定候选不改。指定固件会话独占V3/H7/Keil/逻分；用户已撤销动态下限，改统一单变量最快值输入限制，最终采用4us，源码已验证未重建。",
     "V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。",
     "CDC995和SDK10048根因保留待排查。恢复仅同身份CDC故障5秒内；超时不自动接回/新建AI会话，主动断开立即生效，未知写入不重放。历史实例释放记录见v035-transport-recovery.md；当前硬件占用以本交接真机状态及指定固件会话为准。",
     "客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。"

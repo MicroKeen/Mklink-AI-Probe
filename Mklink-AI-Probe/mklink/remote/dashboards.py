@@ -1782,7 +1782,7 @@ class SystemViewStreamManager:
 # SuperWatch SSE Generator
 # ---------------------------------------------------------------------------
 
-SUPERWATCH_MIN_INTERVAL = 0.000001
+SUPERWATCH_MIN_INTERVAL = 0.000004
 
 
 def normalize_superwatch_interval(interval: float) -> float:
@@ -1797,7 +1797,7 @@ def normalize_superwatch_interval(interval: float) -> float:
         or value > 60.0
     ):
         raise ValueError(
-            "SuperWatch interval must be finite and in the range [0.000001, 60]"
+            f"SuperWatch interval must be finite and in the range [{SUPERWATCH_MIN_INTERVAL:.6f}, 60]"
         )
     return value
 

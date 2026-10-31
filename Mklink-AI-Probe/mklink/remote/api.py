@@ -2539,7 +2539,7 @@ def create_app(
     # Integrated Dashboard SSE — all dashboards
     # ===================================================================
 
-    from mklink.remote.dashboards import get_managers
+    from mklink.remote.dashboards import SUPERWATCH_MIN_INTERVAL, get_managers
 
     @app.get("/api/dash/conflict-check")
     async def dash_conflict_check(type: str):
@@ -2886,7 +2886,7 @@ def create_app(
 
     @app.post("/api/dash/superwatch/start")
     async def superwatch_start(
-        interval: float | None = Body(None, embed=True, ge=0.000001, le=60),
+        interval: float | None = Body(None, embed=True, ge=SUPERWATCH_MIN_INTERVAL, le=60),
     ):
         if not _state["device"] or not _state["device"].connected:
             raise HTTPException(status_code=400, detail="Device not connected")

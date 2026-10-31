@@ -801,6 +801,7 @@ if (es) {
 // ============================================================
 var IS_VOFA_MODE = CONFIG.mode === 'VOFA';
 var IS_SUPERWATCH_MODE = CONFIG.mode === 'SuperWatch';
+var SUPERWATCH_MIN_INTERVAL = 0.000004;
 var IS_BINARY_WAVEFORM_MODE = IS_VOFA_MODE || IS_SUPERWATCH_MODE;
 var collectionState = 'stopped';
 var acquisitionState = 'stopped';
@@ -1127,7 +1128,7 @@ document.getElementById('btn-apply-buffer').addEventListener('click', function()
 document.getElementById('btn-apply-interval').addEventListener('click', function() {
   if (replaySession) return;
   var val = parseFloat(intervalInput.value);
-  var minimumInterval = IS_SUPERWATCH_MODE ? 0.000001 : 0;
+  var minimumInterval = IS_SUPERWATCH_MODE ? SUPERWATCH_MIN_INTERVAL : 0;
   if (!Number.isFinite(val) || val < minimumInterval || val > 60) {
     alert('Interval must be between ' + minimumInterval + ' and 60 seconds');
     return;
@@ -5940,7 +5941,7 @@ if (IS_SUPERWATCH_MODE) {
         return ch && typeof ch.name === 'string';
       }).slice(0, 256);
       viewerPreferences = savedPreferences;
-      if (Number(savedPreferences.interval) >= 0.000001 && Number(savedPreferences.interval) <= 60) {
+      if (Number(savedPreferences.interval) >= SUPERWATCH_MIN_INTERVAL && Number(savedPreferences.interval) <= 60) {
         restoredInterval = Number(savedPreferences.interval);
         intervalInput.value = String(restoredInterval);
         intervalDirty = true;
