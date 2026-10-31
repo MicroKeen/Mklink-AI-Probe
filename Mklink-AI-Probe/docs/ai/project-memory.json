@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-31T14:49:33+08:00",
+  "updated_at": "2026-10-31T14:54:54+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
@@ -13,8 +13,8 @@
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "windows_installed_font_source_verified",
-    "current_task": "统一采集时钟及SuperWatch单行工具栏已构建覆盖安装Windows0.4.2源e29d7809，294Python/196GUI/冻结/原生/Web/正常退出通过。随后工作区按钮复用panel-btn，浏览器字体和专注验证通过；用户明确不重构建，字体小修仅源码。见acquisition-clock-20261031.md。"
+    "status": "superwatch_period_contract_drafted",
+    "current_task": "已核对用户在固件会话新增的最快采样/动态周期限制要求，离线接入草案见superwatch-period-contract-draft.md；待固件协议/多点证据，未改采样代码。Windows仍已装e29d源0.4.2；工具栏字体115ca0ce仅源码，按指令未重构建。"
   },
   "milestones": [
     {
@@ -110,7 +110,7 @@
     "nRF54L15保护闭环、全部擦除/拔插/休眠/断电、电源精度未全测。每次VCC需确认具体电压。26个无可靠扇区FLM禁用扇区操作，Bank模式须匹配。HPM5301 OTP组18/19历史永久锁定；128字读取及批准Word69 0→1已实测，其余型号/区域不继承授权，锁最后写/逐项校验，多Word不可回滚；熔丝/影子/临时锁语义未知，UART按ROM状态及回读为准。详见hpm-offline-otp-handoff.md及known-limits-20261030.md。"
   ],
   "next_actions": [
-    "Windows e29d本地覆盖验收完成；按钮字体源码小修已验，用户要求暂不重构建。等待后续任务；0.4.2正式发布/合并须新指令。Keil历史2→9及SuperWatch相位跳变未闭环。",
+    "动态周期/最快模式接入先等指定固件会话给最终能力、编码/ACK、周期语义和配置下限证据；旧period=0是单次，不能改为最快。见superwatch-period-contract-draft.md。不接硬件、不改插值；Windows/字体交付状态保留。正式发布/合并须新指令，Keil2→9及相位跳变未闭环。",
     "新V3已校准edc40176/build14:10:28，配置需明确ACK与applied/configured；无LIVE能力，采集中改频拒绝且不停任务。低频并行可明显增加DAP延迟。旧NOBITS机器码哈希结论撤回，硬件证据保留，见专项文档。",
     "公网远程服务中继为下个版本任务；本次不实施。",
     "下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。",

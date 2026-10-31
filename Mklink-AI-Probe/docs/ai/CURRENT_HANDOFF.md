@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-31T14:49:33+08:00`
+- 更新时间：`2026-10-31T14:54:54+08:00`
 - 分支：`codex/v0.4.2-fixes`
 - HEAD：`产品源e29d7809已推送并打包安装；后续提交同步dist/验收记录及工作区按钮字体源码小修（未重构建）。`
 - 远端 HEAD：`microkeen/codex/v0.4.2-fixes；多个后续修复共用此分支。microkeen/main核对为3cc474bb。`
 - 工作树：E盘主工作区；旧detached树保留。构建/证据在F盘。
-- 当前任务：统一采集时钟及SuperWatch单行工具栏已构建覆盖安装Windows0.4.2源e29d7809，294Python/196GUI/冻结/原生/Web/正常退出通过。随后工作区按钮复用panel-btn，浏览器字体和专注验证通过；用户明确不重构建，字体小修仅源码。见acquisition-clock-20261031.md。
-- 状态：`windows_installed_font_source_verified`
+- 当前任务：已核对用户在固件会话新增的最快采样/动态周期限制要求，离线接入草案见superwatch-period-contract-draft.md；待固件协议/多点证据，未改采样代码。Windows仍已装e29d源0.4.2；工具栏字体115ca0ce仅源码，按指令未重构建。
+- 状态：`superwatch_period_contract_drafted`
 
 ## 里程碑
 
@@ -53,7 +53,7 @@
 
 ## 下一动作
 
-1. Windows e29d本地覆盖验收完成；按钮字体源码小修已验，用户要求暂不重构建。等待后续任务；0.4.2正式发布/合并须新指令。Keil历史2→9及SuperWatch相位跳变未闭环。
+1. 动态周期/最快模式接入先等指定固件会话给最终能力、编码/ACK、周期语义和配置下限证据；旧period=0是单次，不能改为最快。见superwatch-period-contract-draft.md。不接硬件、不改插值；Windows/字体交付状态保留。正式发布/合并须新指令，Keil2→9及相位跳变未闭环。
 2. 新V3已校准edc40176/build14:10:28，配置需明确ACK与applied/configured；无LIVE能力，采集中改频拒绝且不停任务。低频并行可明显增加DAP延迟。旧NOBITS机器码哈希结论撤回，硬件证据保留，见专项文档。
 3. 公网远程服务中继为下个版本任务；本次不实施。
 4. 下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。
