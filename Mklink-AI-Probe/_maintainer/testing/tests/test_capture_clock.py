@@ -70,10 +70,10 @@ def test_timeout_does_not_replay_or_leave_old_confirmation(tmp_path):
 
 
 @pytest.mark.parametrize('model,hpm,expected', [('V3.6.8',False,list(V3_CLOCKS)),
-    ('V4.7.2',False,[4000000,10000000,20000000,30000000]),
-    ('V2.9.3',False,[4000000,10000000,20000000,30000000]),
+    ('V4.7.2',False,list(V3_CLOCKS)),
+    ('V2.9.3',False,list(V3_CLOCKS)),
     ('V3.6.8',True,[4000000,10000000,20000000,30000000])])
-def test_product_and_interface_do_not_inherit_v3_options(tmp_path, model, hpm, expected):
+def test_capabilities_apply_to_swd_independently_of_product_but_never_leak_into_jtag(tmp_path, model, hpm, expected):
     dev=v3_device(tmp_path)
     dev._bridge._firmware_capabilities=(dev._bridge._firmware_capabilities-{'V3.6.8'})|{model}
     assert clock_options(dev._bridge,hpm=hpm)['clocks_hz'] == expected

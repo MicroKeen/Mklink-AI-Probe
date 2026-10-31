@@ -620,7 +620,9 @@ def burn_hex_file(
     try:
         # 0. 如果未指定 SWD 时钟，从 config.json 读取
         if swd_clock is None:
-            swd_clock = config.get("swd_clock", 10000000 if is_hpm_project else 1000000)
+            from mklink.capture_clock import requested_clock
+            swd_clock = (requested_clock(config, 'JTAG' if is_hpm_project else 'SWD')
+                         if config.get('clock_interface') else config.get("swd_clock", 10000000 if is_hpm_project else 1000000))
         if is_hpm_project:
             from mklink.debug_speed import validate_hpm_clock_hz
             try:

@@ -80,8 +80,12 @@ def test_offline_hpm_rejects_eight_mhz_before_generating_script():
         parse_offline_config(body)
 
 
-def test_hpm_default_flash_clock_uses_supported_profile(tmp_path, monkeypatch):
+@pytest.mark.parametrize('split', [False, True])
+def test_hpm_default_flash_clock_uses_supported_profile(tmp_path, monkeypatch, split):
     from mklink.device import Device
+    if split:
+        from mklink.project_config import save_config
+        save_config(str(tmp_path), {'clock_interface':'SWD', 'swd_clock':'2000000', 'jtag_clock':'20000000'})
     image = tmp_path / 'app.bin'
     image.write_bytes(b'app')
     d = Device(project_root=str(tmp_path))
@@ -92,7 +96,7 @@ def test_hpm_default_flash_clock_uses_supported_profile(tmp_path, monkeypatch):
     result = d.flash(str(image), target_part='HPM5301', board='hpm5301evklite',
                      base_address=0x80000400, verify=False)
     assert result['algorithm_source'] == 'hpm-rom-api'
-    d._flash.set_swd_clock.assert_called_once_with(10_000_000)
+    d._flash.set_swd_clock.assert_called_once_with(20_000_000 if split else 10_000_000)
     d._flash.load_flm.assert_not_called()
 
 

@@ -18,18 +18,34 @@ def firmware_lines(bridge):
     return lines if isinstance(lines, (set, frozenset)) else frozenset()
 
 
-def clock_options(bridge, *, hpm=False):
-    """Advertised V3 options must never leak into HPM or legacy V2/V4 modes."""
-    lines = firmware_lines(bridge)
+def active_clock_interface(bridge):
+    """Cached firmware mode only; a UI preference never changes this value."""
     context = getattr(bridge, '_ctx', None)
-    hpm = hpm or getattr(bridge, 'idcode', None) == 0x1000563D or getattr(context, 'clock_interface', None) == 'JTAG'
+    mode = getattr(context, 'clock_interface', None)
+    if mode in ('SWD', 'JTAG'):
+        return mode
+    identity = getattr(bridge, 'idcode', None)
+    if identity == 0x1000563D:
+        return 'JTAG'
+    if type(identity) is int and identity & 0xFFF == 0x477:
+        return 'SWD'
+    return 'unknown'
+
+
+def clock_options(bridge, *, hpm=False, interface=None):
+    """Capabilities describe each interface, independently of the active mode."""
+    lines = firmware_lines(bridge)
+    active = active_clock_interface(bridge)
+    if interface:
+        hpm = interface == 'JTAG'
+    elif active != 'unknown':
+        hpm = active == 'JTAG'
     advertised = 'SWD_CLOCKS=' + ','.join(map(str, V3_CLOCKS))
-    v3 = (not hpm and 'SWD_CLOCK_ACK=1' in lines and advertised in lines
-          and any(re.fullmatch(r'V3\.\d+\.\d+', line) for line in lines)
-          and not any(re.match(r'V[24]\.', line) for line in lines))
+    modern = not hpm and 'SWD_CLOCK_ACK=1' in lines and advertised in lines
+    v3 = modern and any(re.fullmatch(r'V3\.\d+\.\d+', line) for line in lines)
     return {'interface': 'JTAG' if hpm else 'SWD',
-            'clocks_hz': list(HPM_CLOCKS if hpm else V3_CLOCKS if v3 else LEGACY_SWD_CLOCKS),
-            'clock_source': 'v3-advertised' if v3 else 'hpm-profiles' if hpm else 'legacy',
+            'clocks_hz': list(HPM_CLOCKS if hpm else V3_CLOCKS if modern else LEGACY_SWD_CLOCKS),
+            'clock_source': 'v3-advertised' if v3 else 'swd-advertised' if modern else 'hpm-profiles' if hpm else 'legacy',
             'live_change_supported': False}
 
 
@@ -100,15 +116,39 @@ def acknowledge_clock(bridge, hz, response):
             'profile_confirmed': bool(profile)}
 
 
-def requested_clock(config):
+def requested_clock(config, interface=None):
     from mklink.debug_speed import PROFILES
     raw = config.get('swd_clock')
+    if interface == 'JTAG':
+        # Before split configuration, swd_clock was shared with JTAG. Preserve
+        # that request once; new independent JTAG configurations default to 10M.
+        raw = config.get('jtag_clock', raw if 'clock_interface' not in config else 10000000)
     if raw is None or raw == '':
         return PROFILES.get(config.get('debug_speed') or 'medium')
     try:
         return int(raw, 0) if isinstance(raw, str) else raw if type(raw) is int else None
     except ValueError:
         return None
+
+
+def save_interface_clock(config, interface, hz=None):
+    """Split legacy shared settings without overwriting either saved frequency."""
+    if interface not in ('SWD', 'JTAG'):
+        raise ValueError('Clock interface must be SWD or JTAG')
+    previous = {mode: requested_clock(config, mode) for mode in ('SWD', 'JTAG')}
+    for mode, value in previous.items():
+        if value is not None:
+            config.setdefault(mode.lower() + '_clock', str(value))
+    config['clock_interface'] = interface
+    if hz is not None:
+        config[interface.lower() + '_clock'] = str(hz)
+        if interface == 'SWD':
+            from mklink.debug_speed import PROFILES
+            matching = next((key for key, value in PROFILES.items() if value == hz), None)
+            if matching:
+                config['debug_speed'] = matching
+            else:
+                config.pop('debug_speed', None)
 
 
 def clock_snapshot(device, config):
@@ -119,11 +159,17 @@ def clock_snapshot(device, config):
     hz = getattr(context, 'swd_clock_hz', 0) if connected else 0
     hz = hz if type(hz) is int and hz > 0 else None
     state = getattr(context, 'clock_apply_state', 'unknown') if hz else 'unknown'
-    requested = requested_clock(config)
+    requested = requested_clock(config, options['interface'])
     migration = None
-    if options['clock_source'] == 'v3-advertised' and (requested == 4000000 or hz == 4000000):
+    if options['clock_source'] in ('v3-advertised', 'swd-advertised') and (requested == 4000000 or hz == 4000000):
         migration = {'from_hz': 4000000, 'to_hz': 2000000, 'pending': True}
+    interfaces = {mode: {**clock_options(bridge, interface=mode),
+                         'requested_hz': requested_clock(config, mode)} for mode in ('SWD', 'JTAG')}
+    selected = config.get('clock_interface')
     return {**options, 'connected': connected, 'requested_hz': requested,
+            'active_interface': active_clock_interface(bridge) if connected else 'unknown',
+            'selected_interface': selected if selected in interfaces else options['interface'],
+            'interfaces': interfaces,
             'clock_hz': hz, 'configured_hz': hz, 'apply_state': state,
             'applied_hz': hz if state == 'applied' else None, 'migration': migration,
             'warning': getattr(device, 'clock_warning', None)}

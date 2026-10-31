@@ -1366,8 +1366,21 @@ def create_app(
         mcu_key: str | None = Body(default=None),
         swd_clock: str | None = Body(default=None),
         debug_speed: str | None = Body(default=None),
+        clock_interface: str | None = Body(default=None),
+        clock_hz: int | None = Body(default=None, strict=True),
     ):
         config = load_config(_state["project_root"]) or {}
+        if clock_interface is not None or clock_hz is not None:
+            from mklink.capture_clock import clock_options, save_interface_clock
+            if clock_interface not in ('SWD', 'JTAG') or swd_clock is not None or debug_speed is not None:
+                raise HTTPException(422, 'Provide SWD or JTAG with clock_hz; do not mix legacy clock fields')
+            device = _state.get('device')
+            bridge = getattr(device, '_bridge', None) if device and device.connected else None
+            if clock_hz is not None and clock_hz not in clock_options(bridge, interface=clock_interface)['clocks_hz']:
+                raise HTTPException(422, 'Unsupported clock for the selected interface')
+            # This path edits an interface's saved configuration only. Applying
+            # to hardware uses debug-speed with an explicit, matching interface.
+            save_interface_clock(config, clock_interface, clock_hz)
         if debug_speed is not None:
             from mklink.debug_speed import profile_clock
             if debug_speed:
@@ -1409,7 +1422,10 @@ def create_app(
                 from mklink.flash import FlashError
                 try:
                     async with _exclusive_probe_control("config-clock") as (device, _):
-                        await run_in_threadpool(device.set_debug_clock, parsed_swd_clock)
+                        if config.get('clock_interface'):
+                            await run_in_threadpool(device.set_debug_clock, parsed_swd_clock, interface='SWD')
+                        else:
+                            await run_in_threadpool(device.set_debug_clock, parsed_swd_clock)
                         device.clock_warning = None
                 except (FlashError, ValueError) as error:
                     device.clock_warning = str(error)
@@ -2300,25 +2316,33 @@ def create_app(
         return {"status": "ok", "stopped": []}
 
     @app.post("/api/device/debug-speed")
-    async def set_debug_speed(profile: str | None = Body(None), clock_hz: int | None = Body(None, strict=True), save: bool = Body(True, strict=True)):
+    async def set_debug_speed(profile: str | None = Body(None), clock_hz: int | None = Body(None, strict=True), save: bool = Body(True, strict=True), interface: str | None = Body(None)):
         from mklink.debug_speed import profile_clock, validate_clock_hz, PROFILES
         if (profile is None) == (clock_hz is None):
             raise HTTPException(422, 'Provide exactly one of profile or clock_hz')
         try:
             requested_hz = profile_clock(profile) if profile is not None else validate_clock_hz(clock_hz)
             async with _exclusive_probe_control("debug-speed") as (device, stopped):
-                result = (await run_in_threadpool(device.set_debug_speed, profile) if profile is not None
+                if interface is not None:
+                    result = await run_in_threadpool(device.set_debug_clock, requested_hz, interface=interface)
+                else:
+                    result = (await run_in_threadpool(device.set_debug_speed, profile) if profile is not None
                           else await run_in_threadpool(device.set_debug_clock, requested_hz))
         except ValueError as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
         if save:
             config = load_config(_state["project_root"]) or {}
-            matching = next((key for key, value in PROFILES.items() if value == requested_hz), None)
-            if matching:
-                config["debug_speed"] = matching
+            mode = interface or (result.get('interface') if config.get('clock_interface') else None)
+            if mode in ('SWD', 'JTAG'):
+                from mklink.capture_clock import save_interface_clock
+                save_interface_clock(config, mode, requested_hz)
             else:
-                config.pop("debug_speed", None)
-            config["swd_clock"] = str(requested_hz)
+                matching = next((key for key, value in PROFILES.items() if value == requested_hz), None)
+                if matching:
+                    config["debug_speed"] = matching
+                else:
+                    config.pop("debug_speed", None)
+                config["swd_clock"] = str(requested_hz)
             save_config(_state["project_root"], config)
         return {**result, "stopped": stopped, "saved": save}
 

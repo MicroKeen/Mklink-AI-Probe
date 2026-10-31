@@ -47,10 +47,10 @@ describe('shared connection clock', () => {
   it('uses all advertised V3 clocks, including kHz, without a manual frequency field', async () => {
     const wrapper = await setup()
     expect(wrapper.findAll('input').length).toBe(0)
-    expect(wrapper.findAll('option').map(o => Number(o.attributes('value')))).toEqual(clocks)
+    expect(wrapper.findAll('#connection-clock-hz option').map(o => Number(o.attributes('value')))).toEqual(clocks)
     await apply(wrapper, 5000)
     const request = requests.mock.calls.find(([, init]) => init?.method === 'POST')![1]
-    expect(JSON.parse(request.body)).toEqual({ clock_hz: 5000, save: true })
+    expect(JSON.parse(request.body)).toEqual({ interface: 'SWD', clock_hz: 5000, save: true })
     expect(new Headers(request.headers).get('X-MKLink-Device-Generation')).toBe('7')
     expect(wrapper.get('[data-testid="connection-clock-state"]').text()).toBe('已应用：5 kHz')
   })
@@ -154,8 +154,8 @@ describe('shared connection clock', () => {
     requests.mockImplementation(async (_url: string, init?: RequestInit) => {
       if (init?.method === 'PUT') {
         const body = JSON.parse(String(init.body))
-        offline.requested_hz = Number(body.swd_clock)
-        return response({ swd_clock: body.swd_clock })
+        offline.requested_hz = Number(body.clock_hz)
+        return response({ clock_interface: body.clock_interface, swd_clock: String(body.clock_hz) })
       }
       return response(structuredClone(offline))
     })
@@ -169,7 +169,7 @@ describe('shared connection clock', () => {
     expect(writes).toHaveLength(1)
     expect(writes[0]![0]).toContain('/api/config')
     expect(writes[0]![1]!.method).toBe('PUT')
-    expect(JSON.parse(String(writes[0]![1]!.body))).toEqual({ swd_clock: '20000000' })
+    expect(JSON.parse(String(writes[0]![1]!.body))).toEqual({ clock_interface: 'SWD', clock_hz: 20000000 })
     expect(wrapper.get('[data-testid="connection-clock-state"]').text()).toBe('连接时使用：20 MHz')
     expect(wrapper.emitted('busy')).toEqual([[true], [false]])
   })
@@ -180,5 +180,55 @@ describe('shared connection clock', () => {
     expect(wrapper.get('#connection-clock-hz').attributes('disabled')).toBeDefined()
     await wrapper.get('#connection-clock-hz').trigger('change')
     expect(requests.mock.calls.some(([, init]) => init?.method)).toBe(false)
+  })
+
+  it('keeps SWD and JTAG clocks separate and never applies the inactive interface', async () => {
+    const snapshot = { ...initial(), active_interface: 'SWD', selected_interface: 'SWD', interfaces: {
+      SWD: { clocks_hz: clocks, clock_source: 'swd-advertised', requested_hz: 2000000 },
+      JTAG: { clocks_hz: [4000000,10000000,20000000,30000000], clock_source: 'hpm-profiles', requested_hz: 10000000 },
+    } }
+    requests.mockImplementation(async (_url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT') {
+        const body = JSON.parse(String(init.body))
+        snapshot.selected_interface = body.clock_interface
+        const mode = body.clock_interface as 'SWD' | 'JTAG'
+        if (body.clock_hz) snapshot.interfaces[mode].requested_hz = body.clock_hz
+        return response({ clock_interface: mode, swd_clock: String(snapshot.interfaces.SWD.requested_hz),
+          jtag_clock: String(snapshot.interfaces.JTAG.requested_hz) })
+      }
+      return response(structuredClone(snapshot))
+    })
+    const wrapper = await setup()
+    await wrapper.get('#connection-clock-interface').setValue('JTAG')
+    await flushPromises()
+    expect(wrapper.findAll('#connection-clock-hz option').map(o => Number(o.attributes('value'))))
+      .toEqual([4000000,10000000,20000000,30000000])
+    expect(wrapper.get<HTMLSelectElement>('#connection-clock-hz').element.value).toBe('10000000')
+    await apply(wrapper, 20000000)
+    expect(wrapper.get('[data-testid="connection-clock-state"]').text()).toBe('已保存：20 MHz')
+    expect(wrapper.text()).toContain('当前接口：SWD')
+    await wrapper.get('#connection-clock-interface').setValue('SWD')
+    await flushPromises()
+    expect(wrapper.findAll('#connection-clock-hz option')).toHaveLength(14)
+    await wrapper.get('#connection-clock-interface').setValue('JTAG')
+    await flushPromises()
+    expect(wrapper.get<HTMLSelectElement>('#connection-clock-hz').element.value).toBe('20000000')
+    expect(snapshot.interfaces.SWD.requested_hz).toBe(2000000)
+    expect(requests.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
+    const writes = requests.mock.calls.filter(([, init]) => init?.method === 'PUT').map(([, init]) => JSON.parse(String(init.body)))
+    expect(writes).toEqual([{ clock_interface: 'JTAG' }, { clock_interface: 'JTAG', clock_hz: 20000000 },
+      { clock_interface: 'SWD' }, { clock_interface: 'JTAG' }])
+  })
+
+  it('saves only when the current probe interface is unconfirmed', async () => {
+    Object.assign(data, { active_interface: 'unknown', configured_hz: null })
+    requests.mockImplementation(async (_url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT') return response({ clock_interface: 'SWD', swd_clock: '2000000' })
+      return response(structuredClone(data))
+    })
+    const wrapper = await setup()
+    await apply(wrapper, 2000000)
+    expect(requests.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
+    expect(wrapper.text()).toContain('当前接口：未确认')
   })
 })

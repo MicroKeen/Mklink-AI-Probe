@@ -398,7 +398,8 @@ class Device:
         # The configuration page's raw SWD clock also applies to deferred GUI
         # connections. Previously it was only consumed by flash(), so a new
         # connection silently inherited whatever clock the probe last used.
-        if config.get("swd_clock") or config.get("debug_speed"):
+        split_clocks = config.get('clock_interface') in ('SWD', 'JTAG')
+        if not split_clocks and (config.get("swd_clock") or config.get("debug_speed")):
             try:
                 from mklink.debug_speed import profile_clock
                 clock = config.get("swd_clock") or profile_clock(config["debug_speed"])
@@ -414,15 +415,12 @@ class Device:
                 self.close()
                 raise
 
-        # SWD DP init + IDCODE read + MCU match. This was previously only done
-        # by the remote API layer; every other connect path (MCP, SDK users,
-        # legacy socket server, SystemView CLI, pytest fixtures) skipped it, so
-        # the DAP was never initialized in long-lived sessions and idcode read
-        # 0. Doing it here fixes all of them at once. Tolerant: a missing
-        # target leaves idcode at 0 rather than failing connect (see
-        # initialize_target docstring).
+        # Cached identity selects the matching independent clock. Read it even
+        # for otherwise deferred GUI connections when split settings exist;
+        # this does not initialize or switch the target's debug transport.
+        # Missing identity keeps USB connected without applying either clock.
         detected_idcode = 0
-        if self._initialize_target_now:
+        if self._initialize_target_now or split_clocks:
             detected_idcode = initialize_target(
                 self._bridge,
                 self._flash,
@@ -435,9 +433,16 @@ class Device:
 
         # A new connection uses the configuration page's default 10 MHz for
         # both ARM and HPM, rather than inheriting the probe's previous clock.
-        if not (config.get("swd_clock") or config.get("debug_speed")):
+        if split_clocks or not (config.get("swd_clock") or config.get("debug_speed")):
             try:
-                self.set_debug_clock(10_000_000)
+                if split_clocks:
+                    from mklink.capture_clock import active_clock_interface, requested_clock
+                    interface = active_clock_interface(bridge)
+                    if interface == 'unknown':
+                        raise ValueError('下载器接口尚未确认，已保留 SWD/JTAG 时钟配置；连接目标后重新应用。')
+                    self.set_debug_clock(requested_clock(config, interface), interface=interface)
+                else:
+                    self.set_debug_clock(10_000_000)
             except ValueError as error:
                 if not self.connected:
                     self.close()
@@ -451,9 +456,9 @@ class Device:
         """Apply a named 4/10/20/30 MHz profile to an idle connection."""
         from mklink.debug_speed import apply_profile, profile_clock
         from mklink.capture_clock import clock_options
-        if (clock_options(self._bridge)['clock_source'] == 'v3-advertised'
+        if (clock_options(self._bridge)['clock_source'] in ('v3-advertised', 'swd-advertised')
                 and profile_clock(profile) not in clock_options(self._bridge)['clocks_hz']):
-            raise ValueError('The old 4 MHz profile requires explicit migration to 2 MHz on this V3; use clock_hz=2000000')
+            raise ValueError('The old 4 MHz profile requires explicit migration to 2 MHz on this firmware; use clock_hz=2000000')
         try:
             result = apply_profile(self, profile)
         except ValueError as error:
@@ -462,18 +467,22 @@ class Device:
         self.clock_warning = None
         return result
 
-    def set_debug_clock(self, clock_hz: int) -> dict:
+    def set_debug_clock(self, clock_hz: int, *, interface: str | None = None) -> dict:
         """Configure the shared acquisition clock while captures are stopped.
 
         New V3 firmware distinguishes saved application timing from applied
         timing. Neither acknowledgement promises electrical calibration.
         """
-        from mklink.capture_clock import clock_options, clock_snapshot
+        from mklink.capture_clock import active_clock_interface, clock_options, clock_snapshot
         from mklink.debug_speed import validate_clock_hz
         from mklink.flash import FlashError
         self._require_connected()
+        if interface is not None:
+            active = active_clock_interface(self._bridge)
+            if interface not in ('SWD', 'JTAG') or interface != active:
+                raise ValueError(f'当前下载器接口为 {active}，不能应用 {interface} 时钟；请连接匹配的目标后重新应用。')
         validate_clock_hz(clock_hz)
-        options = clock_options(self._bridge, hpm=str(self._mcu_hint or '').upper().startswith('HPM'))
+        options = clock_options(self._bridge, hpm=str(self._mcu_hint or '').upper().startswith('HPM'), interface=interface)
         if options['clock_source'] != 'legacy' and clock_hz not in options['clocks_hz']:
             raise ValueError('Unsupported acquisition clock for this probe/interface; choose an advertised clock')
         if self._bridge.state != DeviceState.READY:
@@ -913,7 +922,8 @@ class Device:
         if swd_clock is not None:
             resolved_swd_clock = swd_clock
         elif cfg:
-            cfg_clock = cfg.get("swd_clock")
+            from mklink.capture_clock import requested_clock
+            cfg_clock = requested_clock(cfg, 'JTAG' if hpm_clock else 'SWD') if cfg.get('clock_interface') else cfg.get("swd_clock")
             if cfg_clock:
                 resolved_swd_clock = int(cfg_clock)
         elif mcu_profile:
