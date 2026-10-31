@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-31T08:00:59+08:00`
+- 更新时间：`2026-10-31T11:20:40+08:00`
 - 分支：`codex/v0.4.2-fixes`
 - HEAD：`7843de8c：SystemView静默保持；e4d5fc4f FPBv2、76307f05模板、6ce读取/455发现均未安装。已装Windows dce17d3e/Skill归档0d680d90不变。`
 - 远端 HEAD：`microkeen/codex/v0.4.2-fixes；多个后续修复共用此分支。microkeen/main核对为3cc474bb。`
 - 工作树：E盘主工作区；旧detached树保留。构建/证据在F盘。
-- 当前任务：7843/e4 H7断点与Keil暂停采集限定通过，616Python/27GUI/导出113通过。用户确认未操作Keil，BL由2增9原因未明；更正为恢复重载后9个启用状态，未恢复最初2个配置。功能证据保留，见h7-fpbv2-systemview-idle-20261031.md；本次仅记录更正，未构建。
-- 状态：`hil_verified_keil_breakpoint_config_unresolved`
+- 当前任务：V3.6.8/build11:00:39配7843候选实测由指定会话完成；本会话离线核对ZIP45载荷/11报告、40MiB RTT全数据、12万Watch组及1800耗时、FPB/Keil恢复。RTT约124→810KiB/s；见v3-rtt-systemview-review-20261031.md。未构建/安装/操作硬件，Keil历史2→9仍未定因。
+- 状态：`v3_h7_evidence_reviewed_source_only`
 
 ## 里程碑
 
@@ -47,13 +47,13 @@
 
 ## 真机环境
 
-- **state**：7843断点/三路共存及12阶段回归证据保留。Keil收尾恢复重载后0..8号9个启用状态，非最初2个配置；测试9号已删，退出调试留窗口。目标运行、10MHz、流停止、device_closed。固件c995不变；本次未操作硬件。
+- **state**：最新保存记录为普通V3私有3.6.8/build11:00:39、H7、7843隔离候选；测试结束采集停止、目标运行、设备关闭，指定会话报告后台not_running。Keil本轮0..7禁用/8启用已恢复，9号删除；此前2→9仍未定因。V4/c995旧证据保留，本会话只读证据。
 - **installer**：Windows/完整Skill均已覆盖安装0.4.2本地候选；NSIS SHAf70e4960/Skill SHAa126d967，3640/2638文件一致、47工具、5339用户文件保留。41Web一致，更新记录11条。完整产物见v042-combined-20261030，未正式发布。
 - **backups**：保留正式release、安装包、CI ZIP、唯一硬件证据、Skill备份及F盘缓存。含链接/不可访问目录不强删。历史获授权清理见v036-storage-cleanup-20261023.md及本机START_HERE；本地Unix清理不影响正式附件。旧detached树保留；本轮Skill备份在F盘cache/mklink-ai-probe/skill-backups。
 
 ## 下一动作
 
-1. Keil断点2→9列为独立待查，不能归因用户或称已恢复初始配置；保留三份BL列表，未经后续任务不自动改Keil/硬件。7843限定HIL保留；初始halt/真实断链仅离线，活动采集共享断点409与共享step待验边界不变。
+1. 保留V3私有f3b14f14与7843限定实测及离线核对；不替换已装包，不扩为全矩阵。Keil历史2→9独立待查，不能归因用户；未经后续任务不改Keil/硬件。共享断点quiet gate和共享step待验边界不变，首次已halt/真实断链仅离线覆盖。
 2. 下次明确构建带入7843静默/e4 FPBv2、共享MUX/Skill、76307模板、455发现和6ce读取提示；已装两包SHA不变。374目录扫描慢、995/10048、双核实板及V3历史根因保留。PR66合并/发布须新指令。
 3. 公网远程服务中继为下个版本任务；本次不实施。
 4. 下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。
@@ -65,7 +65,7 @@
 - 30MHz RTT/Watch/UART并行历史存在目标读错：V4.6.8 1kHz +1/最大+273，10MHz0；V4.7.0/F103先Watch后RTT11762周期1错、反顺序12297周期0，10MHz两顺序0。发布接受不等于问题关闭，完整记录见known-limits-20261030.md。
 - HPM/SES未发DAP_Disconnect可遗留占用；显式退出后OpenOCD init/resume/shutdown或用户拔插可恢复，超时不得偷占。完整SES矩阵/RTT下行未覆盖。RTT status6截图只证busy，不推断与历史故障同因，待现场时序/显式重试。
 - 共享MUX并行SV仍有容量边界：旧饱和768/drop17371，流水线28/1330、burst26/1164、control15/1442，重启归零不抹去；control独立62.679秒零丢失计数通过。RTT661.208KiB/s为特定配置观测值，H7限定实测新799–801KiB/s、独立/有限并行SV零计数；单次API20样本中位有12.90→20.03ms等退化未归因，旧Watch末组失败保留。采集暂停/下载丢观测、多变量非原子、无时序保证。COS95GiB非账单上限，存储/请求/SCF另计；旧0.4.0固件Git备用未迁，签名资产不改。
-- V3无屏幕且不支持HPM；V3.6.4 Keil/OpenOCD共存已测。V4最终无诊断固件完整SES矩阵未完成。V3.6.8/build17:56:49（SHA751120c4）CRLF候选六轮B1/4KiB丢弃0，证据核对见v3-crlf-final-review-20261030.md，无原始B1抓包。后续V3/H7、SWD30MHz、已装0.4.2/MUX通道0空RTT1800.028秒通过：887状态/178被动USB正常、原会话恢复六条连续记录、设备释放。仅核对保存证据，未新增修复；历史掉线根因未定位，其他版本/legacy/睡眠拔插/更长时长未测，见v3-empty-rtt-review-20261030.md；再现先保存现场。
+- V3无屏幕且不支持HPM；V3.6.4 Keil/OpenOCD共存已测。V4最终无诊断固件完整SES矩阵未完成。旧V3.6.8/build17:56:49的CRLF六轮及1800.028秒空RTT证据见v3-crlf-final-review-20261030.md和v3-empty-rtt-review-20261030.md，不计入新build11:00:39复验。新V3限定RTT/FPB/Keil通过见v3-rtt-systemview-review-20261031.md；历史掉线根因、legacy/睡眠拔插/更长时长仍未测，再现先保存现场。
 - 最后客户端退出约5秒租约后开始排空/关闭，不保证硬实时5秒。每GUI独立后台；单探针仅一个后台持有；已有URL共享页面跟随明确切换。独立操作另开客户端。 Keil BL重载由2增9；用户确认未操作，原因未明。仅恢复重载后9个状态，最初配置未恢复；见h7-fpbv2-systemview-idle-20261031.md。
 - UART5 TTL Modbus读写通过，RS485电气层未测；跨物理主机Agent/全芯片矩阵未认证。Unix包仅CI构建/冻结检查，真实USB/原生UI/升级待测；Mac仅ad-hoc未公证，Windows无Authenticode，UAC/企业策略可拦截。Tauri更新验签仍有效；不得承诺消除SmartScreen。文件句柄选择/跟踪未全测；原生日志选择/回放/PNG已测。
 - nRF54L15保护闭环、全部擦除/拔插/休眠/断电、电源精度未全测。每次VCC需确认具体电压。26个无可靠扇区FLM禁用扇区操作，Bank模式须匹配。HPM5301 OTP组18/19历史永久锁定；128字读取及批准Word69 0→1已实测，其余型号/区域不继承授权，锁最后写/逐项校验，多Word不可回滚；熔丝/影子/临时锁语义未知，UART按ROM状态及回读为准。详见hpm-offline-otp-handoff.md及known-limits-20261030.md。
