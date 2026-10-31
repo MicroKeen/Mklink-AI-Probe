@@ -81,7 +81,13 @@ Keil 首轮实测中，目标暂停后 RTT 和 Watch 保持，而 SystemView 在
 
 补充回归 `fpbv2-7843-other-regression.json` SHA256 `1c85a67dcef5f8acf94755cfc1cf0ca3b5b9b66fefc2751ca5e5dd1fe4fd68d2`：内存 10/30 MHz 读写恢复、两组 D-cache 脏行与 CPU 参照一致、RTT 下行 256 字节的目标计数和滚动哈希、12 阶段采集启停/暂停/反序启动及同 SystemView 通道观察者均通过。保存的并行 RTT 333824 字节全部数据/序号/SHA 独立核对；递归 34 份 SV、59 份 MUX、24 份 Watch 状态的相关丢失/读取错误为零。独立 DAP 的 50 次读取、写入恢复及 halt/step/resume 由报告记录通过，不替代共享 `step` 验收。对应 `verify_fpbv2_other.py` / `fpbv2-other-independent-review.json` 同在 F 盘目录。
 
-指定会话报告收尾已恢复 Keil 原 0..8 号断点的启用状态、删除本次 9 号测试断点并退出调试，窗口保留；最终流已停止、目标运行、恢复 10 MHz、设备释放。原断点恢复列表保存在本机 `keil-restored-breakpoints.txt`，不提交用户工程或截图。
+指定会话收尾恢复的是重新进入调试后记录的 0..8 号共 9 个断点启用状态，删除了本次 9 号测试断点并退出调试，窗口保留；最终流已停止、目标运行、恢复 10 MHz、设备释放。恢复列表保存在本机 `keil-restored-breakpoints.txt`，与 `keil-reloaded-breakpoints.txt` 对应，不能据此称为恢复了测试最初的配置。
+
+2026-10-31 事实更正：用户明确确认测试期间没有操作 Keil。`keil-original-breakpoints.txt` 记录首次 BL 只有 2 个，重新进入调试后则为 9 个；数量增长不能归因于用户手动设置，原因尚未定位，列为独立未解决观察项。先前“原断点已恢复”的表述不准确，撤回该完整恢复结论；本次仅更正记录，不再操作 Keil、硬件或自动删除新增条目。
+
+指定会话记录正式共存前已用 BL 确认重载后的 9 个断点全部禁用，仅启用本次专用 9 号；其后该测试断点已删除。独立 FPB 报告也确认前后没有活动比较器，因此保留现有断点与采集功能的限定验收结果，不能将功能通过外推为 Keil 配置未变化。首次、重载及收尾列表和原始失败证据均保留。
+
+本会话离线核对了首次 2 条、重载及收尾各 9 条列表，后两者的断点内容和启用状态相同。指定会话更正说明后的同名证据 ZIP 为 696704 字节，SHA256 `0d09da56133bde30403ebd4b192b011083db0acf08759366722daf2beabb2bff`；本次仅核对该归档大小及哈希，结果保存在 F 盘 `keil-config-correction-review.json`。
 
 额外调用共享 `breakpoints status` 的中途试验因既有准入返回 409，报告 `keil-7843-final.json` 按失败保留。`runtime_api.py` 仅豁免受支持 MUX 内存操作及复位，断点 status/list/set/clear 都要求先停止采集；本轮未修改此边界。最终应分别报告共享断点独立验收和 Keil CMSIS-DAP 与 MUX 采集共存，不能将后者解读为共享 debug API 可在采集中调用。
 
