@@ -4,12 +4,12 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-31T18:06:03+08:00`
+- 更新时间：`2026-10-31T18:08:20+08:00`
 - 分支：`codex/v0.4.2-fixes`
-- HEAD：`当前安装源509ef9b8，NSIS SHAa3074e47；用户追加未连接14档和90px接口框修正，392Python/59GUI通过，准备重建。固定bd636 SDK/固件SHAebbc11f2保持。`
+- HEAD：`当前安装源509ef9b8，NSIS SHAa3074e47；用户追加未连接14档和90px接口框修正，392Python/65GUI通过，准备重建。固定bd636 SDK/固件SHAebbc11f2保持。`
 - 远端 HEAD：`microkeen/codex/v0.4.2-fixes；多个后续修复共用此分支。microkeen/main核对为3cc474bb。`
 - 工作树：E盘主工作区；旧detached树保留。构建/证据在F盘。
-- 当前任务：首个509ef9b8包覆盖安装/冻结/界面/退出通过。用户实测指出未连接四档及接口等宽；已修为离线14档配置、连接后依真实能力校验、接口框90px，392Python/59GUI通过；继续重建覆盖安装。见v042-clock-install-20261031.md。
+- 当前任务：首个509ef9b8包覆盖安装通过。用户追加离线完整14档、90px接口框和旧固件更新提示，代码与392Python/65GUI通过。旧固件提示只导航升级页，不下载/刷写；中止冻结中的c12中间包以纳入补充，继续重建覆盖。见v042-clock-install-20261031.md。
 - 状态：`offline_full_clock_menu_ready_for_rebuild`
 
 ## 里程碑
@@ -23,7 +23,7 @@
 
 ## 验证证据
 
-- **0.4.2界面更新与Windows覆盖安装**：Windows509ef9b8/NSIS SHAa3074e47已覆盖，3642文件一致、两设置保留、47工具/41Web/原生退出通过。实际页面JTAG20M刷新保存且SWD30M独立，测试后恢复30M。追加离线14档/90px修复392Python/59GUI通过，待新包。见v042-clock-install-20261031.md。此前bd636源408/SDK813及HPM5301并行/周期/收尾报告通过见clock-interfaces-20261031.md。完整Skill0d680d90/SHAa126d967不变。
+- **0.4.2界面更新与Windows覆盖安装**：Windows509ef9b8/NSIS SHAa3074e47已覆盖，3642文件一致、两设置保留、47工具/41Web/原生退出通过。实际页面JTAG20M刷新保存且SWD30M独立，测试后恢复30M。追加离线14档/90px及旧固件升级提示修复392Python/65GUI通过，待新包。见v042-clock-install-20261031.md。此前bd636源408/SDK813及HPM5301并行/周期/收尾报告通过见clock-interfaces-20261031.md。完整Skill0d680d90/SHAa126d967不变。
 - **HPM AI Skill能力核实**：源05e73101：1139相关+68包/文档测试；Flash49700B一致、ELF1528变量/360MHz、SVD UART0、JTAG4/10、RTT/Watch/dump通过。SystemView U32修复38351事件；新固件复测22155事件零丢弃。指定会话依新授权更新V4.7.2/build17:19:37后，共享MCP暂停/寄存器/真实断点cause2/单步cause4/恢复运行通过，x31同值写回正确。Skill SHA44df3e58、2625文件/7059FLM/4800SVD校验，全局47工具并保留5339用户文件。无目标烧录/VCC/OTP/发布。见hpm-skill-audit-20261029.md。
 - **RTT自动恢复与在线静默收尾**：14417715：347相关+17发现测试通过。V4/HPM5301连续两次49700B烧录校验成功，自动暂停/恢复RTT与SuperWatch、零恢复错误；新增RTT349/466字节、Watch3005/3712周期且零读取错。Windows NSIS SHA56830303，覆盖exit0、3627载荷一致、冻结MCP/41Web/正常退出通过；完整Skill SHAbb05fbde、2625文件/47工具已同步。仍0.4.1未发布。旧静默面板修复d1cf16ec的124GUI/29Python证据保留。见rtt-auto-restore-20261030.md及online-flash-receipt-20261029.md。
 - **Linux/macOS 0.4.1测试包**：Linux源a6bdacbc/CI40637027269、Mac arm64源eefc6842/CI40640511140：USB各58通过/1skip，冻结CLI/MCP/健康/Web/退出通过。DEB SHA7309f377、DMG SHA56dc8e0a，均旧0.4.1未带后续修复；Mac ad-hoc未公证，实机安装/UI/USB待测。见linux-deb-test-20261028.md、macos-arm64-test-20261028.md。
@@ -53,7 +53,7 @@
 
 ## 下一动作
 
-1. 继续完成离线14档/90px接口框修正的Windows本地包构建、覆盖安装和实际页面验收。旧509ef9b8包已通过并保留；不改固定SDK/Skill/固件，不发布。
+1. 继续构建覆盖安装含离线14档、90px接口框及旧固件更新提示的Windows本地包，验证真实页面。旧509ef9b8包已通过并保留；c12中间构建主动中止、未安装。不改固定SDK/Skill/固件，不发布。
 2. 新V3已校准edc40176/build14:10:28，配置需明确ACK与applied/configured；无LIVE能力，采集中改频拒绝且不停任务。低频并行可明显增加DAP延迟。旧NOBITS机器码哈希结论撤回，硬件证据保留，见专项文档。
 3. 公网远程服务中继为下个版本任务；本次不实施。
 4. 下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。

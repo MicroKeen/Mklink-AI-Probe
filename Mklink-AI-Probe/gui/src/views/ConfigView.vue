@@ -505,7 +505,7 @@ onUnmounted(() => {
         </div>
 
         <ConnectionClockControl :device-connected="deviceStatus.connected" :device-generation="deviceStatus.device_generation"
-          :disabled="savingLocal || connecting || disconnecting || switchingProbe" @busy="savingClock = $event" />
+          :disabled="savingLocal || connecting || disconnecting || switchingProbe" @busy="savingClock = $event" @firmware-update="activeSection = 'firmware'" />
         <p v-if="switchingProbe" class="connection-detail">{{ tr('请先切换下载器，再选择该设备支持的时钟。', 'Switch probes first, then select a clock supported by that device.') }}</p>
 
         <div class="local-actions">

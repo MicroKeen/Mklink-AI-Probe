@@ -97,6 +97,16 @@ async function mountView() {
 }
 
 describe('ConfigView', () => {
+  it('opens firmware settings from the clock prompt without starting an upgrade', async () => {
+    const wrapper = await mountView()
+    wrapper.findComponent({ name: 'ConnectionClockControl' }).vm.$emit('firmwareUpdate')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="firmware-upgrade-panel"]').exists()).toBe(true)
+    expect(mocks.api.upgradeProbeFirmware).not.toHaveBeenCalled()
+    expect(mocks.api.downloadProbeFirmware).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
   it('places shared clock selection in connection settings without resubmitting it when saving a port', async () => {
     mocks.api.getConfig.mockResolvedValue({ com_port: 'TEST_PORT_A', swd_clock: '4000000', debug_speed: 'low' })
     const wrapper = await mountView()

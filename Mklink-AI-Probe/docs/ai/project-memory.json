@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-31T18:06:03+08:00",
+  "updated_at": "2026-10-31T18:08:20+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.4.2-fixes",
-    "head": "当前安装源509ef9b8，NSIS SHAa3074e47；用户追加未连接14档和90px接口框修正，392Python/59GUI通过，准备重建。固定bd636 SDK/固件SHAebbc11f2保持。",
+    "head": "当前安装源509ef9b8，NSIS SHAa3074e47；用户追加未连接14档和90px接口框修正，392Python/65GUI通过，准备重建。固定bd636 SDK/固件SHAebbc11f2保持。",
     "remote_head": "microkeen/codex/v0.4.2-fixes；多个后续修复共用此分支。microkeen/main核对为3cc474bb。",
     "working_tree": "E盘主工作区；旧detached树保留。构建/证据在F盘。"
   },
@@ -14,7 +14,7 @@
   },
   "current_session": {
     "status": "offline_full_clock_menu_ready_for_rebuild",
-    "current_task": "首个509ef9b8包覆盖安装/冻结/界面/退出通过。用户实测指出未连接四档及接口等宽；已修为离线14档配置、连接后依真实能力校验、接口框90px，392Python/59GUI通过；继续重建覆盖安装。见v042-clock-install-20261031.md。"
+    "current_task": "首个509ef9b8包覆盖安装通过。用户追加离线完整14档、90px接口框和旧固件更新提示，代码与392Python/65GUI通过。旧固件提示只导航升级页，不下载/刷写；中止冻结中的c12中间包以纳入补充，继续重建覆盖。见v042-clock-install-20261031.md。"
   },
   "milestones": [
     {
@@ -51,7 +51,7 @@
   "verification": [
     {
       "area": "0.4.2界面更新与Windows覆盖安装",
-      "result": "Windows509ef9b8/NSIS SHAa3074e47已覆盖，3642文件一致、两设置保留、47工具/41Web/原生退出通过。实际页面JTAG20M刷新保存且SWD30M独立，测试后恢复30M。追加离线14档/90px修复392Python/59GUI通过，待新包。见v042-clock-install-20261031.md。此前bd636源408/SDK813及HPM5301并行/周期/收尾报告通过见clock-interfaces-20261031.md。完整Skill0d680d90/SHAa126d967不变。"
+      "result": "Windows509ef9b8/NSIS SHAa3074e47已覆盖，3642文件一致、两设置保留、47工具/41Web/原生退出通过。实际页面JTAG20M刷新保存且SWD30M独立，测试后恢复30M。追加离线14档/90px及旧固件升级提示修复392Python/65GUI通过，待新包。见v042-clock-install-20261031.md。此前bd636源408/SDK813及HPM5301并行/周期/收尾报告通过见clock-interfaces-20261031.md。完整Skill0d680d90/SHAa126d967不变。"
     },
     {
       "area": "HPM AI Skill能力核实",
@@ -110,7 +110,7 @@
     "nRF54L15保护闭环、全部擦除/拔插/休眠/断电、电源精度未全测。每次VCC需确认具体电压。26个无可靠扇区FLM禁用扇区操作，Bank模式须匹配。HPM5301 OTP组18/19历史永久锁定；128字读取及批准Word69 0→1已实测，其余型号/区域不继承授权，锁最后写/逐项校验，多Word不可回滚；熔丝/影子/临时锁语义未知，UART按ROM状态及回读为准。详见hpm-offline-otp-handoff.md及known-limits-20261030.md。"
   ],
   "next_actions": [
-    "继续完成离线14档/90px接口框修正的Windows本地包构建、覆盖安装和实际页面验收。旧509ef9b8包已通过并保留；不改固定SDK/Skill/固件，不发布。",
+    "继续构建覆盖安装含离线14档、90px接口框及旧固件更新提示的Windows本地包，验证真实页面。旧509ef9b8包已通过并保留；c12中间构建主动中止、未安装。不改固定SDK/Skill/固件，不发布。",
     "新V3已校准edc40176/build14:10:28，配置需明确ACK与applied/configured；无LIVE能力，采集中改频拒绝且不停任务。低频并行可明显增加DAP延迟。旧NOBITS机器码哈希结论撤回，硬件证据保留，见专项文档。",
     "公网远程服务中继为下个版本任务；本次不实施。",
     "下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。",

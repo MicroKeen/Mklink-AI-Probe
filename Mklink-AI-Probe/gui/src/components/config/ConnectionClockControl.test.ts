@@ -44,6 +44,25 @@ afterEach(() => {
 })
 
 describe('shared connection clock', () => {
+  it.each([['SWD', 'legacy'], ['JTAG', 'hpm-profiles']])('prompts to update connected legacy %s firmware without starting an upgrade', async (mode, source) => {
+    Object.assign(data, { interface: mode, active_interface: mode, clock_source: source,
+      clocks_hz: [4000000,10000000,20000000,30000000] })
+    const wrapper = await setup()
+    expect(wrapper.get('[data-testid="clock-firmware-update"]').text()).toContain('请更新下载器固件')
+    await wrapper.get('[data-testid="clock-firmware-update"] button').trigger('click')
+    expect(wrapper.emitted('firmwareUpdate')).toEqual([[]])
+    expect(requests.mock.calls.every(([, init]) => !init?.method)).toBe(true)
+  })
+
+  it.each(['offline', 'modern', 'other-interface'])('does not misidentify %s as outdated firmware', async state => {
+    if (state === 'offline') Object.assign(data, { connected:false, clock_source:'configuration' })
+    if (state === 'other-interface') Object.assign(data, { interface:'JTAG', active_interface:'SWD', clock_source:'hpm-profiles' })
+    const wrapper = mount(ConnectionClockControl, { props: { deviceConnected: state !== 'offline' } })
+    wrappers.push(wrapper)
+    await flushPromises()
+    expect(wrapper.find('[data-testid="clock-firmware-update"]').exists()).toBe(false)
+  })
+
   it('uses all advertised V3 clocks, including kHz, without a manual frequency field', async () => {
     const wrapper = await setup()
     expect(wrapper.findAll('input').length).toBe(0)
