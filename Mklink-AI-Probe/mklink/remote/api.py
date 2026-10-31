@@ -1371,12 +1371,12 @@ def create_app(
     ):
         config = load_config(_state["project_root"]) or {}
         if clock_interface is not None or clock_hz is not None:
-            from mklink.capture_clock import clock_options, save_interface_clock
+            from mklink.capture_clock import configuration_clock_options, save_interface_clock
             if clock_interface not in ('SWD', 'JTAG') or swd_clock is not None or debug_speed is not None:
                 raise HTTPException(422, 'Provide SWD or JTAG with clock_hz; do not mix legacy clock fields')
             device = _state.get('device')
             bridge = getattr(device, '_bridge', None) if device and device.connected else None
-            if clock_hz is not None and clock_hz not in clock_options(bridge, interface=clock_interface)['clocks_hz']:
+            if clock_hz is not None and clock_hz not in configuration_clock_options(bridge, interface=clock_interface)['clocks_hz']:
                 raise HTTPException(422, 'Unsupported clock for the selected interface')
             # This path edits an interface's saved configuration only. Applying
             # to hardware uses debug-speed with an explicit, matching interface.

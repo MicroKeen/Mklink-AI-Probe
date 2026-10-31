@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from mklink._types import DeviceContext, DeviceState
-from mklink.capture_clock import clock_snapshot, requested_clock, save_interface_clock
+from mklink.capture_clock import V3_CLOCKS, clock_options, clock_snapshot, requested_clock, save_interface_clock
 from mklink.device import Device
 from mklink.project_config import load_config, save_config
 from _maintainer.testing.tests.test_capture_clock import api_clock, v3_device
@@ -26,6 +26,43 @@ def test_new_interface_settings_default_to_ten_megahertz():
     config = {}
     save_interface_clock(config, 'SWD', 5000000)
     assert requested_clock(config, 'JTAG') == 10000000
+
+
+@pytest.mark.parametrize('mode', ['SWD', 'JTAG'])
+@pytest.mark.parametrize('hz', V3_CLOCKS)
+def test_disconnected_full_catalog_is_saved_without_claiming_hardware_support(api_clock, tmp_path, mode, hz):
+    client, dev, _ = api_clock
+    # A retained bridge from a former connection must not restrict offline choices.
+    dev._connected = False
+    dev._bridge._firmware_capabilities = frozenset({'V4.7.1'})
+    result = client.put('/api/config', json={'clock_interface': mode, 'clock_hz': hz})
+    assert result.status_code == 200, result.text
+    status = client.get('/api/device/debug-speed').json()
+    assert status['interfaces'][mode]['requested_hz'] == hz
+    for interface in ('SWD', 'JTAG'):
+        assert status['interfaces'][interface]['clocks_hz'] == list(V3_CLOCKS)
+        assert status['interfaces'][interface]['clock_source'] == 'configuration'
+    assert status['active_interface'] == 'unknown' and status['applied_hz'] is None
+    assert not status['connected']
+    assert 1000 not in clock_options(None)['clocks_hz']
+    dev._bridge.send_command.assert_not_called()
+
+
+def test_saved_offline_clock_cannot_unlock_legacy_jtag_on_connection(api_clock, tmp_path):
+    client, dev, _ = api_clock
+    dev._connected = False
+    result = client.put('/api/config', json={'clock_interface': 'JTAG', 'clock_hz': 5000})
+    assert result.status_code == 200
+    dev._connected = True
+    dev._bridge._ctx.clock_interface = 'JTAG'
+    dev._bridge._firmware_capabilities = frozenset({'V4.7.1'})
+    status = client.get('/api/device/debug-speed').json()
+    assert status['interfaces']['JTAG']['clocks_hz'] == [4000000,10000000,20000000,30000000]
+    assert status['interfaces']['JTAG']['requested_hz'] == 5000
+    result = client.post('/api/device/debug-speed', json={'interface':'JTAG', 'clock_hz':5000})
+    assert result.status_code == 400
+    dev._bridge.send_command.assert_not_called()
+    assert load_config(str(tmp_path))['jtag_clock'] == '5000'
 
 
 def test_preference_does_not_change_cached_interface_or_apply_frequency(api_clock, tmp_path):

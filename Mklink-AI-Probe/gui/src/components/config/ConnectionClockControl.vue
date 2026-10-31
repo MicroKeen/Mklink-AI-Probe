@@ -189,7 +189,7 @@ onUnmounted(() => { disposed = true; revision++; clearTimeout(timer); emit('busy
       <span class="clock-state" data-testid="connection-clock-state">{{ effectiveLabel }}</span>
       <span v-if="deviceConnected" class="clock-state">{{ tr('当前接口：', 'Active interface: ') }}{{ activeInterface === 'unknown' ? tr('未确认', 'Unconfirmed') : activeInterface }}</span>
     </div>
-    <p class="clock-help">{{ tr('SWD/JTAG 分别保存，默认 10 MHz；下载器识别到匹配接口后使用对应时钟，采集与内存访问共用。', 'SWD/JTAG settings are saved separately, defaulting to 10 MHz. The matching interface clock is shared by acquisition and memory access.') }}</p>
+    <p class="clock-help">{{ tr('SWD/JTAG 分别保存，默认 10 MHz；连接后按下载器支持的档位应用，采集与内存访问共用。', 'SWD/JTAG settings are saved separately, defaulting to 10 MHz. Supported settings apply on connection and are shared by acquisition and memory access.') }}</p>
     <p v-if="deviceConnected && !matchingInterface" class="clock-help">{{ tr('此处选择要配置的接口；连接匹配的目标后才会应用，不会切换下载器接口。', 'This selects the interface to configure. Settings apply when a matching target connects; the probe interface is not switched.') }}</p>
     <p v-if="migration?.pending" role="status" data-testid="clock-migration">{{ tr('旧 4 MHz 配置需要迁移：请选择 2 MHz 并应用。确认前保留原设置，不会自动切换。', 'The old 4 MHz configuration needs migration: select 2 MHz and apply. The previous setting is retained until confirmed; it will not change automatically.') }}</p>
     <p v-if="matchingInterface && status?.apply_state === 'configured'" role="status">{{ tr('下载器已保存采集设置，尚未确认应用。退出 Keil 调试并停止采集后，可显式重新应用；不会自动停止或重试。', 'The probe saved the acquisition setting but has not confirmed application. After exiting Keil debugging and stopping captures, explicitly apply it again; nothing is automatically stopped or retried.') }}</p>
@@ -204,7 +204,7 @@ onUnmounted(() => { disposed = true; revision++; clearTimeout(timer); emit('busy
 .clock-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
 .clock-row label span, .clock-help, .clock-state { color: var(--muted); font-size: 12px; }
 .clock-row select { width: auto; min-width: 130px; max-width: 100%; }
-.clock-row .interface-select { min-width: 90px; }
+.clock-row .interface-select { flex: 0 0 90px; width: 90px; min-width: 90px; }
 .connection-clock p { margin: 6px 0 0 110px; font-size: 12px; }
 .clock-message { color: var(--warning, #e2aa55); }
 @media (max-width: 640px) { .connection-clock p { margin-left: 0; } }

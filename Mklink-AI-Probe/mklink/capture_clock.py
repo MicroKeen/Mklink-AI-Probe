@@ -77,6 +77,14 @@ def clock_options(bridge, *, hpm=False, interface=None):
             'live_change_supported': False}
 
 
+def configuration_clock_options(bridge, *, hpm=False, interface=None):
+    """Offer the full offline catalog without asserting probe capabilities."""
+    options = clock_options(bridge, hpm=hpm, interface=interface)
+    if bridge is None:
+        options.update(clocks_hz=list(V3_CLOCKS), clock_source='configuration')
+    return options
+
+
 def invalidate_clock(bridge):
     context = bridge._ctx
     context.swd_clock_hz = 0
@@ -189,10 +197,10 @@ def save_interface_clock(config, interface, hz=None):
 
 
 def clock_snapshot(device, config):
-    bridge = getattr(device, '_bridge', None)
-    options = clock_options(bridge, hpm=str(getattr(device, '_mcu_hint', '')).upper().startswith('HPM'))
-    context = getattr(bridge, '_ctx', None)
     connected = bool(device and device.connected)
+    bridge = getattr(device, '_bridge', None) if connected else None
+    options = configuration_clock_options(bridge, hpm=str(getattr(device, '_mcu_hint', '')).upper().startswith('HPM'))
+    context = getattr(bridge, '_ctx', None)
     hz = getattr(context, 'swd_clock_hz', 0) if connected else 0
     hz = hz if type(hz) is int and hz > 0 else None
     state = getattr(context, 'clock_apply_state', 'unknown') if hz else 'unknown'
@@ -200,7 +208,7 @@ def clock_snapshot(device, config):
     migration = None
     if options['clock_source'] in ('v3-advertised', 'swd-advertised') and (requested == 4000000 or hz == 4000000):
         migration = {'from_hz': 4000000, 'to_hz': 2000000, 'pending': True}
-    interfaces = {mode: {**clock_options(bridge, interface=mode),
+    interfaces = {mode: {**configuration_clock_options(bridge, interface=mode),
                          'requested_hz': requested_clock(config, mode)} for mode in ('SWD', 'JTAG')}
     selected = config.get('clock_interface')
     return {**options, 'connected': connected, 'requested_hz': requested,

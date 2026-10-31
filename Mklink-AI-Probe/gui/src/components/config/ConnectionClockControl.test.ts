@@ -150,7 +150,7 @@ describe('shared connection clock', () => {
   it('defaults to 10 MHz and saves a disconnected selection in the connection configuration', async () => {
     const offline = { ...initial(), connected: false, requested_hz: null as number | null,
       configured_hz: null, applied_hz: null, apply_state: 'unknown',
-      clocks_hz: [4000000, 10000000, 20000000, 30000000] }
+      clock_source: 'configuration', clocks_hz: clocks }
     requests.mockImplementation(async (_url: string, init?: RequestInit) => {
       if (init?.method === 'PUT') {
         const body = JSON.parse(String(init.body))
@@ -163,14 +163,15 @@ describe('shared connection clock', () => {
     wrappers.push(wrapper)
     await flushPromises()
     expect(wrapper.get<HTMLSelectElement>('#connection-clock-hz').element.value).toBe('10000000')
+    expect(wrapper.findAll('#connection-clock-hz option').map(o => Number(o.attributes('value')))).toEqual(clocks)
     expect(requests.mock.calls.every(([, init]) => !init?.method)).toBe(true)
-    await apply(wrapper, 20000000)
+    await apply(wrapper, 5000)
     const writes = requests.mock.calls.filter(([, init]) => init?.method)
     expect(writes).toHaveLength(1)
     expect(writes[0]![0]).toContain('/api/config')
     expect(writes[0]![1]!.method).toBe('PUT')
-    expect(JSON.parse(String(writes[0]![1]!.body))).toEqual({ clock_interface: 'SWD', clock_hz: 20000000 })
-    expect(wrapper.get('[data-testid="connection-clock-state"]').text()).toBe('连接时使用：20 MHz')
+    expect(JSON.parse(String(writes[0]![1]!.body))).toEqual({ clock_interface: 'SWD', clock_hz: 5000 })
+    expect(wrapper.get('[data-testid="connection-clock-state"]').text()).toBe('连接时使用：5 kHz')
     expect(wrapper.emitted('busy')).toEqual([[true], [false]])
   })
 
