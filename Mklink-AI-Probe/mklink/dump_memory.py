@@ -1163,6 +1163,7 @@ class DumpMemoryStreamSession:
         *,
         write_ranges: tuple[tuple[int, int], ...] = ARM_WRITE_RANGES,
         allow_legacy_bulk: bool = False,
+        fastest: bool = False,
     ):
         if not region_pairs:
             raise ValueError("dump-memory requires at least one region")
@@ -1174,11 +1175,14 @@ class DumpMemoryStreamSession:
         import math
         if not math.isfinite(period) or period < 0:
             raise ValueError("dump period must be nonnegative and finite")
+        if type(fastest) is not bool or (fastest and period != 0):
+            raise ValueError("Fastest sampling requires fastest=True and period=0")
         self.bridge = bridge
         self.region_pairs = list(region_pairs)
         self.period = float(period)
         self.write_ranges = tuple(write_ranges)
         self.allow_legacy_bulk = allow_legacy_bulk
+        self.fastest = fastest
         self.parser = DumpMemoryParser(region_sizes=[size for _, size in region_pairs])
         self.started = False
         self._mux_watch = None
@@ -1196,11 +1200,11 @@ class DumpMemoryStreamSession:
         if callable(capability) and capability() is True:
             from mklink.mux_watch import MuxWatchSession, MuxWatchCapacityError
             try:
-                watch = MuxWatchSession(None, self.region_pairs, self.period)
+                watch = MuxWatchSession(None, self.region_pairs, self.period, fastest=self.fastest)
             except MuxWatchCapacityError:
                 # Only exclusive finite bulk callers opt in. This is selection
                 # before starting IO, never recovery from a failed MUX request.
-                if not self.allow_legacy_bulk:
+                if self.fastest or not self.allow_legacy_bulk:
                     raise
             else:
                 watch.transport = self.bridge.enable_multiplex()
@@ -1210,6 +1214,8 @@ class DumpMemoryStreamSession:
                 self.started = True
                 return
 
+        if self.fastest:
+            raise RuntimeError('Fastest sampling requires WATCH_TIMING=2 multiplex firmware; legacy dump has no equivalent mode')
         command = build_dump_mem_command(self.region_pairs, self.period)
         self.parser = DumpMemoryParser(
             region_sizes=[size for _, size in self.region_pairs], startup_command=command,
@@ -1221,6 +1227,12 @@ class DumpMemoryStreamSession:
             self.bridge._exit_stream()
             raise
         self.started = True
+
+    @property
+    def timing(self) -> dict | None:
+        """Accepted wire timing, not a measurement or sustainable-rate guarantee."""
+        value = self._mux_watch.timing if self._mux_watch is not None else None
+        return dict(value) if value is not None else None
 
     def request_write(self, address: int, data: bytes, future: Future) -> None:
         """Called by the sole stream owner; ACKs arrive through read_frames()."""

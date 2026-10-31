@@ -1,8 +1,16 @@
 # SuperWatch 动态周期接入草案
 
-2026-10-31，离线源码分析；**未实现、未定义正式固件协议、未构建或连接硬件**。
+2026-10-31，动态下限仍是接入草案。第一阶段SDK已离线实现下述协商协议，227项相关回归通过；**产品UI动态下限尚未实现，未构建安装包或连接硬件**。
 
 已直接核对指定固件会话中用户的要求：验证不延时最快采样、多点校准；当前配置不能达到的更短周期应禁止输入，同时保持原速度和功能。固件会话继续独占 V3/H7/Keil/逻辑分析仪，固定7843候选作前后对照。本草案等待其最终字段与实测依据，不用单个历史吞吐值设置全局下限。
+
+## 第一阶段：协商协议与隔离SDK
+
+指定固件会话约定新增MUX capability bit9（0x200）并声明`WATCH_TIMING=2`。0x32的body不变，线上period_us=0表示显式fastest，1..60000000表示periodic，粒度1µs，不再把低周期静默转换为fastest。成功ACK在状态字节后增加8B `<II accepted_period_us, timebase_hz>`；已接受周期必须与请求相等，时间基准为非零uint32，不能固定24MHz。样本timestamp继续是µs，不能再按timebase_hz二次缩放。该元数据是固件应答，非频率测量。
+
+SDK入口为`DumpMemoryStreamSession(bridge, regions, 0, fastest=True)`或对应`MuxWatchSession(..., fastest=True)`。最快标志必须是布尔且period为0；旧调用不带标志时保持原单次适配。无bit9时不发送最快START，也不退回旧REPL。bit9固件的普通周期也严格检查8B ACK；错误ACK对已启动的本次Watch发送一次STOP，清理失败保留未知状态并使传输失效，均不重发START。已有RTT订阅不受STOP Watch影响。
+
+`session.timing`返回已接受模式、线上请求/接受的µs周期、timebase_hz；旧固件为None，不伪造确认。此阶段不更改产品周期输入、批次、采样解码或插值。基于固定7843导出时只覆盖`mklink/mux_watch.py`与`mklink/dump_memory.py`，不混入时钟UI和其他后续产品修复；原不可变候选不改写。
 
 ## 当前路径与缺口
 
@@ -13,7 +21,7 @@
 | `mklink/remote/api.py` | `/start`固定1µs，`/interval`传给manager | GUI、共享MCP/API统一校验；非法请求在资源申请/停止其他任务前拒绝，事务内再次核对配置版本 |
 | `mklink/remote/dashboards.py` | `normalize_superwatch_interval`固定1µs；`set_interval`立即修改状态并置重启标志 | 先校验候选完整采样配置，再修改；区分请求、固件接受与实测速率；更新变量/数组/外设时共用检查 |
 | `mklink/superwatch.py` | `build_read_blocks`按来源/地址合并，已知RAM范围允许对齐；MMIO不扩读 | 限制依据实际读取布局，不只看界面变量数量 |
-| `mklink/mux_watch.py` | 每块拆成最多128B的parts，最多15个；正周期向上量化到整数µs | 用最终parts参与下限判断；最快模式需明确能力、编码及应答 |
+| `mklink/mux_watch.py` | 每块拆成最多128B的parts，最多15个；正周期向上量化到整数µs，新增显式fastest/ACK校验 | 用最终parts参与动态下限判断 |
 | `mklink/dump_memory.py` | `period=0`表示单次，`-1`为停止；MUX适配中0转2000µs供单次消费 | 保留旧语义；不能把0直接重解释成最快连续模式 |
 
 `WaveformViewer.test.ts`中名称提到zero/fastest的现有测试使用通用加载路径，不能证明当前SuperWatch GUI/API支持最快模式。旧独立viewer、CLI dump、共享MCP等入口应分别核对，不从一个入口外推。
