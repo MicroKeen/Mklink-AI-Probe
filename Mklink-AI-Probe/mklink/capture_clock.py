@@ -40,25 +40,56 @@ def invalidate_clock(bridge):
     context.clock_apply_state = 'unknown'
 
 
-def acknowledge_clock(bridge, hz, response):
-    """Record only an exact successful ACK; configured is never applied."""
+def _clock_reply(response):
+    """Parse unique acknowledgement lines, excluding command echoes/diagnostics."""
     response = response if isinstance(response, str) else ''
     lines = [line.strip() for line in response.splitlines()]
-    profile = re.search(r'(?m)^(SWD|JTAG) profile=(\d+)\b', response)
-    states = re.findall(r'(?m)^SWD clock_state=(\w+)\s*$', response)
-    rejected = any(line == '-1' or line.lower().startswith('error') for line in lines)
-    if (rejected or (profile and int(profile.group(2)) != hz)
-            or (f'set clock {hz}' not in lines and profile is None)):
-        raise ValueError('Probe did not acknowledge the requested clock setting')
-    requires_state = 'SWD_CLOCK_ACK=1' in firmware_lines(bridge)
-    settings = re.findall(r'(?m)^set clock (\d+)\s*$', response)
-    if requires_state and (settings != [str(hz)] or (profile and profile.group(1) != 'SWD')):
-        raise ValueError('Probe did not acknowledge the requested clock setting')
-    if (requires_state or states) and (len(states) != 1 or states[0] not in ('configured', 'applied')):
-        raise ValueError('Probe did not acknowledge configured/applied clock state')
-    state = states[0] if states else 'acknowledged'
-    interface = profile.group(1) if profile else 'SWD' if requires_state else 'unknown'
+    settings = [line for line in lines if line.startswith('set clock ')]
+    profiles = [line for line in lines if line.startswith(('SWD profile=', 'JTAG profile='))]
+    states = [line for line in lines if line.startswith(('SWD clock_state=', 'JTAG clock_state='))]
+    if (any(line == '-1' or line.lower().startswith('error') for line in lines)
+            or len(settings) > 1 or len(profiles) > 1 or len(states) > 1):
+        raise ValueError('Probe did not acknowledge a unique clock setting')
+    setting = re.fullmatch(r'set clock (\d+)', settings[0]) if settings else None
+    profile = re.fullmatch(r'(SWD|JTAG) profile=(\d+)(?:[ \t]+.*)?', profiles[0]) if profiles else None
+    state = re.fullmatch(r'SWD clock_state=(configured|applied)', states[0]) if states else None
+    if (settings and not setting) or (profiles and not profile) or (states and not state):
+        raise ValueError('Probe returned a malformed clock acknowledgement')
+    return (int(setting.group(1)) if setting else None,
+            (profile.group(1), int(profile.group(2))) if profile else None,
+            state.group(1) if state else None)
+
+
+def acknowledge_clock(bridge, hz, response):
+    """Confirm the active interface; a JTAG profile never proves application.
+
+    SWD_CLOCK_ACK describes SWD support globally, including on JTAG-capable
+    probes. JTAG has no applied/configured state and may defer to an IDE.
+    """
+    setting, profile, reported_state = _clock_reply(response)
     context = bridge._ctx
+    expected = ('JTAG' if getattr(bridge, 'idcode', None) == 0x1000563D
+                else getattr(context, 'clock_interface', 'unknown'))
+    interface = profile[0] if profile else expected
+    modern_swd = 'SWD_CLOCK_ACK=1' in firmware_lines(bridge)
+    if (setting is not None and setting != hz) or (profile and profile[1] != hz):
+        raise ValueError('Probe did not acknowledge the requested clock setting')
+    if expected in ('SWD', 'JTAG') and profile and profile[0] != expected:
+        raise ValueError('Probe acknowledged a different debug clock interface')
+    if modern_swd and setting != hz:
+        raise ValueError('Probe did not acknowledge the requested clock setting')
+    if interface == 'JTAG':
+        if hz not in HPM_CLOCKS or not profile or reported_state is not None:
+            raise ValueError('Probe did not acknowledge a supported JTAG profile')
+        state = 'acknowledged'
+    else:
+        if setting != hz and not profile:
+            raise ValueError('Probe did not acknowledge the requested clock setting')
+        if modern_swd and reported_state is None:
+            raise ValueError('Probe did not acknowledge configured/applied clock state')
+        state = reported_state or 'acknowledged'
+        if modern_swd or reported_state:
+            interface = 'SWD'
     context.swd_clock_hz = hz
     context.clock_apply_state = state
     context.applied_clock_hz = hz if state == 'applied' else 0

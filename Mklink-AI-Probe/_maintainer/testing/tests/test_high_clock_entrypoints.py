@@ -22,7 +22,7 @@ def test_online_entrypoints_reject_unsupported_clocks(hz):
 
 @pytest.mark.parametrize('hz', [20_000_000, 30_000_000])
 @pytest.mark.parametrize('hpm', [False, True])
-def test_flash_accepts_probe_setting_ack_with_or_without_profile(hz, hpm):
+def test_flash_requires_jtag_profile_but_legacy_swd_may_ack_setting_only(hz, hpm):
     interface = 'JTAG' if hpm else 'SWD'
     bridge = SimpleNamespace(state=DeviceState.READY, idcode=0x1000563D if hpm else 0x1BA01477,
         send_command=Mock(return_value=f'set clock {hz}\n{interface} profile={hz}\n'),
@@ -30,8 +30,13 @@ def test_flash_accepts_probe_setting_ack_with_or_without_profile(hz, hpm):
     MKLinkFlash(bridge).set_swd_clock(hz)
     assert bridge._ctx.swd_clock_hz == hz
     bridge.send_command.side_effect = [f'set clock {hz}\n']
-    MKLinkFlash(bridge).set_swd_clock(hz)
-    assert bridge._ctx.swd_clock_hz == hz
+    if hpm:
+        with pytest.raises(FlashError, match='JTAG profile'):
+            MKLinkFlash(bridge).set_swd_clock(hz)
+        assert bridge._ctx.swd_clock_hz == 0
+    else:
+        MKLinkFlash(bridge).set_swd_clock(hz)
+        assert bridge._ctx.swd_clock_hz == hz
     fallback = 4000000 if hpm else 1000000
     bridge.send_command.side_effect = [f'set clock {hz}\n{interface} profile=0\n',
                                        f'set clock {fallback}\n{interface} profile={fallback}']

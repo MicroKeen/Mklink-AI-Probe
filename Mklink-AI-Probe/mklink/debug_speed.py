@@ -35,8 +35,7 @@ def apply_profile(device, profile: str) -> dict:
 
 def apply_bridge_profile(bridge, profile: str) -> dict:
     from mklink._types import DeviceState
-    from mklink.capture_clock import acknowledge_clock, invalidate_clock, firmware_lines
-    import re
+    from mklink.capture_clock import acknowledge_clock, invalidate_clock, firmware_lines, _clock_reply
 
     hz = profile_clock(profile)
     if bridge.state != DeviceState.READY:
@@ -47,38 +46,39 @@ def apply_bridge_profile(bridge, profile: str) -> dict:
     # retain profile_confirmed separately from the accepted setting.
     invalidate_clock(bridge)
     response = bridge.send_command(f"cmd.set_swd_clock({hz})")
-    if 'SWD_CLOCK_ACK=1' in firmware_lines(bridge):
-        # Modern ACKs explicitly distinguish a saved application clock from
-        # actual application. A missing/rejected ACK must never cause replay
-        # or a second, implicit fallback write.
+    try:
         result = acknowledge_clock(bridge, hz, response)
-        return {**result, 'profile': profile,
-                'qualification': 'Application clock setting acknowledged; electrical timing not measured'}
-    lines = response.splitlines() if isinstance(response, str) else []
-    match = re.search(r"(?m)^(SWD|JTAG) profile=(\d+)\b", response if isinstance(response, str) else "")
-    interface = match.group(1) if match else "unknown"
-    rejected = any(line.strip() == '-1' or line.strip().lower().startswith('error') for line in lines)
-    confirmed = bool(match and int(match.group(2)) == hz and not rejected)
-    accepted = match is None and not rejected and any(line.strip() == f"set clock {hz}" for line in lines)
-    if not confirmed and not accepted:
-        # An explicit mismatch/rejection or missing setting ACK is still a
-        # failure. Never treat the command echo or diagnostic counters as ACK.
-        # HPM's generic C JTAG shifter uses a fixed delay. A legacy 1 MHz
-        # setting ACK (JTAG profile=0) does not establish a 1 MHz TCK. Only
-        # restore a named JTAG kernel, and require its explicit profile ACK.
-        jtag = interface == 'JTAG' or (interface == 'unknown' and getattr(bridge, 'idcode', None) == 0x1000563D)
+    except ValueError:
+        # Preserve only the legacy firmware's explicit profile=0 fallback.
+        # Missing, mismatched, mixed or rejected replies are unknown outcomes:
+        # do not issue another clock write. Modern firmware never falls back.
+        if 'SWD_CLOCK_ACK=1' in firmware_lines(bridge):
+            raise
+        setting, rejected_profile, reported_state = _clock_reply(response)
+        expected = ('JTAG' if getattr(bridge, 'idcode', None) == 0x1000563D
+                    else getattr(bridge._ctx, 'clock_interface', 'unknown'))
+        if (not rejected_profile or rejected_profile[1] != 0 or reported_state
+                or setting not in (None, hz)
+                or expected in ('SWD', 'JTAG') and rejected_profile[0] != expected):
+            raise
+        interface = rejected_profile[0]
+        jtag = interface == 'JTAG'
         fallback_hz = 4_000_000 if jtag else 1_000_000
         fallback = bridge.send_command(f"cmd.set_swd_clock({fallback_hz})")
-        fallback_lines = fallback.splitlines() if isinstance(fallback, str) else []
-        fallback_ok = any(line.strip() == f"set clock {fallback_hz}" for line in fallback_lines)
-        fallback_ok = fallback_ok and not any(line.strip() == '-1' or line.strip().lower().startswith('error') for line in fallback_lines)
-        if jtag:
-            fallback_ok = fallback_ok and bool(re.search(r"(?m)^JTAG profile=4000000\b", fallback if isinstance(fallback, str) else ''))
-        if not fallback_ok:
+        try:
+            fallback_setting, fallback_profile, _ = _clock_reply(fallback)
+            if (fallback_setting != fallback_hz
+                    or jtag and fallback_profile != ('JTAG', fallback_hz)
+                    or fallback_profile and fallback_profile[0] != interface):
+                raise ValueError('Mismatched fallback acknowledgement')
+            acknowledge_clock(bridge, fallback_hz, fallback)
+        except ValueError as error:
             invalidate_clock(bridge)
-            raise ValueError(f"Probe firmware did not confirm {interface} profile or fallback clock")
-        acknowledge_clock(bridge, fallback_hz, fallback)
+            raise ValueError(f"Probe firmware did not confirm {interface} profile or fallback clock") from error
         raise ClockProfileUnavailable(f"Probe firmware does not confirm this {interface} profile; restored {fallback_hz // 1_000_000} MHz")
-    result = acknowledge_clock(bridge, hz, response)
+    qualification = (f"{result['interface']} profile confirmed; exact target and board stability not identified by IDCODE"
+                     if result['profile_confirmed'] else 'Probe accepted clock setting; target timing not verified')
+    if result['interface'] == 'JTAG':
+        qualification += '; application timing and IDE clock are not confirmed'
     return {**result, "profile": profile,
-            "qualification": f"{interface} profile confirmed; exact target and board stability not identified by IDCODE" if confirmed else "Probe accepted clock setting; target timing not verified"}
+            "qualification": qualification}

@@ -183,7 +183,8 @@ class MKLinkFlash:
             validate_clock_hz(parsed_clock)
         except ValueError as error:
             raise FlashError(str(error)) from error
-        if getattr(self._bridge, 'idcode', None) == 0x1000563D:
+        if (getattr(self._bridge, 'idcode', None) == 0x1000563D
+                or getattr(self._bridge._ctx, 'clock_interface', None) == 'JTAG'):
             from mklink.debug_speed import validate_hpm_clock_hz
             try:
                 validate_hpm_clock_hz(parsed_clock)

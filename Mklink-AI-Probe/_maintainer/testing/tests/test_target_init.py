@@ -142,25 +142,22 @@ class TestDeviceConnectInitializesTarget:
         bridge.close.assert_not_called()
         dev.close()
 
-    @pytest.mark.parametrize('fallback', ['set clock 1000000\r\n', 'Error: busy'])
-    def test_saved_clock_failure_never_disconnects_healthy_usb_session(self, fallback):
+    @pytest.mark.parametrize('reply', ['', 'Error: clock not accepted', 'Error: busy'])
+    def test_saved_clock_failure_never_replays_or_disconnects_healthy_usb_session(self, reply):
         from mklink._types import DeviceState
         dev = Device(port='COM6', initialize_target_now=False)
         bridge = MagicMock()
         bridge.connect.return_value = True
         bridge.state = DeviceState.READY
         bridge.idcode = 0
-        bridge.send_command.side_effect = ['Error: clock not accepted', fallback]
+        bridge.send_command.return_value = reply
         with patch('mklink.bridge.MKLinkSerialBridge', return_value=bridge), \
              patch('mklink.project_config.load_config', return_value={'swd_clock': '20000000'}):
             dev._connect()
             assert dev.connected
-            if fallback.startswith('set clock'):
-                assert bridge._ctx.swd_clock_hz == 1000000
-                assert 'restored 1 MHz' in dev.clock_warning
-            else:
-                assert bridge._ctx.swd_clock_hz == 0
-                assert 'fallback clock' in dev.clock_warning
+            assert bridge._ctx.swd_clock_hz == 0
+            assert dev.clock_warning and 'restored' not in dev.clock_warning
+            bridge.send_command.assert_called_once_with('cmd.set_swd_clock(20000000)')
             bridge.close.assert_not_called()
             dev.close()
 
