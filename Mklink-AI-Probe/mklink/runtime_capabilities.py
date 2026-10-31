@@ -19,6 +19,7 @@ CAPABILITIES = {
     'read_memory': ('POST', '/api/device/read-memory'),
     'measure_dump_memory': ('POST', '/api/device/dump-memory/measure'),
     'capture_dump': ('POST', '/api/device/dump-memory/capture'),
+    'watch_runtime_stats': ('POST', '/api/device/dump-memory/runtime-stats'),
     'flush_memory': ('POST', '/api/device/flush-memory'),
     'dump_memory': ('POST', '/api/device/dump-memory'),
     'read_memory_regions': ('POST', '/api/device/read-memory-regions'),
@@ -147,6 +148,8 @@ UART_CAPABILITIES = frozenset(name for name, (_, path) in CAPABILITIES.items() i
 def validate_arguments(capability, arguments):
     """Reject malformed/range-overflow writes before a device is touched."""
     arguments = dict(arguments)
+    if capability == 'watch_runtime_stats' and arguments:
+        raise HTTPException(422, 'Watch runtime statistics take no arguments')
     if capability == 'hpm_debug':
         from mklink.hpm_debug import command_arguments
         try:

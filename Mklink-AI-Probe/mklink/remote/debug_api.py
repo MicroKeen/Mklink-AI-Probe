@@ -154,6 +154,30 @@ def memory_dump_stream(device, body, *, cancelled=None):
                                cancelled=cancelled)
 
 
+def watch_runtime_stats(device, body):
+    """Read existing firmware counters once, only on an idle claimed MUX."""
+    import struct
+    from mklink.mux import MuxTargetError, MuxTransport
+
+    _fields(body, set())
+    transport = getattr(getattr(device, '_bridge', None), '_mux', None)
+    if not isinstance(transport, MuxTransport):
+        raise HTTPException(409, 'Watch runtime statistics require an existing MUX connection')
+    with transport._commands:
+        if not transport.ready or transport.sampling:
+            raise HTTPException(409, 'Watch runtime statistics require a healthy MUX with all captures confirmed stopped')
+        # Do not enable/reopen MUX, stop a stream, clear counters or retry.
+        try:
+            payload = transport.request(0x14)
+        except MuxTargetError as error:
+            status = 501 if error.status == 1 else 409 if error.status == 6 else 502
+            raise HTTPException(status, f'Watch runtime statistics unavailable (firmware status {error.status}); no retry or fallback') from error
+        if len(payload) != 16:
+            raise HTTPException(502, 'Invalid watch runtime statistics response: expected 16 bytes')
+        return dict(zip(('batches', 'collected', 'collect_cycles', 'pack_cycles'),
+                        struct.unpack('<IIII', payload)))
+
+
 async def _run_cancellable_capture(operation, device, body, request):
     import asyncio
     import threading
@@ -244,8 +268,10 @@ def create_debug_router(state, lease):
     from mklink.hpm_debug import HpmDebugError
     router = APIRouter(prefix='/api/device')
 
-    def add(path, operation, *, cancellable=False):
+    def add(path, operation, *, cancellable=False, shared_only=False):
         async def endpoint(body: dict, request: Request):
+            if shared_only and not state.get('shared_runtime'):
+                raise HTTPException(409, 'This diagnostic requires the shared runtime')
             device = state.get('device')
             if not device or not device.connected:
                 raise HTTPException(400, 'Device not connected')
@@ -254,6 +280,8 @@ def create_debug_router(state, lease):
                     if cancellable:
                         return await _run_cancellable_capture(operation, device, body, request)
                     return await run_in_threadpool(operation, device, body)
+                except HTTPException:
+                    raise
                 except SymbolSourceChangedError as error:
                     raise HTTPException(409, str(error)) from error
                 except HpmDebugError as error:
@@ -267,6 +295,7 @@ def create_debug_router(state, lease):
     add('dump-memory/measure', memory_measure, cancellable=True)
     add('dump-memory', memory_dump, cancellable=True)
     add('dump-memory/capture', memory_dump_stream, cancellable=True)
+    add('dump-memory/runtime-stats', watch_runtime_stats, shared_only=True)
     add('read-memory-regions', memory_regions)
     add('watch', watch_snapshot)
     add('flush-memory', memory_flush)

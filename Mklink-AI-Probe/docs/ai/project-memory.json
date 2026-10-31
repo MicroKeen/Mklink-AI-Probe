@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-31T15:32:37+08:00",
+  "updated_at": "2026-10-31T15:35:26+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
@@ -13,8 +13,8 @@
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "uniform_period_fixed_firmware_diagnostics_pending",
-    "current_task": "00aca9bc时钟回连接配置、默认10MHz已完成。SuperWatch统一4us下限已验证，步长1us、默认1ms，无动态缓存/额外提示，见superwatch-uniform-period-20261031.md。固件会话请求共享只读MUX 0x14统计，待补新独立候选，硬件仍归其独占。"
+    "status": "watch_stats_source_verified_export_pending",
+    "current_task": "00aca9bc时钟回连接配置、默认10MHz；a39e7b96统一4us下限均已完成。新增共享只读watch_runtime_stats：仅既有空闲MUX发一次0x14、不清零/停止/回退。70项定点通过，待导出新固定候选。见watch-runtime-stats-20261031.md；不接硬件/重建安装包。"
   },
   "milestones": [
     {
@@ -110,7 +110,7 @@
     "nRF54L15保护闭环、全部擦除/拔插/休眠/断电、电源精度未全测。每次VCC需确认具体电压。26个无可靠扇区FLM禁用扇区操作，Bank模式须匹配。HPM5301 OTP组18/19历史永久锁定；128字读取及批准Word69 0→1已实测，其余型号/区域不继承授权，锁最后写/逐项校验，多Word不可回滚；熔丝/影子/临时锁语义未知，UART按ROM状态及回读为准。详见hpm-offline-otp-handoff.md及known-limits-20261030.md。"
   ],
   "next_actions": [
-    "统一4us输入下限已完成源码验证，不新增动态限制/提示。协助固件会话补共享只读MUX 0x14统计并另导固定候选；不接硬件、不改原候选。固件性能/Keil及最终hash待验收，已装Windows/Skill不变。正式发布/合并须新指令。",
+    "导出共享0x14统计新固定SDK候选供固件会话拆分性能差异；原候选不改。不接硬件，固件整体性能/Keil及最终hash待验收。统一4us下限a39e7b96已完成，已装Windows/Skill不变；正式发布/合并须新指令。",
     "新V3已校准edc40176/build14:10:28，配置需明确ACK与applied/configured；无LIVE能力，采集中改频拒绝且不停任务。低频并行可明显增加DAP延迟。旧NOBITS机器码哈希结论撤回，硬件证据保留，见专项文档。",
     "公网远程服务中继为下个版本任务；本次不实施。",
     "下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。",

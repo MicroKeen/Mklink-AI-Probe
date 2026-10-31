@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-31T15:32:37+08:00`
+- 更新时间：`2026-10-31T15:35:26+08:00`
 - 分支：`codex/v0.4.2-fixes`
 - HEAD：`已装e29d；字体115ca0ce/SDK644acc2b仅源码。00aca9bc时钟回连接配置、默认10MHz。最新SuperWatch统一4us输入下限，263Python/122GUI/类型/实际浏览器通过，未重建。`
 - 远端 HEAD：`microkeen/codex/v0.4.2-fixes；多个后续修复共用此分支。microkeen/main核对为3cc474bb。`
 - 工作树：E盘主工作区；旧detached树保留。构建/证据在F盘。
-- 当前任务：00aca9bc时钟回连接配置、默认10MHz已完成。SuperWatch统一4us下限已验证，步长1us、默认1ms，无动态缓存/额外提示，见superwatch-uniform-period-20261031.md。固件会话请求共享只读MUX 0x14统计，待补新独立候选，硬件仍归其独占。
-- 状态：`uniform_period_fixed_firmware_diagnostics_pending`
+- 当前任务：00aca9bc时钟回连接配置、默认10MHz；a39e7b96统一4us下限均已完成。新增共享只读watch_runtime_stats：仅既有空闲MUX发一次0x14、不清零/停止/回退。70项定点通过，待导出新固定候选。见watch-runtime-stats-20261031.md；不接硬件/重建安装包。
+- 状态：`watch_stats_source_verified_export_pending`
 
 ## 里程碑
 
@@ -53,7 +53,7 @@
 
 ## 下一动作
 
-1. 统一4us输入下限已完成源码验证，不新增动态限制/提示。协助固件会话补共享只读MUX 0x14统计并另导固定候选；不接硬件、不改原候选。固件性能/Keil及最终hash待验收，已装Windows/Skill不变。正式发布/合并须新指令。
+1. 导出共享0x14统计新固定SDK候选供固件会话拆分性能差异；原候选不改。不接硬件，固件整体性能/Keil及最终hash待验收。统一4us下限a39e7b96已完成，已装Windows/Skill不变；正式发布/合并须新指令。
 2. 新V3已校准edc40176/build14:10:28，配置需明确ACK与applied/configured；无LIVE能力，采集中改频拒绝且不停任务。低频并行可明显增加DAP延迟。旧NOBITS机器码哈希结论撤回，硬件证据保留，见专项文档。
 3. 公网远程服务中继为下个版本任务；本次不实施。
 4. 下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。
