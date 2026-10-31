@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-31T11:20:40+08:00`
+- 更新时间：`2026-10-31T14:29:59+08:00`
 - 分支：`codex/v0.4.2-fixes`
 - HEAD：`7843de8c：SystemView静默保持；e4d5fc4f FPBv2、76307f05模板、6ce读取/455发现均未安装。已装Windows dce17d3e/Skill归档0d680d90不变。`
 - 远端 HEAD：`microkeen/codex/v0.4.2-fixes；多个后续修复共用此分支。microkeen/main核对为3cc474bb。`
 - 工作树：E盘主工作区；旧detached树保留。构建/证据在F盘。
-- 当前任务：V3.6.8/build11:00:39配7843候选实测由指定会话完成；本会话离线核对ZIP45载荷/11报告、40MiB RTT全数据、12万Watch组及1800耗时、FPB/Keil恢复。RTT约124→810KiB/s；见v3-rtt-systemview-review-20261031.md。未构建/安装/操作硬件，Keil历史2→9仍未定因。
-- 状态：`v3_h7_evidence_reviewed_source_only`
+- 当前任务：统一采集时钟/V3能力及明确应答已完成294Python/196GUI/类型/浏览器验证，SuperWatch工具栏合并。用户新授权构建并覆盖安装Windows0.4.2，当前尚未构建安装；见acquisition-clock-20261031.md。最终V3固件edc40176由指定会话升级验收，宿主未接硬件。
+- 状态：`clock_ui_verified_build_authorized`
 
 ## 里程碑
 
@@ -23,7 +23,7 @@
 
 ## 验证证据
 
-- **0.4.2本地Windows与完整Skill候选**：Windows源dce17d3e/Skill归档0d680d90，NSIS SHAf70e4960/Skill SHAa126d967。覆盖exit0，3640/2638载荷匹配、5339用户文件保留、47工具、九XML/41Web一致。冻结PYZ无临时trace；普通V4/H7首次读写MUX、180调用、4KiB恢复/断开通过；4KiB中位21.353ms/最大39.074ms非延迟保证。原生0.4.2/11记录/退出、14元数据/5界面/10归档通过；前序1224回归保留。详见v042-local-candidate-20261030.md。后续4551687d发现异常133回归、6ce79923读取提示211Python/15GUI/类型/浏览器通过，均源码未打包；见各专项报告。
+- **0.4.2本地Windows与完整Skill候选**：Windows源dce17d3e/Skill归档0d680d90，NSIS SHAf70e4960/Skill SHAa126d967。覆盖exit0，3640/2638载荷匹配、5339用户文件保留、47工具、九XML/41Web一致。冻结PYZ无临时trace；普通V4/H7首次读写MUX、180调用、4KiB恢复/断开通过；4KiB中位21.353ms/最大39.074ms非延迟保证。原生0.4.2/11记录/退出、14元数据/5界面/10归档通过；前序1224回归保留。详见v042-local-candidate-20261030.md。455发现/6ce读取提示及后续源码待本轮Windows打包；旧Skill仍0d680d90。
 - **HPM AI Skill能力核实**：源05e73101：1139相关+68包/文档测试；Flash49700B一致、ELF1528变量/360MHz、SVD UART0、JTAG4/10、RTT/Watch/dump通过。SystemView U32修复38351事件；新固件复测22155事件零丢弃。指定会话依新授权更新V4.7.2/build17:19:37后，共享MCP暂停/寄存器/真实断点cause2/单步cause4/恢复运行通过，x31同值写回正确。Skill SHA44df3e58、2625文件/7059FLM/4800SVD校验，全局47工具并保留5339用户文件。无目标烧录/VCC/OTP/发布。见hpm-skill-audit-20261029.md。
 - **RTT自动恢复与在线静默收尾**：14417715：347相关+17发现测试通过。V4/HPM5301连续两次49700B烧录校验成功，自动暂停/恢复RTT与SuperWatch、零恢复错误；新增RTT349/466字节、Watch3005/3712周期且零读取错。Windows NSIS SHA56830303，覆盖exit0、3627载荷一致、冻结MCP/41Web/正常退出通过；完整Skill SHAbb05fbde、2625文件/47工具已同步。仍0.4.1未发布。旧静默面板修复d1cf16ec的124GUI/29Python证据保留。见rtt-auto-restore-20261030.md及online-flash-receipt-20261029.md。
 - **Linux/macOS 0.4.1测试包**：Linux源a6bdacbc/CI40637027269、Mac arm64源eefc6842/CI40640511140：USB各58通过/1skip，冻结CLI/MCP/健康/Web/退出通过。DEB SHA7309f377、DMG SHA56dc8e0a，均旧0.4.1未带后续修复；Mac ad-hoc未公证，实机安装/UI/USB待测。见linux-deb-test-20261028.md、macos-arm64-test-20261028.md。
@@ -47,14 +47,14 @@
 
 ## 真机环境
 
-- **state**：最新保存记录为普通V3私有3.6.8/build11:00:39、H7、7843隔离候选；测试结束采集停止、目标运行、设备关闭，指定会话报告后台not_running。Keil本轮0..7禁用/8启用已恢复，9号删除；此前2→9仍未定因。V4/c995旧证据保留，本会话只读证据。
+- **state**：指定会话已升级普通V3.6.8/build14:10:28（edc40176），MUX/DAP各14档、三流/Keil/FPBv2通过并释放；Keil退出调试、原断点恢复。本会话离线核对固件/ZIP及解码区哈希；1kHz并行DAP中位约730ms，不能称无延迟影响。
 - **installer**：Windows/完整Skill均已覆盖安装0.4.2本地候选；NSIS SHAf70e4960/Skill SHAa126d967，3640/2638文件一致、47工具、5339用户文件保留。41Web一致，更新记录11条。完整产物见v042-combined-20261030，未正式发布。
 - **backups**：保留正式release、安装包、CI ZIP、唯一硬件证据、Skill备份及F盘缓存。含链接/不可访问目录不强删。历史获授权清理见v036-storage-cleanup-20261023.md及本机START_HERE；本地Unix清理不影响正式附件。旧detached树保留；本轮Skill备份在F盘cache/mklink-ai-probe/skill-backups。
 
 ## 下一动作
 
-1. 保留V3私有f3b14f14与7843限定实测及离线核对；不替换已装包，不扩为全矩阵。Keil历史2→9独立待查，不能归因用户；未经后续任务不改Keil/硬件。共享断点quiet gate和共享step待验边界不变，首次已halt/真实断链仅离线覆盖。
-2. 下次明确构建带入7843静默/e4 FPBv2、共享MUX/Skill、76307模板、455发现和6ce读取提示；已装两包SHA不变。374目录扫描慢、995/10048、双核实板及V3历史根因保留。PR66合并/发布须新指令。
+1. 构建并覆盖安装本轮统一时钟候选，验证冻结MCP/Web/原生UI及退出；保留已安装Skill和旧不可变A/B候选。当前授权不含正式发布/合并；Keil历史2→9仍未定因。
+2. 新V3已校准edc40176/build14:10:28，配置需明确ACK与applied/configured；无LIVE能力，采集中改频拒绝且不停任务。低频并行可明显增加DAP延迟。旧NOBITS机器码哈希结论撤回，硬件证据保留，见专项文档。
 3. 公网远程服务中继为下个版本任务；本次不实施。
 4. 下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。
 5. 如需减少Windows未知发布者提示，需用户另行提供/办理可信代码签名身份；当前无证书，不重发相同未签名包。下次先核对当前Git及真实硬件，不重复已完成的发布/云迁移。

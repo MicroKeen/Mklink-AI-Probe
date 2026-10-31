@@ -227,7 +227,8 @@ def test_offline_analysis_available_without_connect_and_preserves_trace_gaps(mon
     asyncio.run(scenario())
 
 
-def test_mcp_debug_speed_uses_shared_admission_without_retry(shared):
+@pytest.mark.parametrize('selection', [{'profile': 'low'}, {'clock_hz': 2000000}])
+def test_mcp_debug_speed_uses_shared_admission_without_retry(shared, selection):
     _, _, calls, managers, app = shared
     from fastapi import HTTPException
     @app.post('/api/device/debug-speed')
@@ -238,15 +239,34 @@ def test_mcp_debug_speed_uses_shared_admission_without_retry(shared):
         async with Client(runtime_mcp.build_server()) as mcp:
             await mcp.call_tool('connect', {'probe': 'test'})
             managers['rtt'].running = True
-            refused = await mcp.call_tool('set_debug_speed', {'profile': 'low'}, raise_on_error=False)
+            refused = await mcp.call_tool('set_debug_speed', selection, raise_on_error=False)
             assert refused.is_error and not calls and managers['rtt'].running
             # Offline tools remain available even while capture owns the bridge.
             assert not (await mcp.call_tool('systemview_decode', {'hex_bytes': '1101'})).is_error
             managers['rtt'].running = False
-            failed = await mcp.call_tool('set_debug_speed', {'profile': 'low'}, raise_on_error=False)
+            failed = await mcp.call_tool('set_debug_speed', selection, raise_on_error=False)
             assert failed.is_error
     asyncio.run(scenario())
-    assert calls == [{'profile': 'low'}]
+    assert calls == [selection]
+
+
+def test_mcp_clock_preserves_pending_state_and_rejects_ambiguous_selection(shared):
+    _, _, calls, _, app = shared
+    @app.post('/api/device/debug-speed')
+    async def speed(body: dict):
+        calls.append(body)
+        return {'configured_hz': body['clock_hz'], 'applied_hz': None, 'apply_state': 'configured'}
+
+    async def scenario():
+        async with Client(runtime_mcp.build_server()) as mcp:
+            await mcp.call_tool('connect', {'probe': 'test'})
+            for invalid in ({}, {'profile': 'low', 'clock_hz': 2000000}):
+                result = await mcp.call_tool('set_debug_speed', invalid, raise_on_error=False)
+                assert result.is_error and calls == []
+            result = await mcp.call_tool('set_debug_speed', {'clock_hz': 2000000})
+            assert result.data['apply_state'] == 'configured' and result.data['applied_hz'] is None
+    asyncio.run(scenario())
+    assert calls == [{'clock_hz': 2000000}]
 
 
 def test_shared_stdio_does_not_import_legacy_device_server():

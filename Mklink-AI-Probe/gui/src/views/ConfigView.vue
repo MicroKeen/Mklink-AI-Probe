@@ -44,20 +44,6 @@ const symbolCatalog = useSymbolCatalog()
 
 const activeSection = ref<ConfigSection>('local')
 const config = ref<ProjectConfig>({})
-// Keep the stored/API value in Hz; only the editable presentation uses MHz.
-const swdClockMhz = computed({
-  get: () => config.value.swd_clock ? String(Number(config.value.swd_clock) / 1_000_000) : '',
-  set: (value: string | number) => {
-    const text = String(value).trim()
-    const hz = Number(text) * 1_000_000
-    const rounded = Math.round(hz)
-    config.value.swd_clock = text ? String(Math.abs(hz - rounded) < 0.000001 ? rounded : hz) : ''
-  },
-})
-const confirmedClockMhz = computed(() => {
-  const hz = deviceStatus.value.clock_hz
-  return typeof hz === 'number' && hz > 0 ? String(hz / 1_000_000) : null
-})
 const localPort = ref('')
 const portOptions = ref<{ label: string; value: string }[]>([])
 const localPortExplicit = ref(false)
@@ -139,21 +125,11 @@ async function loadConfig() {
 
 async function saveLocalConfig() {
   if (savingLocal.value) return
-  const rawClock = String(config.value.swd_clock ?? '').trim()
-  if (rawClock) {
-    const clock = Number(rawClock)
-    if (!Number.isInteger(clock) || !(clock >= 1 && clock <= 10_000_000 || clock === 20_000_000 || clock === 30_000_000)) {
-      localSaveState.value = 'idle'
-      toast.error(tr('SWD 时钟支持 1 Hz 至 10 MHz，或 20 MHz、30 MHz 档位', 'SWD clock supports 1 Hz to 10 MHz, or the 20 MHz / 30 MHz profiles'))
-      return
-    }
-  }
   savingLocal.value = true
   localSaveState.value = 'saving'
   const payload = {
-    ...config.value,
     com_port: localPort.value.trim(),
-    swd_clock: rawClock || undefined,
+    mcu_key: config.value.mcu_key,
   }
   try {
     config.value = await updateConfig(payload)
@@ -502,14 +478,7 @@ onUnmounted(() => {
         <div v-if="deviceStatus.connected && deviceStatus.port" class="connection-detail" data-testid="connected-port">
           {{ tr('当前串口：', 'Connected port: ') }}{{ deviceStatus.port }}
         </div>
-        <div v-if="deviceStatus.connected" class="connection-detail" data-testid="confirmed-clock">
-          {{ tr('下载器设置速率：', 'Probe clock setting: ') }}{{ confirmedClockMhz ? `${confirmedClockMhz} MHz` : tr('未确认', 'Unconfirmed') }}
-        </div>
-        <div v-if="deviceStatus.connected && deviceStatus.clock_warning" role="status" data-testid="clock-warning">
-          <p>{{ tr('下载器已连接，但所选速率设置未获确认。可重新应用所选速率；连接下载器和设置速率均无需连接目标板。', 'The probe is connected, but the requested clock setting was not acknowledged. Retry applying it. Connecting and configuring the probe do not require a target board.') }}</p>
-          <p>{{ deviceStatus.clock_warning }}</p>
-          <button class="btn btn-sm" data-testid="retry-clock" :disabled="savingLocal || connecting || disconnecting" @click="saveLocalConfig">{{ tr('重新应用所选速率', 'Reapply requested clock') }}</button>
-        </div>
+        <p class="connection-detail" data-testid="dashboard-clock-location">{{ tr('采集时钟请在仪表盘统一选择；RTT、RTOS Trace、SuperWatch 和普通内存访问共用。', 'Select the shared acquisition clock on the Dashboard for RTT, RTOS Trace, SuperWatch and ordinary memory access.') }}</p>
 
         <div class="form-row">
           <label class="form-label" for="local-port">{{ tr('串口', 'Serial Port') }}</label>
@@ -533,23 +502,6 @@ onUnmounted(() => {
 
         <div v-if="sharedRuntime && selectedProbe?.probe_id" class="connection-detail" data-testid="selected-probe-id">
           {{ selectedProbe.probe_id }}
-        </div>
-
-        <div class="form-row">
-          <label class="form-label" for="swd-clock">{{ tr('设置时钟 (MHz)', 'Requested Clock (MHz)') }}</label>
-          <input
-            id="swd-clock"
-            v-model="swdClockMhz"
-            type="number"
-            min="0.000001"
-            max="30"
-            step="any"
-            class="form-input"
-            data-testid="swd-clock"
-            :disabled="savingLocal"
-            :placeholder="tr('如 1、10、20、30', 'e.g. 1, 10, 20, 30')"
-            @change="saveLocalConfig"
-          />
         </div>
 
         <div class="local-actions">

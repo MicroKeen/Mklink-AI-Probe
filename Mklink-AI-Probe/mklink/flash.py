@@ -195,15 +195,19 @@ class MKLinkFlash:
             except ValueError as error:
                 raise FlashError(str(error)) from error
             return
-        self._bridge._ctx.swd_clock_hz = 0
+        from mklink.capture_clock import acknowledge_clock, invalidate_clock
+        invalidate_clock(self._bridge)
         response = self._bridge.send_command(f"cmd.set_swd_clock({parsed_clock})", echo=True)
         lines = response.splitlines() if isinstance(response, str) else []
         profile = re.search(r"(?m)^(SWD|JTAG) profile=(\d+)\b", response if isinstance(response, str) else '')
         if (not any(line.strip() == f"set clock {parsed_clock}" for line in lines)
                 or any(line.strip() == '-1' or line.strip().lower().startswith('error') for line in lines)
                 or (profile is not None and int(profile.group(2)) != parsed_clock)):
-            raise FlashError("Probe did not confirm the requested debug clock/profile; HPM JTAG uses 4/10/20/30 MHz profiles")
-        self._bridge._ctx.swd_clock_hz = parsed_clock
+            raise FlashError("Probe did not acknowledge the requested debug clock/profile; HPM JTAG uses 4/10/20/30 MHz profiles")
+        try:
+            acknowledge_clock(self._bridge, parsed_clock, response)
+        except ValueError as error:
+            raise FlashError(str(error)) from error
 
     def load_flm(self, flm_path: str, flash_base: str, ram_base: str) -> bool:
         """加载 Flash 算法文件。

@@ -385,6 +385,16 @@ class Device:
         self._flash = MKLinkFlash(self._bridge)
         self.clock_warning = None
 
+        # Negotiate once per USB connection, before applying a saved clock or
+        # entering MUX. Dashboard status only reads this cache, never USB.
+        prepare_clock = getattr(self._bridge, '_get_firmware_capabilities', None)
+        if callable(prepare_clock):
+            try:
+                prepare_clock()
+            except Exception:
+                self.close()
+                raise
+
         # The configuration page's raw SWD clock also applies to deferred GUI
         # connections. Previously it was only consumed by flash(), so a new
         # connection silently inherited whatever clock the probe last used.
@@ -437,7 +447,11 @@ class Device:
 
     def set_debug_speed(self, profile: str) -> dict:
         """Apply a named 4/10/20/30 MHz profile to an idle connection."""
-        from mklink.debug_speed import apply_profile
+        from mklink.debug_speed import apply_profile, profile_clock
+        from mklink.capture_clock import clock_options
+        if (clock_options(self._bridge)['clock_source'] == 'v3-advertised'
+                and profile_clock(profile) not in clock_options(self._bridge)['clocks_hz']):
+            raise ValueError('The old 4 MHz profile requires explicit migration to 2 MHz on this V3; use clock_hz=2000000')
         try:
             result = apply_profile(self, profile)
         except ValueError as error:
@@ -445,6 +459,30 @@ class Device:
             raise
         self.clock_warning = None
         return result
+
+    def set_debug_clock(self, clock_hz: int) -> dict:
+        """Configure the shared acquisition clock while captures are stopped.
+
+        New V3 firmware distinguishes saved application timing from applied
+        timing. Neither acknowledgement promises electrical calibration.
+        """
+        from mklink.capture_clock import clock_options, clock_snapshot
+        from mklink.debug_speed import validate_clock_hz
+        from mklink.flash import FlashError
+        self._require_connected()
+        validate_clock_hz(clock_hz)
+        options = clock_options(self._bridge, hpm=str(self._mcu_hint or '').upper().startswith('HPM'))
+        if options['clock_source'] != 'legacy' and clock_hz not in options['clocks_hz']:
+            raise ValueError('Unsupported acquisition clock for this probe/interface; choose an advertised clock')
+        if self._bridge.state != DeviceState.READY:
+            raise ValueError('Stop acquisition before changing the shared clock; no stream was stopped')
+        try:
+            self._flash.set_swd_clock(clock_hz)
+        except (FlashError, ValueError) as error:
+            self.clock_warning = str(error)
+            raise ValueError(str(error)) from error
+        self.clock_warning = None
+        return clock_snapshot(self, {})
 
     @property
     def clock_hz(self) -> int | None:

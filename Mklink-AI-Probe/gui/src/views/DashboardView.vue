@@ -78,6 +78,8 @@
         </div>
       </div>
 
+      <AcquisitionClockControl v-if="!IS_REMOTE" :key="'clock-' + (deviceStatus.device_generation || 0)"
+        :device-connected="deviceStatus.connected" :device-generation="deviceStatus.device_generation" />
       <RttViewTab :key="'RttViewTab-' + (deviceStatus.device_generation || 0)" v-show="tab === 'rtt'" :device-connected="deviceStatus.connected" />
 
       <HardFaultTab :key="'HardFaultTab-' + (deviceStatus.device_generation || 0)" v-if="tab === 'hardfault'" :device-connected="deviceStatus.connected" :symbol-loaded="deviceStatus.axf?.loaded === true" />
@@ -104,6 +106,7 @@ import HardFaultTab from '../components/dash/HardFaultTab.vue'
 import SymbolsTab from '../components/dash/SymbolsTab.vue'
 import MemoryTab from '../components/dash/MemoryTab.vue'
 import SuperWatchTab from '../components/dash/SuperWatchTab.vue'
+import AcquisitionClockControl from '../components/dash/AcquisitionClockControl.vue'
 import SerialMonitorTab from '../components/dash/SerialMonitorTab.vue'
 import ModbusTab from '../components/dash/ModbusTab.vue'
 import SystemViewTab from '../components/dash/SystemViewTab.vue'

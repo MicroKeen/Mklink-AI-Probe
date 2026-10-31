@@ -1409,9 +1409,9 @@ def create_app(
                 from mklink.flash import FlashError
                 try:
                     async with _exclusive_probe_control("config-clock") as (device, _):
-                        await run_in_threadpool(device._flash.set_swd_clock, parsed_swd_clock)
+                        await run_in_threadpool(device.set_debug_clock, parsed_swd_clock)
                         device.clock_warning = None
-                except FlashError as error:
+                except (FlashError, ValueError) as error:
                     device.clock_warning = str(error)
                     raise HTTPException(status_code=422, detail=str(error)) from error
         save_config(_state["project_root"], config)
@@ -2300,32 +2300,39 @@ def create_app(
         return {"status": "ok", "stopped": []}
 
     @app.post("/api/device/debug-speed")
-    async def set_debug_speed(profile: str = Body(..., embed=True), save: bool = Body(True, strict=True)):
-        from mklink.debug_speed import profile_clock
+    async def set_debug_speed(profile: str | None = Body(None), clock_hz: int | None = Body(None, strict=True), save: bool = Body(True, strict=True)):
+        from mklink.debug_speed import profile_clock, validate_clock_hz, PROFILES
+        if (profile is None) == (clock_hz is None):
+            raise HTTPException(422, 'Provide exactly one of profile or clock_hz')
         try:
-            profile_clock(profile)
+            requested_hz = profile_clock(profile) if profile is not None else validate_clock_hz(clock_hz)
             async with _exclusive_probe_control("debug-speed") as (device, stopped):
-                result = await run_in_threadpool(device.set_debug_speed, profile)
+                result = (await run_in_threadpool(device.set_debug_speed, profile) if profile is not None
+                          else await run_in_threadpool(device.set_debug_clock, requested_hz))
         except ValueError as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
         if save:
             config = load_config(_state["project_root"]) or {}
-            config["debug_speed"] = profile
-            config["swd_clock"] = str(profile_clock(profile))
+            matching = next((key for key, value in PROFILES.items() if value == requested_hz), None)
+            if matching:
+                config["debug_speed"] = matching
+            else:
+                config.pop("debug_speed", None)
+            config["swd_clock"] = str(requested_hz)
             save_config(_state["project_root"], config)
         return {**result, "stopped": stopped, "saved": save}
 
     @app.get("/api/device/debug-speed")
     async def get_debug_speed():
         from mklink.debug_speed import PROFILES
+        from mklink.capture_clock import clock_snapshot
         config = load_config(_state["project_root"]) or {}
-        profile = config.get("debug_speed", "medium")
         device = _state.get("device")
-        hz = PROFILES.get(profile, PROFILES["medium"])
-        if device and device.connected:
-            hz = device._bridge._ctx.swd_clock_hz or None
-            profile = next((name for name, value in PROFILES.items() if value == hz), None)
-        return {"profile": profile, "clock_hz": hz, "default": "medium", "profiles": PROFILES}
+        snapshot = clock_snapshot(device, config)
+        hz = snapshot['clock_hz']
+        profile = next((name for name, value in PROFILES.items() if value == hz), None)
+        return {**snapshot, "profile": profile, "default": "medium", "profiles": PROFILES,
+                "device_generation": _state.get('device_generation', 0)}
 
     @asynccontextmanager
     async def _exclusive_probe_control(operation: str):
@@ -2334,7 +2341,7 @@ def create_app(
         from mklink.remote.dashboards import BRIDGE_DASHBOARD_TYPES, stop_bridge_dashboards
 
         async with _dashboard_start_lock(_state):
-            if _state.get("shared_runtime"):
+            if _state.get("shared_runtime") or operation in ('debug-speed', 'config-clock'):
                 active = [name for name in BRIDGE_DASHBOARD_TYPES
                           if _dashboard_worker_alive(get_managers().get(name))]
                 if active:

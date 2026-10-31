@@ -331,13 +331,18 @@ python -m mklink superwatch TIM2.CNT,ADC1.DR --svd path/to/device.svd --visualiz
 
 **Dump Memory 连续采样协议**
 
-调试时钟分为 `low`（4 MHz）、`medium`（10 MHz，默认）、`high`（20 MHz）、`ultra`（30 MHz）。SuperWatch 的“采样调试速率”与 CLI/MCP 使用同一组档位；原 `high` 配置继续表示 20 MHz。它调整调试链路时钟，实际采样率应以 dump 时间戳测量。
+采集时钟在仪表盘统一选择，SuperWatch 不再单独提供速率配置。MCP 可先查询
+`gui_call("debug_speed")` 的 `clocks_hz`，再传 `set_debug_speed(clock_hz=...)`；
+新 V3 的 14 档、旧 4→2 MHz 显式迁移和待应用状态见 [共享时钟](shared-runtime.md)。
+兼容档位仍为 `low`（4 MHz）、`medium`（10 MHz，默认）、`high`（20 MHz）、`ultra`（30 MHz）；
+新 V3 拒绝 `low`，HPM/其他旧固件保留。时钟不等于采样率，实际速率以 dump 时间戳测量。
 
 CLI 使用 `python -m mklink debug-speed ultra --project-root <工程目录>`；加 `--save` 可保存供后续连接使用。`dump-memory` 和 `dump-benchmark` 的 `--speed ultra` 可为本次采样选择 30 MHz。MCP 使用 `set_debug_speed(profile="ultra")`，或 `measure_dump_memory(..., speed_profile="ultra")`。
 
-ARM SWD 和 HPM JTAG 提供 4/10/20/30 MHz 档位；检查 `interface` 和
+旧 ARM SWD 和 HPM JTAG 提供 4/10/20/30 MHz 档位；检查 `interface` 和
 `profile_confirmed`，仅设置回显不代表已确认内核或实测频率。明确拒绝时 SWD 尝试
 恢复 1 MHz，HPM JTAG 尝试恢复已确认的 4 MHz 档位；恢复也未确认则时钟状态未知。
+新 V3 采用明确的 configured/applied 应答，失败时不自动回退或重放命令。
 HPM 任意 8 MHz/1 MHz 请求会回退固定延时 C 路径，不能声称按请求改变了 TCK。
 档位回执不证明目标或接线稳定，应按板卡实测选择；采集期间切档会拒绝，不自动抢停。
 

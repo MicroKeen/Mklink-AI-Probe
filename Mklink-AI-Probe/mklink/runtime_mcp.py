@@ -291,17 +291,24 @@ def build_server():
         return client().call("device_status")
 
     @server.tool()
-    def set_debug_speed(profile: str) -> dict:
-        """Set low/medium/high/ultra through the shared backend; busy during capture.
+    def set_debug_speed(profile: str | None = None, clock_hz: int | None = None) -> dict:
+        """Set the shared acquisition clock; stop captures before changing it.
 
         Changes this probe's debug clock and saves the project profile after success.
         All attached clients share it. Inspect gui_call('debug_speed') for cached status.
         No target MCU is required; profile_confirmed reports the optional timing-profile ACK.
-        low=4 MHz, medium=10 MHz, high=20 MHz, ultra=30 MHz. For HPM JTAG use
+        Pass exactly one of profile or integer clock_hz. Read gui_call('debug_speed')
+        clocks_hz first: newly advertised V3 SWD has 14 discrete clocks and replaces
+        old 4 MHz with an explicit 2 MHz choice. configured means saved, still
+        pending application; only applied confirms timing configuration, not
+        electrical calibration. Do not stop streams or replay a failed request.
+        Legacy low=4 MHz, medium=10 MHz, high=20 MHz, ultra=30 MHz. For HPM JTAG use
         these profiles, not arbitrary SWD rates such as 8 MHz. A setting/profile
         ACK is not a measured TCK frequency; inspect interface and qualification.
         """
-        return client().call('set_debug_speed', {'profile': profile})
+        if (profile is None) == (clock_hz is None):
+            raise ValueError('Provide exactly one of profile or clock_hz')
+        return client().call('set_debug_speed', {'profile': profile} if profile is not None else {'clock_hz': clock_hz})
 
     @server.tool()
     def hpm_debug(action: Literal['capabilities', 'status', 'halt', 'resume', 'step',

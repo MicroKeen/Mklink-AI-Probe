@@ -32,7 +32,9 @@ def test_flash_accepts_probe_setting_ack_with_or_without_profile(hz, hpm):
     bridge.send_command.side_effect = [f'set clock {hz}\n']
     MKLinkFlash(bridge).set_swd_clock(hz)
     assert bridge._ctx.swd_clock_hz == hz
-    bridge.send_command.side_effect = [f'set clock {hz}\n{interface} profile=0\n', 'set clock 1000000']
-    with pytest.raises(FlashError, match='restored 1 MHz'):
+    fallback = 4000000 if hpm else 1000000
+    bridge.send_command.side_effect = [f'set clock {hz}\n{interface} profile=0\n',
+                                       f'set clock {fallback}\n{interface} profile={fallback}']
+    with pytest.raises(FlashError, match=f'restored {fallback // 1000000} MHz'):
         MKLinkFlash(bridge).set_swd_clock(hz)
-    assert bridge._ctx.swd_clock_hz == 1_000_000
+    assert bridge._ctx.swd_clock_hz == fallback

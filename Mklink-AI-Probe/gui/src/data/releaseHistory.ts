@@ -9,10 +9,14 @@ export interface ReleaseHistoryEntry {
 
 export const releaseHistory: ReleaseHistoryEntry[] = [
   {
-    version: '0.4.2', date: '2026-10-30',
+    version: '0.4.2', date: '2026-10-31',
     summary: '完善 HPM 调试与外设观察，修复采集恢复并优化内存访问',
     summaryEn: 'Improve HPM debugging and peripherals, capture recovery and memory access',
     changes: [
+      '仪表盘统一选择 RTT、RTOS Trace、SuperWatch 和内存访问的采集时钟；新 V3 按固件能力提供 14 档，并区分已保存与已应用。SuperWatch 配置工具栏合并为一行，窄窗口自动换行。',
+      'RTT 与 SystemView 支持共享采集；配套固件协商更大传输量子。目标暂停时保持 SystemView 会话，继续运行后自动接收新事件。',
+      '支持 Cortex-M FPBv2 硬件断点，完善 STM32H7 断点地址和两个半字位置处理。',
+      '在线读取连接失败显示芯片无应答、下载器占用或 USB 断开等具体原因；修复后台发现时端口复用导致的 HTTP 异常。',
       'Windows 覆盖升级自动清理旧版 MKLink 元数据，修复安装后仍显示旧版本的问题。',
       '在线烧录自动暂停相关采集，完成后恢复原任务；已完成的在线请求自动收尾，避免残留待确认提示。',
       '修复 HPM 烧录复位后 RTT 自动恢复失败，包括自动发现通道及原有编码设置；实际恢复错误保留在任务日志。',
@@ -26,6 +30,10 @@ export const releaseHistory: ReleaseHistoryEntry[] = [
       '修复 HPM SystemView 的 U32 数据解析，改善 RTOS Trace 事件显示。',
     ],
     changesEn: [
+      'Choose a shared acquisition clock for RTT, RTOS Trace, SuperWatch and memory access on the Dashboard. New V3 firmware advertises 14 settings and distinguishes saved from applied. SuperWatch controls share one row and wrap in narrow windows.',
+      'Share RTT and SystemView acquisition and negotiate a larger transfer quantum with compatible firmware. Keep the SystemView session while the target is halted and receive events again after it resumes.',
+      'Support Cortex-M FPBv2 hardware breakpoints, including STM32H7 breakpoint addresses and both halfword positions.',
+      'Show specific online-read failures for target acknowledgement, probe ownership and USB connection; handle HTTP errors caused by reused ports during backend discovery.',
       'Remove obsolete MKLink metadata during Windows overwrite upgrades so the installed version is reported correctly.',
       'Pause related captures for online programming and restore them afterward; settle completed requests automatically to avoid stale pending-confirmation prompts.',
       'Fix RTT restoration after HPM programming and reset, including discovered channels and saved encodings; retain actual restoration errors in the task log.',

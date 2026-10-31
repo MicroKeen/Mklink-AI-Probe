@@ -8,7 +8,7 @@
 - UF2 为 832000 字节，SHA256 `f3b14f14e6a34c34d797fc4e566c87d48b0422e6677e20b8ce6cbe757a921b12`。
 - 配套上位机为隔离源码候选 `7843de8c3fc6e5d959de75997dd1b1ede4529269`，源包 SHA256 `9ea57f92ba65de4b8023d7f385821b75d3c94cdb37ecef46a43fbc6e348599c7`。已安装 Windows 和 Skill 未替换；不能把候选的 FPBv2 和 SystemView 等待状态修复归给旧安装版。
 - 固件会话交付 `V3_H7_最新固件与验证_20261031.zip`，2600388 字节，SHA256 `191e22b66cca06e6d2043e8667075fa17f876210b5156887f726d9b701152a37`。本会话核对内部 45 个载荷哈希、11 份报告哈希和原始报告一致性，交付说明与本地文件一致。
-- 固件报告的 39 项模型通过及 11 个校准 SWD 内核地址/代码不变，本会话核对了 manifest 与审计记录一致性，没有重跑模型、编译或重做机器码审计。
+- 固件报告记录 39 项模型通过；本会话当时只核对 manifest 与审计记录一致性，没有重跑模型或机器码审计。**2026-10-31 更正：原 11 个内核的代码哈希来自 ELF `SHT_NOBITS` 的零填充，不是真实机器码，撤回据此得出的旧版到 build 11:00:39 代码相等结论。** 原地址和硬件实测记录仍保留，原 ZIP 不改写。后续时钟候选通过解码 SEGGER 初始化载荷核对了 14 个函数，但其对照范围是 build 11:00:39 到新时钟候选，不能替代原历史比较。
 
 原始固件交付目录名为 `V3.6.8-rtt-systemview-20261031`，实测目录名为 `v3-rtt-port-20261031`；绝对硬件路径、固件、截图及设备标识不提交仓库。离线核对脚本和结果存于 `F:/MKLink-Build/artifacts/rtt-shared-20261030`：`verify_v3_delivery.py` / `v3-delivery-independent-review.json`、`verify_fpbv2_hits.py` / `v3-fpb-independent-review.json`、`verify_v3_keil_idle.py` / `v3-keil-independent-review.json`。
 

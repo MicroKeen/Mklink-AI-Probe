@@ -96,46 +96,16 @@ async function mountView() {
 }
 
 describe('ConfigView', () => {
-  it('distinguishes a saved 20 MHz request from the confirmed 1 MHz fallback and offers retry', async () => {
-    Object.assign(mocks.deviceStatus, { connected: true, clock_hz: 1_000_000, clock_warning: 'SWD profile unavailable; restored 1 MHz' })
-    mocks.api.getConfig.mockResolvedValue({ swd_clock: '20000000' })
-    mocks.api.updateConfig.mockResolvedValue({ swd_clock: '20000000' })
+  it('moves clock configuration to the Dashboard and does not resubmit a stale clock when saving a port', async () => {
+    mocks.api.getConfig.mockResolvedValue({ com_port: 'TEST_PORT_A', swd_clock: '4000000', debug_speed: 'low' })
     const wrapper = await mountView()
-    expect(wrapper.get<HTMLInputElement>('#swd-clock').element.value).toBe('20')
-    expect(wrapper.get('[data-testid="confirmed-clock"]').text()).toContain('1 MHz')
-    expect(wrapper.get('[data-testid="clock-warning"]').text()).toContain('SWD profile unavailable')
-    expect(wrapper.text()).not.toContain('请升级下载器固件后')
-    await wrapper.get('[data-testid="retry-clock"]').trigger('click')
+    expect(wrapper.find('[data-testid="swd-clock"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="dashboard-clock-location"]').text()).toContain('仪表盘')
+    await wrapper.get('[data-testid="local-port"]').setValue('TEST_PORT_B')
     await flushPromises()
-    expect(mocks.api.updateConfig).toHaveBeenCalledWith(expect.objectContaining({ swd_clock: '20000000' }))
-    expect(mocks.api.refreshStatus).toHaveBeenCalled()
-    wrapper.unmount()
-  })
-
-  it('does not invent a 1 MHz fallback when the actual clock is unknown', async () => {
-    Object.assign(mocks.deviceStatus, { connected: true, clock_hz: null, clock_warning: 'Fallback not acknowledged' })
-    const wrapper = await mountView()
-    expect(wrapper.get('[data-testid="confirmed-clock"]').text()).toContain('未确认')
-    expect(wrapper.text()).not.toContain('当前使用 1 MHz')
-    wrapper.unmount()
-  })
-
-  it.each(['0x0', '0xffffffff'])('never requires a target board for probe configuration (%s)', async idcode => {
-    Object.assign(mocks.deviceStatus, { connected: true, idcode, clock_hz: 1_000_000, clock_warning: 'SWD profile unavailable; restored 1 MHz' })
-    const wrapper = await mountView()
-    expect(wrapper.find('[data-testid="clock-target-warning"]').exists()).toBe(false)
-    expect(wrapper.get('[data-testid="clock-warning"]').text()).toContain('均无需连接目标板')
-    wrapper.unmount()
-  })
-
-  it('displays stored Hz as MHz and saves fractional MHz without changing the API unit', async () => {
-    mocks.api.getConfig.mockResolvedValue({ swd_clock: '20000000' })
-    const wrapper = await mountView()
-    const input = wrapper.get<HTMLInputElement>('[data-testid="swd-clock"]')
-    expect(input.element.value).toBe('20')
-    await input.setValue('0.125')
-    await flushPromises()
-    expect(mocks.api.updateConfig).toHaveBeenCalledWith(expect.objectContaining({ swd_clock: '125000' }))
+    expect(mocks.api.updateConfig).toHaveBeenCalledTimes(1)
+    expect(mocks.api.updateConfig.mock.calls[0]![0]).not.toHaveProperty('swd_clock')
+    expect(mocks.api.updateConfig.mock.calls[0]![0]).not.toHaveProperty('debug_speed')
     wrapper.unmount()
   })
 
@@ -156,21 +126,17 @@ describe('ConfigView', () => {
     wrapper.unmount()
   })
 
-  it('keeps a connection result and an edited clock when initial config arrives late', async () => {
+  it('keeps a connection result when initial config arrives late', async () => {
     sharedRuntime.value = true
     const pending = deferred<any>()
     mocks.api.getConfig.mockReturnValueOnce(pending.promise)
     mocks.api.connectDevice.mockResolvedValueOnce({ port: 'TEST_PORT_B' })
     const wrapper = await mountView()
-    const clock = wrapper.get<HTMLInputElement>('[data-testid="swd-clock"]')
-    clock.element.value = '1'
-    await clock.trigger('input')
     await wrapper.get('[data-testid="connect-local"]').trigger('click')
     await flushPromises()
     pending.resolve({ com_port: 'TEST_PORT_A', swd_clock: '2000000' })
     await flushPromises()
     expect(wrapper.get<HTMLSelectElement>('[data-testid="local-port"]').element.value).toBe('TEST_PORT_B')
-    expect(clock.element.value).toBe('1')
     wrapper.unmount()
   })
 
@@ -456,45 +422,22 @@ describe('ConfigView', () => {
       .toBe('TEST_PORT_B')
   })
 
-  it('automatically saves SWD changes without a save button or auto-discover action', async () => {
-    const wrapper = await mountView()
-
-    expect(wrapper.find('[data-testid="auto-port"]').exists()).toBe(false)
-    await wrapper.get('[data-testid="swd-clock"]').setValue('4')
-    await flushPromises()
-
-    expect(mocks.api.updateConfig).toHaveBeenCalledWith(expect.objectContaining({
-      com_port: 'TEST_PORT_A',
-      swd_clock: '4000000',
-    }))
-    expect(wrapper.find('[data-testid="save-local"]').exists()).toBe(false)
-    expect(wrapper.get('[data-testid="local-auto-save"]').text()).toContain('自动保存')
-    expect(wrapper.get('[data-testid="disconnect-local"]').attributes('disabled')).toBeDefined()
-  })
-
-  it.each(['20000000', '30000000'])('saves calibrated high clock %s', async (hz) => {
-    const wrapper = await mountView()
-    await wrapper.get('[data-testid="swd-clock"]').setValue(String(Number(hz) / 1_000_000))
-    await flushPromises()
-    expect(mocks.api.updateConfig).toHaveBeenCalledWith(expect.objectContaining({ swd_clock: hz }))
-  })
-
   it('keeps an uncertain save visible without resending after a lost response', async () => {
     const wrapper = await mountView()
     mocks.api.updateConfig.mockRejectedValueOnce(new TypeError('Failed to fetch'))
     vi.useFakeTimers()
     try {
-      await wrapper.get('[data-testid="swd-clock"]').setValue('4')
+      await wrapper.get('[data-testid="local-port"]').setValue('TEST_PORT_B')
       await flushPromises()
       await vi.advanceTimersByTimeAsync(1500)
       await flushPromises()
       expect(mocks.api.updateConfig).toHaveBeenCalledTimes(1)
       expect(wrapper.get('[data-testid="local-auto-save"]').text()).toContain('保存未确认')
       expect(mocks.toastError).toHaveBeenCalledWith(expect.stringContaining('Failed to fetch'))
-      expect(wrapper.get('[data-testid="swd-clock"]').attributes('disabled')).toBeUndefined()
+      expect(wrapper.get('[data-testid="local-port"]').attributes('disabled')).toBeUndefined()
 
       mocks.api.updateConfig.mockResolvedValueOnce({ swd_clock: '2000000' })
-      await wrapper.get('[data-testid="swd-clock"]').setValue('2')
+      await wrapper.get('[data-testid="local-port"]').setValue('TEST_PORT_A')
       await flushPromises()
       expect(mocks.api.updateConfig).toHaveBeenCalledTimes(2)
       expect(wrapper.get('[data-testid="local-auto-save"]').text()).toContain('已自动保存')
@@ -508,30 +451,18 @@ describe('ConfigView', () => {
     const wrapper = await mountView()
     const pending = deferred<any>()
     mocks.api.updateConfig.mockReturnValueOnce(pending.promise)
-    const clock = wrapper.get('[data-testid="swd-clock"]')
-    await clock.setValue('4')
-    expect(clock.attributes('disabled')).toBeDefined()
+    const port = wrapper.get('[data-testid="local-port"]')
+    await port.setValue('TEST_PORT_B')
+    expect(port.attributes('disabled')).toBeDefined()
     expect(wrapper.get('[data-testid="local-port"]').attributes('disabled')).toBeDefined()
-    await clock.trigger('change')
+    await port.trigger('change')
     expect(mocks.api.updateConfig).toHaveBeenCalledTimes(1)
     pending.resolve({ swd_clock: '4000000' })
     await flushPromises()
-    expect(clock.attributes('disabled')).toBeUndefined()
+    expect(port.attributes('disabled')).toBeUndefined()
     expect(wrapper.get('[data-testid="local-port"]').attributes('disabled')).toBeUndefined()
     expect(wrapper.get('[data-testid="local-auto-save"]').text()).toContain('已自动保存')
     wrapper.unmount()
-  })
-
-  it('rejects unnamed high clocks', async () => {
-    const wrapper = await mountView()
-    const input = wrapper.get('[data-testid="swd-clock"]')
-    expect(input.attributes('max')).toBe('30')
-
-    await input.setValue('10.000001')
-    await flushPromises()
-
-    expect(mocks.api.updateConfig).not.toHaveBeenCalled()
-    expect(mocks.toastError).toHaveBeenCalledWith(expect.stringContaining('10 MHz'))
   })
 
   it('restores and automatically saves the AXF/ELF path without MAP controls', async () => {

@@ -35,6 +35,7 @@ def apply_profile(device, profile: str) -> dict:
 
 def apply_bridge_profile(bridge, profile: str) -> dict:
     from mklink._types import DeviceState
+    from mklink.capture_clock import acknowledge_clock, invalidate_clock, firmware_lines
     import re
 
     hz = profile_clock(profile)
@@ -44,8 +45,15 @@ def apply_bridge_profile(bridge, profile: str) -> dict:
     # omit the optional profile line while its target scanner has no IDCODE.
     # Accept its exact setting acknowledgement for every supported clock;
     # retain profile_confirmed separately from the accepted setting.
-    bridge._ctx.swd_clock_hz = 0
+    invalidate_clock(bridge)
     response = bridge.send_command(f"cmd.set_swd_clock({hz})")
+    if 'SWD_CLOCK_ACK=1' in firmware_lines(bridge):
+        # Modern ACKs explicitly distinguish a saved application clock from
+        # actual application. A missing/rejected ACK must never cause replay
+        # or a second, implicit fallback write.
+        result = acknowledge_clock(bridge, hz, response)
+        return {**result, 'profile': profile,
+                'qualification': 'Application clock setting acknowledged; electrical timing not measured'}
     lines = response.splitlines() if isinstance(response, str) else []
     match = re.search(r"(?m)^(SWD|JTAG) profile=(\d+)\b", response if isinstance(response, str) else "")
     interface = match.group(1) if match else "unknown"
@@ -67,11 +75,10 @@ def apply_bridge_profile(bridge, profile: str) -> dict:
         if jtag:
             fallback_ok = fallback_ok and bool(re.search(r"(?m)^JTAG profile=4000000\b", fallback if isinstance(fallback, str) else ''))
         if not fallback_ok:
-            bridge._ctx.swd_clock_hz = 0
+            invalidate_clock(bridge)
             raise ValueError(f"Probe firmware did not confirm {interface} profile or fallback clock")
-        bridge._ctx.swd_clock_hz = fallback_hz
+        acknowledge_clock(bridge, fallback_hz, fallback)
         raise ClockProfileUnavailable(f"Probe firmware does not confirm this {interface} profile; restored {fallback_hz // 1_000_000} MHz")
-    bridge._ctx.swd_clock_hz = hz
-    return {"profile": profile, "clock_hz": hz, "profile_confirmed": confirmed,
-            "interface": interface,
+    result = acknowledge_clock(bridge, hz, response)
+    return {**result, "profile": profile,
             "qualification": f"{interface} profile confirmed; exact target and board stability not identified by IDCODE" if confirmed else "Probe accepted clock setting; target timing not verified"}

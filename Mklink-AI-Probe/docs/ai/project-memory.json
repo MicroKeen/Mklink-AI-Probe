@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-31T11:20:40+08:00",
+  "updated_at": "2026-10-31T14:29:59+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
@@ -13,8 +13,8 @@
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "v3_h7_evidence_reviewed_source_only",
-    "current_task": "V3.6.8/build11:00:39配7843候选实测由指定会话完成；本会话离线核对ZIP45载荷/11报告、40MiB RTT全数据、12万Watch组及1800耗时、FPB/Keil恢复。RTT约124→810KiB/s；见v3-rtt-systemview-review-20261031.md。未构建/安装/操作硬件，Keil历史2→9仍未定因。"
+    "status": "clock_ui_verified_build_authorized",
+    "current_task": "统一采集时钟/V3能力及明确应答已完成294Python/196GUI/类型/浏览器验证，SuperWatch工具栏合并。用户新授权构建并覆盖安装Windows0.4.2，当前尚未构建安装；见acquisition-clock-20261031.md。最终V3固件edc40176由指定会话升级验收，宿主未接硬件。"
   },
   "milestones": [
     {
@@ -51,7 +51,7 @@
   "verification": [
     {
       "area": "0.4.2本地Windows与完整Skill候选",
-      "result": "Windows源dce17d3e/Skill归档0d680d90，NSIS SHAf70e4960/Skill SHAa126d967。覆盖exit0，3640/2638载荷匹配、5339用户文件保留、47工具、九XML/41Web一致。冻结PYZ无临时trace；普通V4/H7首次读写MUX、180调用、4KiB恢复/断开通过；4KiB中位21.353ms/最大39.074ms非延迟保证。原生0.4.2/11记录/退出、14元数据/5界面/10归档通过；前序1224回归保留。详见v042-local-candidate-20261030.md。后续4551687d发现异常133回归、6ce79923读取提示211Python/15GUI/类型/浏览器通过，均源码未打包；见各专项报告。"
+      "result": "Windows源dce17d3e/Skill归档0d680d90，NSIS SHAf70e4960/Skill SHAa126d967。覆盖exit0，3640/2638载荷匹配、5339用户文件保留、47工具、九XML/41Web一致。冻结PYZ无临时trace；普通V4/H7首次读写MUX、180调用、4KiB恢复/断开通过；4KiB中位21.353ms/最大39.074ms非延迟保证。原生0.4.2/11记录/退出、14元数据/5界面/10归档通过；前序1224回归保留。详见v042-local-candidate-20261030.md。455发现/6ce读取提示及后续源码待本轮Windows打包；旧Skill仍0d680d90。"
     },
     {
       "area": "HPM AI Skill能力核实",
@@ -95,7 +95,7 @@
     "编译完成不代表目标已下载：文件变化仅发待重载提示，不后台解析。用户明确加载/重载文件时自动停止目标采集，确认worker退出后原子换表，保持停止；失败保留旧目录/选择。不要求连接下载器；断开保留文件和选中变量但清空旧采样。公式只改变可视化，原始记录不变；不恢复旧地址采集或重放写操作。"
   ],
   "hardware": {
-    "state": "最新保存记录为普通V3私有3.6.8/build11:00:39、H7、7843隔离候选；测试结束采集停止、目标运行、设备关闭，指定会话报告后台not_running。Keil本轮0..7禁用/8启用已恢复，9号删除；此前2→9仍未定因。V4/c995旧证据保留，本会话只读证据。",
+    "state": "指定会话已升级普通V3.6.8/build14:10:28（edc40176），MUX/DAP各14档、三流/Keil/FPBv2通过并释放；Keil退出调试、原断点恢复。本会话离线核对固件/ZIP及解码区哈希；1kHz并行DAP中位约730ms，不能称无延迟影响。",
     "installer": "Windows/完整Skill均已覆盖安装0.4.2本地候选；NSIS SHAf70e4960/Skill SHAa126d967，3640/2638文件一致、47工具、5339用户文件保留。41Web一致，更新记录11条。完整产物见v042-combined-20261030，未正式发布。",
     "backups": "保留正式release、安装包、CI ZIP、唯一硬件证据、Skill备份及F盘缓存。含链接/不可访问目录不强删。历史获授权清理见v036-storage-cleanup-20261023.md及本机START_HERE；本地Unix清理不影响正式附件。旧detached树保留；本轮Skill备份在F盘cache/mklink-ai-probe/skill-backups。"
   },
@@ -110,8 +110,8 @@
     "nRF54L15保护闭环、全部擦除/拔插/休眠/断电、电源精度未全测。每次VCC需确认具体电压。26个无可靠扇区FLM禁用扇区操作，Bank模式须匹配。HPM5301 OTP组18/19历史永久锁定；128字读取及批准Word69 0→1已实测，其余型号/区域不继承授权，锁最后写/逐项校验，多Word不可回滚；熔丝/影子/临时锁语义未知，UART按ROM状态及回读为准。详见hpm-offline-otp-handoff.md及known-limits-20261030.md。"
   ],
   "next_actions": [
-    "保留V3私有f3b14f14与7843限定实测及离线核对；不替换已装包，不扩为全矩阵。Keil历史2→9独立待查，不能归因用户；未经后续任务不改Keil/硬件。共享断点quiet gate和共享step待验边界不变，首次已halt/真实断链仅离线覆盖。",
-    "下次明确构建带入7843静默/e4 FPBv2、共享MUX/Skill、76307模板、455发现和6ce读取提示；已装两包SHA不变。374目录扫描慢、995/10048、双核实板及V3历史根因保留。PR66合并/发布须新指令。",
+    "构建并覆盖安装本轮统一时钟候选，验证冻结MCP/Web/原生UI及退出；保留已安装Skill和旧不可变A/B候选。当前授权不含正式发布/合并；Keil历史2→9仍未定因。",
+    "新V3已校准edc40176/build14:10:28，配置需明确ACK与applied/configured；无LIVE能力，采集中改频拒绝且不停任务。低频并行可明显增加DAP延迟。旧NOBITS机器码哈希结论撤回，硬件证据保留，见专项文档。",
     "公网远程服务中继为下个版本任务；本次不实施。",
     "下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。",
     "如需减少Windows未知发布者提示，需用户另行提供/办理可信代码签名身份；当前无证书，不重发相同未签名包。下次先核对当前Git及真实硬件，不重复已完成的发布/云迁移。"
