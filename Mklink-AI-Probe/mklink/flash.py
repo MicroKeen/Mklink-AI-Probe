@@ -179,8 +179,10 @@ class MKLinkFlash:
         except (TypeError, ValueError):
             raise FlashError("SWD 时钟必须是 1Hz 到 10MHz 之间的整数")
         from mklink.debug_speed import validate_clock_hz, apply_bridge_profile, PROFILES
+        from mklink.capture_clock import prepare_clock_capabilities
         try:
             validate_clock_hz(parsed_clock)
+            prepare_clock_capabilities(self._bridge)
         except ValueError as error:
             raise FlashError(str(error)) from error
         if (getattr(self._bridge, 'idcode', None) == 0x1000563D

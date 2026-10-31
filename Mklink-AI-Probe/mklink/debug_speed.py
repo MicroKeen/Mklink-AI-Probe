@@ -42,14 +42,15 @@ def apply_bridge_profile(bridge, profile: str) -> dict:
 def apply_bridge_clock(bridge, hz: int, *, profile: str | None = None) -> dict:
     """Apply an explicit clock through the same ACK and idle-state guards."""
     from mklink._types import DeviceState
-    from mklink.capture_clock import acknowledge_clock, invalidate_clock, firmware_lines, _clock_reply
+    from mklink.capture_clock import acknowledge_clock, invalidate_clock, firmware_lines, _clock_reply, prepare_clock_capabilities
 
     validate_clock_hz(hz)
+    if bridge.state != DeviceState.READY:
+        raise ValueError("Stop the active stream before changing debug speed")
+    prepare_clock_capabilities(bridge)
     if (getattr(bridge, 'idcode', None) == 0x1000563D
             or getattr(bridge._ctx, 'clock_interface', None) == 'JTAG'):
         validate_hpm_clock_hz(hz, bridge)
-    if bridge.state != DeviceState.READY:
-        raise ValueError("Stop the active stream before changing debug speed")
     # Clock configuration belongs to the probe, not the attached MCU. V3 may
     # omit the optional profile line while its target scanner has no IDCODE.
     # Accept its exact setting acknowledgement for every supported clock;

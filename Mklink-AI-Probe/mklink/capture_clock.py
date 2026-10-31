@@ -18,6 +18,27 @@ def firmware_lines(bridge):
     return lines if isinstance(lines, (set, frozenset)) else frozenset()
 
 
+def prepare_clock_capabilities(bridge):
+    """Negotiate once on the command bridge before a first clock write.
+
+    Raw probe-info queries do not fill this cache, even on the same bridge.
+    Status-only helpers deliberately never call this function.
+    """
+    if getattr(bridge, '_firmware_capabilities', frozenset()) is not None:
+        return
+    from mklink._types import DeviceState
+    if bridge.state != DeviceState.READY:
+        raise ValueError('Stop acquisition before preparing debug clock capabilities')
+    loader = getattr(bridge, '_get_firmware_capabilities', None)
+    if not callable(loader):
+        raise ValueError('Cannot read firmware capabilities before setting the clock')
+    lines = loader()  # Transport failures propagate; never replay a clock write.
+    if (not isinstance(lines, (set, frozenset))
+            or not any(re.search(r'\bV\d+\.\d+\.\d+\b', line) for line in lines)):
+        bridge._firmware_capabilities = None
+        raise ValueError('Probe did not return a valid firmware version; clock was not changed')
+
+
 def jtag_multiclock(bridge):
     lines = firmware_lines(bridge)
     return ('JTAG_CLOCK_ACK=1' in lines

@@ -455,7 +455,9 @@ class Device:
     def set_debug_speed(self, profile: str) -> dict:
         """Apply a named 4/10/20/30 MHz profile to an idle connection."""
         from mklink.debug_speed import apply_profile, profile_clock
-        from mklink.capture_clock import clock_options
+        from mklink.capture_clock import clock_options, prepare_clock_capabilities
+        self._require_connected()
+        prepare_clock_capabilities(self._bridge)
         if (clock_options(self._bridge)['clock_source'] in ('v3-advertised', 'swd-advertised')
                 and profile_clock(profile) not in clock_options(self._bridge)['clocks_hz']):
             raise ValueError('The old 4 MHz profile requires explicit migration to 2 MHz on this firmware; use clock_hz=2000000')
@@ -473,7 +475,7 @@ class Device:
         New V3 firmware distinguishes saved application timing from applied
         timing. Neither acknowledgement promises electrical calibration.
         """
-        from mklink.capture_clock import active_clock_interface, clock_options, clock_snapshot
+        from mklink.capture_clock import active_clock_interface, clock_options, clock_snapshot, prepare_clock_capabilities
         from mklink.debug_speed import validate_clock_hz
         from mklink.flash import FlashError
         self._require_connected()
@@ -482,11 +484,12 @@ class Device:
             if interface not in ('SWD', 'JTAG') or interface != active:
                 raise ValueError(f'当前下载器接口为 {active}，不能应用 {interface} 时钟；请连接匹配的目标后重新应用。')
         validate_clock_hz(clock_hz)
+        if self._bridge.state != DeviceState.READY:
+            raise ValueError('Stop acquisition before changing the shared clock; no stream was stopped')
+        prepare_clock_capabilities(self._bridge)
         options = clock_options(self._bridge, hpm=str(self._mcu_hint or '').upper().startswith('HPM'), interface=interface)
         if options['clock_source'] != 'legacy' and clock_hz not in options['clocks_hz']:
             raise ValueError('Unsupported acquisition clock for this probe/interface; choose an advertised clock')
-        if self._bridge.state != DeviceState.READY:
-            raise ValueError('Stop acquisition before changing the shared clock; no stream was stopped')
         try:
             self._flash.set_swd_clock(clock_hz)
         except (FlashError, ValueError) as error:
