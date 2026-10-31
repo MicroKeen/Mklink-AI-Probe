@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-31T15:35:26+08:00`
+- 更新时间：`2026-10-31T15:38:06+08:00`
 - 分支：`codex/v0.4.2-fixes`
-- HEAD：`已装e29d；字体115ca0ce/SDK644acc2b仅源码。00aca9bc时钟回连接配置、默认10MHz。最新SuperWatch统一4us输入下限，263Python/122GUI/类型/实际浏览器通过，未重建。`
+- HEAD：`已装e29d；字体115ca0ce/SDK644acc2b未打包。00aca9bc时钟回连接配置10MHz，a39e7b96统一4us，f1055aed共享只读统计，均已推送。新固定SDK SHA c2ac1e4b，438隔离回归通过。`
 - 远端 HEAD：`microkeen/codex/v0.4.2-fixes；多个后续修复共用此分支。microkeen/main核对为3cc474bb。`
 - 工作树：E盘主工作区；旧detached树保留。构建/证据在F盘。
-- 当前任务：00aca9bc时钟回连接配置、默认10MHz；a39e7b96统一4us下限均已完成。新增共享只读watch_runtime_stats：仅既有空闲MUX发一次0x14、不清零/停止/回退。70项定点通过，待导出新固定候选。见watch-runtime-stats-20261031.md；不接硬件/重建安装包。
-- 状态：`watch_stats_source_verified_export_pending`
+- 当前任务：时钟回连接配置、默认10MHz与SuperWatch统一4us源码已验证。f1055aed共享只读0x14统计固定候选已交固件会话：基线7843+5文件，438隔离回归通过；旧候选不变。见watch-runtime-stats-20261031.md。不接硬件/重建，等待指定会话性能/Keil验收。
+- 状态：`host_fixes_done_firmware_hil_pending`
 
 ## 里程碑
 
@@ -47,13 +47,13 @@
 
 ## 真机环境
 
-- **state**：指定固件会话独占V3/H7/Keil/逻分；26ec2da3/build15:12:37周期候选60行原始样本已提供，宿主未复算，整体性能/Keil仍待验收、最终hash可能改变。报告约1–2%吞吐差异，正拆分调度冷路径做同SDK A/B。不占硬件，原固定候选不变。
+- **state**：指定固件会话独占V3/H7/Keil/逻分；26ec2da3/build15:12:37周期候选60行原始样本未由宿主复算，性能/Keil待验、最终hash可能改变。约1–2%吞吐差异继续归因；已交基线7843+f1055aed统计SDK（SHA c2ac1e4b/438离线通过），未接硬件/改旧候选。
 - **installer**：Windows0.4.2已覆盖安装源e29d7809，NSIS SHAa8c367d4、3642文件/47工具/41Web/15版本项及退出通过。完整Skill仍0d680d90/SHAa126d967。产物v042-clock-20261031；后续按钮字体小修未打包，未正式发布。 连接配置时钟入口纠正仅源码，未重建。
 - **backups**：保留正式release、安装包、CI ZIP、唯一硬件证据、Skill备份及F盘缓存。含链接/不可访问目录不强删。历史获授权清理见v036-storage-cleanup-20261023.md及本机START_HERE；本地Unix清理不影响正式附件。旧detached树保留；本轮Skill备份在F盘cache/mklink-ai-probe/skill-backups。
 
 ## 下一动作
 
-1. 导出共享0x14统计新固定SDK候选供固件会话拆分性能差异；原候选不改。不接硬件，固件整体性能/Keil及最终hash待验收。统一4us下限a39e7b96已完成，已装Windows/Skill不变；正式发布/合并须新指令。
+1. 宿主修复及只读统计候选已交付，固件会话独占硬件继续性能归因/Keil及最终hash验收。旧候选保持不变。统一4us为输入下限，不保证所有布局达到；已装Windows/Skill不变。后续构建、正式发布/合并按新指令。
 2. 新V3已校准edc40176/build14:10:28，配置需明确ACK与applied/configured；无LIVE能力，采集中改频拒绝且不停任务。低频并行可明显增加DAP延迟。旧NOBITS机器码哈希结论撤回，硬件证据保留，见专项文档。
 3. 公网远程服务中继为下个版本任务；本次不实施。
 4. 下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。

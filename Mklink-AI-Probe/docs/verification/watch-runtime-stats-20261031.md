@@ -30,4 +30,10 @@ stats = client.call('watch_runtime_stats')
 
 共享调试与 Runtime 安全回归另 66 passed，原有错误映射、权限与资源边界通过。所有测试通过 `scripts/build_workspace.ps1 -BuildRoot F:/MKLink-Build`；临时测试链接按构建脚本要求保留。
 
-本次没有连接硬件、更新固件或重启其他会话的后台。固定 SDK 导出和隔离回归结果在交付完成后补充；原 7843、d08、644acc2b 候选目录均须保持不可变。本功能不新增 GUI 控件，不构建安装包或 Skill，不构成发布或合并。
+固定 SDK 基线 `7843de8c3fc6e5d959de75997dd1b1ede4529269`，覆盖提交 `f1055aed09dbdac43cec80fde97ade13edbe4fb0` 的五个生产文件：`mklink/mux_watch.py`、`mklink/dump_memory.py`、`mklink/runtime.py`、`mklink/remote/debug_api.py`、`mklink/runtime_capabilities.py`。1262 文件中 1257 个保持原 Git blob；比前一个共享 timing 候选只新增统计路由及 capability 映射。没有带入 GUI 下限或时钟界面修改。
+
+源码 ZIP `source-7843-f1055aed-watch-stats.zip` 的 SHA256 为 `c2ac1e4b2475f657abe694c16b3385f687e146d626426f7efd87b3052d8f6bca`。本机交付目录为 F 盘 `artifacts/superwatch-timing-20261031/candidate-7843-f1055aed-watch-stats-verified`，含 README、隔离环境脚本、逐文件 manifest、verification 和 JUnit。
+
+实际候选包导入路径在测试前后逐项核对，**438 passed**，包括 timing/MUX/dump/桥接能力/复位/共享采集/CLI/新统计/共享调试/安全测试。首轮导出测试虽然 438 项通过，但导入路径断言发现加载了工作区包，明确不计为候选验证；随后固定候选包预导入，再次 438 项通过。唯一 warning 是 anyio 已预导入而无法执行 pytest assert 重写，不是漏跑/跳过。所有原候选源、原 ZIP 和新候选源/ZIP 的 hash 前后均通过；测试未改固定源码。
+
+本次没有连接硬件、更新固件或重启其他会话的后台。候选已交给指定固件会话；原 7843、d08、644acc2b 候选保持不变。本功能不新增 GUI 控件，不构建安装包或 Skill，不构成发布或合并。后续真实统计和性能归因仍待固件会话验收。
