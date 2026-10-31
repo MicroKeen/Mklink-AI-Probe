@@ -4,7 +4,7 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-31T15:06:05+08:00`
+- 更新时间：`2026-10-31T15:11:09+08:00`
 - 分支：`codex/v0.4.2-fixes`
 - HEAD：`产品已装e29d；字体115ca0ce、SDK d08bf1dc及共享capture_dump 644acc2b仅源码。固定7843四文件候选SHA5563d4c7已交固件会话；原候选不变。`
 - 远端 HEAD：`microkeen/codex/v0.4.2-fixes；多个后续修复共用此分支。microkeen/main核对为3cc474bb。`
@@ -47,13 +47,13 @@
 
 ## 真机环境
 
-- **state**：指定固件会话继续独占V3/H7/Keil/逻辑分析仪；已收到644acc2b四文件候选。其报告XTAL24M切换后1ms均值999.956µs、120秒采集零CRC/丢帧/读错，宿主尚未复核原始证据。正在按用户追加要求重测14档MUX/DAP实际SWCLK，之后验证共享显式最快并给多点最短周期表。宿主不连接探针或操作Keil，动态下限未启用；不外推HPM已修复。
+- **state**：指定固件会话独占V3/H7/Keil/逻分；四文件shared fastest首轮已运行。宿主只读复核108行汇总SHAd6d282f3：12最快、96周期中23达标/73未达标，错误计数零不等于周期达标，未重算原始样本/LA。2/5ms系统性慢，固件正在修复绝对相位调度；10M离散200us抖动待300/500us补测。动态下限未启用，不外推HPM。
 - **installer**：Windows0.4.2已覆盖安装源e29d7809，NSIS SHAa8c367d4、3642文件/47工具/41Web/15版本项及退出通过。完整Skill仍0d680d90/SHAa126d967。产物v042-clock-20261031；后续按钮字体小修未打包，未正式发布。
 - **backups**：保留正式release、安装包、CI ZIP、唯一硬件证据、Skill备份及F盘缓存。含链接/不可访问目录不强删。历史获授权清理见v036-storage-cleanup-20261023.md及本机START_HERE；本地Unix清理不影响正式附件。旧detached树保留；本轮Skill备份在F盘cache/mklink-ai-probe/skill-backups。
 
 ## 下一动作
 
-1. 等待固件14档实际SWCLK、共享显式最快及多点周期表和原始证据，再复核并接产品GUI/API动态下限。四文件候选已确认收到，见superwatch-timing-sdk-20261031.md；旧period=0单次保留。不接硬件或改插值，已装Windows/Skill不变。正式发布/合并须新指令。
+1. 等待最终固件慢周期修复、14档实际SWCLK和共享最快/多点复测原始证据，再绑定布局/时钟核对动态下限；首轮表不固化、不得取最快均值倒数。见superwatch-timing-sdk-20261031.md。不接硬件或改插值，已装Windows/Skill不变。正式发布/合并须新指令。
 2. 新V3已校准edc40176/build14:10:28，配置需明确ACK与applied/configured；无LIVE能力，采集中改频拒绝且不停任务。低频并行可明显增加DAP延迟。旧NOBITS机器码哈希结论撤回，硬件证据保留，见专项文档。
 3. 公网远程服务中继为下个版本任务；本次不实施。
 4. 下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。
