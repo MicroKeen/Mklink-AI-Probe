@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-31T16:37:01+08:00`
+- 更新时间：`2026-10-31T16:47:43+08:00`
 - 分支：`codex/v0.4.2-fixes`
 - HEAD：`产品源76d669de已构建覆盖安装0.4.2：连接页时钟10MHz默认、4us下限、统一字体、共享统计及六条版本说明。NSIS SHA7138eb72；后续提交仅dist与验收文档。`
 - 远端 HEAD：`microkeen/codex/v0.4.2-fixes；多个后续修复共用此分支。microkeen/main核对为3cc474bb。`
 - 工作树：E盘主工作区；旧detached树保留。构建/证据在F盘。
-- 当前任务：用户要求重建覆盖安装并精简版本信息，Windows源76d669de已实装验收，见v042-refresh-20261031.md。Skill仍0d680d90，未发布/合并。指定固件会话报告V3最终候选通过、正移植验收V4；本轮不接硬件，固定统计SDK不变。
-- 状态：`windows_local_candidate_installed_firmware_hil_pending`
+- 当前任务：Windows76d669de已实装，Skill仍0d680d90。HPMLink16:29:12/H7交付hash和61点汇总已核对。发现宿主仅V3开放14档且全局SWD ACK误用于JTAG，固件会话已确认源码契约不兼容，待宿主修复/实测；见v042-refresh-20261031.md。4us不变，无新构建/发布。
+- 状态：`windows_installed_new_v4_clock_compatibility_pending`
 
 ## 里程碑
 
@@ -47,13 +47,13 @@
 
 ## 真机环境
 
-- **state**：指定固件会话报告V3最终aeaa356/build16:05:13、UF2 SHAc08e6f95限定周期/MUX/Keil验收通过；V4/HPMLink移植复测中，继续独占硬件。宿主未重跑矩阵或刷固件。固定7843+f1055aed统计SDK SHA c2ac1e4b/438隔离回归不变，见v042-refresh-20261031.md。
+- **state**：指定会话报告HPMLink V4.7.2/build16:29:12、UF2 SHAb0631561已升级并在H7验收，宿主重算hash及61点/41÷49精度汇总一致。Keil退出、采集停止、设备释放/10MHz。HPM目标未复测，不能宣称原反馈闭环；固定统计SDK不变。普通V3最终aeaa356/SHAc08e6f95已另行报告通过。
 - **installer**：Windows0.4.2已覆盖安装产品源76d669de，NSIS SHA7138eb72；3642载荷/设置、47工具/41Web、中英六条说明、连接时钟/字体/4us及正常退出通过。产物v042-refresh-20261031。完整Skill仍0d680d90/SHAa126d967；未发布。
 - **backups**：保留正式release、安装包、CI ZIP、唯一硬件证据、Skill备份及F盘缓存。含链接/不可访问目录不强删。历史获授权清理见v036-storage-cleanup-20261023.md及本机START_HERE；本地Unix清理不影响正式附件。旧detached树保留；本轮Skill备份在F盘cache/mklink-ai-probe/skill-backups。
 
 ## 下一动作
 
-1. Windows最新界面及六条说明已实装验收，等待用户测试；指定固件会话继续V4/HPMLink性能/Keil及最终hash验收。固定SDK保持不变。统一4us为输入下限，不保证所有布局达到；Skill未重建，正式发布/合并仍待明确指令。
+1. 修复新V4宿主时钟门控与JTAG ACK：SWD按能力开放14档；JTAG保留4/10/20/30MHz及独立确认，不要求SWD状态，也不把profile当IDE时钟已应用。契约已由固件会话源码确认，实机未测；先确认占用。4us仅下限，实测均值4.573us，不新增提示；Skill/固定SDK不变。
 2. 新V3已校准edc40176/build14:10:28，配置需明确ACK与applied/configured；无LIVE能力，采集中改频拒绝且不停任务。低频并行可明显增加DAP延迟。旧NOBITS机器码哈希结论撤回，硬件证据保留，见专项文档。
 3. 公网远程服务中继为下个版本任务；本次不实施。
 4. 下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。
@@ -73,7 +73,7 @@
 ## 延续协议
 
 - 读取CURRENT_HANDOFF/v042-session-handoff并核对Git，共用codex/v0.4.2-fixes。本机Windows/Skill为0.4.2本地候选，Windows产品源76d669de/Skill归档0d680d90；正式514efb86及0.4.1资产不可变。保留上海90/95GiB、到期锁停、账本和旧detached树，不申请私钥。
-- Windows最新实装见v042-refresh-20261031.md，包含连接页时钟、按钮字体、统一4us输入下限及共享统计。固定fastest/统计SDK保持不变，固件会话继续独占硬件；本包离线验收不代替硬件复测。V3最终结果为指定会话报告，V4/HPM尚未闭环。
+- Windows实装及HPMLink后续交付见v042-refresh-20261031.md。新V4十四档与JTAG ACK兼容待处理，不能把固定旧SDK的H7通过当作新安装包兼容通过。固件报告设备已释放，使用前仍确认；HPM目标未新复测。固定4us、SDK及旧证据不变。
 - V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。
 - CDC995和SDK10048根因保留待排查。恢复仅同身份CDC故障5秒内；超时不自动接回/新建AI会话，主动断开立即生效，未知写入不重放。历史实例释放记录见v035-transport-recovery.md；当前硬件占用以本交接真机状态及指定固件会话为准。
 - 客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。
