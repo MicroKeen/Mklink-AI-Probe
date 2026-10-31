@@ -196,9 +196,50 @@ percentages remain the owner's analysis. The reported RTT regression was resolve
 by placing DMI/SBA control functions in ILM; the completed RTT data checks above
 are corroborating evidence for this tested configuration.
 
-Application 30 MHz + DAP 20 MHz concurrent operation and final 1 ms / 0.5 ms
-sampling regressions are still running. The inspected `qualified-parallel.json`
-was incomplete (`passed=false`, no final error); it is not a completed failure or
-success. Do not declare all qualification complete or take the probe from the
-firmware owner. Installed Windows/Skill, official assets, previous candidates and
-failure evidence remain unchanged.
+At that checkpoint, application 30 MHz + DAP 20 MHz concurrent operation and final
+1 ms / 0.5 ms sampling regressions were still running. The then-inspected
+`qualified-parallel.json` was incomplete (`passed=false`, no final error), rather
+than a completed failure or success. The final results below supersede that
+pending status; previous candidates and failure evidence remain unchanged.
+
+## Final HPM5301 qualification and hardware release
+
+The firmware owner completed the remaining HPM5301 matrix with the same bd636750
+SDK and V4.7.2 build `Oct 31 2026 17:41:04`. The archived
+`HPMLink-V4.7.2-jtag-clock-20261031/HPMLink.uf2` hashes to
+`ebbc11f2d429e815e6c1a2b67ac1a53c821b17af89aed38ab29677be1f7ecec0`, independently
+checked against its README, manifest and prior candidate. The host inspected the
+following final reports read-only; physical tests were performed by the firmware
+owner, without host-side probe use or additional measurements.
+
+| Report | Checked result |
+| --- | --- |
+| `qualified-parallel.json` | Passed. Owner reports application 30 MHz + DAP 20 MHz concurrency; 50 DAP reads of 64 bytes, write/restore, halt/step/resume and hardware breakpoint set/list/hit/clear. RTT/SV/Watch coexistence, pause/resume, stop/rejoin and startup ordering checked; 367616 RTT bytes passed full sequence verification. |
+| `qualified-period.json` | Passed. Both requested periods recorded for over 60 seconds, with raw sample captures summarized below. Parser loss, firmware read/CRC errors and sample-drop flags were zero. |
+| `qualified-postflight.json` | Passed. Image hash matches the test image, load/SV flags are zero, RTT/SystemView/SuperWatch are stopped, target tick advances (507472 → 507582), JTAG is restored to 10 MHz and device close is confirmed. Owner also reports RAM restoration. |
+
+| Requested period | Recording elapsed | Raw samples | Mean | P99 | Maximum | Gaps > 1.5 periods |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 ms | 60.127 s | 30091 | 1000 µs | 1000 µs | 1012 µs | 0 |
+| 0.5 ms | 60.142 s | 30046 | 500 µs | 507 µs | 530 µs | 0 |
+
+Raw captures cover approximately 30 and 15 seconds respectively within the
+longer recording runs; sample statistics do not represent every sample in the
+full 60-second recording. Report SHA256 values, in report-table order:
+
+```text
+ae7f24f57cdaefc8a491d1d2a79d5be87657ce568746b6e19124491d67f02d55
+0c4ba9aca4abff0b26ffbcab311939c680ce72a1f1c5290ec0a9c550f4f9bc5b
+1b05a1cff4f5cfd64effe414367c83b5244d0a3266e881168f4270e0ebd13d29
+```
+
+The first postflight assertion incorrectly expected a compile date in
+`get_version`; the owner corrected that check to use the USB README and retained
+the original internal failure. No firmware change was made for that correction.
+
+This closes the remaining reported gates for this HPM5301 setup, and the firmware
+owner has released the hardware. It does not establish qualification on other
+MCUs; in particular, no STM32H7 physical retest was performed in this round.
+Installed Windows source 76d669de, full Skill, official release assets and older
+candidates remain unchanged. Source and verification updates do not constitute a
+new installation, firmware publication or authorization to publish.
