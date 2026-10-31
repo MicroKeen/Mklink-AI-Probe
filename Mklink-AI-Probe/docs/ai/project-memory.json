@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-31T15:02:51+08:00",
+  "updated_at": "2026-10-31T15:04:31+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.4.2-fixes",
-    "head": "产品已装e29d；字体115ca0ce及SDK显式fastest/ACK d08bf1dc仅源码。共享capture_dump已透传模式/ACK，固定7843四文件候选待导出；原候选不变。",
+    "head": "产品已装e29d；字体115ca0ce、SDK d08bf1dc及共享capture_dump 644acc2b仅源码。固定7843四文件候选SHA5563d4c7已交固件会话；原候选不变。",
     "remote_head": "microkeen/codex/v0.4.2-fixes；多个后续修复共用此分支。microkeen/main核对为3cc474bb。",
     "working_tree": "E盘主工作区；旧detached树保留。构建/证据在F盘。"
   },
@@ -13,8 +13,8 @@
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "watch_timing_shared_capture_validated",
-    "current_task": "共享capture_dump支持显式fastest及timing ACK；16项新回归通过，真实ASGI/MUX夹具各采10000帧。首轮350项中3项夹具超256B失败、修正31样本后重测通过；其余347通过。待导出固定7843四文件候选给指定固件会话，动态下限仍待多点证据。未构建或接硬件。"
+    "status": "watch_timing_shared_candidate_delivered",
+    "current_task": "共享capture_dump 644acc2b支持显式fastest及timing ACK；固定7843四文件候选SHA5563d4c7实际导入350项全过，ASGI/MUX夹具各采10000帧。原1262blob及d08候选不变，已交指定固件会话。见superwatch-timing-sdk-20261031.md；动态下限仍待多点硬件证据，未构建或接硬件。"
   },
   "milestones": [
     {
@@ -110,7 +110,7 @@
     "nRF54L15保护闭环、全部擦除/拔插/休眠/断电、电源精度未全测。每次VCC需确认具体电压。26个无可靠扇区FLM禁用扇区操作，Bank模式须匹配。HPM5301 OTP组18/19历史永久锁定；128字读取及批准Word69 0→1已实测，其余型号/区域不继承授权，锁最后写/逐项校验，多Word不可回滚；熔丝/影子/临时锁语义未知，UART按ROM状态及回读为准。详见hpm-offline-otp-handoff.md及known-limits-20261030.md。"
   ],
   "next_actions": [
-    "导出共享capture_dump四文件隔离候选；等待固件多点周期/最快实测及配置下限依据，再接产品GUI/API动态限制。见superwatch-timing-sdk-20261031.md；period=0旧单次保留。不接硬件、不改插值，已装Windows/Skill不变。正式发布/合并须新指令。",
+    "共享capture_dump四文件隔离候选已交付；等待固件多点周期/最快实测及配置下限依据，再接产品GUI/API动态限制。见superwatch-timing-sdk-20261031.md；period=0旧单次保留。不接硬件、不改插值，已装Windows/Skill不变。正式发布/合并须新指令。",
     "新V3已校准edc40176/build14:10:28，配置需明确ACK与applied/configured；无LIVE能力，采集中改频拒绝且不停任务。低频并行可明显增加DAP延迟。旧NOBITS机器码哈希结论撤回，硬件证据保留，见专项文档。",
     "公网远程服务中继为下个版本任务；本次不实施。",
     "下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。",

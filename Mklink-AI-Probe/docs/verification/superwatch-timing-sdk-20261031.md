@@ -42,4 +42,9 @@ client仍须按原流程连接已明确选择的共享后台。未提供fastest�
 
 新增16项回归通过真实共享ASGI路由、RuntimeClient、MUX CRC/批帧解析和采集器，旧/新周期模式及新最快模式各采10,000帧，核对所有值、跨uint32回绕后的µs时间戳、计数及单次START/STOP。另测旧零周期单次、错误类型/冲突参数、能力不足、无效ACK、STOP失败、忙时保留RTT、超时预算和不重试。首轮350项中347通过，三个10,000帧夹具因把64样本装入协商256B帧而失败；夹具按31样本上限修正后16项重测全过，未修改生产解码或放宽帧限制。
 
-需另导出固定7843的四文件候选：此前两文件加`mklink/runtime.py`和`mklink/remote/debug_api.py`，不覆盖已交付目录。真实硬件时序与吞吐仍由指定固件会话验收。
+共享扩展已提交`644acc2b6cc91715ac1a4db88a7d4e590c64efe6`并导出独立四文件候选：此前两文件加`mklink/runtime.py`和`mklink/remote/debug_api.py`，其余1258个blob与固定7843一致。
+
+- 目录：`F:/MKLink-Build/artifacts/superwatch-timing-20261031/candidate-7843-644acc2b-shared-timing-v2-verified`。
+- ZIP：`source-7843-644acc2b-timing-v2.zip`，SHA256 `5563d4c727d02c0d77742b0e6d69103981262f231c797d0cb4807fed590e342a`。
+- 实际四个生产模块均从隔离source导入，完整350项回归通过；此前16项重测属于这350项的子集，不累加为更多独立测试。ZIP CRC、1262载荷清单及前后摘要通过，原7843和d08两文件候选均逐文件校验未变。
+- 已将路径、哈希、共享调用示例、两端导入要求、时长边界和ACK语义交给指定固件会话；它继续独占硬件。真实硬件时序与吞吐仍由该会话验收，本记录不把夹具结果当成实测。
