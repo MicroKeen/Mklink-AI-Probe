@@ -187,7 +187,7 @@ class MKLinkFlash:
                 or getattr(self._bridge._ctx, 'clock_interface', None) == 'JTAG'):
             from mklink.debug_speed import validate_hpm_clock_hz
             try:
-                validate_hpm_clock_hz(parsed_clock)
+                validate_hpm_clock_hz(parsed_clock, self._bridge)
             except ValueError as error:
                 raise FlashError(str(error)) from error
         if parsed_clock > 10_000_000:
@@ -626,7 +626,7 @@ def burn_hex_file(
         if is_hpm_project:
             from mklink.debug_speed import validate_hpm_clock_hz
             try:
-                validate_hpm_clock_hz(swd_clock)
+                validate_hpm_clock_hz(swd_clock, flash._bridge)
             except ValueError as error:
                 raise FlashError(str(error)) from error
 

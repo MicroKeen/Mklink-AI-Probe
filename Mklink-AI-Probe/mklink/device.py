@@ -931,7 +931,7 @@ class Device:
         if hpm_clock:
             from mklink.debug_speed import validate_hpm_clock_hz
             try:
-                validate_hpm_clock_hz(resolved_swd_clock)
+                validate_hpm_clock_hz(resolved_swd_clock, self._bridge)
             except ValueError as error:
                 raise DeviceError(str(error)) from error
         self._flash.set_swd_clock(resolved_swd_clock)

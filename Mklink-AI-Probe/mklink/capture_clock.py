@@ -18,6 +18,12 @@ def firmware_lines(bridge):
     return lines if isinstance(lines, (set, frozenset)) else frozenset()
 
 
+def jtag_multiclock(bridge):
+    lines = firmware_lines(bridge)
+    return ('JTAG_CLOCK_ACK=1' in lines
+            and 'JTAG_CLOCKS=' + ','.join(map(str, V3_CLOCKS)) in lines)
+
+
 def active_clock_interface(bridge):
     """Cached firmware mode only; a UI preference never changes this value."""
     context = getattr(bridge, '_ctx', None)
@@ -43,9 +49,10 @@ def clock_options(bridge, *, hpm=False, interface=None):
     advertised = 'SWD_CLOCKS=' + ','.join(map(str, V3_CLOCKS))
     modern = not hpm and 'SWD_CLOCK_ACK=1' in lines and advertised in lines
     v3 = modern and any(re.fullmatch(r'V3\.\d+\.\d+', line) for line in lines)
+    modern_jtag = hpm and jtag_multiclock(bridge)
     return {'interface': 'JTAG' if hpm else 'SWD',
-            'clocks_hz': list(HPM_CLOCKS if hpm else V3_CLOCKS if modern else LEGACY_SWD_CLOCKS),
-            'clock_source': 'v3-advertised' if v3 else 'swd-advertised' if modern else 'hpm-profiles' if hpm else 'legacy',
+            'clocks_hz': list(V3_CLOCKS if modern_jtag or modern else HPM_CLOCKS if hpm else LEGACY_SWD_CLOCKS),
+            'clock_source': 'jtag-advertised' if modern_jtag else 'v3-advertised' if v3 else 'swd-advertised' if modern else 'hpm-profiles' if hpm else 'legacy',
             'live_change_supported': False}
 
 
@@ -68,19 +75,22 @@ def _clock_reply(response):
         raise ValueError('Probe did not acknowledge a unique clock setting')
     setting = re.fullmatch(r'set clock (\d+)', settings[0]) if settings else None
     profile = re.fullmatch(r'(SWD|JTAG) profile=(\d+)(?:[ \t]+.*)?', profiles[0]) if profiles else None
-    state = re.fullmatch(r'SWD clock_state=(configured|applied)', states[0]) if states else None
+    state = re.fullmatch(r'(SWD|JTAG) clock_state=(configured|applied)', states[0]) if states else None
     if (settings and not setting) or (profiles and not profile) or (states and not state):
         raise ValueError('Probe returned a malformed clock acknowledgement')
+    if state and ((profile and state.group(1) != profile.group(1))
+                  or (state.group(1) == 'JTAG' and not profile)):
+        raise ValueError('Probe returned mixed or incomplete clock interface acknowledgement')
     return (int(setting.group(1)) if setting else None,
             (profile.group(1), int(profile.group(2))) if profile else None,
-            state.group(1) if state else None)
+            state.group(2) if state else None)
 
 
 def acknowledge_clock(bridge, hz, response):
-    """Confirm the active interface; a JTAG profile never proves application.
+    """Confirm interface-specific state only when its firmware contract exists.
 
     SWD_CLOCK_ACK describes SWD support globally, including on JTAG-capable
-    probes. JTAG has no applied/configured state and may defer to an IDE.
+    probes. Legacy JTAG profiles have no state and may defer to an IDE.
     """
     setting, profile, reported_state = _clock_reply(response)
     context = bridge._ctx
@@ -88,16 +98,22 @@ def acknowledge_clock(bridge, hz, response):
                 else getattr(context, 'clock_interface', 'unknown'))
     interface = profile[0] if profile else expected
     modern_swd = 'SWD_CLOCK_ACK=1' in firmware_lines(bridge)
+    modern_jtag = 'JTAG_CLOCK_ACK=1' in firmware_lines(bridge)
     if (setting is not None and setting != hz) or (profile and profile[1] != hz):
         raise ValueError('Probe did not acknowledge the requested clock setting')
     if expected in ('SWD', 'JTAG') and profile and profile[0] != expected:
         raise ValueError('Probe acknowledged a different debug clock interface')
-    if modern_swd and setting != hz:
+    if (modern_swd or modern_jtag) and setting != hz:
         raise ValueError('Probe did not acknowledge the requested clock setting')
     if interface == 'JTAG':
-        if hz not in HPM_CLOCKS or not profile or reported_state is not None:
+        supported = (*V3_CLOCKS, 4000000) if jtag_multiclock(bridge) else HPM_CLOCKS
+        if hz not in supported or not profile:
             raise ValueError('Probe did not acknowledge a supported JTAG profile')
-        state = 'acknowledged'
+        if modern_jtag and reported_state is None:
+            raise ValueError('Probe did not acknowledge configured/applied JTAG clock state')
+        if not modern_jtag and reported_state is not None:
+            raise ValueError('Probe returned JTAG clock state without the required capability')
+        state = reported_state or 'acknowledged'
     else:
         if setting != hz and not profile:
             raise ValueError('Probe did not acknowledge the requested clock setting')

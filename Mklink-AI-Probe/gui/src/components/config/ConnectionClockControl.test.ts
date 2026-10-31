@@ -231,4 +231,15 @@ describe('shared connection clock', () => {
     expect(requests.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
     expect(wrapper.text()).toContain('当前接口：未确认')
   })
+
+  it('uses fourteen JTAG options only when advertised by the backend', async () => {
+    Object.assign(data, { interface:'JTAG', clock_source:'jtag-advertised' })
+    const wrapper = await setup()
+    expect(wrapper.get<HTMLSelectElement>('#connection-clock-interface').element.value).toBe('JTAG')
+    expect(wrapper.findAll('#connection-clock-hz option')).toHaveLength(14)
+    await apply(wrapper, 5000)
+    const request = requests.mock.calls.find(([, init]) => init?.method === 'POST')![1]
+    expect(JSON.parse(request.body)).toEqual({ interface:'JTAG', clock_hz:5000, save:true })
+    expect(wrapper.get('[data-testid="connection-clock-state"]').text()).toBe('已应用：5 kHz')
+  })
 })

@@ -15,9 +15,11 @@ def validate_clock_hz(hz: int) -> int:
     return hz
 
 
-def validate_hpm_clock_hz(hz: int) -> int:
+def validate_hpm_clock_hz(hz: int, bridge=None) -> int:
     """HPM private JTAG has named DMI kernels, not arbitrary SWD timing."""
-    if type(hz) is not int or hz not in PROFILES.values():
+    from mklink.capture_clock import V3_CLOCKS, jtag_multiclock
+    supported = (*V3_CLOCKS, 4_000_000) if jtag_multiclock(bridge) else PROFILES.values()
+    if type(hz) is not int or hz not in supported:
         raise ValueError("HPM JTAG requires a 4/10/20/30 MHz debug profile; arbitrary SWD clocks do not set its TCK")
     return hz
 
@@ -34,10 +36,18 @@ def apply_profile(device, profile: str) -> dict:
 
 
 def apply_bridge_profile(bridge, profile: str) -> dict:
+    return apply_bridge_clock(bridge, profile_clock(profile), profile=profile)
+
+
+def apply_bridge_clock(bridge, hz: int, *, profile: str | None = None) -> dict:
+    """Apply an explicit clock through the same ACK and idle-state guards."""
     from mklink._types import DeviceState
     from mklink.capture_clock import acknowledge_clock, invalidate_clock, firmware_lines, _clock_reply
 
-    hz = profile_clock(profile)
+    validate_clock_hz(hz)
+    if (getattr(bridge, 'idcode', None) == 0x1000563D
+            or getattr(bridge._ctx, 'clock_interface', None) == 'JTAG'):
+        validate_hpm_clock_hz(hz, bridge)
     if bridge.state != DeviceState.READY:
         raise ValueError("Stop the active stream before changing debug speed")
     # Clock configuration belongs to the probe, not the attached MCU. V3 may
@@ -52,7 +62,7 @@ def apply_bridge_profile(bridge, profile: str) -> dict:
         # Preserve only the legacy firmware's explicit profile=0 fallback.
         # Missing, mismatched, mixed or rejected replies are unknown outcomes:
         # do not issue another clock write. Modern firmware never falls back.
-        if 'SWD_CLOCK_ACK=1' in firmware_lines(bridge):
+        if firmware_lines(bridge) & {'SWD_CLOCK_ACK=1', 'JTAG_CLOCK_ACK=1'}:
             raise
         setting, rejected_profile, reported_state = _clock_reply(response)
         expected = ('JTAG' if getattr(bridge, 'idcode', None) == 0x1000563D
@@ -78,7 +88,9 @@ def apply_bridge_profile(bridge, profile: str) -> dict:
         raise ClockProfileUnavailable(f"Probe firmware does not confirm this {interface} profile; restored {fallback_hz // 1_000_000} MHz")
     qualification = (f"{result['interface']} profile confirmed; exact target and board stability not identified by IDCODE"
                      if result['profile_confirmed'] else 'Probe accepted clock setting; target timing not verified')
-    if result['interface'] == 'JTAG':
+    if result['interface'] == 'JTAG' and result['apply_state'] == 'acknowledged':
         qualification += '; application timing and IDE clock are not confirmed'
+    elif result['interface'] == 'JTAG':
+        qualification += '; IDE clock is independent; requested timing is not measured TCK'
     return {**result, "profile": profile,
             "qualification": qualification}
