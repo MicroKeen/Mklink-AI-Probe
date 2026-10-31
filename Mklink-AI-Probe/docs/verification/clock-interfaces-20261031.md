@@ -1,8 +1,8 @@
 # Independent SWD/JTAG clock configuration — 2026-10-31
 
 Source changes: `edca358c` (configuration split) and `7c6c5c99` (negotiated
-JTAG clocks). This is source and isolated-SDK qualification, not an installation
-or hardware qualification. Windows remains product source `76d669de`; the full
+JTAG clocks). Host verification covers source and isolated SDKs; subsequent
+firmware-owner hardware evidence is recorded below. Windows remains product source `76d669de`; the full
 Skill and all previously delivered SDK candidates remain unchanged.
 
 ## Behavior
@@ -129,3 +129,25 @@ module paths and old/new source/ZIP hashes were verified. The firmware owner
 received the new candidate for a fresh-backend test without memory/MUX warmup.
 Hardware confirmation remains pending; no installed package or previous candidate
 was modified by this correction.
+
+## Subsequent limited hardware confirmation
+
+The firmware owner reported a fresh-backend run using the bd636750 SDK:
+connect → raw probe_version → probe_idcode → first set_debug_speed(10 MHz),
+without a preceding read_memory/MUX warmup. The first reply is JTAG `applied`.
+The host independently inspected its `candidate3-clocks.json` report,
+SHA256 `db71d1aa700adb3756a64bb024d7bfbcec86f8715edb1371d32a2c599f4b792d`:
+`passed=true`, 15 completed rows covering all 14 advertised frequencies plus
+compatibility 4 MHz, matching requested/configured/applied values, and every
+write's `verified=true`. The owner confirms known-RAM read/write comparisons.
+The report ends with 10 MHz restored and a confirmed device close; ownership of
+the continuing hardware investigation remains with that firmware chat.
+
+This closes the reported first-clock capability-cache failure for that tested
+setup. It does not complete electrical calibration or general firmware release
+qualification. The owner reports roughly correct 10/20/30 MHz continuous shifting
+on private JTAG and CMSIS-DAP, with independent IDE/acquisition clock contexts,
+but continues frequency tuning and has found a compatibility-4-MHz throughput
+regression in the low-clock generic path. That regression remains open; no
+regressing firmware is accepted for delivery here. The host did not independently
+operate the logic analyzer, inspect all waveforms or perform target writes.
