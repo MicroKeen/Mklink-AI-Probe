@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-31T17:10:20+08:00`
+- 更新时间：`2026-10-31T17:16:33+08:00`
 - 分支：`codex/v0.4.2-fixes`
-- HEAD：`源码edca358c/7c6c5c99已加入SWD/JTAG独立配置及协商14档；383Python/59GUI/浏览器通过。隔离SDK SHA2148cdcc/794回归交固件会话。已装Windows76d669de/Skill0d680d90不变。`
+- HEAD：`源码bd636750修复首次改频前能力预取，408回归；新隔离候选SHA2058e1ca/813通过已交固件会话。此前独立接口UI383Python/59GUI/浏览器通过。已装Windows76d669de/Skill0d680d90不变。`
 - 远端 HEAD：`microkeen/codex/v0.4.2-fixes；多个后续修复共用此分支。microkeen/main核对为3cc474bb。`
 - 工作树：E盘主工作区；旧detached树保留。构建/证据在F盘。
-- 当前任务：SWD/JTAG下拉与独立保存完成，默认10MHz，核对缓存实际接口再应用；新JTAG需独立CLOCKS/ACK声明及状态，旧固件四档兼容。7c6候选只改原a8aa候选4个时钟文件，其余1259不变，已交固件会话校准。见clock-interfaces-20261031.md；未重打安装包/完整Skill。
-- 状态：`interface_clock_source_ready_firmware_calibration_pending`
+- 当前任务：固件会话实测7c6候选首次clock因能力缓存未填而失败，现场保留。bd636750在当前空闲bridge首次改频前预取一次能力，不需内存/MUX预热；新候选只改3个时钟文件、1260文件不变，813回归通过。见clock-interfaces-20261031.md；全新后端实测待回传，未重打安装包/完整Skill。
+- 状态：`cold_clock_sdk_delivered_hardware_retest_pending`
 
 ## 里程碑
 
@@ -23,7 +23,7 @@
 
 ## 验证证据
 
-- **0.4.2界面更新与Windows覆盖安装**：已装Windows产品源76d669de，NSIS SHA7138eb72；覆盖exit0、3642载荷/设置一致、47工具/41Web/正常退出通过，详见v042-refresh-20261031.md。完整Skill仍0d680d90/SHAa126d967。后续源码edca358c/7c6c5c99：SWD/JTAG独立下拉及14档协商，383Python/59GUI/类型/真实浏览器夹具通过；新固定SDK SHA2148cdcc/794通过，1259旧文件不变，旧候选保留。见clock-interfaces-20261031.md；实机校准待固件会话，未更新安装版/Skill。
+- **0.4.2界面更新与Windows覆盖安装**：已装Windows产品源76d669de，NSIS SHA7138eb72；覆盖exit0、3642载荷/设置一致、47工具/41Web/退出通过，见v042-refresh-20261031.md。完整Skill仍0d680d90/SHAa126d967。接口UI：383Python/59GUI/类型/浏览器通过。旧7c6候选794离线通过但首次改频实机失败，记录保留。bd636750补能力预取：408源码/813新候选通过，SHA2058e1ca，1260旧文件不变，实机待复验。详见clock-interfaces-20261031.md；未更新安装版/Skill。
 - **HPM AI Skill能力核实**：源05e73101：1139相关+68包/文档测试；Flash49700B一致、ELF1528变量/360MHz、SVD UART0、JTAG4/10、RTT/Watch/dump通过。SystemView U32修复38351事件；新固件复测22155事件零丢弃。指定会话依新授权更新V4.7.2/build17:19:37后，共享MCP暂停/寄存器/真实断点cause2/单步cause4/恢复运行通过，x31同值写回正确。Skill SHA44df3e58、2625文件/7059FLM/4800SVD校验，全局47工具并保留5339用户文件。无目标烧录/VCC/OTP/发布。见hpm-skill-audit-20261029.md。
 - **RTT自动恢复与在线静默收尾**：14417715：347相关+17发现测试通过。V4/HPM5301连续两次49700B烧录校验成功，自动暂停/恢复RTT与SuperWatch、零恢复错误；新增RTT349/466字节、Watch3005/3712周期且零读取错。Windows NSIS SHA56830303，覆盖exit0、3627载荷一致、冻结MCP/41Web/正常退出通过；完整Skill SHAbb05fbde、2625文件/47工具已同步。仍0.4.1未发布。旧静默面板修复d1cf16ec的124GUI/29Python证据保留。见rtt-auto-restore-20261030.md及online-flash-receipt-20261029.md。
 - **Linux/macOS 0.4.1测试包**：Linux源a6bdacbc/CI40637027269、Mac arm64源eefc6842/CI40640511140：USB各58通过/1skip，冻结CLI/MCP/健康/Web/退出通过。DEB SHA7309f377、DMG SHA56dc8e0a，均旧0.4.1未带后续修复；Mac ad-hoc未公证，实机安装/UI/USB待测。见linux-deb-test-20261028.md、macos-arm64-test-20261028.md。
@@ -47,13 +47,13 @@
 
 ## 真机环境
 
-- **state**：指定固件会话独占HPM5301/HPMLink，正在做JTAG14档及CMSIS-DAP校准；旧b063四档基线由其记录。宿主只交付SHA2148cdcc新SDK，不接硬件；原a8aa/f105候选不变。新固件哈希/实测结论待回传，使用前确认占用。
+- **state**：指定固件会话独占HPM5301/HPMLink，已升级带JTAG14档声明的candidate1。旧7c6 SDK首次clock实机失败（能力未预载）；宿主交付SHA2058e1ca新候选待全新后端复测，不接硬件、不改旧候选。新固件完整哈希/校准结论待回传。
 - **installer**：Windows0.4.2已覆盖安装产品源76d669de，NSIS SHA7138eb72；3642载荷/设置、47工具/41Web、中英六条说明、连接时钟/字体/4us及正常退出通过。产物v042-refresh-20261031。完整Skill仍0d680d90/SHAa126d967；未发布。
 - **backups**：保留正式release、安装包、CI ZIP、唯一硬件证据、Skill备份及F盘缓存。含链接/不可访问目录不强删。历史获授权清理见v036-storage-cleanup-20261023.md及本机START_HERE；本地Unix清理不影响正式附件。旧detached树保留；本轮Skill备份在F盘cache/mklink-ai-probe/skill-backups。
 
 ## 下一动作
 
-1. 固件会话使用candidate-7843-7c6c5c99-jtag-multiclock-verified对旧/新固件做HPM5301逐档校准/功能回归。宿主已接入独立SWD/JTAG配置及按能力14档；无公开接口切换命令。4us下限、已装Windows76d669de/Skill0d680d90不变；等待后续构建指令。
+1. 固件会话用candidate-7843-bd636750-clock-first-use-verified验证全新连接后首次clock，不先读内存/MUX；原candidate1-clocks失败保留。随后继续HPM5301旧/新固件同SDK逐档校准及回归。接口选择只配置不强制切换；4us下限和已装Windows/Skill不变。
 2. 新V3已校准edc40176/build14:10:28，配置需明确ACK与applied/configured；无LIVE能力，采集中改频拒绝且不停任务。低频并行可明显增加DAP延迟。旧NOBITS机器码哈希结论撤回，硬件证据保留，见专项文档。
 3. 公网远程服务中继为下个版本任务；本次不实施。
 4. 下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。
@@ -73,7 +73,7 @@
 ## 延续协议
 
 - 读取CURRENT_HANDOFF/v042-session-handoff并核对Git，共用codex/v0.4.2-fixes。本机Windows/Skill为0.4.2本地候选，Windows产品源76d669de/Skill归档0d680d90；正式514efb86及0.4.1资产不可变。保留上海90/95GiB、到期锁停、账本和旧detached树，不申请私钥。
-- 最新时钟交付见clock-interfaces-20261031.md：383源码/59GUI/794候选，SHA2148cdcc；旧JTAG只acknowledged，新JTAG独立能力才认configured/applied，未知不重放。固件会话独占硬件校准；旧a8aa/f105候选保持不可变。
+- 最新见clock-interfaces-20261031.md首次预取小节：408源码/813候选，SHA2058e1ca；7c6首次实机失败保留。固件会话独占复测；全部旧候选不可变。新JTAG能力/状态须匹配，未知结果不重放，宿主不抢硬件。
 - V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。
 - CDC995和SDK10048根因保留待排查。恢复仅同身份CDC故障5秒内；超时不自动接回/新建AI会话，主动断开立即生效，未知写入不重放。历史实例释放记录见v035-transport-recovery.md；当前硬件占用以本交接真机状态及指定固件会话为准。
 - 客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。

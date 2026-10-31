@@ -90,3 +90,42 @@ the prior delivered candidate were hash-verified before/after tests. One existin
 anyio pre-import assertion-rewrite warning was reported. The old Device flash
 test is pinned to `a8aa8a16` because GUI configuration changes are deliberately
 excluded from this candidate. There is no hardware-pass claim.
+
+## First-use capability correction
+
+The firmware owner subsequently reported a real first-use failure on candidate1
+firmware with both new JTAG declarations. In the unchanged `7c6c5c99` SDK,
+`RuntimeClient.connect → probe_version → probe_idcode → set_debug_speed(10 MHz)`
+rejected the new JTAG state because the command bridge's capability cache was
+still `None`. The failed matrix contains zero completed rows; it is retained as
+failure evidence. The preceding 794 offline passes did not cover this cold-cache
+path and do not qualify that candidate for first-use hardware success.
+
+Code inspection confirmed that `runtime_probe._query` can reuse the connected
+bridge but returns raw version text without filling its capability cache. The
+fixed SDK's older Device connection path also lacks the product's eager capability
+read. Reading memory/MUX first could mask the bug and is not the required workflow.
+
+Source `bd636750` prepares capabilities on the actual command bridge before
+frequency validation or a first clock write. It queries only when the cache is
+`None` and the bridge is READY, then reuses the cache. Numeric, named and direct
+Flash clock paths are covered, as are the product Device validation paths.
+Busy capture or a failed/unrecognized version query sends no clock write.
+Passive status polling stays cached and adds no device enumeration or queries.
+Existing clock-write ACK validation, invalidation and no-replay behavior remain.
+
+408 affected source tests passed. The separate immutable correction candidate is
+`F:/MKLink-Build/artifacts/clock-first-use-20261031/candidate-7843-bd636750-clock-first-use-verified`.
+ZIP: `source-7843-bd636750-clock-first-use.zip`.
+SHA256: `2058e1ca87a268beda66479eadf2d066b5420e287e88b9d71179c07e6357b360`.
+Only `capture_clock.py`, `debug_speed.py` and the `flash.set_swd_clock` method
+differ from the prior 7c6 candidate; 1,260 files including Device, runtime API,
+MUX, Watch timing and statistics are byte-identical.
+
+813 tests passed with actual correction-candidate imports, including cold-cache
+numeric/named/Flash/shared changes, raw-version-before-clock, cache reuse, legacy
+version formats, query failures and busy-stream preservation. All loaded mklink
+module paths and old/new source/ZIP hashes were verified. The firmware owner
+received the new candidate for a fresh-backend test without memory/MUX warmup.
+Hardware confirmation remains pending; no installed package or previous candidate
+was modified by this correction.
