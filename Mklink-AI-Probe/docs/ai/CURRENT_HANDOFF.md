@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-31T17:22:07+08:00`
+- 更新时间：`2026-10-31T17:48:32+08:00`
 - 分支：`codex/v0.4.2-fixes`
-- HEAD：`bd636750首次改频预取修复：408源码/813候选回归；固件会话candidate3首次clock及15档ACK/RAM通过，报告SHAdb71d1aa已核对。旧4M吞吐回退仍待固件修复。Windows76d669de/Skill0d680d90不变。`
+- HEAD：`源码bd636750保持；408源码/813SDK回归。固件candidate9 SHAebbc11f2已独立核对，14档双路TCK<0.6%、RTT两轮10MiB/SV63秒报告通过；并行/1ms/.5ms仍运行。Windows76d669de/Skill0d680d90不变。`
 - 远端 HEAD：`microkeen/codex/v0.4.2-fixes；多个后续修复共用此分支。microkeen/main核对为3cc474bb。`
 - 工作树：E盘主工作区；旧detached树保留。构建/证据在F盘。
-- 当前任务：已核对candidate3-clocks报告：bd636候选在无内存预热时首次10M JTAG applied；14档+兼容4M共15档ACK与写入校验通过，末尾恢复10M/断开。首次能力缓存问题在该实测闭环；实际频率仍微调，旧4M吞吐回退待固件会话修复。见clock-interfaces-20261031.md；未打安装包/完整Skill。
-- 状态：`cold_clock_hil_passed_firmware_calibration_pending`
+- 当前任务：固件会话已烧V4.7.2/build17:41:04（SHAebbc11f2），继续固定bd636 SDK。宿主核对UF2及qualified报告：首次clock/15档ACK-RAM、14档双路连续TCK、RTT/SV独立通过；旧4M吞吐及RTT回退据固件方已修。应用30M+DAP20M并行、1ms/.5ms最终回归尚未完成。详见clock-interfaces-20261031.md；不占探针，不发布。
+- 状态：`candidate9_partial_hardware_qualification_parallel_pending`
 
 ## 里程碑
 
@@ -23,7 +23,7 @@
 
 ## 验证证据
 
-- **0.4.2界面更新与Windows覆盖安装**：已装Windows产品源76d669de，NSIS SHA7138eb72；覆盖exit0、3642载荷/设置一致、47工具/41Web/退出通过，见v042-refresh-20261031.md。完整Skill仍0d680d90/SHAa126d967。接口UI：383Python/59GUI/类型/浏览器通过。旧7c6候选794离线通过但首次改频实机失败，记录保留。bd636750补能力预取：408源码/813新候选通过，SHA2058e1ca，1260旧文件不变，candidate3首次clock及15档ACK/RAM实机通过，SHAdb71d1aa已核对；全档校准/4M吞吐仍待固件修复。详见clock-interfaces-20261031.md；未更新安装版/Skill。
+- **0.4.2界面更新与Windows覆盖安装**：已装Windows76d669de/NSIS SHA7138eb72，完整Skill0d680d90/SHAa126d967不变，详见v042-refresh-20261031.md。接口UI383Python/59GUI/浏览器通过；bd636首次预取408源码/813候选通过，SDK SHA2058e1ca。candidate9 UF2 SHAebbc11f2及qualified报告已核对：15档ACK/RAM，14档应用/DAP连续TCK最大偏差0.548608/0.581625%；RTT各10MiB目标计时647.818/646.793KiB/s、SV63秒零计数。并行/采样回归待完成。见clock-interfaces-20261031.md；不改安装版。
 - **HPM AI Skill能力核实**：源05e73101：1139相关+68包/文档测试；Flash49700B一致、ELF1528变量/360MHz、SVD UART0、JTAG4/10、RTT/Watch/dump通过。SystemView U32修复38351事件；新固件复测22155事件零丢弃。指定会话依新授权更新V4.7.2/build17:19:37后，共享MCP暂停/寄存器/真实断点cause2/单步cause4/恢复运行通过，x31同值写回正确。Skill SHA44df3e58、2625文件/7059FLM/4800SVD校验，全局47工具并保留5339用户文件。无目标烧录/VCC/OTP/发布。见hpm-skill-audit-20261029.md。
 - **RTT自动恢复与在线静默收尾**：14417715：347相关+17发现测试通过。V4/HPM5301连续两次49700B烧录校验成功，自动暂停/恢复RTT与SuperWatch、零恢复错误；新增RTT349/466字节、Watch3005/3712周期且零读取错。Windows NSIS SHA56830303，覆盖exit0、3627载荷一致、冻结MCP/41Web/正常退出通过；完整Skill SHAbb05fbde、2625文件/47工具已同步。仍0.4.1未发布。旧静默面板修复d1cf16ec的124GUI/29Python证据保留。见rtt-auto-restore-20261030.md及online-flash-receipt-20261029.md。
 - **Linux/macOS 0.4.1测试包**：Linux源a6bdacbc/CI40637027269、Mac arm64源eefc6842/CI40640511140：USB各58通过/1skip，冻结CLI/MCP/健康/Web/退出通过。DEB SHA7309f377、DMG SHA56dc8e0a，均旧0.4.1未带后续修复；Mac ad-hoc未公证，实机安装/UI/USB待测。见linux-deb-test-20261028.md、macos-arm64-test-20261028.md。
@@ -47,13 +47,13 @@
 
 ## 真机环境
 
-- **state**：固件会话继续独占HPM5301/HPMLink校准。candidate3报告（SHAdb71d1aa）首次clock及15档ACK/RAM通过，末尾恢复10MHz/断开；不据此抢占。私有JTAG/CMSIS-DAP高档约匹配的反馈非最终校准结论，旧4M吞吐回退在修；最终固件哈希待回传。
+- **state**：固件会话独占HPM5301/HPMLink。已装V4.7.2/build20261031-17:41:04，UF2 SHAebbc11f2d429e815e6c1a2b67ac1a53c821b17af89aed38ab29677be1f7ecec0已核对。14档校准与独立RTT/SV通过，正在应用30M+DAP20M并行及1ms/.5ms回归，未全项通过；不抢探针。
 - **installer**：Windows0.4.2已覆盖安装产品源76d669de，NSIS SHA7138eb72；3642载荷/设置、47工具/41Web、中英六条说明、连接时钟/字体/4us及正常退出通过。产物v042-refresh-20261031。完整Skill仍0d680d90/SHAa126d967；未发布。
 - **backups**：保留正式release、安装包、CI ZIP、唯一硬件证据、Skill备份及F盘缓存。含链接/不可访问目录不强删。历史获授权清理见v036-storage-cleanup-20261023.md及本机START_HERE；本地Unix清理不影响正式附件。旧detached树保留；本轮Skill备份在F盘cache/mklink-ai-probe/skill-backups。
 
 ## 下一动作
 
-1. 固件会话继续JTAG/CMSIS-DAP逐档频率校准并修复旧4M吞吐回退，使用相同bd636 SDK对比；不交付回退版本。首次冷缓存clock已实测通过，原candidate1失败保留。宿主等待实测/最终哈希；接口选择不强制切换，安装版/Skill及4us下限不变。
+1. 等待固件会话完成candidate9应用30M+DAP20M并行和1ms/.5ms采样最终回归；当前14档双路连续TCK、RTT/SV独立通过，旧4M/RTT吞吐回退据其已修。固定bd636 SDK，不用ACK推断每个边沿均匀。旧4M兼容单列，DAP约4.081M；不占探针，不打包发布。
 2. 新V3已校准edc40176/build14:10:28，配置需明确ACK与applied/configured；无LIVE能力，采集中改频拒绝且不停任务。低频并行可明显增加DAP延迟。旧NOBITS机器码哈希结论撤回，硬件证据保留，见专项文档。
 3. 公网远程服务中继为下个版本任务；本次不实施。
 4. 下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。
@@ -73,7 +73,7 @@
 ## 延续协议
 
 - 读取CURRENT_HANDOFF/v042-session-handoff并核对Git，共用codex/v0.4.2-fixes。本机Windows/Skill为0.4.2本地候选，Windows产品源76d669de/Skill归档0d680d90；正式514efb86及0.4.1资产不可变。保留上海90/95GiB、到期锁停、账本和旧detached树，不申请私钥。
-- 最新见clock-interfaces-20261031.md：408源码/813候选，SHA2058e1ca；candidate3首次clock和15档ACK/RAM实测通过，报告SHAdb71d1aa。旧4M吞吐/全档校准仍待固件会话，宿主不抢硬件，未知不重放，旧候选/失败保留。
+- 最新clock-interfaces-20261031.md candidate9小节：UF2 SHAebbc11f2、SDK SHA2058e1ca；14档双路TCK最大误差<0.6%仅连续位窗，拉长间隔另计。RTT/SV独立通过，并行/采样待完成。首次预取已闭环，旧失败保留；宿主只读核对，不抢硬件。
 - V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。
 - CDC995和SDK10048根因保留待排查。恢复仅同身份CDC故障5秒内；超时不自动接回/新建AI会话，主动断开立即生效，未知写入不重放。历史实例释放记录见v035-transport-recovery.md；当前硬件占用以本交接真机状态及指定固件会话为准。
 - 客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。

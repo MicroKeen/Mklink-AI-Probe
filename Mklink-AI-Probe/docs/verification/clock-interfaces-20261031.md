@@ -151,3 +151,54 @@ but continues frequency tuning and has found a compatibility-4-MHz throughput
 regression in the low-clock generic path. That regression remains open; no
 regressing firmware is accepted for delivery here. The host did not independently
 operate the logic analyzer, inspect all waveforms or perform target writes.
+
+## Candidate9 calibration and independent-stream results
+
+The firmware owner subsequently installed HPMLink V4.7.2, build
+`Oct 31 2026 17:41:04`, while continuing to use the immutable bd636750 SDK.
+The host independently hashed its local `probe-candidates/candidate9/HPMLink.uf2`:
+`ebbc11f2d429e815e6c1a2b67ac1a53c821b17af89aed38ab29677be1f7ecec0`, matching the
+owner's reported final candidate. This is not a public firmware release.
+
+Completed `qualified-*` reports were inspected read-only:
+
+| Evidence | Checked result |
+| --- | --- |
+| `qualified-clocks.json` | Passed, 15 rows (14 advertised clocks + compatibility 4 MHz); each JTAG applied/configured/requested value matches, each RAM write reports verified; first 10 MHz clock also applied. |
+| `qualified-dap-physical.json` | Passed, 15 rows, exit code 0; the owner reports all corresponding CMSIS-DAP reads passed. |
+| `qualified-clocks-decoded.json` | All 14 advertised clocks present; maximum absolute continuous-shift frequency error 0.548608%. Compatibility 4 MHz measures 4.000176 MHz separately. |
+| `qualified-dap-physical-decoded.json` | All 14 advertised clocks present; maximum absolute error 0.581625%. Compatibility 4 MHz measures 4.081396 MHz (+2.034909%), outside the new menu. |
+| `qualified-rtt30-final.json` | Two 10 MiB runs, 1024/2048-byte chunks; both complete-byte sequences verified. Target-timed rates 647.818/646.793 KiB/s; host-timed rates 646.372/645.404 KiB/s. |
+| `qualified-systemview.json` | Passed, 63.117 seconds, 13 stored status samples, up to 852991 events; sampled target-overflow, parser/transport loss and event-gap counters all zero. |
+
+The decoded frequency window is DMI bits 2..29, using intervals within ±10% of
+nominal for frequency calculation and counting interruptions separately. Maximum
+reported stretched-interval counts are 60 (application) / 14 (DAP). These results
+qualify continuous shifting frequency, not every edge interval, total bus
+throughput, or a uniform acquisition period. The host checked the decoded reports,
+not a second independent waveform decoding or a new physical measurement.
+
+Report SHA256 values, in table order:
+
+```text
+5a0f160aee0fc0f257d99669a947689fae2cf4ee8fdb1119df261d020e37fa56
+727635dd3833a68244579dc581be86f044ac5596e6c7ddf4d9050ff827e5e73a
+e17a38a7aa963262c95f04554664899724c45aa32d717810dc8790b4e24291aa
+48cb99e1028a816897cf26373936322fd8a8a63bc9a45d981a9545935e1272c9
+2a7f95f3810db2eaf2ebdec9b98e1e5b1a41b3da9439a39fc47a2c0d05634375
+1e37876bcc54ca06dd5d48a58fb2b3861016e4ade4cf932a77a51ec689cc31b5
+```
+
+The owner reports the earlier compatibility-4-MHz throughput regression resolved
+(about +1% over baseline), with 10 MHz +6.5–7.5%, 20 MHz +4.2–5.1%, and 30 MHz
+−0.06–+0.33%. `qualified-bench.json` is passed with 24 rows; these comparative
+percentages remain the owner's analysis. The reported RTT regression was resolved
+by placing DMI/SBA control functions in ILM; the completed RTT data checks above
+are corroborating evidence for this tested configuration.
+
+Application 30 MHz + DAP 20 MHz concurrent operation and final 1 ms / 0.5 ms
+sampling regressions are still running. The inspected `qualified-parallel.json`
+was incomplete (`passed=false`, no final error); it is not a completed failure or
+success. Do not declare all qualification complete or take the probe from the
+firmware owner. Installed Windows/Skill, official assets, previous candidates and
+failure evidence remain unchanged.
