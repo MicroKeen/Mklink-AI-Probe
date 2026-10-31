@@ -23,6 +23,7 @@ import type { AxlStatus, FileSourceKind, PortInfo, ProbeFirmwareCheck, ProbeFirm
 import ConfigSectionNav, { type ConfigSection } from '../components/config/ConfigSectionNav.vue'
 import FileSourcesPanel from '../components/config/FileSourcesPanel.vue'
 import RuntimePanel from '../components/config/RuntimePanel.vue'
+import ConnectionClockControl from '../components/config/ConnectionClockControl.vue'
 
 const {
   deviceStatus,
@@ -56,6 +57,7 @@ const settings = ref<DesktopSettings>(loadDesktopSettings(window.localStorage))
 
 const portsLoading = ref(false)
 const savingLocal = ref(false)
+const savingClock = ref(false)
 const connecting = ref(false)
 const disconnecting = ref(false)
 const connectionOwners = ref<string[] | null>(null)
@@ -151,7 +153,7 @@ async function selectLocalPort() {
 }
 
 async function connectLocal() {
-  if (connecting.value || disconnecting.value) return
+  if (connecting.value || disconnecting.value || savingLocal.value || savingClock.value) return
   connectionOwners.value = null
   localPortTouched = true
   connecting.value = true
@@ -478,11 +480,9 @@ onUnmounted(() => {
         <div v-if="deviceStatus.connected && deviceStatus.port" class="connection-detail" data-testid="connected-port">
           {{ tr('当前串口：', 'Connected port: ') }}{{ deviceStatus.port }}
         </div>
-        <p class="connection-detail" data-testid="dashboard-clock-location">{{ tr('采集时钟请在仪表盘统一选择；RTT、RTOS Trace、SuperWatch 和普通内存访问共用。', 'Select the shared acquisition clock on the Dashboard for RTT, RTOS Trace, SuperWatch and ordinary memory access.') }}</p>
-
         <div class="form-row">
           <label class="form-label" for="local-port">{{ tr('串口', 'Serial Port') }}</label>
-          <select id="local-port" v-model="localPort" class="form-select" data-testid="local-port" :disabled="savingLocal" @change="selectLocalPort">
+          <select id="local-port" v-model="localPort" class="form-select" data-testid="local-port" :disabled="savingLocal || savingClock || connecting || disconnecting" @change="selectLocalPort">
             <option value="">{{ tr('自动搜索', 'Auto Search') }}</option>
             <option v-for="port in portOptions" :key="port.value" :value="port.value">
               {{ port.label }}
@@ -504,6 +504,10 @@ onUnmounted(() => {
           {{ selectedProbe.probe_id }}
         </div>
 
+        <ConnectionClockControl :device-connected="deviceStatus.connected" :device-generation="deviceStatus.device_generation"
+          :disabled="savingLocal || connecting || disconnecting || switchingProbe" @busy="savingClock = $event" />
+        <p v-if="switchingProbe" class="connection-detail">{{ tr('请先切换下载器，再选择该设备支持的时钟。', 'Switch probes first, then select a clock supported by that device.') }}</p>
+
         <div class="local-actions">
           <span class="auto-save-state" data-testid="local-auto-save">
             {{ localSaveState === 'saving' ? tr('自动保存中...', 'Saving...') : localSaveState === 'saved' ? tr('已自动保存', 'Saved') : localSaveState === 'unconfirmed' ? tr('保存未确认，请刷新页面核对配置', 'Save unconfirmed; refresh the page to check configuration') : tr('修改后自动保存', 'Changes save automatically') }}
@@ -512,7 +516,7 @@ onUnmounted(() => {
             class="btn btn-primary icon-command"
             type="button"
             data-testid="connect-local"
-            :disabled="connecting || disconnecting || (deviceStatus.connected && !switchingProbe)"
+            :disabled="connecting || disconnecting || savingLocal || savingClock || (deviceStatus.connected && !switchingProbe)"
             @click="connectLocal"
           >
             <Usb :size="15" aria-hidden="true" />
@@ -522,7 +526,7 @@ onUnmounted(() => {
             class="btn icon-command"
             type="button"
             data-testid="disconnect-local"
-            :disabled="disconnecting || connecting || !deviceStatus.connected"
+            :disabled="disconnecting || connecting || savingClock || !deviceStatus.connected"
             @click="disconnectLocal"
           >
             <Unplug :size="15" aria-hidden="true" />

@@ -1,6 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import AcquisitionClockControl from './AcquisitionClockControl.vue'
+import ConnectionClockControl from './ConnectionClockControl.vue'
 
 const clocks = [1000, 5000, 10000, 20000, 50000, 100000, 200000, 500000,
   1000000, 2000000, 5000000, 10000000, 20000000, 30000000]
@@ -15,14 +15,13 @@ let post: (body: { clock_hz: number; save: boolean }) => Promise<unknown>
 let requests: ReturnType<typeof vi.fn>
 const wrappers: ReturnType<typeof mount>[] = []
 async function setup() {
-  const wrapper = mount(AcquisitionClockControl, { props: { deviceConnected: true, deviceGeneration: 7 } })
+  const wrapper = mount(ConnectionClockControl, { props: { deviceConnected: true, deviceGeneration: 7 } })
   wrappers.push(wrapper)
   await flushPromises()
   return wrapper
 }
 async function apply(wrapper: ReturnType<typeof mount>, hz: number) {
-  await wrapper.get('#acquisition-clock-hz').setValue(String(hz))
-  await wrapper.get('[data-testid="apply-acquisition-clock"]').trigger('click')
+  await wrapper.get('#connection-clock-hz').setValue(String(hz))
   await flushPromises()
 }
 
@@ -44,16 +43,16 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('shared acquisition clock', () => {
+describe('shared connection clock', () => {
   it('uses all advertised V3 clocks, including kHz, without a manual frequency field', async () => {
     const wrapper = await setup()
     expect(wrapper.findAll('input').length).toBe(0)
-    expect(wrapper.findAll('option').slice(1).map(o => Number(o.attributes('value')))).toEqual(clocks)
+    expect(wrapper.findAll('option').map(o => Number(o.attributes('value')))).toEqual(clocks)
     await apply(wrapper, 5000)
     const request = requests.mock.calls.find(([, init]) => init?.method === 'POST')![1]
     expect(JSON.parse(request.body)).toEqual({ clock_hz: 5000, save: true })
     expect(new Headers(request.headers).get('X-MKLink-Device-Generation')).toBe('7')
-    expect(wrapper.get('[data-testid="acquisition-clock-state"]').text()).toBe('已应用：5 kHz')
+    expect(wrapper.get('[data-testid="connection-clock-state"]').text()).toBe('已应用：5 kHz')
   })
 
   it('preserves the old 4 MHz setting until an explicit migration is acknowledged', async () => {
@@ -61,10 +60,10 @@ describe('shared acquisition clock', () => {
       migration: { from_hz: 4000000, to_hz: 2000000, pending: true } })
     const wrapper = await setup()
     expect(wrapper.get('[data-testid="clock-migration"]').text()).toContain('请选择 2 MHz')
-    expect(wrapper.get<HTMLSelectElement>('#acquisition-clock-hz').element.value).toBe('4000000')
-    expect(wrapper.get('[data-testid="acquisition-clock-state"]').text()).toContain('4 MHz')
+    expect(wrapper.get<HTMLSelectElement>('#connection-clock-hz').element.value).toBe('4000000')
+    expect(wrapper.get('[data-testid="connection-clock-state"]').text()).toContain('4 MHz')
     expect(requests.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
-    expect(wrapper.get('[data-testid="apply-acquisition-clock"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('option[value="4000000"]').attributes('disabled')).toBeDefined()
     await apply(wrapper, 2000000)
     expect(wrapper.text()).toContain('已迁移到 2 MHz')
     expect(wrapper.find('[data-testid="clock-migration"]').exists()).toBe(false)
@@ -78,7 +77,7 @@ describe('shared acquisition clock', () => {
     const wrapper = await setup()
     await apply(wrapper, 2000000)
     await vi.advanceTimersByTimeAsync(3000)
-    expect(wrapper.get('[data-testid="acquisition-clock-state"]').text()).toBe('已保存，待应用：2 MHz')
+    expect(wrapper.get('[data-testid="connection-clock-state"]').text()).toBe('已保存，待应用：2 MHz')
     expect(wrapper.text()).toContain('退出 Keil 调试')
     expect(requests.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1)
   })
@@ -92,8 +91,8 @@ describe('shared acquisition clock', () => {
     const wrapper = await setup()
     await apply(wrapper, 2000000)
     await vi.advanceTimersByTimeAsync(3000)
-    expect(wrapper.get('[data-testid="acquisition-clock-state"]').text()).toBe('已应用：10 MHz')
-    expect(wrapper.get<HTMLSelectElement>('#acquisition-clock-hz').element.value).toBe('2000000')
+    expect(wrapper.get('[data-testid="connection-clock-state"]').text()).toBe('已应用：10 MHz')
+    expect(wrapper.get<HTMLSelectElement>('#connection-clock-hz').element.value).toBe('2000000')
     expect(requests.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1)
     expect(requests.mock.calls.every(([url]) => !url.includes('/stop'))).toBe(true)
     if (failure === 'busy') expect(wrapper.text()).toContain('原任务保持运行')
@@ -104,11 +103,12 @@ describe('shared acquisition clock', () => {
     // Another client may apply without changing the persisted default.
     data = { ...data, configured_hz: 30000000, applied_hz: 30000000 }
     await vi.advanceTimersByTimeAsync(1000)
-    expect(wrapper.get<HTMLSelectElement>('#acquisition-clock-hz').element.value).toBe('30000000')
-    await wrapper.get('#acquisition-clock-hz').setValue('2000000')
+    expect(wrapper.get<HTMLSelectElement>('#connection-clock-hz').element.value).toBe('30000000')
+    post = async () => response({ detail: { busy: ['rtt'] } }, false)
+    await wrapper.get('#connection-clock-hz').setValue('2000000')
     await vi.advanceTimersByTimeAsync(1000)
-    expect(wrapper.get<HTMLSelectElement>('#acquisition-clock-hz').element.value).toBe('2000000')
-    expect(wrapper.get('[data-testid="acquisition-clock-state"]').text()).toContain('30 MHz')
+    expect(wrapper.get<HTMLSelectElement>('#connection-clock-hz').element.value).toBe('2000000')
+    expect(wrapper.get('[data-testid="connection-clock-state"]').text()).toContain('30 MHz')
   })
 
   it('clears a transient polling failure after status becomes available again', async () => {
@@ -117,7 +117,7 @@ describe('shared acquisition clock', () => {
     expect(wrapper.text()).toContain('Temporary status failure')
     await vi.advanceTimersByTimeAsync(1000)
     expect(wrapper.text()).not.toContain('Temporary status failure')
-    expect(wrapper.get('[data-testid="acquisition-clock-state"]').text()).toContain('10 MHz')
+    expect(wrapper.get('[data-testid="connection-clock-state"]').text()).toContain('10 MHz')
   })
 
   it('does not apply a late old-device result to a new HPM selection', async () => {
@@ -131,18 +131,54 @@ describe('shared acquisition clock', () => {
     await flushPromises()
     finish(response({ ...initial(), configured_hz: 2000000 }))
     await flushPromises()
-    expect(wrapper.get<HTMLSelectElement>('#acquisition-clock-hz').element.value).toBe('4000000')
+    expect(wrapper.get<HTMLSelectElement>('#connection-clock-hz').element.value).toBe('4000000')
     expect(wrapper.findAll('option').map(o => o.attributes('value'))).not.toContain('2000000')
-    expect(wrapper.get('[data-testid="acquisition-clock-state"]').text()).toContain('4 MHz')
+    expect(wrapper.get('[data-testid="connection-clock-state"]').text()).toContain('4 MHz')
   })
 
   it('does not invent a confirmed clock from a saved request or after disconnecting', async () => {
     Object.assign(data, { configured_hz: null, applied_hz: null, apply_state: 'unknown' })
     const wrapper = await setup()
-    expect(wrapper.get('[data-testid="acquisition-clock-state"]').text()).toContain('未确认')
+    expect(wrapper.get('[data-testid="connection-clock-state"]').text()).toContain('未确认')
+    data.connected = false
     await wrapper.setProps({ deviceConnected: false })
     await flushPromises()
-    expect(wrapper.get('[data-testid="acquisition-clock-state"]').text()).toBe('未连接')
-    expect(wrapper.get('[data-testid="apply-acquisition-clock"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="connection-clock-state"]').text()).toBe('连接时使用：10 MHz')
+    expect(wrapper.find('[data-testid="apply-connection-clock"]').exists()).toBe(false)
+  })
+
+  it('defaults to 10 MHz and saves a disconnected selection in the connection configuration', async () => {
+    const offline = { ...initial(), connected: false, requested_hz: null as number | null,
+      configured_hz: null, applied_hz: null, apply_state: 'unknown',
+      clocks_hz: [4000000, 10000000, 20000000, 30000000] }
+    requests.mockImplementation(async (_url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT') {
+        const body = JSON.parse(String(init.body))
+        offline.requested_hz = Number(body.swd_clock)
+        return response({ swd_clock: body.swd_clock })
+      }
+      return response(structuredClone(offline))
+    })
+    const wrapper = mount(ConnectionClockControl, { props: { deviceConnected: false } })
+    wrappers.push(wrapper)
+    await flushPromises()
+    expect(wrapper.get<HTMLSelectElement>('#connection-clock-hz').element.value).toBe('10000000')
+    expect(requests.mock.calls.every(([, init]) => !init?.method)).toBe(true)
+    await apply(wrapper, 20000000)
+    const writes = requests.mock.calls.filter(([, init]) => init?.method)
+    expect(writes).toHaveLength(1)
+    expect(writes[0]![0]).toContain('/api/config')
+    expect(writes[0]![1]!.method).toBe('PUT')
+    expect(JSON.parse(String(writes[0]![1]!.body))).toEqual({ swd_clock: '20000000' })
+    expect(wrapper.get('[data-testid="connection-clock-state"]').text()).toBe('连接时使用：20 MHz')
+    expect(wrapper.emitted('busy')).toEqual([[true], [false]])
+  })
+
+  it('prevents changes while the parent is saving or switching devices', async () => {
+    const wrapper = await setup()
+    await wrapper.setProps({ disabled: true })
+    expect(wrapper.get('#connection-clock-hz').attributes('disabled')).toBeDefined()
+    await wrapper.get('#connection-clock-hz').trigger('change')
+    expect(requests.mock.calls.some(([, init]) => init?.method)).toBe(false)
   })
 })

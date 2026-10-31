@@ -433,9 +433,11 @@ class Device:
         if self._axf and load_symbols:
             self._load_dwarf_info()
 
-        if detected_idcode == 0x1000563D and not (config.get("swd_clock") or config.get("debug_speed")):
+        # A new connection uses the configuration page's default 10 MHz for
+        # both ARM and HPM, rather than inheriting the probe's previous clock.
+        if not (config.get("swd_clock") or config.get("debug_speed")):
             try:
-                self.set_debug_speed("medium")
+                self.set_debug_clock(10_000_000)
             except ValueError as error:
                 if not self.connected:
                     self.close()

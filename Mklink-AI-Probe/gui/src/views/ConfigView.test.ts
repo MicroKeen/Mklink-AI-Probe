@@ -88,6 +88,7 @@ async function mountView() {
       stubs: {
         FirmwareUpdateModal: true,
         RuntimePanel: true,
+        ConnectionClockControl: true,
       },
     },
   })
@@ -96,16 +97,29 @@ async function mountView() {
 }
 
 describe('ConfigView', () => {
-  it('moves clock configuration to the Dashboard and does not resubmit a stale clock when saving a port', async () => {
+  it('places shared clock selection in connection settings without resubmitting it when saving a port', async () => {
     mocks.api.getConfig.mockResolvedValue({ com_port: 'TEST_PORT_A', swd_clock: '4000000', debug_speed: 'low' })
     const wrapper = await mountView()
-    expect(wrapper.find('[data-testid="swd-clock"]').exists()).toBe(false)
-    expect(wrapper.get('[data-testid="dashboard-clock-location"]').text()).toContain('仪表盘')
+    expect(wrapper.find('[data-testid="local-device-panel"] connection-clock-control-stub').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="dashboard-clock-location"]').exists()).toBe(false)
     await wrapper.get('[data-testid="local-port"]').setValue('TEST_PORT_B')
     await flushPromises()
     expect(mocks.api.updateConfig).toHaveBeenCalledTimes(1)
     expect(mocks.api.updateConfig.mock.calls[0]![0]).not.toHaveProperty('swd_clock')
     expect(mocks.api.updateConfig.mock.calls[0]![0]).not.toHaveProperty('debug_speed')
+    wrapper.unmount()
+  })
+
+  it('keeps connection and port changes disabled until the shared clock save settles', async () => {
+    const wrapper = await mountView()
+    const clock = wrapper.findComponent({ name: 'ConnectionClockControl' })
+    clock.vm.$emit('busy', true)
+    await flushPromises()
+    expect(wrapper.get('[data-testid="connect-local"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="local-port"]').attributes('disabled')).toBeDefined()
+    clock.vm.$emit('busy', false)
+    await flushPromises()
+    expect(wrapper.get('[data-testid="connect-local"]').attributes('disabled')).toBeUndefined()
     wrapper.unmount()
   })
 

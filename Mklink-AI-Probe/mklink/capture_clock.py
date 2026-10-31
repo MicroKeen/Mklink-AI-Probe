@@ -73,7 +73,7 @@ def requested_clock(config):
     from mklink.debug_speed import PROFILES
     raw = config.get('swd_clock')
     if raw is None or raw == '':
-        return PROFILES.get(config.get('debug_speed'))
+        return PROFILES.get(config.get('debug_speed') or 'medium')
     try:
         return int(raw, 0) if isinstance(raw, str) else raw if type(raw) is int else None
     except ValueError:

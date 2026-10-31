@@ -86,6 +86,24 @@ def test_unadvertised_legacy_v3_does_not_gain_new_options(tmp_path):
     assert 1000 not in clock_options(dev._bridge)['clocks_hz']
 
 
+def test_unsaved_connection_defaults_to_ten_megahertz_without_inventing_application():
+    status = clock_snapshot(None, {})
+    assert status['requested_hz'] == 10_000_000
+    assert status['configured_hz'] is None and status['applied_hz'] is None
+    assert status['apply_state'] == 'unknown' and not status['connected']
+
+
+def test_disconnected_clock_saves_into_the_same_connection_config(api_clock, tmp_path):
+    client, dev, _ = api_clock
+    client.app.state.mklink_state['device'] = None
+    response = client.put('/api/config', json={'swd_clock': '20000000'})
+    assert response.status_code == 200, response.text
+    assert load_config(str(tmp_path))['swd_clock'] == '20000000'
+    status = client.get('/api/device/debug-speed').json()
+    assert status['requested_hz'] == 20_000_000 and status['applied_hz'] is None
+    dev._bridge.send_command.assert_not_called()
+
+
 @pytest.mark.parametrize('kind', ['number','profile'])
 def test_old_four_megahertz_requires_explicit_migration(tmp_path,kind):
     dev=v3_device(tmp_path)

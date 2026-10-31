@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-31T15:11:09+08:00`
+- 更新时间：`2026-10-31T15:22:09+08:00`
 - 分支：`codex/v0.4.2-fixes`
-- HEAD：`产品已装e29d；字体115ca0ce、SDK d08bf1dc及共享capture_dump 644acc2b仅源码。固定7843四文件候选SHA5563d4c7已交固件会话；原候选不变。`
+- HEAD：`已装e29d；字体115ca0ce/SDK644acc2b仅源码。最新纠正时钟统一到配置→连接设备，下拉默认10MHz，81GUI/181Python/类型/隔离浏览器通过；未重建。`
 - 远端 HEAD：`microkeen/codex/v0.4.2-fixes；多个后续修复共用此分支。microkeen/main核对为3cc474bb。`
 - 工作树：E盘主工作区；旧detached树保留。构建/证据在F盘。
-- 当前任务：共享capture_dump 644acc2b支持显式fastest及timing ACK；固定7843四文件候选SHA5563d4c7实际导入350项全过，ASGI/MUX夹具各采10000帧。原1262blob及d08候选不变，已交指定固件会话。见superwatch-timing-sdk-20261031.md；动态下限仍待多点硬件证据，未构建或接硬件。
-- 状态：`watch_timing_shared_candidate_delivered`
+- 当前任务：用户纠正已完成：移除仪表盘时钟，下拉统一到连接配置，默认10MHz、离线自动保存/连接应用，既有选择及忙保护保留。见connection-clock-config-20261031.md。用户在固件会话改为按单变量最快值设统一输入下限，不做动态适用域缓存/提示；约4us待最终确认。
+- 状态：`connection_clock_location_fixed_waiting_uniform_period`
 
 ## 里程碑
 
@@ -23,7 +23,7 @@
 
 ## 验证证据
 
-- **0.4.2统一时钟Windows本地候选及字体小修**：Windows源e29d7809/NSIS SHAa8c367d4，覆盖exit0、3642载荷匹配/设置保留，47工具/九XML/38编译及41原生Web一致，Windows-only PATH无宿主Python。1920px单行、15版本条目、专注/正常退出通过。294Python/196GUI/类型通过。后续字体11px/24px高统一，仅源码未重建。完整Skill仍0d680d90/SHAa126d967；前包V4/H7硬件证据见v042-local-candidate-20261030.md，本包未接硬件；本次见acquisition-clock-20261031.md。
+- **0.4.2统一时钟Windows本地候选及字体小修**：Windows源e29d7809/NSIS SHAa8c367d4，覆盖exit0、3642载荷匹配/设置保留，47工具/九XML/38编译及41原生Web一致，Windows-only PATH无宿主Python。1920px单行、15版本条目、专注/正常退出通过。294Python/196GUI/类型通过。后续字体11px/24px高统一，仅源码未重建。完整Skill仍0d680d90/SHAa126d967；前包V4/H7硬件证据见v042-local-candidate-20261030.md，本包未接硬件；本次见acquisition-clock-20261031.md。 后续入口纠正移回连接配置、默认10MHz，81GUI/181Python/类型及实际浏览器夹具通过，仅源码；见connection-clock-config-20261031.md。
 - **HPM AI Skill能力核实**：源05e73101：1139相关+68包/文档测试；Flash49700B一致、ELF1528变量/360MHz、SVD UART0、JTAG4/10、RTT/Watch/dump通过。SystemView U32修复38351事件；新固件复测22155事件零丢弃。指定会话依新授权更新V4.7.2/build17:19:37后，共享MCP暂停/寄存器/真实断点cause2/单步cause4/恢复运行通过，x31同值写回正确。Skill SHA44df3e58、2625文件/7059FLM/4800SVD校验，全局47工具并保留5339用户文件。无目标烧录/VCC/OTP/发布。见hpm-skill-audit-20261029.md。
 - **RTT自动恢复与在线静默收尾**：14417715：347相关+17发现测试通过。V4/HPM5301连续两次49700B烧录校验成功，自动暂停/恢复RTT与SuperWatch、零恢复错误；新增RTT349/466字节、Watch3005/3712周期且零读取错。Windows NSIS SHA56830303，覆盖exit0、3627载荷一致、冻结MCP/41Web/正常退出通过；完整Skill SHAbb05fbde、2625文件/47工具已同步。仍0.4.1未发布。旧静默面板修复d1cf16ec的124GUI/29Python证据保留。见rtt-auto-restore-20261030.md及online-flash-receipt-20261029.md。
 - **Linux/macOS 0.4.1测试包**：Linux源a6bdacbc/CI40637027269、Mac arm64源eefc6842/CI40640511140：USB各58通过/1skip，冻结CLI/MCP/健康/Web/退出通过。DEB SHA7309f377、DMG SHA56dc8e0a，均旧0.4.1未带后续修复；Mac ad-hoc未公证，实机安装/UI/USB待测。见linux-deb-test-20261028.md、macos-arm64-test-20261028.md。
@@ -47,13 +47,13 @@
 
 ## 真机环境
 
-- **state**：指定固件会话独占V3/H7/Keil/逻分；四文件shared fastest首轮已运行。宿主只读复核108行汇总SHAd6d282f3：12最快、96周期中23达标/73未达标，错误计数零不等于周期达标，未重算原始样本/LA。2/5ms系统性慢，固件正在修复绝对相位调度；10M离散200us抖动待300/500us补测。动态下限未启用，不外推HPM。
-- **installer**：Windows0.4.2已覆盖安装源e29d7809，NSIS SHAa8c367d4、3642文件/47工具/41Web/15版本项及退出通过。完整Skill仍0d680d90/SHAa126d967。产物v042-clock-20261031；后续按钮字体小修未打包，未正式发布。
+- **state**：指定固件会话独占V3/H7/Keil/逻分；26ec2da3/build15:12:37周期候选60行原始样本已提供，宿主未复算，整体性能/Keil仍待验收、最终hash可能改变。报告约1–2%吞吐差异，正拆分调度冷路径做同SDK A/B。不占硬件，原固定候选不变。
+- **installer**：Windows0.4.2已覆盖安装源e29d7809，NSIS SHAa8c367d4、3642文件/47工具/41Web/15版本项及退出通过。完整Skill仍0d680d90/SHAa126d967。产物v042-clock-20261031；后续按钮字体小修未打包，未正式发布。 连接配置时钟入口纠正仅源码，未重建。
 - **backups**：保留正式release、安装包、CI ZIP、唯一硬件证据、Skill备份及F盘缓存。含链接/不可访问目录不强删。历史获授权清理见v036-storage-cleanup-20261023.md及本机START_HERE；本地Unix清理不影响正式附件。旧detached树保留；本轮Skill备份在F盘cache/mklink-ai-probe/skill-backups。
 
 ## 下一动作
 
-1. 等待最终固件慢周期修复、14档实际SWCLK和共享最快/多点复测原始证据，再绑定布局/时钟核对动态下限；首轮表不固化、不得取最快均值倒数。见superwatch-timing-sdk-20261031.md。不接硬件或改插值，已装Windows/Skill不变。正式发布/合并须新指令。
+1. 按用户最新简化要求等待最终单变量最快复测值，向上取整为统一输入下限；停止动态下限/复杂适用域缓存/提示方案。4us暂待定。固件整体性能/Keil及最终hash待验收，不接硬件；连接入口纠正已完成源码验证，已装Windows/Skill不变。正式发布/合并须新指令。
 2. 新V3已校准edc40176/build14:10:28，配置需明确ACK与applied/configured；无LIVE能力，采集中改频拒绝且不停任务。低频并行可明显增加DAP延迟。旧NOBITS机器码哈希结论撤回，硬件证据保留，见专项文档。
 3. 公网远程服务中继为下个版本任务；本次不实施。
 4. 下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。
@@ -73,7 +73,7 @@
 ## 延续协议
 
 - 读取CURRENT_HANDOFF/v042-session-handoff并核对Git，共用codex/v0.4.2-fixes。本机Windows/Skill现为0.4.2本地候选，Windows源e29d7809/Skill归档0d680d90；正式514efb86及0.4.1资产不可变，未正式发布0.4.2。保留上海90/95GiB、到期锁停、账本和旧detached树，不申请私钥。
-- 已装Windows e29d源0.4.2验收见acquisition-clock-20261031.md；Skill仍0d680d90，按钮字体115ca0ce仅源码，按用户指令未重建。指定固件会话重新独占V3/H7/Keil/逻分做时间戳修复，固定7843对照；等待最终无诊断包/证据和明确释放后再协调，不替换候选、不改插值或外推HPM已修复。
+- 已装Windows e29d见acquisition-clock-20261031.md，Skill仍0d680d90。字体115ca0ce及最新连接配置时钟纠正仅源码，未重建。共享fastest644acc2b固定候选不改。指定固件会话独占V3/H7/Keil/逻分；用户已撤销动态下限，改统一单变量最快值输入限制，最终值待复测。
 - V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。
 - CDC995和SDK10048根因保留待排查。恢复仅同身份CDC故障5秒内；超时不自动接回/新建AI会话，主动断开立即生效，未知写入不重放。历史实例释放记录见v035-transport-recovery.md；当前硬件占用以本交接真机状态及指定固件会话为准。
 - 客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。
