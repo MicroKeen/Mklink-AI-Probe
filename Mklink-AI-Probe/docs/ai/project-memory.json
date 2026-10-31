@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-31T16:47:43+08:00",
+  "updated_at": "2026-10-31T16:56:18+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.4.2-fixes",
-    "head": "产品源76d669de已构建覆盖安装0.4.2：连接页时钟10MHz默认、4us下限、统一字体、共享统计及六条版本说明。NSIS SHA7138eb72；后续提交仅dist与验收文档。",
+    "head": "已装Windows76d669de，NSIS SHA7138eb72；源码a8aa8a16修复JTAG ACK，451回归；新隔离候选SHAaaf9eb1b/692回归已交固件会话，未打入安装版/完整Skill。",
     "remote_head": "microkeen/codex/v0.4.2-fixes；多个后续修复共用此分支。microkeen/main核对为3cc474bb。",
     "working_tree": "E盘主工作区；旧detached树保留。构建/证据在F盘。"
   },
@@ -13,8 +13,8 @@
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "windows_installed_new_v4_clock_compatibility_pending",
-    "current_task": "Windows76d669de已实装，Skill仍0d680d90。HPMLink16:29:12/H7交付hash和61点汇总已核对。发现宿主仅V3开放14档且全局SWD ACK误用于JTAG，固件会话已确认源码契约不兼容，待宿主修复/实测；见v042-refresh-20261031.md。4us不变，无新构建/发布。"
+    "status": "jtag_ack_candidate_delivered_hpm_hil_pending",
+    "current_task": "按固件会话分工修复全局SWD ACK误用于JTAG，保留独立四档及不确认应用语义；a8aa8a16源码451/实际隔离候选692回归通过。新候选只在原固定SDK上改3文件，原候选不变。见hpm-jtag-clock-ack-20261031.md。HPM5301实机由固件会话负责；14档SWD菜单待办。"
   },
   "milestones": [
     {
@@ -51,7 +51,7 @@
   "verification": [
     {
       "area": "0.4.2界面更新与Windows覆盖安装",
-      "result": "产品源76d669de，NSIS SHA7138eb72，覆盖exit0/两份设置保留、3642载荷一致；提取及实装47工具/九XML/38编译、原生41Web/7059FLM/4800SVD/11601寄存器通过。中英六条说明、连接页时钟、统一11px字体、4us下限及1920px单行/专注/正常退出通过，无硬件操作。版本弹层5测试；此前时钟81GUI/181Python、周期122GUI/263Python及类型/浏览器证据保留。完整Skill仍0d680d90/SHAa126d967。详见v042-refresh-20261031.md及原专项文档。"
+      "result": "产品源76d669de，NSIS SHA7138eb72，覆盖exit0/两份设置保留、3642载荷一致；提取及实装47工具/九XML/38编译、原生41Web/7059FLM/4800SVD/11601寄存器通过。中英六条说明、连接页时钟、统一11px字体、4us下限及1920px单行/专注/正常退出通过，无硬件操作。版本弹层5测试；此前时钟81GUI/181Python、周期122GUI/263Python及类型/浏览器证据保留。完整Skill仍0d680d90/SHAa126d967。详见v042-refresh-20261031.md及原专项文档。 后续a8aa8a16修复JTAG ACK：451源码/692隔离候选通过，SHAaaf9eb1b、1260旧文件不变；尚未装入Windows/Skill，见hpm-jtag-clock-ack-20261031.md。"
     },
     {
       "area": "HPM AI Skill能力核实",
@@ -95,7 +95,7 @@
     "编译完成不代表目标已下载：文件变化仅发待重载提示，不后台解析。用户明确加载/重载文件时自动停止目标采集，确认worker退出后原子换表，保持停止；失败保留旧目录/选择。不要求连接下载器；断开保留文件和选中变量但清空旧采样。公式只改变可视化，原始记录不变；不恢复旧地址采集或重放写操作。"
   ],
   "hardware": {
-    "state": "指定会话报告HPMLink V4.7.2/build16:29:12、UF2 SHAb0631561已升级并在H7验收，宿主重算hash及61点/41÷49精度汇总一致。Keil退出、采集停止、设备释放/10MHz。HPM目标未复测，不能宣称原反馈闭环；固定统计SDK不变。普通V3最终aeaa356/SHAc08e6f95已另行报告通过。",
+    "state": "HPMLink V4.7.2/build16:29:12、UF2 SHAb0631561已由指定会话完成H7复测，宿主核对hash及61点汇总。用户随后要求更换HPM5301，接线/路径由该会话协调。宿主不接硬件，新JTAG ACK SDK已交付，原统计SDK保持不变；使用前确认真实占用。",
     "installer": "Windows0.4.2已覆盖安装产品源76d669de，NSIS SHA7138eb72；3642载荷/设置、47工具/41Web、中英六条说明、连接时钟/字体/4us及正常退出通过。产物v042-refresh-20261031。完整Skill仍0d680d90/SHAa126d967；未发布。",
     "backups": "保留正式release、安装包、CI ZIP、唯一硬件证据、Skill备份及F盘缓存。含链接/不可访问目录不强删。历史获授权清理见v036-storage-cleanup-20261023.md及本机START_HERE；本地Unix清理不影响正式附件。旧detached树保留；本轮Skill备份在F盘cache/mklink-ai-probe/skill-backups。"
   },
@@ -110,7 +110,7 @@
     "nRF54L15保护闭环、全部擦除/拔插/休眠/断电、电源精度未全测。每次VCC需确认具体电压。26个无可靠扇区FLM禁用扇区操作，Bank模式须匹配。HPM5301 OTP组18/19历史永久锁定；128字读取及批准Word69 0→1已实测，其余型号/区域不继承授权，锁最后写/逐项校验，多Word不可回滚；熔丝/影子/临时锁语义未知，UART按ROM状态及回读为准。详见hpm-offline-otp-handoff.md及known-limits-20261030.md。"
   ],
   "next_actions": [
-    "修复新V4宿主时钟门控与JTAG ACK：SWD按能力开放14档；JTAG保留4/10/20/30MHz及独立确认，不要求SWD状态，也不把profile当IDE时钟已应用。契约已由固件会话源码确认，实机未测；先确认占用。4us仅下限，实测均值4.573us，不新增提示；Skill/固定SDK不变。",
+    "指定固件会话使用新candidate-7843-a8aa8a16-jtag-ack-verified做HPM5301旧/新固件同条件四档JTAG校准和功能回归；宿主JTAG ACK已修复，硬件结果待回传。V4十四档SWD菜单仍仅V3门控，待单独适配。4us下限不变；已装Windows76d669de/Skill0d680d90未更新。",
     "新V3已校准edc40176/build14:10:28，配置需明确ACK与applied/configured；无LIVE能力，采集中改频拒绝且不停任务。低频并行可明显增加DAP延迟。旧NOBITS机器码哈希结论撤回，硬件证据保留，见专项文档。",
     "公网远程服务中继为下个版本任务；本次不实施。",
     "下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。",
@@ -118,7 +118,7 @@
   ],
   "continuation_protocol": [
     "读取CURRENT_HANDOFF/v042-session-handoff并核对Git，共用codex/v0.4.2-fixes。本机Windows/Skill为0.4.2本地候选，Windows产品源76d669de/Skill归档0d680d90；正式514efb86及0.4.1资产不可变。保留上海90/95GiB、到期锁停、账本和旧detached树，不申请私钥。",
-    "Windows实装及HPMLink后续交付见v042-refresh-20261031.md。新V4十四档与JTAG ACK兼容待处理，不能把固定旧SDK的H7通过当作新安装包兼容通过。固件报告设备已释放，使用前仍确认；HPM目标未新复测。固定4us、SDK及旧证据不变。",
+    "JTAG ACK候选交付见hpm-jtag-clock-ack-20261031.md：451源码/692隔离通过，SHAaaf9eb1b，只新增/替换3文件；原f105统计候选不变。JTAG acknowledged不等于applied，SWD保留两状态，未知结果不重放。固件会话负责HPM5301硬件；14档SWD菜单仍待适配。",
     "V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。",
     "CDC995和SDK10048根因保留待排查。恢复仅同身份CDC故障5秒内；超时不自动接回/新建AI会话，主动断开立即生效，未知写入不重放。历史实例释放记录见v035-transport-recovery.md；当前硬件占用以本交接真机状态及指定固件会话为准。",
     "客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。"
