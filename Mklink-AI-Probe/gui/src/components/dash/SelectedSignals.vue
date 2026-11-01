@@ -36,7 +36,7 @@
           <div class="signal-heading">
             <button class="drag-handle" :aria-label="`移动 ${path} 到分组`" :disabled="!prefs.ready.value" :title="tr('按住拖入目标分组', 'Drag into a group')" @pointerdown="startDrag(path,$event)" @pointermove="dragMove" @pointerup="finishDrag" @pointercancel="cancelDrag" @lostpointercapture="cancelDrag" @dragstart.prevent>⠿</button>
             <input v-if="settings" type="checkbox" :value="path" v-model="checked" :aria-label="`选择 ${path}`" />
-            <button class="signal-visibility" :aria-label="`${hidden?.has(path) ? tr('显示', 'Show') : tr('隐藏', 'Hide')} ${path}`" :aria-pressed="!hidden?.has(path)" :title="tr('显示或隐藏波形', 'Show or hide waveform')" @click="$emit('visibility', path, hidden?.has(path) ?? false)"><EyeOff v-if="hidden?.has(path)" :size="14" /><Eye v-else :size="14" /></button>
+            <button class="signal-visibility" :aria-label="`${hidden?.has(path) ? tr('显示', 'Show') : tr('隐藏', 'Hide')} ${path}`" :aria-pressed="!hidden?.has(path)" :title="tr('显示或隐藏波形', 'Show or hide waveform')" @click="$emit('visibility', path, hidden?.has(path) ?? false)"><EyeOff v-if="hidden?.has(path)" :size="15" aria-hidden="true" /><Eye v-else :size="15" aria-hidden="true" /></button>
             <InlineWatchName :value="prefs.style(path).alias" :fallback="path" :title="path" :label="`重命名变量 ${path}`" :commit="name => prefs.setStyle([path],{alias:name})" /><output>{{ formatValue(values[path]) }}</output>
             <button :aria-label="`强调 ${path}`" :aria-pressed="prefs.style(path).emphasis" @click="toggleStyle(path,'emphasis')"><b>B</b></button>
             <button :aria-label="`采样点 ${path}`" :title="tr('仅显示采样点，不连线', 'Sample points only, no lines')" :aria-pressed="prefs.style(path).renderMode === 'points'" @click="toggleStyle(path,'renderMode')">{{ tr('点','Dots') }}</button>
@@ -154,6 +154,10 @@ input { width:100%; } input[type=checkbox] { width:auto; } fieldset { border:0; 
 .drop-target { outline:2px solid var(--accent); outline-offset:-2px; background:var(--surface); }
 .hint { font-size:12px; color:var(--text-muted); margin:4px; }
 button[aria-pressed=true] { color:var(--accent); border-color:var(--accent); }
+button.signal-visibility { display:grid; place-items:center; width:24px; height:24px; padding:0; border:0; border-radius:0; background:transparent; color:var(--accent); cursor:pointer; }
+button.signal-visibility:hover { background:color-mix(in srgb,var(--accent) 10%,transparent); }
+button.signal-visibility[aria-pressed=false] { color:var(--muted); }
+button.signal-visibility:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
 
 .emphasized .signal-heading { font-weight:700; } output { font-family:monospace; max-width:28%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } p[role=alert] { color:var(--danger,#e66); }
 </style>
