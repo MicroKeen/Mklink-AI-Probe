@@ -512,6 +512,7 @@ var triggerSettings = {
 var preTriggerBuffer = [];
 var postTriggerRemaining = 0;
 var autoTimeout = null;
+var triggerRearmTimer = null;
 var lastTriggerValue = null;
 var triggerCaptureData = {};
 var singleTriggerCaptureFrozen = false;
@@ -3684,6 +3685,8 @@ function endReplay() {
 }
 
 function disposeViewer() {
+  clearTimeout(autoTimeout);
+  clearTimeout(triggerRearmTimer);
   saveViewerPreferences();
   clearTimeout(viewerPreferenceTimer);
   stopWatchColumnResize();
@@ -5554,6 +5557,8 @@ function updateTriggerSourceOptions() {
 }
 
 function armTrigger() {
+  clearTimeout(triggerRearmTimer);
+  triggerRearmTimer = null;
   singleTriggerCaptureFrozen = false;
   requestBinaryDetail(true);
   triggerSettings.state = 'armed';
@@ -5585,6 +5590,8 @@ function forceTrigger() {
 }
 
 function resetTrigger() {
+  clearTimeout(triggerRearmTimer);
+  triggerRearmTimer = null;
   requestBinaryDetail(false);
   triggerSettings.state = 'idle';
   preTriggerBuffer = [];
@@ -5661,7 +5668,10 @@ function checkTrigger(point) {
       }
       updateTriggerStateBadge();
       if (triggerSettings.mode === 'normal' || triggerSettings.mode === 'auto') {
-        setTimeout(function() { armTrigger(); }, 100);
+        triggerRearmTimer = setTimeout(function() {
+          triggerRearmTimer = null;
+          if (triggerSettings.enabled && triggerSettings.state === 'done') armTrigger();
+        }, 100);
       }
     }
     return !singleTriggerCaptureFrozen;

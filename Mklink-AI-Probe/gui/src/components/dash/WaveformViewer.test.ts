@@ -3624,6 +3624,71 @@ describe('VOFA viewer typed-ring runtime', () => {
     },
   )
 
+  it.each(['rising', 'falling', 'both'].flatMap(edge => ['single', 'normal', 'auto'].map(mode => [edge, mode])))('captures %s edges in %s mode and cancels delayed rearm when disabled', async (edge, mode) => {
+    mocks.useBinaryStream.mockReturnValue({
+      ...mocks.binary, waveformBatch: shallowRef(null), envelope: shallowRef(null),
+      telemetry: shallowRef(null), state: shallowRef({phase:'stopped'}),
+      error: shallowRef(null), superwatchMetadata: shallowRef(null),
+    })
+    const runtime = await loadRttViewerRuntime('SuperWatch', 32)
+    vi.useFakeTimers()
+    try {
+      runtime.viewer.configureBinaryChannels([{name:'A'}])
+      runtime.probe.syncStatus({state:'running'})
+      const detail = vi.fn()
+      runtime.viewer.setBinaryDetailRequester(detail)
+      Object.assign(runtime.probe.trigger, {source:'A',edge,mode,level:0,preTriggerSamples:2})
+      document.getElementById('trigger-enable-btn')!.click()
+      const values = edge === 'falling' ? [2,1,-1,-2,-3] : [-2,-1,1,2,3]
+      runtime.viewer.acceptBinaryBatch({sequence:1n,timestampNs:5_000_000n,itemCount:5,channelCount:1,
+        layout:'sample-major-float32',values:Float32Array.from(values).buffer,times:Float64Array.of(1,2,3,4,5).buffer})
+      expect(runtime.probe.trigger.state).toBe('done')
+      if (mode === 'single') expect(runtime.probe.fields().A.ringBuf.toArray().map((p:any)=>p.y)).toEqual(values)
+      else {
+        vi.advanceTimersByTime(101)
+        expect(runtime.probe.trigger.state).toBe('armed')
+        runtime.viewer.acceptBinaryBatch({sequence:2n,timestampNs:10_000_000n,itemCount:5,channelCount:1,
+          layout:'sample-major-float32',values:Float32Array.from(values).buffer,times:Float64Array.of(6,7,8,9,10).buffer})
+        expect(runtime.probe.trigger.state).toBe('done')
+      }
+      document.getElementById('trigger-enable-btn')!.click()
+      expect(runtime.probe.trigger.state).toBe('idle')
+      vi.advanceTimersByTime(2500)
+      await flushPromises()
+      expect(runtime.probe.trigger).toMatchObject({enabled:false,state:'idle'})
+      expect(detail).toHaveBeenLastCalledWith(false)
+    } finally {runtime.cleanup();vi.useRealTimers()}
+  })
+
+  it.each(['auto','normal'])('handles timeout and force triggering in %s mode without a threshold crossing', async mode => {
+    mocks.useBinaryStream.mockReturnValue({
+      ...mocks.binary, waveformBatch: shallowRef(null), envelope: shallowRef(null),
+      telemetry: shallowRef(null), state: shallowRef({phase:'stopped'}),
+      error: shallowRef(null), superwatchMetadata: shallowRef(null),
+    })
+    const runtime = await loadRttViewerRuntime('SuperWatch', 32)
+    vi.useFakeTimers()
+    try {
+      runtime.viewer.configureBinaryChannels([{name:'A'}])
+      runtime.probe.syncStatus({state:'running'})
+      Object.assign(runtime.probe.trigger, {source:'A',edge:'rising',mode,level:100,preTriggerSamples:2})
+      document.getElementById('trigger-enable-btn')!.click()
+      runtime.viewer.acceptBinaryBatch({sequence:1n,timestampNs:2_000_000n,itemCount:2,channelCount:1,
+        layout:'sample-major-float32',values:Float32Array.of(1,2).buffer,times:Float64Array.of(1,2).buffer})
+      expect(runtime.probe.trigger.state).toBe('armed')
+      vi.advanceTimersByTime(2100)
+      expect(runtime.probe.trigger.state).toBe(mode === 'auto' ? 'triggered' : 'armed')
+      if (mode === 'normal') document.getElementById('trigger-force-btn')!.click()
+      expect(runtime.probe.trigger.state).toBe('triggered')
+      runtime.viewer.acceptBinaryBatch({sequence:2n,timestampNs:4_000_000n,itemCount:2,channelCount:1,
+        layout:'sample-major-float32',values:Float32Array.of(3,4).buffer,times:Float64Array.of(3,4).buffer})
+      expect(runtime.probe.trigger.state).toBe('done')
+      document.getElementById('trigger-enable-btn')!.click()
+      vi.advanceTimersByTime(2500)
+      expect(runtime.probe.trigger.state).toBe('idle')
+    } finally {runtime.cleanup();vi.useRealTimers()}
+  })
+
   it('rearms an enabled SuperWatch trigger with detail after every acquisition reset', async () => {
     mocks.useBinaryStream.mockReturnValue({
       ...mocks.binary, waveformBatch: shallowRef(null), envelope: shallowRef(null),
