@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-02T00:15:58+08:00",
+  "updated_at": "2026-11-02T00:47:00+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.4.2-fixes",
-    "head": "最新源码e475eabe压缩RTT工具栏，90相关GUI/类型/隔离Web构建通过，未打包/未浏览器复核。已安装Windows/Skill产品源仍27989d09；验收文档独立提交。",
+    "head": "产品源码1ca9b8fd：三处眼睛统一、RTT单行、四固件目录及Git备用/索引保留修正；当前正式验收进行中。已安装产品仍27989d09。",
     "remote_head": "microkeen/codex/v0.4.2-fixes；多个后续修复共用此分支。microkeen/main核对为3cc474bb。",
     "working_tree": "E盘主工作区；旧detached树保留。构建/证据在F盘。"
   },
@@ -13,8 +13,8 @@
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "v042_traffic_qualified_partially_rtt_layout_source_ready",
-    "current_task": "27989d09日志/眼睛/触发修复已构建覆盖并验收，6450Python/2skip、1182GUI通过；文件回放UI用户暂缓，Trace初始溢出1待归因。用户追加RTT三行压一行：e475eabe已完成90相关GUI/类型/隔离Web构建，尚未打包/界面复核。设备与原生进程已释放。见v042-traffic-replay.md。"
+    "status": "v042_formal_qualification_in_progress",
+    "current_task": "用户已明确授权0.4.2覆盖安装、正式验收通过后发布上位机/Skill及四固件到腾讯云/Git渠道。db7391fa基线6450Python/2skip、1182GUI通过；追加固件索引55定点通过，1ca9b8fd全量回归进行中。正式包尚未构建/安装/发布。新实机/UI验收须保留历史Trace溢出失败证据。"
   },
   "milestones": [
     {
@@ -51,7 +51,7 @@
   "verification": [
     {
       "area": "0.4.2日志/显隐/触发及安装资格",
-      "result": "27989d09：6450Python/2可选skip、1182GUI、生产构建/Windows覆盖及Skill同步通过；3647载荷/2设置/2647 Skill/5340用户文件，协议53/56工具/126能力一致。HPM RTT73728B上行/286B下行日志精确，Watch31628记录/四波形及眼睛双向同步、单次/普通/自动/强制/关闭触发通过；虚拟串口双向4096B及GUI日志通过。14 JTAG、完整镜像回读、RAM/XML六GPIO、GUI在线256B读取通过。文件回放UI用户暂缓；Trace初始溢出1不计零丢失，HardFault限ARM。正常退出11进程及端口释放。旧abf26c5a烧录/临时文件清理/三流恢复、8eb2a242的V2V3普通V4证据不外推。见v042-traffic-replay.md及hpmlink-product-online-files-20261101.md。 追加e475eabe仅RTT工具栏压缩，90组件/类型/Web通过；尚未打包和浏览器复核，不沿用旧实机资格。"
+      "result": "27989d09：6450Python/2可选skip、1182GUI、生产构建/Windows覆盖及Skill同步通过；3647载荷/2设置/2647 Skill/5340用户文件，协议53/56工具/126能力一致。HPM RTT73728B上行/286B下行日志精确，Watch31628记录/四波形及眼睛双向同步、单次/普通/自动/强制/关闭触发通过；虚拟串口双向4096B及GUI日志通过。14 JTAG、完整镜像回读、RAM/XML六GPIO、GUI在线256B读取通过。文件回放UI用户暂缓；Trace初始溢出1不计零丢失，HardFault限ARM。正常退出11进程及端口释放。旧abf26c5a烧录/临时文件清理/三流恢复、8eb2a242的V2V3普通V4证据不外推。见v042-traffic-replay.md及hpmlink-product-online-files-20261101.md。 追加e475eabe仅RTT工具栏压缩，90组件/类型/Web通过；尚未打包和浏览器复核，不沿用旧实机资格。 db7391fa全量基线同数通过；追加固件索引55项通过。日志回放旧安装已在浏览器加载/播放/拖动/HEX预检，新包仍需复验。"
     },
     {
       "area": "HPM AI Skill能力核实",
@@ -83,19 +83,19 @@
     }
   ],
   "decisions": [
-    "0.4.1正式源514efb86及资产不可变。codex/v0.4.2-fixes共用；Windows/Skill0.4.2同源27989d09已覆盖，NSIS SHA41313c83、Skill SHA931df8c2，协议53/56工具/126能力。正式发布/合并须明确指令，公网中继延期。",
+    "0.4.1正式源514efb86及资产不可变。继续codex/v0.4.2-fixes。2026-11-02用户明确授权0.4.2覆盖安装、正式验收通过后发布Windows/完整Skill和V2.9.3/V3.6.8/普通V4.7.2/HPMLinkV4.7.2；含必要PR集成及既有密钥签名、腾讯云/Git附件与索引。验收通过前不激活公开更新。公网中继延期。",
     "后台协议 53：一个 GUI 客户端持有一个固定后台，同窗口切换只改下载器，RTT/Watch/Trace 跟随当前设备并清空旧目标状态；另开客户端才建独立后台。已有 URL 的额外页面共享该后台。工程上下文固定，换工程须停止原后台后重开。",
     "物理探针唯一 OS 所有权、USB 身份核对和 epoch 隔离保留。GUI/AI 明确断开或切换自动停止采集、排空在途操作并释放端口；旧会话不得跨设备，未知结果不得自动重放，不偷取其他后台占用。MCP disconnect 物理断开，detach 仅退出自身；独立 UART 保留。",
     "SuperWatch 变量写入只认写应答，不做自动回读；烧录/显式内存校验仍保留，真实写错误不得吞掉或重放。外设 ID 基于 Pack 版本/芯片/SVD 相对路径；失效选择不得阻断物理连接，无法迁移时重选。 在线型号提供脱机/外设默认值，各页可独立修改；Pack操作完成自动刷新。下载先预留唯一物理身份，不要求先连接目标；自身预留不重建下载表单，其他设备切换仍清理。 HPM SDK的*_svd.xml按CMSIS-SVD支持；九系列共用目录不要求精确型号，精确Pack优先，型号扩展可手动导入XML；SES CPU寄存器XML不作为外设SVD。保留厂家原始字节/许可证及SHA校验。dump停止根据DUMP_STOP能力验证回执，旧固件错误不得凭身份token误报READY；启动命令回显独立计数，duration尾部不算完整样本。",
     "腾讯云优先、GitHub/Gitee备用；上海私有COS签短链，90GiB告警/95GiB锁停，保留累计账本。套餐到期北京时间2026-11-26零点，未核验续费不恢复；监控延迟使阈值非账单上限。只用现有控制台/TAT，不申请私钥/SSH。preview撤下、旧桶获授权清理，香港桶已删除，只留上海；叠加110GB不提高90/95阈值。2026-10-25停止旧Aladdin-Wang GitHub的新发布，保留历史资产；新版本仅MicroKeen GitHub和既有Gitee。旧0.4.0草稿转换未完成，不自动操作。云迁移和Dot确认见v040-release-handoff.md，当前正式版见v041-release-handoff.md。",
-    "测试直接使用用户原工程及 build/keil/Obj ELF，允许修改且无需备份还原，不复制工程；硬件路径只留本地。HPM 使用 ROM API，不使用 FLM/第二次通用 SWD reset；VCC 每次改动需确认具体电压，固件修改另开会话。 HPM AI可选固件声明的JTAG档位；旧4/10/20/30、新能力14档，默认10MHz。SWD/JTAG配置独立，不声称切换接口或物理测量。固件修复由用户指定会话01a186cd-c52a-7ea0-af29-8de6775d143b负责，用户后续允许提供本会话ID、通知和更新固件；指定会话已据此刷入本次私有测试包。双向协同核对占用，本授权不含正式发布。",
+    "测试直接使用用户原工程及 build/keil/Obj ELF，允许修改且无需备份还原，不复制工程；硬件路径只留本地。HPM 使用 ROM API，不使用 FLM/第二次通用 SWD reset；VCC 每次改动需确认具体电压，固件修改另开会话。 HPM AI可选固件声明的JTAG档位；旧4/10/20/30、新能力14档，默认10MHz。SWD/JTAG配置独立，不声称切换接口或物理测量。固件修复由用户指定会话01a186cd-c52a-7ea0-af29-8de6775d143b负责，用户后续允许提供本会话ID、通知和更新固件；指定会话已据此刷入本次私有测试包。双向协同核对占用，本轮明确发布授权已包含指定四包，验收通过后统一发布。",
     "默认只构建Windows；仅明确要求Linux/macOS时才构建或触发对应原生CI。完整Skill仍须FLM/Pack资格检查。构建使用scripts/build_workspace.ps1和F:/MKLink-Build，保留正式包、唯一证据、依赖与缓存。历史获授权本地Unix清理不影响线上正式附件；过时可再生产物仅依清理授权处理，链接/不可访问目录不强删。",
     "工程上下文固定；物理唯一OS锁/身份/epoch保留。被动枚举不遍历占用设备；普通内存身份检查同活跃CDC最多复用250ms，错误/恢复即失效，生命周期仍全枚举。共享RTT/SV同CB掩码合并、独立有界队列；bit7增量，bit8协商480，短帧含CRC≤512；bit6独立4096读不变，旧量子128。未知操作不重放，失败不自动raw回退，worker退出才关串口，背压/丢失不隐瞒。指定固件会话负责实机，双方协调占用，宿主只导出不可变源码/离线验收；清除临时日志代码，保留移植说明。",
     "原MK-Firmware及用户固件工程改动保留，不自动恢复旧备份。2026-10-18授权的0.3.5、V3.6.5/V4.6.9发布已完成；未知操作不重放。用户要求未解决项保留交接，未扩大验收或宣称客户故障已闭环。",
     "编译完成不代表目标已下载：文件变化仅发待重载提示，不后台解析。用户明确加载/重载文件时自动停止目标采集，确认worker退出后原子换表，保持停止；失败保留旧目录/选择。不要求连接下载器；断开保留文件和选中变量但清空旧采样。公式只改变可视化，原始记录不变；不恢复旧地址采集或重放写操作。"
   ],
   "hardware": {
-    "state": "HPMLink V4/HPM5301，f06af597/build22:37:10未改；目标52988B镜像保持运行、负载标志0、三流和测试串口停止、JTAG10MHz；11个自有原生进程及端口释放。无VCC/OTP/烧写操作。初始Trace溢出1已通知指定固件会话。",
+    "state": "HPMLink V4/HPM5301，f06af597/build22:37:10；原生旧包当前运行，JTAG当前用户保存/应用30MHz，实测须保存恢复实际值。指定固件会话已准备SystemView自然排空/单次启动脚本，等待新包安装后明确交接，不并发占用。",
     "installer": "Windows/Skill0.4.2产品源27989d09已覆盖，NSIS SHA41313c83/Skill SHA931df8c2；3647载荷/2设置/2647 Skill/5340用户文件核对，56MCP/126能力/原生退出通过。证据v042-traffic-replay-20261101/candidate，未发布。",
     "backups": "保留正式release、安装包、CI ZIP、唯一硬件证据、Skill备份及F盘缓存。含链接/不可访问目录不强删。历史获授权清理见v036-storage-cleanup-20261023.md及本机START_HERE；本地Unix清理不影响正式附件。旧detached树保留；本轮Skill备份在F盘cache/mklink-ai-probe/skill-backups。"
   },
@@ -110,11 +110,11 @@
     "nRF54L15保护闭环、全部擦除/拔插/休眠/断电、电源精度未全测。每次VCC需确认具体电压。26个无可靠扇区FLM禁用扇区操作，Bank模式须匹配。HPM5301 OTP组18/19历史永久锁定；128字读取及批准Word69 0→1已实测，其余型号/区域不继承授权，锁最后写/逐项校验，多Word不可回滚；熔丝/影子/临时锁语义未知，UART按ROM状态及回读为准。详见hpm-offline-otp-handoff.md及known-limits-20261030.md。"
   ],
   "next_actions": [
-    "先复核e475eabe RTT单行布局；下次构建带入（当前安装/Skill仍27989d09）。继续文件回放UI和原生目录验收，用户本轮暂缓；HPM HardFault/Trace通道选择及初始溢出另评估。HPM GUI烧录/脱机及新清理V2V3普通V4仍待复验。正式发布/合并须明确指令。",
-    "V3修复已本地提交2102f601，未推送；发布前核实远端同步及完整构建来源。V4 receive假成功由250c4445改为不支持，真实Pika绑定和物理发送未测；接收未实现，Vref保持禁用。V4构建依赖Arm-2D/MicroBoot既有本地补丁。",
-    "公网远程服务中继为下个版本任务；本次不实施。",
-    "下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。",
-    "如需减少Windows未知发布者提示，需用户另行提供/办理可信代码签名身份；当前无证书，不重发相同未签名包。下次先核对当前Git及真实硬件，不重复已完成的发布/云迁移。"
+    "完成1ca9b8fd最终全量回归及同源Windows/Skill候选构建、覆盖安装；验证三处眼睛样式/同步、RTT单行、双日志回放和原生目录选择。证据F盘v042-formal-20261102。",
+    "新包HPM5301验收RTT/Watch/触发、XML/内存、在线下载自动恢复和临时文件清理。交接指定固件会话运行Trace自然排空/单次START，保留旧overflow1/drop3124失败报告；不得清零计数。",
+    "固件来源：V2主干ac0c780b，V3 PR8主干8c162351，V4/HPMLink PR17主干840ce328；四包哈希未变，补丁源码完整归档。核对最终证明和适用实机范围。",
+    "通过后精确SHA审阅PR66/CI并合main，从干净远端一致main签名重建Windows/Skill/SiteAgent，验证七资产、覆盖安装、公开下载及Gitee回退。",
+    "腾讯云服务器已开；当前stable0.4.1/28资产。保留90/95GiB、周期/账本及11月26日到期，使用现有控制台/TAT，新增正式资产及路由，全部校验后最后激活三渠道与独立固件索引并更新网站；不新建密钥。"
   ],
   "continuation_protocol": [
     "读取CURRENT_HANDOFF/v042-session-handoff并核对Git，共用codex/v0.4.2-fixes。源码e475eabe工具栏压缩未打包；本机Windows/Skill为27989d09的0.4.2候选，协议53一致。正式514efb86及0.4.1资产不可变；保留上海90/95、到期锁停、账本和旧detached树。",

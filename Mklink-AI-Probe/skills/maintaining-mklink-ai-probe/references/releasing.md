@@ -180,8 +180,11 @@ python _maintainer/firmware/publish_firmware.py
 The command validates UF2 framing, selects the newest file for each exact
 family/model, rejects version rollback and same-version content changes, and
 verifies the public GitHub/Gitee assets by size and SHA-256. It adds immutable
-files to the `firmware-assets` Release on both providers and force-publishes
-`firmware/latest.json` last. Re-running it with unchanged files is safe.
+files to the `firmware-assets` Release on both providers and updates
+`firmware/latest.json` last with a fast-forward push. Existing branch history,
+the independent `latest-v2.json`, and other files are preserved. Both providers
+are validated before either index changes; a retry also reconciles a partial
+publication. Re-running it with unchanged files is safe.
 
 Use `--dry-run` for local validation. Do not add UF2 files to the NSIS bundle or
 the public Skill archive; installed clients resolve the independent manifest
