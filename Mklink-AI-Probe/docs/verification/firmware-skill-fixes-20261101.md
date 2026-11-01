@@ -15,7 +15,7 @@
 | 实时连接、探针诊断、ISP 链路诊断缺失 | probe_presence 区分实时与缓存、负数保留未知；probe_diagnostics 有界读取探针堆/栈/复位报告；isp_link_probe 占用共享 UART 资源，限时查询，不声称烧录成功 |
 | 探针扫描/蜂鸣/Vref 配置缺失 | probe_control 提供白名单控制和明确应答；允许关闭 Vref 跟随，开启暂拒绝并说明缺少电压确认契约 |
 | 幽灵 capture_rtt、Flash 读取需 FLM、失效 save 示例 | 移除/修正，专用流程文档集中说明实际 MCP schema 和边界 |
-| 本地 Skill 长期落后 | 本轮生成完整包并覆盖，最终安装清单与哈希另记于本机 installation.json |
+| 本地 Skill 长期落后 | cafe835f 完整包已覆盖；2,644 个安装文件一致，5,340 个用户文件保留，安装后 MCP schema 与源码一致 |
 
 共享后台协议升为 53，拒绝与协议 52 的旧桌面后台混用。仅覆盖 Skill 不替换旧 Windows
 安装器；需要重启 MCP 使用新 Skill 后台，桌面新入口需下一次重新构建安装。
@@ -32,6 +32,16 @@
 - 证据目录：`firmware-skill-fixes-20261101`，含回归 XML、Web、打包/安装校验结果。
   wrapper 遇测试链接按规则保留目录，没有强制删除。
 - 本轮无 USB/目标/VCC/OTP 实际操作；这些是软件回归和界面验证，不替代新入口的硬件验收。
+
+## 完整 Skill 本地覆盖
+
+- 产品源码：`cafe835f464f4629ac0865ca361374db56ef389c`，版本 0.4.2，本地测试包。
+- 包名：`Mklink-AI-Probe-v0.4.2-cafe835f-skill-test.zip`，100,263,872 字节。
+- SHA-256：`717cfdfbb518915b1eb53275258f1ae048cbb8792625b9d740b691b8bb6b71db`。
+- 完整资源资格检查通过：7,059 个 FLM 目标、2,224 个算法文件、4,800 个 SVD 目标及九个 HPM XML 系列；生产 Web 41 个文件。
+- 原 Skill 已备份为 `mklink-ai-probe-0.4.2-1793532591.zip`，位于构建根 cache 的 skill-backups；本地 installation.json 记录绝对路径。
+- 覆盖后逐一核对 2,644 个安装文件及 5,340 个原有用户文件；安装后 56 个 MCP 工具、126 项能力、协议 53、完整工具 schema 与源码一致，Skill 格式校验通过。
+- Windows 已装应用仍为此前 8a09b32e/协议 52；本轮未重建或覆盖 Windows 安装器。新 Skill 需要重启 MCP，使用自己的兼容后台。
 
 ## 固件边界
 
