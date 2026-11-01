@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-31T18:16:39+08:00",
+  "updated_at": "2026-11-01T19:09:39+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.4.2-fixes",
-    "head": "产品源8a09b32e；离线14档/90px接口框/旧固件升级提示，392Python/65GUI通过，Windows覆盖安装完成，NSIS SHA868b146c。固定bd636 SDK及固件SHAebbc11f2保持。",
+    "head": "审计基线c3479a23；Windows产品源8a09b32e/完整Skill0d680d90不变。20261101仅审计文档，74固件入口/47 MCP/296回归，未修复或重建。",
     "remote_head": "microkeen/codex/v0.4.2-fixes；多个后续修复共用此分支。microkeen/main核对为3cc474bb。",
     "working_tree": "E盘主工作区；旧detached树保留。构建/证据在F盘。"
   },
@@ -13,8 +13,8 @@
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "clock_menu_upgrade_prompt_installed_verified",
-    "current_task": "用户追加的离线完整14档、90px接口框、旧固件更新提示已修复，Windows8a09b32e本地包覆盖安装及真实界面/冻结/退出验证完成。旧固件提示按钮只导航升级页，不下载/刷写。安装版首次枚举3秒超时保留，复查1.134秒通过。见v042-clock-install-20261031.md；未发布。"
+    "status": "firmware_skill_command_audit_complete",
+    "current_task": "已核对固件4dcdb8a的74入口、MUX19请求及HPM_DEBUG10操作；源码/已装Skill均47工具，能力107/106。确认时钟文档过期、Skill缺clock_hz、脱机仍限四档、供电/ISP/OTP等共享MCP缺口及YMODEM接收空实现；296回归通过，无硬件操作。见firmware-skill-command-audit-20261101.md；仅审计未实施，固件空实现已通知指定会话。"
   },
   "milestones": [
     {
@@ -55,7 +55,7 @@
     },
     {
       "area": "HPM AI Skill能力核实",
-      "result": "源05e73101：1139相关+68包/文档测试；Flash49700B一致、ELF1528变量/360MHz、SVD UART0、JTAG4/10、RTT/Watch/dump通过。SystemView U32修复38351事件；新固件复测22155事件零丢弃。指定会话依新授权更新V4.7.2/build17:19:37后，共享MCP暂停/寄存器/真实断点cause2/单步cause4/恢复运行通过，x31同值写回正确。Skill SHA44df3e58、2625文件/7059FLM/4800SVD校验，全局47工具并保留5339用户文件。无目标烧录/VCC/OTP/发布。见hpm-skill-audit-20261029.md。"
+      "result": "20261101审计74固件入口、19MUX请求、HPM_DEBUG10操作；47工具源码/安装schema核对，107/106能力，296回归通过。发现Skill调频参数/文档过期、脱机时钟限制、共享供电/ISP/OTP缺口、Flash读取文档错误、YMODEM接收空壳；无硬件。见firmware-skill-command-audit-20261101.md。此前05e73101的1139回归及HPM5301暂停/寄存器/断点/单步/采集实测保留于hpm-skill-audit-20261029.md。"
     },
     {
       "area": "RTT自动恢复与在线静默收尾",
@@ -110,7 +110,7 @@
     "nRF54L15保护闭环、全部擦除/拔插/休眠/断电、电源精度未全测。每次VCC需确认具体电压。26个无可靠扇区FLM禁用扇区操作，Bank模式须匹配。HPM5301 OTP组18/19历史永久锁定；128字读取及批准Word69 0→1已实测，其余型号/区域不继承授权，锁最后写/逐项校验，多Word不可回滚；熔丝/影子/临时锁语义未知，UART按ROM状态及回读为准。详见hpm-offline-otp-handoff.md及known-limits-20261030.md。"
   ],
   "next_actions": [
-    "本轮Windows8a09b32e覆盖安装验收已完成，等待用户测试反馈或下一任务；离线完整14档保存不解锁旧固件，连接后按实际能力校验并提示更新。旧固件按钮仅导航。不自动更新固件、重建Skill或发布。",
+    "等待用户指定审计修复范围。优先同步Skill/schema时钟说明及修复脱机/旧SDK首次时钟限制，再补受控共享MCP入口；YMODEM接收空实现已通知指定固件会话。Windows8a09b32e/Skill0d680d90保持，未打包/升级/发布。",
     "新V3已校准edc40176/build14:10:28，配置需明确ACK与applied/configured；无LIVE能力，采集中改频拒绝且不停任务。低频并行可明显增加DAP延迟。旧NOBITS机器码哈希结论撤回，硬件证据保留，见专项文档。",
     "公网远程服务中继为下个版本任务；本次不实施。",
     "下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。",

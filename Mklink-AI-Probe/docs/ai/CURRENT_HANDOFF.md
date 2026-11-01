@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-10-31T18:16:39+08:00`
+- 更新时间：`2026-11-01T19:09:39+08:00`
 - 分支：`codex/v0.4.2-fixes`
-- HEAD：`产品源8a09b32e；离线14档/90px接口框/旧固件升级提示，392Python/65GUI通过，Windows覆盖安装完成，NSIS SHA868b146c。固定bd636 SDK及固件SHAebbc11f2保持。`
+- HEAD：`审计基线c3479a23；Windows产品源8a09b32e/完整Skill0d680d90不变。20261101仅审计文档，74固件入口/47 MCP/296回归，未修复或重建。`
 - 远端 HEAD：`microkeen/codex/v0.4.2-fixes；多个后续修复共用此分支。microkeen/main核对为3cc474bb。`
 - 工作树：E盘主工作区；旧detached树保留。构建/证据在F盘。
-- 当前任务：用户追加的离线完整14档、90px接口框、旧固件更新提示已修复，Windows8a09b32e本地包覆盖安装及真实界面/冻结/退出验证完成。旧固件提示按钮只导航升级页，不下载/刷写。安装版首次枚举3秒超时保留，复查1.134秒通过。见v042-clock-install-20261031.md；未发布。
-- 状态：`clock_menu_upgrade_prompt_installed_verified`
+- 当前任务：已核对固件4dcdb8a的74入口、MUX19请求及HPM_DEBUG10操作；源码/已装Skill均47工具，能力107/106。确认时钟文档过期、Skill缺clock_hz、脱机仍限四档、供电/ISP/OTP等共享MCP缺口及YMODEM接收空实现；296回归通过，无硬件操作。见firmware-skill-command-audit-20261101.md；仅审计未实施，固件空实现已通知指定会话。
+- 状态：`firmware_skill_command_audit_complete`
 
 ## 里程碑
 
@@ -24,7 +24,7 @@
 ## 验证证据
 
 - **0.4.2界面更新与Windows覆盖安装**：Windows8a09b32e/NSIS SHA868b146c已覆盖，3642文件一致/两设置保留，47工具/41Web及原生退出通过。392Python/65GUI；真实页面两接口14档、90px接口框、JTAG5k刷新独立保存通过；旧固件提示和导航隔离浏览器通过。首次枚举3秒超时保留，复查1.134秒。见v042-clock-install-20261031.md；此前bd636源408/SDK813及限定HPM5301矩阵见clock-interfaces-20261031.md。完整Skill0d680d90/SHAa126d967不变。
-- **HPM AI Skill能力核实**：源05e73101：1139相关+68包/文档测试；Flash49700B一致、ELF1528变量/360MHz、SVD UART0、JTAG4/10、RTT/Watch/dump通过。SystemView U32修复38351事件；新固件复测22155事件零丢弃。指定会话依新授权更新V4.7.2/build17:19:37后，共享MCP暂停/寄存器/真实断点cause2/单步cause4/恢复运行通过，x31同值写回正确。Skill SHA44df3e58、2625文件/7059FLM/4800SVD校验，全局47工具并保留5339用户文件。无目标烧录/VCC/OTP/发布。见hpm-skill-audit-20261029.md。
+- **HPM AI Skill能力核实**：20261101审计74固件入口、19MUX请求、HPM_DEBUG10操作；47工具源码/安装schema核对，107/106能力，296回归通过。发现Skill调频参数/文档过期、脱机时钟限制、共享供电/ISP/OTP缺口、Flash读取文档错误、YMODEM接收空壳；无硬件。见firmware-skill-command-audit-20261101.md。此前05e73101的1139回归及HPM5301暂停/寄存器/断点/单步/采集实测保留于hpm-skill-audit-20261029.md。
 - **RTT自动恢复与在线静默收尾**：14417715：347相关+17发现测试通过。V4/HPM5301连续两次49700B烧录校验成功，自动暂停/恢复RTT与SuperWatch、零恢复错误；新增RTT349/466字节、Watch3005/3712周期且零读取错。Windows NSIS SHA56830303，覆盖exit0、3627载荷一致、冻结MCP/41Web/正常退出通过；完整Skill SHAbb05fbde、2625文件/47工具已同步。仍0.4.1未发布。旧静默面板修复d1cf16ec的124GUI/29Python证据保留。见rtt-auto-restore-20261030.md及online-flash-receipt-20261029.md。
 - **Linux/macOS 0.4.1测试包**：Linux源a6bdacbc/CI40637027269、Mac arm64源eefc6842/CI40640511140：USB各58通过/1skip，冻结CLI/MCP/健康/Web/退出通过。DEB SHA7309f377、DMG SHA56dc8e0a，均旧0.4.1未带后续修复；Mac ad-hoc未公证，实机安装/UI/USB待测。见linux-deb-test-20261028.md、macos-arm64-test-20261028.md。
 - **安装器旧元数据自动清理**：源cb30b703：62定点、5577Python/2skip、1133GUI和NSIS通过。八文件旧dist-info复现误报0.3.6，覆盖exit0清理后识别0.4.1；207保留文件及3626载荷一致，冻结/原生/退出通过。PR63已集成下版，正式0.4.1不变。见installer-metadata-cleanup-20261027.md。
@@ -53,7 +53,7 @@
 
 ## 下一动作
 
-1. 本轮Windows8a09b32e覆盖安装验收已完成，等待用户测试反馈或下一任务；离线完整14档保存不解锁旧固件，连接后按实际能力校验并提示更新。旧固件按钮仅导航。不自动更新固件、重建Skill或发布。
+1. 等待用户指定审计修复范围。优先同步Skill/schema时钟说明及修复脱机/旧SDK首次时钟限制，再补受控共享MCP入口；YMODEM接收空实现已通知指定固件会话。Windows8a09b32e/Skill0d680d90保持，未打包/升级/发布。
 2. 新V3已校准edc40176/build14:10:28，配置需明确ACK与applied/configured；无LIVE能力，采集中改频拒绝且不停任务。低频并行可明显增加DAP延迟。旧NOBITS机器码哈希结论撤回，硬件证据保留，见专项文档。
 3. 公网远程服务中继为下个版本任务；本次不实施。
 4. 下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。
