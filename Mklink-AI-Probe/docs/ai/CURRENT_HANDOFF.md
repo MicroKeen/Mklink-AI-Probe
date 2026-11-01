@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-11-01T21:44:00+08:00`
+- 更新时间：`2026-11-01T22:09:56+08:00`
 - 分支：`codex/v0.4.2-fixes`
-- HEAD：`8eb2a242：RTT/SV就绪恢复、MSC退出MUX、V2型号提示修复；同源Windows/Skill已覆盖，V2限定实机验收完成。`
+- HEAD：`8eb2a242产品源；Windows/Skill同源已覆盖，V2与新V3限定实机验收完成，后续为资格文档提交。`
 - 远端 HEAD：`microkeen/codex/v0.4.2-fixes；多个后续修复共用此分支。microkeen/main核对为3cc474bb。`
 - 工作树：E盘主工作区；旧detached树保留。构建/证据在F盘。
-- 当前任务：V2 V2.9.3限定验收完成并释放硬件，通知用户换V3。6404 Python/2skip、1165 GUI及新包实装通过；最新V4两候选需按新哈希重测，见v042-release-qualification-20261101.md。
-- 状态：`v042_v2_passed_await_v3`
+- 当前任务：V2及V3限定验收完成并释放，通知用户换V4。V3补齐get_memory(-2)，已单次升级SHA44b1aff2并用安装版重新通过全部本轮项目；V4两候选待真机。见v042-release-qualification-20261101.md。
+- 状态：`v042_v2_v3_passed_await_v4`
 
 ## 里程碑
 
@@ -23,7 +23,7 @@
 
 ## 验证证据
 
-- **0.4.2发布资格：V2完成**：源8eb2a242完整6404Python/2可选observe跳过、1165GUI通过；Windows/Skill同源覆盖、3644/2644文件及56工具/126能力一致。V2 V2.9.3/SHA08ab4061的14时钟、内存/flush、AXF、halt/step/双断点、真实HardFault、RTT上下行、三流并行、SDK与GUI烧录恢复/全回读、冻结后台脱机通过。目标继续运行，采集/标志/断点清空，后台已退出。限定范围与测试脚本问题见v042-release-qualification-20261101.md；V3/V4未验收，不构成发布批准。
+- **0.4.2发布资格：V2与V3完成**：源8eb2a242完整6404Python/2可选observe跳过、1165GUI通过；Windows/Skill同源覆盖、3644/2644文件、56工具/126能力一致。V2 SHA08ab4061通过。V3旧c08e6f95缺复位报告，指定固件会话补齐并升级44b1aff2/build21:53:19；安装版重新通过MCP堆/复位/栈诊断、14时钟、RAM/flush/AXF、halt/step/双断点、真实HardFault、RTT双向、三流、SDK/GUI/冻结脱机烧录全223048B回读及采集恢复。最终目标运行、三流/标志/FPB清空、后台已退出。原始失败保留；V4未验收，不构成发布批准。
 - **HPM AI Skill能力核实**：审计修复749Python/65GUI、生产Web及浏览器HPM JTAG 5k/排除8M通过；完整Skill源cafe835f/SHA717cfdfb已覆盖，2644安装文件一致、5340用户文件保留；56 MCP/126能力和协议53安装后schema一致、Skill验证通过。时钟协商/离线档位门禁、探针控制/诊断/供电、离线/ISP/OTP入口及文档补齐。无USB操作；固件空接收/Vref开启待指定会话。见firmware-skill-fixes-20261101.md。
 - **RTT自动恢复与在线静默收尾**：14417715：347相关+17发现测试通过。V4/HPM5301连续两次49700B烧录校验成功，自动暂停/恢复RTT与SuperWatch、零恢复错误；新增RTT349/466字节、Watch3005/3712周期且零读取错。Windows NSIS SHA56830303，覆盖exit0、3627载荷一致、冻结MCP/41Web/正常退出通过；完整Skill SHAbb05fbde、2625文件/47工具已同步。仍0.4.1未发布。旧静默面板修复d1cf16ec的124GUI/29Python证据保留。见rtt-auto-restore-20261030.md及online-flash-receipt-20261029.md。
 - **Linux/macOS 0.4.1测试包**：Linux源a6bdacbc/CI40637027269、Mac arm64源eefc6842/CI40640511140：USB各58通过/1skip，冻结CLI/MCP/健康/Web/退出通过。DEB SHA7309f377、DMG SHA56dc8e0a，均旧0.4.1未带后续修复；Mac ad-hoc未公证，实机安装/UI/USB待测。见linux-deb-test-20261028.md、macos-arm64-test-20261028.md。
@@ -47,14 +47,14 @@
 
 ## 真机环境
 
-- **state**：2026-11-01 V2 V2.9.3/SHA08ab4061与STM32H743限定资格完成，后台/USB已释放；原工程223048B镜像回读一致，三流停止、load/sv/fault测试标志0、FPB清空、tick运行。等待用户换V3，接入后重查身份与镜像。V4新候选普通79a72f68/HPMLink dc9c36b4均需重测，旧记录不继承。
+- **state**：2026-11-01 V2 SHA08ab4061及V3新SHA44b1aff2/build21:53:19与STM32H743限定验收完成；后台/USB均释放，三流停止、测试标志0、FPB清空、原223048B镜像运行。等待用户换V4后重查身份。普通V4 SHA79a72f68、HPMLink dc9c36b4均待测，旧结果不继承。
 - **installer**：Windows/完整Skill0.4.2同源8eb2a242，NSIS SHA9625d4f1/Skill SHA059d7d4d已覆盖；3644载荷/2设置/2644 Skill/5340用户文件、56工具/126能力及原生退出通过。证据v042-release-qualification-20261101/candidate-8eb2a242，未发布。
 - **backups**：保留正式release、安装包、CI ZIP、唯一硬件证据、Skill备份及F盘缓存。含链接/不可访问目录不强删。历史获授权清理见v036-storage-cleanup-20261023.md及本机START_HERE；本地Unix清理不影响正式附件。旧detached树保留；本轮Skill备份在F盘cache/mklink-ai-probe/skill-backups。
 
 ## 下一动作
 
-1. 通知用户换V3后核对最新V3.6.8/SHA c08e6f95并测试；普通V4 SHA79a72f68、HPMLink SHAdc9c36b4待各自真机。固件交指定会话；发布/合并需明确指令。
-2. V4 YMODEM receive假成功已由固件250c4445修正为不支持，接收功能仍未实现；Vref auto-follow保持禁用。固件构建依赖既有Arm-2D/MicroBoot本地补丁，完整来源记录与新哈希重测是后续资格条件。
+1. 通知用户换V4，按实际普通/HPMLink型号核对候选（79a72f68/dc9c36b4）后逐台验收。V3已升级44b1aff2并完成限定复验。固件交指定会话；发布/合并需明确指令。
+2. V3固件分支codex/v3-reset-diagnostics基础aeaa3567，验收时修复尚未提交/推送；已请指定会话继续源码收尾，发布前核对候选构建源。V4 receive假成功已由250c4445改为不支持，接收仍未实现；Vref保持禁用。V4构建依赖既有Arm-2D/MicroBoot本地补丁，须核实完整来源。
 3. 公网远程服务中继为下个版本任务；本次不实施。
 4. 下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。
 5. 如需减少Windows未知发布者提示，需用户另行提供/办理可信代码签名身份；当前无证书，不重发相同未签名包。下次先核对当前Git及真实硬件，不重复已完成的发布/云迁移。
@@ -73,7 +73,7 @@
 ## 延续协议
 
 - 读取CURRENT_HANDOFF/v042-session-handoff并核对Git，共用codex/v0.4.2-fixes。本机Windows/Skill为0.4.2测试候选8eb2a242，协议53一致；正式514efb86及0.4.1资产不可变。保留上海90/95GiB、到期锁停、账本及旧detached树，不申请私钥。
-- 最新资格见v042-release-qualification-20261101.md：V2限定范围完成并释放，待换V3；旧clock/skill-aligned安装证据不能代替最新固件与新包复验。GUI读后空闲旧会话被释放，安装版Skill及冻结后台脱机各有独立证据。
+- 最新资格见v042-release-qualification-20261101.md：V2与新V3完成并释放，待换V4；旧安装/固件证据不代替最新候选。V3旧包缺-2，修复新哈希独立复验通过，初始失败仍保留。
 - V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。
 - CDC995和SDK10048根因保留待排查。恢复仅同身份CDC故障5秒内；超时不自动接回/新建AI会话，主动断开立即生效，未知写入不重放。历史实例释放记录见v035-transport-recovery.md；当前硬件占用以本交接真机状态及指定固件会话为准。
 - 客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。
