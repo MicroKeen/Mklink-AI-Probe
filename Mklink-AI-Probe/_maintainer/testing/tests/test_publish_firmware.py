@@ -150,3 +150,72 @@ def test_v2_retired_repository_rejected_before_any_repository_access(tmp_path):
     from _maintainer.firmware.publish_v2_firmware import publish
     with pytest.raises(ValueError, match="Legacy GitHub publication is retired"):
         publish(tmp_path / "missing.rbl", ["MicroKeen/Mklink-AI-Probe", "Aladdin-Wang/Mklink-AI-Probe"], apply=True)
+
+
+def test_channel_update_preserves_v2_and_recovers_partial_publication(publisher, tmp_path, monkeypatch):
+    import json
+    import subprocess
+
+    def git(*args, cwd=None):
+        return subprocess.run(['git', *map(str, args)], cwd=cwd, text=True,
+                              capture_output=True, check=True)
+
+    _uf2(tmp_path / 'MicroLink_V3.3.7.uf2')
+    local = publisher.scan_firmware_directory(tmp_path)
+    document, _ = publisher.merge_manifest(None, local, _urls(local), published_at='now')
+    previous = {**document, 'firmwares': [{**document['firmwares'][0],
+        'name': 'MicroLink_V3.3.6.uf2', 'version': 'V3.3.6', 'sha256': 'b' * 64}]}
+    remotes = {}
+    for provider in ('github', 'gitee'):
+        bare = tmp_path / (provider + '.git')
+        git('init', '--bare', bare)
+        seed = tmp_path / (provider + '-seed')
+        git('init', '--initial-branch=firmware', seed)
+        git('config', 'user.name', 'Test', cwd=seed)
+        git('config', 'user.email', 'test@example.test', cwd=seed)
+        (seed/'latest.json').write_text(json.dumps(previous), encoding='utf-8')
+        (seed/'latest-v2.json').write_text(provider + ' independent V2 index\n', encoding='utf-8')
+        (seed/'other.txt').write_text('preserve me\n', encoding='utf-8')
+        git('add', '.', cwd=seed)
+        git('commit', '-m', 'baseline', cwd=seed)
+        git('push', bare, 'firmware', cwd=seed)
+        remotes[provider] = bare
+
+    before = {p:git('--git-dir', r, 'rev-parse', 'firmware:latest-v2.json').stdout.strip()
+              for p,r in remotes.items()}
+    original_run = publisher._run
+    commands = []
+
+    def local_run(command, **kwargs):
+        command = list(command)
+        commands.append(command)
+        for provider, bare in remotes.items():
+            command = [str(bare) if arg == f'https://{provider}.com/test/repo.git' else arg for arg in command]
+        return original_run(command, **kwargs)
+
+    fail_gitee = True
+
+    def gitee_push(*, repository, repo, refspec, token, force):
+        nonlocal fail_gitee
+        assert force is False and repo == 'test/repo'
+        if fail_gitee:
+            fail_gitee = False
+            raise RuntimeError('simulated Gitee outage')
+        git('push', remotes['gitee'], refspec, cwd=repository)
+
+    monkeypatch.setattr(publisher, '_run', local_run)
+    monkeypatch.setattr(publisher, '_gitee_push', gitee_push)
+    args = dict(document=document, github_repo='test/repo', gitee_repo='test/repo', gitee_token='unused')
+    with pytest.raises(RuntimeError, match='simulated Gitee outage'):
+        publisher.publish_manifest_branch(**args)
+    github_head = git('--git-dir', remotes['github'], 'rev-parse', 'firmware').stdout
+    publisher.publish_manifest_branch(**args)
+    assert git('--git-dir', remotes['github'], 'rev-parse', 'firmware').stdout == github_head
+    for provider, bare in remotes.items():
+        assert git('--git-dir', bare, 'rev-parse', 'firmware:latest-v2.json').stdout.strip() == before[provider]
+        assert git('--git-dir', bare, 'show', 'firmware:other.txt').stdout.strip() == 'preserve me'
+        assert json.loads(git('--git-dir', bare, 'show', 'firmware:latest.json').stdout) == document
+    heads = {p:git('--git-dir', r, 'rev-parse', 'firmware').stdout for p,r in remotes.items()}
+    publisher.publish_manifest_branch(**args)
+    assert heads == {p:git('--git-dir', r, 'rev-parse', 'firmware').stdout for p,r in remotes.items()}
+    assert not any('--force' in command for command in commands)

@@ -2,7 +2,7 @@
 
 The default input is the repository's MK-Firmware directory. Firmware assets
 live in the long-lived ``firmware-assets`` Release; the ``firmware`` branch is
-updated last and contains only ``latest.json``.
+updated last, preserving the independent V2 index and other existing files.
 """
 
 from __future__ import annotations
@@ -272,30 +272,41 @@ def publish_manifest_branch(
     gitee_token: str,
 ) -> None:
     with tempfile.TemporaryDirectory(prefix="mklink-firmware-index-") as directory:
-        checkout = Path(directory)
-        _run(["git", "init", "--initial-branch=firmware"], cwd=checkout)
-        _run(["git", "config", "user.name", "Mklink Firmware Bot"], cwd=checkout)
-        _run(["git", "config", "user.email", "firmware@mklink.local"], cwd=checkout)
-        (checkout / "latest.json").write_text(
-            json.dumps(document, indent=2, ensure_ascii=False) + "\n",
-            encoding="utf-8",
-        )
-        _run(["git", "add", "latest.json"], cwd=checkout)
-        _run([
-            "git", "commit", "-m",
-            f"firmware: publish {len(document['firmwares'])} current images",
-        ], cwd=checkout)
-        _run([
-            "git", "push", "--force", f"https://github.com/{github_repo}.git",
-            "firmware:firmware",
-        ], cwd=checkout)
-        _gitee_push(
-            repository=checkout,
-            repo=gitee_repo,
-            refspec="firmware:firmware",
-            token=gitee_token,
-            force=True,
-        )
+        pending = []
+        local = {(row['family'], row['model']): row for row in document['firmwares']}
+        urls = {row['name']: row['urls'] for row in document['firmwares']}
+        # Read and validate both providers before changing either index. Each
+        # branch has its own history and may contain an independent V2 index.
+        for provider, repo in (('github', github_repo), ('gitee', gitee_repo)):
+            checkout = Path(directory) / provider
+            checkout.mkdir()
+            remote = f'https://{provider}.com/{repo}.git'
+            _run(['git', 'init', '--initial-branch=firmware'], cwd=checkout)
+            _run(['git', 'config', 'user.name', 'Mklink Firmware Bot'], cwd=checkout)
+            _run(['git', 'config', 'user.email', 'firmware@mklink.local'], cwd=checkout)
+            exists = _run(['git', 'ls-remote', '--heads', remote, 'firmware'], cwd=checkout).stdout.strip()
+            if exists:
+                _run(['git', 'fetch', '--depth=1', remote, 'firmware'], cwd=checkout)
+                _run(['git', 'checkout', '-B', 'firmware', 'FETCH_HEAD'], cwd=checkout)
+            path = checkout / 'latest.json'
+            previous = json.loads(path.read_text('utf-8')) if path.exists() else None
+            if previous is not None:
+                merged, _ = merge_manifest(previous, local, urls, published_at=document['published_at'])
+                if merged['firmwares'] != document['firmwares']:
+                    raise ValueError(f'{provider} has additional firmware entries; reconcile before publication')
+            if previous == document:
+                continue
+            path.write_text(json.dumps(document, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
+            _run(['git', 'add', 'latest.json'], cwd=checkout)
+            _run(['git', 'commit', '-m', f"firmware: publish {len(document['firmwares'])} current images"], cwd=checkout)
+            pending.append((provider, repo, remote, checkout))
+        for provider, repo, remote, checkout in pending:
+            # A concurrent publication fails as non-fast-forward instead of
+            # overwriting newer entries or dropping another channel's files.
+            if provider == 'github':
+                _run(['git', 'push', remote, 'firmware:firmware'], cwd=checkout)
+            else:
+                _gitee_push(repository=checkout, repo=repo, refspec='firmware:firmware', token=gitee_token, force=False)
 
 
 def publish_firmware(
@@ -367,13 +378,14 @@ def publish_firmware(
         urls,
         published_at=datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
     )
-    if changed:
-        publish_manifest_branch(
-            document,
-            github_repo=github_repo,
-            gitee_repo=gitee_repo,
-            gitee_token=token,
-        )
+    # Also reconcile a previous partial publication where GitHub succeeded but
+    # Gitee failed. The per-provider update is idempotent and preserves history.
+    publish_manifest_branch(
+        document,
+        github_repo=github_repo,
+        gitee_repo=gitee_repo,
+        gitee_token=token,
+    )
     return {"manifest": document, "changed": changed, "published": True}
 
 

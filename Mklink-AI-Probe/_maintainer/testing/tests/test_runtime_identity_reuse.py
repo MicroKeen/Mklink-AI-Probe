@@ -88,5 +88,3 @@ def test_same_port_replacement_is_rejected_when_cache_expires(identity):
     with pytest.raises(HTTPException):
         control.require_identity(memory_snapshot=True)
     assert inventory.call_count == 2
-
-
