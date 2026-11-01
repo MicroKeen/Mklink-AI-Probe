@@ -62,8 +62,21 @@ def integer_reply(bridge, expression, *, timeout=5):
     return int(values[0]), raw
 
 
+def require_model_operation(bridge, operation):
+    """Reject known V2 omissions before issuing an unsupported command."""
+    from mklink.capture_clock import firmware_lines
+    if getattr(bridge, '_firmware_capabilities', ()) is None:
+        loader = getattr(bridge, '_get_firmware_capabilities', None)
+        if callable(loader):
+            loader()
+    if any(re.search(r'\bV2\.\d+\.\d+\b', line) for line in firmware_lines(bridge)):
+        raise ValueError(f'当前 V2 型号固件不支持 {operation}。Current V2 firmware does not support this operation; upgrading is not known to add it.')
+
+
 def execute(bridge, capability, args):
     args = validate(capability, args)
+    if capability in ('probe_diagnostics', 'probe_control', 'set_power_on', 'set_power_off'):
+        require_model_operation(bridge, capability)
     if capability == 'probe_presence':
         interface = args['interface']
         if interface == 'JTAG':

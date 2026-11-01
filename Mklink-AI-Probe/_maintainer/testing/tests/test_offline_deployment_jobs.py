@@ -13,6 +13,28 @@ from mklink.remote.offline_download_api import create_offline_download_router
 from mklink.runtime_jobs import RuntimeJobs
 
 
+@pytest.mark.parametrize('fail', [False, True])
+def test_disk_write_waits_for_mux_exit_and_never_replays_on_failure(tmp_path, fail):
+    from mklink.remote.offline_download_api import _perform_deployment
+    calls = []
+    def leave():
+        calls.append('exit-mux')
+        if fail:
+            raise TimeoutError('MUX outcome unknown')
+    def copy(callback):
+        calls.append('copy')
+        return {'status': 'deployed'}
+    async def run():
+        operation = _perform_deployment(None, tmp_path, copy, bridge=SimpleNamespace(_leave_multiplex=leave))
+        if fail:
+            with pytest.raises(TimeoutError, match='outcome unknown'):
+                await operation
+        else:
+            assert (await operation)['status'] == 'deployed'
+    asyncio.run(run())
+    assert calls == (['exit-mux'] if fail else ['exit-mux', 'copy'])
+
+
 @pytest.fixture
 def deployment(runtime, tmp_path, monkeypatch):
     client, control, calls, managers, app = runtime

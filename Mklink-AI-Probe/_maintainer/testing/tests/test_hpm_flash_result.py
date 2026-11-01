@@ -1,4 +1,5 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -145,6 +146,9 @@ def test_hpm_flash_does_not_require_mcu_profile(tmp_path: Path, monkeypatch):
     calls = []
 
     class FakeFlash:
+        # Model an already negotiated legacy bridge (the 10 MHz profile is valid).
+        _bridge = SimpleNamespace(_firmware_capabilities=frozenset())
+
         def set_swd_clock(self, swd_clock):
             calls.append(("clock", swd_clock))
 
@@ -189,6 +193,8 @@ def test_hpm_custom_mcu_burn_hex_file_routes_to_hpm_program(tmp_path: Path, monk
     calls = []
 
     class FakeFlash:
+        _bridge = SimpleNamespace(_firmware_capabilities=frozenset())
+
         def set_swd_clock(self, swd_clock):
             calls.append(("clock", swd_clock))
 

@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-11-01T20:05:31+08:00`
+- 更新时间：`2026-11-01T21:06:00+08:00`
 - 分支：`codex/v0.4.2-fixes`
-- HEAD：`5bdd1611本地Windows已覆盖；与Skill cafe835f产品代码一致，均协议53、56 MCP/126能力。安装证据另提交。`
+- HEAD：`7226aa56后：V2发布资格发现RTT恢复过早/回执假成功及MSC部署未退出MUX，宿主修复；新包尚待构建安装。`
 - 远端 HEAD：`microkeen/codex/v0.4.2-fixes；多个后续修复共用此分支。microkeen/main核对为3cc474bb。`
 - 工作树：E盘主工作区；旧detached树保留。构建/证据在F盘。
-- 当前任务：按用户要求重建并覆盖Windows0.4.2：5bdd1611/SHA27b2c09d，3644安装文件一致、2设置保留；56 MCP完整schema/126能力/协议53与Skill一致，真实跨包连接、原生/Web与正常退出通过。未占用硬件、未发布。见v042-skill-aligned-install-20261101.md。
-- 状态：`windows_skill_aligned_installed`
+- 当前任务：V2/STM32H743核心调试、14时钟、RTT上下行通过；恢复与脱机修复源码实机通过，291相关回归通过。待完整回归、新Windows/Skill和GUI在线验收后再换V3。见v042-release-qualification-20261101.md。
+- 状态：`v042_v2_qualification_fixes`
 
 ## 里程碑
 
@@ -23,7 +23,7 @@
 
 ## 验证证据
 
-- **0.4.2上位机与Skill一致性覆盖安装**：Windows源5bdd1611/SHA27b2c09d已覆盖，3644文件一致/2设置保留。冻结56 MCP schema/126能力/协议53与Skill一致、真实Skill连接退出通过；原生/Web/资源/正常退出通过，无硬件操作。FLM/Pack/Web与Skill逐字节一致；同产品代码此前749Python/65GUI通过。见v042-skill-aligned-install-20261101.md；旧8a09包验收保留于v042-clock-install-20261031.md。
+- **0.4.2发布资格进行中**：V2 V2.9.3/SHA08ab4061核心功能通过。RTT/SV复位后就绪等待和工作线程确认、MSC写入前退出MUX、V2型号能力提示已修，源码烧录恢复/脱机/完整读回通过；291相关测试通过。首轮全套6383Python通过/2失败/2skip、1164GUI通过/1失败，旧测试修正后10Python/124GUI整文件通过；完整新源码回归及安装包验收待完成。旧本机仍Windows5bdd1611与Skillcafe835f，不能混称新包。详见v042-release-qualification-20261101.md。
 - **HPM AI Skill能力核实**：审计修复749Python/65GUI、生产Web及浏览器HPM JTAG 5k/排除8M通过；完整Skill源cafe835f/SHA717cfdfb已覆盖，2644安装文件一致、5340用户文件保留；56 MCP/126能力和协议53安装后schema一致、Skill验证通过。时钟协商/离线档位门禁、探针控制/诊断/供电、离线/ISP/OTP入口及文档补齐。无USB操作；固件空接收/Vref开启待指定会话。见firmware-skill-fixes-20261101.md。
 - **RTT自动恢复与在线静默收尾**：14417715：347相关+17发现测试通过。V4/HPM5301连续两次49700B烧录校验成功，自动暂停/恢复RTT与SuperWatch、零恢复错误；新增RTT349/466字节、Watch3005/3712周期且零读取错。Windows NSIS SHA56830303，覆盖exit0、3627载荷一致、冻结MCP/41Web/正常退出通过；完整Skill SHAbb05fbde、2625文件/47工具已同步。仍0.4.1未发布。旧静默面板修复d1cf16ec的124GUI/29Python证据保留。见rtt-auto-restore-20261030.md及online-flash-receipt-20261029.md。
 - **Linux/macOS 0.4.1测试包**：Linux源a6bdacbc/CI40637027269、Mac arm64源eefc6842/CI40640511140：USB各58通过/1skip，冻结CLI/MCP/健康/Web/退出通过。DEB SHA7309f377、DMG SHA56dc8e0a，均旧0.4.1未带后续修复；Mac ad-hoc未公证，实机安装/UI/USB待测。见linux-deb-test-20261028.md、macos-arm64-test-20261028.md。
@@ -53,7 +53,7 @@
 
 ## 下一动作
 
-1. Windows与Skill一致性覆盖已完成；旧MCP进程需重启。等待指定固件会话交付YMODEM receive/Vref契约并协调新入口真机验收。发布/合并仍需明确指令。
+1. 先完成V2新包/Skill覆盖和GUI验收，释放USB后通知换V3；最新V3、普通V4、HPMLink候选见专项资格文档。问题能修即修，固件交指定会话；发布/合并需明确指令。
 2. 新V3已校准edc40176/build14:10:28，配置需明确ACK与applied/configured；无LIVE能力，采集中改频拒绝且不停任务。低频并行可明显增加DAP延迟。旧NOBITS机器码哈希结论撤回，硬件证据保留，见专项文档。
 3. 公网远程服务中继为下个版本任务；本次不实施。
 4. 下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。
@@ -73,7 +73,7 @@
 ## 延续协议
 
 - 读取CURRENT_HANDOFF/v042-session-handoff并核对Git，共用codex/v0.4.2-fixes。本机Windows/Skill为0.4.2本地候选，Windows源5bdd1611/SHA27b2c09d与Skill cafe835f/SHA717cfdfb产品代码及协议53一致；正式514efb86及0.4.1资产不可变。保留上海90/95GiB、到期锁停、账本和旧detached树，不申请私钥。
-- 最新安装验收见v042-skill-aligned-install-20261101.md；8a09旧包见v042-clock-install-20261031.md。clock-interfaces-20261031.md记录固件SHAebbc11f2、SDK SHA2058e1ca及限定HPM5301矩阵；硬件后来换GPTMR镜像，操作前须重查，不混同历史包和失败。
+- 最新资格进度见v042-release-qualification-20261101.md，V2未完全收尾前不要换探针。旧安装证据v042-skill-aligned-install-20261101.md；历史clock-interfaces-20261031.md及v042-clock-install-20261031.md不代替最新固件复验。
 - V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。
 - CDC995和SDK10048根因保留待排查。恢复仅同身份CDC故障5秒内；超时不自动接回/新建AI会话，主动断开立即生效，未知写入不重放。历史实例释放记录见v035-transport-recovery.md；当前硬件占用以本交接真机状态及指定固件会话为准。
 - 客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。

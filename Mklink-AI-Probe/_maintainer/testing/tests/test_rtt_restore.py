@@ -73,10 +73,15 @@ def test_download_restores_delayed_auto_channels_and_live_encoding(monkeypatch, 
                 target.gate.clear()
                 target.entered.clear()
                 target.reading.clear()
+                async def release_start():
+                    await wait_until(target.entered.is_set)
+                    assert report['state'] == 'restoring' and report['restored'] == []
+                    assert not target.reading.is_set()
+                    target.gate.set()
+                release = asyncio.create_task(release_start())
+            await release
             assert report == dict(state='restored', paused=['rtt'], restored=['rtt'], errors=[])
-            assert target.entered.wait(1) and not target.reading.is_set()
             assert manager.running and manager.paused == paused
-            target.gate.set()
             await wait_until(lambda: bool(manager.get_status()['control_block_addr']))
             assert set(manager._channel_decoders) == set(channels)
             assert manager._line_assembler.encoding == 'gb18030'
@@ -137,3 +142,35 @@ def test_usb_recovery_plan_also_passes_encoding_during_start(monkeypatch):
     asyncio.run(recovery.tick())
     recovery.plan[0][2]()
     assert calls == [(device, {'all_channels': True, 'encoding': 'utf-8', 'channel_encodings': {1: 'gbk'}})]
+
+
+@pytest.mark.parametrize('stream', ['rtt', 'systemview'])
+@pytest.mark.parametrize('failure', [None, 'target channel unavailable'])
+def test_restore_confirms_worker_start_without_requiring_target_output(monkeypatch, stream, failure):
+    from mklink.remote.dashboards import SystemViewStreamManager
+    target = Target()
+    target.systemview_start = target.rtt_start
+    target.systemview_stop = target.rtt_stop
+    target.systemview_read_bytes = lambda **kwargs: (time.sleep(.002) or b'')
+    manager = RttStreamManager() if stream == 'rtt' else SystemViewStreamManager()
+    state = {'device': target, 'resource_manager': ResourceManager()}
+    monkeypatch.setattr('mklink.remote.dashboards.get_managers', lambda: {stream: manager})
+    monkeypatch.setattr('mklink.remote.api.acquire_dashboard_resources', lambda *args: [])
+    target.gate.set()
+    manager.start(target)
+    manager.wait_started()
+    manager._restart_after_operation = lambda: manager.start(target)
+    target.failure = failure
+    async def run():
+        async with suspend_acquisition(state) as report:
+            pass
+        assert report['restored'] == ([] if failure else [stream])
+        assert report['state'] == ('failed' if failure else 'restored')
+        if failure:
+            assert failure in report['errors'][0]
+        assert manager.running is (failure is None)
+    try:
+        asyncio.run(run())
+        assert target.starts == 2  # one original start and one restore, never replayed
+    finally:
+        manager.stop()

@@ -360,6 +360,8 @@ describe('useOnlineFlashApi', () => {
   })
 
   it('preserves structured API conflict details', async () => {
+    const { setLanguage } = await import('../composables/useLanguage')
+    setLanguage('zh')
     vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({
       detail: { code: 'PROBE_BUSY', owner: 'ai-session', resource: 'TARGET_DEBUG' },
     }), { status: 409, statusText: 'Conflict' }))
@@ -375,7 +377,7 @@ describe('useOnlineFlashApi', () => {
       resource: 'TARGET_DEBUG',
       detail: { code: 'PROBE_BUSY', owner: 'ai-session', resource: 'TARGET_DEBUG' },
     })
-    expect(error.message).toBe('PROBE_BUSY: TARGET_DEBUG is owned by ai-session')
+    expect(error.message).toBe('下载器被占用，请先结束占用它的调试或下载任务后重试。')
   })
 
   it('formats nested API details as stable JSON instead of object coercion', async () => {

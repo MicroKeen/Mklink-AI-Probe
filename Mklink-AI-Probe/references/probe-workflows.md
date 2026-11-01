@@ -9,7 +9,7 @@
 | 工具 | 参数和结果 |
 |---|---|
 | `probe_presence` | `interface="SWD"` 或 `"JTAG"`。实时查询，不强制切换接口；`present=null` 表示错误/忙/未知，不能判定拔板。缓存 `probe_idcode` 不替代它。 |
-| `probe_diagnostics` | `index=-1` 读探针堆；`-2` 读探针复位报告；`0..31` 读线程栈水位，遇 `MEM_END` 停止。不是目标 MCU 内存；水位不保证不会溢出。 |
+| `probe_diagnostics` | `index=-1` 读探针堆；`-2` 读探针复位报告；`0..31` 读线程栈水位，遇 `MEM_END` 停止。不是目标 MCU 内存；水位不保证不会溢出。当前 V2 固件未提供此接口。 |
 | `probe_control` | `setting="auto_scan"/"beep"/"auto_follow_vref"`、布尔 `enabled`、`confirm_user=true`。蜂鸣器开启后需明确关闭；扫描开关改变探针发现行为。 |
 | `set_power_on` | `voltage_mv=1800/3300/5000`，每次先获用户具体电压确认，再传 `confirm_user=true`；5 V 另须 `confirm_5v=true`。 |
 | `set_power_off` | 每次确认断电后传 `confirm_user=true`。 |

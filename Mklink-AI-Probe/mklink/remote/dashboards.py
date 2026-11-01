@@ -403,6 +403,31 @@ class RttChannelDecoder:
         self._flush_terminal_batch()
 
 
+class _CaptureStartup:
+    """One worker generation's actual hardware-start result, not thread creation."""
+
+    def __init__(self):
+        self.done = threading.Event()
+        self.error = None
+        self.started = False
+
+    def ready(self):
+        self.started = True
+        self.done.set()
+
+    def ended(self, error):
+        self.error = error or RuntimeError('Capture stopped during startup')
+        self.done.set()
+
+    def wait(self, timeout=10.0):
+        if not self.done.wait(timeout):
+            raise TimeoutError('Capture worker has not finished startup')
+        if self.error is not None:
+            raise self.error
+        if not self.started:
+            raise RuntimeError('Capture did not start')
+
+
 class RttStreamManager(RttChannelDecoder):
     """Manages RTT streaming sessions with SSE output."""
 
@@ -445,6 +470,9 @@ class RttStreamManager(RttChannelDecoder):
                for ch, decoder in self._channel_decoders.items()},
         }
         return options
+
+    def wait_started(self, timeout=10.0) -> None:
+        self._startup_result.wait(timeout)
 
     @property
     def running(self) -> bool:
@@ -531,6 +559,7 @@ class RttStreamManager(RttChannelDecoder):
         self._stats = {"parsed_lines": 0, "raw_lines": 0}
         self._error = None
         self._startup_started = time.monotonic()
+        startup = self._startup_result = _CaptureStartup()
         self._start_options = dict(addr=addr, channel=channel, channels=channels,
                                    mode=mode, search_size=search_size, duration=duration,
                                    encoding=encoding, all_channels=all_channels,
@@ -606,6 +635,7 @@ class RttStreamManager(RttChannelDecoder):
                             "channel": poll_channel,
                         }
                         self._active_generation = generation
+                startup.ready()
                 start_time = time.time()
                 while not stop_event.is_set():
                     if time.time() - start_time > duration:
@@ -659,6 +689,7 @@ class RttStreamManager(RttChannelDecoder):
                     terminal_failure = e
             finally:
                 failure = start_failure or terminal_failure
+                startup.ended(failure)
                 if failure is not None and getattr(self, "_generation", None) is generation:
                     # Report the reason before potentially slow device cleanup.
                     # Keep the worker alive/owned until cleanup actually ends.
@@ -926,6 +957,12 @@ class SystemViewStreamManager:
     def set_start_failure_callback(self, callback) -> None:
         self._start_failure_callback = callback
 
+    def restart_options(self) -> dict:
+        return copy.deepcopy(self._start_options)
+
+    def wait_started(self, timeout=10.0) -> None:
+        self._startup_result.wait(timeout)
+
     def set_stream_hub(self, stream_hub) -> None:
         self._stream_hub = stream_hub
 
@@ -952,6 +989,9 @@ class SystemViewStreamManager:
         self._auto_retry_stop_error = ""
 
         stop_event = threading.Event()
+        startup = self._startup_result = _CaptureStartup()
+        self._start_options = dict(addr=addr, channel=channel, mode=mode,
+                                   search_size=search_size, duration=duration)
         generation = object()
         self._stop_event = stop_event
         self._generation = generation
@@ -991,6 +1031,7 @@ class SystemViewStreamManager:
                 )
                 initialized = True
                 self._apply_cpu_freq_hint(device, start_result)
+                startup.ready()
                 shared_mux = isinstance(start_result, dict) and start_result.get('transport') == 'cdc-mux'
                 self._mux_transport_stats = None
                 # Duration is independent of target activity. Framed reads
@@ -1196,6 +1237,7 @@ class SystemViewStreamManager:
                 })
                 start_failure = e
             finally:
+                startup.ended(start_failure)
                 try:
                     device.systemview_stop()
                 except Exception:

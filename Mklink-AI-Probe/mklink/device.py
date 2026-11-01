@@ -1653,12 +1653,55 @@ class Device:
                     if validate(candidate):
                         return candidate
         if rejected:
-            raise DeviceError(
+            raise _InvalidRTTControlBlock(
                 "RTT signature found but control block validation failed: "
                 + '; '.join(rejected[:4])
                 + ". Check the loaded ELF/MCU RAM map and target initialization."
             )
         return None
+
+    def _wait_for_rtt_ready_after_download(
+        self, addr=None, *, channel=0, channels=None, all_channels=False,
+        mode=0, search_size=0, require_down=False, timeout=5.0,
+    ) -> None:
+        """Wait for target initialization using reads only, before one start.
+
+        A reset returns before the application constructs its RTT table. Only
+        missing/uninitialized target data is transient here: transport errors
+        still propagate immediately and no failed stream command is replayed.
+        """
+        self._require_connected()
+        addr, channel, search_size, mode = _resolve_rtt_stream_parameters(
+            addr, channel, search_size, mode, self._project_root, source_path=self._axf,
+        )
+        self.validate_rtt_channels(channel, channels)
+        self.validate_rtt_stream_request(addr, search_size=search_size, mode=mode)
+        address = int(addr, 0)
+        span = self._rtt_bounded_search_size(address, search_size) if mode == 0 else 0
+        deadline = time.monotonic() + timeout
+        while True:
+            try:
+                found = self._find_rtt_control_block(address, span) if mode == 0 else address
+                if found is None:
+                    raise _InvalidRTTControlBlock('RTT control block was not found in target RAM')
+                info = self._read_rtt_control_block(found)
+                selected = [item['channel'] for item in info['up_buffers']
+                            if item['active'] and item['channel'] < 8] if all_channels else (channels or [channel])
+                if not selected:
+                    raise _InvalidRTTControlBlock('RTT control block has no active up channels')
+                # Descriptor validation is pure data validation, with no I/O.
+                # A requested channel may be initialized after the RTT header.
+                try:
+                    for selected_channel in selected:
+                        self._validate_rtt_channel(info, selected_channel, require_down=require_down)
+                except DeviceError as error:
+                    raise _InvalidRTTControlBlock(str(error)) from error
+                return
+            except _InvalidRTTControlBlock as error:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise DeviceError(f'RTT target initialization timed out after {timeout:g}s: {error}') from error
+                time.sleep(min(.05, remaining))
 
     def _parse_rtt_descriptor(
         self,

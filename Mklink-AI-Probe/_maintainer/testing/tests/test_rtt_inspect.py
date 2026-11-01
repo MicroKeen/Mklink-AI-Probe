@@ -87,6 +87,51 @@ def test_fresh_connection_inspect_reads_channels_without_capture(tmp_path, model
     assert (0x13 in commands) is (mux and not jtag)  # SWD attach only on ARM.
 
 
+@pytest.mark.parametrize('mode', [0, 1])
+@pytest.mark.parametrize('require_down', [False, True])
+def test_after_download_waits_for_header_and_channel_using_reads_only(tmp_path, mode, require_down):
+    device, base, commands = discovery_device(tmp_path, mux=True)
+    device.rtt_inspect(base)  # Establish transport before the target reset.
+    commands.clear()
+    read = device.read_memory
+    headers = 0
+    def initializing(address, size):
+        nonlocal headers
+        data = read(address, size)
+        if address == base:
+            headers += 1
+            if headers == 1:
+                return bytes(size)  # C runtime is still clearing BSS.
+        if address == base + 24 and headers == 2:
+            # With SystemView, Up is ready while Down is still uninitialized.
+            return data[:24] + bytes(size - 24) if require_down else bytes(size)
+        return data
+    device.read_memory = initializing
+    device._wait_for_rtt_ready_after_download(base, mode=mode, search_size=4, require_down=require_down)
+    assert headers >= 3
+    assert set(commands) == {0x11}  # No capture start, RAM write or reset.
+    assert device._rtt_session is None
+
+
+def test_after_download_transport_error_is_not_retried(tmp_path):
+    from mklink.device import DeviceError
+    device, base, _ = discovery_device(tmp_path, mux=True)
+    device.read_memory = Mock(side_effect=DeviceError('target bus fault'))
+    with pytest.raises(DeviceError, match='target bus fault'):
+        device._wait_for_rtt_ready_after_download(base, mode=1)
+    assert device.read_memory.call_count == 1
+
+
+def test_after_download_missing_target_rtt_times_out_without_start(tmp_path):
+    from mklink.device import DeviceError
+    device, base, commands = discovery_device(tmp_path, mux=True)
+    device.read_memory = Mock(side_effect=lambda address, size: bytes(size))
+    with pytest.raises(DeviceError, match='initialization timed out'):
+        device._wait_for_rtt_ready_after_download(base, mode=1, timeout=.01)
+    assert device.read_memory.call_count == 2
+    assert 0x20 not in commands and device._rtt_session is None
+
+
 @pytest.mark.parametrize('jtag', [False, True])
 @pytest.mark.parametrize('first', ['rtt', 'superwatch'])
 def test_inspect_during_both_start_orders_preserves_streams(tmp_path, jtag, first):

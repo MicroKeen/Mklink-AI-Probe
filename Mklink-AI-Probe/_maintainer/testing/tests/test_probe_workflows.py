@@ -85,6 +85,21 @@ def test_invalid_probe_request_has_no_io(capability, arguments):
     bridge.send_command.assert_not_called()
 
 
+@pytest.mark.parametrize('capability,arguments', [
+    ('probe_diagnostics', {'index': -1}),
+    ('probe_control', {'setting': 'beep', 'enabled': True, 'confirm_user': True}),
+    ('probe_control', {'setting': 'auto_scan', 'enabled': False, 'confirm_user': True}),
+    ('probe_control', {'setting': 'auto_follow_vref', 'enabled': False, 'confirm_user': True}),
+    ('set_power_on', {'voltage_mv': 3300, 'confirm_user': True}),
+    ('set_power_off', {'confirm_user': True}),
+])
+def test_latest_v2_omissions_are_model_limits_without_sending_commands(capability, arguments):
+    bridge = SimpleNamespace(_firmware_capabilities=frozenset({'V2.9.3', 'MUX_TARGET=1'}), send_command=Mock())
+    with pytest.raises(ValueError, match='当前 V2 型号固件不支持'):
+        execute(bridge, capability, arguments)
+    bridge.send_command.assert_not_called()
+
+
 def test_diagnostics_and_isp_require_actual_firmware_records():
     reset = 'RESET flags=00000001 status=0 live=0 ticks=234 port=2 idcode=1000563d'
     bridge = SimpleNamespace(send_command=Mock(return_value=reset+'\n>>>'))
