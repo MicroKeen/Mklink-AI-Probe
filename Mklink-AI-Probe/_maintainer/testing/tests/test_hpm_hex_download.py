@@ -42,7 +42,8 @@ def test_hex_is_normalized_and_uses_dedicated_entry(tmp_path, monkeypatch):
     flash = MKLinkFlash(Bridge())
     def copy(path, name):
         staged.append((Path(path), Path(path).read_bytes()))
-        return name
+        assert name is None  # Default online downloads use owned temporary names.
+        return 'source.hex'
     flash._copy_to_microkeen = copy
     result = flash.burn_hpm_hex(str(source(tmp_path)), board='hpm6e00evk')
     assert result['success']

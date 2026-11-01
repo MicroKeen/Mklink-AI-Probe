@@ -564,6 +564,15 @@ class OnlineFlashJobManager:
         finally:
             try:
                 if backend is not None and connection_may_be_open:
+                    complete = getattr(backend, 'complete', None)
+                    if primary_error is None and not job.cancel_requested and callable(complete):
+                        try:
+                            cleanup = complete()
+                        except Exception as error:
+                            cleanup = {'errors': [str(error)]}
+                        if cleanup:
+                            with self._condition:
+                                self._emit_locked(job, 'log', message=f"online temporary files: {cleanup}")
                     try:
                         with self._condition:
                             if (

@@ -70,6 +70,7 @@ export interface AxlStatus {
 }
 
 export interface DeviceStatus {
+  probe_product?: 'MKLink' | 'HPMLINK'
   connection_recovery?: { state: string; attempts: number; error?: string; errors?: string[]; restored_at?: number }
   device_generation?: number
   clock_hz?: number | null

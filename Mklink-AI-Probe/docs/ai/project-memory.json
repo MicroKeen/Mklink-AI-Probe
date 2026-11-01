@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-01T22:23:10+08:00",
+  "updated_at": "2026-11-01T22:58:14+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.4.2-fixes",
-    "head": "8eb2a242产品源；Windows/Skill同源已覆盖，V2/V3/普通V4限定实机验收完成，后续为资格文档提交。",
+    "head": "825975fc后的HPMLink产品标识/在线临时文件清理修复；既有实装资格对应8eb2a242，不能外推新增产品代码。",
     "remote_head": "microkeen/codex/v0.4.2-fixes；多个后续修复共用此分支。microkeen/main核对为3cc474bb。",
     "working_tree": "E盘主工作区；旧detached树保留。构建/证据在F盘。"
   },
@@ -13,8 +13,8 @@
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "v042_v2_v3_v4_passed_await_hpmlink",
-    "current_task": "V2/V3/普通V4限定验收完成且USB已释放，待换HPMLink并接HPM5301。普通V4从旧构建单次升级79a72f68，安装版烧录/回读/调试/采集恢复通过；YMODEM绑定及物理传输未测。见v042-release-qualification-20261101.md。"
+    "status": "v042_hpmlink_brand_cleanup_qualifying",
+    "current_task": "HPMLink USB品牌候选f06af597已升级，MICROKEEN卷标不变；上位机产品识别/本次成功在线副本清理/协商JTAG门禁完整回归已通过。准备新包实装及HPM5301集成验收，见hpmlink-product-online-files-20261101.md。"
   },
   "milestones": [
     {
@@ -50,8 +50,8 @@
   ],
   "verification": [
     {
-      "area": "0.4.2发布资格：V2/V3/普通V4完成",
-      "result": "源8eb2a242全套6404Python/2可选observe跳过、1165GUI及Windows/Skill同源实装通过。V2 SHA08ab4061、V3修复后44b1aff2、普通V4升级79a72f68均通过限定STM32H743矩阵：14时钟、RAM/flush/AXF、halt/step/双断点、真实HardFault、RTT双向、三流、SDK/GUI/冻结脱机烧录全223048B回读与自动恢复。V3/V4堆/复位/栈诊断通过；VCC未改。目标运行、三流/标志/FPB清空，后台已退出。原始失败保留；HPMLink新候选未验收，YMODEM实机/长稳等未测，不构成发布批准。"
+      "area": "0.4.2发布资格与HPMLink新修复",
+      "result": "源8eb2a242全套6404Python/2可选observe跳过、1165GUI及Windows/Skill同源实装通过。V2 SHA08ab4061、V3修复后44b1aff2、普通V4升级79a72f68均通过限定STM32H743矩阵：14时钟、RAM/flush/AXF、halt/step/双断点、真实HardFault、RTT双向、三流、SDK/GUI/冻结脱机烧录全223048B回读与自动恢复。V3/V4堆/复位/栈诊断通过；VCC未改。目标运行、三流/标志/FPB清空，后台已退出。原始失败保留；HPMLink新候选未验收，YMODEM实机/长稳等未测，不构成发布批准。 第一轮定点418项通过；新增顺序及14档JTAG/旧固件门禁回归，完整回归已完成。仅删除本任务有所有权且内容不变的成功副本；不扫历史文件，不改MICROKEEN卷标。新代码尚未实装/实机验证，不构成发布批准。 新HPMLink产品/清理代码完整回归：6446 Python通过/2个可选observe跳过，1166 GUI通过/102文件；准备构建/实装，不能外推硬件通过。"
     },
     {
       "area": "HPM AI Skill能力核实",
@@ -95,7 +95,7 @@
     "编译完成不代表目标已下载：文件变化仅发待重载提示，不后台解析。用户明确加载/重载文件时自动停止目标采集，确认worker退出后原子换表，保持停止；失败保留旧目录/选择。不要求连接下载器；断开保留文件和选中变量但清空旧采样。公式只改变可视化，原始记录不变；不恢复旧地址采集或重放写操作。"
   ],
   "hardware": {
-    "state": "2026-11-01 V2 SHA08ab4061、V3 SHA44b1aff2、普通V4 SHA79a72f68与STM32H743限定验收完成；USB/后台已释放，三流停止、测试标志0、FPB清空、原223048B镜像运行。等待换HPMLink V4并接HPM5301，再核对dc9c36b4候选。用户历史别名不是固件产品身份，以绑定磁盘readme识别。",
+    "state": "已接HPMLink V4/HPM5301，品牌候选f06af597/build22:37:10已升级；固件会话89回归、真实USB产品名/接口名及MICROKEEN卷保持、升级后首次16B读取通过并释放。待新上位机/Skill实装后HPM集成验收。V2/V3/普通V4旧8eb包限定资格保留。",
     "installer": "Windows/完整Skill0.4.2同源8eb2a242，NSIS SHA9625d4f1/Skill SHA059d7d4d已覆盖；3644载荷/2设置/2644 Skill/5340用户文件、56工具/126能力及原生退出通过。证据v042-release-qualification-20261101/candidate-8eb2a242，未发布。",
     "backups": "保留正式release、安装包、CI ZIP、唯一硬件证据、Skill备份及F盘缓存。含链接/不可访问目录不强删。历史获授权清理见v036-storage-cleanup-20261023.md及本机START_HERE；本地Unix清理不影响正式附件。旧detached树保留；本轮Skill备份在F盘cache/mklink-ai-probe/skill-backups。"
   },
@@ -110,7 +110,7 @@
     "nRF54L15保护闭环、全部擦除/拔插/休眠/断电、电源精度未全测。每次VCC需确认具体电压。26个无可靠扇区FLM禁用扇区操作，Bank模式须匹配。HPM5301 OTP组18/19历史永久锁定；128字读取及批准Word69 0→1已实测，其余型号/区域不继承授权，锁最后写/逐项校验，多Word不可回滚；熔丝/影子/临时锁语义未知，UART按ROM状态及回读为准。详见hpm-offline-otp-handoff.md及known-limits-20261030.md。"
   ],
   "next_actions": [
-    "通知用户换HPMLink V4并接HPM5301，按实际身份核对最新dc9c36b4候选，交固件会话升级后验收HPM/JTAG/ROM/XML/采集恢复。普通V4 79a72f68已完成限定复验；发布/合并仍需明确指令。",
+    "构建/覆盖安装新HPMLink产品识别与成功在线临时副本清理的同源Windows/Skill，完成f06af597固件的HPM5301集成验收。旧V2/V3/普通V4限定证据保留；新清理逻辑这些型号尚待实板复验。",
     "V3修复已本地提交2102f601，未推送；发布前核实远端同步及完整构建来源。V4 receive假成功由250c4445改为不支持，真实Pika绑定和物理发送未测；接收未实现，Vref保持禁用。V4构建依赖Arm-2D/MicroBoot既有本地补丁。",
     "公网远程服务中继为下个版本任务；本次不实施。",
     "下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。",

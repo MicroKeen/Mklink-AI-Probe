@@ -36,6 +36,14 @@ def test_filter_only_returns_mklink_identity_probe():
     assert [probe.unique_id for probe in filter_mklink_probes(probes)] == ["mk-1"]
 
 
+@pytest.mark.parametrize('product', ['HPMLINK', 'HPMLINK CMSIS-DAP'])
+def test_hpmlink_descriptor_is_recognized_without_vendor_alias(product):
+    from mklink.cmsis_dap.probes import filter_mklink_probes
+    probes = [SimpleNamespace(product_name=product, unique_id='hpm'),
+              SimpleNamespace(product_name='CMSIS-DAP', unique_id='other')]
+    assert [item.unique_id for item in filter_mklink_probes(probes)] == ['hpm']
+
+
 def test_probe_filter_accepts_injected_and_environment_usb_ids(monkeypatch):
     from mklink.cmsis_dap.probes import filter_mklink_probes
 

@@ -558,6 +558,15 @@ class Device:
             raise DeviceNotConnectedError("Device not connected")
 
     @property
+    def probe_product(self) -> str:
+        """Product identity negotiated at connect; status polling performs no I/O."""
+        capabilities = getattr(self._bridge, '_firmware_capabilities', None)
+        if (self.connected and isinstance(capabilities, (set, frozenset))
+                and 'PROBE_PRODUCT=HPMLINK' in capabilities):
+            return 'HPMLINK'
+        return 'MKLink'
+
+    @property
     def idcode(self) -> int:
         self._require_connected()
         return self._bridge.idcode
@@ -830,6 +839,7 @@ class Device:
         verify: bool = True,
         reset_after: bool = True,
         progress_callback=None,
+        _defer_probe_cleanup: bool = False,
     ) -> dict:
         self._require_connected()
 
@@ -1004,6 +1014,9 @@ class Device:
             if verify:
                 self._verify_firmware_readback(firmware, _fmt_hex(address))
                 result["verified"] = True
+            if not _defer_probe_cleanup:
+                from mklink.online_files import cleanup_firmware
+                result['temporary_files'] = cleanup_firmware(self._flash, result)
             return result
 
         if resolved_target:
@@ -1171,6 +1184,9 @@ class Device:
         if reset_after:
             self.reset()
 
+        if not _defer_probe_cleanup:
+            from mklink.online_files import cleanup_firmware
+            result['temporary_files'] = cleanup_firmware(self._flash, result)
         return result
 
     def _verify_firmware_readback(self, firmware: str, flash_base: str) -> None:

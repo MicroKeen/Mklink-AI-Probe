@@ -81,6 +81,7 @@ class MKLinkFlash:
 
     def __init__(self, bridge: MKLinkSerialBridge):
         self._bridge = bridge
+        self._online_files: dict = {}
 
     @classmethod
     def connect(cls, port: str | None = None, baudrate: int = 115200) -> "MKLinkFlash":
@@ -276,7 +277,7 @@ class MKLinkFlash:
 
         Args:
             hex_path: 本地 HEX 文件路径
-            microkeen_filename: MICROKEEN 磁盘上的文件名，None 则使用 hex_path 的文件名
+            microkeen_filename: 显式保留文件名；None 创建本次在线下载专用临时副本
             progress_callback: 进度回调函数，签名为 callback(percent: int)
         Returns:
             烧录结果 dict: {"success": bool, "progress": list, "time_ms": int}
@@ -389,7 +390,7 @@ class MKLinkFlash:
             prepare_hpm_hex(Path(hex_path), canonical)
             return self._burn_hpm_image(
                 str(canonical), "0x80000000", board, flash_cfg,
-                microkeen_filename or Path(hex_path).name, progress_callback,
+                microkeen_filename, progress_callback,
                 hex_format=True,
             )
 
@@ -486,7 +487,7 @@ class MKLinkFlash:
 
         Args:
             local_path: 本地文件路径
-            microkeen_filename: 指定在 MICROKEEN 上的文件名，None 则用原文件名
+            microkeen_filename: 显式保留文件名；None 创建本次在线下载专用临时副本
         Returns:
             MICROKEEN 上的文件名（不含路径），失败返回 None
         """
@@ -497,6 +498,15 @@ class MKLinkFlash:
         src = Path(local_path)
         if not src.exists():
             return None
+
+        if microkeen_filename is None:
+            from mklink.online_files import stage_firmware
+            try:
+                filename = stage_firmware(self, src, disk)
+                print(f"[COPY] {filename} · SHA-256 verified")
+                return filename
+            except (OSError, ValueError):
+                return None
 
         filename = microkeen_filename or src.name
         dest = Path(disk) / filename
@@ -778,6 +788,8 @@ def burn_hex_file(
             result = dict(result)
             result["algorithm_source"] = "hpm-rom-api"
         if result["success"]:
+            from mklink.online_files import cleanup_firmware
+            result['temporary_files'] = cleanup_firmware(flash, result)
             flash.beep()
 
         return result

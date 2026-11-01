@@ -2086,11 +2086,12 @@ def create_app(
     async def device_status():
         if not _state["device"]:
             symbols = _state.get('symbol_device')
-            return {"connected": False, "state": "disconnected", "axf": symbols.axf_status if symbols else {"loaded": False},
+            return {"connected": False, "probe_product": "MKLink", "state": "disconnected", "axf": symbols.axf_status if symbols else {"loaded": False},
                     "device_generation": _state.get('device_generation', 0)}
         dev = _state["device"]
         return {
             "connected": dev.connected,
+            "probe_product": getattr(dev, 'probe_product', 'MKLink') if dev.connected else 'MKLink',
             "connection_recovery": _state.get('connection_recovery'),
             "device_generation": _state.get('device_generation', 0),
             "state": dev.state.name if dev.state else "disconnected",

@@ -1047,6 +1047,7 @@ def test_hpm_rom_backend_programs_without_flm_and_verifies_by_readback(
             "swd_clock": 10_000_000,
             "verify": False,
             "reset_after": False,
+            "_defer_probe_cleanup": True,
         },
     )
     assert calls[3:] == [
@@ -1055,6 +1056,35 @@ def test_hpm_rom_backend_programs_without_flm_and_verifies_by_readback(
         ("reset",),
         ("close",),
     ]
+
+
+@pytest.mark.parametrize('hz', [1000, 5000, 10000, 20000, 50000, 100000, 200000,
+                                500000, 1000000, 2000000, 5000000, 10000000,
+                                20000000, 30000000])
+def test_hpm_online_clock_uses_connected_firmware_capabilities(hz):
+    from types import SimpleNamespace
+    from mklink.capture_clock import V3_CLOCKS
+    device = SimpleNamespace(
+        _bridge=SimpleNamespace(_firmware_capabilities={
+            'JTAG_CLOCK_ACK=1', 'JTAG_CLOCKS=' + ','.join(map(str, V3_CLOCKS))}),
+        close=lambda: None)
+    backend = HpmRomBackend(device_factory=lambda **kwargs: device,
+                            port_resolver=lambda probe: 'probe-port')
+    backend.connect('probe', 'HPM5301', hz, board='hpm5301evklite')
+    assert backend._frequency == hz
+    backend.disconnect()
+
+
+def test_hpm_online_legacy_clock_rejection_closes_connection():
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+    device = SimpleNamespace(_bridge=SimpleNamespace(_firmware_capabilities=set()), close=Mock())
+    backend = HpmRomBackend(device_factory=lambda **kwargs: device,
+                            port_resolver=lambda probe: 'probe-port')
+    with pytest.raises(FlashError, match='upgrade firmware'):
+        backend.connect('probe', 'HPM5301', 500000, board='hpm5301evklite')
+    device.close.assert_called_once()
+    assert backend._device is None
 
 
 def test_hpm_power_cycle_reset_restores_selected_voltage(monkeypatch) -> None:

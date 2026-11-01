@@ -60,6 +60,43 @@ class ReadBackend(FakeBackend):
         return bytes((address + index) & 0xFF for index in range(size))
 
 
+@pytest.mark.parametrize('failure', [None, 'program', 'verify', 'reset', 'cleanup'])
+def test_temporary_cleanup_only_after_success_and_never_prevents_disconnect(failure):
+    class Backend(FakeBackend):
+        def program(self, image, progress_callback=None):
+            super().program(image, progress_callback)
+            if failure == 'program':
+                raise RuntimeError('program failed')
+        def verify(self, image):
+            super().verify(image)
+            if failure == 'verify':
+                raise RuntimeError('verify failed')
+        def reset_run(self, mode):
+            super().reset_run(mode)
+            if failure == 'reset':
+                raise RuntimeError('reset failed')
+        def complete(self):
+            self.calls.append(('cleanup', None))
+            if failure == 'cleanup':
+                raise OSError('volume busy')
+            return {'deleted': ['owned.bin'], 'retained': [], 'errors': []}
+    backend = Backend()
+    manager = OnlineFlashJobManager(lambda: backend, ResourceManager(), image_provider=lambda _: image())
+    try:
+        job = manager.start(JobRequest(actions=('connect', 'program', 'verify', 'reset', 'disconnect'),
+            image_id='image-1', probe_id='probe', target_part='HPM5300', board='hpm5300evk'))
+        result = manager.wait(job, timeout=3)
+        names = [name for name, _ in backend.calls]
+        assert names[-1] == 'disconnect'
+        if failure in ('program', 'verify', 'reset'):
+            assert 'cleanup' not in names and result.state is JobState.FAILED
+        else:
+            assert names == ['connect', 'program', 'verify', 'reset', 'cleanup', 'disconnect']
+            assert result.state is JobState.SUCCEEDED
+    finally:
+        manager.shutdown()
+
+
 def test_hpm_job_holds_debug_and_bridge_resources_until_disconnect():
     backend = BlockingBackend()
     resources = ResourceManager()
