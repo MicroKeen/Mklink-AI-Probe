@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-11-01T23:08:02+08:00`
+- 更新时间：`2026-11-02T00:15:58+08:00`
 - 分支：`codex/v0.4.2-fixes`
-- HEAD：`产品源abf26c5a已推送；后续资格文档单独提交，不改变产品源。Windows/Skill同源实装，HPM限定SDK验收通过，Web GUI及脱机门禁仍未完成。`
+- HEAD：`最新源码e475eabe压缩RTT工具栏，90相关GUI/类型/隔离Web构建通过，未打包/未浏览器复核。已安装Windows/Skill产品源仍27989d09；验收文档独立提交。`
 - 远端 HEAD：`microkeen/codex/v0.4.2-fixes；多个后续修复共用此分支。microkeen/main核对为3cc474bb。`
 - 工作树：E盘主工作区；旧detached树保留。构建/证据在F盘。
-- 当前任务：HPMLink产品标识及在线副本清理已实现/构建/实装。新固件f06af597，HPM5301 SDK烧录52988B完整回读/自动清理/三流恢复通过，原18个U盘根文件及MICROKEEN卷不变。用户重开浏览器后再次因Computer Use无法确认URL而中止GUI验收；设备已释放。见hpmlink-product-online-files-20261101.md。
-- 状态：`v042_hpmlink_sdk_passed_gui_pending`
+- 当前任务：27989d09日志/眼睛/触发修复已构建覆盖并验收，6450Python/2skip、1182GUI通过；文件回放UI用户暂缓，Trace初始溢出1待归因。用户追加RTT三行压一行：e475eabe已完成90相关GUI/类型/隔离Web构建，尚未打包/界面复核。设备与原生进程已释放。见v042-traffic-replay.md。
+- 状态：`v042_traffic_qualified_partially_rtt_layout_source_ready`
 
 ## 里程碑
 
@@ -23,18 +23,18 @@
 
 ## 验证证据
 
-- **0.4.2资格与HPMLink产品/临时文件清理**：旧8eb2a242下V2/V3/普通V4限定矩阵保留；新abf26c5a全套6446Python/2可选observe跳过、1166GUI、Windows/Skill同源实装通过。HPMLink新f06af597：14 JTAG、RAM/flush、RV32调试、XML六GPIO、MCP、RTT双向、单次SDK烧录52988B全回读及三流恢复通过。成功专用副本删除，原18文件哈希/卷名不变。Computer Use无法确认URL两次停止，Web GUI/脱机/新清理的V2V3普通V4复验未完成。脚本字段/运行态断点查询错误保留，未重放烧录。见hpmlink-product-online-files-20261101.md。
+- **0.4.2日志/显隐/触发及安装资格**：27989d09：6450Python/2可选skip、1182GUI、生产构建/Windows覆盖及Skill同步通过；3647载荷/2设置/2647 Skill/5340用户文件，协议53/56工具/126能力一致。HPM RTT73728B上行/286B下行日志精确，Watch31628记录/四波形及眼睛双向同步、单次/普通/自动/强制/关闭触发通过；虚拟串口双向4096B及GUI日志通过。14 JTAG、完整镜像回读、RAM/XML六GPIO、GUI在线256B读取通过。文件回放UI用户暂缓；Trace初始溢出1不计零丢失，HardFault限ARM。正常退出11进程及端口释放。旧abf26c5a烧录/临时文件清理/三流恢复、8eb2a242的V2V3普通V4证据不外推。见v042-traffic-replay.md及hpmlink-product-online-files-20261101.md。 追加e475eabe仅RTT工具栏压缩，90组件/类型/Web通过；尚未打包和浏览器复核，不沿用旧实机资格。
 - **HPM AI Skill能力核实**：审计修复749Python/65GUI、生产Web及浏览器HPM JTAG 5k/排除8M通过；完整Skill源cafe835f/SHA717cfdfb已覆盖，2644安装文件一致、5340用户文件保留；56 MCP/126能力和协议53安装后schema一致、Skill验证通过。时钟协商/离线档位门禁、探针控制/诊断/供电、离线/ISP/OTP入口及文档补齐。无USB操作；固件空接收/Vref开启待指定会话。见firmware-skill-fixes-20261101.md。
 - **RTT自动恢复与在线静默收尾**：14417715：347相关+17发现测试通过。V4/HPM5301连续两次49700B烧录校验成功，自动暂停/恢复RTT与SuperWatch、零恢复错误；新增RTT349/466字节、Watch3005/3712周期且零读取错。Windows NSIS SHA56830303，覆盖exit0、3627载荷一致、冻结MCP/41Web/正常退出通过；完整Skill SHAbb05fbde、2625文件/47工具已同步。仍0.4.1未发布。旧静默面板修复d1cf16ec的124GUI/29Python证据保留。见rtt-auto-restore-20261030.md及online-flash-receipt-20261029.md。
-- **Linux/macOS 0.4.1测试包**：Linux源a6bdacbc/CI40637027269、Mac arm64源eefc6842/CI40640511140：USB各58通过/1skip，冻结CLI/MCP/健康/Web/退出通过。DEB SHA7309f377、DMG SHA56dc8e0a，均旧0.4.1未带后续修复；Mac ad-hoc未公证，实机安装/UI/USB待测。见linux-deb-test-20261028.md、macos-arm64-test-20261028.md。
-- **安装器旧元数据自动清理**：源cb30b703：62定点、5577Python/2skip、1133GUI和NSIS通过。八文件旧dist-info复现误报0.3.6，覆盖exit0清理后识别0.4.1；207保留文件及3626载荷一致，冻结/原生/退出通过。PR63已集成下版，正式0.4.1不变。见installer-metadata-cleanup-20261027.md。
+- **Linux/macOS 0.4.1测试包**：Linux a6bdacbc、Mac arm64 eefc6842：CI USB各58/1skip及冻结CLI/MCP/健康/Web/退出通过。DEB SHA7309f377、DMG SHA56dc8e0a，均旧0.4.1；Mac ad-hoc未公证，实机安装/UI/USB待测。见linux-deb-test-20261028.md、macos-arm64-test-20261028.md。
+- **安装器旧元数据自动清理**：cb30b703：62定点/5577Python/2skip/1133GUI及NSIS通过；覆盖后清理旧dist-info，207保留文件与3626载荷核对，冻结/原生/退出通过。PR63已集成下版，正式0.4.1不变。见installer-metadata-cleanup-20261027.md。
 - **上海COS正式0.4.0与90/95保护**：正式0.4.0七资源COS/GitHub哈希与备用实测、SCF21资产及三个索引一致；Gitee完整Skill通过，安装包受100MB限制。累计账本保留，90GiB告警/95GiB锁停、180秒租约、到期未续费及用量回落不恢复。2026-10-26线上代码与发布一致，本地边界/到期回归通过；每分钟监控和全天告警开启，三正式入口上海HEAD通过。未新建私钥，未重测生产停服备用。详见v040-release-handoff.md。
 - **H743正式固件与双核候选边界**：H743正式V4.7.1在线/四脱机/19采集调试通过。私有V4.7.2单核兼容、双核误选写前拒绝、2MiB不变及M7/M4 HEX在线通过；V4.7.2/V3.6.8/V2.9.3双核候选交付，46回归通过。无双核实板正向脱机，V3历史掉线未闭环，候选不公开替换。见known-limits-20261030.md。
-- **共享RTT/SystemView及480量子**：4be共享MUX/480/二进制订阅996回归及浏览器通过，76307模板104回归/真实H7头文件通过，已含Windows e29d。H7同镜像8份10MiB全字节/序号/SHA/计时，新799–801、旧528–633KiB/s，均值+38.43%；独立SV307134事件零计数，共存334848B完整/DAP50及SV/MUX/Watch零错。60000Watch样本/65文件8报告核对；旧Watch末组失败及并行丢失保留。详细HPM/RTT/SV证据见h7-rtt-control-20261031.md、systemview-rtthread-template-20261031.md与known-limits-20261030.md。
+- **共享RTT/SystemView及480量子**：共享MUX/480/二进制订阅996回归及浏览器、76307模板104回归/真实H7头文件通过。H7八份10MiB全字节核对，新799–801/旧528–633KiB/s，独立SV307134事件和有限共存零计数通过。旧Watch末组失败及饱和丢失保留，不能外推。详见h7-rtt-control-20261031.md、systemview-rtthread-template-20261031.md及known-limits-20261030.md。
 
 ## 架构决策
 
-- 0.4.1正式源514efb86及资产不可变。codex/v0.4.2-fixes共用；Windows/Skill0.4.2同源8eb2a242已覆盖，NSIS SHA9625d4f1、Skill SHA059d7d4d，协议53/56工具/126能力。正式发布/合并须明确指令，公网中继延期。
+- 0.4.1正式源514efb86及资产不可变。codex/v0.4.2-fixes共用；Windows/Skill0.4.2同源27989d09已覆盖，NSIS SHA41313c83、Skill SHA931df8c2，协议53/56工具/126能力。正式发布/合并须明确指令，公网中继延期。
 - 后台协议 53：一个 GUI 客户端持有一个固定后台，同窗口切换只改下载器，RTT/Watch/Trace 跟随当前设备并清空旧目标状态；另开客户端才建独立后台。已有 URL 的额外页面共享该后台。工程上下文固定，换工程须停止原后台后重开。
 - 物理探针唯一 OS 所有权、USB 身份核对和 epoch 隔离保留。GUI/AI 明确断开或切换自动停止采集、排空在途操作并释放端口；旧会话不得跨设备，未知结果不得自动重放，不偷取其他后台占用。MCP disconnect 物理断开，detach 仅退出自身；独立 UART 保留。
 - SuperWatch 变量写入只认写应答，不做自动回读；烧录/显式内存校验仍保留，真实写错误不得吞掉或重放。外设 ID 基于 Pack 版本/芯片/SVD 相对路径；失效选择不得阻断物理连接，无法迁移时重选。 在线型号提供脱机/外设默认值，各页可独立修改；Pack操作完成自动刷新。下载先预留唯一物理身份，不要求先连接目标；自身预留不重建下载表单，其他设备切换仍清理。 HPM SDK的*_svd.xml按CMSIS-SVD支持；九系列共用目录不要求精确型号，精确Pack优先，型号扩展可手动导入XML；SES CPU寄存器XML不作为外设SVD。保留厂家原始字节/许可证及SHA校验。dump停止根据DUMP_STOP能力验证回执，旧固件错误不得凭身份token误报READY；启动命令回显独立计数，duration尾部不算完整样本。
@@ -47,13 +47,13 @@
 
 ## 真机环境
 
-- **state**：HPMLink V4/HPM5301，f06af597/build22:37:10；目标52988B镜像运行、测试标志0、三流停止、槽0此前清除、JTAG10MHz，后台exit0/USB已释放。无VCC/OTP修改。GUI与脱机验收未完成。
-- **installer**：Windows/Skill0.4.2产品源abf26c5a已覆盖，NSIS SHA2603c688/Skill SHA8ac34a26；3645载荷/2设置/2645 Skill/5340用户文件核对，56MCP/126能力/原生退出通过。证据v042-release-qualification-20261101/candidate-hpmlink-cleanup，未发布。
+- **state**：HPMLink V4/HPM5301，f06af597/build22:37:10未改；目标52988B镜像保持运行、负载标志0、三流和测试串口停止、JTAG10MHz；11个自有原生进程及端口释放。无VCC/OTP/烧写操作。初始Trace溢出1已通知指定固件会话。
+- **installer**：Windows/Skill0.4.2产品源27989d09已覆盖，NSIS SHA41313c83/Skill SHA931df8c2；3647载荷/2设置/2647 Skill/5340用户文件核对，56MCP/126能力/原生退出通过。证据v042-traffic-replay-20261101/candidate，未发布。
 - **backups**：保留正式release、安装包、CI ZIP、唯一硬件证据、Skill备份及F盘缓存。含链接/不可访问目录不强删。历史获授权清理见v036-storage-cleanup-20261023.md及本机START_HERE；本地Unix清理不影响正式附件。旧detached树保留；本轮Skill备份在F盘cache/mklink-ai-probe/skill-backups。
 
 ## 下一动作
 
-1. 继续abf26c5a安装版Web GUI品牌/GUI在线烧录读取、HPM脱机验收；需可用且能可靠识别URL的UI通道或用户人工验收。现有SDK烧录已通过，不重复。再换机复验V2/V3/普通V4的新临时文件清理。正式发布/合并仍需明确指令。
+1. 先复核e475eabe RTT单行布局；下次构建带入（当前安装/Skill仍27989d09）。继续文件回放UI和原生目录验收，用户本轮暂缓；HPM HardFault/Trace通道选择及初始溢出另评估。HPM GUI烧录/脱机及新清理V2V3普通V4仍待复验。正式发布/合并须明确指令。
 2. V3修复已本地提交2102f601，未推送；发布前核实远端同步及完整构建来源。V4 receive假成功由250c4445改为不支持，真实Pika绑定和物理发送未测；接收未实现，Vref保持禁用。V4构建依赖Arm-2D/MicroBoot既有本地补丁。
 3. 公网远程服务中继为下个版本任务；本次不实施。
 4. 下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。
@@ -67,13 +67,13 @@
 - 共享MUX并行SV仍有容量边界：旧饱和768/drop17371，流水线28/1330、burst26/1164、control15/1442，重启归零不抹去；control独立62.679秒零丢失计数通过。RTT661.208KiB/s为特定配置观测值，H7限定实测新799–801KiB/s、独立/有限并行SV零计数；单次API20样本中位有12.90→20.03ms等退化未归因，旧Watch末组失败保留。采集暂停/下载丢观测、多变量非原子、无时序保证。COS95GiB非账单上限，存储/请求/SCF另计；旧0.4.0固件Git备用未迁，签名资产不改。
 - V3无屏幕且不支持HPM；V3.6.4 Keil/OpenOCD共存已测。V4最终无诊断固件完整SES矩阵未完成。旧V3.6.8/build17:56:49的CRLF六轮及1800.028秒空RTT证据见v3-crlf-final-review-20261030.md和v3-empty-rtt-review-20261030.md，不计入新build11:00:39复验。新V3限定RTT/FPB/Keil通过见v3-rtt-systemview-review-20261031.md；历史掉线根因、legacy/睡眠拔插/更长时长仍未测，再现先保存现场。 旧1ms Watch相位跳变归因未闭环；本轮HPM5301周期矩阵已通过，不能外推历史全部场景。
 - 最后客户端退出约5秒租约后开始排空/关闭，不保证硬实时5秒。每GUI独立后台；单探针仅一个后台持有；已有URL共享页面跟随明确切换。独立操作另开客户端。 Keil BL重载由2增9；用户确认未操作，原因未明。仅恢复重载后9个状态，最初配置未恢复；见h7-fpbv2-systemview-idle-20261031.md。
-- UART5 TTL Modbus读写通过，RS485电气层未测；跨物理主机Agent/全芯片矩阵未认证。Unix包仅CI构建/冻结检查，真实USB/原生UI/升级待测；Mac仅ad-hoc未公证，Windows无Authenticode，UAC/企业策略可拦截。Tauri更新验签仍有效；不得承诺消除SmartScreen。文件句柄选择/跟踪未全测；原生日志选择/回放/PNG已测。
+- UART5 TTL Modbus历史读写通过，RS485电气层未测；本次仅虚拟串口双向字节/日志，不能替代物理UART。跨主机Agent/全芯片未认证。Unix包仅CI冻结检查，USB/原生UI/升级待测；Mac ad-hoc未公证，Windows无Authenticode，不承诺消除SmartScreen。新日志文件回放UI用户暂缓；原生目录确认未完成。RTOS Trace直接启动固定通道1，本次SDK通道2显示通过但初始溢出1待归因，非零丢失资格；HPM HardFault页面仍限Cortex-M。最后浏览器清理因无法可靠确认URL停止，未绕过。详见v042-traffic-replay.md。
 - nRF54L15保护闭环、全部擦除/拔插/休眠/断电、电源精度未全测。每次VCC需确认具体电压。26个无可靠扇区FLM禁用扇区操作，Bank模式须匹配。HPM5301 OTP组18/19历史永久锁定；128字读取及批准Word69 0→1已实测，其余型号/区域不继承授权，锁最后写/逐项校验，多Word不可回滚；熔丝/影子/临时锁语义未知，UART按ROM状态及回读为准。详见hpm-offline-otp-handoff.md及known-limits-20261030.md。
 
 ## 延续协议
 
-- 读取CURRENT_HANDOFF/v042-session-handoff并核对Git，共用codex/v0.4.2-fixes。本机Windows/Skill为0.4.2测试候选abf26c5a，协议53一致；正式514efb86及0.4.1资产不可变。保留上海90/95GiB、到期锁停、账本及旧detached树，不申请私钥。
-- 最新资格见v042-release-qualification-20261101.md及hpmlink-product-online-files-20261101.md。旧V2/V3/普通V4与新HPMLink实机证据严格分源；新HPM的GUI/脱机以及新清理路径其他型号仍待验收，原始失败及UI安全阻断保留。
+- 读取CURRENT_HANDOFF/v042-session-handoff并核对Git，共用codex/v0.4.2-fixes。源码e475eabe工具栏压缩未打包；本机Windows/Skill为27989d09的0.4.2候选，协议53一致。正式514efb86及0.4.1资产不可变；保留上海90/95、到期锁停、账本和旧detached树。
+- 最新日志/显隐/触发资格见v042-traffic-replay.md；旧硬件资格见v042-release-qualification-20261101.md与hpmlink-product-online-files-20261101.md，严格分源。Web GUI本轮部分通过，文件回放用户暂缓；其他型号/脱机门禁未完成，保留全部脚本失败与UI阻断。
 - V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。
 - CDC995和SDK10048根因保留待排查。恢复仅同身份CDC故障5秒内；超时不自动接回/新建AI会话，主动断开立即生效，未知写入不重放。历史实例释放记录见v035-transport-recovery.md；当前硬件占用以本交接真机状态及指定固件会话为准。
 - 客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。
