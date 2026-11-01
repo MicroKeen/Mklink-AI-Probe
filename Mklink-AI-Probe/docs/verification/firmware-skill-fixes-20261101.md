@@ -3,6 +3,10 @@
 承接 [74 条固件命令审计](firmware-skill-command-audit-20261101.md)，在
 `codex/v0.4.2-fixes` 实施；版本仍为 0.4.2，没有发布正式资产或升级探针固件。
 
+后续已按用户要求完成协议 53 的 Windows 覆盖安装，与本地新 Skill 一致；
+见[上位机与 Skill 一致性验收](v042-skill-aligned-install-20261101.md)。下文保留本轮
+Skill 修复交付时的安装状态。
+
 ## 修复对应表
 
 | 审计缺口 | 处理结果 |
