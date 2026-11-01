@@ -685,10 +685,7 @@ if (chartLegend) {
     if (eye) {
       e.preventDefault(); e.stopPropagation();
       var name = eye.dataset.channel, visible = !FIELDS[name].visible;
-      var hidden = Object.keys(hiddenChannelNames).filter(function(n) { return n !== name; });
-      if (!visible) hidden.push(name);
-      setHiddenChannels(hidden, !!replaySession);
-      chartLegend.dispatchEvent(new CustomEvent('mklink:visibility', {bubbles:true, detail:{path:name, visible:visible}}));
+      setChannelVisible(name, visible);
       return;
     }
     var action = target.closest('.chart-legend-action');
@@ -2256,8 +2253,10 @@ function setChannelVisible(name, visible) {
   var chip = document.querySelector('#var-selector .chip[data-name="' + cssEscape(name) + '"]');
   if (chip) chip.classList.toggle('active', meta.visible);
   updateWatchTable();
+  updateChartLegend();
   drawChart();
   drawMinimap();
+  if (chartLegend) chartLegend.dispatchEvent(new CustomEvent('mklink:visibility', {bubbles:true, detail:{path:name, visible:meta.visible}}));
 }
 
 function cssEscape(value) {
