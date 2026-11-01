@@ -1,5 +1,5 @@
 <template>
-  <div class="traffic-log-controls">
+  <div class="traffic-log-controls" :class="{ compact }">
     <details>
       <summary>{{ tr('日志', 'Logs') }}{{ recording ? tr(' · 记录中', ' · Recording') : '' }}</summary>
       <div class="log-actions">
@@ -26,7 +26,7 @@ import { computed, onUnmounted, ref, shallowRef } from 'vue'
 import SuperWatchRecording from './SuperWatchRecording.vue'
 import { tr } from '../../composables/useLanguage'
 import { parseTrafficLog, TRAFFIC_FILE_LIMIT, type TrafficFrame, type TrafficLog } from '../../lib/trafficReplay'
-const props = withDefaults(defineProps<{ kind: 'rtt' | 'serial'; channel?: number }>(), { channel: 0 })
+const props = withDefaults(defineProps<{ kind: 'rtt' | 'serial'; channel?: number; compact?: boolean }>(), { channel: 0 })
 const emit = defineEmits<{ state: [active: boolean]; reset: []; batch: [frames: TrafficFrame[]] }>()
 const picker = ref<HTMLInputElement>(), log = shallowRef<TrafficLog | null>(null), filename = ref(''), source = ref('')
 const frames = computed(() => log.value?.frames.filter(frame => frame.source === source.value) || [])
@@ -76,6 +76,12 @@ onUnmounted(() => { disposed = true; generation++; clearInterval(timer) })
 </script>
 <style scoped>
 .traffic-log-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 12px; margin: 4px 0; }
+.traffic-log-controls.compact { display: contents; }
+.compact > details { flex: 0 0 auto; }
+.compact summary { white-space: nowrap; }
+.compact .log-actions { left: auto; right: 0; }
+.compact .replay-controls { flex: 1 0 100%; order: 1; }
+.compact > .warning, .compact > [role=alert] { flex-basis: 100%; order: 2; }
 details { position: relative; } summary { cursor: pointer; color: var(--accent); padding: 4px 8px; }
 .log-actions { position: absolute; top: 100%; left: 0; z-index: 30; min-width: 250px; max-width: 70vw; padding: 12px; display: flex; flex-wrap: wrap; gap: 8px; border: 1px solid var(--border); background: var(--surface); border-radius: 6px; box-shadow: 0 4px 16px #0005; }
 .replay-controls { display: flex; flex: 1; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; }

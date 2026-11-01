@@ -1,12 +1,8 @@
 <template>
   <section class="rtt-channel-panel" :class="{ collapsed }" :data-channel="channel">
-    <header><h3>RTT {{ channel }}</h3>
-      <button type="button" data-testid="channel-pause" :disabled="replaying" @click="renderPaused ? onResumeRender() : onPauseRender()">{{ renderPaused ? tr('继续显示', 'Resume display') : tr('暂停显示', 'Pause display') }}</button>
-      <button type="button" data-testid="channel-collapse" @click="collapsed = !collapsed">{{ collapsed ? tr('展开', 'Expand') : tr('收起', 'Collapse') }}</button>
-    </header>
-    <div v-show="!collapsed" class="channel-content">
-    <p v-if="runtimeError" role="alert">{{ runtimeError }}</p>
-      <div class="rtt-view-toolbar">
+    <header class="rtt-view-toolbar">
+      <h3>RTT {{ channel }}</h3>
+      <div v-show="!collapsed" class="rtt-panel-tools">
         <div class="rtt-primary-tools">
           <label class="encoding-control" :for="`rtt-encoding-${channel}`">
             <span>{{ tr('编码', 'Encoding') }}</span>
@@ -85,8 +81,15 @@
             <Trash2 :size="15" aria-hidden="true" />
           </button>
         </div>
+        <TrafficLogControls ref="trafficControls" kind="rtt" compact :channel="channel" @state="setReplay" @reset="resetReplay" @batch="appendReplay" />
       </div>
-      <TrafficLogControls ref="trafficControls" kind="rtt" :channel="channel" @state="setReplay" @reset="resetReplay" @batch="appendReplay" />
+      <div class="panel-actions">
+        <button type="button" data-testid="channel-pause" :disabled="replaying" @click="renderPaused ? onResumeRender() : onPauseRender()">{{ renderPaused ? tr('继续显示', 'Resume display') : tr('暂停显示', 'Pause display') }}</button>
+        <button type="button" data-testid="channel-collapse" @click="collapsed = !collapsed">{{ collapsed ? tr('展开', 'Expand') : tr('收起', 'Collapse') }}</button>
+      </div>
+    </header>
+    <div v-show="!collapsed" class="channel-content">
+      <p v-if="runtimeError" role="alert">{{ runtimeError }}</p>
       <div v-if="viewMode === 'log' && chartEnabled && hasChartData" class="rtt-chart-shell">
         <canvas
           ref="chart" class="rtt-numeric-chart"
@@ -659,14 +662,13 @@ onUnmounted(() => {
 .rtt-channel-panel { display: flex; flex-direction: column; height: 600px; min-height: 320px; min-width: min(320px, 100%); max-width: 100%; width: 100%; box-sizing: border-box; overflow: auto; resize: both; border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; }
 .rtt-channel-panel.collapsed { height: auto !important; min-height: 0; resize: none; }
 .resize-hint { align-self: flex-end; color: var(--muted); font-size: 11px; margin-top: 4px; padding-right: 10px; }
-header { display: flex; align-items: center; gap: 8px; }
-header h3 { flex: 1; margin: 0; font-size: 14px; }
-header button { color: inherit; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; font: 12px var(--font-body); cursor: pointer; }
+header h3 { flex: 0 0 auto; margin: 0 4px 0 0; font-size: 14px; }
+.panel-actions { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+.panel-actions button { color: inherit; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; height: 26px; padding: 0 6px; font: 12px var(--font-body); white-space: nowrap; cursor: pointer; }
 .channel-content { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-.rtt-view-toolbar { flex-wrap: wrap; position: relative; display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 42px; padding: 7px 0; }
-.rtt-primary-tools, .rtt-secondary-tools { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.rtt-primary-tools { flex: 1 1 auto; flex-wrap: wrap; }
-.rtt-secondary-tools { flex: 0 0 auto; }
+.rtt-view-toolbar { flex-wrap: wrap; position: relative; display: flex; align-items: center; gap: 6px; min-height: 26px; padding: 0 0 6px; }
+.rtt-panel-tools, .rtt-primary-tools { display: contents; }
+.rtt-secondary-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; min-width: 0; max-width: 100%; }
 .rtt-view-toolbar :deep(.control-toolbar) { flex: 0 0 auto; gap: 6px; padding: 0; }
 .encoding-control { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: 12px; }
 .encoding-control select { height: 26px; padding: 0 24px 0 7px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: var(--text); }
@@ -676,6 +678,8 @@ header button { color: inherit; background: var(--surface); border: 1px solid va
 .view-mode-switch button.active { background: var(--accent); color: #fff; }
 .stream-metrics { display: inline-flex; align-items: center; min-width: 0; color: var(--muted); font-family: var(--font-mono); font-size: 11px; white-space: nowrap; }
 .stream-metrics span + span::before { margin: 0 6px; color: var(--dim); content: '\00b7'; }
+.rtt-secondary-tools :deep(.log-display-controls) { gap: 5px; }
+.rtt-secondary-tools :deep(.log-format-switch button) { padding: 0 5px; }
 .format-help { position: relative; }
 .icon-action { display: inline-grid; width: 26px; height: 26px; place-items: center; padding: 0; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: var(--muted); cursor: pointer; }
 .icon-action:hover { border-color: var(--accent); color: var(--accent); }
@@ -694,8 +698,6 @@ header button { color: inherit; background: var(--surface); border: 1px solid va
 @media (max-width: 720px) {
   .rtt-address-row { grid-template-columns: auto minmax(0, 1fr) auto; }
   .address-error, .address-source { grid-column: 1 / -1; }
-  .rtt-view-toolbar { align-items: flex-start; flex-direction: column; gap: 6px; }
-  .rtt-secondary-tools { align-self: flex-end; }
   .format-help-popover { right: -70px; }
 }
 </style>
