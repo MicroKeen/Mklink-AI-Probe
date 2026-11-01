@@ -51,3 +51,19 @@ it('rejects wrong formats without disturbing a loaded replay and blocks opening 
     expect(wrapper.get('[data-testid=traffic-open]').attributes('disabled')).toBeDefined()
   } finally {wrapper.unmount()}
 })
+it('discards a file finishing after exit and allows opening another log',async()=>{
+  const wrapper=mount(TrafficLogControls,{props:{kind:'rtt'},global:{stubs:{SuperWatchRecording:true}}})
+  try {
+    await open(wrapper)
+    let finish!: (text:string)=>void
+    const input=wrapper.get('input[type=file]')
+    Object.defineProperty(input.element,'files',{configurable:true,value:[{name:'slow.jsonl',size:500,text:()=>new Promise<string>(resolve=>{finish=resolve})}]})
+    await input.trigger('change')
+    await wrapper.get('[data-testid=traffic-close]').trigger('click')
+    finish(logText()); await flushPromises()
+    expect(wrapper.find('[data-testid=traffic-replay]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid=traffic-open]').attributes('disabled')).toBeUndefined()
+    await open(wrapper)
+    expect(wrapper.find('[data-testid=traffic-replay]').exists()).toBe(true)
+  } finally {wrapper.unmount()}
+})

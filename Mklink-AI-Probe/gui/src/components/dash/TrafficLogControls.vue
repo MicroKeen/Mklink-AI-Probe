@@ -49,7 +49,7 @@ async function openFile(event: Event) {
     if (disposed || current !== generation) return
     playing.value = false; log.value = parsed; filename.value = file.name; source.value = parsed.sources[0]!
     emit('state', true); seek(0)
-  } catch (caught) { if (!disposed) error.value = String(caught) }
+  } catch (caught) { if (!disposed && current === generation) error.value = String(caught) }
   finally { if (!disposed && current === generation) loading.value = false }
 }
 function seek(index: number) {
@@ -70,7 +70,7 @@ const timer = setInterval(() => {
   if (cursor.value > start) emit('batch', frames.value.slice(start, cursor.value))
   if (cursor.value === frames.value.length) playing.value = false
 }, 25)
-function close() { generation++; playing.value = false; log.value = null; emit('reset'); emit('state', false) }
+function close() { generation++; loading.value = false; playing.value = false; log.value = null; emit('reset'); emit('state', false) }
 defineExpose({ redraw })
 onUnmounted(() => { disposed = true; generation++; clearInterval(timer) })
 </script>
