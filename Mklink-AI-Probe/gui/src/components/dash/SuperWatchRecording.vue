@@ -1,11 +1,11 @@
 <template>
-  <button class="panel-btn" data-testid="sw-record-toggle" :class="{ active: status.active }" :disabled="busy" @click="status.active ? stop() : showPicker()">{{ status.active ? tr('停止记录', 'Stop recording') : tr('开始记录', 'Start recording') }}</button>
+  <button class="panel-btn" data-testid="sw-record-toggle" :class="{ active: status.active }" :disabled="busy || (disabled && !status.active)" @click="status.active ? stop() : showPicker()">{{ status.active ? tr('停止记录', 'Stop recording') : tr('开始记录', 'Start recording') }}</button>
   <span v-if="status.path" class="record-result" :title="status.path">{{ status.active ? (status.samples ? tr('记录中', 'Recording') : tr('等待数据', 'Waiting for data')) : tr('已保存', 'Saved') }} · {{ status.samples || 0 }} {{ tr('条', 'samples') }}</span>
   <span v-if="error || status.error" role="alert" class="record-error">{{ error || status.error }}</span>
   <Teleport to="body">
     <dialog ref="dialog" class="record-dialog" @keydown.stop>
       <form @submit.prevent="start">
-        <h3>{{ tr('保存 SuperWatch 日志', 'Save SuperWatch log') }}</h3>
+        <h3>{{ tr('保存 ', 'Save ') + name + tr(' 日志', ' log') }}</h3>
         <p>{{ tr('可先开启记录，再开始采集。日志写入后台电脑的所选目录，停止采集也会完成保存。', 'You can enable recording before acquisition. Logs are saved on the backend computer; stopping acquisition also completes recording.') }}</p>
         <div class="record-path"><input v-model="directory" data-testid="sw-record-directory" :aria-label="tr('保存目录', 'Save directory')"><button type="button" @click="browse(directory)">{{ tr('浏览', 'Browse') }}</button></div>
         <div class="record-drives"><button v-for="drive in drives" :key="drive" type="button" @click="browse(drive)">{{ drive }}</button><button type="button" @click="browse(parent)">↑ {{ tr('上一级', 'Parent') }}</button></div>
@@ -24,15 +24,20 @@ import { isTauri } from '@tauri-apps/api/core'
 import { API_BASE, IS_REMOTE } from '../../lib/runtimeEndpoint'
 import { pickDirectory } from '../../lib/filePicker'
 import { language } from '../../composables/useLanguage'
+const props = withDefaults(defineProps<{ endpoint?: string; name?: string; channel?: number; disabled?: boolean }>(), {
+  endpoint: '/api/dash/superwatch/recording', name: 'SuperWatch', channel: 0, disabled: false,
+})
+const storageKey = `mklink.${props.name.toLowerCase()}.recordDirectory`
+const route = (action: string) => `${props.endpoint}/${action}${props.name === 'SuperWatch' ? '' : '?channel=' + props.channel}`
 const emit = defineEmits<{ state: [state: string] }>()
 const tr = (zh: string, en: string) => language.value === 'en' ? en : zh
 type Recording = { active: boolean; state: string; samples?: number; path?: string; error?: string }
 const status = ref<Recording>({ active: false, state: 'idle' })
-const directory = ref(localStorage.getItem('mklink.superwatch.recordDirectory') || '')
+const directory = ref(localStorage.getItem(storageKey) || '')
 const dialog = ref<HTMLDialogElement>()
 const dirs = ref<Array<{ name: string; path: string }>>([]), drives = ref<string[]>([]), parent = ref('')
 const busy = ref(false), error = ref('')
-let timer: ReturnType<typeof setTimeout> | undefined, disposed = false, browseGeneration = 0
+let timer: ReturnType<typeof setTimeout> | undefined, disposed = false, browseGeneration = 0, statusGeneration = 0
 async function request(path: string, body?: unknown) {
   const response = await fetch(`${API_BASE}${path}`, body === undefined ? undefined : {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
@@ -45,10 +50,16 @@ async function request(path: string, body?: unknown) {
   }
   return data
 }
-function update(data: Recording) { status.value = data; emit('state', data.state) }
+function update(data: Recording) { if (!disposed) { status.value = data; emit('state', data.state) } }
 async function poll() {
-  try { if (!busy.value) update(await request('/api/dash/superwatch/recording/status')) }
-  catch (caught) { error.value = String(caught) }
+  const generation = statusGeneration
+  try {
+    if (!busy.value) {
+      const data = await request(route('status'))
+      if (generation === statusGeneration) update(data)
+    }
+  }
+  catch (caught) { if (!disposed && generation === statusGeneration) error.value = String(caught) }
   finally { if (!disposed) timer = setTimeout(poll, 1000) }
 }
 async function browse(path: string) {
@@ -71,7 +82,7 @@ async function showPicker() {
   }
   busy.value = true
   try {
-    const selected = await pickDirectory(tr('选择 SuperWatch 日志保存文件夹', 'Choose a SuperWatch log folder'), directory.value)
+    const selected = await pickDirectory(tr('选择日志保存文件夹', 'Choose a log folder'), directory.value)
     if (!selected || disposed) return
     directory.value = selected
     await start()
@@ -79,17 +90,19 @@ async function showPicker() {
   finally { busy.value = false }
 }
 async function start() {
+  statusGeneration++
   busy.value = true; error.value = ''
   try {
-    update(await request('/api/dash/superwatch/recording/start', { directory: directory.value }))
-    localStorage.setItem('mklink.superwatch.recordDirectory', directory.value)
+    update(await request(route('start'), { directory: directory.value, ...(props.name === 'SuperWatch' ? {} : { channel: props.channel }) }))
+    localStorage.setItem(storageKey, directory.value)
     dialog.value?.close()
   } catch (caught) { error.value = String(caught) }
   finally { busy.value = false }
 }
 async function stop() {
+  statusGeneration++
   busy.value = true; error.value = ''
-  try { update(await request('/api/dash/superwatch/recording/stop', {})) }
+  try { update(await request(route('stop'), {})) }
   catch (caught) { error.value = String(caught) }
   finally { busy.value = false }
 }

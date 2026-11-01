@@ -1,7 +1,7 @@
 <template>
   <section class="rtt-channel-panel" :class="{ collapsed }" :data-channel="channel">
     <header><h3>RTT {{ channel }}</h3>
-      <button type="button" data-testid="channel-pause" @click="renderPaused ? onResumeRender() : onPauseRender()">{{ renderPaused ? tr('继续显示', 'Resume display') : tr('暂停显示', 'Pause display') }}</button>
+      <button type="button" data-testid="channel-pause" :disabled="replaying" @click="renderPaused ? onResumeRender() : onPauseRender()">{{ renderPaused ? tr('继续显示', 'Resume display') : tr('暂停显示', 'Pause display') }}</button>
       <button type="button" data-testid="channel-collapse" @click="collapsed = !collapsed">{{ collapsed ? tr('展开', 'Expand') : tr('收起', 'Collapse') }}</button>
     </header>
     <div v-show="!collapsed" class="channel-content">
@@ -12,7 +12,7 @@
             <span>{{ tr('编码', 'Encoding') }}</span>
             <select
               :id="`rtt-encoding-${channel}`" v-model="rttEncoding" data-testid="rtt-encoding"
-              :disabled="!running" @change="onEncodingChange"
+              :disabled="!running && !replaying" @change="onEncodingChange"
             >
               <option value="utf-8">UTF-8</option>
               <option value="gb2312">GB2312</option>
@@ -75,14 +75,7 @@
             <Eye v-else :size="14" aria-hidden="true" />
             <span>{{ chartEnabled ? tr('关闭曲线', 'Hide Chart') : tr('打开曲线', 'Show Chart') }}</span>
           </button>
-          <button
-            v-if="viewMode === 'log'" data-testid="rtt-save-log" type="button"
-            class="icon-action" :disabled="retainedCount === 0 || savingLog" :aria-busy="savingLog"
-            :title="tr('保存日志', 'Save log')" :aria-label="tr('保存日志', 'Save log')"
-            @click="saveLog"
-          >
-            <Download :size="15" aria-hidden="true" />
-          </button>
+
           <button
             data-testid="rtt-clear-logs" class="btn-clear icon-action" type="button"
             :title="viewMode === 'terminal' ? tr('清除终端', 'Clear terminal') : tr('清除日志', 'Clear log')"
@@ -93,7 +86,7 @@
           </button>
         </div>
       </div>
-      <p v-if="saveError" data-testid="rtt-save-error" role="alert">{{ saveError }}</p>
+      <TrafficLogControls ref="trafficControls" kind="rtt" :channel="channel" @state="setReplay" @reset="resetReplay" @batch="appendReplay" />
       <div v-if="viewMode === 'log' && chartEnabled && hasChartData" class="rtt-chart-shell">
         <canvas
           ref="chart" class="rtt-numeric-chart"
@@ -111,7 +104,7 @@
           @input="queueTerminalInput"
         />
       </div>
-      <RttRawView ref="rawView" v-show="viewMode === 'hex'" :channel="channel" :running="running && viewMode === 'hex'" :paused="renderPaused" />
+      <RttRawView ref="rawView" v-show="viewMode === 'hex'" :channel="channel" :running="running && !replaying && viewMode === 'hex'" :paused="renderPaused" />
       <RttTransmitBar :id-prefix="`rtt-channel-${channel}`"
         :enabled="transmitEnabled" :settings="settings" :send="sendRtt"
         @settings-change="persistSettings"
@@ -121,13 +114,14 @@
   </section>
 </template>
 <script setup lang="ts">
+import TrafficLogControls from './TrafficLogControls.vue'
+import { trafficBytes, TrafficTextDecoder, type TrafficFrame } from '../../lib/trafficReplay'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { Download, Eye, EyeOff, Info, ScrollText, SquareTerminal, Trash2 } from '@lucide/vue'
+import { Eye, EyeOff, Info, ScrollText, SquareTerminal, Trash2 } from '@lucide/vue'
 import { useBinaryStream } from '../../composables/useBinaryStream'
 import { useMklinkApi } from '../../composables/useMklinkApi'
 import { loadDesktopSettings, type DesktopSettings, type RttEncoding } from '../../lib/desktopSettings'
 import { RenderScheduler } from '../../lib/stream/renderScheduler'
-import { saveBlobFile, timestampedLogName } from '../../lib/downloadTextFile'
 import LogDisplayControls, { type LogDisplayMode } from './LogDisplayControls.vue'
 import RttRawView from './RttRawView.vue'
 import RttTransmitBar from './RttTransmitBar.vue'
@@ -135,6 +129,40 @@ import RttTerminalPanel from './RttTerminalPanel.vue'
 import VirtualLogPanel, { type VirtualLogInput } from './VirtualLogPanel.vue'
 import { language, tr } from '../../composables/useLanguage'
 import { API_BASE } from '../../lib/runtimeEndpoint'
+const replaying = ref(false)
+const trafficControls = ref<InstanceType<typeof TrafficLogControls>>()
+let replayDecoder = new TrafficTextDecoder()
+function resetReplay() {
+  replayDecoder = new TrafficTextDecoder(rttEncoding.value)
+  logPanel.value?.clear(); terminalPanel.value?.clear()
+  rawView.value?.clear()
+  resetChartData()
+}
+function setReplay(active: boolean) {
+  replaying.value = active
+  terminalInput = ''
+  pausedLines = []; pausedTerminal = ''; renderPaused.value = false
+  if (active) detachBinary(); else if (props.running) attachBinary()
+}
+function appendReplay(frames: TrafficFrame[]) {
+  const entries: VirtualLogInput[] = []
+  let terminal = ''
+  const rawChunks: Uint8Array[] = []
+  for (const frame of frames) {
+    const text = replayDecoder.decode(frame), raw = trafficBytes(frame)
+    entries.push({time: frame.time, level: frame.direction === 'RX' ? 'data' : 'warning', label: frame.direction, text, raw})
+    if (frame.direction === 'RX') {
+      terminal += text
+      rawChunks.push(raw)
+    }
+  }
+  const raw = new Uint8Array(rawChunks.reduce((size, chunk) => size + chunk.length, 0))
+  let offset = 0
+  for (const chunk of rawChunks) { raw.set(chunk, offset); offset += chunk.length }
+  rawView.value?.append(raw)
+  logPanel.value?.append(entries)
+  if (terminal) terminalPanel.value?.write(terminal)
+}
 const props = defineProps<{ channel: number, running: boolean, sendEnabled: boolean, session?: string, channelStatus?: { numeric_channels?: string[], encoding?: string } }>()
 const logBinary = useBinaryStream(`rtt-${props.channel}`, { capacity: 25000, channelCount: 1 })
 const terminalBinary = useBinaryStream(`rtt-terminal-${props.channel}`, { capacity: 64 * 1024, channelCount: 1 })
@@ -157,12 +185,10 @@ const hasChartData = ref(false)
 const renderPaused = ref(false)
 const collapsed = ref(false)
 const runtimeError = ref<string | null>(null)
-const savingLog = ref(false)
-const saveError = ref<string | null>(null)
 let pausedLines: VirtualLogInput[] = []
 let pausedTerminal = ''
 const rawView = ref<InstanceType<typeof RttRawView> | null>(null)
-const transmitEnabled = computed(() => props.running && props.sendEnabled)
+const transmitEnabled = computed(() => !replaying.value && props.running && props.sendEnabled)
 let requestId = 0
 let latestEnvelope: NonNullable<typeof logBinary.envelope.value> | null = null
 let dataRange: { start: number, end: number } | null = null
@@ -192,6 +218,7 @@ let terminalSendChain = Promise.resolve()
 
 function persistSettings(next: DesktopSettings) { settings.value = next }
 async function sendRtt(payload: Uint8Array): Promise<void> {
+  if (replaying.value) throw new Error('Exit replay before sending')
   const result = await writeRtt(payload, props.channel)
   const sent = result.sent_bytes
   if (!Number.isInteger(sent) || sent < 0 || sent > payload.length) throw new Error(tr('发送结果未确认', 'Send result was not confirmed'))
@@ -207,6 +234,7 @@ async function sendRtt(payload: Uint8Array): Promise<void> {
   if (sent !== payload.length) throw new Error(tr(`仅发送 ${sent}/${payload.length} 字节`, `Sent only ${sent}/${payload.length} bytes`))
 }
 async function onEncodingChange() {
+  if (replaying.value) { trafficControls.value?.redraw(); return }
   try {
     const response = await fetch(`${API_BASE}/api/dash/rtt/encoding`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({channel: props.channel, encoding: rttEncoding.value}) })
     if (!response.ok) throw new Error((await response.json()).detail || 'RTT encoding failed')
@@ -229,7 +257,7 @@ const scheduler = new RenderScheduler(() => {
 })
 
 watch(() => logBinary.rttLines.value, batch => {
-  if (!batch) return
+  if (!batch || replaying.value) return
   const lines = batch.lines.map(line => ({
     time: line.timestampNs, level: line.level, label: 'RX', text: line.text,
     raw: logEncoder.encode(`${line.text}\n`),
@@ -239,13 +267,13 @@ watch(() => logBinary.rttLines.value, batch => {
 })
 
 watch(() => terminalBinary.rttTerminal.value, chunk => {
-  if (!chunk) return
+  if (!chunk || replaying.value) return
   if (renderPaused.value) pausedTerminal = (pausedTerminal + chunk.text).slice(-65536)
   else terminalPanel.value?.write(chunk.text)
 })
 
 watch(() => logBinary.waveformBatch.value, batch => {
-  if (!batch) return
+  if (!batch || replaying.value) return
   numericChannelCount.value = batch.channelCount
   if (numericChannelNames.value.length !== batch.channelCount) {
     numericChannelNames.value = Array.from(
@@ -419,6 +447,7 @@ function toggleChart(): void {
 function setViewMode(mode: 'log' | 'terminal' | 'hex'): void {
   if (viewMode.value === mode) return
   viewMode.value = mode
+  if (replaying.value) { void nextTick(() => trafficControls.value?.redraw()); return }
   formatHelpOpen.value = false
   if (mode === 'terminal') {
     scheduler.stop()
@@ -567,6 +596,7 @@ function resetChartData(): void {
 }
 
 function attachBinary() {
+  if (replaying.value) return
   if (viewMode.value === 'log') logBinary.start()
   else logBinary.stop()
   if (viewMode.value === 'terminal') terminalBinary.start()
@@ -576,9 +606,9 @@ function detachBinary() { logBinary.stop(); terminalBinary.stop() }
 watch([() => props.running, viewMode], ([running]) => { if (running) attachBinary(); else detachBinary() }, { immediate: true })
 watch(() => props.channelStatus, status => {
   if (status?.numeric_channels?.length) { numericChannelNames.value = status.numeric_channels; numericChannelCount.value = status.numeric_channels.length }
-  if (status?.encoding) rttEncoding.value = status.encoding as RttEncoding
+  if (status?.encoding && !replaying.value) rttEncoding.value = status.encoding as RttEncoding
 }, { immediate: true })
-watch(() => props.session, () => { clearAllOutputs(); resetChartData(); logBinary.reset(); terminalBinary.reset() })
+watch(() => props.session, () => { if (replaying.value) return; clearAllOutputs(); resetChartData(); logBinary.reset(); terminalBinary.reset() })
 function onPauseRender(): void {
   renderPaused.value = true
   requestId++
@@ -608,23 +638,6 @@ function clearVisibleOutput(): void {
   else { logPanel.value?.clear(); pausedLines = [] }
 }
 
-async function saveLog(): Promise<void> {
-  if (savingLog.value) return
-  saveError.value = null
-  savingLog.value = true
-  try {
-    const raw = logPanel.value?.exportRaw() ?? new Uint8Array()
-    if (!raw.byteLength) return
-    await saveBlobFile(
-      timestampedLogName(`rtt-${props.channel}`),
-      new Blob([new Uint8Array(raw)], { type: 'application/octet-stream' }),
-    )
-  } catch (error) {
-    saveError.value = `${tr('保存日志失败', 'Could not save log')}: ${error instanceof Error ? error.message : String(error)}`
-  } finally {
-    savingLog.value = false
-  }
-}
 
 
 onMounted(() => {

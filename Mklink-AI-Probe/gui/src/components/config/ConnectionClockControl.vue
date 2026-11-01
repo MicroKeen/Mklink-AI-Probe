@@ -196,10 +196,8 @@ onUnmounted(() => { disposed = true; revision++; clearTimeout(timer); emit('busy
       {{ tr('当前固件不支持完整时钟档位，请更新下载器固件。', 'This firmware does not support the full clock range. Please update the probe firmware.') }}
       <button type="button" class="btn btn-sm" @click="emit('firmwareUpdate')">{{ tr('前往固件升级', 'Open Firmware Update') }}</button>
     </p>
-    <p v-if="deviceConnected && !matchingInterface" class="clock-help">{{ tr('此处选择要配置的接口；连接匹配的目标后才会应用，不会切换下载器接口。', 'This selects the interface to configure. Settings apply when a matching target connects; the probe interface is not switched.') }}</p>
     <p v-if="migration?.pending" role="status" data-testid="clock-migration">{{ tr('旧 4 MHz 配置需要迁移：请选择 2 MHz 并应用。确认前保留原设置，不会自动切换。', 'The old 4 MHz configuration needs migration: select 2 MHz and apply. The previous setting is retained until confirmed; it will not change automatically.') }}</p>
     <p v-if="matchingInterface && status?.apply_state === 'configured'" role="status">{{ tr('下载器已保存采集设置，尚未确认应用。退出 Keil 调试并停止采集后，可显式重新应用；不会自动停止或重试。', 'The probe saved the acquisition setting but has not confirmed application. After exiting Keil debugging and stopping captures, explicitly apply it again; nothing is automatically stopped or retried.') }}</p>
-    <p v-if="interfaceConfig?.clock_source?.endsWith('-advertised')" class="clock-help">{{ tr('档位是请求值，并非逻辑分析仪实测频率。', 'These are requested clock settings, not logic-analyzer measurements.') }}</p>
     <p v-if="interfaceConfig?.clock_source?.endsWith('-advertised') && Number(selected) > 0 && Number(selected) < 1000000" class="clock-help">{{ tr('低频采集会延长总线占用，可能明显增加并行 Keil 调试的等待时间。', 'Low-frequency acquisition holds the bus longer and can significantly increase waiting time during concurrent Keil debugging.') }}</p>
     <p v-if="readError || message || status?.warning" class="clock-message" role="status">{{ readError || message || status?.warning }}</p>
   </div>

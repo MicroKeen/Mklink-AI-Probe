@@ -568,13 +568,13 @@ function hideChartLegend() { setChartLegendVisible(false); }
 function showChartLegend() { setChartLegendVisible(true); }
 function revealChartLegendAfterAction() { showChartLegend(); }
 
-function visibleChartChannelNames() {
+function visibleChartChannelNames(includeHidden) {
   var names = [];
   var sorted = sortedFieldNames();
   for (var i = 0; i < sorted.length; i++) {
     var name = sorted[i];
     var meta = FIELDS[name];
-    if (!meta || !meta.visible || (CHANNEL_METADATA[name] && CHANNEL_METADATA[name].source === 'struct')) continue;
+    if (!meta || (!includeHidden && !meta.visible) || (CHANNEL_METADATA[name] && CHANNEL_METADATA[name].source === 'struct')) continue;
     names.push(name);
   }
   return names;
@@ -582,8 +582,8 @@ function visibleChartChannelNames() {
 
 function updateChartLegend() {
   if (!chartLegend) return;
-  var names = visibleChartChannelNames();
-  var signature = (IS_SUPERWATCH_MODE ? 'superwatch:' : 'vofa:') + splitChannelName + ':' + names.map(function(name) { return name + ':' + (signalStyle(name).color || FIELDS[name].color); }).join('|');
+  var names = visibleChartChannelNames(true);
+  var signature = (IS_SUPERWATCH_MODE ? 'superwatch:' : 'vofa:') + splitChannelName + ':' + names.map(function(name) { return name + ':' + FIELDS[name].visible + ':' + signalLabel(name) + ':' + (signalStyle(name).color || FIELDS[name].color); }).join('|');
   if (chartLegend.dataset.signature === signature) return;
   chartLegend.dataset.signature = signature;
   chartLegend.textContent = '';
@@ -604,6 +604,13 @@ function updateChartLegend() {
     var label = document.createElement('span');
     label.className = 'chart-legend-name';
     label.textContent = signalLabel(name); label.title = name; if (signalStyle(name).emphasis) label.style.fontWeight = 'bold';
+    var eye = document.createElement('button');
+    eye.type = 'button'; eye.className = 'chart-legend-eye'; eye.dataset.channel = name;
+    eye.setAttribute('aria-pressed', String(meta.visible));
+    eye.title = (document.documentElement.lang === 'en' ? (meta.visible ? 'Hide ' : 'Show ') : (meta.visible ? '隐藏 ' : '显示 ')) + name;
+    eye.setAttribute('aria-label', eye.title);
+    eye.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>' + (meta.visible ? '' : '<path d="M3 3l18 18"/>') + '</svg>';
+    row.appendChild(eye);
     row.appendChild(swatch);
     row.appendChild(label);
     if (IS_SUPERWATCH_MODE) {
@@ -674,6 +681,16 @@ if (chartLegend) {
   chartLegend.addEventListener('click', function(e) {
     var target = e.target;
     if (!target || !target.closest) return;
+    var eye = target.closest('.chart-legend-eye');
+    if (eye) {
+      e.preventDefault(); e.stopPropagation();
+      var name = eye.dataset.channel, visible = !FIELDS[name].visible;
+      var hidden = Object.keys(hiddenChannelNames).filter(function(n) { return n !== name; });
+      if (!visible) hidden.push(name);
+      setHiddenChannels(hidden, !!replaySession);
+      chartLegend.dispatchEvent(new CustomEvent('mklink:visibility', {bubbles:true, detail:{path:name, visible:visible}}));
+      return;
+    }
     var action = target.closest('.chart-legend-action');
     if (!action) return;
     e.preventDefault();
@@ -2935,6 +2952,7 @@ function setHiddenChannels(names, replay) {
     FIELDS[name].visible = !hiddenChannelNames[name];
   }
   updateWatchTable();
+  updateChartLegend();
   drawChart();
   drawMinimap();
 }

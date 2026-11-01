@@ -15,6 +15,7 @@ export const releaseHistory: ReleaseHistoryEntry[] = [
     changes: [
       '完善 HPM 烧录与调试，修复烧录后 RTT 恢复及遗留请求提示。',
       'SuperWatch 内置九个 HPM 系列外设目录，支持手动导入 SVD/XML。',
+      'RTT、串口支持持续记录与原窗口回放；SuperWatch 分组和图例同步控制曲线显隐。',
       '连接配置统一选择时钟，默认 10 MHz；精简 SuperWatch 工具栏，最低周期 4 µs。',
       '支持 RTT 与 RTOS Trace 并行采集，改善暂停恢复和 STM32H7 硬件断点；需配套固件。',
       '优化内存读写与设备识别，连接失败提示更明确。',
@@ -23,6 +24,7 @@ export const releaseHistory: ReleaseHistoryEntry[] = [
     changesEn: [
       'Improve HPM programming and debugging; fix RTT recovery after flashing and stale request prompts.',
       'Add peripheral catalogs for nine HPM series and manual SVD/XML import in SuperWatch.',
+      'Record and replay RTT/serial traffic in place; synchronize SuperWatch visibility controls in groups and legends.',
       'Select the shared clock in connection settings, defaulting to 10 MHz. Simplify SuperWatch controls with a 4 µs minimum interval.',
       'Support parallel RTT and RTOS Trace capture, improve pause/resume and STM32H7 hardware breakpoints; requires compatible firmware.',
       'Improve memory access and device detection, with clearer connection errors.',

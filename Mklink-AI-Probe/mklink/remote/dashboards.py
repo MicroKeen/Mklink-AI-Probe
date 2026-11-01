@@ -460,6 +460,9 @@ class RttStreamManager(RttChannelDecoder):
         self._write_lock = threading.RLock()
         self._lifecycle_lock = threading.RLock()
 
+        from mklink.traffic_recording import TrafficRecordings
+        self.traffic_recordings = TrafficRecordings('rtt')
+
     def restart_options(self) -> dict:
         """Capture settings for a source-address refresh, without old target data."""
         options = copy.deepcopy(getattr(self, '_start_options', {}))
@@ -703,6 +706,7 @@ class RttStreamManager(RttChannelDecoder):
                         self._device = None
                         self._start_info = {}
                         self._active_generation = None
+                self.traffic_recordings.request_stop_all()
                 self.flush_pending(final=True)
                 for decoder in self._channel_decoders.values():
                     decoder.flush_pending(final=True)
@@ -736,6 +740,7 @@ class RttStreamManager(RttChannelDecoder):
                 if thread.is_alive():
                     raise TimeoutError("RTT worker thread is still active")
             self._running = False
+            self.traffic_recordings.stop_all()
             self.flush_pending(final=True)
             if self._thread is thread:
                 self._thread = None
@@ -753,6 +758,10 @@ class RttStreamManager(RttChannelDecoder):
 
     def feed_channel_bytes(self, channel, chunk):
         from mklink.remote.stream_protocol import RTT_CHANNEL_BYTES, RTT_BYTES_HEADER
+        session = getattr(self._device, '_rtt_session', None)
+        losses = getattr(session, 'dropped_bytes', {})
+        self.traffic_recordings.append(channel, chunk, 'RX', self._capture_session,
+            lost_bytes=losses.get(channel, 0) if isinstance(losses, dict) else 0)
         offset = self._byte_offsets.get(channel, 0)
         self._byte_offsets[channel] = offset + len(chunk)
         hub = self._byte_hubs.get(channel)
@@ -810,6 +819,7 @@ class RttStreamManager(RttChannelDecoder):
                 raise RuntimeError(f"RTT write failed: {exc}") from exc
             if not written:
                 raise RuntimeError("RTT write failed")
+            self.traffic_recordings.append(channel, data, 'TX', self._capture_session)
             return len(data)
 
     def get_status(self) -> dict:
@@ -3148,6 +3158,8 @@ class SerialStreamManager:
         self._serial_session: str | None = None
         self._idle_cutoffs: dict[str, float] = {}
         self._send_sequences = {}
+        from mklink.traffic_recording import TrafficRecordings
+        self.traffic_recordings = TrafficRecordings('serial')
         self._recorder = None
         self._stopping = False
         self._rx_count = 0
@@ -3332,6 +3344,7 @@ class SerialStreamManager:
                 self._rx_bytes += len(data)
             else:
                 self._tx_bytes += len(data)
+            self.traffic_recordings.append(port, data, direction, session, timestamp)
             self._byte_batcher.feed(data, direction, port, monotonic_time=monotonic_time)
             if self._bridge.client_count == 0:
                 return
@@ -3461,6 +3474,7 @@ class SerialStreamManager:
                 )
             self._monitor = None
             self._running = False
+            self.traffic_recordings.stop_all()
             if self._recorder is not None:
                 self._recorder.stop()
             self._bridge.put({"event": "stopped"})

@@ -54,7 +54,7 @@ describe('SuperWatchTab', () => {
           },
           WaveformViewer: {
             name: 'WaveformViewer',
-            emits: ['latest-values'],
+            emits: ['latest-values', 'visibility-change'],
             props: ['mode', 'deviceConnected', 'hiddenChannels', 'arraySnapshotPath'],
             template: '<main class="waveform-stub" />',
           },
@@ -72,6 +72,12 @@ describe('SuperWatchTab', () => {
     await nextTick()
     expect(wrapper.findComponent(SymbolVariablePanel).props('hiddenChannels')).toEqual(new Set(['gain']))
     expect(wrapper.findComponent(WaveformViewer).props('hiddenChannels')).toEqual(new Set(['gain']))
+    wrapper.findComponent(WaveformViewer).vm.$emit('visibility-change', 'gain', true)
+    await nextTick()
+    expect(wrapper.findComponent(SymbolVariablePanel).props('hiddenChannels')).toEqual(new Set())
+    wrapper.findComponent(WaveformViewer).vm.$emit('visibility-change', 'gain', false)
+    await nextTick()
+    expect(wrapper.findComponent(SymbolVariablePanel).props('hiddenChannels')).toEqual(new Set(['gain']))
     expect(wrapper.findComponent(WaveformViewer).props('arraySnapshotPath')).toBe(null)
     wrapper.findComponent(SymbolVariablePanel).vm.$emit('snapshot-change', 'samples')
     await nextTick()

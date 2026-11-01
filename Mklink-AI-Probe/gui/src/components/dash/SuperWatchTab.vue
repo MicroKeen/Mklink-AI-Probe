@@ -38,6 +38,7 @@
         :array-snapshot-path="snapshotPath"
         @latest-values="latestValues = $event"
         @replay-channels="setReplayChannels"
+        @visibility-change="(path, visible) => replayChannels ? setReplayVisibility(path, visible) : setChannelVisibility(path, visible)"
       >
         <template #actions>
           <span class="workspace-actions">

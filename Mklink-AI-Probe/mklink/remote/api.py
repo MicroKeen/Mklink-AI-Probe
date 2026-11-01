@@ -2720,6 +2720,34 @@ def create_app(
         managers["rtt"].resume()
         return {"status": "running"}
 
+    # Raw, replayable traffic logs. Existing serial TXT/CSV API stays compatible.
+    def traffic_recorder(kind):
+        if kind not in ('rtt', 'serial'):
+            raise HTTPException(404, 'Unknown traffic source')
+        return get_managers()[kind].traffic_recordings
+
+    @app.get('/api/dash/{kind}/traffic-recording/status')
+    async def traffic_recording_status(kind: str, channel: int = Query(0, ge=0, le=7)):
+        return traffic_recorder(kind).status(channel)
+
+    @app.post('/api/dash/{kind}/traffic-recording/start')
+    async def traffic_recording_start(kind: str,
+            directory: str = Body(..., min_length=1, max_length=4096),
+            channel: int = Body(0, ge=0, le=7)):
+        try:
+            return await run_in_threadpool(traffic_recorder(kind).start, directory, channel)
+        except (ValueError, OSError) as exc:
+            raise HTTPException(400, str(exc)) from exc
+        except RuntimeError as exc:
+            raise HTTPException(409, str(exc)) from exc
+
+    @app.post('/api/dash/{kind}/traffic-recording/stop')
+    async def traffic_recording_stop(kind: str, channel: int = Query(0, ge=0, le=7)):
+        try:
+            return await run_in_threadpool(traffic_recorder(kind).stop, channel)
+        except TimeoutError as exc:
+            raise HTTPException(409, str(exc)) from exc
+
     @app.get("/api/dash/rtt/status")
     async def rtt_status():
         managers = get_managers()

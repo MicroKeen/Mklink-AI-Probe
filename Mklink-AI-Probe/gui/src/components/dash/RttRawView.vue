@@ -31,7 +31,7 @@ async function poll() {
       const response = await fetch(`${API_BASE}/api/dash/rtt/channels/read?${query}`, { signal: controller.signal })
       const data = await response.json()
       if (!response.ok) throw new Error(data.detail || 'RTT read failed')
-      if (!disposed) {
+      if (!disposed && props.running) {
         if (data.reset) { bytes.value = []; lost.value = 0; evicted.value = 0 }
         cursor = data.cursor; session = data.session
         lost.value += data.lost_bytes
@@ -49,7 +49,10 @@ async function poll() {
   } catch (exc) { if (!disposed) error.value = String(exc) }
   if (!disposed) timer = setTimeout(poll, 200)
 }
-defineExpose({ clear: () => { bytes.value = []; lost.value = 0; evicted.value = 0 } })
+function append(data: Uint8Array) {
+  const combined = [...bytes.value, ...data]; evicted.value += Math.max(0, combined.length - 65536); bytes.value = combined.slice(-65536)
+}
+defineExpose({ append, clear: () => { bytes.value = []; lost.value = 0; evicted.value = 0 } })
 onMounted(poll)
 onUnmounted(() => { disposed = true; controller?.abort(); if (timer) clearTimeout(timer) })
 </script>

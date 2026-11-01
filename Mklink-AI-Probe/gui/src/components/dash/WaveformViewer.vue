@@ -35,6 +35,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   'latest-values': [values: Record<string, number>]
   'replay-channels': [channels: string[] | null]
+  'visibility-change': [path: string, visible: boolean]
 }>()
 
 const container = ref<HTMLDivElement>()
@@ -144,6 +145,10 @@ function applyHiddenChannels(): void {
   else viewer?.setHiddenChannels?.(names)
 }
 
+function onVisibility(event: Event) {
+  const {path, visible} = (event as CustomEvent).detail
+  emit('visibility-change', path, visible)
+}
 function onReplay(event: Event) {
   const detail = (event as CustomEvent).detail
   emit('replay-channels', detail.channels)
@@ -356,6 +361,7 @@ onMounted(() => {
   if (!container.value) return
   const el = container.value
   el.addEventListener('mklink:replay', onReplay)
+  el.addEventListener('mklink:visibility', onVisibility)
 
   const saveViewerFile = (filename: string, text: string) => saveTextFile(filename, text)
   ;(window as any).__MKLINK_SAVE_FILE__ = saveViewerFile
@@ -398,6 +404,7 @@ watch(language, value => {
 
 onUnmounted(() => {
   container.value?.removeEventListener('mklink:replay', onReplay)
+  container.value?.removeEventListener('mklink:visibility', onVisibility)
   disposeReplay?.()
   disposed = true
   stopVofaStatusPolling()

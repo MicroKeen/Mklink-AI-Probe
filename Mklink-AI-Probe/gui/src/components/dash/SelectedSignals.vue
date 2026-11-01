@@ -36,7 +36,7 @@
           <div class="signal-heading">
             <button class="drag-handle" :aria-label="`移动 ${path} 到分组`" :disabled="!prefs.ready.value" :title="tr('按住拖入目标分组', 'Drag into a group')" @pointerdown="startDrag(path,$event)" @pointermove="dragMove" @pointerup="finishDrag" @pointercancel="cancelDrag" @lostpointercapture="cancelDrag" @dragstart.prevent>⠿</button>
             <input v-if="settings" type="checkbox" :value="path" v-model="checked" :aria-label="`选择 ${path}`" />
-            <button :title="tr('显示或隐藏波形', 'Show or hide waveform')" @click="$emit('visibility', path, hidden?.has(path) ?? false)">{{ hidden?.has(path) ? '○' : '●' }}</button>
+            <button class="signal-visibility" :aria-label="`${hidden?.has(path) ? tr('显示', 'Show') : tr('隐藏', 'Hide')} ${path}`" :aria-pressed="!hidden?.has(path)" :title="tr('显示或隐藏波形', 'Show or hide waveform')" @click="$emit('visibility', path, hidden?.has(path) ?? false)"><EyeOff v-if="hidden?.has(path)" :size="14" /><Eye v-else :size="14" /></button>
             <InlineWatchName :value="prefs.style(path).alias" :fallback="path" :title="path" :label="`重命名变量 ${path}`" :commit="name => prefs.setStyle([path],{alias:name})" /><output>{{ formatValue(values[path]) }}</output>
             <button :aria-label="`强调 ${path}`" :aria-pressed="prefs.style(path).emphasis" @click="toggleStyle(path,'emphasis')"><b>B</b></button>
             <button :aria-label="`采样点 ${path}`" :title="tr('仅显示采样点，不连线', 'Sample points only, no lines')" :aria-pressed="prefs.style(path).renderMode === 'points'" @click="toggleStyle(path,'renderMode')">{{ tr('点','Dots') }}</button>
@@ -58,6 +58,7 @@
   </section>
 </template>
 <script setup lang="ts">
+import { Eye, EyeOff } from '@lucide/vue'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useWatchWorkspace } from '../../composables/useWatchWorkspace'
 import InlineWatchName from './InlineWatchName.vue'
