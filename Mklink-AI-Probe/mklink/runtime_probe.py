@@ -1,14 +1,17 @@
 """Probe queries and guarded updates executed by the selected shared backend."""
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Body, Request
 from starlette.concurrency import run_in_threadpool
 
 from mklink._types import DeviceState
-from mklink.runtime_capabilities import PROBE_QUERIES
+from mklink.runtime_capabilities import PROBE_QUERIES, PROBE_OPERATIONS
 
 
-def _query(state, capability):
-    if capability not in PROBE_QUERIES:
+def _query(state, capability, arguments=None):
+    if capability not in PROBE_QUERIES and capability not in PROBE_OPERATIONS:
         raise ValueError('Unsupported probe query')
+    if capability in PROBE_OPERATIONS:
+        from mklink.probe_commands import validate
+        arguments = validate(capability, arguments or {})
     from mklink.bridge import MKLinkSerialBridge
     from mklink.power import read_power
     from mklink.probes import select_probe
@@ -20,7 +23,10 @@ def _query(state, capability):
         raise HTTPException(409, 'Release the stale connection explicitly before querying this probe')
     manager = state['resource_manager']
     owner = 'user:api:' + capability
-    manager.acquire_many((ResourceGroup.MKLINK_BRIDGE, ResourceGroup.TARGET_DEBUG, ResourceGroup.MUX_RTT, ResourceGroup.MUX_WATCH, ResourceGroup.MUX_SYSTEMVIEW), owner)
+    resources = [ResourceGroup.MKLINK_BRIDGE, ResourceGroup.TARGET_DEBUG, ResourceGroup.MUX_RTT, ResourceGroup.MUX_WATCH, ResourceGroup.MUX_SYSTEMVIEW]
+    if capability == 'isp_link_probe':
+        resources += [ResourceGroup.SERIAL_PORT, ResourceGroup.MODBUS_PORT]
+    manager.acquire_many(resources, owner, preempt=False)
     bridge = None
     owned = device is None
     try:
@@ -31,6 +37,9 @@ def _query(state, capability):
             raise HTTPException(409, 'Stop the active acquisition explicitly before querying the probe')
         if capability == 'power_read':
             return read_power(bridge)
+        if capability in PROBE_OPERATIONS:
+            from mklink.probe_commands import execute
+            return execute(bridge, capability, arguments)
         if capability == 'probe_idcode':
             from mklink.flash import IDCODEError, MKLinkFlash
             try:
@@ -146,11 +155,11 @@ def upgrade_firmware(state, firmware_root):
 def create_probe_router(state):
     router = APIRouter()
 
-    async def execute(capability):
+    async def execute(capability, arguments=None):
         from mklink.remote.resource_manager import ResourceError
         from mklink.runtime import RuntimeErrorResponse
         try:
-            return await run_in_threadpool(_query, state, capability)
+            return await run_in_threadpool(_query, state, capability, arguments)
         except (ResourceError, RuntimeErrorResponse) as error:
             raise HTTPException(409, str(error)) from error
         except (ConnectionError, TimeoutError, ValueError) as error:
@@ -167,5 +176,20 @@ def create_probe_router(state):
     @router.post(PROBE_QUERIES['probe_idcode'])
     async def probe_idcode():
         return await execute('probe_idcode')
+
+    def register_operation(capability, path):
+        async def operation(request: Request, arguments: dict = Body(...)):
+            if capability == 'isp_link_probe':
+                runtime = getattr(request.app.state, 'shared_runtime', None)
+                if runtime is not None:
+                    if runtime.uart_operations or any(s.scope == 'uart' for s in runtime.sessions.values()):
+                        raise HTTPException(409, 'Finish UART operations and detach UART clients before ISP diagnosis')
+                    if runtime.current_operation is not None:
+                        runtime.current_operation['uart_exclusive'] = True
+            return await execute(capability, arguments)
+        router.add_api_route(path, operation, methods=['POST'], name=capability)
+
+    for capability, path in PROBE_OPERATIONS.items():
+        register_operation(capability, path)
 
     return router

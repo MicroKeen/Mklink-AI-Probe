@@ -191,7 +191,7 @@ def parse_offline_config(
     swd_clock = _positive_int(
         payload.get("swd_clock_hz", 10000000),
         "SWD clock",
-        100000,
+        1000,
         30000000,
     )
     from mklink.debug_speed import validate_clock_hz
@@ -238,11 +238,9 @@ def parse_offline_config(
     if protocol not in ("debug", "hpm_rom_isp_uart"):
         raise OfflineDownloadError("Unsupported offline programming protocol")
     if hpm_target and protocol == 'debug':
-        from mklink.debug_speed import validate_hpm_clock_hz
-        try:
-            validate_hpm_clock_hz(swd_clock)
-        except ValueError as error:
-            raise OfflineDownloadError(str(error)) from error
+        from mklink.capture_clock import V3_CLOCKS, HPM_CLOCKS
+        if swd_clock not in (*V3_CLOCKS, *HPM_CLOCKS):
+            raise OfflineDownloadError('Choose a supported HPM JTAG clock; arbitrary SWD clocks do not set JTAG TCK')
     try:
         isp_otp = resolve_isp_otp(payload.get('hpm_isp_otp'), target_part or '', model, protocol)
     except ValueError as error:
@@ -628,9 +626,12 @@ def _generate_v2_script(config: OfflineDownloadConfig) -> str:
         "import cmd",
         "import hpm" if config.is_hpm else "import load",
         "",
-        f"cmd.set_swd_clock({config.swd_clock_hz})",
         "abort = False",
         "for i in range(1):",
+        f"    if cmd.set_swd_clock({config.swd_clock_hz}) != 0:",
+        '        print("debug clock rejected; upgrade downloader firmware")',
+        "        abort = True",
+        "        break",
     ]
     lines.extend(_reset_preflight_lines(config))
     lines.extend(_program_lines(config, "    "))
@@ -668,11 +669,14 @@ def generate_offline_script(config: OfflineDownloadConfig) -> str:
         "",
         f"AUTO_DOWNLOAD_COUNT = {config.auto_download_count}",
         f"WAIT_IDCODE_TIMEOUT = {config.wait_idcode_timeout_ms}",
-        f"cmd.set_swd_clock({config.swd_clock_hz})",
         "",
         "abort = False",
         "for i in range(AUTO_DOWNLOAD_COUNT):",
         "    if abort:",
+        "        break",
+        f"    if cmd.set_swd_clock({config.swd_clock_hz}) != 0:",
+        '        print("debug clock rejected; upgrade downloader firmware")',
+        "        abort = True",
         "        break",
         '    print("=== Auto Download Round:", i + 1, "===")',
         *(['    print("waiting for target connection")'] if config.is_hpm else []),
@@ -964,6 +968,14 @@ def _transactional_copy(
 def required_verify_capabilities(config: OfflineDownloadConfig) -> tuple[str, ...]:
     """Deployment requirements; retain the existing helper name for callers."""
     required = set()
+    if config.hpm_isp is None:
+        from mklink.capture_clock import V3_CLOCKS, HPM_CLOCKS
+        modern = (config.swd_clock_hz not in HPM_CLOCKS if config.is_hpm else
+                  config.swd_clock_hz < 100000 or config.model == 'V2' and config.swd_clock_hz > 10000000)
+        if modern:
+            interface = 'JTAG' if config.is_hpm else 'SWD'
+            required.update((f'{interface}_CLOCK_ACK=1',
+                             f'{interface}_CLOCKS=' + ','.join(map(str, V3_CLOCKS))))
     if not config.verify_after_download:
         required.update(f"OFFLINE_{firmware.format.upper()}_VERIFY=1" for firmware in config.firmwares)
     if uses_cm7_flash(config.target_part or ""):

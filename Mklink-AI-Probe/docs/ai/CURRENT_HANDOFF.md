@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-11-01T19:09:39+08:00`
+- 更新时间：`2026-11-01T19:28:42+08:00`
 - 分支：`codex/v0.4.2-fixes`
-- HEAD：`审计基线c3479a23；Windows产品源8a09b32e/完整Skill0d680d90不变。20261101仅审计文档，74固件入口/47 MCP/296回归，未修复或重建。`
+- HEAD：`a4460790审计后宿主修复；Windows8a09b32e保持，本轮完整Skill覆盖进行中。源码协议53；56 MCP/126能力。`
 - 远端 HEAD：`microkeen/codex/v0.4.2-fixes；多个后续修复共用此分支。microkeen/main核对为3cc474bb。`
 - 工作树：E盘主工作区；旧detached树保留。构建/证据在F盘。
-- 当前任务：已核对固件4dcdb8a的74入口、MUX19请求及HPM_DEBUG10操作；源码/已装Skill均47工具，能力107/106。确认时钟文档过期、Skill缺clock_hz、脱机仍限四档、供电/ISP/OTP等共享MCP缺口及YMODEM接收空实现；296回归通过，无硬件操作。见firmware-skill-command-audit-20261101.md；仅审计未实施，固件空实现已通知指定会话。
-- 状态：`firmware_skill_command_audit_complete`
+- 当前任务：已修复审计中的时钟/首次SDK/离线校验及受控探针、下载、ISP、OTP共享MCP入口和Skill说明；749Python、65GUI及生产Web/真实浏览器通过。正生成完整Skill并备份覆盖本地。YMODEM receive及Vref开启契约交指定固件会话，未占用硬件、未建安装器、未发布。见firmware-skill-fixes-20261101.md。
+- 状态：`firmware_skill_fixes_packaging`
 
 ## 里程碑
 
@@ -24,7 +24,7 @@
 ## 验证证据
 
 - **0.4.2界面更新与Windows覆盖安装**：Windows8a09b32e/NSIS SHA868b146c已覆盖，3642文件一致/两设置保留，47工具/41Web及原生退出通过。392Python/65GUI；真实页面两接口14档、90px接口框、JTAG5k刷新独立保存通过；旧固件提示和导航隔离浏览器通过。首次枚举3秒超时保留，复查1.134秒。见v042-clock-install-20261031.md；此前bd636源408/SDK813及限定HPM5301矩阵见clock-interfaces-20261031.md。完整Skill0d680d90/SHAa126d967不变。
-- **HPM AI Skill能力核实**：20261101审计74固件入口、19MUX请求、HPM_DEBUG10操作；47工具源码/安装schema核对，107/106能力，296回归通过。发现Skill调频参数/文档过期、脱机时钟限制、共享供电/ISP/OTP缺口、Flash读取文档错误、YMODEM接收空壳；无硬件。见firmware-skill-command-audit-20261101.md。此前05e73101的1139回归及HPM5301暂停/寄存器/断点/单步/采集实测保留于hpm-skill-audit-20261029.md。
+- **HPM AI Skill能力核实**：审计后宿主修复：749Python/65GUI、生产Web及真实浏览器HPM JTAG 5k/排除8M通过；56 MCP/126能力，协议53。时钟首次协商、离线完整档位部署门禁、探针诊断/供电、离线/ISP/OTP入口补齐。本轮无USB操作，完整Skill覆盖进行中；固件空接收和Vref开启待指定会话。见firmware-skill-fixes-20261101.md；此前HPM实测保留。
 - **RTT自动恢复与在线静默收尾**：14417715：347相关+17发现测试通过。V4/HPM5301连续两次49700B烧录校验成功，自动暂停/恢复RTT与SuperWatch、零恢复错误；新增RTT349/466字节、Watch3005/3712周期且零读取错。Windows NSIS SHA56830303，覆盖exit0、3627载荷一致、冻结MCP/41Web/正常退出通过；完整Skill SHAbb05fbde、2625文件/47工具已同步。仍0.4.1未发布。旧静默面板修复d1cf16ec的124GUI/29Python证据保留。见rtt-auto-restore-20261030.md及online-flash-receipt-20261029.md。
 - **Linux/macOS 0.4.1测试包**：Linux源a6bdacbc/CI40637027269、Mac arm64源eefc6842/CI40640511140：USB各58通过/1skip，冻结CLI/MCP/健康/Web/退出通过。DEB SHA7309f377、DMG SHA56dc8e0a，均旧0.4.1未带后续修复；Mac ad-hoc未公证，实机安装/UI/USB待测。见linux-deb-test-20261028.md、macos-arm64-test-20261028.md。
 - **安装器旧元数据自动清理**：源cb30b703：62定点、5577Python/2skip、1133GUI和NSIS通过。八文件旧dist-info复现误报0.3.6，覆盖exit0清理后识别0.4.1；207保留文件及3626载荷一致，冻结/原生/退出通过。PR63已集成下版，正式0.4.1不变。见installer-metadata-cleanup-20261027.md。
@@ -35,7 +35,7 @@
 ## 架构决策
 
 - 0.4.1正式源514efb86及资产不可变。PR63安装器修复留待下版；codex/v0.4.2-fixes共用。Windows0.4.2产品源8a09b32e已按用户要求覆盖安装，含独立时钟/离线14档/紧凑接口框/旧固件升级提示；完整Skill仍0d680d90。发布/合并须明确指令；旧Unix/SDK/私有固件保留，公网中继延期。
-- 后台协议 52：一个 GUI 客户端持有一个固定后台，同窗口切换只改下载器，RTT/Watch/Trace 跟随当前设备并清空旧目标状态；另开客户端才建独立后台。已有 URL 的额外页面共享该后台。工程上下文固定，换工程须停止原后台后重开。
+- 后台协议 53：一个 GUI 客户端持有一个固定后台，同窗口切换只改下载器，RTT/Watch/Trace 跟随当前设备并清空旧目标状态；另开客户端才建独立后台。已有 URL 的额外页面共享该后台。工程上下文固定，换工程须停止原后台后重开。
 - 物理探针唯一 OS 所有权、USB 身份核对和 epoch 隔离保留。GUI/AI 明确断开或切换自动停止采集、排空在途操作并释放端口；旧会话不得跨设备，未知结果不得自动重放，不偷取其他后台占用。MCP disconnect 物理断开，detach 仅退出自身；独立 UART 保留。
 - SuperWatch 变量写入只认写应答，不做自动回读；烧录/显式内存校验仍保留，真实写错误不得吞掉或重放。外设 ID 基于 Pack 版本/芯片/SVD 相对路径；失效选择不得阻断物理连接，无法迁移时重选。 在线型号提供脱机/外设默认值，各页可独立修改；Pack操作完成自动刷新。下载先预留唯一物理身份，不要求先连接目标；自身预留不重建下载表单，其他设备切换仍清理。 HPM SDK的*_svd.xml按CMSIS-SVD支持；九系列共用目录不要求精确型号，精确Pack优先，型号扩展可手动导入XML；SES CPU寄存器XML不作为外设SVD。保留厂家原始字节/许可证及SHA校验。dump停止根据DUMP_STOP能力验证回执，旧固件错误不得凭身份token误报READY；启动命令回显独立计数，duration尾部不算完整样本。
 - 腾讯云优先、GitHub/Gitee备用；上海私有COS签短链，90GiB告警/95GiB锁停，保留累计账本。套餐到期北京时间2026-11-26零点，未核验续费不恢复；监控延迟使阈值非账单上限。只用现有控制台/TAT，不申请私钥/SSH。preview撤下、旧桶获授权清理，香港桶已删除，只留上海；叠加110GB不提高90/95阈值。2026-10-25停止旧Aladdin-Wang GitHub的新发布，保留历史资产；新版本仅MicroKeen GitHub和既有Gitee。旧0.4.0草稿转换未完成，不自动操作。云迁移和Dot确认见v040-release-handoff.md，当前正式版见v041-release-handoff.md。
@@ -53,7 +53,7 @@
 
 ## 下一动作
 
-1. 等待用户指定审计修复范围。优先同步Skill/schema时钟说明及修复脱机/旧SDK首次时钟限制，再补受控共享MCP入口；YMODEM接收空实现已通知指定固件会话。Windows8a09b32e/Skill0d680d90保持，未打包/升级/发布。
+1. 完成完整Skill本地备份覆盖并核验schema/资源/用户文件；Windows8a09b32e未重建，旧协议52后台不能混用新Skill。等待指定固件会话交付YMODEM receive/Vref契约并协调新入口真机验收。发布/合并仍需本次明确指令。
 2. 新V3已校准edc40176/build14:10:28，配置需明确ACK与applied/configured；无LIVE能力，采集中改频拒绝且不停任务。低频并行可明显增加DAP延迟。旧NOBITS机器码哈希结论撤回，硬件证据保留，见专项文档。
 3. 公网远程服务中继为下个版本任务；本次不实施。
 4. 下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。

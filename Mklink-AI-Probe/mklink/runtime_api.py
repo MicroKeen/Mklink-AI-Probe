@@ -387,7 +387,12 @@ class RuntimeControl:
             headers["X-MKLink-Session"] = session_id
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=self.app),
                                     base_url=f"http://127.0.0.1:{self.info['port']}") as client:
-            kwargs = {"params" if method == "GET" else "json": arguments or {}}
+            if path == '/api/offline-download/deploy':
+                kwargs = {'data': {'config_json': json.dumps(arguments['config']),
+                                   'request_id': arguments['request_id']}}
+                headers['X-MKLink-Request-Id'] = arguments['request_id']
+            else:
+                kwargs = {"params" if method == "GET" else "json": arguments or {}}
             response = await client.request(method, path, headers=headers, **kwargs)
         if response.status_code >= 400:
             raise HTTPException(response.status_code, response.json())
@@ -511,7 +516,7 @@ class RuntimeGate:
                 c.require_identity(reconnect=path == '/api/device/connect', memory_snapshot=path in MUX_MEMORY_PATHS)
             except HTTPException as exc:
                 return await reject(exc.status_code, exc.detail)
-        if path in {'/api/offline-download/deploy', '/api/offline-download/trigger', '/api/offline-download/algorithm'}:
+        if path in {'/api/offline-download/deploy', '/api/offline-download/trigger', '/api/offline-download/trigger-job', '/api/offline-download/algorithm'}:
             try:
                 c.require_identity()
                 from mklink.probe_volumes import resolve_volume
@@ -607,7 +612,7 @@ class RuntimeGate:
             # Receiving a body may yield across a completed switch. Validate
             # again under admission before any old request reaches hardware.
             check_connection()
-            if path in {'/api/offline-download/deploy', '/api/offline-download/trigger',
+            if path in {'/api/offline-download/deploy', '/api/offline-download/trigger', '/api/offline-download/trigger-job',
                         '/api/offline-download/algorithm', '/api/online-flash/memory/read',
                         '/api/online-flash/memory/read-stream'}:
                 from mklink.remote.acquisition import download_response

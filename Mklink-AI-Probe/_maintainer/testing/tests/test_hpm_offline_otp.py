@@ -49,7 +49,7 @@ def test_generated_recipe_stops_before_any_following_operation(monkeypatch, fail
         hpm.program_verified = verified
     for name, obj in dict(hpm=hpm, PikaStdLib=SimpleNamespace(),
                           time=SimpleNamespace(sleep_ms=lambda _: None),
-                          cmd=SimpleNamespace(set_swd_clock=lambda _: None,
+                          cmd=SimpleNamespace(set_swd_clock=lambda _: 0,
                                               set_beep_on=lambda: None, set_beep_off=lambda: None)).items():
         monkeypatch.setitem(sys.modules, name, obj)
     script = generate_offline_script(parse_offline_config(payload()))

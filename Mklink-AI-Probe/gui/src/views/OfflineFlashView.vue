@@ -96,6 +96,9 @@ const scriptName = ref(saved.scriptName ?? 'factory-download.py')
 const automaticCount = ref(1)
 const idcodeTimeout = ref(saved.idcodeTimeout ?? 10000)
 const swdClock = ref(saved.swdClock ?? 10000000)
+const offlineClocks = computed(() => [1000, 5000, 10000, 20000, 50000, 100000,
+  200000, 500000, 1000000, 2000000, 4000000, 5000000,
+  ...(!hpmMode.value ? [8000000] : []), 10000000, 20000000, 30000000])
 
 const algorithms = ref<AlgorithmRow[]>([])
 const firmwares = ref<FirmwareRow[]>([])
@@ -1142,7 +1145,8 @@ onBeforeUnmount(() => {
         <label v-if="hpmMode && !ispMode" class="setting-row"><span>{{ tr('HPM 板卡', 'HPM Board') }}</span><select v-model="hpmBoard" class="form-select"><option v-for="item in hpmBoards" :key="item" :value="item">{{ item }}</option></select></label>
         <label class="setting-row"><span>{{ tr('自动烧录次数', 'Automatic Flash Count') }}</span><input v-model.number="automaticCount" data-testid="offline-automatic-count" type="number" min="1" max="9999" class="form-input" :disabled="effectiveModel === 'V2'"></label>
         <label v-if="!ispMode && automaticCount > 1" class="setting-row"><span>{{ tr('目标连接／换板等待时间（ms）', 'Connection / board replacement timeout (ms)') }}</span><input v-model.number="idcodeTimeout" data-testid="offline-connection-timeout" type="number" min="500" max="600000" step="500" class="form-input"></label>
-        <label v-if="!ispMode" class="setting-row"><span>{{ tr('调试速率', 'Debug clock') }}</span><select v-model.number="swdClock" class="form-select" data-testid="offline-clock"><option :value="1000000">1 MHz</option><option :value="4000000">4 MHz</option><option :value="5000000">5 MHz</option><option :value="8000000">8 MHz</option><option :value="10000000">10 MHz</option><option :value="20000000">20 MHz</option><option :value="30000000">30 MHz</option></select></label>
+        <label v-if="!ispMode" class="setting-row"><span>{{ hpmMode ? 'JTAG' : 'SWD' }} {{ tr('时钟', 'clock') }}</span><select v-model.number="swdClock" class="form-select" data-testid="offline-clock"><option v-if="!offlineClocks.includes(swdClock)" :value="swdClock" disabled>{{ swdClock }} Hz — {{ tr('请重新选择', 'Choose again') }}</option><option v-for="hz in offlineClocks" :key="hz" :value="hz">{{ hz >= 1000000 ? `${hz / 1000000} MHz` : `${hz / 1000} kHz` }}</option></select></label>
+        <p v-if="!ispMode" class="muted">{{ tr('部署前核验固件支持的档位；旧固件不支持时会提示更新。', 'Firmware clock support is checked before deployment; update older firmware when prompted.') }}</p>
         <p v-if="effectiveModel === 'V2' && swdClock > 10000000" class="muted">{{ tr('V2 的 20/30 MHz 需要支持高速时序的新版固件。', 'V2 20/30 MHz requires updated firmware with high-speed timing support.') }}</p>
         </fieldset>
       </aside>

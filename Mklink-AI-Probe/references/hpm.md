@@ -15,9 +15,9 @@ HPM / HPMLINK / RISC-V 任务先读本页，再按需读烧录、内存或采集
    `cmd.get_idcode()` 以及 `gui_call("probe_idcode")` 返回的 ID 可能来自缓存；
    `0x1000563D` 不能证明精确 HPM 型号、Flash 容量、当前在线状态或 SBA 已初始化。
    精确 `target_part`、板卡和存储配置取自工程/板级资料。
-3. 新固件的原始 `hpm.read_idcode()` 是实时 JTAG 存在性检查，先查
-   `hpm.jtag_presence_supported()`。这是固件接口，不是同名 MCP 工具；正常 AI
-   使用共享入口，不另开串口执行。返回负数表示忙/不支持/错误，不能当作已拔板。
+3. `probe_presence(interface="JTAG")` 通过共享后台核验能力并执行实时 JTAG 存在性检查。
+   它封装 `hpm.jtag_presence_supported()` / `hpm.read_idcode()`，不另开串口、不强制切换接口。
+   返回负数表示忙/不支持/错误，`present=null` 不能当作已拔板。
 4. 首次内存访问报 `SBA unavailable` 时，记录固件版本、完整错误和调用入口。
    旧固件可能缺少冷启动初始化；反复 `cmd.get_idcode()` 不会修复它。不要通过
    ARM halt、通用复位、OTP 或反复重放写命令尝试恢复。共享 MUX 路径与原始 Pika
@@ -27,34 +27,30 @@ HPM / HPMLINK / RISC-V 任务先读本页，再按需读烧录、内存或采集
 
 ## 调试速度：不要把 SWD 参数当成任意 JTAG 频率
 
-AI 可以自行选择 `set_debug_speed(profile="low")` 或 `"medium"`，对应 4/10 MHz，
-无需为普通调试的档位选择再次询问用户；新接线优先 low，已知稳定连接可用 medium。
-`high`/`ultra` 对应 20/30 MHz，仅在目标和接线允许时选择。切档前按共享后台规则
-处理正在运行的采集；不要抢停其他客户端。读取返回的 `interface`、
-`profile_confirmed`、`qualification`，随后用已知有效地址验证通信。
+先读 `gui_call("debug_speed")` 的 `active_interface`、`interfaces.JTAG.clocks_hz`
+和 `clock_source`。AI 可自主选择固件声明的档位，默认 10 MHz；新接线可选已声明的
+较低频率，20/30 MHz 需按目标和接线验证。使用 `set_debug_speed(clock_hz=...)`，
+例如声明支持时选 5000 Hz。共享采集运行期间不改频、不抢停其他客户端。
 
-固件的历史命令名 `cmd.set_swd_clock(Hz)` 同时包含 SWD 设置和 HPM JTAG DMI
-档位选择。当前 HPM 私有 JTAG 后端只有 **4/10/20/30 MHz** 的 DMI 快路径。
-`cmd.set_swd_clock(8000000)` 会返回 `JTAG profile=0`，回退到固定延时的通用
-C 路径，**不是把 JTAG TCK 设为 8 MHz**。`set clock 8000000` 只是接受请求，
-不是频率测量。1 MHz 同样不代表该 JTAG 路径真实降到 1 MHz。
+新版 JTAG 声明 `JTAG_CLOCK_ACK=1` 和完整 14 档：1/5/10/20/50/100/200/500 kHz、
+1/2/5/10/20/30 MHz；保留旧 4 MHz 兼容入口。旧固件只有 4/10/20/30 MHz，需更新
+匹配型号固件后才能使用新增档位。8 MHz 不属于 HPM JTAG 档位，不能按任意 SWD 频率调用。
+`profile=low/medium/high/ultra` 是旧 4/10/20/30 MHz 的兼容别名，能力清单优先。
 
-烧录接口里的 `swd_clock`、脱机 `swd_clock_hz` 也是历史字段名；HPM JTAG 只填
-`4000000/10000000/20000000/30000000`。遇到示例或旧配置中的 8 MHz，AI 可选择
-受支持的 4/10 MHz 并报告实际选择；用户要求严格 8 MHz 时说明当前路径不能保证。
-现有工程保存了其他频率时应显式修正配置，不能用原始命令绕过拒绝。
+配置页“连接设备”分别保存 SWD/JTAG 时钟；选择接口不切换实际调试模式。烧录字段
+`swd_clock`、脱机字段 `swd_clock_hz` 是历史命名，HPM 按 JTAG 能力解释。
+脱机预览可选完整目录，部署前检查绑定下载器的固件能力；脚本发现时钟设置失败会中止。
 
-`JTAG profile=10000000` 只确认选择了内核；快路径还取决于扫描宽度、TAP 链及
-探针 CPU 时钟。TAP 发现、通用扫描和 CMSIS-DAP/IDE 路径不等同于该 DMI 内核。
-报告分别写明请求档位、固件应答、读写是否成功；没有示波器/逻辑分析仪实测时，
-不要声称实测 TCK 或用采样率倒推 TCK。
+读取 `interface`、`profile_confirmed`、`apply_state`、`qualification`。
+`configured` 只表示已配置、待应用；`applied` 确认应用时序设置，仍非物理 TCK 测量。
+Keil/DAP 独立；使用已知有效地址验证通信，不能用数据吞吐率倒推 TCK。
 
 ## 能力和正确入口
 
 | 任务 | 当前入口和边界 |
 |---|---|
 | BIN / HEX 在线烧录 | 共享 `start_job(action="flash", ...)` 或在线烧录页的 HPM ROM 后端；不是 ARM pyOCD/FLM。BIN 要真实基址，HEX 用文件内地址；精确目标加 `board` 或四字 `hpm_flash_cfg`。 |
-| 脱机部署、换板循环 | `/api/offline-download` 的 preview/deploy/trigger；实时存在性检查由生成脚本负责。部署成功不等于已烧写，保存并查询匹配任务结果。 |
+| 脱机部署、换板循环 | `offline_download` 的 preview/deploy/trigger；实时存在性检查由生成脚本负责。部署成功不等于已烧写，保存并查询匹配任务结果。 |
 | UART ROM ISP | 用户明确选择时走 [USART ISP](hpm-usart-isp.md)；独立的 NOR 参数、波特率与 ROM 启动条件，不隐式从 JTAG 切换。 |
 | RAM / Flash 快照 | `read_memory`、`read_memory_regions`；使用工程已知地址。Flash 读取不需要 FLM；RAM 局部/全局映射、总线可访问性和缓存一致性以实际 HPM 工程为准。 |
 | RAM / 变量写入 | `write_memory` / `flush_memory` / 共享类型化写入；先确定用户允许修改的对象和范围。RAM 写命令不是 Flash 编程器。未知结果不重放。 |
@@ -65,7 +61,7 @@ C 路径，**不是把 JTAG TCK 设为 8 MHz**。`set clock 8000000` 只是接�
 | 目标复位 | 显式 `start_job(action="reset", ...)` 由后端路由；运行采集时受固件复位能力约束。烧录 ROM API 自带复位/运行，不额外补 ARM SWD reset。 |
 | halt / resume / step / 断点 / CPU 寄存器 | 配套上位机的 `hpm_debug` 经 HPM_DEBUG v1 固件接口操作 RV32 hart 0，先查 capabilities。旧固件/旧工具缺少此入口时明确说明接口缺失；可协调释放探针后使用工程已有 HPM IDE/OpenOCD/GDB。不能据旧 ARM API 的拒绝判定 HPM 硬件不支持。 |
 | 异常分析 | 使用 HPM 异常现场和对应 ELF；配套 `hpm_debug` 可在已暂停 hart 上读 PC、mepc、mcause、mtval、mstatus。Cortex-M HardFault / CFSR / HFSR / MSP / PSP 不适用，当前没有自动 RISC-V 异常报告，不能把 ARM 检测结果称为 HPM“无异常”。 |
-| OTP、保护、供电 | `configuration_description` / `read_configuration` 只限声明支持的字段。OTP 写入/锁定使用专用受控流程，VCC 每次单独确认具体电压；不以通用 ARM `security_lock/unlock` 替代 HPM OTP。 |
+| OTP、保护、供电 | `hpm_otp` 复用 GUI 的 JTAG/ISP 受控流程，见[参数与边界](probe-workflows.md)。写入/锁定单独确认，VCC 每次确认具体电压；不以 ARM `security_lock/unlock` 替代 HPM OTP。 |
 
 ## HPM 外设 XML 与 SuperWatch
 

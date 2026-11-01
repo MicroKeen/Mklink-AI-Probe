@@ -30,7 +30,7 @@ FPB 和 CPU 核心寄存器示例不适用于 HPM；地址须取自当前工程 
 
 ### 读取 RAM
 
-#### `python -m mklink read-ram --addr <地址> [--size <字节数>] [--port COM6] [--save <文件名>]`
+#### `python -m mklink read-ram --addr <地址> [--size <字节数>] [--port COM6]`
 读取目标芯片 RAM 数据，输出十六进制 dump。RAM 读取不需要 FLM 算法。
 `--size` 限制为 **1..4096 字节**；更大范围改用 `dump-memory`，不要把大段文本
 hexdump 返回给 AI。MCP 同样限制 `read_memory` 为 4096B；同时读取多个变量时用
@@ -222,12 +222,14 @@ CLI 失败返回非零退出码；共享 MCP/SDK 调用方必须检查 `ok`/`ver
 
 ### 读取 Flash
 
-#### `python -m mklink read-flash [--addr <地址>] [--size <字节数>] [--port COM6] [--save <文件名>]`
-读取 Flash 数据。自动从 `.mklink/` 配置加载 FLM 算法（Flash 读取需要 FLM）。
+#### `python -m mklink read-flash [--addr <地址>] [--size <字节数>] [--port COM6]`
+读取目标内存映射 Flash，每次 1..4096 字节，不需要 FLM。共享 CLI 返回 JSON 中的
+`data_hex`/`data_base64`；不使用下载器磁盘，也不支持这里的旧 `--save` 参数。
+需要文件时使用共享 SDK `read_memory` 后在主机保存，或 `dump-memory --save`（按该命令的采集边界）。
 
 ```
 python -m mklink read-flash --addr 0x08000000 --size 128
-python -m mklink read-flash --addr 0x08005000 --size 4096 --save flash_dump.bin
+python -m mklink read-flash --addr 0x08005000 --size 4096
 ```
 
 ### VOFA+ 共享实时变量观测（0.3.0）
@@ -331,20 +333,17 @@ python -m mklink superwatch TIM2.CNT,ADC1.DR --svd path/to/device.svd --visualiz
 
 **Dump Memory 连续采样协议**
 
-采集时钟在仪表盘统一选择，SuperWatch 不再单独提供速率配置。MCP 可先查询
-`gui_call("debug_speed")` 的 `clocks_hz`，再传 `set_debug_speed(clock_hz=...)`；
-新 V3 的 14 档、旧 4→2 MHz 显式迁移和待应用状态见 [共享时钟](shared-runtime.md)。
-兼容档位仍为 `low`（4 MHz）、`medium`（10 MHz，默认）、`high`（20 MHz）、`ultra`（30 MHz）；
-新 V3 拒绝 `low`，HPM/其他旧固件保留。时钟不等于采样率，实际速率以 dump 时间戳测量。
+采集时钟统一使用配置页“连接设备”的 SWD/JTAG 选项，默认 10 MHz，SuperWatch 不单独配置速率。
+MCP 先查 `gui_call("debug_speed")` 的接口与档位，再传 `set_debug_speed(clock_hz=...)`。
+声明能力的 SWD/JTAG 支持完整 14 档；旧固件仅四档，新档位需更新匹配型号固件，详见
+[共享时钟](shared-runtime.md) 与 [HPM](hpm.md)。HPM 不支持任意 8 MHz。
+兼容 profile 为 low=4 MHz、medium=10 MHz、high=20 MHz、ultra=30 MHz；现代 SWD
+不接受旧 4 MHz，需显式改选，JTAG 保留兼容。时钟不等于采样率。
 
-CLI 使用 `python -m mklink debug-speed ultra --project-root <工程目录>`；加 `--save` 可保存供后续连接使用。`dump-memory` 和 `dump-benchmark` 的 `--speed ultra` 可为本次采样选择 30 MHz。MCP 使用 `set_debug_speed(profile="ultra")`，或 `measure_dump_memory(..., speed_profile="ultra")`。
-
-旧 ARM SWD 和 HPM JTAG 提供 4/10/20/30 MHz 档位；检查 `interface` 和
-`profile_confirmed`，仅设置回显不代表已确认内核或实测频率。明确拒绝时 SWD 尝试
-恢复 1 MHz，HPM JTAG 尝试恢复已确认的 4 MHz 档位；恢复也未确认则时钟状态未知。
-新 V3 采用明确的 configured/applied 应答，失败时不自动回退或重放命令。
-HPM 任意 8 MHz/1 MHz 请求会回退固定延时 C 路径，不能声称按请求改变了 TCK。
-档位回执不证明目标或接线稳定，应按板卡实测选择；采集期间切档会拒绝，不自动抢停。
+CLI 示例：`python -m mklink debug-speed --clock-hz 5000 --project-root <工程目录>`。
+也可传 `medium`；profile 与 `--clock-hz` 二选一，加 `--save` 保存供后续连接使用。
+读取 `interface`、`apply_state` 和 `qualification`，区分 configured/applied，均非物理测频。
+采集期间切档会拒绝，不抢停任务，不重放未知应答。
 
 档位设置改变探针的调试时钟，同一连接中的 RTT、SystemView 等内存访问也使用该时钟。Keil、在线烧录和脱机脚本会按各自配置重新设置时钟；不能用 SuperWatch 的档位代替下载配置。采样报告应分别注明包含批间空隙的持续速率与批内速率，不能混用。
 

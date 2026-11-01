@@ -1007,6 +1007,7 @@ def create_offline_download_router(
                 await upload.close()
 
     @router.post("/trigger")
+    @router.post("/trigger-job")
     async def trigger(
         request: Request,
         payload: Optional[dict] = Body(default=None),
@@ -1091,7 +1092,9 @@ def create_offline_download_router(
                 resolved_port,
             )
         except Exception as error:
-            raise HTTPException(status_code=409, detail=str(error))
+            from mklink.remote.resource_manager import ResourceError
+            unknown = request.url.path.endswith('/trigger-job') and not isinstance(error, ResourceError)
+            raise HTTPException(status_code=503 if unknown else 409, detail=str(error))
         finally:
             resource_manager.release(owner)
         lines = _format_trigger_output(response)

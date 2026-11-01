@@ -20,7 +20,8 @@ def validate_hpm_clock_hz(hz: int, bridge=None) -> int:
     from mklink.capture_clock import V3_CLOCKS, jtag_multiclock
     supported = (*V3_CLOCKS, 4_000_000) if jtag_multiclock(bridge) else PROFILES.values()
     if type(hz) is not int or hz not in supported:
-        raise ValueError("HPM JTAG requires a 4/10/20/30 MHz debug profile; arbitrary SWD clocks do not set its TCK")
+        choices = ', '.join(str(value) for value in supported)
+        raise ValueError(f"HPM JTAG supports these clocks in Hz: {choices}. Read debug_speed capabilities; upgrade firmware for additional clocks. Arbitrary SWD clocks do not set JTAG TCK")
     return hz
 
 

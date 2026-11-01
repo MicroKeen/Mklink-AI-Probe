@@ -626,6 +626,8 @@ def burn_hex_file(
             swd_clock = (requested_clock(config, 'JTAG' if is_hpm_project else 'SWD')
                          if config.get('clock_interface') else config.get("swd_clock", 10000000 if is_hpm_project else 1000000))
         if is_hpm_project:
+            from mklink.capture_clock import prepare_clock_capabilities
+            prepare_clock_capabilities(flash._bridge)
             from mklink.debug_speed import validate_hpm_clock_hz
             try:
                 validate_hpm_clock_hz(swd_clock, flash._bridge)

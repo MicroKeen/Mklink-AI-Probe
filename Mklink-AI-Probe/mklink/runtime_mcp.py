@@ -52,6 +52,9 @@ def build_server():
                 raise RuntimeErrorResponse('Call connect first')
             return current
 
+    from mklink.mcp_workflows import register_workflow_tools
+    register_workflow_tools(server, client)
+
     @server.tool()
     def ping(force_update_check: bool = False) -> dict:
         """Shared-runtime health and supported GUI capabilities; does not open CDC."""
@@ -286,6 +289,20 @@ def build_server():
         return {"detached": True, "device_closed": False}
 
     @server.tool()
+    def reboot_probe(confirm: StrictBool = False) -> dict:
+        """Reboot the selected downloader after explicit approval, never the MCU.
+
+        Detaches this AI session first; other clients/captures must be released
+        explicitly. No automatic reconnect or retry after USB disappears.
+        """
+        if confirm is not True:
+            raise ValueError('Confirm the downloader reboot first')
+        info = client().info
+        close()
+        from mklink.runtime import request
+        return request(info, 'POST', '/api/device/reboot', {})
+
+    @server.tool()
     def device_status() -> dict:
         """Read the shared device status without touching CDC."""
         return client().call("device_status")
@@ -298,12 +315,13 @@ def build_server():
         All attached clients share it. Inspect gui_call('debug_speed') for cached status.
         No target MCU is required; profile_confirmed reports the optional timing-profile ACK.
         Pass exactly one of profile or integer clock_hz. Read gui_call('debug_speed')
-        clocks_hz first: newly advertised V3 SWD has 14 discrete clocks and replaces
-        old 4 MHz with an explicit 2 MHz choice. configured means saved, still
+        interfaces/active_interface and clocks_hz first: modern SWD and HPM JTAG
+        advertise 14 discrete clocks. The interface selection never switches the
+        physical debug mode. Default is 10 MHz. configured means saved, still
         pending application; only applied confirms timing configuration, not
         electrical calibration. Do not stop streams or replay a failed request.
-        Legacy low=4 MHz, medium=10 MHz, high=20 MHz, ultra=30 MHz. For HPM JTAG use
-        these profiles, not arbitrary SWD rates such as 8 MHz. A setting/profile
+        Legacy low=4 MHz, medium=10 MHz, high=20 MHz, ultra=30 MHz. HPM JTAG also
+        supports advertised integer clock_hz; 8 MHz is not a JTAG choice. A setting/profile
         ACK is not a measured TCK frequency; inspect interface and qualification.
         """
         if (profile is None) == (clock_hz is None):
@@ -574,8 +592,8 @@ def build_server():
         Optional target_part, base_address (32-bit integer or integer string), board,
         hpm_flash_cfg (four 32-bit hexadecimal strings) and swd_clock (integer Hz)
         are passed to the existing flash backend. HPM uses ROM API, never FLM.
-        For HPM swd_clock is a legacy parameter name: use only 4000000,
-        10000000, 20000000 or 30000000 for JTAG DMI profiles, not 8000000.
+        For HPM swd_clock is a legacy parameter name: use advertised JTAG clocks
+        from debug_speed (modern 14 clocks, legacy 4/10/20/30 MHz), not 8000000.
         reset_after=false does not prevent the HPM ROM routine's own reset/resume.
         erase and erase_sector accept target_part and algorithm_id; erase_sector requires address.
         Erasure loads the exact target algorithm first; family IDCODE alone is insufficient.

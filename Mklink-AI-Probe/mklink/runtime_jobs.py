@@ -15,7 +15,7 @@ from starlette.routing import Mount
 executing_job = ContextVar('mklink_executing_job', default=None)
 PATHS = {'flash': '/api/device/flash', 'erase': '/api/device/erase',
          'erase_sector': '/api/device/erase-sector', 'reset': '/api/device/reset',
-         'security': '/api/device/security'}
+         'security': '/api/device/security', 'offline_trigger': '/api/offline-download/trigger-job'}
 TERMINAL = {'succeeded', 'failed', 'unknown'}
 DEPLOYMENT_PATHS = {'offline_deploy': '/api/offline-download/deploy',
                     'flm_copy': '/api/offline-download/algorithm'}
@@ -70,7 +70,7 @@ class RuntimeJobs:
         if body.get('session_id') is not None:
             self.control.validate_session(body['session_id'])
         if action not in PATHS or not isinstance(arguments, dict) or body.get('confirm') is not True:
-            raise HTTPException(422, 'Select flash/erase/erase_sector/reset/security with arguments and confirm=true')
+            raise HTTPException(422, 'Select flash/erase/erase_sector/reset/security/offline_trigger with arguments and confirm=true')
         if not isinstance(request_id, str) or not 1 <= len(request_id) <= 128:
             raise HTTPException(422, 'A stable request_id is required; reuse it to query an uncertain submission')
         if action == 'flash':
@@ -84,6 +84,20 @@ class RuntimeJobs:
             try:
                 arguments = validate_erase_request(arguments, sector=action == 'erase_sector')
             except ValueError as exc:
+                raise HTTPException(422, str(exc)) from exc
+        elif action == 'offline_trigger':
+            from mklink.offline_download import offline_trigger_command, OfflineDownloadError
+            try:
+                if arguments.keys() - {'model', 'script_name', 'programming_protocol'}:
+                    raise ValueError('Unsupported offline trigger arguments')
+                model = arguments.get('model')
+                if model not in ('V2', 'V3', 'V4'):
+                    raise ValueError('Select V2, V3 or V4 explicitly')
+                offline_trigger_command(model, arguments.get('script_name', 'offline_download.py'))
+                protocol = arguments.get('programming_protocol', 'debug')
+                if protocol not in ('debug', 'hpm_rom_isp_uart') or protocol == 'hpm_rom_isp_uart' and model != 'V4':
+                    raise ValueError('HPM USART ISP requires V4')
+            except (ValueError, OfflineDownloadError) as exc:
                 raise HTTPException(422, str(exc)) from exc
         elif action == 'security':
             from mklink.security_operations import validate_security_request
@@ -105,15 +119,15 @@ class RuntimeJobs:
         from mklink.runtime_capabilities import capture_reset_supported
         active = active_bridge_dashboards()
         sharing_reset = action == 'reset' and capture_reset_supported(c.app.state.mklink_state, active)
-        if active and action != 'flash' and not sharing_reset:
+        if active and action not in ('flash', 'offline_trigger') and not sharing_reset:
             if action == 'reset':
                 raise HTTPException(409, 'In-stream software reset requires supported probe firmware and shared MUX capture; acquisition was left running')
             raise HTTPException(409, 'Stop acquisition explicitly before an exclusive job')
         device = c.app.state.mklink_state.get('device')
         if action != 'security' and (not device or not device.connected):
             raise HTTPException(409, 'Connect the bound probe before submitting a job')
-        if action == 'security' and self.path is None:
-            raise HTTPException(503, 'Security journal unavailable; no operation was started')
+        if action in ('security', 'offline_trigger') and self.path is None:
+            raise HTTPException(503, 'Task journal unavailable; no operation was started')
         if action == 'flash' or (action == 'security' and arguments['action'] == 'lock'):
             firmware = arguments.get('firmware')
             if not Path(firmware).is_file():
@@ -273,7 +287,9 @@ class RuntimeJobs:
                 job['result'].update(files=[], file_count=len(result['files']), truncated=True)
             else:
                 job['result'] = {'summary': encoded[:16384], 'truncated': True}
-            job['state'] = 'failed' if result.get('success') is False or result.get('status') == 'failed' else 'succeeded'
+            job['state'] = ('unknown' if result.get('status') == 'unknown' else
+                            'failed' if result.get('success') is False or result.get('ok') is False
+                            or result.get('status') == 'failed' else 'succeeded')
         except HTTPException as exc:
             job.update(state='failed' if exc.status_code < 500 else 'unknown', error=str(exc.detail)[:2048])
             if (job['action'] in DEPLOYMENT_PATHS and isinstance(exc.detail, dict)

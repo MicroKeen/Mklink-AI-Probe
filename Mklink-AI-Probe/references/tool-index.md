@@ -16,7 +16,10 @@
 | 器件检查（0.3） | `inspect_mcu` | 只读检查精确器件和统一算法目录，不写 profile/设备文件 |
 | 连接 | `discover_probes` · `connect` · `disconnect` · `detach` · `device_status` | 变量需后台已加载对应 ELF/AXF；已有 GUI 符号时不重复覆盖 |
 | 烧录/擦除/复位 | `start_job` · `job_status` | action 为 flash/erase/erase_sector/reset；保存 request_id、确认本次操作并查询终态。HPM 烧录走 ROM，独立 FLM 擦除不适用 |
-| 采集时钟 | `set_debug_speed` · `gui_call("debug_speed")` | 先读可用档位，再传 Hz 或兼容 profile；新 V3 14 档、HPM 4/10/20/30 MHz，详见共享运行与 HPM 指南 |
+| 采集时钟 | `set_debug_speed` · `gui_call("debug_speed")` | 先读可用档位，再传 Hz 或兼容 profile；SWD/JTAG 各按固件能力提供 14 档，旧固件四档，详见共享运行与 HPM 指南 |
+| 探针诊断/控制 | `probe_presence` · `probe_diagnostics` · `probe_control` · `set_power_on/off` · `reboot_probe` | 实时存在性与缓存 ID 分开；VCC/重启单独确认，见[流程](probe-workflows.md) |
+| 脱机/ROM ISP | `offline_download` · `isp_link_probe` | 预览→部署→独立触发，保存 request_id/查询任务；ISP link probe 仅诊断 |
+| HPM OTP | `hpm_otp` | JTAG 与 ISP 分开，read/plan 后单独确认不可逆写入；ISP 使用一次性 plan_id |
 | 安全保护 | `security_status` · `security_lock` · `security_unlock` | 活动共享 MCP：先查精确型号；必须提供 request_id，返回后台任务后用 job_status 查询。加锁校验固件，解锁确认永久数据丢失，按明确电压复位；nRF54L15省略电压 |
 | 内存 | `read_memory` · `read_memory_regions` · `write_memory` · `flush_memory` | 快照 regions 最多 16 项/总计 4096B；flush 单批最多 12 KiB/8 项，超额由调用方串行分批 |
 | 变量/寄存器 | `read_variable` · `write_variable` · `read_register` | 变量需 AXF；外设字段使用项目所选目录，无需 AXF |

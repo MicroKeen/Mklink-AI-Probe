@@ -494,6 +494,22 @@ describe('OfflineFlashView', () => {
     wrapper.unmount()
   })
 
+  it('offers the complete offline clock catalog and excludes 8 MHz for HPM JTAG', async () => {
+    onlineMocks.searchTargets.mockResolvedValue([{ part_number: 'HPM5301', vendor: 'HPMicro', installed: true, source: 'builtin' }])
+    const wrapper = mount(OfflineFlashView)
+    await flushPromises()
+    await wrapper.get('[data-testid="offline-model"]').setValue('V4')
+    await wrapper.get('.target-result').trigger('click')
+    await flushPromises()
+    const clock = wrapper.get('[data-testid="offline-clock"]')
+    const values = clock.findAll('option:not([disabled])').map(option => Number(option.attributes('value')))
+    expect(values).toEqual([1000, 5000, 10000, 20000, 50000, 100000, 200000, 500000,
+      1000000, 2000000, 4000000, 5000000, 10000000, 20000000, 30000000])
+    await clock.setValue('5000')
+    expect(clock.element).toHaveProperty('value', '5000')
+    expect(wrapper.text()).toContain('JTAG')
+  })
+
   it('provides multi-file firmware selection and editable BIN address and FLM bases', () => {
     const source = readFileSync('src/views/OfflineFlashView.vue', 'utf8')
 
@@ -502,7 +518,7 @@ describe('OfflineFlashView', () => {
     expect(source).toContain('v-model="item.flash_base"')
     expect(source).toContain('v-model="item.ram_base"')
     expect(source).toContain('自动烧录次数')
-    expect(source).toContain('调试速率')
+    expect(source).toContain('data-testid="offline-clock"')
     expect(source).toContain('添加本地 FLM')
     expect(source).toContain('offline-shared-device')
   })

@@ -67,7 +67,8 @@ def test_user_skill_publishes_probe_safety_boundaries():
     assert "超限不得自动拆分" in entry
     assert "文件或日志走 YMODEM/串口专用传输" in entry
     assert "禁止拆分" in entry
-    assert "`pattern` 是 1~256 UTF-8 字节的字面子串" in entry
+    assert 'capture_rtt' not in entry  # Not a tool in the default shared MCP.
+    assert 'references/probe-workflows.md' in entry
     assert "`disconnect` → `connect`" in entry
 
     assert "最多 15 个读取分组" in memory

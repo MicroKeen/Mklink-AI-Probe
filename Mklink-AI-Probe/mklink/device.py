@@ -932,6 +932,8 @@ class Device:
         elif mcu_profile:
             resolved_swd_clock = mcu_profile.get("swd_clock_default", resolved_swd_clock)
         if hpm_clock:
+            from mklink.capture_clock import prepare_clock_capabilities
+            prepare_clock_capabilities(self._bridge)
             from mklink.debug_speed import validate_hpm_clock_hz
             try:
                 validate_hpm_clock_hz(resolved_swd_clock, self._bridge)

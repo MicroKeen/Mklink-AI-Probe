@@ -5,8 +5,6 @@ description: 使用 MKLink/MicroLink 操作目标 MCU：固件烧录、内存与
 
 # MKLink 用户入口
 
-仅用于目标 MCU，按需读参考页。
-
 ## 开始前
 
 - 首次加载立即检查版本：MCP `ping(force_update_check=True)` 读取 `update`；
@@ -46,8 +44,7 @@ description: 使用 MKLink/MicroLink 操作目标 MCU：固件烧录、内存与
   不得拼接 Pika 表达式；旧固件 RTT 通道为 **0~2**；MUX RTT/SystemView 支持 **0~7**，以目标实际活动通道为准。SystemView 需增量 RTT 能力，缺失不回退 raw。搜索窗口为 **0~65536 字节**且不得
   越出已知目标 RAM。越界由工具拒绝，不绕过、不循环重试失败启动。MCP `rtt_write` 单次最多 **256
   字节**（文本 `rtt_write` 或二进制 `rtt_write_hex`），超限不得自动拆分；文件或日志走 YMODEM/串口专用传输，禁止拆分
-  绕过；旧串口映射模式的输入不得包含或跨调用拼接探针保留串 `RTTView.stop()`；多路复用模式按二进制传输。`capture_rtt` 的
-  `pattern` 是 1~256 UTF-8 字节的字面子串，不是正则表达式。
+  绕过；旧串口映射模式的输入不得包含或跨调用拼接探针保留串 `RTTView.stop()`；多路复用模式按二进制传输。
   大流量采集见[原始字节订阅](references/rtt-binary-stream.md)。
 - **MCP Timeout**：查 `runtime_status`/`job_status`；无在途任务才显式
   `disconnect` → `connect` 恢复原设备。失败按控制权参考页处理；不重放未知结果，
@@ -59,9 +56,10 @@ description: 使用 MKLink/MicroLink 操作目标 MCU：固件烧录、内存与
   [FLM 兼容性规则](references/firmware-download-priority.md#flm-兼容性)核对工程与 Pack。
   能确定唯一兼容项时显式指定；确有歧义再请用户选择，均不兼容或缺文件才停止。
 - **HPM**：先读 [HPM 指南](references/hpm.md)。V4/ROM API，禁用 FLM；AI 自选
-  JTAG 4/10/20/30 MHz 档位，不套用任意 SWD 频率或 Cortex-M 调试命令。
+  固件声明的 JTAG 档位，默认 10 MHz，不套用任意 SWD 频率或 Cortex-M 命令。
 - **供电**：`set_power_on` 每次都先确认 1800/3300/5000 mV 并传
   `confirm_user=True`。5000 mV 还须确认供电路径和负载耐压，并传 `confirm_5v=True`。
+  断电也须确认；诊断、ISP、OTP 和离线下载见[专用流程](references/probe-workflows.md)。
 - **加锁/解锁**：先调用 `security_status`，只有返回 `supported:true` 的精确型号才可
   继续；不支持的型号必须停止，禁止改通用型号绕过白名单。加锁必须提供刚校验通过
   的完整固件；解锁会永久擦除该型号声明的 Flash/EEPROM/备份数据，必须分别确认

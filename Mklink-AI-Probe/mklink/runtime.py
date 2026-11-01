@@ -15,7 +15,7 @@ import time
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, build_opener, ProxyHandler
 
-PROTOCOL = 52  # Explicit lifecycle requests drain work and retire target sessions.
+PROTOCOL = 53  # Guarded probe/OTP/offline workflows and complete clock capabilities.
 VERSION = "0.4.2"
 STARTUP_TIMEOUT_SECONDS = 60
 
@@ -455,6 +455,14 @@ class RuntimeClient:
             if not self.session_id:
                 raise RuntimeErrorResponse("Call connect first")
             transport_options = {}
+            if capability == 'offline_deploy':
+                transport_options['timeout'] = 650
+            elif capability == 'isp_link_probe':
+                from mklink.probe_commands import validate
+                args = validate(capability, arguments or {})
+                transport_options['timeout'] = args.get('duration_ms', 10000) / 1000 + 25
+            elif capability.startswith('hpm_otp_'):
+                transport_options['timeout'] = 180
             if capability == 'write_memory':
                 from mklink.memory_write import validate_writes, plan_flush_batches
                 args = arguments if isinstance(arguments, dict) else {}

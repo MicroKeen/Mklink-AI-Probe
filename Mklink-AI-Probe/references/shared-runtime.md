@@ -122,23 +122,24 @@ MCP 的 `systemview_decode(hex_bytes=...)` 和 `systemview_analyze_events(events
 `read_configuration(part_number=..., model="V4")` 通过已连接的共享后台读取受限配置快照，
 须先停止 CDC 采集；保留芯片身份、容量与字段范围校验，不改变保护状态或写入 OTP。
 
-仪表盘的“采集时钟”统一管理当前下载器的 RTT、SystemView、SuperWatch 与普通内存访问。
-先用 `gui_call("debug_speed")` 读取缓存的 `clocks_hz`、`interface` 和 `apply_state`，
-再调用 `set_debug_speed(clock_hz=2000000)`，或保留兼容的 `profile="medium"`；两参数只能选一个。
-新 V3 明确声明能力时提供 1/5/10/20/50/100/200/500 kHz、1/2/5/10/20/30 MHz。
-旧 4 MHz 配置需显式选择 2 MHz 并成功应用后保存；不要把这些档位套到 V2、V4 或 HPM JTAG。
-旧固件仍使用 low/medium/high/ultra 四个档位。持续采集期间拒绝改频，原任务保持运行，
-不要自动停流或重放失败请求。状态查询不访问 USB，采集期间也可调用。
+配置页“连接设备”的接口/时钟统一管理 RTT、SystemView、SuperWatch 与普通内存访问。
+SWD/JTAG 分别保存，默认 10 MHz；选择接口只保存配置，不切换物理调试模式。
+先读 `gui_call("debug_speed")` 的 `active_interface`、`interfaces`、`clocks_hz` 和 `apply_state`，
+再传 `set_debug_speed(clock_hz=...)` 或兼容 `profile="medium"`，两者只能选一个。
+明确声明能力的 SWD/JTAG 都有 14 档：1/5/10/20/50/100/200/500 kHz、1/2/5/10/20/30 MHz。
+以每个接口的能力为准，不凭 V2/V3/V4 名称推断。现代 SWD 的旧 4 MHz 配置需显式改选；
+JTAG 保留 4 MHz 兼容入口，旧固件只有四档。需要新增档位时更新匹配型号的固件。
+HPM 不支持任意 8 MHz，详见 [HPM 调试速度](hpm.md)。
 
-新固件须同时确认精确 Hz 和 `SWD clock_state`。`configured` 表示已保存、尚未确认应用，
-不是 Keil 时钟变化；`applied` 才表示应用时序已设置，仍不是物理频率测量。
-若需确认应用，退出 Keil、停止采集后显式重新设置；不能因后续有采样数据就推断已应用。
-Keil/DAP 时钟独立，低频采集可能明显增加并行调试等待时间。成功后保存工程配置，
-同一下载器的客户端共享当前设置；失败或应答丢失保持未知状态，不伪报成功。
+`configured` 表示已配置、尚待应用；`applied` 表示固件确认应用时序设置，仍非物理频率测量。
+Keil/DAP 时钟独立。持续采集期间改频被拒绝，原任务保持运行；不自动停流、回退或重放
+未知请求。状态查询读取缓存，不访问 USB。普通内存访问成功也不能代替时钟应用应答。
+`ping.capabilities` 列的是上位机入口；HPM CPU 控制仍须 `hpm_debug` 固件能力，不能套用 ARM 工具。
 
-HPM 必须先看 [HPM 调试速度](hpm.md)：`set_swd_clock(8000000)` 的设置回显
-不能证明 JTAG 为 8 MHz；当前私有 JTAG DMI 路径只提供 4/10/20/30 MHz 档位。
-`ping.capabilities` 是服务入口清单，HPM 不能因此使用 Cortex-M 单步/断点/HardFault。
+共享 MCP 新增 `offline_download`、`hpm_otp`、`probe_presence`、`probe_diagnostics`、
+`isp_link_probe`、`probe_control`、`set_power_on/off`、`reboot_probe`，见
+[探针与下载流程](probe-workflows.md)。协议 53 后台提供这些入口；旧后台明确拒绝版本不匹配，
+不得绕过共享锁另开串口。更新本地 Skill 后重启 MCP；旧桌面安装包需待更新后才能提供新接口。
 
 连接下载器与设置速度均不要求连接目标板或取得有效 IDCODE。USB 身份匹配、命令口
 握手成功即可建立下载器会话；目标识别仅补充信息，目标读写/采样仍需有效目标通信。
