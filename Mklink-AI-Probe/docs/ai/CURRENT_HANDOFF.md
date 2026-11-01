@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-11-01T22:58:14+08:00`
+- 更新时间：`2026-11-01T23:08:02+08:00`
 - 分支：`codex/v0.4.2-fixes`
-- HEAD：`825975fc后的HPMLink产品标识/在线临时文件清理修复；既有实装资格对应8eb2a242，不能外推新增产品代码。`
+- HEAD：`产品源abf26c5a已推送；后续资格文档单独提交，不改变产品源。Windows/Skill同源实装，HPM限定SDK验收通过，Web GUI及脱机门禁仍未完成。`
 - 远端 HEAD：`microkeen/codex/v0.4.2-fixes；多个后续修复共用此分支。microkeen/main核对为3cc474bb。`
 - 工作树：E盘主工作区；旧detached树保留。构建/证据在F盘。
-- 当前任务：HPMLink USB品牌候选f06af597已升级，MICROKEEN卷标不变；上位机产品识别/本次成功在线副本清理/协商JTAG门禁完整回归已通过。准备新包实装及HPM5301集成验收，见hpmlink-product-online-files-20261101.md。
-- 状态：`v042_hpmlink_brand_cleanup_qualifying`
+- 当前任务：HPMLink产品标识及在线副本清理已实现/构建/实装。新固件f06af597，HPM5301 SDK烧录52988B完整回读/自动清理/三流恢复通过，原18个U盘根文件及MICROKEEN卷不变。用户重开浏览器后再次因Computer Use无法确认URL而中止GUI验收；设备已释放。见hpmlink-product-online-files-20261101.md。
+- 状态：`v042_hpmlink_sdk_passed_gui_pending`
 
 ## 里程碑
 
@@ -23,7 +23,7 @@
 
 ## 验证证据
 
-- **0.4.2发布资格与HPMLink新修复**：源8eb2a242全套6404Python/2可选observe跳过、1165GUI及Windows/Skill同源实装通过。V2 SHA08ab4061、V3修复后44b1aff2、普通V4升级79a72f68均通过限定STM32H743矩阵：14时钟、RAM/flush/AXF、halt/step/双断点、真实HardFault、RTT双向、三流、SDK/GUI/冻结脱机烧录全223048B回读与自动恢复。V3/V4堆/复位/栈诊断通过；VCC未改。目标运行、三流/标志/FPB清空，后台已退出。原始失败保留；HPMLink新候选未验收，YMODEM实机/长稳等未测，不构成发布批准。 第一轮定点418项通过；新增顺序及14档JTAG/旧固件门禁回归，完整回归已完成。仅删除本任务有所有权且内容不变的成功副本；不扫历史文件，不改MICROKEEN卷标。新代码尚未实装/实机验证，不构成发布批准。 新HPMLink产品/清理代码完整回归：6446 Python通过/2个可选observe跳过，1166 GUI通过/102文件；准备构建/实装，不能外推硬件通过。
+- **0.4.2资格与HPMLink产品/临时文件清理**：旧8eb2a242下V2/V3/普通V4限定矩阵保留；新abf26c5a全套6446Python/2可选observe跳过、1166GUI、Windows/Skill同源实装通过。HPMLink新f06af597：14 JTAG、RAM/flush、RV32调试、XML六GPIO、MCP、RTT双向、单次SDK烧录52988B全回读及三流恢复通过。成功专用副本删除，原18文件哈希/卷名不变。Computer Use无法确认URL两次停止，Web GUI/脱机/新清理的V2V3普通V4复验未完成。脚本字段/运行态断点查询错误保留，未重放烧录。见hpmlink-product-online-files-20261101.md。
 - **HPM AI Skill能力核实**：审计修复749Python/65GUI、生产Web及浏览器HPM JTAG 5k/排除8M通过；完整Skill源cafe835f/SHA717cfdfb已覆盖，2644安装文件一致、5340用户文件保留；56 MCP/126能力和协议53安装后schema一致、Skill验证通过。时钟协商/离线档位门禁、探针控制/诊断/供电、离线/ISP/OTP入口及文档补齐。无USB操作；固件空接收/Vref开启待指定会话。见firmware-skill-fixes-20261101.md。
 - **RTT自动恢复与在线静默收尾**：14417715：347相关+17发现测试通过。V4/HPM5301连续两次49700B烧录校验成功，自动暂停/恢复RTT与SuperWatch、零恢复错误；新增RTT349/466字节、Watch3005/3712周期且零读取错。Windows NSIS SHA56830303，覆盖exit0、3627载荷一致、冻结MCP/41Web/正常退出通过；完整Skill SHAbb05fbde、2625文件/47工具已同步。仍0.4.1未发布。旧静默面板修复d1cf16ec的124GUI/29Python证据保留。见rtt-auto-restore-20261030.md及online-flash-receipt-20261029.md。
 - **Linux/macOS 0.4.1测试包**：Linux源a6bdacbc/CI40637027269、Mac arm64源eefc6842/CI40640511140：USB各58通过/1skip，冻结CLI/MCP/健康/Web/退出通过。DEB SHA7309f377、DMG SHA56dc8e0a，均旧0.4.1未带后续修复；Mac ad-hoc未公证，实机安装/UI/USB待测。见linux-deb-test-20261028.md、macos-arm64-test-20261028.md。
@@ -47,13 +47,13 @@
 
 ## 真机环境
 
-- **state**：已接HPMLink V4/HPM5301，品牌候选f06af597/build22:37:10已升级；固件会话89回归、真实USB产品名/接口名及MICROKEEN卷保持、升级后首次16B读取通过并释放。待新上位机/Skill实装后HPM集成验收。V2/V3/普通V4旧8eb包限定资格保留。
-- **installer**：Windows/完整Skill0.4.2同源8eb2a242，NSIS SHA9625d4f1/Skill SHA059d7d4d已覆盖；3644载荷/2设置/2644 Skill/5340用户文件、56工具/126能力及原生退出通过。证据v042-release-qualification-20261101/candidate-8eb2a242，未发布。
+- **state**：HPMLink V4/HPM5301，f06af597/build22:37:10；目标52988B镜像运行、测试标志0、三流停止、槽0此前清除、JTAG10MHz，后台exit0/USB已释放。无VCC/OTP修改。GUI与脱机验收未完成。
+- **installer**：Windows/Skill0.4.2产品源abf26c5a已覆盖，NSIS SHA2603c688/Skill SHA8ac34a26；3645载荷/2设置/2645 Skill/5340用户文件核对，56MCP/126能力/原生退出通过。证据v042-release-qualification-20261101/candidate-hpmlink-cleanup，未发布。
 - **backups**：保留正式release、安装包、CI ZIP、唯一硬件证据、Skill备份及F盘缓存。含链接/不可访问目录不强删。历史获授权清理见v036-storage-cleanup-20261023.md及本机START_HERE；本地Unix清理不影响正式附件。旧detached树保留；本轮Skill备份在F盘cache/mklink-ai-probe/skill-backups。
 
 ## 下一动作
 
-1. 构建/覆盖安装新HPMLink产品识别与成功在线临时副本清理的同源Windows/Skill，完成f06af597固件的HPM5301集成验收。旧V2/V3/普通V4限定证据保留；新清理逻辑这些型号尚待实板复验。
+1. 继续abf26c5a安装版Web GUI品牌/GUI在线烧录读取、HPM脱机验收；需可用且能可靠识别URL的UI通道或用户人工验收。现有SDK烧录已通过，不重复。再换机复验V2/V3/普通V4的新临时文件清理。正式发布/合并仍需明确指令。
 2. V3修复已本地提交2102f601，未推送；发布前核实远端同步及完整构建来源。V4 receive假成功由250c4445改为不支持，真实Pika绑定和物理发送未测；接收未实现，Vref保持禁用。V4构建依赖Arm-2D/MicroBoot既有本地补丁。
 3. 公网远程服务中继为下个版本任务；本次不实施。
 4. 下个产品版本将固件GitHub备用索引从旧个人仓库迁到MicroKeen；0.4.0签名包保持不可变，当前使用COS主入口与Gitee。
@@ -72,8 +72,8 @@
 
 ## 延续协议
 
-- 读取CURRENT_HANDOFF/v042-session-handoff并核对Git，共用codex/v0.4.2-fixes。本机Windows/Skill为0.4.2测试候选8eb2a242，协议53一致；正式514efb86及0.4.1资产不可变。保留上海90/95GiB、到期锁停、账本及旧detached树，不申请私钥。
-- 最新资格见v042-release-qualification-20261101.md：V2/V3/普通V4已完成并释放，待HPMLink/HPM。三者各有独立新哈希与安装版证据；旧包失败保留，不外推未测型号或YMODEM/供电/长稳。
+- 读取CURRENT_HANDOFF/v042-session-handoff并核对Git，共用codex/v0.4.2-fixes。本机Windows/Skill为0.4.2测试候选abf26c5a，协议53一致；正式514efb86及0.4.1资产不可变。保留上海90/95GiB、到期锁停、账本及旧detached树，不申请私钥。
+- 最新资格见v042-release-qualification-20261101.md及hpmlink-product-online-files-20261101.md。旧V2/V3/普通V4与新HPMLink实机证据严格分源；新HPM的GUI/脱机以及新清理路径其他型号仍待验收，原始失败及UI安全阻断保留。
 - V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。
 - CDC995和SDK10048根因保留待排查。恢复仅同身份CDC故障5秒内；超时不自动接回/新建AI会话，主动断开立即生效，未知写入不重放。历史实例释放记录见v035-transport-recovery.md；当前硬件占用以本交接真机状态及指定固件会话为准。
 - 客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。
