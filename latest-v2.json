@@ -1,20 +1,22 @@
 {
   "schema": "mklink-firmware-v1",
-  "published_at": "2026-10-25T09:47:08+00:00",
+  "published_at": "2026-11-02T01:51:51.965668+00:00",
   "firmwares": [
     {
-      "name": "MicroLink_V2.9.2.rbl",
+      "name": "MicroLink_V2.9.3.rbl",
       "family": "microlink",
       "model": "V2",
-      "version": "V2.9.2",
-      "size": 365384,
-      "sha256": "6a4d13ce3dc29633645c6674ea2bb34f2f09a6e0a9231edb0865ee1103d66563",
-      "build_id": "2026-10-25T17:32:00",
+      "format": "rbl",
+      "version": "V2.9.3",
+      "size": 366268,
+      "sha256": "08ab4061834af5256b6f258c3fa0be5bedeb53c302791064b35733148c9bcbd5",
+      "rbl_payload_bytes": 366172,
       "urls": {
-        "tencent": "https://download.microkeenai.com/mklink/firmware/releases/20261025/MicroLink_V2.9.2.rbl",
-        "github": "https://github.com/Aladdin-Wang/Mklink-AI-Probe/releases/download/firmware-assets/MicroLink_V2.9.2.rbl",
-        "gitee": "https://gitee.com/Aladdin-Wang/Mklink-AI-Probe/releases/download/firmware-assets/MicroLink_V2.9.2.rbl"
-      }
+        "tencent": "https://download.microkeenai.com/mklink/firmware/releases/20261102/MicroLink_V2.9.3.rbl",
+        "github": "https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/firmware-assets/MicroLink_V2.9.3.rbl",
+        "gitee": "https://gitee.com/Aladdin-Wang/Mklink-AI-Probe/releases/download/firmware-assets/MicroLink_V2.9.3.rbl"
+      },
+      "build_id": "2026-11-01T19:34:48"
     }
   ]
 }
