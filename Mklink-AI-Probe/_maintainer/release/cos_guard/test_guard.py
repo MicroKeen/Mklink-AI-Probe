@@ -1,10 +1,12 @@
 import copy
 import unittest
 import json
+import io
 from unittest.mock import patch
 import index
+import resolver
 from index import decide, run, sum_points, STATE_KEY, HEALTH_KEY
-from resolver import select_url
+from resolver import select_url, LeaseCache, MAX_HEALTH_BYTES
 
 
 class GuardTests(unittest.TestCase):
@@ -113,6 +115,55 @@ class GuardTests(unittest.TestCase):
                     index.main_handler({}, None)
             self.assertEqual(storage[HEALTH_KEY]["open"], opened)
             self.assertNotEqual(storage[HEALTH_KEY]["reason"], "guard_error")
+
+
+class LeaseCacheTests(unittest.TestCase):
+    def refresh_once(self, payload, *, failure=None):
+        class EndRound(BaseException):
+            pass
+
+        class Body(io.BytesIO):
+            requested = None
+
+            def read(self, size=-1):
+                self.requested = size
+                return super().read(size)
+
+        body = Body(payload)
+        cache = LeaseCache({"host": "example.invalid"})
+        cache.health = {"old": "must not survive a failed refresh"}
+        with patch.object(resolver.urllib.request, "urlopen", return_value=body,
+                          side_effect=failure), \
+             patch.object(resolver.time, "sleep", side_effect=EndRound):
+            with self.assertRaises(EndRound):
+                cache.refresh()
+        if failure is None:
+            self.assertEqual(body.requested, MAX_HEALTH_BYTES + 1)
+        return cache.health
+
+    def test_release_history_over_64_kib_is_accepted(self):
+        health = {"schema": "mklink-cos-lease-v1", "urls": {
+            f"/release-{i}.zip": {
+                method: "https://example.invalid/release.zip?token=" + "x" * 900
+                for method in ("GET", "HEAD")
+            } for i in range(39)
+        }}
+        payload = json.dumps(health).encode()
+        self.assertGreater(len(payload), 65536)
+        self.assertLess(len(payload), MAX_HEALTH_BYTES)
+        self.assertEqual(self.refresh_once(payload), health)
+
+    def test_oversized_response_fails_closed(self):
+        payload = json.dumps({"padding": "x" * MAX_HEALTH_BYTES}).encode()
+        self.assertEqual(self.refresh_once(payload), {})
+
+    def test_invalid_json_or_non_object_fails_closed(self):
+        for payload in (b"{broken", b"[]", b"null"):
+            with self.subTest(payload=payload):
+                self.assertEqual(self.refresh_once(payload), {})
+
+    def test_fetch_error_clears_cached_health(self):
+        self.assertEqual(self.refresh_once(b"", failure=OSError("unavailable")), {})
 
 
 class ResolverTests(unittest.TestCase):
