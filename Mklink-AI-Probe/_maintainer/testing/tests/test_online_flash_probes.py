@@ -36,6 +36,14 @@ def test_filter_only_returns_mklink_identity_probe():
     assert [probe.unique_id for probe in filter_mklink_probes(probes)] == ["mk-1"]
 
 
+@pytest.mark.parametrize('product', ['HPMLINK', 'HPMLINK CMSIS-DAP'])
+def test_hpmlink_descriptor_is_recognized_without_vendor_alias(product):
+    from mklink.cmsis_dap.probes import filter_mklink_probes
+    probes = [SimpleNamespace(product_name=product, unique_id='hpm'),
+              SimpleNamespace(product_name='CMSIS-DAP', unique_id='other')]
+    assert [item.unique_id for item in filter_mklink_probes(probes)] == ['hpm']
+
+
 def test_probe_filter_accepts_injected_and_environment_usb_ids(monkeypatch):
     from mklink.cmsis_dap.probes import filter_mklink_probes
 
@@ -2070,7 +2078,7 @@ def test_rtt_start_failure_callback_runs_after_worker_cleanup():
     assert callback_observations == [(True, False)]
     assert resource_manager.get_status() == {}
 
-@pytest.mark.parametrize("interval", [0, -1, 0.0000001, 61, "NaN", "Infinity", "bad"])
+@pytest.mark.parametrize("interval", [0, -1, 0.000001, 0.000003999, 61, "NaN", "Infinity", "bad"])
 def test_superwatch_start_rejects_invalid_interval_before_resources(interval):
     managers = {
         name: SimpleNamespace(running=False, start=MagicMock(), stop=MagicMock())
@@ -2099,12 +2107,12 @@ def test_superwatch_concurrent_start_preferences_and_operation_resume():
     route = next(r for r in client.app.routes if getattr(r, "path", None) == "/api/dash/superwatch/start")
 
     async def exercise():
-        return await asyncio.gather(route.endpoint(interval=0.00001), route.endpoint(interval=0.002))
+        return await asyncio.gather(route.endpoint(interval=0.000004), route.endpoint(interval=0.002))
 
     first, second = asyncio.run(exercise())
     assert first["status"] == "started"
-    assert second == {"status": "already_running", "stopped": [], "interval": 0.00001}
-    sw.set_interval.assert_called_once_with(0.00001)
+    assert second == {"status": "already_running", "stopped": [], "interval": 0.000004}
+    sw.set_interval.assert_called_once_with(0.000004)
     sw.start.assert_called_once_with(state["device"])
     # A later explicit change must survive an exclusive operation's resume.
     sw.set_interval(0.003)

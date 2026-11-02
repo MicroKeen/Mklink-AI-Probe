@@ -154,6 +154,8 @@ class SvdRegister:
 
 
 def parse_timestamped_read_ram_response(response: str) -> TimestampedRead:
+    from .memory_access import require_read_response
+    require_read_response(response)
     match = _TIMESTAMP_RE.search(response)
     timestamp_us = int(match.group(1), 0) if match else None
     data = bytearray()

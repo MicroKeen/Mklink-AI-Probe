@@ -3,12 +3,55 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import MemoryReadPanel from './MemoryReadPanel.vue'
+import { setLanguage } from '../../composables/useLanguage'
 
 const componentSource = fs.readFileSync(
   path.resolve(process.cwd(), 'src/components/online-flash/MemoryReadPanel.vue'), 'utf8',
 ).replaceAll('\r\n', '\n')
 
 describe('MemoryReadPanel', () => {
+  it.each([
+    ['zh', 'CONNECT_FAIL', 'SWD/JTAG communication failure (No ACK)', '请确认目标板已连接并供电'],
+    ['en', 'CONNECT_FAIL', 'SWD/JTAG communication failure (No ACK)', 'target board is connected and powered'],
+    ['zh', 'CONNECT_FAIL', 'CPU initialization is incomplete', '连接目标芯片失败: CPU initialization is incomplete'],
+    ['en', 'CONNECT_FAIL', 'CPU initialization is incomplete', 'Target connection failed: CPU initialization is incomplete'],
+    ['zh', 'PROBE_BUSY', 'Probe is already open', '下载器被占用'],
+    ['en', 'PROBE_BUSY', 'Probe is already open', 'The probe is busy'],
+    ['zh', 'MKLINK_DAP_NOT_FOUND', 'Selected probe is unavailable', '检查 USB 连接并刷新设备列表'],
+    ['en', 'MKLINK_DAP_NOT_FOUND', 'Selected probe is unavailable', 'Check its USB connection and refresh'],
+  ] as const)('shows an actionable %s read error for %s without retrying', async (language, code, message, expected) => {
+    setLanguage(language)
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ probe_id: 'physical', device_generation: 1 })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ detail: { code, message } }), {
+        status: code === 'PROBE_BUSY' ? 409 : code === 'MKLINK_DAP_NOT_FOUND' ? 404 : 502,
+        headers: { 'Content-Type': 'application/json' },
+      }))
+    vi.stubGlobal('fetch', fetch)
+    const wrapper = mount(MemoryReadPanel, {
+      props: {
+        probeId: 'probe', targetPart: 'STM32H743II', hpm: false,
+        frequency: 10_000_000, connectMode: 'attach', resetMode: 'software',
+      },
+    })
+    try {
+      await wrapper.get('[data-testid="memory-read-submit"]').trigger('click')
+      await wrapper.get('[data-testid="memory-read-confirm"]').trigger('click')
+      await flushPromises()
+      expect(wrapper.text()).toContain(expected)
+      expect(wrapper.text()).not.toContain('Internal Server Error')
+      expect(wrapper.emitted('log')?.at(-1)?.[0]).toContain(expected)
+      expect(wrapper.emitted('progress')?.at(-1)?.[2]).toBe('failed')
+      expect(wrapper.emitted('data')).toBeUndefined()
+      expect(wrapper.get('[data-testid="memory-read-save"]').attributes('disabled')).toBeDefined()
+      expect(fetch).toHaveBeenCalledTimes(2)
+    } finally {
+      wrapper.unmount()
+      vi.unstubAllGlobals()
+      setLanguage('zh')
+    }
+  })
+
   it('fills the selected target Flash range and preserves manual edits', async () => {
     const wrapper = mount(MemoryReadPanel, {
       props: {

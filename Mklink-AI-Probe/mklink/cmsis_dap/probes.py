@@ -8,7 +8,7 @@ from typing import Any
 from .models import ProbeRecord
 
 
-_IDENTITY_TOKENS = ("mklink", "microlink", "microkeen")
+_IDENTITY_TOKENS = ("mklink", "microlink", "microkeen", "hpmlink")
 
 
 def _parse_usb_id(value: str) -> int:

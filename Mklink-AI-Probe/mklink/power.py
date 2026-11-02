@@ -56,4 +56,6 @@ def parse_power_response(response: str) -> dict:
 def read_power(bridge) -> dict:
     if bridge.state != DeviceState.READY:
         raise RuntimeError("VCC telemetry requires an idle command session; stop the active stream first")
+    from mklink.probe_commands import require_model_operation
+    require_model_operation(bridge, 'get_power')
     return parse_power_response(bridge.send_command("cmd.get_power()", timeout=5.0))

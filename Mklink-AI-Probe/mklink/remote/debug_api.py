@@ -108,17 +108,15 @@ def breakpoints(device, body):
             if address is None:
                 raise ValueError("Function not found: " + target)
             address &= ~1  # ELF Thumb function symbols may carry bit zero.
-        if address % 2 or not 0 <= address < 0x20000000:
-            raise ValueError("FPBv1 requires an even code address below 0x20000000")
+        debug._validate_breakpoint_address(address)
     device._require_cortex_m_debug()
-    if debug._read_u32(device._bridge, debug.FP_CTRL) >> 28:
-        raise ValueError("Shared breakpoints currently support FPBv1 only")
     state = debug.read_debug_state(device._bridge)
     if slot is not None and slot >= state.num_breakpoints:
         raise ValueError("Breakpoint slot is out of range")
     if action in {'list', 'status'}:
         return asdict(state)
     if action == 'set':
+        expected = debug.encode_breakpoint(address, state.fpb_version)
         occupied = {bp.index for bp in state.breakpoints}
         if slot is None:
             slot = next((i for i in range(state.num_breakpoints) if i not in occupied), None)
@@ -127,8 +125,9 @@ def breakpoints(device, body):
         slot = device.set_breakpoint(address, slot)
         # Readback detects silent bridge failures, without replaying writes.
         actual = debug._read_u32(device._bridge, debug.FP_COMP_BASE + slot * 4)
-        expected = (address & 0x1ffffffc) | (0x80000000 if address & 2 else 0x40000000) | 1
-        if actual != expected or not debug._read_u32(device._bridge, debug.FP_CTRL) & debug.FP_CTRL_ENABLE:
+        fp_ctrl = debug._read_u32(device._bridge, debug.FP_CTRL)
+        if (actual != expected or not fp_ctrl & debug.FP_CTRL_ENABLE
+                or ((fp_ctrl >> 28) & 0xF) != state.fpb_version - 1):
             raise RuntimeError("Breakpoint verification failed; inspect status before another operation")
         return {'action': action, 'slot': slot, 'address': address, 'verified': True}
     slots = [slot] if action == 'clear' else [bp.index for bp in state.breakpoints]
@@ -148,10 +147,35 @@ def memory_measure(device, body, *, cancelled=None):
 
 def memory_dump_stream(device, body, *, cancelled=None):
     from mklink.dump_memory import capture_dump_stream
-    _fields(body, {'regions', 'period', 'frames', 'duration', 'speed_profile'})
+    _fields(body, {'regions', 'period', 'frames', 'duration', 'speed_profile', 'fastest'})
     return capture_dump_stream(device, body.get('regions'), period=body.get('period', 0.0),
                                frames=body.get('frames', 1), duration=body.get('duration', 2.0),
-                               speed_profile=body.get('speed_profile'), cancelled=cancelled)
+                               speed_profile=body.get('speed_profile'), fastest=body.get('fastest', False),
+                               cancelled=cancelled)
+
+
+def watch_runtime_stats(device, body):
+    """Read existing firmware counters once, only on an idle claimed MUX."""
+    import struct
+    from mklink.mux import MuxTargetError, MuxTransport
+
+    _fields(body, set())
+    transport = getattr(getattr(device, '_bridge', None), '_mux', None)
+    if not isinstance(transport, MuxTransport):
+        raise HTTPException(409, 'Watch runtime statistics require an existing MUX connection')
+    with transport._commands:
+        if not transport.ready or transport.sampling:
+            raise HTTPException(409, 'Watch runtime statistics require a healthy MUX with all captures confirmed stopped')
+        # Do not enable/reopen MUX, stop a stream, clear counters or retry.
+        try:
+            payload = transport.request(0x14)
+        except MuxTargetError as error:
+            status = 501 if error.status == 1 else 409 if error.status == 6 else 502
+            raise HTTPException(status, f'Watch runtime statistics unavailable (firmware status {error.status}); no retry or fallback') from error
+        if len(payload) != 16:
+            raise HTTPException(502, 'Invalid watch runtime statistics response: expected 16 bytes')
+        return dict(zip(('batches', 'collected', 'collect_cycles', 'pack_cycles'),
+                        struct.unpack('<IIII', payload)))
 
 
 async def _run_cancellable_capture(operation, device, body, request):
@@ -241,10 +265,13 @@ def peripheral_capture(device, body, *, cancelled=None):
 
 
 def create_debug_router(state, lease):
+    from mklink.hpm_debug import HpmDebugError
     router = APIRouter(prefix='/api/device')
 
-    def add(path, operation, *, cancellable=False):
+    def add(path, operation, *, cancellable=False, shared_only=False):
         async def endpoint(body: dict, request: Request):
+            if shared_only and not state.get('shared_runtime'):
+                raise HTTPException(409, 'This diagnostic requires the shared runtime')
             device = state.get('device')
             if not device or not device.connected:
                 raise HTTPException(400, 'Device not connected')
@@ -253,8 +280,12 @@ def create_debug_router(state, lease):
                     if cancellable:
                         return await _run_cancellable_capture(operation, device, body, request)
                     return await run_in_threadpool(operation, device, body)
+                except HTTPException:
+                    raise
                 except SymbolSourceChangedError as error:
                     raise HTTPException(409, str(error)) from error
+                except HpmDebugError as error:
+                    raise HTTPException(409, error.detail) from error
                 except (ValueError, KeyError) as error:
                     raise HTTPException(422, str(error)) from error
                 except Exception as error:
@@ -264,12 +295,14 @@ def create_debug_router(state, lease):
     add('dump-memory/measure', memory_measure, cancellable=True)
     add('dump-memory', memory_dump, cancellable=True)
     add('dump-memory/capture', memory_dump_stream, cancellable=True)
+    add('dump-memory/runtime-stats', watch_runtime_stats, shared_only=True)
     add('read-memory-regions', memory_regions)
     add('watch', watch_snapshot)
     add('flush-memory', memory_flush)
     add('register-snapshot', register_snapshot)
     add('fault-snapshot', fault_snapshot)
     add('breakpoints', breakpoints)
+    add('hpm-debug', lambda device, body: device.hpm_debug(**body))
     add('peripherals/read', peripheral_read)
     add('peripherals/capture', peripheral_capture, cancellable=True)
     return router

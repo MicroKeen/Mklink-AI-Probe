@@ -1070,7 +1070,7 @@ def _register_systemview_tools(mcp: Any) -> None:
         Args:
             addr: RTT control-block address (resolved from
                 .mklink/rtt_config.json when omitted, shared with RTT).
-            channel: SystemView up-channel, 0..2 on V4 firmware (default 1).
+            channel: SystemView up/down channel, 0..7 with shared MUX firmware (default 1).
             search_size: Scan window in bytes; 0 (default) scans up to 1024 bytes within trusted RAM.
             mode: "auto"/"dynamic"/"static" — same semantics as rtt_start.
         """
@@ -1631,15 +1631,22 @@ def build_server() -> Any:
 
     @mcp.tool()
     @_exclusive_hardware_tool
-    def set_debug_speed(profile: str) -> dict:
+    def set_debug_speed(profile: str | None = None, clock_hz: int | None = None) -> dict:
         """Set low=4 MHz, medium=10 MHz, high=20 MHz, ultra=30 MHz. Stop streams first.
 
         HPM JTAG and ARM SWD use the same named profiles with matching probe
         firmware. No target MCU is required to configure the probe. An exact
         setting ACK is sufficient; profile_confirmed separately reports the
         optional interface/profile ACK, not target or wiring stability.
+        Alternatively pass integer clock_hz instead of profile. New V3 SWD
+        uses advertised discrete clocks; its old low=4 MHz requires an explicit
+        2 MHz migration. configured means saved, pending application; applied
+        only acknowledges timing configuration, not electrical calibration.
         """
-        return _connected_device().set_debug_speed(profile)
+        if (profile is None) == (clock_hz is None):
+            raise ValueError('Provide exactly one of profile or clock_hz')
+        device = _connected_device()
+        return device.set_debug_speed(profile) if profile is not None else device.set_debug_clock(clock_hz)
 
     @mcp.tool()
     @_exclusive_hardware_tool

@@ -1,5 +1,6 @@
 from mklink.systemview_parser import (
     EVTID_INIT,
+    EVTID_NAME_RESOURCE,
     EVTID_OVERFLOW,
     EVTID_STACK_INFO,
     EVTID_TASK_INFO,
@@ -91,6 +92,26 @@ def test_hpm_init_preserves_zero_ram_base_and_id_shift():
 
     assert parser._ram_base == 0
     assert parser._id_shift == 0
+
+
+@pytest.mark.parametrize('id_shift', [0, 2])
+@pytest.mark.parametrize('chunk_size', [1, 4096])
+def test_ids_below_rambase_expand_with_target_u32_arithmetic(id_shift, chunk_size):
+    parser = SystemViewParser()
+    ram_base, task_id = 0x01200000, 0x00081BA0
+    raw = ((task_id - ram_base) & 0xFFFFFFFF) >> id_shift
+    init = b''.join(_encode_u32(v) for v in (360_000_000, 360_000_000, ram_base, id_shift))
+    resource = _encode_u32(raw) + b'\x04task'
+    packets = (bytes((EVTID_INIT, len(init))) + init + b'\x01'
+               + bytes((EVTID_TASK_START_EXEC,)) + _encode_u32(raw) + b'\x01'
+               + bytes((EVTID_NAME_RESOURCE, len(resource))) + resource + b'\x01')
+    events = []
+    for offset in range(0, len(packets), chunk_size):
+        events.extend(parser.feed(packets[offset:offset + chunk_size]))
+    assert [event['kind'] for event in events] == ['init', 'task_start_exec', 'name_resource']
+    assert events[1]['task_id'] == events[2]['resource_id'] == task_id
+    assert events[1]['task_id_raw'] == events[2]['resource_id_raw'] == raw
+    assert parser.dropped_bytes == parser.dropped_packets == 0
 
 
 def test_runtime_cpu_clock_override_survives_stale_init_packet():

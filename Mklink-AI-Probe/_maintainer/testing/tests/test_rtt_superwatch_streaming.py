@@ -47,17 +47,19 @@ def test_superwatch_dashboard_template_defaults_interval_to_1ms():
 
     assert 'id="interval-input" value="0.001"' in superwatch_html
     assert 'id="interval-input" value="0"' in vofa_html
+    assert 'step="0.000001" min="0.000004"' in superwatch_html
+    assert 'step="0.001" min="0"' in vofa_html
 
 
-@pytest.mark.parametrize("interval", [0.000001, 0.00001, 0.001, 60.0])
+@pytest.mark.parametrize("interval", [0.000004, 0.000005, 0.00001, 0.001, 60.0])
 def test_superwatch_interval_accepts_supported_range(interval):
     assert normalize_superwatch_interval(interval) == pytest.approx(interval)
 
 
 @pytest.mark.parametrize(
-    "interval", [float("nan"), float("inf"), -float("inf"), 0, 0.0000009, 60.000001],
+    "interval", [float("nan"), float("inf"), -float("inf"), 0, 0.000001, 0.000003999, 60.000001],
 )
-def test_superwatch_interval_rejects_values_outside_1us_to_60s(interval):
+def test_superwatch_interval_rejects_values_outside_4us_to_60s(interval):
     manager = SuperWatchStreamManager()
     before = manager.get_status()["interval"]
 
@@ -166,7 +168,7 @@ def test_superwatch_default_batches_high_rate_samples_without_discarding_rows():
     hub = Mock()
     manager = SuperWatchStreamManager(stream_hub=hub, clock=lambda: 0.0)
     manager._runtime = SimpleNamespace(items=[SimpleNamespace(name="a")])
-    manager.set_interval(0.000001)
+    manager.set_interval(0.000004)
     for sample in range(4096):
         assert manager.publish_sample_points([{"_t": sample / 200000, "a": float(sample)}])
     calls = [call for call in hub.publish.call_args_list if call.kwargs.get("item_count")]

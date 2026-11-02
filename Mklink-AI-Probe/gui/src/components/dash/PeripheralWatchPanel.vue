@@ -1,8 +1,8 @@
 <template>
   <aside class="peripheral-panel" data-testid="peripheral-panel">
     <div ref="searchBox" class="chip-search" @focusout="closeSuggestions">
-      <label for="peripheral-chip-input">{{ tr('芯片型号', 'Chip model') }}</label>
-      <input id="peripheral-chip-input" v-model="chipQuery" class="form-input" data-testid="peripheral-chip-search" role="combobox" aria-autocomplete="list" aria-controls="peripheral-chip-suggestions" :aria-expanded="suggestionsOpen" :aria-activedescendant="suggestionsOpen && activeSuggestion >= 0 ? `peripheral-chip-option-${activeSuggestion}` : undefined" :placeholder="tr('输入型号，如 STM32F103RE', 'Type a model, e.g. STM32F103RE')" @input="searchInput" @focus="suggestionsOpen = true; loadTargets()" @keydown="searchKeydown" />
+      <label for="peripheral-chip-input">{{ tr('芯片型号 / HPM 系列', 'Chip model / HPM series') }}</label>
+      <input id="peripheral-chip-input" v-model="chipQuery" class="form-input" data-testid="peripheral-chip-search" role="combobox" aria-autocomplete="list" aria-controls="peripheral-chip-suggestions" :aria-expanded="suggestionsOpen" :aria-activedescendant="suggestionsOpen && activeSuggestion >= 0 ? `peripheral-chip-option-${activeSuggestion}` : undefined" :placeholder="tr('如 HPM5300 / STM32F103RE', 'e.g. HPM5300 / STM32F103RE')" @input="searchInput" @focus="suggestionsOpen = true; loadTargets()" @keydown="searchKeydown" />
       <div v-if="suggestionsOpen && targets.length" id="peripheral-chip-suggestions" role="listbox" class="chip-suggestions">
         <button v-for="(target, index) in targets" :id="`peripheral-chip-option-${index}`" :key="target.id" type="button" role="option" :aria-selected="index === activeSuggestion" class="chip-suggestion" @mousedown.prevent @click="chooseTarget(target)"><strong>{{ target.target }}</strong><small>{{ target.pack }}</small></button>
       </div>
@@ -11,16 +11,17 @@
       <option value="">{{ searching ? tr('正在匹配 SVD…', 'Finding SVD…') : tr('匹配的 SVD 文件', 'Matching SVD file') }}</option>
       <option v-for="target in matchingSvds" :key="target.id" :value="target.id" :title="target.pack">{{ target.target }} · {{ target.svd.split(/[\\/]/).pop() }} · {{ target.pack }}</option>
     </select>
-    <p v-if="chipQuery.trim() && !searching && !matchingSvds.length" data-testid="peripheral-no-match">{{ tr('没有匹配的 SVD。可导入包含该芯片 SVD 的 Pack，或手动加载 SVD 文件。', 'No matching SVD. Import a Pack containing its SVD, or load an SVD file manually.') }}</p>
+    <p v-if="chipQuery.trim() && !searching && !matchingSvds.length" data-testid="peripheral-no-match">{{ tr('没有匹配的外设描述。可导入 Pack，或手动加载 SVD / XML 文件。', 'No matching peripheral description. Import a Pack or load an SVD / XML file manually.') }}</p>
     <button class="btn btn-primary" data-testid="peripheral-load" :disabled="!deviceConnected || !targetId || busy" @click="loadChip">{{ tr('加载外设', 'Load peripherals') }}</button>
-    <button class="btn" data-testid="peripheral-load-svd" :disabled="!deviceConnected || busy" @click="loadSvd">{{ tr('加载 SVD 文件', 'Load SVD file') }}</button>
+    <button class="btn" data-testid="peripheral-load-svd" :disabled="!deviceConnected || busy" @click="loadSvd">{{ tr('加载 SVD / XML 文件', 'Load SVD / XML file') }}</button>
     <p v-if="selection" data-testid="peripheral-source">{{ tr('当前已加载：', 'Currently loaded: ') }}{{ selection.target }} · {{ selection.pack }} · {{ selection.svd }} · {{ items.length }} {{ tr('项（只读）', 'items (read only)') }}</p>
     <p v-if="restoreError" role="status" data-testid="peripheral-restore-warning">{{ tr('上次的外设选择已失效，请重新选择实际芯片和 Pack。下载器连接及其他功能可继续使用。', 'The previous peripheral selection is unavailable. Select the actual chip and Pack again. The probe connection and other features remain available.') }} <span>{{ restoreError }}</span></p>
-    <p>{{ tr('GPIO 引脚读取 IDR 电平；ODR 为输出锁存值。采样可能漏掉短脉冲，GPIO 时钟须由程序开启。', 'GPIO pins sample IDR levels; ODR is the output latch. Short pulses may be missed. Firmware must enable the GPIO clock.') }}</p>
+    <p v-if="selection?.series" data-testid="peripheral-series-note">{{ tr('已加载该系列共用外设；扩展外设可手动加载对应型号的 XML。', 'Common peripherals for this series are loaded. Load the model XML for additional peripherals.') }}</p>
+    <p>{{ tr('GPIO 输入电平与输出锁存值是不同寄存器，名称以所选描述为准。采样可能漏掉短脉冲，GPIO 时钟须由程序开启。', 'GPIO input levels and output latches are separate registers; names follow the selected description. Short pulses may be missed. Firmware must enable the GPIO clock.') }}</p>
     <select v-model="group" class="form-input" data-testid="peripheral-group"><option value="">{{ tr('所有外设', 'All peripherals') }}</option><option v-for="name in groups" :key="name">{{ name }}</option></select>
     <input v-model="query" class="form-input" data-testid="peripheral-search" :placeholder="tr('搜索，如 GPIOB.12', 'Search, e.g. GPIOB.12')" />
     <p v-if="error" role="alert">{{ error }}</p>
-    <p v-else-if="!items.length">{{ tr('选择实际芯片型号，加载 Pack 的 SVD。无需 AXF。', 'Select the actual chip to load its Pack SVD. No AXF needed.') }}</p>
+    <p v-else-if="!items.length">{{ tr('选择芯片型号或 HPM 系列，加载外设描述。无需 AXF。', 'Select a chip model or HPM series to load peripherals. No AXF needed.') }}</p>
     <p>{{ tr('已过滤 SVD 标注的只写和读取副作用寄存器；未标注的行为仍以芯片手册为准。', 'Write-only registers and SVD-declared read side effects are excluded; consult the chip manual for undocumented behavior.') }}</p>
     <div class="peripheral-list">
       <label v-for="item in filtered" :key="item.name" :title="`${item.register} @ ${item.address}`">
@@ -48,7 +49,7 @@ const query = ref('')
 const error = ref('')
 const restoreError = ref('')
 const busy = ref(false)
-type Target = { id: string; target: string; pack: string; svd: string }
+type Target = { id: string; target: string; pack: string; svd: string; series?: string }
 const targets = ref<Target[]>([])
 const targetId = ref('')
 const chipQuery = ref(consumerTarget('peripheral'))
@@ -83,6 +84,9 @@ async function loadTargets(force = false) {
       if (!targetId.value && exact.length === 1) {
         targetId.value = exact[0]!.id
         chosenModel.value = exact[0]!.target
+      } else if (!targetId.value && targets.value.length === 1 && targets.value[0]!.series) {
+        targetId.value = targets.value[0]!.id
+        chosenModel.value = targets.value[0]!.target
       }
       activeSuggestion.value = targets.value.length ? 0 : -1
     }

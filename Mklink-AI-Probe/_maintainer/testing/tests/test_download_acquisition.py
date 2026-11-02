@@ -263,10 +263,13 @@ def test_restore_retains_live_channel_settings(capture, kind):
     managers.clear()
     managers[kind] = manager
     if kind == 'rtt':
-        manager._line_assembler = SimpleNamespace(encoding='gbk')
-        manager._channel_decoders = {0: SimpleNamespace(_line_assembler=SimpleNamespace(encoding='utf-8')),
-                                     2: SimpleNamespace(_line_assembler=SimpleNamespace(encoding='gbk'))}
-        manager.set_encoding = lambda value, channel=None: calls.append(('encoding', channel, value))
+        options = {'encoding': 'gbk', 'all_channels': True,
+                   'channel_encodings': {0: 'utf-8', 2: 'gbk'}}
+        manager.restart_options = lambda: options
+        def start(device, **kwargs):
+            calls.append(('rtt-options', kwargs))
+            manager.running = True
+        manager.start = start
     elif kind == 'vofa':
         manager._channel_specs = [{'path': 'counter'}]
         manager._interval = 0.25  # Changed since the original start.
@@ -282,7 +285,7 @@ def test_restore_retains_live_channel_settings(capture, kind):
             pass
     asyncio.run(run())
     if kind == 'rtt':
-        assert calls[-3:] == [('encoding', None, 'gbk'), ('encoding', 0, 'utf-8'), ('encoding', 2, 'gbk')]
+        assert calls[-1] == ('rtt-options', options)
     elif kind == 'vofa':
         assert calls[-1] == ('vofa', [{'path': 'counter'}], 0.25)
     else:

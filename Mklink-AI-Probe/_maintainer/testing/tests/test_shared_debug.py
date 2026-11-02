@@ -118,8 +118,8 @@ def test_breakpoint_preserves_occupied_slots_and_decodes_upper_halfword(fpb):
 
 def test_unsupported_revision_and_full_slots_never_write(fpb):
     device,memory,reads,writes=fpb
-    memory[debug.FP_CTRL]=0x10000060
-    with pytest.raises(ValueError,match='FPBv1'):debug_api.breakpoints(device,{'action':'clear_all'})
+    memory[debug.FP_CTRL]=0x20000060
+    with pytest.raises(ValueError,match='Unsupported FPB revision'):debug_api.breakpoints(device,{'action':'clear_all'})
     memory[debug.FP_CTRL]=0x60
     for i in range(6):memory[debug.FP_COMP_BASE+4*i]=0x48005001
     with pytest.raises(ValueError,match='free'):debug_api.breakpoints(device,{'action':'set','target':'0x08005000'})

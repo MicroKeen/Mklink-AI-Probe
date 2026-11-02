@@ -31,6 +31,7 @@ STREAM_TYPES: Mapping[str, StreamType] = {
     "rtt-terminal": StreamType.RTT_RAW,
     **{f"rtt-{ch}": StreamType.RTT_RAW for ch in range(8)},
     **{f"rtt-terminal-{ch}": StreamType.RTT_RAW for ch in range(8)},
+    **{f"rtt-bytes-{ch}": StreamType.RTT_RAW for ch in range(8)},
     "serial": StreamType.SERIAL,
     "superwatch": StreamType.SUPERWATCH,
 }
@@ -40,7 +41,7 @@ def create_stream_registry() -> Dict[str, StreamHub]:
     """Create the per-application stream hubs."""
     return {
         name: StreamHub(max_batches_per_client=(
-            SERIAL_BATCHES_PER_CLIENT if name == "serial" else MAX_BATCHES_PER_CLIENT
+            SERIAL_BATCHES_PER_CLIENT if name == "serial" or name.startswith('rtt-bytes-') else MAX_BATCHES_PER_CLIENT
         ))
         for name in STREAM_TYPES
     }
@@ -125,14 +126,21 @@ async def stream_websocket(
         await websocket.close(code=1008, reason="Unauthorized")
         return
 
+    # Raw byte subscribers can trigger a target producer as soon as they see
+    # READY. Register first so that no bytes can fall through that boundary.
+    ready_frame = _encoded_status_frame(stream_type, hub)
+    queue = hub.subscribe() if stream_name.startswith('rtt-bytes-') else None
     # Keep the CONTROL frame as the subscription-ready barrier before a
     # producer's subscribe callback can enqueue retained metadata.
     try:
-        await websocket.send_bytes(_encoded_status_frame(stream_type, hub))
+        await websocket.send_bytes(ready_frame)
     except Exception as exc:
+        if queue is not None:
+            hub.unsubscribe(queue)
         logger.debug("Binary stream WebSocket closed before subscribe: %s", exc)
         return
-    queue = hub.subscribe()
+    if queue is None:
+        queue = hub.subscribe()
 
     async def send_batches():
         next_status = time.monotonic() + HEARTBEAT_INTERVAL_SECONDS

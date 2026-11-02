@@ -12,6 +12,26 @@ from mklink.remote.api import create_app
 from mklink.runtime_api import install_runtime
 
 
+@pytest.mark.parametrize('product', ['HPMLINK', 'MKLink', None])
+def test_status_brand_uses_only_negotiated_product_not_target_or_usb_polling(tmp_path, monkeypatch, product):
+    bridge = SimpleNamespace(state=DeviceState.READY, idcode=0x1000563d,
+        current_mcu='HPM5301', _transport_error=None, _firmware_capabilities=frozenset(
+            [f'PROBE_PRODUCT={product}'] if product else []))
+    dev = Device(port='TEST_PORT', project_root=str(tmp_path))
+    dev._connected, dev._bridge = True, bridge
+    app = create_app(auth_token=None, project_root=str(tmp_path))
+    app.state.mklink_state['device'] = dev
+    monkeypatch.setattr('mklink.probes.inventory', Mock(side_effect=AssertionError('status enumerated USB')))
+    with TestClient(app) as client:
+        for _ in range(3):
+            status = client.get('/api/device/status').json()
+            assert status['probe_product'] == ('HPMLINK' if product == 'HPMLINK' else 'MKLink')
+        bridge._transport_error = ConnectionError('unplugged')
+        assert client.get('/api/device/status').json()['probe_product'] == 'MKLink'
+        app.state.mklink_state['device'] = None
+        assert client.get('/api/device/status').json()['probe_product'] == 'MKLink'
+
+
 @pytest.mark.parametrize('kind', ['gui', 'mcp', 'cli', 'sdk'])
 @pytest.mark.parametrize('saved', [{'swd_clock': '20000000'}, {'debug_speed': 'high'}])
 def test_connect_and_configure_without_target_through_shared_backend(tmp_path, monkeypatch, kind, saved):

@@ -615,7 +615,7 @@ describe('WaveformViewer VOFA binary transport', () => {
       expect(bufferInput.max).toBe('1000000')
       expect(bufferInput.step).toBe('1')
       expect(input.value).toBe('0.001')
-      expect(input.min).toBe('0.000001')
+      expect(input.min).toBe('0.000004')
       expect(input.step).toBe('0.000001')
       expect(runtime.probe.currentInterval()).toBe(0.001)
 
@@ -625,15 +625,15 @@ describe('WaveformViewer VOFA binary transport', () => {
       const fetchMock = vi.fn().mockResolvedValue({
         ok: true,
         status: 200,
-        json: async () => ({ interval: 0.000001 }),
+        json: async () => ({ interval: 0.000004 }),
       })
       vi.stubGlobal('fetch', fetchMock)
       input.focus()
-      input.value = '0.000001'
+      input.value = '0.000004'
       input.dispatchEvent(new Event('input', { bubbles: true }))
       input.blur()
       runtime.probe.syncStatus({ state: 'running', interval: 0.001, items: [] })
-      expect(input.value).toBe('0.000001')
+      expect(input.value).toBe('0.000004')
       document.getElementById('btn-apply-interval')?.click()
       for (let turn = 0; turn < 6; turn++) await Promise.resolve()
 
@@ -641,15 +641,39 @@ describe('WaveformViewer VOFA binary transport', () => {
         '/api/dash/superwatch/interval',
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify({ interval: 0.000001 }),
+          body: JSON.stringify({ interval: 0.000004 }),
         }),
       )
-      expect(runtime.probe.currentInterval()).toBe(0.000001)
-      expect(input.value).toBe('0.000001')
+      expect(runtime.probe.currentInterval()).toBe(0.000004)
+      expect(input.value).toBe('0.000004')
       expect(runtime.probe.collectionState().state).toBe('running')
     } finally {
       runtime.cleanup()
     }
+  })
+
+  it('rejects SuperWatch intervals below 4 us without changing a running acquisition', async () => {
+    const runtime = await loadRttViewerRuntime('SuperWatch')
+    try {
+      await flushPromises()
+      runtime.probe.syncStatus({ state: 'running', interval: 0.001, items: [] })
+      const requests = vi.fn()
+      vi.stubGlobal('fetch', requests)
+      vi.stubGlobal('alert', vi.fn())
+      const input = document.getElementById('interval-input') as HTMLInputElement
+      for (const value of ['0', '0.000001', '0.000003', '0.000003999']) {
+        input.value = value
+        expect(input.validity.rangeUnderflow).toBe(true)
+        document.getElementById('btn-apply-interval')!.click()
+        expect(requests).not.toHaveBeenCalled()
+        expect(runtime.probe.currentInterval()).toBe(0.001)
+        expect(runtime.probe.collectionState().state).toBe('running')
+      }
+      input.value = '0.000004'
+      expect(input.checkValidity()).toBe(true)
+      input.stepUp()
+      expect(input.valueAsNumber).toBeCloseTo(0.000005, 12)
+    } finally { runtime.cleanup() }
   })
 
   it('accepts integer point boundaries without truncating fractional or invalid input', async () => {
@@ -1649,8 +1673,19 @@ describe('VOFA viewer hot path source guard', () => {
 
       expect(runtime.probe.splitChannel()).toBe('A')
       expect(legend.classList.contains('is-visible')).toBe(true)
-      expect(legend.querySelector<HTMLButtonElement>('[data-channel="A"]')?.textContent)
+      expect(legend.querySelector<HTMLButtonElement>('.chart-legend-action[data-channel="A"]')?.textContent)
         .toBe('merge_channel')
+      const visibility = vi.fn()
+      legend.addEventListener('mklink:visibility', visibility)
+      legend.querySelector<HTMLButtonElement>('.chart-legend-eye[data-channel="A"]')!.click()
+      expect(visibility.mock.calls[0]![0].detail).toEqual({path:'A',visible:false})
+      expect(legend.querySelector('.chart-legend-eye[data-channel="A"]')!.getAttribute('aria-pressed')).toBe('false')
+      expect(legend.querySelectorAll('.chart-legend-row')).toHaveLength(2)
+      runtime.viewer.setHiddenChannels(['B'])
+      expect(legend.querySelector('.chart-legend-eye[data-channel="A"]')!.getAttribute('aria-pressed')).toBe('true')
+      expect(legend.querySelector('.chart-legend-eye[data-channel="B"]')!.getAttribute('aria-pressed')).toBe('false')
+      legend.querySelector<HTMLButtonElement>('.chart-legend-eye[data-channel="B"]')!.click()
+      expect(visibility.mock.calls.at(-1)![0].detail).toEqual({path:'B',visible:true})
     } finally {
       runtime.cleanup()
       vi.useRealTimers()
@@ -2957,6 +2992,26 @@ describe('VOFA viewer hot path source guard', () => {
     } finally { runtime.cleanup(); vi.unstubAllGlobals() }
   })
 
+  it.each([0.000001, 0.000003, 0.000003999])('does not replay a saved SuperWatch interval below 4 us (%s)', async interval => {
+    vi.stubGlobal('localStorage', {
+      getItem: () => JSON.stringify({ channels: [], interval }), setItem: vi.fn(),
+    })
+    const requests = vi.fn(async (_url: any, _options?: RequestInit) => ({
+      ok: true, json: async () => ({ state: 'stopped', interval: 0.001, items: [] }),
+    }))
+    const runtime = await loadRttViewerRuntime('SuperWatch', 4, requests as typeof fetch)
+    try {
+      await flushPromises()
+      expect((document.getElementById('interval-input') as HTMLInputElement).value).toBe('0.001')
+      expect(requests.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false)
+      document.getElementById('btn-start')!.click()
+      await flushPromises()
+      const start = requests.mock.calls.find(([url]) => String(url).endsWith('/start'))!
+      expect(start).toBeDefined()
+      expect(start[1]!.body).toBeUndefined()
+    } finally { runtime.cleanup(); vi.unstubAllGlobals() }
+  })
+
   it('routes SuperWatch sample-log export through the desktop save bridge', async () => {
     const runtime = await loadRttViewerRuntime('SuperWatch')
     const nativeSave = vi.fn().mockResolvedValue(true)
@@ -3568,6 +3623,71 @@ describe('VOFA viewer typed-ring runtime', () => {
     }
     },
   )
+
+  it.each(['rising', 'falling', 'both'].flatMap(edge => ['single', 'normal', 'auto'].map(mode => [edge, mode])))('captures %s edges in %s mode and cancels delayed rearm when disabled', async (edge, mode) => {
+    mocks.useBinaryStream.mockReturnValue({
+      ...mocks.binary, waveformBatch: shallowRef(null), envelope: shallowRef(null),
+      telemetry: shallowRef(null), state: shallowRef({phase:'stopped'}),
+      error: shallowRef(null), superwatchMetadata: shallowRef(null),
+    })
+    const runtime = await loadRttViewerRuntime('SuperWatch', 32)
+    vi.useFakeTimers()
+    try {
+      runtime.viewer.configureBinaryChannels([{name:'A'}])
+      runtime.probe.syncStatus({state:'running'})
+      const detail = vi.fn()
+      runtime.viewer.setBinaryDetailRequester(detail)
+      Object.assign(runtime.probe.trigger, {source:'A',edge,mode,level:0,preTriggerSamples:2})
+      document.getElementById('trigger-enable-btn')!.click()
+      const values = edge === 'falling' ? [2,1,-1,-2,-3] : [-2,-1,1,2,3]
+      runtime.viewer.acceptBinaryBatch({sequence:1n,timestampNs:5_000_000n,itemCount:5,channelCount:1,
+        layout:'sample-major-float32',values:Float32Array.from(values).buffer,times:Float64Array.of(1,2,3,4,5).buffer})
+      expect(runtime.probe.trigger.state).toBe('done')
+      if (mode === 'single') expect(runtime.probe.fields().A.ringBuf.toArray().map((p:any)=>p.y)).toEqual(values)
+      else {
+        vi.advanceTimersByTime(101)
+        expect(runtime.probe.trigger.state).toBe('armed')
+        runtime.viewer.acceptBinaryBatch({sequence:2n,timestampNs:10_000_000n,itemCount:5,channelCount:1,
+          layout:'sample-major-float32',values:Float32Array.from(values).buffer,times:Float64Array.of(6,7,8,9,10).buffer})
+        expect(runtime.probe.trigger.state).toBe('done')
+      }
+      document.getElementById('trigger-enable-btn')!.click()
+      expect(runtime.probe.trigger.state).toBe('idle')
+      vi.advanceTimersByTime(2500)
+      await flushPromises()
+      expect(runtime.probe.trigger).toMatchObject({enabled:false,state:'idle'})
+      expect(detail).toHaveBeenLastCalledWith(false)
+    } finally {runtime.cleanup();vi.useRealTimers()}
+  })
+
+  it.each(['auto','normal'])('handles timeout and force triggering in %s mode without a threshold crossing', async mode => {
+    mocks.useBinaryStream.mockReturnValue({
+      ...mocks.binary, waveformBatch: shallowRef(null), envelope: shallowRef(null),
+      telemetry: shallowRef(null), state: shallowRef({phase:'stopped'}),
+      error: shallowRef(null), superwatchMetadata: shallowRef(null),
+    })
+    const runtime = await loadRttViewerRuntime('SuperWatch', 32)
+    vi.useFakeTimers()
+    try {
+      runtime.viewer.configureBinaryChannels([{name:'A'}])
+      runtime.probe.syncStatus({state:'running'})
+      Object.assign(runtime.probe.trigger, {source:'A',edge:'rising',mode,level:100,preTriggerSamples:2})
+      document.getElementById('trigger-enable-btn')!.click()
+      runtime.viewer.acceptBinaryBatch({sequence:1n,timestampNs:2_000_000n,itemCount:2,channelCount:1,
+        layout:'sample-major-float32',values:Float32Array.of(1,2).buffer,times:Float64Array.of(1,2).buffer})
+      expect(runtime.probe.trigger.state).toBe('armed')
+      vi.advanceTimersByTime(2100)
+      expect(runtime.probe.trigger.state).toBe(mode === 'auto' ? 'triggered' : 'armed')
+      if (mode === 'normal') document.getElementById('trigger-force-btn')!.click()
+      expect(runtime.probe.trigger.state).toBe('triggered')
+      runtime.viewer.acceptBinaryBatch({sequence:2n,timestampNs:4_000_000n,itemCount:2,channelCount:1,
+        layout:'sample-major-float32',values:Float32Array.of(3,4).buffer,times:Float64Array.of(3,4).buffer})
+      expect(runtime.probe.trigger.state).toBe('done')
+      document.getElementById('trigger-enable-btn')!.click()
+      vi.advanceTimersByTime(2500)
+      expect(runtime.probe.trigger.state).toBe('idle')
+    } finally {runtime.cleanup();vi.useRealTimers()}
+  })
 
   it('rearms an enabled SuperWatch trigger with detail after every acquisition reset', async () => {
     mocks.useBinaryStream.mockReturnValue({

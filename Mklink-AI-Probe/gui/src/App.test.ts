@@ -7,6 +7,7 @@ import VersionHistoryPopover from './components/VersionHistoryPopover.vue'
 import { setLanguage } from './composables/useLanguage'
 
 const routeName = ref('dashboard')
+const deviceStatus = ref({ device_generation: 0, connected: false, probe_product: 'MKLink' })
 const backendState = ref<'starting' | 'alive' | 'dead'>('starting')
 const startStatusPolling = vi.fn()
 const restart = vi.fn()
@@ -29,7 +30,7 @@ vi.mock('vue-router', () => ({
 }))
 
 vi.mock('./composables/useMklinkApi', () => ({
-  useMklinkApi: () => ({ startStatusPolling, stopStatusPolling: vi.fn(), deviceStatus: ref({ device_generation: 0 }) }),
+  useMklinkApi: () => ({ startStatusPolling, stopStatusPolling: vi.fn(), deviceStatus }),
 }))
 
 vi.mock('./composables/useBackendHealth', () => ({
@@ -79,6 +80,7 @@ describe('App version footer', () => {
     setLanguage('zh')
     nativeRuntime.value = true
     backendState.value = 'starting'
+    deviceStatus.value = { device_generation: 0, connected: false, probe_product: 'MKLink' }
     authenticationRequired.value = false
     sharedRuntime.value = false
     startBrowserSessionLease.mockClear()
@@ -95,6 +97,25 @@ describe('App version footer', () => {
     await wrapper.get('[data-testid="global-language-toggle"]').trigger('click')
     expect(wrapper.findAll('.nav-tab').map(tab => tab.text())).toEqual(['Config', 'Dashboard', 'Online Flash', 'Offline Flash', 'Remote Service'])
     expect(wrapper.get('[data-testid="global-language-toggle"]').text()).toContain('中文')
+    wrapper.unmount()
+  })
+
+  it('follows the connected probe product and clears stale HPMLINK branding', async () => {
+    backendState.value = 'alive'
+    const wrapper = mountApp()
+    deviceStatus.value = { device_generation: 1, connected: true, probe_product: 'HPMLINK' }
+    await nextTick()
+    expect(wrapper.get('.app-title').text()).toBe('HPMLINK')
+    deviceStatus.value = { device_generation: 2, connected: true, probe_product: 'MKLink' }
+    await nextTick()
+    expect(wrapper.get('.app-title').text()).toBe('MKLink')
+    deviceStatus.value = { device_generation: 3, connected: false, probe_product: 'HPMLINK' }
+    await nextTick()
+    expect(wrapper.get('.app-title').text()).toBe('MKLink')
+    deviceStatus.value.connected = true
+    backendState.value = 'dead'
+    await nextTick()
+    expect(wrapper.get('.app-title').text()).toBe('MKLink')
     wrapper.unmount()
   })
 

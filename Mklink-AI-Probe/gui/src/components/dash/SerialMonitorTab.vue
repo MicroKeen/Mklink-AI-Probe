@@ -116,12 +116,7 @@
         </span>
       </div>
       <span v-if="runtimeError" class="runtime-error" role="alert">{{ runtimeError }}</span>
-      <button
-        v-if="viewMode === 'log'" data-testid="serial-save-log" type="button"
-        class="icon-action" :disabled="retainedCount === 0"
-        :title="tr('保存日志', 'Save log')" :aria-label="tr('保存日志', 'Save log')"
-        @click="saveLog"
-      ><Download :size="15" /></button>
+
       <button
         type="button" class="icon-action clear-action"
         :title="viewMode === 'terminal' ? tr('清除终端', 'Clear terminal') : tr('清除日志', 'Clear log')"
@@ -156,6 +151,7 @@
       </span>
     </div>
 
+    <TrafficLogControls ref="trafficControls" kind="serial" @state="setReplay" @reset="resetReplay" @batch="appendReplay" />
     <VirtualLogPanel
       v-if="viewMode === 'log'" ref="logPanel" class="serial-log"
       :display-mode="logDisplayMode" :show-timestamp="showLogTimestamp"
@@ -175,15 +171,16 @@
 </template>
 
 <script setup lang="ts">
+import TrafficLogControls from './TrafficLogControls.vue'
+import { trafficBytes, TrafficTextDecoder, type TrafficFrame } from '../../lib/trafficReplay'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { ChevronDown, Download, RefreshCw, ScrollText, SlidersHorizontal, SquareTerminal, Trash2 } from '@lucide/vue'
+import { ChevronDown, RefreshCw, ScrollText, SlidersHorizontal, SquareTerminal, Trash2 } from '@lucide/vue'
 import { useBinaryStream } from '../../composables/useBinaryStream'
 import { useMklinkApi } from '../../composables/useMklinkApi'
 import { useToast } from '../../composables/useToast'
 import { tr } from '../../composables/useLanguage'
 import type { DesktopSettings } from '../../lib/desktopSettings'
 import { toHexPayload } from '../../lib/rttTransmit'
-import { saveBlobFile, timestampedLogName } from '../../lib/downloadTextFile'
 import {
   loadSerialAssistantSettings,
   saveSerialAssistantSettings,
@@ -273,8 +270,10 @@ watch(portName, port => {
   logBinary.selectSerialPort(port)
   terminalBinary.selectSerialPort(port)
   displayedSource = ''
-  logPanel.value?.clear()
-  terminalPanel.value?.clear()
+  if (!replaying.value) {
+    logPanel.value?.clear()
+    terminalPanel.value?.clear()
+  }
   const config = activeConfigs.value.find(item => item.port === port)
   if (config) {
     baudrate.value = Number(config.baudrate)
@@ -287,6 +286,32 @@ const baudrate = ref(115200)
 const databits = ref(8)
 const stopbits = ref(1)
 const parity = ref('N')
+const replaying = ref(false)
+const trafficControls = ref<InstanceType<typeof TrafficLogControls>>()
+let replayDecoder = new TrafficTextDecoder()
+function resetReplay() {
+  replayDecoder = new TrafficTextDecoder('utf-8')
+  logPanel.value?.clear(); terminalPanel.value?.clear()
+}
+function setReplay(active: boolean) {
+  replaying.value = active
+  terminalInput = ''
+  if (active) detachBinaryStreams(); else syncBinaryStream()
+}
+function appendReplay(frames: TrafficFrame[]) {
+  const entries: VirtualLogInput[] = []
+  let terminal = ''
+  for (const frame of frames) {
+    const text = replayDecoder.decode(frame), raw = trafficBytes(frame)
+    entries.push({time: frame.time, level: frame.direction === 'RX' ? 'data' : 'warning', label: frame.direction, text, raw})
+    if (frame.direction === 'RX') {
+      terminal += text
+
+    }
+  }
+  logPanel.value?.append(entries)
+  if (terminal) terminalPanel.value?.write(terminal)
+}
 const running = ref(false)
 const starting = ref(false)
 const stopping = ref(false)
@@ -362,13 +387,12 @@ const localizedPortStatus = computed(() => {
 })
 const ymodemActive = computed(() => ymodemStatus.value.active)
 const transmitEnabled = computed(() => (
-  running.value && currentPortStatus.value === 'open'
+  !replaying.value && running.value && currentPortStatus.value === 'open'
   && !(ymodemActive.value && ymodemStatus.value.port === portName.value) && !ymodemStarting.value
 ))
 const activeTelemetry = computed(() => (
   viewMode.value === 'log' ? logBinary.telemetry.value : terminalBinary.telemetry.value
 ))
-const retainedCount = computed(() => logPanel.value?.retainedCount ?? 0)
 const transmitSettings = computed<DesktopSettings>(() => ({
   version: 1,
   symbolPath: '',
@@ -760,6 +784,7 @@ async function doStop(): Promise<void> {
 }
 
 function syncBinaryStream(): void {
+  if (replaying.value) return
   // Subscribe while idle as well: API-started sessions may emit their entire
   // first response before the next status poll. This never opens the UART.
   if (attachedMode === viewMode.value) return
@@ -777,7 +802,7 @@ function detachBinaryStreams(): void {
 }
 
 function acceptSerialSource(source: { port: string; session: string }): boolean {
-  if (source.port !== portName.value) return false
+  if (replaying.value || source.port !== portName.value) return false
   const key = `${source.session}:${source.port}`
   if (displayedSource !== key) {
     displayedSource = key
@@ -829,6 +854,7 @@ function setViewMode(mode: 'log' | 'terminal'): void {
   if (viewMode.value === mode) return
   viewMode.value = mode
   syncBinaryStream()
+  if (replaying.value) void nextTick(() => trafficControls.value?.redraw())
   if (mode === 'terminal') void nextTick(() => terminalPanel.value?.activate())
 }
 
@@ -854,15 +880,6 @@ function clearVisibleOutput(): void {
   else logPanel.value?.clear()
 }
 
-function saveLog(): void {
-  const raw = logPanel.value?.exportRaw() ?? new Uint8Array()
-  if (raw.byteLength) {
-    void saveBlobFile(
-      timestampedLogName('serial'),
-      new Blob([new Uint8Array(raw)], { type: 'application/octet-stream' }),
-    )
-  }
-}
 
 function hexToBytes(value: string): Uint8Array {
   const compact = value.replace(/\s+/g, '')

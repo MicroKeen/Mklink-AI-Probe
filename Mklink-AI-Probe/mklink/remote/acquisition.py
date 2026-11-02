@@ -40,16 +40,9 @@ async def suspend_acquisition(state, control=None):
                 if name == 'vofa':
                     channels, interval = deepcopy(manager._channel_specs), manager._interval
                     restart = lambda m=manager, ch=channels, dt=interval: m.start(state['device'], ch, dt)
-                elif name == 'rtt' and hasattr(manager, '_line_assembler'):
-                    encoding = manager._line_assembler.encoding
-                    encodings = {ch: decoder._line_assembler.encoding
-                                 for ch, decoder in manager._channel_decoders.items()}
-                    def restart_rtt(start=restart, m=manager, default=encoding, per_channel=encodings):
-                        start()
-                        m.set_encoding(default)
-                        for channel, value in per_channel.items():
-                            m.set_encoding(value, channel)
-                    restart = restart_rtt
+                elif name == 'rtt' and hasattr(manager, 'restart_options'):
+                    options = manager.restart_options()
+                    restart = lambda m=manager, opts=options: m.start(state['device'], **opts)
                 elif name == 'systemview' and getattr(manager, '_recording', None) is not None:
                     def restart_recording(start=restart, m=manager):
                         start()
@@ -99,7 +92,20 @@ async def suspend_acquisition(state, control=None):
                 try:
                     if device is None or not device.connected:
                         raise RuntimeError('Device not connected')
-                    await _start_dashboard_manager_transaction(state, name, manager, restart)
+                    def restart_ready(m=manager, start=restart, stream=name):
+                        prepare = getattr(device, '_wait_for_rtt_ready_after_download', None)
+                        if stream in ('rtt', 'systemview') and callable(prepare):
+                            options = m.restart_options()
+                            prepare(require_down=stream == 'systemview', **{key: value for key, value in options.items()
+                                       if key in ('addr', 'channel', 'channels', 'all_channels', 'mode', 'search_size')})
+                        start()
+                        wait = getattr(m, 'wait_started', None)
+                        if callable(wait):
+                            wait()
+                    await _start_dashboard_manager_transaction(state, name, manager, restart_ready)
+                    # Keep the original start plan; repeated downloads must not
+                    # accumulate nested preparation/confirmation wrappers.
+                    manager._restart_after_operation = restart
                     if paused:
                         manager.pause()
                     report['restored'].append(name)

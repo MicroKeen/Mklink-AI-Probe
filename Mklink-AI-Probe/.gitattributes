@@ -1,0 +1,3 @@
+# Also applies when Skill packaging archives HEAD:Mklink-AI-Probe as its root.
+# Vendor digests cover original XML bytes, including line endings.
+mklink/hpm_svd/*.xml -text whitespace=cr-at-eol

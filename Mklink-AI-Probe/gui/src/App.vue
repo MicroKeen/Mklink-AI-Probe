@@ -2,7 +2,7 @@
   <div class="app-root">
     <RemoteSessionBar v-if="IS_REMOTE" />
     <header class="app-header">
-      <h1 class="app-title">MKLink</h1>
+      <h1 class="app-title">{{ probeBrand }}</h1>
       <nav class="app-nav">
         <button
           v-for="tab in tabs" :key="tab.key"
@@ -140,6 +140,8 @@ const route = useRoute()
 const { startStatusPolling, stopStatusPolling, deviceStatus } = useMklinkApi()
 const downloadViewKey = useDownloadViewKey(computed(() => deviceStatus.value.device_generation))
 const { backendState, sharedRuntime, authenticationRequired, backendStartupError, startHealthPolling, stopHealthPolling, restart, refreshHealth, isTauri } = useBackendHealth()
+const probeBrand = computed(() => backendState.value === 'alive'
+  && deviceStatus.value.connected && deviceStatus.value.probe_product === 'HPMLINK' ? 'HPMLINK' : 'MKLink')
 const recoveryTitle = computed(() => authenticationRequired.value
   ? tr('当前页面授权已失效', 'This page is no longer authorized')
   : tr('无法连接本地服务', 'Cannot reach the local service'))

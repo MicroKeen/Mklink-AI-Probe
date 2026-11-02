@@ -403,6 +403,31 @@ class RttChannelDecoder:
         self._flush_terminal_batch()
 
 
+class _CaptureStartup:
+    """One worker generation's actual hardware-start result, not thread creation."""
+
+    def __init__(self):
+        self.done = threading.Event()
+        self.error = None
+        self.started = False
+
+    def ready(self):
+        self.started = True
+        self.done.set()
+
+    def ended(self, error):
+        self.error = error or RuntimeError('Capture stopped during startup')
+        self.done.set()
+
+    def wait(self, timeout=10.0):
+        if not self.done.wait(timeout):
+            raise TimeoutError('Capture worker has not finished startup')
+        if self.error is not None:
+            raise self.error
+        if not self.started:
+            raise RuntimeError('Capture did not start')
+
+
 class RttStreamManager(RttChannelDecoder):
     """Manages RTT streaming sessions with SSE output."""
 
@@ -422,6 +447,8 @@ class RttStreamManager(RttChannelDecoder):
         self._channel_cache = RttChannelCache()
         self._channel_decoders = {}
         self._channel_hubs = {}
+        self._byte_hubs = {}
+        self._byte_offsets = {}
         self._interval = 0.0
         self._error = None
         self._start_failure_callback = None
@@ -433,9 +460,22 @@ class RttStreamManager(RttChannelDecoder):
         self._write_lock = threading.RLock()
         self._lifecycle_lock = threading.RLock()
 
+        from mklink.traffic_recording import TrafficRecordings
+        self.traffic_recordings = TrafficRecordings('rtt')
+
     def restart_options(self) -> dict:
         """Capture settings for a source-address refresh, without old target data."""
-        return {**getattr(self, '_start_options', {}), 'encoding': self._line_assembler.encoding}
+        options = copy.deepcopy(getattr(self, '_start_options', {}))
+        options['encoding'] = self._line_assembler.encoding
+        options['channel_encodings'] = {
+            **options.get('channel_encodings', {}),
+            **{ch: decoder._line_assembler.encoding
+               for ch, decoder in self._channel_decoders.items()},
+        }
+        return options
+
+    def wait_started(self, timeout=10.0) -> None:
+        self._startup_result.wait(timeout)
 
     @property
     def running(self) -> bool:
@@ -476,7 +516,8 @@ class RttStreamManager(RttChannelDecoder):
     def start(self, device, *, addr: str | None = None, channel: int = 0,
               mode: int = 0, search_size: int = 0,
               duration: float = 86400, encoding: str = "utf-8",
-              channels: list[int] | None = None, all_channels: bool = False) -> None:
+              channels: list[int] | None = None, all_channels: bool = False,
+              channel_encodings: dict[int, str] | None = None) -> None:
         with self._lifecycle_lock:
             self._start_locked(
                 device,
@@ -488,24 +529,32 @@ class RttStreamManager(RttChannelDecoder):
                 encoding=encoding,
                 channels=channels,
                 all_channels=all_channels,
+                channel_encodings=channel_encodings,
             )
 
     def _start_locked(self, device, *, addr: str | None = None, channel: int = 0,
                       mode: int = 0, search_size: int = 0,
                       duration: float = 86400, encoding: str = "utf-8",
-                      channels: list[int] | None = None, all_channels: bool = False) -> None:
+                      channels: list[int] | None = None, all_channels: bool = False,
+                      channel_encodings: dict[int, str] | None = None) -> None:
         """Start RTT polling in a background thread."""
         if self._thread is not None and self._thread.is_alive():
             if self.running:
                 return
             raise RuntimeError("RTT worker thread is still active")
 
+        # Apply saved encodings when each actual channel is created, including
+        # channels discovered asynchronously. Never require old channels to
+        # already exist immediately after starting the worker.
+        channel_encodings = {ch: normalize_rtt_encoding(value)
+                             for ch, value in (channel_encodings or {}).items()}
         self._clear_active_session()
         stop_event = threading.Event()
         generation = object()
         self._stop_event = stop_event
         self._generation = generation
         self._capture_session = uuid.uuid4().hex
+        self._byte_offsets = {}
         self._channel_cache.reset(self._capture_session, channels or [channel])
         self._paused.set()
         self._running = True
@@ -513,9 +562,11 @@ class RttStreamManager(RttChannelDecoder):
         self._stats = {"parsed_lines": 0, "raw_lines": 0}
         self._error = None
         self._startup_started = time.monotonic()
+        startup = self._startup_result = _CaptureStartup()
         self._start_options = dict(addr=addr, channel=channel, channels=channels,
                                    mode=mode, search_size=search_size, duration=duration,
-                                   encoding=encoding, all_channels=all_channels)
+                                   encoding=encoding, all_channels=all_channels,
+                                   channel_encodings=channel_encodings)
         with self._decode_lock:
             self._line_assembler.reset(encoding)
             self._terminal_decoder = codecs.getincrementaldecoder(
@@ -538,7 +589,7 @@ class RttStreamManager(RttChannelDecoder):
         for source in channels or [channel]:
             decoder = RttChannelDecoder(raw_batch_lines=self._raw_batch_lines,
                                         waveform_batch_samples=self._waveform_batch_samples)
-            decoder.set_encoding(encoding)
+            decoder.set_encoding(channel_encodings.get(source, encoding))
             if source in self._channel_hubs:
                 decoder._stream_hub, decoder._terminal_stream_hub = self._channel_hubs[source]
                 decoder._traffic_requested = lambda d=decoder: d._stream_hub.has_subscribers
@@ -568,7 +619,7 @@ class RttStreamManager(RttChannelDecoder):
                             continue
                         decoder = RttChannelDecoder(raw_batch_lines=self._raw_batch_lines,
                                                     waveform_batch_samples=self._waveform_batch_samples)
-                        decoder.set_encoding(encoding)
+                        decoder.set_encoding(channel_encodings.get(source, encoding))
                         if source in self._channel_hubs:
                             decoder._stream_hub, decoder._terminal_stream_hub = self._channel_hubs[source]
                             decoder._traffic_requested = lambda d=decoder: d._stream_hub.has_subscribers
@@ -587,6 +638,7 @@ class RttStreamManager(RttChannelDecoder):
                             "channel": poll_channel,
                         }
                         self._active_generation = generation
+                startup.ready()
                 start_time = time.time()
                 while not stop_event.is_set():
                     if time.time() - start_time > duration:
@@ -640,6 +692,7 @@ class RttStreamManager(RttChannelDecoder):
                     terminal_failure = e
             finally:
                 failure = start_failure or terminal_failure
+                startup.ended(failure)
                 if failure is not None and getattr(self, "_generation", None) is generation:
                     # Report the reason before potentially slow device cleanup.
                     # Keep the worker alive/owned until cleanup actually ends.
@@ -653,6 +706,7 @@ class RttStreamManager(RttChannelDecoder):
                         self._device = None
                         self._start_info = {}
                         self._active_generation = None
+                self.traffic_recordings.request_stop_all()
                 self.flush_pending(final=True)
                 for decoder in self._channel_decoders.values():
                     decoder.flush_pending(final=True)
@@ -686,6 +740,7 @@ class RttStreamManager(RttChannelDecoder):
                 if thread.is_alive():
                     raise TimeoutError("RTT worker thread is still active")
             self._running = False
+            self.traffic_recordings.stop_all()
             self.flush_pending(final=True)
             if self._thread is thread:
                 self._thread = None
@@ -699,8 +754,25 @@ class RttStreamManager(RttChannelDecoder):
 
     def set_channel_stream_hubs(self, registry):
         self._channel_hubs = {ch: (registry[f"rtt-{ch}"], registry[f"rtt-terminal-{ch}"]) for ch in range(8)}
+        self._byte_hubs = {ch: registry[f'rtt-bytes-{ch}'] for ch in range(8) if f'rtt-bytes-{ch}' in registry}
 
     def feed_channel_bytes(self, channel, chunk):
+        from mklink.remote.stream_protocol import RTT_CHANNEL_BYTES, RTT_BYTES_HEADER
+        session = getattr(self._device, '_rtt_session', None)
+        losses = getattr(session, 'dropped_bytes', {})
+        self.traffic_recordings.append(channel, chunk, 'RX', self._capture_session,
+            lost_bytes=losses.get(channel, 0) if isinstance(losses, dict) else 0)
+        offset = self._byte_offsets.get(channel, 0)
+        self._byte_offsets[channel] = offset + len(chunk)
+        hub = self._byte_hubs.get(channel)
+        if chunk and hub is not None and hub.has_subscribers and self._capture_session:
+            session = getattr(self._device, '_rtt_session', None)
+            losses = getattr(session, 'dropped_bytes', {})
+            lost = losses.get(channel, 0) if isinstance(losses, dict) else 0
+            for start in range(0, len(chunk), 16384):
+                data = chunk[start:start+16384]
+                header = RTT_BYTES_HEADER.pack(bytes.fromhex(self._capture_session), offset+start, lost)
+                hub.publish(header+data, item_count=len(data), flags=RTT_CHANNEL_BYTES, stream_type=StreamType.RTT_RAW)
         decoder = self._channel_decoders.get(channel)
         if decoder is not None:
             decoder.feed_rtt_bytes(chunk)
@@ -747,6 +819,7 @@ class RttStreamManager(RttChannelDecoder):
                 raise RuntimeError(f"RTT write failed: {exc}") from exc
             if not written:
                 raise RuntimeError("RTT write failed")
+            self.traffic_recordings.append(channel, data, 'TX', self._capture_session)
             return len(data)
 
     def get_status(self) -> dict:
@@ -859,6 +932,7 @@ class SystemViewStreamManager:
         self._recording_summary_path = ""
         self._recording_error = ""
         self._recording_device = None
+        self._mux_transport_stats = None
         self._recording_meta: dict[str, Any] = {}
         self._target_overflow_events = 0
         self._target_drop_count_baseline: int | None = None
@@ -893,6 +967,12 @@ class SystemViewStreamManager:
     def set_start_failure_callback(self, callback) -> None:
         self._start_failure_callback = callback
 
+    def restart_options(self) -> dict:
+        return copy.deepcopy(self._start_options)
+
+    def wait_started(self, timeout=10.0) -> None:
+        self._startup_result.wait(timeout)
+
     def set_stream_hub(self, stream_hub) -> None:
         self._stream_hub = stream_hub
 
@@ -919,6 +999,9 @@ class SystemViewStreamManager:
         self._auto_retry_stop_error = ""
 
         stop_event = threading.Event()
+        startup = self._startup_result = _CaptureStartup()
+        self._start_options = dict(addr=addr, channel=channel, mode=mode,
+                                   search_size=search_size, duration=duration)
         generation = object()
         self._stop_event = stop_event
         self._generation = generation
@@ -958,11 +1041,15 @@ class SystemViewStreamManager:
                 )
                 initialized = True
                 self._apply_cpu_freq_hint(device, start_result)
-                # 会话总时长与空闲看门狗分离:deadline 只管理 duration,任何
-                # 恢复动作都不延长它;看门狗以"最后一次收到数据"为基准,统一
-                # 裁决空读与读异常——START 突发排空后的亚秒级静默(探针按批
-                # 转发的正常间隙)和单次瞬时读异常都不会误杀健康流,而持续
-                # 无数据会按"从未收到过 / 流中断"如实终止。
+                startup.ready()
+                shared_mux = isinstance(start_result, dict) and start_result.get('transport') == 'cdc-mux'
+                self._mux_transport_stats = None
+                # Duration is independent of target activity. Framed reads
+                # already check heartbeat/claim failures and target errors;
+                # an empty healthy read cannot distinguish a halted CPU from
+                # a running application that emits no trace. Keep its parser,
+                # history and recorder intact, including before the first
+                # event. Only legacy streams need the idle watchdog/retry.
                 deadline_mono = time.monotonic() + max(0.0, duration)
                 last_data_mono = time.monotonic()
                 had_data = False
@@ -974,13 +1061,18 @@ class SystemViewStreamManager:
                         break
                     if not self._paused.is_set():
                         time.sleep(0.05)
+                        last_data_mono = time.monotonic()
                         continue
                     try:
                         raw = device.systemview_read_bytes(
                             duration=_SYSTEMVIEW_DELIVERY_INTERVAL,
                             max_bytes=64 * 1024,
                         )
+                        if shared_mux:
+                            self._mux_transport_stats = device._bridge._mux.stats()
                     except Exception as exc:
+                        if shared_mux:
+                            raise  # Framed errors are terminal; never replay START.
                         if time.monotonic() - last_data_mono >= self._startup_no_data_timeout_s:
                             raise RuntimeError(
                                 f"SystemView 读取失败: {exc}"
@@ -990,12 +1082,23 @@ class SystemViewStreamManager:
                     if not raw:
                         idle = time.monotonic() - last_data_mono
                         if idle >= self._startup_no_data_timeout_s:
+                            if shared_mux:
+                                if self._progress_state != "waiting":
+                                    self._progress_state = "waiting"
+                                    self._bridge.put({
+                                        "event": "status",
+                                        "stats": dict(self._stats),
+                                        "history_size": len(self._history),
+                                        **self._status_meta(),
+                                    })
+                                continue
                             # 探针固件的首次附着可能复位目标(表现为 START
                             # 突发排干后流静默,第二次启动即正常)。范围严格限定
                             # 为每个 Device 连接首会话的一次可见自动重试；达到
                             # 上限后如实终止并注明。
                             if (
                                 had_data
+                                and not shared_mux
                                 and first_start_on_connection
                                 and retry_count < _SYSTEMVIEW_FIRST_START_MAX_RETRIES
                             ):
@@ -1098,6 +1201,10 @@ class SystemViewStreamManager:
                     self._stats["bytes"] += len(raw)
                     now = time.time()
                     evs = self._parser.feed(raw)
+                    if self._progress_state == "waiting":
+                        self._progress_state = (
+                            "streaming" if self._stats["events"] else "starting"
+                        )
                     if evs:
                         self._progress_state = "streaming"
                         self._raw_bytes_without_events = 0
@@ -1140,6 +1247,7 @@ class SystemViewStreamManager:
                 })
                 start_failure = e
             finally:
+                startup.ended(start_failure)
                 try:
                     device.systemview_stop()
                 except Exception:
@@ -1453,6 +1561,7 @@ class SystemViewStreamManager:
     def _status_meta(self) -> dict:
         p = self._parser
         session_status = {
+            "transport_stats": self._mux_transport_stats,
             "connection_generation": self._connection_generation,
             "session_generation": self._session_generation,
             "first_start_on_connection": self._first_start_on_connection,
@@ -1583,6 +1692,16 @@ class SystemViewStreamManager:
             return False
         self._last_name_resolution = now
         self._name_resolution_attempted.update(ids)
+
+        session = getattr(device, '_systemview_session', None)
+        from mklink.systemview import SystemViewSession
+        if isinstance(session, SystemViewSession):
+            # MUX memory requests share the transport; do not stop or restart
+            # a recorder merely to fill missing RT-Thread metadata.
+            resolved = self._resolve_task_names(device, ids)
+            if not resolved:
+                self._name_resolution_disabled = True
+            return False
 
         try:
             device.systemview_stop()
@@ -1715,7 +1834,7 @@ class SystemViewStreamManager:
 # SuperWatch SSE Generator
 # ---------------------------------------------------------------------------
 
-SUPERWATCH_MIN_INTERVAL = 0.000001
+SUPERWATCH_MIN_INTERVAL = 0.000004
 
 
 def normalize_superwatch_interval(interval: float) -> float:
@@ -1730,7 +1849,7 @@ def normalize_superwatch_interval(interval: float) -> float:
         or value > 60.0
     ):
         raise ValueError(
-            "SuperWatch interval must be finite and in the range [0.000001, 60]"
+            f"SuperWatch interval must be finite and in the range [{SUPERWATCH_MIN_INTERVAL:.6f}, 60]"
         )
     return value
 
@@ -3039,6 +3158,8 @@ class SerialStreamManager:
         self._serial_session: str | None = None
         self._idle_cutoffs: dict[str, float] = {}
         self._send_sequences = {}
+        from mklink.traffic_recording import TrafficRecordings
+        self.traffic_recordings = TrafficRecordings('serial')
         self._recorder = None
         self._stopping = False
         self._rx_count = 0
@@ -3223,6 +3344,7 @@ class SerialStreamManager:
                 self._rx_bytes += len(data)
             else:
                 self._tx_bytes += len(data)
+            self.traffic_recordings.append(port, data, direction, session, timestamp)
             self._byte_batcher.feed(data, direction, port, monotonic_time=monotonic_time)
             if self._bridge.client_count == 0:
                 return
@@ -3352,6 +3474,7 @@ class SerialStreamManager:
                 )
             self._monitor = None
             self._running = False
+            self.traffic_recordings.stop_all()
             if self._recorder is not None:
                 self._recorder.stop()
             self._bridge.put({"event": "stopped"})

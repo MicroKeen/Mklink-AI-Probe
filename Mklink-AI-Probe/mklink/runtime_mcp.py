@@ -52,6 +52,9 @@ def build_server():
                 raise RuntimeErrorResponse('Call connect first')
             return current
 
+    from mklink.mcp_workflows import register_workflow_tools
+    register_workflow_tools(server, client)
+
     @server.tool()
     def ping(force_update_check: bool = False) -> dict:
         """Shared-runtime health and supported GUI capabilities; does not open CDC."""
@@ -286,23 +289,74 @@ def build_server():
         return {"detached": True, "device_closed": False}
 
     @server.tool()
+    def reboot_probe(confirm: StrictBool = False) -> dict:
+        """Reboot the selected downloader after explicit approval, never the MCU.
+
+        Detaches this AI session first; other clients/captures must be released
+        explicitly. No automatic reconnect or retry after USB disappears.
+        """
+        if confirm is not True:
+            raise ValueError('Confirm the downloader reboot first')
+        info = client().info
+        close()
+        from mklink.runtime import request
+        return request(info, 'POST', '/api/device/reboot', {})
+
+    @server.tool()
     def device_status() -> dict:
         """Read the shared device status without touching CDC."""
         return client().call("device_status")
 
     @server.tool()
-    def set_debug_speed(profile: str) -> dict:
-        """Set low/medium/high/ultra through the shared backend; busy during capture.
+    def set_debug_speed(profile: str | None = None, clock_hz: int | None = None) -> dict:
+        """Set the shared acquisition clock; stop captures before changing it.
 
         Changes this probe's debug clock and saves the project profile after success.
         All attached clients share it. Inspect gui_call('debug_speed') for cached status.
         No target MCU is required; profile_confirmed reports the optional timing-profile ACK.
+        Pass exactly one of profile or integer clock_hz. Read gui_call('debug_speed')
+        interfaces/active_interface and clocks_hz first: modern SWD and HPM JTAG
+        advertise 14 discrete clocks. The interface selection never switches the
+        physical debug mode. Default is 10 MHz. configured means saved, still
+        pending application; only applied confirms timing configuration, not
+        electrical calibration. Do not stop streams or replay a failed request.
+        Legacy low=4 MHz, medium=10 MHz, high=20 MHz, ultra=30 MHz. HPM JTAG also
+        supports advertised integer clock_hz; 8 MHz is not a JTAG choice. A setting/profile
+        ACK is not a measured TCK frequency; inspect interface and qualification.
         """
-        return client().call('set_debug_speed', {'profile': profile})
+        if (profile is None) == (clock_hz is None):
+            raise ValueError('Provide exactly one of profile or clock_hz')
+        return client().call('set_debug_speed', {'profile': profile} if profile is not None else {'clock_hz': clock_hz})
+
+    @server.tool()
+    def hpm_debug(action: Literal['capabilities', 'status', 'halt', 'resume', 'step',
+                                  'read-register', 'write-register', 'breakpoint-query',
+                                  'breakpoint-set', 'breakpoint-clear'] = 'status',
+                  timeout_ms: StrictInt | None = None, register: str | None = None,
+                  value: StrictInt | None = None, slot: StrictInt | None = None,
+                  address: StrictInt | None = None) -> dict:
+        """HPM RV32 hart 0 debug; requires firmware advertising HPM_DEBUG v1.
+
+        capabilities/status do not halt/reset. halt/resume/step accept timeout_ms
+        1..1000 (default 500); step, register and trigger access require an already
+        halted hart. Registers: x0..x31, pc/dpc, sp/ra/fp or supported machine CSRs
+        (mstatus, mepc, mcause, mtval, etc). Only x1..x31/PC are writable.
+        Breakpoints use explicit slot 0..7; query actual slots first. set and clear
+        require a 2-byte-aligned address; clear verifies the expected address.
+        Requires idle capture and exclusive target admission; never auto-stops,
+        resets, falls back to ARM or retries unknown outcomes. Preserve issued/
+        cleanup/uncertainty on failure. Peripheral registers use read_register/SVD.
+        """
+        options = dict(action=action, timeout_ms=timeout_ms, register=register,
+                       value=value, slot=slot, address=address)
+        return client().call('hpm_debug', {key: val for key, val in options.items() if val is not None})
 
     @server.tool()
     def read_memory(address: int, size: int) -> dict:
-        """Read 1..4096 bytes through the shared backend. Busy during continuous acquisition."""
+        """Read 1..4096 bytes; backend negotiates MUX without starting capture.
+
+        Legacy exclusive capture is busy. No fallback or replay after a failure.
+        """
         return client().call("read_memory", {"address": hex(address), "size": size})
 
     @server.tool()
@@ -312,7 +366,10 @@ def build_server():
 
     @server.tool()
     def write_memory(address: int, data_hex: str) -> dict:
-        """Write 1..4096 bytes via shared admission. Busy during capture; never retries."""
+        """Write 1..4096 bytes; backend prefers native MUX without starting capture.
+
+        Legacy exclusive capture is busy. Never retries an unknown write outcome.
+        """
         return client().call('write_memory', {'address': hex(address), 'data_hex': data_hex})
 
     @server.tool()
@@ -535,6 +592,8 @@ def build_server():
         Optional target_part, base_address (32-bit integer or integer string), board,
         hpm_flash_cfg (four 32-bit hexadecimal strings) and swd_clock (integer Hz)
         are passed to the existing flash backend. HPM uses ROM API, never FLM.
+        For HPM swd_clock is a legacy parameter name: use advertised JTAG clocks
+        from debug_speed (modern 14 clocks, legacy 4/10/20/30 MHz), not 8000000.
         reset_after=false does not prevent the HPM ROM routine's own reset/resume.
         erase and erase_sector accept target_part and algorithm_id; erase_sector requires address.
         Erasure loads the exact target algorithm first; family IDCODE alone is insufficient.

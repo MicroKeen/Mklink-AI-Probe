@@ -37,13 +37,19 @@ class MuxWatchEvent(bytes):
 
 
 def packet(op, epoch, request, payload=b''):
-    if len(payload) > 256:
-        raise ValueError('Multiplex payload exceeds 256 bytes')
+    limit = {0x12: 492, 0x24: 489}.get(op, 256)
+    if len(payload) > limit:
+        raise ValueError(f'Multiplex payload exceeds {limit} bytes')
     raw = struct.pack('<4sBBHII', b'MLX1', 1, op, len(payload), epoch, request) + payload
     return raw + struct.pack('<I', binascii.crc32(raw) & 0xffffffff)
 
 
 class MuxTransport:
+    RTT_UPDATE_CAPABILITY = 1 << 7
+    FAST_TRANSFER_CAPABILITY = 1 << 8
+    FAST_TRANSFER_BYTES = 480
+    BLOCK_READ_CAPABILITY = 1 << 6
+    BLOCK_READ_COMMAND = 0x16
     SOFTWARE_RESET_CAPABILITY = 1 << 5
     SOFTWARE_RESET_COMMAND = 0x15
     MAX_QUEUE_BYTES = 65536
@@ -66,8 +72,11 @@ class MuxTransport:
         self.nonce = secrets.token_bytes(8)
         self.ready = False
         self.capabilities = 0
+        self.transfer_quantum = 128
+        self._pending_quantum = None
         self._reset_generation = 0
         self.rtt_mask = 0
+        self._rtt_manager = None
         self.watch_running = False
         self._last_command = time.monotonic()
         self._queues = {}
@@ -105,14 +114,19 @@ class MuxTransport:
             raise self._error
 
     def _send(self, op, payload, heartbeat=False):
+        if op == 0x12 and len(payload) > 4 + self.transfer_quantum:
+            raise ValueError('Memory write exceeds negotiated transfer size')
+        if op == 0x24 and (self.transfer_quantum != self.FAST_TRANSFER_BYTES
+                          or not 2 <= len(payload) <= 1 + self.FAST_TRANSFER_BYTES):
+            raise ValueError('Fast RTT write requires negotiated 480-byte capability')
         self._next_id += 1
         if self._next_id > 0xffffffff:
             raise MuxError('Request IDs exhausted; close and create a new session')
         req = self._next_id
-        self._pending = (op, req, time.monotonic()+3, heartbeat)
-        self._reply = None
         wire = packet(op, 0 if op == 1 else self.epoch, req,
                       (self.nonce if 0x10 <= op < 0x40 else b'') + payload)
+        self._pending = (op, req, time.monotonic()+3, heartbeat)
+        self._reply = None
         self._last_command = time.monotonic()
         try:
             count = self._write(wire)
@@ -158,7 +172,22 @@ class MuxTransport:
         self.capabilities = struct.unpack_from('<I', caps)[0]
         if self.request(4, self.nonce) != self.nonce:
             raise MuxError('Session claim mismatch')
+        if self.capabilities & self.FAST_TRANSFER_CAPABILITY:
+            self.set_transfer_quantum(self.FAST_TRANSFER_BYTES)
         self.ready = True
+
+    def set_transfer_quantum(self, quantum):
+        """Negotiate bounded short frames; never expand limits on HELLO alone."""
+        if type(quantum) is not int or quantum not in (128, self.FAST_TRANSFER_BYTES):
+            raise ValueError('Transfer quantum must be 128 or 480')
+        if not self.capabilities & self.FAST_TRANSFER_CAPABILITY:
+            raise RuntimeError('Probe firmware lacks bounded fast-transfer support')
+        with self._commands:
+            self._pending_quantum = quantum
+            try:
+                self.request(0x25, struct.pack('<H', quantum))
+            finally:
+                self._pending_quantum = None
 
     def tick(self):
         """Called by the serial reader even when no bytes arrive."""
@@ -207,6 +236,14 @@ class MuxTransport:
                     return
                 _, version, op, n, epoch, req = struct.unpack_from('<4sBBHII', self._rx)
                 limit = 1024 if op == 0x41 and self.capabilities & 8 else 256
+                if op == 0x96 and self.capabilities & self.BLOCK_READ_CAPABILITY:
+                    limit = 4097  # Status plus one bounded block; CRC v1 only.
+                if (self.capabilities & self.FAST_TRANSFER_CAPABILITY
+                        and self.transfer_quantum == self.FAST_TRANSFER_BYTES):
+                    if op == 0x40:
+                        limit = 6 + self.FAST_TRANSFER_BYTES
+                    elif op == 0x91:
+                        limit = 1 + self.FAST_TRANSFER_BYTES
                 # Version 2 is restricted to advertised Watch events. Commands,
                 # replies and RTT retain their CRC-protected version 1 framing.
                 watch_raw = version == 2 and op == 0x41 and bool(self.capabilities & 16)
@@ -232,6 +269,16 @@ class MuxTransport:
                         return
                     if hello:
                         self.epoch = epoch
+                    if self._pending[0] == 4 and payload[:1] == b'\0':
+                        self.transfer_quantum = 128  # Each claim starts compatible.
+                    if self._pending[0] == 0x25 and payload[:1] == b'\0':
+                        if payload != b'\0' or self._pending_quantum is None:
+                            self.fail('Invalid transfer quantum ACK; outcome unknown, do not replay')
+                            return
+                        # ACK and first large event can share one USB read. Set
+                        # the limit here before parsing the next frame, not in
+                        # the requesting thread after request() returns.
+                        self.transfer_quantum = self._pending_quantum
                     heartbeat = self._pending[3]
                     self._last_reply = time.monotonic()
                     self._reply = payload
@@ -255,6 +302,10 @@ class MuxTransport:
                     if self._event_id is not None:
                         self.event_gaps += (req-self._event_id-1) & 0xffffffff
                     self._event_id = req
+                    if op == 0x40 and self._rtt_manager is not None:
+                        self._rtt_manager.publish(payload)
+                        self._condition.notify_all()
+                        continue
                     key = (op, payload[0] if op == 0x40 else 255)
                     if op == 0x41:
                         payload = MuxWatchEvent(payload, self._reset_generation)
@@ -272,6 +323,7 @@ class MuxTransport:
     def stats(self):
         with self._condition:
             return {'event_gaps': self.event_gaps,
+                    'transfer_quantum': self.transfer_quantum,
                     'last_timeout': dict(self._last_timeout) if self._last_timeout else None,
                     'rtt_dropped_bytes': {ch: self.dropped_bytes.get((0x40, ch), 0) for ch in range(8)},
                     'watch_dropped_bytes': self.dropped_bytes.get((0x41, 255), 0)}
@@ -304,9 +356,12 @@ class MuxTransport:
         if not 0 <= address <= 0xffffffff or size < 0 or address+size > 0x100000000:
             raise ValueError('Invalid memory range')
         result = bytearray()
-        for offset in range(0, size, 128):
-            n = min(128, size-offset)
-            data = self.request(0x11, struct.pack('<IH', address+offset, n))
+        block_read = bool(self.capabilities & self.BLOCK_READ_CAPABILITY)
+        chunk_size = 4096 if block_read else self.transfer_quantum
+        command = self.BLOCK_READ_COMMAND if block_read else 0x11
+        for offset in range(0, size, chunk_size):
+            n = min(chunk_size, size-offset)
+            data = self.request(command, struct.pack('<IH', address+offset, n))
             if len(data) != n:
                 self.fail('Incomplete memory response')
                 raise self._error
@@ -316,8 +371,9 @@ class MuxTransport:
     def write_memory(self, address, data):
         if not 0 <= address <= 0xffffffff or address+len(data) > 0x100000000:
             raise ValueError('Invalid memory range')
-        for offset in range(0, len(data), 128):
-            self.request(0x12, struct.pack('<I', address+offset)+data[offset:offset+128])
+        chunk_size = self.transfer_quantum
+        for offset in range(0, len(data), chunk_size):
+            self.request(0x12, struct.pack('<I', address+offset)+data[offset:offset+chunk_size])
 
     @property
     def supports_software_reset(self):

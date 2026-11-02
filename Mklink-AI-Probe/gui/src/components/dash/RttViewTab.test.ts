@@ -374,7 +374,7 @@ describe('RttViewTab binary migration', () => {
     expect(wrapper.findComponent({ name: 'RttTerminalPanel' }).exists()).toBe(true)
     expect(wrapper.findComponent({ name: 'VirtualLogPanel' }).exists()).toBe(true)
     expect(wrapper.find('[data-testid="rtt-chart-toggle"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="rtt-save-log"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="traffic-open"]').exists()).toBe(true)
     expect(mocks.terminalBinary.stop).toHaveBeenCalled()
     expect(mocks.binary.start).toHaveBeenCalled()
     expect(mocks.dash.start).not.toHaveBeenCalled()
@@ -491,74 +491,35 @@ describe('RttViewTab binary migration', () => {
     wrapper.unmount()
   })
 
-  it('saves retained RTT rows only in log mode', async () => {
-    vi.useFakeTimers()
-    const wrapper = mount(RttViewTab, { props: { deviceConnected: true } })
-    expect(wrapper.find('[data-testid="rtt-save-log"]').exists()).toBe(false)
-    await wrapper.get('[data-testid="rtt-log-mode"]').trigger('click')
-    mocks.binary.rttLines.value = {
-      type: 'rtt-lines', sequence: 1n,
-      lines: [{ timestampNs: 1_000_000n, level: 'raw', text: 'ready' }],
-    }
-    await nextTick()
-    vi.advanceTimersByTime(100)
-    await nextTick()
-
-    await wrapper.get('[data-testid="rtt-save-log"]').trigger('click')
-
-    expect(wrapper.get('[data-testid="rtt-0-log-text"]').attributes('aria-pressed')).toBe('true')
-    expect((wrapper.get('[data-testid="rtt-0-log-timestamp"]').element as HTMLInputElement).checked).toBe(true)
-    expect(mocks.saveBlobFile).toHaveBeenCalledWith('rtt-0-test.log', expect.any(Blob))
-    const saved = mocks.saveBlobFile.mock.calls[0][1] as Blob
-    expect(new TextDecoder().decode(await saved.arrayBuffer())).toBe('ready\n')
-    wrapper.unmount()
-  })
-
-  it.each([0, 1, 2, 3, 4, 5, 6, 7])('isolates save failure, cancel and retry on RTT %i while acquisition continues', async (channel) => {
+  it.each([0,1,2,3,4,5,6,7])('isolates replay from live traffic and sends on RTT %i', async(channel) => {
     vi.useFakeTimers()
     const streams = new Map<string, typeof mocks.binary>()
     mocks.useBinaryStream.mockImplementation((name: string) => {
       const state = { ...mocks.binary, rttLines: shallowRef(null), rttTerminal: shallowRef(null), waveformBatch: shallowRef(null), envelope: shallowRef(null) }
-      streams.set(name, state)
-      return state
+      streams.set(name, state); return state
     })
-    mocks.status = { running: true, channels: [0, 1, 2, 3, 4, 5, 6, 7], down_buffers: [] }
+    mocks.status = { running: true, channels: [0,1,2,3,4,5,6,7], down_buffers: [{channel,active:true}] }
     const wrapper = mount(RttViewTab, { props: { deviceConnected: true } })
-    await flushPromises()
-    const panels = wrapper.findAllComponents({ name: 'RttChannelPanel' })
-    for (let ch = 0; ch < 8; ch++) {
-      await panels[ch]!.get('[data-testid=rtt-log-mode]').trigger('click')
-      streams.get(`rtt-${ch}`)!.rttLines.value = { type: 'rtt-lines', sequence: 1n, lines: [{ timestampNs: 1n, level: 'raw', text: `channel-${ch}` }] }
-    }
-    await nextTick(); await vi.advanceTimersByTimeAsync(100)
-    const panel = panels[channel]!
-    const neighbor = panels[(channel + 1) % 8]!
-    let rejectSave!: (reason: Error) => void
-    mocks.saveBlobFile.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectSave = reject }))
-    await panel.get('[data-testid=rtt-save-log]').trigger('click')
-    await panel.get('[data-testid=rtt-save-log]').trigger('click')
-    expect(mocks.saveBlobFile).toHaveBeenCalledTimes(1)
-    expect(panel.get('[data-testid=rtt-save-log]').attributes('aria-busy')).toBe('true')
-    expect(neighbor.get('[data-testid=rtt-save-log]').attributes('disabled')).toBeUndefined()
-    await neighbor.get('[data-testid=rtt-save-log]').trigger('click')
-    streams.get(`rtt-${channel}`)!.rttLines.value = { type: 'rtt-lines', sequence: 2n, lines: [{ timestampNs: 2n, level: 'raw', text: 'during-save' }] }
-    await nextTick(); await vi.advanceTimersByTimeAsync(100)
-    rejectSave(new Error('disk full'))
-    await flushPromises()
-    expect(panel.get('[data-testid=rtt-save-error]').text()).toContain('disk full')
-    expect(neighbor.find('[data-testid=rtt-save-error]').exists()).toBe(false)
-    expect(panel.get('[data-testid=rtt-save-log]').attributes('disabled')).toBeUndefined()
-    mocks.saveBlobFile.mockResolvedValueOnce(false)
-    await panel.get('[data-testid=rtt-save-log]').trigger('click')
-    await flushPromises()
-    expect(panel.find('[data-testid=rtt-save-error]').exists()).toBe(false)
-    await panel.get('[data-testid=rtt-save-log]').trigger('click')
-    await flushPromises()
-    const [name, blob] = mocks.saveBlobFile.mock.calls.at(-1)!
-    expect(name).toBe(`rtt-${channel}-test.log`)
-    expect(new TextDecoder().decode(await (blob as Blob).arrayBuffer())).toBe(`channel-${channel}\nduring-save\n`)
-    expect(mocks.dash.stop).not.toHaveBeenCalled()
-    wrapper.unmount()
+    try {
+      await flushPromises()
+      const panel = wrapper.findAllComponents({name:'RttChannelPanel'})[channel]!
+      await panel.get('[data-testid=rtt-log-mode]').trigger('click')
+      const controls = panel.findComponent({name:'TrafficLogControls'})
+      expect(controls.props('channel')).toBe(channel)
+      controls.vm.$emit('state',true); controls.vm.$emit('reset')
+      controls.vm.$emit('batch',[{source:String(channel),session:'recorded',direction:'TX',time:1,hex:'0061ff',lost_bytes:0}])
+      streams.get(`rtt-${channel}`)!.rttLines.value = {type:'rtt-lines',sequence:1n,lines:[{timestampNs:1n,level:'raw',text:'live-must-not-mix'}]}
+      await nextTick(); await vi.advanceTimersByTimeAsync(100)
+      const log = panel.findComponent({name:'VirtualLogPanel'})
+      expect(Array.from((log.vm as any).exportRaw())).toEqual([0,97,255])
+      expect(panel.get(`[data-testid=rtt-channel-${channel}-send]`).attributes('disabled')).toBeDefined()
+      expect(mocks.api.writeRtt).not.toHaveBeenCalled()
+      expect(mocks.dash.stop).not.toHaveBeenCalled()
+      controls.vm.$emit('reset'); controls.vm.$emit('state',false)
+      await nextTick()
+      expect(Array.from((log.vm as any).exportRaw())).toEqual([])
+      expect(panel.findComponent({name:'RttTransmitBar'}).props('enabled')).toBe(true)
+    } finally {wrapper.unmount()}
   })
 
   it('starts and stops the binary lifecycle with dashboard controls', async () => {

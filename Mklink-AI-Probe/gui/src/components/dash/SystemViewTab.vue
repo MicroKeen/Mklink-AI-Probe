@@ -110,6 +110,10 @@
       </div>
 
       <div class="sv-health-grid">
+        <div v-if="!offlineMode && meta.waitingForEvents && dash.state.value === 'running'" data-testid="systemview-waiting" class="sv-health-card sv-waiting">
+          <span>{{ tr('采集保持连接', 'Capture connected') }}</span>
+          <b>{{ tr('等待目标事件；若目标已运行，请检查 SystemView 录制配置与通道。', 'Waiting for target events. If the target is running, check SystemView recording and channel configuration.') }}</b>
+        </div>
         <div class="sv-health-card">
           <span>Events</span>
           <b>{{ eventCount.toLocaleString() }}</b>
@@ -402,6 +406,7 @@ const meta = reactive({
   autoRetryCount: 0,
   autoRetryReason: '',
   autoRetryStopError: '',
+  waitingForEvents: false,
 })
 let lastAutoRetryKey = ''
 let lastStreamSeq = 0
@@ -1133,6 +1138,9 @@ function applySessionStatus(status: Record<string, unknown>): void {
   meta.autoRetryCount = retryCount
   meta.autoRetryReason = String(status.auto_retry_reason || '')
   meta.autoRetryStopError = String(status.auto_retry_stop_error || '')
+  if (status.progress_state !== undefined) {
+    meta.waitingForEvents = status.progress_state === 'waiting'
+  }
 }
 
 function hexId(id: number) { return '0x' + (id >>> 0).toString(16).toUpperCase() }
@@ -1198,6 +1206,7 @@ function clearAll() {
   meta.autoRetryCount = 0
   meta.autoRetryReason = ''
   meta.autoRetryStopError = ''
+  meta.waitingForEvents = false
 }
 
 async function refreshLogList() {
@@ -1438,7 +1447,9 @@ async function waitForSystemViewReady(generation: number, timeoutMs = CAPTURE_ST
         runtimeError.value = status.progress_error || tr('SystemView 启动失败', 'SystemView startup failed')
         return false
       }
-      if (status?.progress_state === 'streaming' || Number(status?.stats?.bytes) > 0) {
+      if (status?.progress_state === 'streaming'
+        || (status?.running && status?.progress_state === 'waiting')
+        || Number(status?.stats?.bytes) > 0) {
         return true
       }
       if (status?.running === false && status?.progress_state !== 'starting') {
@@ -1554,6 +1565,8 @@ async function onStop() {
 
 <style scoped>
 .sv-tab { display: flex; flex-direction: column; height: 100%; gap: 8px; }
+.sv-health-card.sv-waiting { grid-column: 1 / -1; }
+.sv-health-card.sv-waiting b { white-space: normal; overflow: visible; }
 .alert-warn { color: var(--warn); padding: 8px; border: 1px solid var(--warn); border-radius: 4px; }
 .sv-toolbar { display: flex; align-items: center; gap: 12px; padding: 6px 0; flex-wrap: wrap; }
 .sv-address-row { display: grid; grid-template-columns: auto minmax(180px, 320px) auto minmax(0, 1fr); align-items: center; gap: 8px; padding: 4px 0; }

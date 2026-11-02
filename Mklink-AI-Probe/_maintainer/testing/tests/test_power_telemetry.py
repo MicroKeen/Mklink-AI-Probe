@@ -42,6 +42,14 @@ def test_v4_units_and_probe_only_command():
     assert bridge.commands == ['cmd.get_power()']
 
 
+def test_latest_v2_reports_unsupported_without_a_power_command():
+    bridge = Bridge()
+    bridge._firmware_capabilities = frozenset({'V2.9.3'})
+    with pytest.raises(ValueError, match='当前 V2 型号固件不支持 get_power'):
+        read_power(bridge)
+    assert bridge.commands == []
+
+
 def test_v3_does_not_fabricate_current_or_power():
     result = parse_power_response(wire(current_supported=False, current_ua=None, power_uw=None))
     assert result['voltage_mv'] == 3300

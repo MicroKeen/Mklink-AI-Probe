@@ -80,6 +80,9 @@ These platforms are opt-in. Build Windows NSIS by default; do not build Linux
 or macOS installers or dispatch their workflow unless the user explicitly
 requests those platforms. General build, prerelease testing, and publication
 requests do not imply that request. `desktop-unix.yml` is manual-dispatch only.
+Its `target` input selects `linux-x64` (default), `macos-arm64`, `macos-x64`,
+or `all`; select only the platforms requested by the maintainer. Artifacts are
+named by target and source commit, while package versions come from the source.
 
 Run `scripts/build_workspace.ps1` with `python` and argument
 `skills/tauri-gui-builder/scripts/build_unix.py` on the target OS/architecture.

@@ -646,7 +646,9 @@ def test_auto_channels_use_only_active_control_block_descriptors(monkeypatch, mu
     device, bridge = _device_with_rtt_memory(header, descriptors)
     bridge.supports_multiplex = lambda: multiplex
     bridge.enable_multiplex = lambda: None
-    bridge._mux = SimpleNamespace(_commands=threading.RLock(), request=Mock(), drain=Mock(return_value=[]))
+    from mklink.mux import MuxTransport
+    bridge._mux = MuxTransport(Mock())
+    bridge._mux.request = Mock(return_value=b'\x03\x00')
     if not multiplex:
         monkeypatch.setattr(RTTSession, 'start', lambda *a, **kw: {'control_block_addr': '0x20000000'})
     result = device.rtt_start('0x20000000', mode=1, all_channels=True)

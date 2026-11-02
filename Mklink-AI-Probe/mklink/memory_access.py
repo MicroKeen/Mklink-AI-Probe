@@ -59,12 +59,28 @@ _HEX_DUMP_HEADER_RE = re.compile(
 _HEX_DUMP_RE = re.compile(r"^\s*([0-9a-fA-F]{8})\s+((?:[0-9a-fA-F]{2}\s+){0,15}[0-9a-fA-F]{2})\b")
 
 
+def read_response_error(response: str) -> str | None:
+    """Keep explicit probe failures distinct from an empty/malformed dump."""
+    for line in response.splitlines():
+        value = line.strip()
+        if re.match(r'(?i)(?:error\s*:|\w*error\s*:|traceback\b|SBA unavailable\s*:|DAP busy\b)', value):
+            return value[:512]
+    return None
+
+
+def require_read_response(response: str) -> None:
+    error = read_response_error(response)
+    if error:
+        raise RuntimeError('Probe memory read failed: ' + error)
+
+
 def parse_read_ram_response(response: str) -> bytes:
     """Extract bytes from the hex dump text returned by ``cmd.read_ram``.
 
-    Returns an empty bytes object when the response does not contain a
-    parseable dump. Callers should retain and display the raw response.
+    Explicit firmware errors raise, even when some data rows precede them.
+    An otherwise unrecognized response returns empty bytes for legacy callers.
     """
+    require_read_response(response)
     data = bytearray()
     header_seen = False
     for line in response.splitlines():

@@ -8,6 +8,28 @@ from urllib.error import URLError
 from mklink import firmware_check as fc
 
 
+@pytest.mark.parametrize('v2,name,index', [
+    (False, 'HPMLink_V4.3.7.uf2', 'latest.json'),
+    (True, 'MicroLink_V2.9.3.rbl', 'latest-v2.json'),
+])
+def test_github_firmware_lookup_uses_active_repository(monkeypatch, v2, name, index):
+    import json
+    info = fc.parse_firmware_filename(name)
+    payload = {'schema': fc.FIRMWARE_MANIFEST_SCHEMA, 'firmwares': [{
+        'family': info.family, 'model': info.model, 'version': info.version_str,
+        'name': name, 'size': 512, 'sha256': 'a' * 64,
+        'urls': {'github': 'https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/firmware-assets/' + name},
+    }]}
+
+    def open_active(request, **_kwargs):
+        assert request.full_url == 'https://raw.githubusercontent.com/MicroKeen/Mklink-AI-Probe/firmware/' + index
+        return io.BytesIO(json.dumps(payload).encode())
+
+    monkeypatch.setattr(fc, 'urlopen', open_active)
+    entries = fc._remote_firmwares_from_source('github', v2=v2)
+    assert len(entries) == 1 and entries[0].name == name
+
+
 @pytest.fixture(autouse=True)
 def isolated_release_catalog(monkeypatch):
     monkeypatch.setattr(fc, 'bundled_firmwares', lambda: [])

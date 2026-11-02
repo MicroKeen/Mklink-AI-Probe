@@ -404,6 +404,82 @@ def test_read_memory_stream_rejects_inconsistent_chunk_plan(app):
     assert "add up to size" in response.json()["detail"]
 
 
+@pytest.mark.parametrize("wrapped", [False, True])
+@pytest.mark.parametrize("code,status,message", [
+    (FlashErrorCode.CONNECT_FAIL, 502, "SWD/JTAG communication failure (No ACK)"),
+    (FlashErrorCode.PROBE_BUSY, 409, "Probe is already open"),
+    (FlashErrorCode.MKLINK_DAP_NOT_FOUND, 404, "Selected probe is unavailable"),
+])
+def test_read_stream_returns_connection_error_before_binary_headers(
+    app, services, monkeypatch, wrapped, code, status, message,
+):
+    calls = []
+
+    def failed_read(*args):
+        try:
+            calls.append("connect")
+            raise FlashError(code, message, {"path": "C:/private/probe.log"})
+            yield b""  # The real connection is opened lazily by the iterator.
+        finally:
+            calls.append("disconnect")
+
+    services.job_manager.iter_memory = failed_read
+    if wrapped:
+        from types import SimpleNamespace
+        from mklink.remote.acquisition import download_response
+        monkeypatch.setattr("mklink.remote.dashboards.get_managers", lambda: {})
+        original = app
+
+        async def app(scope, receive, send):
+            await download_response(
+                original, scope, receive, send,
+                {"device": SimpleNamespace(connected=False)}, None,
+            )
+
+    response = request(app, "POST", "/api/online-flash/memory/read-stream", json={
+        "address": "0x1000", "size": 8, "chunk_sizes": [4, 4],
+        "probe_id": "mk", "target_part": "DEVICE_A",
+    })
+    assert response.status_code == status
+    assert response.headers["content-type"] == "application/json"
+    assert "content-disposition" not in response.headers
+    assert response.json()["detail"]["code"] == code.value
+    assert response.json()["detail"]["message"] == message
+    assert "private" not in response.text
+    assert calls == ["connect", "disconnect"]
+
+
+@pytest.mark.parametrize("failure", ["start", "body", "later_read"])
+def test_read_stream_closes_target_on_cancellation_or_later_read_failure(failure):
+    from mklink.remote.online_flash_api import _MemoryReadResponse
+    calls, sent = [], []
+
+    def chunks():
+        try:
+            calls.append("connect")
+            yield b"1234"
+            calls.append("next")
+            raise FlashError(FlashErrorCode.CONNECT_FAIL, "connection lost")
+        finally:
+            calls.append("disconnect")
+
+    async def run():
+        async def send(message):
+            sent.append(message)
+            if message["type"] == f"http.response.{failure}":
+                raise asyncio.CancelledError()
+
+        response = _MemoryReadResponse(chunks(), media_type="application/octet-stream")
+        with pytest.raises(FlashError if failure == "later_read" else asyncio.CancelledError):
+            await response({"type": "http", "asgi": {"spec_version": "2.4"}}, None, send)
+
+    asyncio.run(run())
+    assert calls == (["connect", "next", "disconnect"] if failure == "later_read"
+                     else ["connect", "disconnect"])
+    assert not any(message.get("more_body") is False for message in sent)
+    assert all(message.get("body", b"") in (b"", b"1234") for message in sent)
+
+
 def test_read_memory_route_supports_hpm_target(app, services):
     services.catalog.search = lambda *args, **kwargs: []
     response = request(

@@ -531,7 +531,7 @@ def _deployment_inputs(payload, firmware_sources, algorithm_sources, temp):
     return hashlib.sha256(json.dumps(['offline_deploy', stable, hashes], sort_keys=True).encode()).hexdigest()
 
 
-async def _perform_deployment(runtime, disk_root, operation, recovery=None):
+async def _perform_deployment(runtime, disk_root, operation, recovery=None, *, bridge=None):
     """One identity recheck and recovery bridge for all journaled file deployments."""
     loop = asyncio.get_running_loop()
     def record_recovery(directory):
@@ -546,6 +546,12 @@ async def _perform_deployment(runtime, disk_root, operation, recovery=None):
                 raise HTTPException(409, 'Bound deployment disk is unavailable') from error
             if Path(current['root']).resolve() != disk_root.resolve():
                 raise HTTPException(409, 'Bound deployment disk changed while preparing inputs')
+        # MSC writes can stall the probe's command/heartbeat task. Capture is
+        # already suspended by admission; leave idle MUX before touching disk.
+        # If the protocol transition fails, do not begin or replay the copy.
+        leave_mux = getattr(bridge, '_leave_multiplex', None)
+        if callable(leave_mux):
+            await asyncio.to_thread(leave_mux)
         return await asyncio.to_thread(operation, record_recovery if recovery is not None else None)
     except OfflineRecoveryError as error:
         raise HTTPException(500, detail={
@@ -595,7 +601,7 @@ def create_offline_download_router(
     def _resources(isp_job=None):
         from mklink.remote.resource_manager import ResourceGroup
         result = [ResourceGroup.MKLINK_BRIDGE, ResourceGroup.TARGET_DEBUG,
-                  ResourceGroup.MUX_RTT, ResourceGroup.MUX_WATCH]
+                  ResourceGroup.MUX_RTT, ResourceGroup.MUX_WATCH, ResourceGroup.MUX_SYSTEMVIEW]
         if isp_job is not None:
             result += [ResourceGroup.SERIAL_PORT, ResourceGroup.MODBUS_PORT]
         return result
@@ -794,7 +800,8 @@ def create_offline_download_router(
                     files = _transactional_copy(disk_root, [(Path('FLM') / name, sources['algorithm'], None)], callback)
                     return {'status': 'deployed', 'files': files}
                 async def perform(recovery):
-                    return await _perform_deployment(runtime, disk_root, copy, recovery)
+                    return await _perform_deployment(runtime, disk_root, copy, recovery,
+                                                     bridge=_connected_bridge(None))
                 job = await runtime.jobs.record_deployment(request_id, fingerprint, perform, action='flm_copy')
                 return _deployment_result(job)
         except (OfflineDownloadError, OSError) as error:
@@ -983,7 +990,8 @@ def create_offline_download_router(
                         deploy_offline_bundle(config, disk_root, firmware_sources=firmware_sources,
                                               algorithm_sources=algorithm_sources, recovery_callback=callback,
                                               isp_capability_response=isp_capability,
-                                              firmware_capability_response=firmware_capability), recovery)
+                                              firmware_capability_response=firmware_capability), recovery,
+                                                     bridge=_connected_bridge(None))
                 runtime = getattr(request.app.state, 'shared_runtime', None)
                 if runtime is None:
                     await asyncio.to_thread(_validate_bin_firmware_ranges, config, online_services, firmware_sources)
@@ -1007,6 +1015,7 @@ def create_offline_download_router(
                 await upload.close()
 
     @router.post("/trigger")
+    @router.post("/trigger-job")
     async def trigger(
         request: Request,
         payload: Optional[dict] = Body(default=None),
@@ -1091,7 +1100,9 @@ def create_offline_download_router(
                 resolved_port,
             )
         except Exception as error:
-            raise HTTPException(status_code=409, detail=str(error))
+            from mklink.remote.resource_manager import ResourceError
+            unknown = request.url.path.endswith('/trigger-job') and not isinstance(error, ResourceError)
+            raise HTTPException(status_code=503 if unknown else 409, detail=str(error))
         finally:
             resource_manager.release(owner)
         lines = _format_trigger_output(response)

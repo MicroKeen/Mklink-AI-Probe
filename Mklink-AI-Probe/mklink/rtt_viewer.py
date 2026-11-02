@@ -781,6 +781,8 @@ def _build_dashboard_html(max_points: int = 500, title: str = "MKLink RTT View",
     html = html.replace(_MARKER_MODE, mode)
     html = html.replace(_MARKER_LANG, _load_lang_preference())
     html = html.replace(_MARKER_INTERVAL, "0.001" if mode == "SuperWatch" else "0")
+    html = html.replace("__INTERVAL_STEP__", "0.000001" if mode == "SuperWatch" else "0.001")
+    html = html.replace("__INTERVAL_MIN__", "0.000004" if mode == "SuperWatch" else "0")
     return html
 
 

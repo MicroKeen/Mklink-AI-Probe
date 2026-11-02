@@ -569,6 +569,7 @@ class HpmRomBackend:
         self._frequency = 1_000_000
         self._board: Optional[str] = None
         self._flash_cfg: Optional[Tuple[str, str, str, str]] = None
+        self._program_result: Optional[dict] = None
         self._reset_mode = "default"
         self._reset_voltage_mv: Optional[int] = None
         self._lock = threading.RLock()
@@ -608,8 +609,10 @@ class HpmRomBackend:
 
         if not is_hpm_target(target):
             raise FlashError(FlashErrorCode.TARGET_NOT_SUPPORTED, "target is not an HPM device")
-        from mklink.debug_speed import validate_clock_hz
-        validate_clock_hz(frequency)
+        from mklink.debug_speed import validate_hpm_clock_hz
+        from mklink.capture_clock import V3_CLOCKS, HPM_CLOCKS
+        if type(frequency) is not int or frequency not in (*V3_CLOCKS, *HPM_CLOCKS):
+            raise ValueError("Unsupported HPM JTAG clock")
         if reset_voltage_mv is not None and reset_voltage_mv not in _POWER_CYCLE_VOLTAGES_MV:
             raise ValueError("reset_voltage_mv must be 1800, 3300, or 5000")
         if reset_mode != "power-cycle" and reset_voltage_mv is not None:
@@ -636,7 +639,13 @@ class HpmRomBackend:
 
                 factory = connect
             try:
-                self._device = factory(port=port)
+                device = factory(port=port)
+                try:
+                    validate_hpm_clock_hz(frequency, getattr(device, '_bridge', None))
+                except Exception:
+                    device.close()
+                    raise
+                self._device = device
                 self._target = str(target)
                 self._frequency = frequency
                 self._board = resolved_board
@@ -651,6 +660,7 @@ class HpmRomBackend:
     def disconnect(self) -> None:
         with self._lock:
             device, self._device = self._device, None
+            self._program_result = None
             self._reset_voltage_mv = None
             if device is not None:
                 try:
@@ -682,6 +692,7 @@ class HpmRomBackend:
                     "swd_clock": self._frequency,
                     "verify": False,
                     "reset_after": False,
+                    "_defer_probe_cleanup": True,
                 }
                 if progress_callback is not None:
                     flash_options["progress_callback"] = (
@@ -693,10 +704,21 @@ class HpmRomBackend:
                 )
                 if not isinstance(result, Mapping) or result.get("success") is not True:
                     raise FlashError(FlashErrorCode.PROGRAM_FAIL, "HPM ROM programming failed")
+                self._program_result = dict(result)
             except FlashError:
                 raise
             except Exception as error:
                 raise FlashError(FlashErrorCode.PROGRAM_FAIL, str(error)) from error
+
+    def complete(self) -> dict:
+        """Called only after all requested online stages have succeeded."""
+        from mklink.online_files import cleanup_firmware
+        with self._lock:
+            result = self._program_result
+            if result is None:
+                return {}
+            self._program_result = None
+            return cleanup_firmware(getattr(self._device, '_flash', None), result)
 
     def verify(
         self,

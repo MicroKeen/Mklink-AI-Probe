@@ -78,16 +78,17 @@ def setup_app(tmp_path, monkeypatch):
     return app, manager, device
 
 
-def test_svd_upload_select_restore_and_active_capture_rejection(tmp_path, monkeypatch):
+@pytest.mark.parametrize("extension", ["SVD", "XML"])
+def test_svd_upload_select_restore_and_active_capture_rejection(tmp_path, monkeypatch, extension):
     app, manager, device = setup_app(tmp_path, monkeypatch)
     upload = find_route(app, "/api/files/svd").endpoint
     select = find_route(app, "/api/dash/superwatch/peripherals/select").endpoint
     async def verify():
-        saved = await upload(UploadFile(filename="device.SVD", file=io.BytesIO(SVD)))
+        saved = await upload(UploadFile(filename=f"device.{extension}", file=io.BytesIO(SVD)))
         path = Path(saved["path"])
         assert path.parent == tmp_path / ".mklink/uploads/file-sources"
         assert path.read_bytes() == SVD
-        again = await upload(UploadFile(filename="another.svd", file=io.BytesIO(SVD)))
+        again = await upload(UploadFile(filename=f"another.{extension}", file=io.BytesIO(SVD)))
         assert again["path"] == saved["path"]
         result = await select(target_id=None, chip=None, svd=str(path))
         assert result["selection"]["pack"] == "local"
@@ -107,7 +108,8 @@ def test_svd_upload_select_restore_and_active_capture_rejection(tmp_path, monkey
     asyncio.run(verify())
 
 
-@pytest.mark.parametrize("name,data", [("bad.xml", SVD), ("empty.svd", b""),
+@pytest.mark.parametrize("name,data", [("bad.txt", SVD), ("empty.svd", b""),
+    ("hpm_ses_riscv_cpu_regs.xml", b"<!DOCTYPE CPU_Registers_File><Root name='RISCV'/>") ,
     ("bad.svd", b"<device>"), ("wrong.svd", SVD.replace(b"device", b"package")),
     ("no_registers.svd", b"<device><name>Empty</name></device>")])
 def test_invalid_svd_is_not_published_or_selected(tmp_path, monkeypatch, name, data):

@@ -95,6 +95,38 @@ def test_device_flash_verify_rejects_mismatched_hex(tmp_path: Path):
         device.flash(str(firmware), verify=True, reset_after=False)
 
 
+@pytest.mark.parametrize('hpm', [False, True])
+@pytest.mark.parametrize('outcome', ['success', 'mismatch', 'deferred'])
+def test_online_copy_cleanup_follows_successful_readback(tmp_path, monkeypatch, hpm, outcome):
+    firmware = tmp_path / 'demo.hex'
+    base = 0x80000400 if hpm else 0x08000000
+    _write_hex(firmware, b'image', base)
+    events = []
+
+    def read_memory(address, size):
+        events.append('verify')
+        return b'wrong' if outcome == 'mismatch' else b'image'
+
+    def cleanup(flash, result):
+        events.append('cleanup')
+        return {'deleted': ['owned.hex'], 'retained': [], 'errors': []}
+
+    monkeypatch.setattr('mklink.online_files.cleanup_firmware', cleanup)
+    device = _device(read_memory)
+    device.reset = lambda: events.append('reset')
+    device._flash.burn_hpm_hex = lambda *args, **kwargs: {'success': True}
+    options = {'target_part': 'HPM5301', 'board': 'hpm5301evklite'} if hpm else {}
+    if outcome == 'mismatch':
+        with pytest.raises(DeviceError, match='Flash verify failed'):
+            device.flash(str(firmware), **options)
+        assert events == ['verify']
+    else:
+        result = device.flash(str(firmware), _defer_probe_cleanup=outcome == 'deferred', **options)
+        expected = ['verify'] + ([] if hpm else ['reset'])
+        assert events == expected + (['cleanup'] if outcome == 'success' else [])
+        assert ('temporary_files' in result) == (outcome == 'success')
+
+
 def test_hpm_hex_uses_addressed_rom_route_without_generic_reset(tmp_path: Path):
     firmware = tmp_path / "hpm.hex"
     _write_hex(firmware, b"data", 0x80000030)
@@ -377,7 +409,7 @@ def test_unknown_hpm_target_requires_board_or_flash_configuration(tmp_path: Path
 def test_device_flash_recognizes_hpm_project_without_target_part(tmp_path: Path):
     firmware = tmp_path / "firmware.bin"
     firmware.write_bytes(b"hpm")
-    save_config(str(tmp_path), {"mcu_key": None, "swd_clock": 1_000_000})
+    save_config(str(tmp_path), {"mcu_key": None, "swd_clock": 4_000_000})
     save_project_info(str(tmp_path), {
         "vendor": "HPMicro",
         "board": "hpm5301evklite",

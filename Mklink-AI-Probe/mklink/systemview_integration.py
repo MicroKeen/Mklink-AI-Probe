@@ -394,6 +394,10 @@ def generate_systemview_usage_example() -> str:
     return """\
 // SystemView 已集成（USE_SYSTEMVIEW 宏控制）。RT-Thread 启动时自动初始化并
 // 开始把跟踪事件写入 RTT 通道 1——无需手写任何 Init 调用。
+// 额外 RTT 通道在 SystemView 初始化后配置（INIT_APP 或 main）；启用
+// SEGGER_RTT_SECTION 时 SystemView 初始化会重置 RTT 控制块。不要随后重复 Init。
+// 若普通 RTT 已占用通道 1，请把 SystemView 改为独立通道，并匹配上下行通道容量。
+// 集成命令不覆盖工程已有文件；旧适配器需要审查后单独更新。
 //
 // PC 端采集：
 //   python -m mklink systemview --duration 10         # 控制台解码事件
@@ -405,6 +409,6 @@ def generate_systemview_usage_example() -> str:
 //
 // 配置（segger_systemview/SEGGER_SYSVIEW_Conf.h + Config_RTThread.c）：
 //   通道 = 1（SEGGER_SYSVIEW_RTT_CHANNEL，与 mklink 读取一致）
-//   缓冲 = 1024 字节（SEGGER_SYSVIEW_RTT_BUFFER_SIZE，欠读会溢出，可调大）
+//   缓冲 = 16384 字节（SEGGER_SYSVIEW_RTT_BUFFER_SIZE，欠读会溢出，可调大）
 //   CPU 频率 = SystemCoreClock；RAM base = 0x20000000；时间戳 = DWT CYCCNT
 """

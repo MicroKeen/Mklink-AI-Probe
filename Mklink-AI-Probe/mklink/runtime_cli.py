@@ -264,7 +264,11 @@ def run(args):
         elif args.command == 'device-status':
             result = client.call('device_status')
         elif args.command == 'debug-speed':
-            result = client.call('set_debug_speed', {'profile': args.profile, 'save': args.persist_profile})
+            clock_hz = getattr(args, 'clock_hz', None)
+            if (args.profile is None) == (clock_hz is None):
+                raise ValueError('Choose exactly one profile or --clock-hz')
+            result = client.call('set_debug_speed', {**({'profile': args.profile} if args.profile else
+                                {'clock_hz': clock_hz}), 'save': args.persist_profile})
         elif args.command in {'halt', 'resume', 'step'}:
             result = client.call(args.command)
         elif args.command in {'read-ram', 'read-flash'}:

@@ -101,5 +101,5 @@ def test_hpm_serial_mapping_missing_never_constructs_a_device(devices):
     factory=Mock()
     backend=HpmRomBackend(device_factory=factory)
     with pytest.raises(FlashError,match='selected probe'):
-        backend.connect('missing','HPM5300',1000000,board='hpm5300evk')
+        backend.connect('missing','HPM5300',10000000,board='hpm5300evk')
     factory.assert_not_called()

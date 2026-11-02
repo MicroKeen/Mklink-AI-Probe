@@ -16,7 +16,9 @@ class MuxWatchCapacityError(ValueError):
 
 
 class MuxWatchSession:
-    def __init__(self, transport, regions, period):
+    TIMING_V2_CAPABILITY = 1 << 9
+
+    def __init__(self, transport, regions, period, *, fastest=False):
         self.transport = transport
         self.regions = regions
         self.parts = [(index, address+offset, min(128, size-offset))
@@ -26,9 +28,15 @@ class MuxWatchSession:
             raise MuxWatchCapacityError('Multiplex watch allows 15 regions of at most 128 bytes; select fewer/smaller variables')
         if not math.isfinite(period) or period < 0:
             raise MuxWatchCapacityError('Multiplex watch period must be finite and nonnegative')
+        if type(fastest) is not bool or (fastest and period != 0):
+            raise MuxWatchCapacityError('Fastest sampling requires fastest=True and period=0')
+        self.fastest = fastest
+        self.timing = None
         self.period = max(1, math.ceil(period*1000000))
         if period == 0:
-            self.period = 2000
+            # Keep the existing period=0 adapter for finite single reads.
+            # Only the explicit, capability-gated mode sends zero on the wire.
+            self.period = 0 if fastest else 2000
         if self.period > 60000000:
             raise MuxWatchCapacityError('Multiplex watch period exceeds 60 seconds')
         self._pending = []
@@ -48,12 +56,38 @@ class MuxWatchSession:
         # Negotiate units only after the real firmware capabilities are known.
         if not getattr(self.transport, 'capabilities', 0) & 8:
             raise RuntimeError('SuperWatch requires the matching grouped-sampling firmware; update the probe firmware and host together')
+        timing_v2 = bool(self.transport.capabilities & self.TIMING_V2_CAPABILITY)
+        self.timing = None
+        if self.fastest and not timing_v2:
+            raise RuntimeError('Fastest sampling requires WATCH_TIMING=2 firmware with MUX capability bit 9')
         self.transport.drain(0x41, 255)
         body = struct.pack('<IB', self.period, len(self.parts))
         body += b''.join(struct.pack('<IB', address, size) for _, address, size in self.parts)
         with self.transport._commands:
-            self.transport.request(0x32, body)
+            answer = self.transport.request(0x32, body)
             self.transport.watch_running = True
+            if timing_v2:
+                try:
+                    if not isinstance(answer, (bytes, bytearray)) or len(answer) != 8:
+                        raise RuntimeError('Invalid WATCH_TIMING=2 START acknowledgement length')
+                    accepted, timebase_hz = struct.unpack('<II', answer)
+                    if accepted != self.period or timebase_hz == 0:
+                        raise RuntimeError('WATCH_TIMING=2 START acknowledgement does not match requested period/timebase')
+                except RuntimeError as error:
+                    # The command succeeded but its timing contract is invalid.
+                    # Stop this subscription once; never replay START or use REPL.
+                    try:
+                        self.stop()
+                    except Exception as stop_error:
+                        self.transport.fail(stop_error)
+                        raise RuntimeError(f'{error}; stopping the unconfirmed capture failed: {stop_error}') from error
+                    raise
+                self.timing = {
+                    'mode': 'fastest' if self.fastest else 'periodic',
+                    'requested_period_us': self.period,
+                    'accepted_period_us': accepted,
+                    'timebase_hz': timebase_hz,
+                }
 
     def read_frames(self, *, packed=False):
         result = []

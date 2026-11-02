@@ -17,12 +17,20 @@ def registers(monkeypatch):
     return values, read, write
 
 
-@pytest.mark.parametrize('address', [-1, 0x20000000, 0x100000000, True, '0x08005000', 1.5])
+@pytest.mark.parametrize('address', [-1, 0x100000000, 0x08005001, True, '0x08005000', 1.5])
 def test_invalid_address_never_accesses_registers(registers, address):
     _, read, write = registers
     with pytest.raises(ValueError):
         debug.set_breakpoint(None, address)
     read.assert_not_called()
+    write.assert_not_called()
+
+
+def test_v1_address_limit_checked_after_reading_revision(registers):
+    _, read, write = registers
+    with pytest.raises(ValueError, match='FPBv1'):
+        debug.set_breakpoint(None, 0x20000000)
+    read.assert_called_once_with(None, debug.FP_CTRL)
     write.assert_not_called()
 
 

@@ -18,11 +18,12 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
+from anyio import CancelScope
 from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 from mklink.debug_speed import validate_clock_hz
-from starlette.concurrency import run_in_threadpool
+from starlette.concurrency import iterate_in_threadpool, run_in_threadpool
 
 from mklink.cmsis_dap.backend import _pack_flm_address_offset
 from mklink.cmsis_dap.errors import FlashError, FlashErrorCode
@@ -332,6 +333,34 @@ async def _blocking(function: Callable[..., Any], *args: object, **kwargs: objec
         return await run_in_threadpool(function, *args, **kwargs)
     except Exception as error:
         _raise_http(error)
+
+
+class _MemoryReadResponse(StreamingResponse):
+    """Expose connection/first-read errors before committing binary headers."""
+
+    def __init__(self, content, **kwargs):
+        self._chunks = iter(content)
+        super().__init__(self._chunks, **kwargs)
+
+    async def __call__(self, scope, receive, send):
+        try:
+            first = await _blocking(next, self._chunks, None)
+
+            async def body():
+                if first is not None:
+                    yield first
+                async for chunk in iterate_in_threadpool(self._chunks):
+                    yield chunk
+
+            self.body_iterator = body()
+            await super().__call__(scope, receive, send)
+        finally:
+            # A disconnected client must still release the target session,
+            # including cancellation after prefetch but before the first send.
+            close = getattr(self._chunks, "close", None)
+            if callable(close):
+                with CancelScope(shield=True):
+                    await run_in_threadpool(close)
 
 
 def _pack_stream_requested(request: Request) -> bool:
@@ -1770,7 +1799,7 @@ def create_online_flash_router(services: OnlineFlashServices) -> APIRouter:
             **flash_configuration,
         )
         filename = "read-0x{:08X}-{}.bin".format(address, body.size)
-        return StreamingResponse(
+        return _MemoryReadResponse(
             services.job_manager.iter_memory(request, address, chunk_sizes),
             media_type="application/octet-stream",
             headers={

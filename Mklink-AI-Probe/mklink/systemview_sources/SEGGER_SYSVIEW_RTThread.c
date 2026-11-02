@@ -9,8 +9,8 @@
  *
  * 本文件同时提供 SEGGER_SYSVIEW_OS_API（_cbGetTime + _cbSendTaskList），供
  * Config_RTThread.c 的 SEGGER_SYSVIEW_Conf() 在 Init 时引用（否则链接报
- * SYSVIEW_X_OS_TraceApi undefined）。任务名字段访问带 RT_VERSION_CHECK 守卫，
- * 兼容 RT-Thread 4.x / 5.x。
+ * SYSVIEW_X_OS_TraceApi undefined）。通过公共对象头访问任务名和链表，
+ * 兼容 RT-Thread 4.x / 5.x；调度字段和创建钩子按可用接口选择。
  *
  * 用 USE_SYSTEMVIEW（mklink 手动集成）或 PKG_USING_SYSTEMVIEW（Env 包）启用。
  * RT-Thread 在 INIT_COMPONENT 阶段自动调用 rt_trace_init，立即 Start()——
@@ -34,18 +34,24 @@ static U64 _cbGetTime(void)
 static void _cbSendTaskInfo(const rt_thread_t thread)
 {
     SEGGER_SYSVIEW_TASKINFO Info;
+    const struct rt_object *object = (const struct rt_object *)thread;
+#if RT_NAME_MAX > 0
+    char name[RT_NAME_MAX + 1];
+#endif
 
     rt_enter_critical();
     rt_memset(&Info, 0, sizeof(Info));
     Info.TaskID = (U32)thread;
-    /* 不用 RT_VERSION_CHECK()——RT-Thread 4.x 未定义该宏，AC5 预处理器会报 #59。
-     * 用 RT_VERSION 整数比较（4.x=4, 5.x=5），AC5 安全。 */
-#if defined(RT_VERSION) && (RT_VERSION >= 5)
-    Info.sName = thread->parent.name;
+    /* 固定长名称可能没有 NUL；SendTaskInfo 同步编码，不保留此指针。
+     * RT_NAME_MAX=0 的新内核使用字符串指针，不按数组大小截取。 */
+#if RT_NAME_MAX > 0
+    rt_memcpy(name, object->name, RT_NAME_MAX);
+    name[RT_NAME_MAX] = '\0';
+    Info.sName = name;
 #else
-    Info.sName = thread->name;
+    Info.sName = object->name ? object->name : "";
 #endif
-#if defined(RT_VERSION) && (RT_VERSION >= 5)
+#if defined(RT_SCHED_PRIV)
     Info.Prio = RT_SCHED_PRIV(thread).current_priority;
 #else
     Info.Prio = thread->current_priority;
@@ -72,11 +78,8 @@ static void _cbSendTaskList(void)
     rt_enter_critical();
     for (node = list->next; node != list; node = node->next)
     {
-#if defined(RT_VERSION) && (RT_VERSION >= 5)
+        /* 4.x 的平铺对象头与 5.x 的 parent 都位于线程结构起始处。 */
         thread = (struct rt_thread *)rt_list_entry(node, struct rt_object, list);
-#else
-        thread = rt_list_entry(node, struct rt_thread, list);
-#endif
         if (thread != tidle)
             _cbSendTaskInfo(thread);
     }
@@ -103,10 +106,25 @@ static void _mklink_scheduler_hook(rt_thread_t from, rt_thread_t to)
     }
 }
 
+/* 部分 4.0 内核提供单回调 setter；新内核通过可选 hooklist 注册。
+ * 没有此接口时仍支持调度和任务列表，不占用其他模块的 object-attach 钩子。 */
+#if defined(RT_USING_HOOKLIST) && defined(RT_OBJECT_HOOKLIST_DEFINE_NODE)
+#define MKLINK_SYSVIEW_INIT_HOOKLIST
+#elif defined(RT_VERSION) && (RT_VERSION == 4) && defined(RT_SUBVERSION) && (RT_SUBVERSION == 0)
+#define MKLINK_SYSVIEW_INIT_HOOK_LEGACY
+#endif
+
+#if defined(MKLINK_SYSVIEW_INIT_HOOKLIST) || defined(MKLINK_SYSVIEW_INIT_HOOK_LEGACY)
 static void _mklink_thread_inited_hook(rt_thread_t thread)
 {
     SEGGER_SYSVIEW_OnTaskCreate((U32)thread);
 }
+#endif
+
+#if defined(MKLINK_SYSVIEW_INIT_HOOKLIST)
+static RT_OBJECT_HOOKLIST_DEFINE_NODE(rt_thread_inited, _mklink_thread_inited_node,
+                                    _mklink_thread_inited_hook);
+#endif
 
 /* ---- ISR / 软件定时器钩子（ISR 延迟 / 中断占用分析需要） ----
  * 注意：中断在一个 busy RTOS 上极高频（实测 STM32F405 ~71K 次/秒），会灌满
@@ -144,7 +162,11 @@ static int rt_trace_init(void)
     tidle = rt_thread_idle_gethandler();
     SEGGER_SYSVIEW_Conf();                    /* Init + SetRAMBase（Config_RTThread.c） */
     rt_scheduler_sethook(_mklink_scheduler_hook);
+#if defined(MKLINK_SYSVIEW_INIT_HOOKLIST)
+    rt_thread_inited_sethook(&_mklink_thread_inited_node);
+#elif defined(MKLINK_SYSVIEW_INIT_HOOK_LEGACY)
     rt_thread_inited_sethook(_mklink_thread_inited_hook);
+#endif
 #if defined(SYSVIEW_TRACE_ISR)
     rt_interrupt_enter_sethook(_mklink_irq_enter_hook);
     rt_interrupt_leave_sethook(_mklink_irq_leave_hook);

@@ -11,6 +11,7 @@ CAPABILITIES = {
     'device_status': ('GET', '/api/device/status'),
     'debug_speed': ('GET', '/api/device/debug-speed'),
     'set_debug_speed': ('POST', '/api/device/debug-speed'),
+    'hpm_debug': ('POST', '/api/device/hpm-debug'),
     'halt': ('POST', '/api/device/halt'),
     'resume': ('POST', '/api/device/resume'),
     'step': ('POST', '/api/device/step'),
@@ -18,6 +19,7 @@ CAPABILITIES = {
     'read_memory': ('POST', '/api/device/read-memory'),
     'measure_dump_memory': ('POST', '/api/device/dump-memory/measure'),
     'capture_dump': ('POST', '/api/device/dump-memory/capture'),
+    'watch_runtime_stats': ('POST', '/api/device/dump-memory/runtime-stats'),
     'flush_memory': ('POST', '/api/device/flush-memory'),
     'dump_memory': ('POST', '/api/device/dump-memory'),
     'read_memory_regions': ('POST', '/api/device/read-memory-regions'),
@@ -73,11 +75,23 @@ def multiplex_enabled(state):
     return getattr(getattr(state.get('device'), '_bridge', None), '_mux_supported', None) is True
 
 
+def multiplex_captures(state, active):
+    """SystemView requires negotiated incremental RTT, never a raw fallback."""
+    from mklink.mux import MuxTransport
+    if not multiplex_enabled(state) or not set(active) <= {'rtt', 'superwatch', 'systemview'}:
+        return False
+    if 'systemview' not in active:
+        return True
+    mux = getattr(getattr(state.get('device'), '_bridge', None), '_mux', None)
+    return (isinstance(mux, MuxTransport) and mux.ready
+            and bool(mux.capabilities & MuxTransport.RTT_UPDATE_CAPABILITY))
+
+
 def capture_reset_supported(state, active):
     """Only negotiated framed reset may share a running target acquisition."""
     from mklink.mux import MuxTransport
     mux = getattr(getattr(state.get('device'), '_bridge', None), '_mux', None)
-    return (set(active) <= {'rtt', 'superwatch'}
+    return (multiplex_captures(state, active)
             and isinstance(mux, MuxTransport) and mux.ready
             and mux.supports_software_reset)
 
@@ -121,6 +135,18 @@ LIFECYCLE_CAPABILITIES = {
 PROBE_QUERIES = {'power_read': '/api/probe/power-read', 'probe_version': '/api/probe/version',
                  'probe_idcode': '/api/probe/idcode'}
 CAPABILITIES.update({name: ('POST', path) for name, path in PROBE_QUERIES.items()})
+PROBE_OPERATIONS = {name: '/api/probe/' + name.replace('_', '-') for name in
+                    ('probe_presence', 'probe_diagnostics', 'probe_control', 'set_power_on', 'set_power_off', 'isp_link_probe')}
+CAPABILITIES.update({name: ('POST', path) for name, path in PROBE_OPERATIONS.items()})
+CAPABILITIES.update({'offline_status': ('GET', '/api/offline-download/status'),
+                     'offline_preview': ('POST', '/api/offline-download/preview'),
+                     'offline_deploy': ('POST', '/api/offline-download/deploy')})
+for transport, route, actions in (
+        ('jtag', 'hpm-user-otp', ('read', 'plan', 'program', 'lock-plan', 'lock-program')),
+        ('isp', 'hpm-isp-otp', ('read', 'plan', 'program', 'batch-plan', 'batch-program'))):
+    for action in actions:
+        CAPABILITIES[f'hpm_otp_{transport}_{action.replace("-", "_")}'] = (
+            'POST', f'/api/device/configuration/{route}/{action}')
 
 
 def is_uart_path(path: str) -> bool:
@@ -134,6 +160,42 @@ UART_CAPABILITIES = frozenset(name for name, (_, path) in CAPABILITIES.items() i
 def validate_arguments(capability, arguments):
     """Reject malformed/range-overflow writes before a device is touched."""
     arguments = dict(arguments)
+    if capability in PROBE_OPERATIONS:
+        from mklink.probe_commands import validate
+        try:
+            return validate(capability, arguments)
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from error
+    if capability == 'offline_deploy':
+        if (arguments.keys() - {'config', 'request_id', 'confirm'} or
+                not isinstance(arguments.get('config'), dict) or arguments.get('confirm') is not True or
+                not isinstance(arguments.get('request_id'), str) or not 1 <= len(arguments['request_id']) <= 128):
+            raise HTTPException(422, 'Offline deployment requires config, stable request_id and confirm=true')
+    if capability.startswith('hpm_otp_jtag_'):
+        action = capability.removeprefix('hpm_otp_jtag_')
+        allowed = {'part_number', 'model'}
+        if action != 'read':
+            allowed |= {'word', 'expected'}
+            if not {'word', 'expected'} <= arguments.keys():
+                raise HTTPException(422, 'OTP requires an explicit word and expected original value')
+        if action in ('plan', 'program'):
+            allowed.add('desired')
+            if 'desired' not in arguments:
+                raise HTTPException(422, 'OTP requires an explicit desired value')
+        if action in ('program', 'lock_program'):
+            allowed.add('confirm_irreversible')
+            if arguments.get('confirm_irreversible') is not True:
+                raise HTTPException(422, 'Confirm this irreversible OTP operation first')
+        if arguments.keys() - allowed:
+            raise HTTPException(422, 'Unsupported JTAG OTP arguments')
+    if capability == 'watch_runtime_stats' and arguments:
+        raise HTTPException(422, 'Watch runtime statistics take no arguments')
+    if capability == 'hpm_debug':
+        from mklink.hpm_debug import command_arguments
+        try:
+            command_arguments(arguments)
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from error
     if capability == 'rtt_inspect':
         try:
             if set(arguments) != {'address'}:

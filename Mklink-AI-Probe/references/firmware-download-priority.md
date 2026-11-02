@@ -5,6 +5,10 @@
 
 ## 强制路由
 
+HPM 先读 [HPM 下载与调试](hpm.md)：使用 ROM API，当前共享 MCP 通过
+`start_job(action="flash", ...)` 提交并用 `job_status` 查终态；不使用旧版独立
+`flash(...)` 工具，也不把 HPM 的在线 ROM 后端称为 ARM pyOCD/FLM。
+
 除 HPM 例外外，自动下载严格按以下顺序选择：
 
 1. **IDE 原生编译和下载**：工程文件存在且对应 IDE 可用时首选。

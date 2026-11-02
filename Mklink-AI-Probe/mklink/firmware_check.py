@@ -259,7 +259,7 @@ def _find_bootloader_disk() -> str | None:
 
 FIRMWARE_MANIFEST_URLS = {
     "tencent": "https://download.microkeenai.com/mklink/firmware/latest.json",
-    "github": "https://raw.githubusercontent.com/Aladdin-Wang/Mklink-AI-Probe/firmware/latest.json",
+    "github": "https://raw.githubusercontent.com/MicroKeen/Mklink-AI-Probe/firmware/latest.json",
     "gitee": "https://gitee.com/Aladdin-Wang/Mklink-AI-Probe/raw/firmware/latest.json",
 }
 FIRMWARE_MANIFEST_SCHEMA = "mklink-firmware-v1"

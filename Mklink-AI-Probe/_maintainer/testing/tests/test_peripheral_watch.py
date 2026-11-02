@@ -93,7 +93,8 @@ def test_device_discovery_uses_pdsc_not_first_svd_in_directory(tmp_path, monkeyp
     monkeypatch.delenv('ARM_PACK_ROOT', raising=False)
     monkeypatch.delenv('CMSIS_PACK_ROOT', raising=False)
     targets = discover_svd_targets(str(tmp_path))
-    assert [(target.target, target.svd) for target in targets] == [('CHIP', 'SVD/right.svd')]
+    assert [(target.target, target.svd) for target in targets if not target.series] == [('CHIP', 'SVD/right.svd')]
+    assert len([target for target in targets if target.series]) == 9
 
 
 def test_chip_selection_needs_no_axf_and_preserves_program_watches(tmp_path, monkeypatch):

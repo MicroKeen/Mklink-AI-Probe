@@ -8,6 +8,7 @@ MKLink Serial Bridge — 烧录功能模块。
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import tempfile
 import time
@@ -80,6 +81,7 @@ class MKLinkFlash:
 
     def __init__(self, bridge: MKLinkSerialBridge):
         self._bridge = bridge
+        self._online_files: dict = {}
 
     @classmethod
     def connect(cls, port: str | None = None, baudrate: int = 115200) -> "MKLinkFlash":
@@ -168,7 +170,7 @@ class MKLinkFlash:
         raise IDCODEError(f"获取 IDCODE 失败（超时 {timeout}s）")
 
     def set_swd_clock(self, clock_hz: int) -> None:
-        """设置 SWD 时钟频率。
+        """Set the legacy clock request; HPM JTAG requires a named DMI profile.
 
         Args:
             clock_hz: 时钟频率（Hz），如 10000000 表示 10MHz
@@ -178,23 +180,38 @@ class MKLinkFlash:
         except (TypeError, ValueError):
             raise FlashError("SWD 时钟必须是 1Hz 到 10MHz 之间的整数")
         from mklink.debug_speed import validate_clock_hz, apply_bridge_profile, PROFILES
+        from mklink.capture_clock import prepare_clock_capabilities
         try:
             validate_clock_hz(parsed_clock)
+            prepare_clock_capabilities(self._bridge)
         except ValueError as error:
             raise FlashError(str(error)) from error
+        if (getattr(self._bridge, 'idcode', None) == 0x1000563D
+                or getattr(self._bridge._ctx, 'clock_interface', None) == 'JTAG'):
+            from mklink.debug_speed import validate_hpm_clock_hz
+            try:
+                validate_hpm_clock_hz(parsed_clock, self._bridge)
+            except ValueError as error:
+                raise FlashError(str(error)) from error
         if parsed_clock > 10_000_000:
             try:
                 apply_bridge_profile(self._bridge, next(p for p, hz in PROFILES.items() if hz == parsed_clock))
             except ValueError as error:
                 raise FlashError(str(error)) from error
             return
+        from mklink.capture_clock import acknowledge_clock, invalidate_clock
+        invalidate_clock(self._bridge)
         response = self._bridge.send_command(f"cmd.set_swd_clock({parsed_clock})", echo=True)
-        if not isinstance(response, str) or not any(
-            line.strip() == f"set clock {parsed_clock}" for line in response.splitlines()
-        ):
-            self._bridge._ctx.swd_clock_hz = 0
-            raise FlashError("Probe did not acknowledge the requested SWD clock")
-        self._bridge._ctx.swd_clock_hz = parsed_clock
+        lines = response.splitlines() if isinstance(response, str) else []
+        profile = re.search(r"(?m)^(SWD|JTAG) profile=(\d+)\b", response if isinstance(response, str) else '')
+        if (not any(line.strip() == f"set clock {parsed_clock}" for line in lines)
+                or any(line.strip() == '-1' or line.strip().lower().startswith('error') for line in lines)
+                or (profile is not None and int(profile.group(2)) != parsed_clock)):
+            raise FlashError("Probe did not acknowledge the requested debug clock/profile; HPM JTAG uses 4/10/20/30 MHz profiles")
+        try:
+            acknowledge_clock(self._bridge, parsed_clock, response)
+        except ValueError as error:
+            raise FlashError(str(error)) from error
 
     def load_flm(self, flm_path: str, flash_base: str, ram_base: str) -> bool:
         """加载 Flash 算法文件。
@@ -260,7 +277,7 @@ class MKLinkFlash:
 
         Args:
             hex_path: 本地 HEX 文件路径
-            microkeen_filename: MICROKEEN 磁盘上的文件名，None 则使用 hex_path 的文件名
+            microkeen_filename: 显式保留文件名；None 创建本次在线下载专用临时副本
             progress_callback: 进度回调函数，签名为 callback(percent: int)
         Returns:
             烧录结果 dict: {"success": bool, "progress": list, "time_ms": int}
@@ -373,7 +390,7 @@ class MKLinkFlash:
             prepare_hpm_hex(Path(hex_path), canonical)
             return self._burn_hpm_image(
                 str(canonical), "0x80000000", board, flash_cfg,
-                microkeen_filename or Path(hex_path).name, progress_callback,
+                microkeen_filename, progress_callback,
                 hex_format=True,
             )
 
@@ -470,7 +487,7 @@ class MKLinkFlash:
 
         Args:
             local_path: 本地文件路径
-            microkeen_filename: 指定在 MICROKEEN 上的文件名，None 则用原文件名
+            microkeen_filename: 显式保留文件名；None 创建本次在线下载专用临时副本
         Returns:
             MICROKEEN 上的文件名（不含路径），失败返回 None
         """
@@ -481,6 +498,15 @@ class MKLinkFlash:
         src = Path(local_path)
         if not src.exists():
             return None
+
+        if microkeen_filename is None:
+            from mklink.online_files import stage_firmware
+            try:
+                filename = stage_firmware(self, src, disk)
+                print(f"[COPY] {filename} · SHA-256 verified")
+                return filename
+            except (OSError, ValueError):
+                return None
 
         filename = microkeen_filename or src.name
         dest = Path(disk) / filename
@@ -606,7 +632,17 @@ def burn_hex_file(
     try:
         # 0. 如果未指定 SWD 时钟，从 config.json 读取
         if swd_clock is None:
-            swd_clock = config.get("swd_clock", 1000000) if config else 1000000
+            from mklink.capture_clock import requested_clock
+            swd_clock = (requested_clock(config, 'JTAG' if is_hpm_project else 'SWD')
+                         if config.get('clock_interface') else config.get("swd_clock", 10000000 if is_hpm_project else 1000000))
+        if is_hpm_project:
+            from mklink.capture_clock import prepare_clock_capabilities
+            prepare_clock_capabilities(flash._bridge)
+            from mklink.debug_speed import validate_hpm_clock_hz
+            try:
+                validate_hpm_clock_hz(swd_clock, flash._bridge)
+            except ValueError as error:
+                raise FlashError(str(error)) from error
 
         print(f"[*] 烧录配置: MCU={mcu_key}, Flash={flash_base}, SWD={swd_clock}Hz")
 
@@ -752,6 +788,8 @@ def burn_hex_file(
             result = dict(result)
             result["algorithm_source"] = "hpm-rom-api"
         if result["success"]:
+            from mklink.online_files import cleanup_firmware
+            result['temporary_files'] = cleanup_firmware(flash, result)
             flash.beep()
 
         return result

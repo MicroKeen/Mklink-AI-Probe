@@ -25,7 +25,7 @@ def test_both_capture_orders_reuse_negotiated_capabilities(first, hpm_write):
     transport = MuxTransport(Mock())
     transport.epoch = 17
     transport.capabilities = 63
-    transport.request = Mock(return_value=b'')
+    transport.request = Mock(side_effect=lambda op, *args: b'\x01\x00' if op == 0x20 else b'')
     bridge._mux = transport
     rtt = MuxRTTSession(transport, {'down_buffers': []}, channels=[0])
     watch = MuxWatchSession(transport, [(0x00085800, 4), (0x00080314, 4)], .01)

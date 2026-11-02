@@ -136,7 +136,7 @@
       "page_size": 256,
       "sector_size": 4096,
       "flash_size": "2MB",
-      "swd_clock_default": 1000000,
+      "swd_clock_default": 10000000,
       "rtt_default": {
         "addr": "0x00080000",
         "search_size": 1024,

@@ -31,7 +31,18 @@ describe('file picker', () => {
   it('opens a single SVD file in the desktop dialog', async () => {
     const { open, picker } = await loadPickerWithDialog('F:/chip.svd')
     expect(await picker.pickSvdFile()).toBe('F:/chip.svd')
-    expect(open).toHaveBeenCalledWith({ multiple: false, filters: [{ name: 'CMSIS SVD', extensions: ['svd'] }] })
+    expect(open).toHaveBeenCalledWith({ multiple: false, filters: [{ name: 'CMSIS SVD / HPM XML', extensions: ['svd', 'xml'] }] })
+  })
+  it('accepts vendor XML in the browser file picker', async () => {
+    vi.doMock('@tauri-apps/api/core', () => ({ isTauri: () => false }))
+    const selected = new File(['<device/>'], 'HPM5301_svd.xml')
+    vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(function () {
+      expect(this.accept).toBe('.svd,.xml')
+      Object.defineProperty(this, 'files', { configurable: true, value: [selected] })
+      this.dispatchEvent(new Event('change'))
+    })
+    const picker = await import('./filePicker')
+    await expect(picker.pickSvdFile()).resolves.toBe(selected)
   })
   it('retains a symbol handle and calls the browser picker with its Window receiver', async () => {
     vi.doMock('@tauri-apps/api/core', () => ({ isTauri: () => false }))

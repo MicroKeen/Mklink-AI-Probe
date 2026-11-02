@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 import hashlib
 import io
+import json
 import os
 from pathlib import Path, PurePosixPath
 import re
@@ -47,6 +48,20 @@ class SvdTarget:
     source: Path
     svd: str
     archive: bool = False
+    series: str = ""
+    sha256: str = ""
+
+    def matches_chip(self, chip: str) -> bool:
+        value = chip.strip().upper()
+        return value == self.target.upper() or bool(
+            self.series and re.fullmatch(re.escape(self.series[:-2]) + r"[A-Z0-9]{2,}", value)
+        )
+
+    def matches_query(self, query: str) -> bool:
+        value = query.strip().upper()
+        return value in self.target.upper() or bool(
+            self.series and re.fullmatch(re.escape(self.series[:-2]) + r"[A-Z0-9]+", value)
+        )
 
     @property
     def key(self) -> str:
@@ -69,6 +84,7 @@ class SvdTarget:
             "target": self.target,
             "pack": self.pack,
             "svd": self.svd,
+            **({"series": self.series} if self.series else {}),
         }
 
     def read(self) -> bytes:
@@ -83,7 +99,31 @@ class SvdTarget:
         path.relative_to(root)
         if path.stat().st_size > MAX_XML_BYTES:
             raise ValueError("SVD is too large")
-        return path.read_bytes()
+        data = path.read_bytes()
+        if self.sha256 and hashlib.sha256(data).hexdigest() != self.sha256:
+            raise ValueError("Built-in HPM SVD integrity check failed")
+        return data
+
+
+def builtin_hpm_targets() -> list[SvdTarget]:
+    """SDK series descriptions, independent of locally installed CMSIS Packs."""
+    manifest = Path(__file__).with_name('hpm_svd') / 'manifest.json'
+    data = json.loads(manifest.read_text(encoding='utf-8'))
+    if data.get('schema') != 1:
+        raise ValueError('Unsupported built-in HPM SVD manifest')
+    targets = []
+    for entry in data['series']:
+        series = entry['series']
+        if not re.fullmatch(r'HPM[0-9][0-9A-Z]00', series):
+            raise ValueError('Invalid HPM series')
+        target = SvdTarget(series, 'HPMicro.SDK@' + data['sdk_version'], manifest,
+                           _member(entry['file']), series=series, sha256=entry['sha256'])
+        if not re.fullmatch(r'[0-9a-f]{64}', target.sha256):
+            raise ValueError('Invalid HPM SVD digest')
+        if not (manifest.parent / target.svd).is_file():
+            raise ValueError('Missing built-in HPM SVD')
+        targets.append(target)
+    return targets
 
 
 def pdsc_targets(
@@ -119,7 +159,7 @@ def pdsc_targets(
 def list_svd_targets(project_root: str = ".", query: str = "") -> dict:
     """Offline installed-description index; does not select or open a probe."""
     return {"targets": [target.public() for target in discover_svd_targets(project_root)
-                        if query.casefold() in target.target.casefold()]}
+                        if target.matches_query(query)]}
 
 
 def svd_index_revision(project_root: str):
@@ -137,7 +177,7 @@ def svd_index_revision(project_root: str):
 
 
 def discover_svd_targets(project_root: str) -> list[SvdTarget]:
-    """Inspect installed Packs only; never download or guess SVD filenames."""
+    """Inspect installed Packs and bundled HPM series; never download descriptions."""
     from mklink.project_config import load_project_info
     from mklink.cmsis_dap.paths import PackPaths
     from mklink.cmsis_dap.algorithm_catalog import _installed_pack_records
@@ -161,7 +201,7 @@ def discover_svd_targets(project_root: str) -> list[SvdTarget]:
     for root in roots:
         if root.is_dir():
             descriptors.update(root.glob("*/*/*/*.pdsc"))
-    targets = []
+    targets = builtin_hpm_targets()
     for descriptor in sorted(descriptors):
         try:
             if descriptor.stat().st_size <= MAX_XML_BYTES:
@@ -349,8 +389,6 @@ class PeripheralCatalog:
 
 def load_catalog(project_root=".", *, target_id=None, chip=None, svd=None, target=None):
     """Explicit selection, or restore the same project selection for every UI."""
-    import json
-
     selectors = sum(bool(x) for x in (target_id, chip, svd, target))
     if selectors > 1:
         raise ValueError("Choose only one of target_id, chip or svd")
@@ -383,6 +421,8 @@ def load_catalog(project_root=".", *, target_id=None, chip=None, svd=None, targe
                 if target_id
                 else [t for t in targets if t.target.casefold() == chip.casefold()]
             )
+            if not matches and chip:
+                matches = [t for t in targets if t.series and t.matches_chip(chip)]
             if len(matches) != 1:
                 if target_id:
                     raise ValueError("Saved peripheral target is unavailable or ambiguous; select the chip and Pack again")
@@ -401,8 +441,6 @@ def load_catalog(project_root=".", *, target_id=None, chip=None, svd=None, targe
 
 
 def save_catalog_selection(project_root, catalog):
-    import json
-
     # Only the description selection is shared; no target state or firmware path.
     path = Path(project_root) / ".mklink/peripheral-selection.json"
     path.parent.mkdir(parents=True, exist_ok=True)

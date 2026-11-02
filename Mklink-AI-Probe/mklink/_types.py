@@ -48,3 +48,6 @@ class DeviceContext:
     current_mcu: str = ""
     idcode: int = 0
     swd_clock_hz: int = 0
+    applied_clock_hz: int = 0
+    clock_apply_state: str = 'unknown'
+    clock_interface: str = 'unknown'
