@@ -4,12 +4,12 @@
 
 ## 当前断点
 
-- 更新时间：`2026-11-02T00:47:00+08:00`
+- 更新时间：`2026-11-02T08:58:04+08:00`
 - 分支：`codex/v0.4.2-fixes`
-- HEAD：`产品源码1ca9b8fd：三处眼睛统一、RTT单行、四固件目录及Git备用/索引保留修正；当前正式验收进行中。已安装产品仍27989d09。`
+- HEAD：`产品源码1ca9b8fd、候选90e676db：眼睛统一、RTT单行、四固件目录/索引保留；Windows及完整Skill已覆盖安装同源候选，正式验收进行中。`
 - 远端 HEAD：`microkeen/codex/v0.4.2-fixes；多个后续修复共用此分支。microkeen/main核对为3cc474bb。`
 - 工作树：E盘主工作区；旧detached树保留。构建/证据在F盘。
-- 当前任务：用户已明确授权0.4.2覆盖安装、正式验收通过后发布上位机/Skill及四固件到腾讯云/Git渠道。db7391fa基线6450Python/2skip、1182GUI通过；追加固件索引55定点通过，1ca9b8fd全量回归进行中。正式包尚未构建/安装/发布。新实机/UI验收须保留历史Trace溢出失败证据。
+- 当前任务：已获本次正式发布授权。最终6453Python/2可选skip、1182GUI及生产构建/覆盖安装通过，三处眼睛、RTT单行、日志录制回放、触发与HPM基本实机通过；Trace独立/并行各三轮、原生日志、GUI烧录后三流恢复与完整回读、临时文件清理及13进程正常退出均通过，未发布0.4.2。详见v042-formal-qualification.md。
 - 状态：`v042_formal_qualification_in_progress`
 
 ## 里程碑
@@ -23,7 +23,7 @@
 
 ## 验证证据
 
-- **0.4.2日志/显隐/触发及安装资格**：27989d09：6450Python/2可选skip、1182GUI、生产构建/Windows覆盖及Skill同步通过；3647载荷/2设置/2647 Skill/5340用户文件，协议53/56工具/126能力一致。HPM RTT73728B上行/286B下行日志精确，Watch31628记录/四波形及眼睛双向同步、单次/普通/自动/强制/关闭触发通过；虚拟串口双向4096B及GUI日志通过。14 JTAG、完整镜像回读、RAM/XML六GPIO、GUI在线256B读取通过。文件回放UI用户暂缓；Trace初始溢出1不计零丢失，HardFault限ARM。正常退出11进程及端口释放。旧abf26c5a烧录/临时文件清理/三流恢复、8eb2a242的V2V3普通V4证据不外推。见v042-traffic-replay.md及hpmlink-product-online-files-20261101.md。 追加e475eabe仅RTT工具栏压缩，90组件/类型/Web通过；尚未打包和浏览器复核，不沿用旧实机资格。 db7391fa全量基线同数通过；追加固件索引55项通过。日志回放旧安装已在浏览器加载/播放/拖动/HEX预检，新包仍需复验。
+- **0.4.2正式候选最终资格**：90e676db与产品1ca9b8fd等价：6453Python/2skip、1182GUI、生产Web/冻结/Rust/NSIS及覆盖通过。3647载荷/2设置、2647 Skill/5340用户文件、42当前Web，协议53/56工具/126能力一致。真实浏览器三眼睛样式与双向同步、RTT单行、双日志播放/首尾跳转、单次/普通/自动/强制/关闭触发通过；HPM14 JTAG与完整52988B镜像、RAM、XML六GPIO通过，RTT71680B RX/286B TX精确、Watch8334记录零读错，虚拟串口4096B双向及GUI27B回显日志精确。原生目录13条/819B日志、Trace独立/并行各三轮零新增丢失、GUI烧录后RTT/Watch/Trace恢复及52988B回读、临时文件清理/旧文件不变、13进程及两端口正常退出通过，尚未正式发布。详见v042-formal-qualification.md。 旧27989d09及更早来源证据见v042-traffic-replay.md，历史Trace溢出失败保留。
 - **HPM AI Skill能力核实**：审计修复749Python/65GUI、生产Web及浏览器HPM JTAG 5k/排除8M通过；完整Skill源cafe835f/SHA717cfdfb已覆盖，2644安装文件一致、5340用户文件保留；56 MCP/126能力和协议53安装后schema一致、Skill验证通过。时钟协商/离线档位门禁、探针控制/诊断/供电、离线/ISP/OTP入口及文档补齐。无USB操作；固件空接收/Vref开启待指定会话。见firmware-skill-fixes-20261101.md。
 - **RTT自动恢复与在线静默收尾**：14417715：347相关+17发现测试通过。V4/HPM5301连续两次49700B烧录校验成功，自动暂停/恢复RTT与SuperWatch、零恢复错误；新增RTT349/466字节、Watch3005/3712周期且零读取错。Windows NSIS SHA56830303，覆盖exit0、3627载荷一致、冻结MCP/41Web/正常退出通过；完整Skill SHAbb05fbde、2625文件/47工具已同步。仍0.4.1未发布。旧静默面板修复d1cf16ec的124GUI/29Python证据保留。见rtt-auto-restore-20261030.md及online-flash-receipt-20261029.md。
 - **Linux/macOS 0.4.1测试包**：Linux a6bdacbc、Mac arm64 eefc6842：CI USB各58/1skip及冻结CLI/MCP/健康/Web/退出通过。DEB SHA7309f377、DMG SHA56dc8e0a，均旧0.4.1；Mac ad-hoc未公证，实机安装/UI/USB待测。见linux-deb-test-20261028.md、macos-arm64-test-20261028.md。
@@ -53,8 +53,8 @@
 
 ## 下一动作
 
-1. 完成1ca9b8fd最终全量回归及同源Windows/Skill候选构建、覆盖安装；验证三处眼睛样式/同步、RTT单行、双日志回放和原生目录选择。证据F盘v042-formal-20261102。
-2. 新包HPM5301验收RTT/Watch/触发、XML/内存、在线下载自动恢复和临时文件清理。交接指定固件会话运行Trace自然排空/单次START，保留旧overflow1/drop3124失败报告；不得清零计数。
+1. 90e676db已覆盖Windows/完整Skill并完成最终全量测试、眼睛/RTT单行/双回放。候选全部门禁通过，下一步核对PR精确提交并合并，从干净main构建签名包、覆盖验收后发布，证据F盘v042-formal-20261102。
+2. 候选HPM5301新包实机/UI及Trace六轮已通过，原生正常退出释放设备；正式包覆盖后复核签名、载荷、冻结启动、协议与退出，不把早期V2/V3/普通V4硬件证据外推。
 3. 固件来源：V2主干ac0c780b，V3 PR8主干8c162351，V4/HPMLink PR17主干840ce328；四包哈希未变，补丁源码完整归档。核对最终证明和适用实机范围。
 4. 通过后精确SHA审阅PR66/CI并合main，从干净远端一致main签名重建Windows/Skill/SiteAgent，验证七资产、覆盖安装、公开下载及Gitee回退。
 5. 腾讯云服务器已开；当前stable0.4.1/28资产。保留90/95GiB、周期/账本及11月26日到期，使用现有控制台/TAT，新增正式资产及路由，全部校验后最后激活三渠道与独立固件索引并更新网站；不新建密钥。
@@ -72,8 +72,8 @@
 
 ## 延续协议
 
-- 读取CURRENT_HANDOFF/v042-session-handoff并核对Git，共用codex/v0.4.2-fixes。源码e475eabe工具栏压缩未打包；本机Windows/Skill为27989d09的0.4.2候选，协议53一致。正式514efb86及0.4.1资产不可变；保留上海90/95、到期锁停、账本和旧detached树。
-- 最新日志/显隐/触发资格见v042-traffic-replay.md；旧硬件资格见v042-release-qualification-20261101.md与hpmlink-product-online-files-20261101.md，严格分源。Web GUI本轮部分通过，文件回放用户暂缓；其他型号/脱机门禁未完成，保留全部脚本失败与UI阻断。
+- 继续codex/v0.4.2-fixes。本机Windows/Skill为90e676db的0.4.2候选，产品1ca9b8fd；最终回归及候选实机/UI门禁通过，正式签名实装及发布仍待完成，见v042-formal-qualification.md。用户已明确授权通过后发布四固件及上位机/Skill；正式0.4.1仍不可变。
+- 当前正式候选证据见v042-formal-qualification.md；旧硬件/日志证据严格分源。日志浏览器文件回放已解决并复验。原生目录已通过；Trace六轮通过并保留旧失败证据。指定固件会话完成独立轮后停止，主会话已接管并完成并行轮及烧录；正常退出后设备已释放。
 - V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。
 - CDC995和SDK10048根因保留待排查。恢复仅同身份CDC故障5秒内；超时不自动接回/新建AI会话，主动断开立即生效，未知写入不重放。历史实例释放记录见v035-transport-recovery.md；当前硬件占用以本交接真机状态及指定固件会话为准。
 - 客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。
