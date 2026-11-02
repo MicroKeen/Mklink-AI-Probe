@@ -99,7 +99,9 @@ lease, expiry, cycle and host checks. Oversized/malformed/fetch failures still
 clear cached health. Nineteen guard/resolver tests passed, and deployed resolver
 SHA-256 is `0396ceab7be33b1ea0146507cc2d0208881446fd5b41737936fe34728012dc0d`.
 This maintainer-only correction does not change the immutable desktop/Skill tag
-or require replacing the released assets. Old server configurations were backed
+or require replacing the released assets. It was merged in
+[PR 67](https://github.com/MicroKeen/Mklink-AI-Probe/pull/67), main
+`be0e000c399bc499197c738b137b24bc118893f0`. Old server configurations were backed
 up outside the web root before changes. An initial oversized console activation
 command did not run; the final compact command checked both before/after catalog
 hashes, preserved history and completed with exit code zero.
@@ -111,6 +113,9 @@ build/install, public-download hashes, channel proofs, both updater tests,
 server deployment/fallback results and website screenshots. Its final
 `publication/release-complete.json` passed. Raw logs, local hardware identities,
 screenshots, temporary signed URLs and binaries are not committed.
+Subsequent [workspace cleanup and handoff](../ai/v042-postrelease-handoff.md)
+removed reproducible extraction copies, isolated updater installations and
+verified download fragments; original packages and acceptance reports remain.
 
 Earlier V2/V3/ordinary V4 hardware tests keep their recorded host/fixture scope;
 they are not relabeled as new formal-host cold-plug tests. The final HPMLink/HPM
