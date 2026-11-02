@@ -15,6 +15,9 @@ or desktop runtime. The formal release binaries and signatures are unchanged.
 - `resolver.py`: loopback HTTP redirect service on port 18736. Refreshes the
   public health object every ten seconds. Unknown paths return 404. Missing,
   stale, closed, wrong-cycle or malformed leases use the configured backup URL.
+  The response is bounded to 256 KiB, allowing retained release history with
+  per-file GET/HEAD signatures; larger responses still fail closed. Verify the
+  deployed resolver limit whenever the published asset list grows.
 - `test_guard.py`: boundaries, latching, expiry, API failure, write ordering,
   native alert handling and redirect validation.
 
@@ -49,7 +52,7 @@ Configure a native SCF-version alarm for invocation error count > 0 in one
 one-minute interval, bound to this function and `$LATEST`, with the owner's
 verified notification channels. The handler intentionally raises *after* saving
 health when usage reaches the warning threshold. This leaves the lease open at
-8 GiB and closes it at 9 GiB. Actual execution errors also fail closed and alarm.
+90 GiB and closes it at 95 GiB. Actual execution errors also fail closed and alarm.
 The `run` alarm callback is a test seam; production notification is the native
 SCF alarm, not the legacy custom-alarm API. Set a daily repeat interval to avoid
 per-minute notification spam. Do not infer SMS receipt merely from policy setup.
@@ -68,7 +71,7 @@ before reload and restore on validation failure.
 
 ## Budget behavior and limitations
 
-The production thresholds are `8 * 1024**3` and `9 * 1024**3` bytes. The state
+The production thresholds are `90 * 1024**3` and `95 * 1024**3` bytes. The state
 uses the maximum observed cumulative usage and never resets on month boundaries.
 Once quota/expiry stops downloads, increasing the package expiry or restarting
 the function does not clear that latch. Renewal requires an operator to verify
@@ -76,7 +79,7 @@ the new entitlement and deliberately provision a new cycle/config/state.
 
 This is not a billing hard cap: Tencent monitoring is delayed, already-issued
 URLs remain usable for their short lifetime, and in-flight downloads can finish.
-The 1 GiB margin reduces risk but cannot guarantee zero overage under arbitrary
+The 5 GiB margin reduces risk but cannot guarantee zero overage under arbitrary
 load. Storage, requests, SCF execution and other billing items remain separate.
 Anonymous health reads still exist after closure; only release download access
 is stopped. Retired public buckets/object ACLs must be closed separately.

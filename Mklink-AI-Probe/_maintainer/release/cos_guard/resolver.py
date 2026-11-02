@@ -30,6 +30,10 @@ def select_url(config, health, path, method, now):
     return fallback
 
 
+# Signed URLs for retained release history can exceed 64 KiB.
+MAX_HEALTH_BYTES = 256 * 1024
+
+
 class LeaseCache:
     def __init__(self, config):
         self.config = config
@@ -42,8 +46,8 @@ class LeaseCache:
                 req = urllib.request.Request("https://" + self.config["host"] + "/mklink/guard/health.json",
                                              headers={"Cache-Control": "no-cache"})
                 with urllib.request.urlopen(req, timeout=5) as response:
-                    data = response.read(65537)
-                if len(data) > 65536:
+                    data = response.read(MAX_HEALTH_BYTES + 1)
+                if len(data) > MAX_HEALTH_BYTES:
                     raise ValueError("oversized health response")
                 health = json.loads(data)
                 if not isinstance(health, dict):
