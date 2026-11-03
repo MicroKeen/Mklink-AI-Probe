@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-03T12:26:20+08:00",
+  "updated_at": "2026-11-03T13:10:26+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
@@ -13,8 +13,8 @@
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "v043_latency_qualification_in_progress",
-    "current_task": "用户指定普通V4与STM32H7，优化现有read_memory/write_memory单次请求延迟。候选复用每线程HTTP连接并移除准入中的重复路径解析与AXF工具链诊断，保留身份/epoch/符号版本/权限/未知写入不重放。源码初测通过，采集并行、Keil和实际候选包资格进行中；不是正式发布。"
+    "status": "v043_latency_candidate_draft_review",
+    "current_task": "通用请求延迟优化已提交草稿PR69，实际NSIS/Skill、读写恢复、三流和Keil验证见v043-request-latency.md；保留一次代理退出异常待跟进。产品仍0.4.2，正式安装/资产不变，无合并/签名/发布授权。后续继续codex/v0.4.3-fixes。"
   },
   "milestones": [
     {
@@ -50,8 +50,8 @@
   ],
   "verification": [
     {
-      "area": "0.4.3请求延迟源码候选（资格进行中）",
-      "result": "正式0.4.2本机基线4/16/128/4096B热态中位7.92/8.23/7.84/14.52ms；候选100次中位5.27/5.34/5.47/11.88ms，三次独立4B中位15.81ms，RAM写回读和恢复校验通过。非确定时延保证，实际交付包及并行验证未完成。完整Python首轮6460通过/2跳过/1旧夹具失败；同步UART夹具AXF路径后相关143项全通过，产品代码未变。"
+      "area": "0.4.3通用请求延迟候选",
+      "result": "产品ea80b827/载荷2cfda2e4，正式→最终候选4B热态中位8.49→5.69ms、P95 20.05→6.65ms；三次独立4B中位35.12→16.75ms。读写/恢复/错误/冷连接、三流/Keil/冻结MCP/Web/原生退出验证通过；Watch约75ms未改善，一次代理退出异常保留。Python首轮6460/2skip/1旧夹具失败，修正后相关143通过；GUI1182通过。实际NSIS隔离验证，临时资源路径修正后重建复测，无正式覆盖升级；详见v043-request-latency.md。"
     },
     {
       "area": "0.4.2正式构建安装及公开发布",
@@ -110,13 +110,13 @@
     "nRF54L15保护闭环、全部擦除/拔插/休眠/断电、电源精度未全测。每次VCC需确认具体电压。26个无可靠扇区FLM禁用扇区操作，Bank模式须匹配。HPM5301 OTP组18/19历史永久锁定；128字读取及批准Word69 0→1已实测，其余型号/区域不继承授权，锁最后写/逐项校验，多Word不可回滚；熔丝/影子/临时锁语义未知，UART按ROM状态及回读为准。详见hpm-offline-otp-handoff.md及known-limits-20261030.md。"
   ],
   "next_actions": [
-    "继续0.4.3通用延迟资格：正式/候选RTT、SystemView、SuperWatch单独及并行，Keil断点/单步/下载恢复，实际未签名Windows候选与完整Skill复测；更新报告后推送任务分支和PR。禁止合并、签名、发布或更改版本号。",
+    "继续共享codex/v0.4.3-fixes；草稿PR69保留一次Windows代理退出异常（复测通过但未归因），发布前须跟进，详见v043-request-latency.md。高频Watch约75ms调度等待未改善。正式覆盖升级/合并/签名/发布须新明确授权。",
     "只有分层实测证明固件瓶颈时另建专门固件优化会话，由本会话协调硬件占用；原分析会话不继续实施。F407高地址RAM快速路径覆盖另属未解决项，不能由H7测试推断解决。",
     "保留正式包、唯一验收证据及含链接目录；本机新START_HERE与v042-postrelease-handoff.md记录清理清单和接手入口。历史V3掉线/冷插拔/长稳等仍按known-limits-20261030.md和最终资格报告处理。",
     "监控上海90GiB告警/95GiB停止，套餐截止北京时间2026-11-26 00:00。未核验续费不清除停止锁、不清零账本、不申请新私钥。"
   ],
   "continuation_protocol": [
-    "主工作区收尾回到main；后续修改仍用codex/v0.4.2-fixes并先同步。0.4.2正式源0e82ba6f与四固件已发布、本机正式覆盖；PR67维护端修复已合并be0e000c。最新交接见v042-postrelease-handoff.md，不沿用旧候选/未发布状态。",
+    "后续多个修复共用codex/v0.4.3-fixes，先fetch核对实际状态；不直接修改main，不逐任务另建分支，不自动切回main。旧v0.4.2分支及两个detached工作树保留。0.4.2正式源0e82ba6f和全部已发布资产不可覆盖。",
     "当前最终资格见v042-formal-qualification.md，正式安装/公开渠道见v042-release-handoff.md。浏览器文件回放、原生目录、Trace六轮、GUI烧录后三流恢复通过；旧硬件/日志证据严格分源并保留失败。本轮盘点用户已重开正式上位机，硬件操作前重新核对当前占用。",
     "V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。",
     "CDC995和SDK10048根因保留待排查。恢复仅同身份CDC故障5秒内；超时不自动接回/新建AI会话，主动断开立即生效，未知写入不重放。历史实例释放记录见v035-transport-recovery.md；当前硬件占用以本交接真机状态及指定固件会话为准。",
