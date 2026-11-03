@@ -90,10 +90,15 @@ F407-specific issues remain open.
 ## SuperWatch and shared streams
 
 `product-prefetch-streams` passes RTT, SystemView, SuperWatch, all three together,
-the fastest Watch matrix, and two saturated RTT transfers. Each mixed-stream
-window lasts 15 seconds and interleaves byte-checked 4/16/128/4096 B reads. All
+the minimum-interval Watch matrix at 10 MHz, and two saturated RTT transfers.
+Each mixed-stream window lasts 15 seconds and interleaves byte-checked
+4/16/128/4096 B reads. All
 checked target/parser/stream/read-drop counters are zero; Watch cycles and SV
 events advance. RTT sequence and payload bytes are checked completely.
+
+These 10 MHz / 4 us results are not the absolute fastest mode. The later
+[30 MHz maximum-rate comparison](v043-stream-maximum.md) explicitly tests
+period zero, sustained sampling and the normal dashboard separately.
 
 At a requested 4 us interval, with a binary subscriber checking every Float32
 row, target timestamp and frame sequence, the latest 15-second Watch windows are:

@@ -153,8 +153,9 @@ below to distinguish run-to-run effects from the code change.
 
 `tail-last-error-streams` passes 15-second RTT, SystemView, Watch and combined
 windows, with byte-checked interleaved memory reads. All checked target, parser,
-stream and read-drop counters remain zero. Fastest Watch with a binary subscriber
-checking every value, timestamp order and frame sequence gives:
+stream and read-drop counters remain zero. The Watch comparison uses 10 MHz
+and a requested 4 us interval, with a binary subscriber checking every value,
+timestamp order and frame sequence:
 
 | Variables | Previous phase-2 cycles/s | Current cycles/s | Current checked rows |
 | ---: | ---: | ---: | ---: |
@@ -167,6 +168,10 @@ gaps, read errors or reported drops. These finite windows do not prove unlimited
 long-duration behavior. Ordinary Watch interleaved 4-byte reads have median
 2.033 ms / P95 2.783 ms. Combined-stream 4-byte reads have P95 447.632 ms;
 concurrent acquisition is not claimed to meet the sub-ms target.
+
+These are not absolute maximum-rate results. The later
+[30 MHz fastest-mode and RTT comparison](v043-stream-maximum.md) reproduces
+the approximately 265,000 groups/s class and retains all slower RTT rounds.
 
 The initial 10 MiB RTT transfers measured 706.17 / 652.38 KiB/s for 1024/2048-byte
 chunks. An independent repeat measured 678.24 / 659.87 KiB/s. All bytes pass in
