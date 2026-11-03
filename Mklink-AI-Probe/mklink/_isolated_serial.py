@@ -8,9 +8,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
-import os
 from pathlib import Path
-import select
 import struct
 import subprocess
 import sys
@@ -38,17 +36,67 @@ def _worker_command(port, baudrate):
     return [sys.executable, str(Path(__file__).with_name('_serial_worker.py')), port, str(baudrate)]
 
 
-def _available(pipe) -> int:
-    if os.name == 'nt':
-        import ctypes
-        import msvcrt
-        available = ctypes.c_ulong()
-        peek = ctypes.windll.kernel32.PeekNamedPipe
-        if not peek(ctypes.c_void_p(msvcrt.get_osfhandle(pipe.fileno())), None, 0,
-                    None, ctypes.byref(available), None):
-            raise serial.SerialException('Serial worker pipe closed')
-        return available.value
-    return 65536 if select.select([pipe], [], [], 0)[0] else 0
+class _PipeInbox:
+    """Blocking pipe reader with bounded storage and notification on arrival.
+
+    Separate control/data readers keep acknowledgements independent of RX
+    backpressure. Only the consumer interprets framing and reset generations.
+    """
+
+    def __init__(self, pipe, capacity, name):
+        self._pipe, self._capacity = pipe, capacity
+        self._condition = threading.Condition()
+        self._buffer = bytearray()
+        self._ended = self._stopped = False
+        self._error = None
+        self._thread = threading.Thread(target=self._receive, name=name, daemon=True)
+        self._thread.start()
+
+    def _receive(self):
+        try:
+            while True:
+                with self._condition:
+                    self._condition.wait_for(lambda: self._stopped or len(self._buffer) < self._capacity)
+                    if self._stopped:
+                        return
+                    size = min(65536, self._capacity - len(self._buffer))
+                # Popen uses unbuffered FileIO: return available bytes without
+                # waiting to fill size. A worker exit releases the blocked read.
+                data = self._pipe.read(size)
+                if not data:
+                    return
+                with self._condition:
+                    self._buffer.extend(data)
+                    self._condition.notify_all()
+        except (OSError, ValueError) as exc:
+            self._error = exc
+        finally:
+            with self._condition:
+                self._ended = True
+                self._condition.notify_all()
+
+    def wait(self, timeout):
+        with self._condition:
+            self._condition.wait_for(lambda: self._buffer or self._ended or self._stopped, timeout)
+
+    def read(self, size, timeout=0):
+        with self._condition:
+            self._condition.wait_for(lambda: self._buffer or self._ended or self._stopped, timeout)
+            if self._buffer:
+                data = bytes(self._buffer[:size])
+                del self._buffer[:size]
+                self._condition.notify_all()
+                return data
+            if self._ended or self._stopped:
+                raise serial.SerialException('Serial worker pipe closed') from self._error
+            return b''
+
+    def stop(self):
+        with self._condition:
+            self._stopped = True
+            self._condition.notify_all()
+        # Called only after the worker is reaped: the pipe can no longer block.
+        self._thread.join(timeout=2)
 
 
 class IsolatedSerial:
@@ -73,6 +121,8 @@ class IsolatedSerial:
             raise serial.SerialException('Cannot start serial receive worker') from exc
         self.is_open = True  # The worker may own IO before its ready reply.
         try:
+            self._data_inbox = _PipeInbox(self._process.stdout, 1048576, 'serial-worker-data')
+            self._control_inbox = _PipeInbox(self._process.stderr, 65536, 'serial-worker-control')
             if not self._reply().get('ready'):
                 raise serial.SerialException('Serial worker did not open the port')
             self.is_open = True
@@ -99,17 +149,13 @@ class IsolatedSerial:
                     raise serial.SerialException(response['error'])
                 return response
             try:
-                n = _available(self._process.stderr)
+                data = self._control_inbox.read(65536, max(0, deadline - time.monotonic()))
             except serial.SerialException as exc:
                 raise _ControlFailure(f'Serial worker control pipe closed during {self._control_operation}') from exc
-            if n:
-                data = self._process.stderr.read(min(n,65536))
-                if not data: break
+            if data:
                 self._control.extend(data)
-            elif self._process.poll() is not None:
-                break
-            else:
-                time.sleep(.001)
+                if len(self._control) > 65536:
+                    raise _ControlFailure('Oversized serial worker response')
         raise _ControlFailure(f'Serial worker control connection failed during {self._control_operation} (reply deadline 7s)')
 
     def _command(self, op, **kwargs):
@@ -142,11 +188,8 @@ class IsolatedSerial:
             raise serial.SerialException('Serial port is closed')
         # Leave excess bytes in the bounded worker/pipe instead of growing
         # memory when a caller repeatedly checks in_waiting without reading.
-        n = _available(self._process.stdout) if len(self._rx) < 1048576 else 0
-        if n:
-            data = self._process.stdout.read(min(n,65536))
-            if not data:
-                raise serial.SerialException('Serial worker disconnected')
+        data = self._data_inbox.read(65536) if len(self._rx) < 1048576 else b''
+        if data:
             self._wire.extend(data)
         elif self._process.poll() is not None:
             raise serial.SerialException('Serial worker exited')
@@ -180,8 +223,9 @@ class IsolatedSerial:
                     data = bytes(self._rx[:size])
                     del self._rx[:size]
                     return data
-            if time.monotonic() >= deadline: return b''
-            time.sleep(.0005)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0: return b''
+            self._data_inbox.wait(remaining)
 
     def write(self, data):
         return self._command('write', data=base64.b64encode(data).decode('ascii'))['result']
@@ -215,6 +259,10 @@ class IsolatedSerial:
             # that state only after the worker has exited, so another thread
             # cannot release the application port lock while it still owns IO.
             self.is_open = False
+            for name in ('_data_inbox', '_control_inbox'):
+                inbox = getattr(self, name, None)
+                if inbox is not None:
+                    inbox.stop()
             for pipe in (self._process.stdin, self._process.stdout, self._process.stderr):
                 try:
                     pipe.close()

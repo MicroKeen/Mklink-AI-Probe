@@ -1,3 +1,5 @@
+import asyncio
+import threading
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -88,3 +90,53 @@ def test_same_port_replacement_is_rejected_when_cache_expires(identity):
     with pytest.raises(HTTPException):
         control.require_identity(memory_snapshot=True)
     assert inventory.call_count == 2
+
+
+def test_background_refresh_preserves_original_ttl_and_missing_probe_guard(identity):
+    from mklink.runtime_memory import refresh_memory_identity
+    control, _, _, inventory, now = identity
+    asyncio.run(refresh_memory_identity(control))
+    assert control._memory_identity_cache[1] == 10.25
+    control.require_identity(memory_snapshot=True)
+    assert inventory.call_count == 1
+    now[0] += .251
+    inventory.return_value = []
+    with pytest.raises(HTTPException):
+        control.require_identity(memory_snapshot=True)
+    assert control._memory_identity_cache is None
+
+
+@pytest.mark.parametrize('change', ['generation', 'newer_observation', 'slow'])
+def test_background_refresh_discards_obsolete_or_late_positive_result(identity, change):
+    from mklink.runtime_memory import refresh_memory_identity
+    control, _, _, inventory, now = identity
+    entered, release = threading.Event(), threading.Event()
+    def enumerate_probe():
+        entered.set()
+        assert release.wait(3)
+        return [{'probe_id': 'usb-fixture', 'port': 'COM9'}]
+    inventory.side_effect = enumerate_probe
+    async def run():
+        task = asyncio.create_task(refresh_memory_identity(control))
+        try:
+            while not entered.is_set():
+                await asyncio.sleep(0)
+            if change == 'generation': control.app.state.mklink_state['device_generation'] += 1
+            elif change == 'newer_observation': control._record_presence([])
+            else: now[0] += .3
+        finally:
+            release.set()
+        await task
+    asyncio.run(run())
+    assert getattr(control, '_memory_identity_cache', None) is None
+
+
+@pytest.mark.parametrize('result', ['missing', 'error', 'port_changed'])
+def test_background_refresh_failure_invalidates_positive_cache(identity, result):
+    from mklink.runtime_memory import refresh_memory_identity
+    control, _, _, inventory, _ = identity
+    control.require_identity(memory_snapshot=True)
+    if result == 'error': inventory.side_effect = OSError('enumeration failed')
+    else: inventory.return_value = [] if result == 'missing' else [{'probe_id': 'usb-fixture', 'port': 'COM10'}]
+    asyncio.run(refresh_memory_identity(control))
+    assert control._memory_identity_cache is None

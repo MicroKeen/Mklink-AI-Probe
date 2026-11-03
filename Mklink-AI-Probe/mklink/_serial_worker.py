@@ -46,10 +46,12 @@ class _WindowsReadQueue:
         timeout = win32.COMMTIMEOUTS()
         if not win32.GetCommTimeouts(port._port_handle, ctypes.byref(timeout)):
             raise serial.SerialException('Cannot read CDC timeouts')
-        # A quiet command reply completes promptly; continuous acquisition fills
-        # requests without depending on a new user-space ReadFile every 4 KiB.
-        timeout.ReadIntervalTimeout = 1
-        timeout.ReadTotalTimeoutMultiplier = 0
+        # Return buffered bytes, or wait for the first arrival, without a 1 ms
+        # inter-byte aggregation delay. Keep eight reads posted for acquisition
+        # and a bounded idle timeout. This is COMMTIMEOUTS' first-byte mode,
+        # not the MAXDWORD/0/0 mode that returns empty immediately and spins.
+        timeout.ReadIntervalTimeout = 0xFFFFFFFF
+        timeout.ReadTotalTimeoutMultiplier = 0xFFFFFFFF
         timeout.ReadTotalTimeoutConstant = 100
         if not win32.SetCommTimeouts(port._port_handle, ctypes.byref(timeout)):
             raise serial.SerialException('Cannot set CDC receive timeouts')

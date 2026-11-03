@@ -3783,6 +3783,9 @@ def create_app(
             except Exception as e:
                 raise HTTPException(status_code=500, detail=str(e))
 
+    # The shared runtime calls the same leased/executor-backed implementation.
+    app.state.shared_memory_read = read_memory
+
     @app.post("/api/device/write-memory")
     async def write_memory(
         address: str = Body(...),

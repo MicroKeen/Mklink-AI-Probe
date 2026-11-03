@@ -384,6 +384,8 @@ class RuntimeClient:
         self._stop = threading.Event()
         self._heartbeat = None
         self._lock = threading.Lock()
+        self._memory_transport = False
+        self._memory_channel = None
         self.kind, self.name = kind, name
 
     def connect(self, *, project_root=None, port=None, probe=None, axf=None, mcu=None, elf_backend=None, scope='target'):
@@ -392,6 +394,8 @@ class RuntimeClient:
         if scope == 'uart' and any(value is not None for value in (port, axf, mcu, elf_backend)):
             raise ValueError('UART-only attachment accepts a probe selector, not target connection settings')
         with self._lock:
+            self._close_memory_channel()
+            self._memory_transport = False
             existing = self.info is not None
             if self.info is None:
                 options = {'allow_lobby': True} if scope == 'uart' else {}
@@ -436,6 +440,7 @@ class RuntimeClient:
                 'kind': self.kind, 'name': self.name, 'scope': scope,
             })
             self.session_id = result["session_id"]
+            self._memory_transport = result.get('memory_transport') == 'websocket-v1'
             if project_root is not None:
                 self.project_root = project_root
             self._stop_heartbeat()
@@ -478,6 +483,21 @@ class RuntimeClient:
         with self._lock:
             if not self.session_id:
                 raise RuntimeErrorResponse("Call connect first")
+            if capability == 'read_memory' and self._memory_transport:
+                from mklink.runtime_memory_client import MemoryChannel
+                try:
+                    if self._memory_channel is None:
+                        self._memory_channel = MemoryChannel(self.info, self.session_id)
+                    return self._memory_channel.read(arguments or {})
+                except BaseException as error:
+                    try:
+                        self._close_memory_channel()
+                    except Exception:
+                        pass  # Preserve the original failure; never retry it.
+                    if isinstance(error, (RuntimeErrorResponse, KeyboardInterrupt, SystemExit)):
+                        raise
+                    raise RuntimeErrorResponse(
+                        'Memory channel failed; command was not retried') from error
             transport_options = {}
             if capability == 'offline_deploy':
                 transport_options['timeout'] = 650
@@ -550,8 +570,14 @@ class RuntimeClient:
     def job_status(self, job_id=None):
         return job_status(self.info, job_id)
 
+    def _close_memory_channel(self):
+        channel, self._memory_channel = self._memory_channel, None
+        if channel is not None:
+            channel.close()
+
     def close(self):
         with self._lock:
+            self._close_memory_channel()
             session_id = self.session_id
             # A lost detach response must not leave this client able to send
             # commands on a session it has already relinquished locally.
@@ -563,6 +589,7 @@ class RuntimeClient:
     def disconnect(self):
         """Explicit physical disconnect; close() remains attachment-only cleanup."""
         with self._lock:
+            self._close_memory_channel()
             if self.info is None:
                 return {'status': 'disconnected', 'device_closed': False}
             result = request(self.info, 'POST', '/api/runtime/control/release-device',

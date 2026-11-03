@@ -108,7 +108,7 @@ class Worker:
         def close():
             self.closed.append(name)
             if broken and name == 'in': raise BrokenPipeError('injected pipe failure')
-        return SimpleNamespace(close=close)
+        return SimpleNamespace(close=close, read=lambda size: b'')
     def poll(self): return None if self.alive else 0
     def terminate(self): pass
     def kill(self): pass
