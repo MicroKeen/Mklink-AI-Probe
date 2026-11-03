@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-11-03T20:57:13+08:00`
+- 更新时间：`2026-11-03T21:13:47+08:00`
 - 分支：`codex/v0.4.3-fixes`
 - HEAD：`基于main 4f3be7a4的通用请求延迟优化候选；当前提交以Git为准。`
 - 远端 HEAD：`microkeen/main已合并PR66、67、68，基线4f3be7a4；正式tag/包不变。`
 - 工作树：复用E盘主工作区，保留旧v0.4.2分支和两个detached工作树；本轮及后续修复共用codex/v0.4.3-fixes。
-- 当前任务：30MHz复测：4B最快26.48万、持续25.98万、正常4us Watch22.87万次/s；RTT最高737.25KiB/s，历史808未复现。相邻对照未见一致新增退化，完整性通过；见v043-stream-maximum.md。通用P95/间隔仍未<1ms，未构建发布。
-- 状态：`v043_stream_speed_verified_tail_open`
+- 当前任务：H743 PE2改为40us翻转并Keil下载；1024边沿均值40.000us/P95 40.100us，最终RAM镜像采样26.45万/s，P95 4us但最大71us。原速度基线保留，目标换镜像须重载AXF；见v043-h7-led-waveform.md。宿主通用P95/间隔仍未<1ms，未构建发布宿主。
+- 状态：`v043_led_40us_verified_tail_open`
 
 ## 里程碑
 
@@ -23,7 +23,7 @@
 
 ## 验证证据
 
-- **0.4.3流速复测与尾延迟**：普通V4/H743/30MHz，正式SDK与58d3853e A-B-B-A：4B最快均值263508/264770组/s（+0.48%），持续260807/259782（-0.39%）；4us仪表盘约228667次/s。八会话720000组原始值、10977372行数值/序号及160MiB RTT通过。RTT均值678.86/672.22KiB/s；追加旧新旧当前最高737.25，无一致新增退化，历史HPMLink 808未复现，设备/固件/目标程序不同。见v043-stream-maximum.md。前轮10MHz/4us的14.5万不是绝对最快。4B读取P95连续1.309/间隔1.983ms仍开放，错误码修复34测试见v043-tail-latency.md；前阶段资格见v043-memory-latency.md，旧包证据不外推。
+- **0.4.3流速复测与尾延迟**：普通V4/H743/30MHz，正式SDK/58d3853e：4B最快263508/264770组/s，持续260807/259782，4us仪表盘228667；八会话72万组/1097万行/160MiB完整性通过。RTT均值678.86/672.22KiB/s，当前最高737.25，无一致新增退化，历史HPMLink 808未复现；设备/固件/目标不同，见v043-stream-maximum.md。P95连续1.309/间隔1.983ms仍开放，34测试及前阶段资格见v043-tail-latency.md、v043-memory-latency.md。后续PE2改40us：1024边沿均值40.000us/P95 40.100us，镜像26.45万/s但最大空档71us；新目标不沿用旧RTT结论，见v043-h7-led-waveform.md。
 - **0.4.2正式构建安装及公开发布**：正式源0e82ba6f，Windows/完整Skill/SiteAgent及四固件正式覆盖、签名、三渠道与故障回退验证通过；PR66/67/68已合并，正式资产不可变。安装器元数据修复cb30b703/PR63已纳入。详细计数/SHA见v042-release-handoff.md、installer-metadata-cleanup-20261027.md。后续清理29目录约6.587GiB、629保留文件哈希不变，135含链接组保留人工检查，见v042-postrelease-handoff.md。
 - **0.4.2正式候选最终资格**：90e676db与产品1ca9b8fd等价：6453Python/2skip、1182GUI、生产Web/冻结/Rust/NSIS/覆盖及真实界面交互通过。HPM时钟/镜像/RAM/XML/RTT/Watch/串口、Trace独立并行、烧录后三流恢复与原生退出通过。完整计数及限制见v042-formal-qualification.md、v042-traffic-replay.md，历史Trace溢出失败保留。
 - **HPM AI Skill能力核实**：源cafe835f：749Python/65GUI、生产Web/浏览器与完整Skill覆盖校验通过，56 MCP/126能力/协议53一致。时钟、离线门禁、探针诊断/供电/ISP/OTP入口和文档已补齐。该轮无USB操作，详见firmware-skill-fixes-20261101.md；后续正式固件范围见发布报告。
@@ -47,7 +47,7 @@
 
 ## 真机环境
 
-- **state**：本轮重新核对普通V4 V4.7.2/WATCH_TIMING=2与H743；Flash全223048字节匹配当前AXF，30MHz做流速对照，未升降级固件或烧写目标。八会话测试参数恢复、10MHz恢复、设备关闭及后台退出通过。历史HPMLink程序Flash哈希与当前不同，原标识/路径仅保存在本机。后续硬件身份与占用仍需重新核对。
+- **state**：普通V4 V4.7.2/WATCH_TIMING=2与H743重新核对。用户授权PE2每40us翻转，原工程Keil编译下载，最终Flash全223656字节匹配新AXF（SHA77e05091）；GPIO边沿记录及3万点通过。旧测速镜像b622f80c已保存，旧固定RAM地址失效，必须加载新AXF。新程序留在目标，探针未升级；10MHz恢复、device_closed及后台退出通过。详情v043-h7-led-waveform.md；路径/身份只留本地。
 - **installer**：本机Windows与全局Skill均为正式0.4.2源0e82ba6f，NSIS SHA5ff079bb/Skill SHA14af7a5f；签名、覆盖、载荷、56MCP/126能力与正常退出通过。当前不是旧测试包。AI客户端需重启加载新Skill。
 - **backups**：原安装包/正式七资产及四固件、CI ZIP、唯一验收证据、Skill备份和缓存均保留；旧detached树不删除。清理详情见v042-postrelease-handoff.md；本机新入口为v042-postrelease-handoff-20261102/START_HERE.txt。29可再生目录已删，含链接135组保留清单供人工检查。
 
