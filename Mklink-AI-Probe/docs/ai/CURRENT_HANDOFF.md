@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-11-03T21:39:48+08:00`
+- 更新时间：`2026-11-03T22:03:35+08:00`
 - 分支：`codex/v0.4.3-fixes`
-- HEAD：`基于main 4f3be7a4的通用请求延迟优化候选；当前提交以Git为准。`
+- HEAD：`基于main 4f3be7a4的延迟优化及Watch窄批量候选；当前提交以Git为准。`
 - 远端 HEAD：`microkeen/main已合并PR66、67、68，基线4f3be7a4；正式tag/包不变。`
 - 工作树：复用E盘主工作区，保留旧v0.4.2分支和两个detached工作树；本轮及后续修复共用codex/v0.4.3-fixes。
-- 当前任务：外设快读/RAM流水覆盖专项转交固件会话01a1a1a2-9adc-79e2-b30e-07c07d5f90c6；本会话继续上位机优化，P95/间隔仍未<1ms，保持codex/v0.4.3-fixes，暂不构建发布。LED与流速基线见验证证据。
-- 状态：`v043_firmware_delegated_host_tail_open`
+- 当前任务：宿主bit10/0x33窄批量支持完成，608回归/golden通过，实机待授权；固件会话01a1a1a2-9adc-79e2-b30e-07c07d5f90c6负责外设/RAM覆盖。宿主P95<1ms仍开放，继续codex/v0.4.3-fixes，不构建发布。
+- 状态：`v043_narrow_batch_offline_pass_hardware_pending`
 
 ## 里程碑
 
@@ -23,7 +23,7 @@
 
 ## 验证证据
 
-- **0.4.3流速复测与尾延迟**：普通V4/H743/30MHz，正式SDK/58d3853e：4B最快263508/264770组/s，持续260807/259782，4us仪表盘228667；八会话72万组/1097万行/160MiB完整性通过。RTT均值678.86/672.22KiB/s，当前最高737.25，无一致新增退化，历史HPMLink 808未复现；设备/固件/目标不同，见v043-stream-maximum.md。P95连续1.309/间隔1.983ms仍开放，34测试及前阶段资格见v043-tail-latency.md、v043-memory-latency.md。后续PE2改40us：1024边沿均值40.000us/P95 40.100us，镜像26.45万/s但最大空档71us；新目标不沿用旧RTT结论，见v043-h7-led-waveform.md。
+- **0.4.3延迟、流速与窄批量**：1/2B协商bit10/0x33，保留旧协议/RAM对齐/JTAG；608测试、762帧97536样本通过，离线解析-0.84%至+8.13%，硬件待验，见v043-watch-narrow-batch.md。V4/H743/30MHz旧SDK/58d：4B最快263508/264770组/s，仪表盘228667；72万组/1097万行/160MiB完整性通过。RTT均值678.86/672.22、最高737.25KiB/s，历史HPMLink808未复现，见v043-stream-maximum.md。P95连续1.309/间隔1.983ms未达标，见v043-tail-latency.md、v043-memory-latency.md。LED40us边沿P95 40.100us，镜像26.45万/s最大空档71us；新映像不沿用旧RTT结论，见v043-h7-led-waveform.md。
 - **0.4.2正式构建安装及公开发布**：正式源0e82ba6f，Windows/完整Skill/SiteAgent及四固件正式覆盖、签名、三渠道与故障回退验证通过；PR66/67/68已合并，正式资产不可变。安装器元数据修复cb30b703/PR63已纳入。详细计数/SHA见v042-release-handoff.md、installer-metadata-cleanup-20261027.md。后续清理29目录约6.587GiB、629保留文件哈希不变，135含链接组保留人工检查，见v042-postrelease-handoff.md。
 - **0.4.2正式候选最终资格**：90e676db与产品1ca9b8fd等价：6453Python/2skip、1182GUI、生产Web/冻结/Rust/NSIS/覆盖及真实界面交互通过。HPM时钟/镜像/RAM/XML/RTT/Watch/串口、Trace独立并行、烧录后三流恢复与原生退出通过。完整计数及限制见v042-formal-qualification.md、v042-traffic-replay.md，历史Trace溢出失败保留。
 - **HPM AI Skill能力核实**：源cafe835f：749Python/65GUI、生产Web/浏览器与完整Skill覆盖校验通过，56 MCP/126能力/协议53一致。时钟、离线门禁、探针诊断/供电/ISP/OTP入口和文档已补齐。该轮无USB操作，详见firmware-skill-fixes-20261101.md；后续正式固件范围见发布报告。
@@ -53,8 +53,8 @@
 
 ## 下一动作
 
-1. 继续codex/v0.4.3-fixes/草稿PR69。稳定<1ms的P95/间隔读取仍开放；保留完整门禁和Watch性能。先读v043-stream-maximum.md区分30MHz最快/4us仪表盘与旧10MHz结果；RTT波动及历史808差距尚未闭环。尾延迟候选/失败见v043-tail-latency.md。不改固件或目标以迁就对照；暂不构建发布，合并/签名/正式发布须新授权。
-2. 只有分层实测证明固件瓶颈时另建专门固件优化会话，由本会话协调硬件占用；原分析会话不继续实施。F407高地址RAM快速路径覆盖另属未解决项，不能由H7测试推断解决。
+1. 继续codex/v0.4.3-fixes/草稿PR69；稳定<1ms的P95/间隔仍开放。流速条件区别/RTT808差距见v043-stream-maximum.md，失败候选见v043-tail-latency.md。保留完整门禁和Watch性能，不改目标迁就对照；暂不构建发布，合并/签名/发布须新授权。
+2. 固件会话已交付d4f7479b候选未刷入；待授权并核占用后测实际8/16/32位、外设、>64KiB RAM及RTT/SV/Keil。协议/证据见v043-watch-narrow-batch.md；H7不代表所有ARM覆盖。
 3. 保留正式包、唯一验收证据及含链接目录；本机新START_HERE与v042-postrelease-handoff.md记录清理清单和接手入口。历史V3掉线/冷插拔/长稳等仍按known-limits-20261030.md和最终资格报告处理。
 4. 监控上海90GiB告警/95GiB停止，套餐截止北京时间2026-11-26 00:00。未核验续费不清除停止锁、不清零账本、不申请新私钥。
 

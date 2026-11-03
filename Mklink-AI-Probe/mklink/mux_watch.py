@@ -17,6 +17,8 @@ class MuxWatchCapacityError(ValueError):
 
 class MuxWatchSession:
     TIMING_V2_CAPABILITY = 1 << 9
+    NARROW_BATCH_CAPABILITY = 1 << 10
+    NARROW_BATCH_START = 0x33
 
     def __init__(self, transport, regions, period, *, fastest=False):
         self.transport = transport
@@ -26,12 +28,15 @@ class MuxWatchSession:
                       for offset in range(0, size, 128)]
         if not self.parts or len(self.parts) > 15:
             raise MuxWatchCapacityError('Multiplex watch allows 15 regions of at most 128 bytes; select fewer/smaller variables')
+        self._batch_size = sum(n for _, _, n in self.parts)
+        self._word_batch = 4 <= self._batch_size <= 64 and self._batch_size % 4 == 0
         if not math.isfinite(period) or period < 0:
             raise MuxWatchCapacityError('Multiplex watch period must be finite and nonnegative')
         if type(fastest) is not bool or (fastest and period != 0):
             raise MuxWatchCapacityError('Fastest sampling requires fastest=True and period=0')
         self.fastest = fastest
         self.timing = None
+        self._narrow_batch = False
         self.period = max(1, math.ceil(period*1000000))
         if period == 0:
             # Keep the existing period=0 adapter for finite single reads.
@@ -58,21 +63,29 @@ class MuxWatchSession:
             raise RuntimeError('SuperWatch requires the matching grouped-sampling firmware; update the probe firmware and host together')
         timing_v2 = bool(self.transport.capabilities & self.TIMING_V2_CAPABILITY)
         self.timing = None
+        self._narrow_batch = False
         if self.fastest and not timing_v2:
             raise RuntimeError('Fastest sampling requires WATCH_TIMING=2 firmware with MUX capability bit 9')
+        # Select before any target command. HELLO support alone must never
+        # enable new event widths for an old/ordinary START subscription.
+        narrow = bool(self.transport.capabilities & self.NARROW_BATCH_CAPABILITY
+                      and len(self.parts) == 1 and self.parts[0][2] in (1, 2)
+                      and self.parts[0][1] % self.parts[0][2] == 0)
+        command = self.NARROW_BATCH_START if narrow else 0x32
         self.transport.drain(0x41, 255)
         body = struct.pack('<IB', self.period, len(self.parts))
         body += b''.join(struct.pack('<IB', address, size) for _, address, size in self.parts)
         with self.transport._commands:
-            answer = self.transport.request(0x32, body)
+            answer = self.transport.request(command, body)
             self.transport.watch_running = True
-            if timing_v2:
+            if timing_v2 or narrow:
+                contract = 'WATCH_NARROW_BATCH' if narrow else 'WATCH_TIMING=2'
                 try:
                     if not isinstance(answer, (bytes, bytearray)) or len(answer) != 8:
-                        raise RuntimeError('Invalid WATCH_TIMING=2 START acknowledgement length')
+                        raise RuntimeError(f'Invalid {contract} START acknowledgement length')
                     accepted, timebase_hz = struct.unpack('<II', answer)
                     if accepted != self.period or timebase_hz == 0:
-                        raise RuntimeError('WATCH_TIMING=2 START acknowledgement does not match requested period/timebase')
+                        raise RuntimeError(f'{contract} START acknowledgement does not match requested period/timebase')
                 except RuntimeError as error:
                     # The command succeeded but its timing contract is invalid.
                     # Stop this subscription once; never replay START or use REPL.
@@ -88,6 +101,7 @@ class MuxWatchSession:
                     'accepted_period_us': accepted,
                     'timebase_hz': timebase_hz,
                 }
+            self._narrow_batch = narrow
 
     def read_frames(self, *, packed=False):
         result = []
@@ -106,9 +120,11 @@ class MuxWatchSession:
             index, status = event[:2]
             if status == 7:
                 self._pending = []
+                self._narrow_batch = False
                 raise RuntimeError('DAP changed the target; SuperWatch capture was invalidated. Restart capture after debugging.')
             if status == 8:
                 self._pending = []
+                self._narrow_batch = False
                 self.gaps += 1
                 raise RuntimeError('MCU reset recovery timed out; SuperWatch could not read the target within 5 seconds. The reset was not repeated.')
             if status == 5:
@@ -127,9 +143,9 @@ class MuxWatchSession:
                 self.gaps += 1
                 raise RuntimeError(f'SuperWatch target read failed (status {status}); capture stopped. Check the target connection and sampling debug speed before restarting.')
             if status == 9:
-                size = sum(n for _, _, n in self.parts)
+                size = self._batch_size
                 stride = 4+size
-                if (len(event) < 4 or event[0] or not 4 <= size <= 64 or size % 4
+                if (len(event) < 4 or event[0] or not (self._word_batch or self._narrow_batch)
                         or event[3] != size or not 1 <= event[2] <= min(127, 1020//stride)
                         or len(event) != 4+stride*event[2]):
                     raise RuntimeError('Invalid multiplex watch batch')
@@ -201,3 +217,4 @@ class MuxWatchSession:
         with self.transport._commands:
             self.transport.request(0x31)
             self.transport.watch_running = False
+            self._narrow_batch = False
