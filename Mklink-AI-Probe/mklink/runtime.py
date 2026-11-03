@@ -2,27 +2,27 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from http.client import HTTPException
+from http.client import HTTPConnection, HTTPException
 import json
 import os
 from pathlib import Path
 import secrets
+import select
 import socket
 import subprocess
 import sys
 import threading
 import time
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, build_opener, ProxyHandler
 
 PROTOCOL = 53  # Guarded probe/OTP/offline workflows and complete clock capabilities.
 VERSION = "0.4.2"
 STARTUP_TIMEOUT_SECONDS = 60
 
-# urllib's default opener builds an HTTPS context even for loopback HTTP.
-# Keep one per thread: no shared mutable handlers and no per-call Windows
-# certificate-store scan. Proxy isolation and default TLS verification remain.
+# One loopback connection per thread, never shared with the lease heartbeat.
+# Retire before uvicorn's five-second idle timeout. A failed request is never
+# retried: even a lost response may represent a completed target write.
 _local_http = threading.local()
+_HTTP_IDLE_SECONDS = 2
 
 
 class RuntimeErrorResponse(RuntimeError):
@@ -95,27 +95,51 @@ def request(info: dict, method: str, path: str, payload=None, *, timeout=35, for
                "application/x-www-form-urlencoded" if form else "application/json"}
     if info.get('probe_id'):
         headers['X-MKLink-Probe'] = info['probe_id']
-    req = Request(f"http://127.0.0.1:{port}{path}", data=data, headers=headers, method=method)
-    # Local IPC must never travel through environment-configured HTTP proxies.
+    # A fixed numeric loopback destination neither consults proxies nor follows
+    # redirects. Bind reuse to this backend and target, not just a recycled port.
+    key = (port, info.get('instance_id'), info.get('probe_id'), info['token'])
+    connection = getattr(_local_http, 'connection', None)
+    if connection is not None:
+        stale = (getattr(_local_http, 'key', None) != key
+                 or time.monotonic() - _local_http.used_at >= _HTTP_IDLE_SECONDS)
+        if not stale and connection.sock is not None:
+            try:
+                # The previous body was consumed completely. Readability now
+                # means EOF or unsolicited bytes: discard before sending work.
+                stale = bool(select.select([connection.sock], [], [], 0)[0])
+            except (OSError, ValueError):
+                stale = True
+        if stale:
+            connection.close()
+            connection = None
+    if connection is None:
+        connection = HTTPConnection('127.0.0.1', port, timeout=timeout)
+        _local_http.connection, _local_http.key = connection, key
+    connection.timeout = timeout
     try:
-        opener = getattr(_local_http, 'opener', None)
-        if opener is None:
-            opener = _local_http.opener = build_opener(ProxyHandler({}))
-        with opener.open(req, timeout=timeout) as response:
-            return json.load(response)
-    except HTTPError as exc:
-        detail = exc.read(65536).decode("utf-8", "replace")
-        try:
-            body = json.loads(detail)
-            structured_detail = body.get("detail") if isinstance(body, dict) else None
-        except ValueError:
-            structured_detail = None
-        raise RuntimeErrorResponse(f"Runtime HTTP {exc.code}: {detail}",
-                                   status_code=exc.code, detail=structured_detail) from exc
-    except (URLError, TimeoutError, OSError, HTTPException) as exc:
+        if connection.sock is not None:
+            connection.sock.settimeout(timeout)
+        connection.request(method, path, body=data, headers=headers)
+        with connection.getresponse() as response:
+            if response.status >= 300:
+                detail = response.read(65536).decode('utf-8', 'replace')
+                connection.close()  # An oversized error may have unread bytes.
+                try:
+                    body = json.loads(detail)
+                    structured_detail = body.get('detail') if isinstance(body, dict) else None
+                except ValueError:
+                    structured_detail = None
+                raise RuntimeErrorResponse(f'Runtime HTTP {response.status}: {detail}',
+                                           status_code=response.status, detail=structured_detail)
+            payload = response.read()
+        return json.loads(payload)
+    except (TimeoutError, OSError, HTTPException) as exc:
+        connection.close()
         # A stale endpoint's port may now speak another protocol. Treat failed
         # HTTP parsing like other transport failures, without replaying work.
         raise RuntimeErrorResponse("Shared runtime is unavailable; no direct CDC fallback was attempted") from exc
+    finally:
+        _local_http.used_at = time.monotonic()
 
 
 def discover(probe_id=None) -> dict | None:

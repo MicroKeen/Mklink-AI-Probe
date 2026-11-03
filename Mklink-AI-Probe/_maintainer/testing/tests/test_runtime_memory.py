@@ -14,6 +14,7 @@ from mklink.device import Device
 from mklink.remote.api import create_app
 from mklink.runtime import RuntimeErrorResponse
 from mklink.runtime_api import install_runtime
+from mklink.runtime_api import Session
 
 
 @pytest.fixture
@@ -32,6 +33,21 @@ def batch(monkeypatch, tmp_path):
     with TestClient(app, base_url='http://127.0.0.1:8765', headers={'X-Auth-Token':'fixture'}) as client:
         yield client, state, device, control, managers
         state['device'] = None
+
+
+def test_session_identity_does_not_run_toolchain_diagnostics(batch, monkeypatch):
+    _, state, device, control, _ = batch
+    control.sessions['identity'] = Session(state['project_root'], device.axf_path,
+                                           kind='sdk', name='identity fixture')
+    def unexpected(*args, **kwargs):
+        pytest.fail('Admission must not probe ELF tools or the filesystem status page')
+    monkeypatch.setattr('mklink.elf_backend.elf_status', unexpected)
+    assert control.validate_session('identity').name == 'identity fixture'
+    device._axf = 'new-source.axf'
+    from fastapi import HTTPException
+    with pytest.raises(HTTPException) as rejected:
+        control.validate_session('identity')
+    assert rejected.value.status_code == 409
 
 
 def test_real_device_coalesces_touching_regions_only_and_preserves_order(batch):

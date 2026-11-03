@@ -84,6 +84,7 @@ def test_uart_state_survives_symbol_changes_and_does_not_block_device_release(ru
     uart = client.post('/_runtime/attach', json={'scope': 'uart'}).json()['session_id']
     target = attach(client)
     app.state.mklink_state['device'].axf_status = {'axf_path': 'different.axf'}
+    app.state.mklink_state['device'].axf_path = 'different.axf'
     assert call(client, target, 'device_status').status_code == 409
     assert call(client, target, 'serial_status').status_code == 200
     assert call(client, uart, 'modbus_status').status_code == 200

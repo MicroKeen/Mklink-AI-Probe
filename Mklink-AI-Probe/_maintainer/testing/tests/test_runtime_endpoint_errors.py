@@ -21,7 +21,8 @@ INVALID_RESPONSES = [
 
 def json_response(body):
     data = json.dumps(body).encode('utf-8')
-    return b'HTTP/1.1 200 OK\r\nContent-Length: ' + str(len(data)).encode() + b'\r\n\r\n' + data
+    # This fixture handles exactly one request per socket.
+    return b'HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: ' + str(len(data)).encode() + b'\r\n\r\n' + data
 
 
 @pytest.fixture

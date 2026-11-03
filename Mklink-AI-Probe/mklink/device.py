@@ -775,6 +775,11 @@ class Device:
             return {"loaded": False, "error": str(e), "active": self.axf_status}
 
     @property
+    def axf_path(self) -> str | None:
+        """Current symbol source, without probing optional toolchain diagnostics."""
+        return self._axf
+
+    @property
     def axf_status(self) -> dict:
         """返回 AXF 解析状态摘要（含解析后端能力与失败原因）。"""
         from mklink.elf_backend import elf_status

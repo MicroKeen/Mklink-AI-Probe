@@ -56,6 +56,8 @@ async def settle(task):
 
 
 def same_path(left, right):
+    if left == right:
+        return True
     return str(Path(left).resolve()).casefold() == str(Path(right).resolve()).casefold()
 
 
@@ -263,7 +265,9 @@ class RuntimeControl:
             raise HTTPException(409, 'Project changed; reconnect explicitly')
         if not target:
             return session
-        active_axf = (getattr(state.get('device'), 'axf_status', {}) or {}).get('axf_path')
+        # Admission needs the active source and catalog generation, not the
+        # status page's filesystem/toolchain discovery on every memory call.
+        active_axf = getattr(state.get('device'), 'axf_path', None)
         if session.axf != active_axf or session.symbol_version != self.symbol_version():
             raise HTTPException(409, 'Symbols changed; reconnect explicitly before reading the new target layout')
         return session
