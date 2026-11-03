@@ -26,6 +26,27 @@ class _PendingReadTimeout(serial.SerialException):
     """Only process termination may release storage still owned by the driver."""
 
 
+def _windows_read_api():
+    """Capture native errors before ctypes reacquires the Python GIL."""
+    import ctypes
+    from types import SimpleNamespace
+    from serial import win32
+
+    api = SimpleNamespace(**vars(win32))
+    kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+    # A later GetLastError() can observe an error overwritten while reacquiring
+    # the GIL. In particular, losing IO_INCOMPLETE would retire a live buffer.
+    # Keep these bindings private: pyserial's other calls use native last-error.
+    for name in ('ReadFile', 'GetOverlappedResult', 'WaitForSingleObject'):
+        original = getattr(win32, name)
+        function = getattr(kernel, name)
+        function.argtypes = original.argtypes
+        function.restype = original.restype
+        setattr(api, name, function)
+    api.GetLastError = ctypes.get_last_error
+    return api
+
+
 class _WindowsReadQueue:
     """Keep CDC reads posted while Python is descheduled (128 KiB bounded).
 
@@ -37,7 +58,7 @@ class _WindowsReadQueue:
     def __init__(self, port):
         import ctypes
         from collections import deque
-        from serial import win32
+        win32 = _windows_read_api()
 
         self._ctypes, self._api, self._port = ctypes, win32, port
         self._slots = deque()

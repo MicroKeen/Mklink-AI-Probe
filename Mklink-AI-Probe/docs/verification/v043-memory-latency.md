@@ -1,5 +1,8 @@
 # Read-memory latency, phase 2 — 2026-11-03
 
+The [P95 and spaced-read follow-up](v043-tail-latency.md) records larger samples,
+rejected scheduling/transport experiments and the Windows error-preservation fix.
+
 The public call now measures below 1 ms **at the median for continuous small
 reads**. This does not establish every request below 1 ms: P95 still exceeds
 1 ms, spaced reads remain slower, and first use includes channel/MUX setup.
