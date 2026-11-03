@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-11-03T21:13:47+08:00`
+- 更新时间：`2026-11-03T21:39:48+08:00`
 - 分支：`codex/v0.4.3-fixes`
 - HEAD：`基于main 4f3be7a4的通用请求延迟优化候选；当前提交以Git为准。`
 - 远端 HEAD：`microkeen/main已合并PR66、67、68，基线4f3be7a4；正式tag/包不变。`
 - 工作树：复用E盘主工作区，保留旧v0.4.2分支和两个detached工作树；本轮及后续修复共用codex/v0.4.3-fixes。
-- 当前任务：H743 PE2改为40us翻转并Keil下载；1024边沿均值40.000us/P95 40.100us，最终RAM镜像采样26.45万/s，P95 4us但最大71us。原速度基线保留，目标换镜像须重载AXF；见v043-h7-led-waveform.md。宿主通用P95/间隔仍未<1ms，未构建发布宿主。
-- 状态：`v043_led_40us_verified_tail_open`
+- 当前任务：外设快读/RAM流水覆盖专项转交固件会话01a1a1a2-9adc-79e2-b30e-07c07d5f90c6；本会话继续上位机优化，P95/间隔仍未<1ms，保持codex/v0.4.3-fixes，暂不构建发布。LED与流速基线见验证证据。
+- 状态：`v043_firmware_delegated_host_tail_open`
 
 ## 里程碑
 
