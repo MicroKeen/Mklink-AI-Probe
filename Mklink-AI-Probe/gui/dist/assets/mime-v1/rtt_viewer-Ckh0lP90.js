@@ -512,6 +512,7 @@ var triggerSettings = {
 var preTriggerBuffer = [];
 var postTriggerRemaining = 0;
 var autoTimeout = null;
+var triggerRearmTimer = null;
 var lastTriggerValue = null;
 var triggerCaptureData = {};
 var singleTriggerCaptureFrozen = false;
@@ -568,13 +569,13 @@ function hideChartLegend() { setChartLegendVisible(false); }
 function showChartLegend() { setChartLegendVisible(true); }
 function revealChartLegendAfterAction() { showChartLegend(); }
 
-function visibleChartChannelNames() {
+function visibleChartChannelNames(includeHidden) {
   var names = [];
   var sorted = sortedFieldNames();
   for (var i = 0; i < sorted.length; i++) {
     var name = sorted[i];
     var meta = FIELDS[name];
-    if (!meta || !meta.visible || (CHANNEL_METADATA[name] && CHANNEL_METADATA[name].source === 'struct')) continue;
+    if (!meta || (!includeHidden && !meta.visible) || (CHANNEL_METADATA[name] && CHANNEL_METADATA[name].source === 'struct')) continue;
     names.push(name);
   }
   return names;
@@ -582,8 +583,8 @@ function visibleChartChannelNames() {
 
 function updateChartLegend() {
   if (!chartLegend) return;
-  var names = visibleChartChannelNames();
-  var signature = (IS_SUPERWATCH_MODE ? 'superwatch:' : 'vofa:') + splitChannelName + ':' + names.map(function(name) { return name + ':' + (signalStyle(name).color || FIELDS[name].color); }).join('|');
+  var names = visibleChartChannelNames(true);
+  var signature = (IS_SUPERWATCH_MODE ? 'superwatch:' : 'vofa:') + splitChannelName + ':' + names.map(function(name) { return name + ':' + FIELDS[name].visible + ':' + signalLabel(name) + ':' + (signalStyle(name).color || FIELDS[name].color); }).join('|');
   if (chartLegend.dataset.signature === signature) return;
   chartLegend.dataset.signature = signature;
   chartLegend.textContent = '';
@@ -604,6 +605,16 @@ function updateChartLegend() {
     var label = document.createElement('span');
     label.className = 'chart-legend-name';
     label.textContent = signalLabel(name); label.title = name; if (signalStyle(name).emphasis) label.style.fontWeight = 'bold';
+    var eye = document.createElement('button');
+    eye.type = 'button'; eye.className = 'chart-legend-eye'; eye.dataset.channel = name;
+    eye.setAttribute('aria-pressed', String(meta.visible));
+    eye.title = (document.documentElement.lang === 'en' ? (meta.visible ? 'Hide ' : 'Show ') : (meta.visible ? '隐藏 ' : '显示 ')) + name;
+    eye.setAttribute('aria-label', eye.title);
+    // Match the Lucide Eye/EyeOff used by the variable catalog (ISC license).
+    eye.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (meta.visible
+      ? '<path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/>'
+      : '<path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/>') + '</svg>';
+    row.appendChild(eye);
     row.appendChild(swatch);
     row.appendChild(label);
     if (IS_SUPERWATCH_MODE) {
@@ -674,6 +685,13 @@ if (chartLegend) {
   chartLegend.addEventListener('click', function(e) {
     var target = e.target;
     if (!target || !target.closest) return;
+    var eye = target.closest('.chart-legend-eye');
+    if (eye) {
+      e.preventDefault(); e.stopPropagation();
+      var name = eye.dataset.channel, visible = !FIELDS[name].visible;
+      setChannelVisible(name, visible);
+      return;
+    }
     var action = target.closest('.chart-legend-action');
     if (!action) return;
     e.preventDefault();
@@ -820,6 +838,7 @@ function syncIntervalFromServer(value) {
   var normalized = Number(value);
   if (!Number.isFinite(normalized) || normalized <= 0 || normalized > 60) return;
   currentInterval = normalized;
+  updateSampleTimingStatus();
   if (!intervalDirty && !intervalUpdatePending) {
     intervalInput.value = String(normalized);
   }
@@ -2239,8 +2258,10 @@ function setChannelVisible(name, visible) {
   var chip = document.querySelector('#var-selector .chip[data-name="' + cssEscape(name) + '"]');
   if (chip) chip.classList.toggle('active', meta.visible);
   updateWatchTable();
+  updateChartLegend();
   drawChart();
   drawMinimap();
+  if (chartLegend) chartLegend.dispatchEvent(new CustomEvent('mklink:visibility', {bubbles:true, detail:{path:name, visible:meta.visible}}));
 }
 
 function cssEscape(value) {
@@ -2935,6 +2956,7 @@ function setHiddenChannels(names, replay) {
     FIELDS[name].visible = !hiddenChannelNames[name];
   }
   updateWatchTable();
+  updateChartLegend();
   drawChart();
   drawMinimap();
 }
@@ -3108,6 +3130,7 @@ function freezeRenderedView() {
 
 function discardPausedBinarySnapshot() {
   binaryEnvelope = null;
+  updateSampleTimingStatus();
   for (var channel = 0; channel < binaryChannelNames.length; channel++) {
     var field = FIELDS[binaryChannelNames[channel]];
     if (field && field.ringBuf) field.ringBuf.clear();
@@ -3196,6 +3219,7 @@ function configureBinaryChannels(channels) {
   binaryLastSequence = null;
   binaryLastDetailSequence = null;
   binaryEnvelope = null;
+  updateSampleTimingStatus();
   binaryBufferStart = null;
   binaryBufferEnd = null;
   binaryBufferedSamples = 0;
@@ -3374,8 +3398,27 @@ function getBinaryVisibleRange() {
   return {
     start: (binaryTimeOrigin + range.tMin) * 1000,
     end: (binaryTimeOrigin + range.tMax) * 1000,
-    pixelWidth: pixelWidth
+    pixelWidth: pixelWidth,
+    gapThresholdMs: IS_SUPERWATCH_MODE ? Math.max(0.02, currentInterval * 2000) : undefined
   };
+}
+
+function formatSampleInterval(ms) {
+  if (!Number.isFinite(ms)) return '—';
+  var scale = ms < 1 ? 1000 : ms < 1000 ? 1 : 0.001;
+  return Number((ms * scale).toFixed(3)) + (ms < 1 ? ' µs' : ms < 1000 ? ' ms' : ' s');
+}
+
+function updateSampleTimingStatus() {
+  if (!IS_SUPERWATCH_MODE) return;
+  var host = document.getElementById('sample-timing-status');
+  if (!host) return;
+  var timing = binaryEnvelope && binaryEnvelope.sampleTiming;
+  document.getElementById('sample-interval-max').textContent = timing && timing.maxIntervalMs !== null ? formatSampleInterval(timing.maxIntervalMs) : '—';
+  document.getElementById('sample-gap-threshold').textContent = formatSampleInterval(timing ? timing.thresholdMs : Math.max(0.02, currentInterval * 2000));
+  document.getElementById('sample-gap-count').textContent = timing ? String(timing.gapCount) : '—';
+  host.classList.toggle('has-gaps', !!timing && timing.gapCount > 0);
+  host.dataset.gapCount = timing ? String(timing.gapCount) : '';
 }
 
 function parseBinaryEnvelope(envelope) {
@@ -3399,7 +3442,22 @@ function parseBinaryEnvelope(envelope) {
   for (var time = 0; time < times.length; time++) {
     if (!Number.isFinite(times[time])) return null;
   }
-  return { times: times, timeIndices: timeIndices, values: values, offsets: offsets };
+  var timing = null;
+  if (IS_SUPERWATCH_MODE && envelope.sampleTiming && !envelope.replay) {
+    var supplied = envelope.sampleTiming;
+    var columns = new Uint8Array(supplied.columns);
+    var segments = new Uint32Array(supplied.segmentIds);
+    if (!Number.isFinite(supplied.startMs) || !Number.isFinite(supplied.endMs) || supplied.endMs < supplied.startMs ||
+        !Number.isFinite(supplied.thresholdMs) || supplied.thresholdMs <= 0 ||
+        (supplied.maxIntervalMs !== null && (!Number.isFinite(supplied.maxIntervalMs) || supplied.maxIntervalMs < 0)) ||
+        !Number.isSafeInteger(supplied.intervalCount) || supplied.intervalCount < 0 ||
+        !Number.isSafeInteger(supplied.gapCount) || supplied.gapCount < 0 || supplied.gapCount > supplied.intervalCount ||
+        columns.length !== envelope.pixelWidth || segments.length !== envelope.pointCount) return null;
+    timing = { startMs: supplied.startMs, endMs: supplied.endMs, thresholdMs: supplied.thresholdMs,
+      maxIntervalMs: supplied.maxIntervalMs, intervalCount: supplied.intervalCount, gapCount: supplied.gapCount,
+      columns: columns, segmentIds: segments };
+  }
+  return { times: times, timeIndices: timeIndices, values: values, offsets: offsets, sampleTiming: timing };
 }
 
 function getBinaryEnvelopeChannelRange(name) {
@@ -3475,6 +3533,7 @@ function renderBinaryEnvelope(envelope, renderWhilePaused) {
   }
   canvas.dataset.binaryEnvelopePoints = String(envelope.pointCount);
   binaryEnvelope = parsed;
+  updateSampleTimingStatus();
   if (!paused || renderWhilePaused) {
     drawChart();
     drawMinimap();
@@ -3500,6 +3559,7 @@ function resetBinaryStream() {
   binaryLastDetailSequence = null;
   binaryEnvelope = null;
   binaryBufferStart = null;
+  updateSampleTimingStatus();
   binaryBufferEnd = null;
   binaryBufferedSamples = 0;
   requestBinaryDetail(false);
@@ -3667,6 +3727,8 @@ function endReplay() {
 }
 
 function disposeViewer() {
+  clearTimeout(autoTimeout);
+  clearTimeout(triggerRearmTimer);
   saveViewerPreferences();
   clearTimeout(viewerPreferenceTimer);
   stopWatchColumnResize();
@@ -4445,6 +4507,26 @@ function drawChart() {
     ctx.fillRect(ml, mainTop + mainHeight + Math.floor(panelGap / 2), pw, 1);
   }
 
+  // Render missing-observation spans independently of channel extrema. Never
+  // infer gaps from the spacing of points selected by the min/max envelope.
+  if (useBinaryEnvelope && binaryEnvelope.sampleTiming && !arrayOnly) {
+    var gapTiming = binaryEnvelope.sampleTiming;
+    var gapColumns = gapTiming.columns;
+    ctx.save();
+    ctx.beginPath(); ctx.rect(ml, mt, pw, ph); ctx.clip();
+    ctx.fillStyle = 'rgba(128,128,128,0.22)';
+    for (var column = 0; column < gapColumns.length;) {
+      if (!gapColumns[column]) { column++; continue; }
+      var gapFirst = column++;
+      while (column < gapColumns.length && gapColumns[column]) column++;
+      var gapSpan = gapTiming.endMs - gapTiming.startMs;
+      var gapLeft = tx((gapTiming.startMs + gapSpan * gapFirst / gapColumns.length) / 1000 - binaryTimeOrigin);
+      var gapRight = tx((gapTiming.startMs + gapSpan * column / gapColumns.length) / 1000 - binaryTimeOrigin);
+      ctx.fillRect(gapLeft, mt, gapRight - gapLeft, ph);
+    }
+    ctx.restore();
+  }
+
   var names = sortedFieldNames().slice().sort(function(a,b){return Number(!!signalStyle(a).emphasis)-Number(!!signalStyle(b).emphasis);});
   for (var ni = 0; ni < names.length; ni++) {
     var name = names[ni];
@@ -4487,7 +4569,13 @@ function drawChart() {
     if (useBinaryEnvelope && envelopeChannel !== undefined) {
       var envelopeStart = binaryEnvelope.offsets[envelopeChannel];
       var envelopeEnd = binaryEnvelope.offsets[envelopeChannel + 1];
+      var previousSegment = -1;
       for (var envelopePoint = envelopeStart; envelopePoint < envelopeEnd; envelopePoint++) {
+        if (binaryEnvelope.sampleTiming) {
+          var pointSegment = binaryEnvelope.sampleTiming.segmentIds[envelopePoint];
+          if (pointSegment !== previousSegment) started = false;
+          previousSegment = pointSegment;
+        }
         var timeIndex = binaryEnvelope.timeIndices[envelopePoint];
         var envelopeTime = binaryEnvelope.times[timeIndex] / 1000 - binaryTimeOrigin;
         var envelopeX = tx(envelopeTime);
@@ -4495,7 +4583,11 @@ function drawChart() {
         if (!Number.isFinite(envelopeY)) { started = false; continue; }
         if (envelopeX < ml - 10 || envelopeX > ml + pw + 10) continue;
         if (pointsOnly) ctx.fillRect(envelopeX-pointSize/2,envelopeY-pointSize/2,pointSize,pointSize);
-        else if (!started) { ctx.moveTo(envelopeX, envelopeY); started = true; }
+        else if (!started) {
+          // Keep isolated observed points visible between two unknown spans.
+          if (binaryEnvelope.sampleTiming) ctx.fillRect(envelopeX-1,envelopeY-1,2,2);
+          ctx.moveTo(envelopeX, envelopeY); started = true;
+        }
         else ctx.lineTo(envelopeX, envelopeY);
       }
     } else {
@@ -5537,6 +5629,8 @@ function updateTriggerSourceOptions() {
 }
 
 function armTrigger() {
+  clearTimeout(triggerRearmTimer);
+  triggerRearmTimer = null;
   singleTriggerCaptureFrozen = false;
   requestBinaryDetail(true);
   triggerSettings.state = 'armed';
@@ -5568,6 +5662,8 @@ function forceTrigger() {
 }
 
 function resetTrigger() {
+  clearTimeout(triggerRearmTimer);
+  triggerRearmTimer = null;
   requestBinaryDetail(false);
   triggerSettings.state = 'idle';
   preTriggerBuffer = [];
@@ -5644,7 +5740,10 @@ function checkTrigger(point) {
       }
       updateTriggerStateBadge();
       if (triggerSettings.mode === 'normal' || triggerSettings.mode === 'auto') {
-        setTimeout(function() { armTrigger(); }, 100);
+        triggerRearmTimer = setTimeout(function() {
+          triggerRearmTimer = null;
+          if (triggerSettings.enabled && triggerSettings.state === 'done') armTrigger();
+        }, 100);
       }
     }
     return !singleTriggerCaptureFrozen;
@@ -5660,6 +5759,7 @@ function copyBufferedTriggerPoints(points) {
 function freezeSingleTriggerCapture() {
   singleTriggerCaptureFrozen = true;
   binaryEnvelope = null;
+  updateSampleTimingStatus();
   binaryExportPending = false;
   var start = Infinity, end = -Infinity, count = 0;
   for (var name in FIELDS) {
