@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-04T20:45:31+08:00",
+  "updated_at": "2026-11-04T21:39:31.7920313+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
@@ -13,8 +13,8 @@
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "v043_ilm_b_evaluated_usb7_restored",
-    "current_task": "本机0.4.3源f9b1ae8a安装通过；E/F历史清理完成，不用D盘。最小ILM B已完成A/B/A：局部ECHO收益但20us/40us零漏采未达，不采用候选；原USB7已恢复反测，见v043-control-ilm-b-ab.md。"
+    "status": "v043_host_baseline_accepted_notes_simplified",
+    "current_task": "用户确认当前0.4.3上位机为后续不退化基线；产品0a0c97b3/已安装源f9b1ae8a，见v043-host-baseline.md。本轮仅精简中英文更新说明并同步Web资源；USB7保持，ILM B不采用。"
   },
   "milestones": [
     {
@@ -110,7 +110,7 @@
     "nRF54L15保护闭环、全部擦除/拔插/休眠/断电、电源精度未全测。每次VCC需确认具体电压。26个无可靠扇区FLM禁用扇区操作，Bank模式须匹配。HPM5301 OTP组18/19历史永久锁定；128字读取及批准Word69 0→1已实测，其余型号/区域不继承授权，锁最后写/逐项校验，多Word不可回滚；熔丝/影子/临时锁语义未知，UART按ROM状态及回读为准。详见hpm-offline-otp-handoff.md及known-limits-20261030.md。"
   ],
   "next_actions": [
-    "继续codex/v0.4.3-fixes/草稿PR69，本机安装已更新f9b1ae8a。普通读P95/间隔<1ms、采样最大间隔<20us仍开放；合并/签名/正式发布须新授权。",
+    "继续codex/v0.4.3-fixes/草稿PR69；后续修复须按v043-host-baseline.md保留功能、数据正确性和性能，不能后退。普通读P95/间隔<1ms、采样最大间隔<20us仍开放；合并/签名/正式发布须新授权。",
     "最小ILM B试验已完成且不扩大；原USB7保持，候选/失败和A/B/A原始证据保留，见v043-control-ilm-b-ab.md。后续采样优化应重新定位普通批间21–22us与批内长尾，不能靠平均速率宣称无漏采；固件会话01a1a1a2-9adc-79e2-b30e-07c07d5f90c6本轮设备工作结束。",
     "保留正式包、当前唯一验收证据、缓存和含链接目录；旧记录/脚本退役范围见v043-workspace-cleanup.md。历史V3掉线/冷插拔/长稳等仍按known-limits-20261030.md处理。",
     "监控上海90GiB告警/95GiB停止，套餐截止北京时间2026-11-26 00:00。未核验续费不清除停止锁、不清零账本、不申请新私钥。"
