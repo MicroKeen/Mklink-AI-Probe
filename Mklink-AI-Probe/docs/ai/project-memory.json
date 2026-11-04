@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-04T16:04:28+08:00",
+  "updated_at": "2026-11-04T17:20:44+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
@@ -13,8 +13,8 @@
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "v043_iab_waveforms_verified_echo_gap_open",
-    "current_task": "0a0c97b3接收修复后，内置浏览器四组40/100us波形/PNG及缺失回放完成；max47–62us，原始MUX与2369439个发布样本逐点相符。四组峰值均在ECHO回复前后批间，20us/40us零漏采未达。见v043-iab-waveforms.md；未更新安装版。"
+    "status": "v043_control_ahb_rejected_usb7_restored",
+    "current_task": "控制热点AHB布局A/B/A完成，ECHO批间中位44–49→70–74→42–49us，负收益已撤销；用户明确授权手动恢复原USB7后反测通过。36轮21377916样本原始MUX逐点相符，144宽度/66MiB RTT/900次DAP共存通过。见v043-control-ahb-ab.md；产品0a0c97b3、安装14160cc6不变。"
   },
   "milestones": [
     {
@@ -51,7 +51,7 @@
   "verification": [
     {
       "area": "0.4.3接收、连续性与性能",
-      "result": "0a0c97b3：382后端/307GUI，最终记录9/回放164及Web通过。搜索1.75–1.87s→35–72ms，同负载八组max14–86ms→46–56us、队列丢弃0。RTT两份10MiB全验853.3→853.5–853.8KiB/s；DAP300+Watch+RTT通过，P95 1.2515→1.135ms，见v043-receive-backpressure.md。内置浏览器四图/缺失回放完成，原始MUX与2369439样本相符，max47–62us均关联ECHO，见v043-iab-waveforms.md；20us/40us零漏采未达。旧MUX1234/48宽度见v043-mux-sampling-contract.md；安装14160cc6见v043-desktop-waveforms.md，普通读见v043-tail-latency.md。"
+      "result": "0a0c97b3接收/连续性：382后端/307GUI，最终记录9/回放164及Web通过；搜索1.75–1.87s→35–72ms，队列删除归零，见v043-receive-backpressure.md。内置浏览器四图/缺失回放及2369439样本raw比对见v043-iab-waveforms.md。本轮AHB A/B/A：36轮21377916样本、144宽度、66MiB RTT、900次DAP共存通过；AHB ECHO批间恶化，恢复USB7后42–49us、4B持续264.435k/s、RTT853.53/853.58KiB/s。最大43–67us，20us/40us零漏采未达，见v043-control-ahb-ab.md。普通读/协议/实装仍见v043-tail-latency.md、v043-mux-sampling-contract.md、v043-desktop-waveforms.md。"
     },
     {
       "area": "0.4.2正式构建安装及公开发布",
@@ -95,7 +95,7 @@
     "编译完成不代表目标已下载：文件变化仅发待重载提示，不后台解析。用户明确加载/重载文件时自动停止目标采集，确认worker退出后原子换表，保持停止；失败保留旧目录/选择。不要求连接下载器；断开保留文件和选中变量但清空旧采样。公式只改变可视化，原始记录不变；不恢复旧地址采集或重放写操作。"
   ],
   "hardware": {
-    "state": "普通V4 USB7源465a9b69/H743映像77e05091不变；30MHz/4us采样，只改TIM7 ARR39/99并回读，最终99。流已停止并断开，内置浏览器保留RAM100us真实记录的离线回放；GUI后台可仍有租约但不持有探针，操作前重核占用。20us/长期资格未达，USB背压未证实。",
+    "state": "普通V4已按用户新增手动UF2授权恢复原USB7源465a9b69/build11:01:27（原SHA db6fdfe2）；AHB16:49:28负收益已撤销。三阶段H743 Flash223656B逐字节相符，映像77e05091不变；30MHz，最终TIM7 ARR99。反测完成，流停止并断开、子后台退出；旧内置浏览器离线回放不持有探针。操作前仍重核占用，20us/长稳未达。",
     "installer": "本机Windows已覆盖为0.4.3本地未签名测试版，源14160cc6，NSIS SHA2fb705ce，安装/载荷/冻结MCP/Web/正常退出通过；正式0.4.2资产保留不变。全局Skill及独立SiteAgent仍0.4.2，未覆盖。没有合并/签名/发布。",
     "backups": "保留正式包/七资产/四固件、CI ZIP、唯一验收证据、Skill备份、缓存及旧detached树。29目录清理/135含链接组人工检查清单见v042-postrelease-handoff.md及本机v042-postrelease-handoff-20261102/START_HERE.txt。"
   },
@@ -111,7 +111,7 @@
   ],
   "next_actions": [
     "继续codex/v0.4.3-fixes/草稿PR69。安装版仍14160cc6，本轮Web试构建仅F盘。普通读P95/间隔<1ms、采样最大间隔<20us仍开放；合并/签名/正式发布须新授权。",
-    "GPIO搜索阻塞/队列删除已修复；内置浏览器补齐PNG。原始MUX确认127点批边界，普通批间PE2/RAM中位22/21us，四组峰值在ECHO回复附近。固件会话01a1a1a2-9adc-79e2-b30e-07c07d5f90c6继续分析调度/热点布局；不停心跳、不改目标迁就采集、不自动刷固件，见v043-iab-waveforms.md。",
+    "AHB控制代码布局负收益，已恢复USB7并完成A/B/A，见v043-control-ahb-ab.md。ILM因预布局空间不足未实测；后续控制解析/USB OUT/RTOS须独立测量并协调固件会话01a1a1a2-9adc-79e2-b30e-07c07d5f90c6。保留一次WATCH START 501.7369ms准入超时证据；不停心跳、不改目标迁就采集、不自动试刷其他候选。",
     "保留正式包、唯一验收证据及含链接目录；本机新START_HERE与v042-postrelease-handoff.md记录清理清单和接手入口。历史V3掉线/冷插拔/长稳等仍按known-limits-20261030.md和最终资格报告处理。",
     "监控上海90GiB告警/95GiB停止，套餐截止北京时间2026-11-26 00:00。未核验续费不清除停止锁、不清零账本、不申请新私钥。"
   ],

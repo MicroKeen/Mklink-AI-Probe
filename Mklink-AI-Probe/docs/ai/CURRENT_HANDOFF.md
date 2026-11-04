@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-11-04T16:04:28+08:00`
+- 更新时间：`2026-11-04T17:20:44+08:00`
 - 分支：`codex/v0.4.3-fixes`
 - HEAD：`基于main 4f3be7a4；本轮接收/连续性修改对照c71d6995，本地安装源14160cc6；确切提交以Git为准。`
 - 远端 HEAD：`microkeen/main已合并PR66、67、68，基线4f3be7a4；正式tag/包不变。`
 - 工作树：复用E盘主工作区，保留旧v0.4.2分支和两个detached工作树；本轮及后续修复共用codex/v0.4.3-fixes。
-- 当前任务：0a0c97b3接收修复后，内置浏览器四组40/100us波形/PNG及缺失回放完成；max47–62us，原始MUX与2369439个发布样本逐点相符。四组峰值均在ECHO回复前后批间，20us/40us零漏采未达。见v043-iab-waveforms.md；未更新安装版。
-- 状态：`v043_iab_waveforms_verified_echo_gap_open`
+- 当前任务：控制热点AHB布局A/B/A完成，ECHO批间中位44–49→70–74→42–49us，负收益已撤销；用户明确授权手动恢复原USB7后反测通过。36轮21377916样本原始MUX逐点相符，144宽度/66MiB RTT/900次DAP共存通过。见v043-control-ahb-ab.md；产品0a0c97b3、安装14160cc6不变。
+- 状态：`v043_control_ahb_rejected_usb7_restored`
 
 ## 里程碑
 
@@ -23,7 +23,7 @@
 
 ## 验证证据
 
-- **0.4.3接收、连续性与性能**：0a0c97b3：382后端/307GUI，最终记录9/回放164及Web通过。搜索1.75–1.87s→35–72ms，同负载八组max14–86ms→46–56us、队列丢弃0。RTT两份10MiB全验853.3→853.5–853.8KiB/s；DAP300+Watch+RTT通过，P95 1.2515→1.135ms，见v043-receive-backpressure.md。内置浏览器四图/缺失回放完成，原始MUX与2369439样本相符，max47–62us均关联ECHO，见v043-iab-waveforms.md；20us/40us零漏采未达。旧MUX1234/48宽度见v043-mux-sampling-contract.md；安装14160cc6见v043-desktop-waveforms.md，普通读见v043-tail-latency.md。
+- **0.4.3接收、连续性与性能**：0a0c97b3接收/连续性：382后端/307GUI，最终记录9/回放164及Web通过；搜索1.75–1.87s→35–72ms，队列删除归零，见v043-receive-backpressure.md。内置浏览器四图/缺失回放及2369439样本raw比对见v043-iab-waveforms.md。本轮AHB A/B/A：36轮21377916样本、144宽度、66MiB RTT、900次DAP共存通过；AHB ECHO批间恶化，恢复USB7后42–49us、4B持续264.435k/s、RTT853.53/853.58KiB/s。最大43–67us，20us/40us零漏采未达，见v043-control-ahb-ab.md。普通读/协议/实装仍见v043-tail-latency.md、v043-mux-sampling-contract.md、v043-desktop-waveforms.md。
 - **0.4.2正式构建安装及公开发布**：正式源0e82ba6f，Windows/完整Skill/SiteAgent及四固件正式覆盖、签名、三渠道与故障回退验证通过；PR66/67/68已合并，正式资产不可变。安装器元数据修复cb30b703/PR63已纳入。详细计数/SHA见v042-release-handoff.md、installer-metadata-cleanup-20261027.md。后续清理29目录约6.587GiB、629保留文件哈希不变，135含链接组保留人工检查，见v042-postrelease-handoff.md。
 - **0.4.2正式候选最终资格**：90e676db与产品1ca9b8fd等价：6453Python/2skip、1182GUI、生产Web/冻结/Rust/NSIS/覆盖及真实界面交互通过。HPM时钟/镜像/RAM/XML/RTT/Watch/串口、Trace独立并行、烧录后三流恢复与原生退出通过。完整计数及限制见v042-formal-qualification.md、v042-traffic-replay.md，历史Trace溢出失败保留。
 - **HPM AI Skill能力核实**：源cafe835f：749Python/65GUI、生产Web/浏览器与完整Skill覆盖校验通过，56 MCP/126能力/协议53一致。时钟、离线门禁、探针诊断/供电/ISP/OTP入口和文档已补齐。该轮无USB操作，详见firmware-skill-fixes-20261101.md；后续正式固件范围见发布报告。
@@ -47,14 +47,14 @@
 
 ## 真机环境
 
-- **state**：普通V4 USB7源465a9b69/H743映像77e05091不变；30MHz/4us采样，只改TIM7 ARR39/99并回读，最终99。流已停止并断开，内置浏览器保留RAM100us真实记录的离线回放；GUI后台可仍有租约但不持有探针，操作前重核占用。20us/长期资格未达，USB背压未证实。
+- **state**：普通V4已按用户新增手动UF2授权恢复原USB7源465a9b69/build11:01:27（原SHA db6fdfe2）；AHB16:49:28负收益已撤销。三阶段H743 Flash223656B逐字节相符，映像77e05091不变；30MHz，最终TIM7 ARR99。反测完成，流停止并断开、子后台退出；旧内置浏览器离线回放不持有探针。操作前仍重核占用，20us/长稳未达。
 - **installer**：本机Windows已覆盖为0.4.3本地未签名测试版，源14160cc6，NSIS SHA2fb705ce，安装/载荷/冻结MCP/Web/正常退出通过；正式0.4.2资产保留不变。全局Skill及独立SiteAgent仍0.4.2，未覆盖。没有合并/签名/发布。
 - **backups**：保留正式包/七资产/四固件、CI ZIP、唯一验收证据、Skill备份、缓存及旧detached树。29目录清理/135含链接组人工检查清单见v042-postrelease-handoff.md及本机v042-postrelease-handoff-20261102/START_HERE.txt。
 
 ## 下一动作
 
 1. 继续codex/v0.4.3-fixes/草稿PR69。安装版仍14160cc6，本轮Web试构建仅F盘。普通读P95/间隔<1ms、采样最大间隔<20us仍开放；合并/签名/正式发布须新授权。
-2. GPIO搜索阻塞/队列删除已修复；内置浏览器补齐PNG。原始MUX确认127点批边界，普通批间PE2/RAM中位22/21us，四组峰值在ECHO回复附近。固件会话01a1a1a2-9adc-79e2-b30e-07c07d5f90c6继续分析调度/热点布局；不停心跳、不改目标迁就采集、不自动刷固件，见v043-iab-waveforms.md。
+2. AHB控制代码布局负收益，已恢复USB7并完成A/B/A，见v043-control-ahb-ab.md。ILM因预布局空间不足未实测；后续控制解析/USB OUT/RTOS须独立测量并协调固件会话01a1a1a2-9adc-79e2-b30e-07c07d5f90c6。保留一次WATCH START 501.7369ms准入超时证据；不停心跳、不改目标迁就采集、不自动试刷其他候选。
 3. 保留正式包、唯一验收证据及含链接目录；本机新START_HERE与v042-postrelease-handoff.md记录清理清单和接手入口。历史V3掉线/冷插拔/长稳等仍按known-limits-20261030.md和最终资格报告处理。
 4. 监控上海90GiB告警/95GiB停止，套餐截止北京时间2026-11-26 00:00。未核验续费不清除停止锁、不清零账本、不申请新私钥。
 
