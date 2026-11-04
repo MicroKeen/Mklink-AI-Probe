@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-11-04T10:58:46+08:00`
+- 更新时间：`2026-11-04T11:24:57+08:00`
 - 分支：`codex/v0.4.3-fixes`
-- HEAD：`基于main 4f3be7a4；含窄批量、视窗空隙和当前MUX采样契约清理；确切提交以Git为准。`
+- HEAD：`基于main 4f3be7a4；宿主实现1bed6807，含窄批量/视窗空隙/MUX契约；确切文档提交以Git为准。`
 - 远端 HEAD：`microkeen/main已合并PR66、67、68，基线4f3be7a4；正式tag/包不变。`
 - 工作树：复用E盘主工作区，保留旧v0.4.2分支和两个detached工作树；本轮及后续修复共用codex/v0.4.3-fixes。
-- 当前任务：视窗空隙显示已验；获授权清理在线旧协议，MUX采样/有限内存/HPM回读1234项通过，配套硬件未验。固件USB6吞吐不退，间隔仍46–50us。不改目标，不构建发布。
-- 状态：`v043_mux_verified_firmware_optimization_open`
+- 当前任务：宿主1bed6807与USB7实机配套通过；1234软件项、Watch/RTT/DAP共存/48组宽度/有限导出正确。波形记录未漏边沿，但其他GPIO间隔62/65us，20us硬上限未达。不改目标，未构建发布。
+- 状态：`v043_mux_paired_verified_gap_limit_open`
 
 ## 里程碑
 
@@ -23,7 +23,7 @@
 
 ## 验证证据
 
-- **0.4.3延迟、流速、窄批量与空隙显示**：空隙显示279回归/类型/Chrome46us重放通过，单通道5万点0.551→0.862ms。MUX契约37文件1234通过，硬件未验，见v043-mux-sampling-contract.md。USB3同步40us翻转记录17467物理/读出边沿相等、10万宿主值与SWD一致，max47.874us未达20us且不外推长期；USB6吞吐不退/max46–50us，见v043-sample-gap-visibility.md。窄批量golden见v043-watch-narrow-batch.md；普通读P95连续1.309/间隔1.983ms仍开放，见v043-tail-latency.md。
+- **0.4.3延迟、流速、窄批量与空隙显示**：空隙显示279回归/类型/Chrome46us重放通过，单通道5万点0.551→0.862ms。MUX37文件1234通过；1bed+USB7配套有限导出24584B、48组宽度、DAP300+Watch+RTT通过，持续RAM26.44万/s、RTT853KiB/s全验。波形10万值与SWD一致、17311边沿全读到；该段max37.418us，其他GPIO62/65us、窄读82us，20us未达。见v043-mux-sampling-contract.md及v043-sample-gap-visibility.md；普通读P95连续1.309/间隔1.983ms仍开放见v043-tail-latency.md。
 - **0.4.2正式构建安装及公开发布**：正式源0e82ba6f，Windows/完整Skill/SiteAgent及四固件正式覆盖、签名、三渠道与故障回退验证通过；PR66/67/68已合并，正式资产不可变。安装器元数据修复cb30b703/PR63已纳入。详细计数/SHA见v042-release-handoff.md、installer-metadata-cleanup-20261027.md。后续清理29目录约6.587GiB、629保留文件哈希不变，135含链接组保留人工检查，见v042-postrelease-handoff.md。
 - **0.4.2正式候选最终资格**：90e676db与产品1ca9b8fd等价：6453Python/2skip、1182GUI、生产Web/冻结/Rust/NSIS/覆盖及真实界面交互通过。HPM时钟/镜像/RAM/XML/RTT/Watch/串口、Trace独立并行、烧录后三流恢复与原生退出通过。完整计数及限制见v042-formal-qualification.md、v042-traffic-replay.md，历史Trace溢出失败保留。
 - **HPM AI Skill能力核实**：源cafe835f：749Python/65GUI、生产Web/浏览器与完整Skill覆盖校验通过，56 MCP/126能力/协议53一致。时钟、离线门禁、探针诊断/供电/ISP/OTP入口和文档已补齐。该轮无USB操作，详见firmware-skill-fixes-20261101.md；后续正式固件范围见发布报告。
@@ -47,14 +47,14 @@
 
 ## 真机环境
 
-- **state**：H743保持40us PE2映像AXF SHA77e05091；专用固件会话独占。ec185ffc确认至少漏4脉冲/8边沿，稳定GPIO值无不符，最大读间隔81.694us。临时统计帧异常已修且失败保留，14组诊断通过；USB发送/维护抢占待优化。当前候选/占用须重核；宿主未接硬件，<20us/最终性能资格未完成。
+- **state**：普通V4已由固件会话刷USB7候选（源465a9b69，build2026-11-04T11:01:27）；H743保持40us PE2映像77e05091、TIM7/负载不变。1bed独立配套通过，最后恢复10MHz/停止自身流/断开。占用仍需重核。新源物理HPM/安装GUI未验，20us硬上限及长期无漏采未达；候选无签名/发布/合并。
 - **installer**：本机Windows与全局Skill均为正式0.4.2源0e82ba6f，NSIS SHA5ff079bb/Skill SHA14af7a5f；签名、覆盖、载荷、56MCP/126能力与正常退出通过。当前不是旧测试包。AI客户端需重启加载新Skill。
 - **backups**：原安装包/正式七资产及四固件、CI ZIP、唯一验收证据、Skill备份和缓存均保留；旧detached树不删除。清理详情见v042-postrelease-handoff.md；本机新入口为v042-postrelease-handoff-20261102/START_HERE.txt。29可再生目录已删，含链接135组保留清单供人工检查。
 
 ## 下一动作
 
 1. 继续codex/v0.4.3-fixes/草稿PR69；稳定<1ms的P95/间隔仍开放。流速条件区别/RTT808差距见v043-stream-maximum.md，失败候选见v043-tail-latency.md。保留完整门禁和Watch性能，不改目标迁就对照；暂不构建发布，合并/签名/发布须新授权。
-2. 固件会话01a1a1a2-9adc-79e2-b30e-07c07d5f90c6继续批间批内优化，USB6吞吐不退/max46–50us，USB7待测。新宿主须另组Watch/RTT/DAP与HPM回读实机资格；不改目标适应采集，错开测速负载。见当前MUX契约与空隙报告。
+2. 固件会话01a1a1a2-9adc-79e2-b30e-07c07d5f90c6已交付USB7候选/本地源465a9b69，1bed配套通过。20us硬上限仍开放，保留所有长尾/失败证据；物理HPM回读、安装GUI及长期资格待验。不改目标适应采集；详见当前MUX契约和空隙报告。
 3. 保留正式包、唯一验收证据及含链接目录；本机新START_HERE与v042-postrelease-handoff.md记录清理清单和接手入口。历史V3掉线/冷插拔/长稳等仍按known-limits-20261030.md和最终资格报告处理。
 4. 监控上海90GiB告警/95GiB停止，套餐截止北京时间2026-11-26 00:00。未核验续费不清除停止锁、不清零账本、不申请新私钥。
 
