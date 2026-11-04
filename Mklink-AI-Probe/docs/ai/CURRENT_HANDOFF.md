@@ -4,26 +4,26 @@
 
 ## 当前断点
 
-- 更新时间：`2026-11-04T11:42:32+08:00`
+- 更新时间：`2026-11-04T12:30:46+08:00`
 - 分支：`codex/v0.4.3-fixes`
-- HEAD：`基于main 4f3be7a4；宿主实现1bed6807，含窄批量/视窗空隙/MUX契约；确切文档提交以Git为准。`
+- HEAD：`基于main 4f3be7a4；采集实现1bed6807，本地0.4.3构建源14160cc6；确切证据/dist提交以Git为准。`
 - 远端 HEAD：`microkeen/main已合并PR66、67、68，基线4f3be7a4；正式tag/包不变。`
 - 工作树：复用E盘主工作区，保留旧v0.4.2分支和两个detached工作树；本轮及后续修复共用codex/v0.4.3-fixes。
-- 当前任务：用户11月4日授权版本升0.4.3、增加中英更新说明、Windows本地构建覆盖安装及真实SuperWatch展示PE2寄存器/实时RAM镜像；以USB7/1bed速度为基线，不签名发布，不改目标。版本UI19项通过；构建/安装/波形待执行。
-- 状态：`v043_local_desktop_build_in_progress`
+- 当前任务：0.4.3中英说明/Windows覆盖安装/40与100us原生波形已完成，源14160cc6。40us PE2/RAM max49/51us；100us RAM47us、PE2两轮9047/1343us。五组接收链无新增丢弃，JSONL首轮704730B丢弃保留。详见v043-desktop-waveforms.md。
+- 状态：`v043_installed_waveforms_complete_with_open_gaps`
 
 ## 里程碑
 
 - **0.4.2正式版** — `complete`。PR66源0e82ba6f，七资产签名/正式覆盖、四固件三源哈希、三渠道/双固件索引、11文件COS及故障回退、0.4.1 Skill两源升级、官网通过。NSIS SHA5ff079bb/Skill SHA14af7a5f；见v042-release-handoff.md。
-- **0.4.1正式版** — `complete`。PR61源514efb86，七资源签名、COS/Git备用、三索引、公开Skill升级及原生退出通过；egg-info遗留在切索引前修正，旧草稿撤回。NSIS SHA30333c33；详见v041-release-handoff.md。
-- **0.4.0正式版** — `complete`。PR58源0c9c2d97，七附件签名/实装/升级、21资源COS/故障备用及网站核验通过，索引最后切换。Gitee Skill可用，安装包受100MB限制走MicroKeen备用。见v040-release-handoff.md。
-- **0.3.6正式版** — `complete`。PR50/51源d000370b；Windows/Skill/SiteAgent签名、三渠道、实装升级通过，preview撤下、Dot通知、临时SSH撤销。见v036-release-handoff.md。
-- **0.3.5正式版** — `complete`。PR43合并源2f474f60372e。Windows/Skill/三平台/SiteAgent与17附件、5签名、3渠道通过；全局Skill同步、原生退出资源释放。V3.6.5/V4.6.9独立发布。详见v035-release-handoff.md和v035-probe-firmware.md。
-- **0.3.4正式版** — `complete`。不可变源a8fd3fab0403/PR40已发布；PR41正式Web/交接、三渠道验签及实装通过，后续清理完成。详细提交、资产和证据见v034-release-handoff.md及v034-workspace-cleanup.md。 更早0.3.3源11616f80/PR38及0.3.2/0.3.1见各版交接。
+- **0.4.1正式版** — `complete`。PR61源514efb86，七资源签名/实装、三索引、Skill升级及原生退出通过；正式源见v041-release-handoff.md。
+- **0.4.0正式版** — `complete`。PR58源0c9c2d97，七附件签名/实装/升级、21资源COS及故障备用通过，索引最后切换；Gitee安装包经MicroKeen备用。见v040-release-handoff.md。
+- **0.3.6正式版** — `complete`。PR50/51源d000370b；Windows/Skill/SiteAgent签名、三渠道实装通过，preview撤下、临时SSH撤销。见v036-release-handoff.md。
+- **0.3.5正式版** — `complete`。PR43源2f474f60372e；Windows/Skill/三平台/SiteAgent与17附件、签名/三渠道通过，全局Skill同步。V3.6.5/V4.6.9独立发布，见v035-release-handoff.md和v035-probe-firmware.md。
+- **0.3.4正式版** — `complete`。源a8fd3fab0403/PR40已发布；PR41正式Web/交接、三渠道验签/实装及清理完成。见v034-release-handoff.md及v034-workspace-cleanup.md；更早发布见各版交接。
 
 ## 验证证据
 
-- **0.4.3延迟、流速、窄批量与空隙显示**：空隙显示279回归/类型/Chrome46us重放通过，单通道5万点0.551→0.862ms。MUX37文件1234通过；1bed+USB7配套有限导出24584B、48组宽度、DAP300+Watch+RTT通过，持续RAM26.44万/s、RTT853KiB/s全验。波形10万值与SWD一致、17311边沿全读到；该段max37.418us，其他GPIO62/65us、窄读82us，20us未达。见v043-mux-sampling-contract.md及v043-sample-gap-visibility.md；普通读P95连续1.309/间隔1.983ms仍开放见v043-tail-latency.md。
+- **0.4.3延迟、流速、窄批量与空隙显示**：空隙显示279回归/类型/Chrome46us重放通过，单通道5万点0.551→0.862ms。MUX37文件1234通过；1bed+USB7配套有限导出24584B、48组宽度、DAP300+Watch+RTT通过，持续RAM26.44万/s、RTT853KiB/s全验。波形10万值与SWD一致、17311边沿全读到；该段max37.418us，其他GPIO62/65us、窄读82us，20us未达。见v043-mux-sampling-contract.md及v043-sample-gap-visibility.md；普通读P95连续1.309/间隔1.983ms仍开放见v043-tail-latency.md。 0.4.3源14160cc6本地NSIS覆盖/3649载荷/42Web资产/56MCP/浏览器/原生退出、版本UI19项通过；40/100us实装波形及限制见v043-desktop-waveforms.md。
 - **0.4.2正式构建安装及公开发布**：正式源0e82ba6f，Windows/完整Skill/SiteAgent及四固件正式覆盖、签名、三渠道与故障回退验证通过；PR66/67/68已合并，正式资产不可变。安装器元数据修复cb30b703/PR63已纳入。详细计数/SHA见v042-release-handoff.md、installer-metadata-cleanup-20261027.md。后续清理29目录约6.587GiB、629保留文件哈希不变，135含链接组保留人工检查，见v042-postrelease-handoff.md。
 - **0.4.2正式候选最终资格**：90e676db与产品1ca9b8fd等价：6453Python/2skip、1182GUI、生产Web/冻结/Rust/NSIS/覆盖及真实界面交互通过。HPM时钟/镜像/RAM/XML/RTT/Watch/串口、Trace独立并行、烧录后三流恢复与原生退出通过。完整计数及限制见v042-formal-qualification.md、v042-traffic-replay.md，历史Trace溢出失败保留。
 - **HPM AI Skill能力核实**：源cafe835f：749Python/65GUI、生产Web/浏览器与完整Skill覆盖校验通过，56 MCP/126能力/协议53一致。时钟、离线门禁、探针诊断/供电/ISP/OTP入口和文档已补齐。该轮无USB操作，详见firmware-skill-fixes-20261101.md；后续正式固件范围见发布报告。
@@ -47,14 +47,14 @@
 
 ## 真机环境
 
-- **state**：普通V4已由固件会话刷USB7候选（源465a9b69，build2026-11-04T11:01:27）；H743保持40us PE2映像77e05091、TIM7/负载不变。1bed独立配套通过，最后恢复10MHz/停止自身流/断开。占用仍需重核。新源物理HPM/安装GUI未验，20us硬上限及长期无漏采未达；候选无签名/发布/合并。
-- **installer**：本机Windows与全局Skill均为正式0.4.2源0e82ba6f，NSIS SHA5ff079bb/Skill SHA14af7a5f；签名、覆盖、载荷、56MCP/126能力与正常退出通过。当前不是旧测试包。AI客户端需重启加载新Skill。
-- **backups**：原安装包/正式七资产及四固件、CI ZIP、唯一验收证据、Skill备份和缓存均保留；旧detached树不删除。清理详情见v042-postrelease-handoff.md；本机新入口为v042-postrelease-handoff-20261102/START_HERE.txt。29可再生目录已删，含链接135组保留清单供人工检查。
+- **state**：普通V4 USB7候选源465a9b69与H743原映像77e05091不变。本轮实装0.4.3、30MHz、4us采样；按用户100us要求只写TIM7 ARR39→99并回读，复位恢复40us。五组结束流停止/测试SDK已detach，原生GUI仍连接展示100us PE2；重新用设备需重核占用。20us未达、PE2毫秒空隙/JSONL丢弃开放。
+- **installer**：本机Windows已覆盖为0.4.3本地未签名测试版，源14160cc6，NSIS SHA2fb705ce，安装/载荷/冻结MCP/Web/正常退出通过；正式0.4.2资产保留不变。全局Skill及独立SiteAgent仍0.4.2，未覆盖。没有合并/签名/发布。
+- **backups**：保留正式包/七资产/四固件、CI ZIP、唯一验收证据、Skill备份、缓存及旧detached树。29目录清理/135含链接组人工检查清单见v042-postrelease-handoff.md及本机v042-postrelease-handoff-20261102/START_HERE.txt。
 
 ## 下一动作
 
-1. 继续codex/v0.4.3-fixes/草稿PR69；稳定<1ms的P95/间隔仍开放。流速条件区别/RTT808差距见v043-stream-maximum.md，失败候选见v043-tail-latency.md。保留完整门禁和Watch性能，不改目标迁就对照；暂不构建发布，合并/签名/发布须新授权。
-2. 固件会话01a1a1a2-9adc-79e2-b30e-07c07d5f90c6已交付USB7候选/本地源465a9b69，1bed配套通过。20us硬上限仍开放，保留所有长尾/失败证据；物理HPM回读、安装GUI及长期资格待验。不改目标适应采集；详见当前MUX契约和空隙报告。
+1. 继续codex/v0.4.3-fixes/草稿PR69；本轮授权的0.4.3本地构建安装和40/100us展示已完成，不是正式发布。普通读P95/间隔<1ms仍开放；合并/签名/正式发布须新授权。
+2. 固件会话01a1a1a2-9adc-79e2-b30e-07c07d5f90c6只读确认100us PE2七处长间隔均对齐127样本批界且在WS帧内，优先查批间USB背压/调度；JSONL704730B丢弃、GUI Hz宿主完成量另查。详见v043-desktop-waveforms.md；20us/长期资格未达，不改目标适应采集，不自动刷固件。
 3. 保留正式包、唯一验收证据及含链接目录；本机新START_HERE与v042-postrelease-handoff.md记录清理清单和接手入口。历史V3掉线/冷插拔/长稳等仍按known-limits-20261030.md和最终资格报告处理。
 4. 监控上海90GiB告警/95GiB停止，套餐截止北京时间2026-11-26 00:00。未核验续费不清除停止锁、不清零账本、不申请新私钥。
 
@@ -72,7 +72,7 @@
 ## 延续协议
 
 - 后续多个修复共用codex/v0.4.3-fixes，先fetch核对实际状态；不直接修改main，不逐任务另建分支，不自动切回main。旧v0.4.2分支及两个detached工作树保留。0.4.2正式源0e82ba6f和全部已发布资产不可覆盖。
-- 当前最终资格见v042-formal-qualification.md，正式安装/公开渠道见v042-release-handoff.md。浏览器文件回放、原生目录、Trace六轮、GUI烧录后三流恢复通过；旧硬件/日志证据严格分源并保留失败。本轮盘点用户已重开正式上位机，硬件操作前重新核对当前占用。
+- 正式资格/渠道仍以v042-formal-qualification.md和v042-release-handoff.md为准；当前本机0.4.3本地测试安装、40/100us波形及未闭环异常见v043-desktop-waveforms.md。GUI最后保持连接，操作前重核占用。
 - V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。
 - CDC995和SDK10048根因保留待排查。恢复仅同身份CDC故障5秒内；超时不自动接回/新建AI会话，主动断开立即生效，未知写入不重放。历史实例释放记录见v035-transport-recovery.md；当前硬件占用以本交接真机状态及指定固件会话为准。
 - 客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。
