@@ -17,7 +17,9 @@ def peer():
         _, _, op, size, epoch, req = struct.unpack_from('<4sBBHII', wire)
         payload = wire[16:16+size]
         calls.append((op, payload))
-        answer = {1: struct.pack('<IHH', 15, 256, 1), 4: payload, 0x20: b'\x08\x08'}.get(op, b'')
+        answer = {1: struct.pack('<IHH', 0x61f, 256, 1), 4: payload, 0x20: b'\x08\x08'}.get(op, b'')
+        if op in (0x32, 0x33):
+            answer = struct.pack('<II', struct.unpack_from('<I', payload, 8)[0], 360_000_000)
         raw = packet(op | 0x80, 17, req, b'\0'+answer)
         transport.feed(raw[:9])
         transport.feed(raw[9:])
@@ -88,7 +90,7 @@ def test_target_busy_or_error_does_not_poison_claimed_bridge(monkeypatch, tmp_pa
         calls.append(op)
         payload = wire[16:16+size]
         status = attach_status if op == 0x13 else 6 if op == 0x12 else 0
-        answer = {1: struct.pack('<IHH', 15, 256, 1), 4: payload,
+        answer = {1: struct.pack('<IHH', 0x61f, 256, 1), 4: payload,
                   0x10: bytes(15)+b'\x01', 0x11: b'test'}.get(op, b'')
         bridge._mux.feed(packet(op | 0x80, 17, req, bytes([status])+answer))
         return len(wire)
@@ -329,31 +331,6 @@ def test_mux_watch_complete_frames_reuse_dump_coverage_validation(ordered):
         else:assert assembler.feed(invalid) is None
     watch.stop()
 
-@pytest.mark.parametrize('size,bulk',[(1920,False),(1921,False),(1921,True),(4096,True)])
-def test_finite_bulk_selects_protocol_before_hardware(size,bulk):
-    from unittest.mock import Mock
-    from mklink.dump_memory import DumpMemoryStreamSession
-    from test_dump_memory_session import FakeBridge
-    transport,_=peer();transport.handshake()
-    bridge=FakeBridge([])
-    bridge.supports_multiplex=lambda:True
-    bridge.enable_multiplex=Mock(return_value=transport)
-    bridge._leave_multiplex=Mock()
-    session=DumpMemoryStreamSession(bridge,[(0x08005000,size)],.01,allow_legacy_bulk=bulk)
-    if size>1920 and not bulk:
-        with pytest.raises(ValueError,match='15 regions'):session.start()
-        bridge.enable_multiplex.assert_not_called();bridge._leave_multiplex.assert_not_called()
-        assert not bridge.calls
-        return
-    session.start()
-    if size<=1920:
-        bridge.enable_multiplex.assert_called_once();bridge._leave_multiplex.assert_not_called()
-        assert session._mux_watch is not None
-    else:
-        bridge.enable_multiplex.assert_not_called();bridge._leave_multiplex.assert_called_once()
-        assert session._mux_watch is None and session.started
-        assert any(call[0]=='write' and b'cmd.dump_memory' in call[1] for call in bridge.calls)
-    session.stop()
 
 
 def test_finite_bulk_never_falls_back_after_mux_start_failure():
@@ -364,13 +341,13 @@ def test_finite_bulk_never_falls_back_after_mux_start_failure():
     transport.request=Mock(side_effect=RuntimeError('response lost'))
     bridge=FakeBridge([]);bridge.supports_multiplex=lambda:True
     bridge.enable_multiplex=Mock(return_value=transport);bridge._leave_multiplex=Mock()
-    session=DumpMemoryStreamSession(bridge,[(0x08005000,4)],.01,allow_legacy_bulk=True)
+    session=DumpMemoryStreamSession(bridge,[(0x08005000,4)],.01)
     with pytest.raises(RuntimeError,match='response lost'):session.start()
     bridge._leave_multiplex.assert_not_called()
     assert not bridge.calls
 
 
-@pytest.mark.parametrize('capabilities,op,unit', [(15, 0x32, 1)])
+@pytest.mark.parametrize('capabilities,op,unit', [(0x61f, 0x32, 1)])
 def test_watch_negotiates_precision_and_clock_wrap(capabilities, op, unit):
     transport, calls = peer()
     transport.handshake()
@@ -389,7 +366,7 @@ def test_watch_negotiates_precision_and_clock_wrap(capabilities, op, unit):
 @pytest.mark.parametrize('period', [-.1, -1, float('nan'), float('inf'), 60.1])
 def test_watch_rejects_invalid_period_before_target_command(period):
     transport, calls = peer()
-    transport.capabilities = 15
+    transport.capabilities = 0x61f
     with pytest.raises(ValueError):
         MuxWatchSession(transport, [(0x20000000, 4)], period)
     assert not calls
@@ -398,7 +375,7 @@ def test_watch_rejects_invalid_period_before_target_command(period):
 def test_watch_compact_batch_preserves_values_and_microsecond_wrap():
     transport, _ = peer()
     transport.handshake()
-    transport.capabilities = 15
+    transport.capabilities = 0x61f
     watch = MuxWatchSession(transport, [(0x20000000, 4)], .000019)
     watch.start()
     payload = bytes([0, 9, 2, 4])+struct.pack('<IIII', 0xfffffffe, 123, 3, 456)
@@ -413,7 +390,7 @@ def test_watch_compact_batch_preserves_values_and_microsecond_wrap():
 def test_watch_target_error_stops_instead_of_silently_discarding_forever(status):
     transport, calls = peer()
     transport.handshake()
-    transport.capabilities = 15
+    transport.capabilities = 0x61f
     watch = MuxWatchSession(transport, [(0x20000000, 4)], .000001)
     watch.start()
     previous_commands = len(calls)
@@ -536,7 +513,7 @@ def test_watch_transient_recovery_never_masks_invalidation_or_transport_failure(
 def test_watch_rejects_malformed_compact_batch(payload):
     transport, _ = peer()
     transport.handshake()
-    transport.capabilities = 15
+    transport.capabilities = 0x61f
     watch = MuxWatchSession(transport, [(0x20000000, 4)], .000001)
     transport.feed(packet(0x41, 17, 1, payload))
     with pytest.raises(RuntimeError, match='Invalid multiplex watch batch'):
@@ -547,7 +524,7 @@ def test_watch_negotiates_after_deferred_transport_assignment():
     watch = MuxWatchSession(None, [(0x20000000, 4)], .000020)
     transport, calls = peer()
     transport.handshake()
-    transport.capabilities = 15
+    transport.capabilities = 0x61f
     watch.transport = transport
     watch.start()
     assert calls[-1][0] == 0x32
@@ -556,7 +533,7 @@ def test_watch_negotiates_after_deferred_transport_assignment():
 
 def test_watch_accepts_bounded_large_event_only_after_capability_negotiation():
     payload = bytes([0,9,127,4])+b''.join(struct.pack('<II', i*4,i) for i in range(127))
-    for capabilities in (3,15):
+    for capabilities in (3,0x61f):
         transport, _ = peer()
         transport.handshake()
         transport.capabilities = capabilities

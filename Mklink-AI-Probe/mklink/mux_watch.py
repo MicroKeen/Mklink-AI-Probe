@@ -16,11 +16,14 @@ class MuxWatchCapacityError(ValueError):
 
 
 class MuxWatchSession:
+    REQUIRED_CAPABILITIES = (1 << 3) | (1 << 4) | (1 << 9) | (1 << 10)
     TIMING_V2_CAPABILITY = 1 << 9
     NARROW_BATCH_CAPABILITY = 1 << 10
     NARROW_BATCH_START = 0x33
 
     def __init__(self, transport, regions, period, *, fastest=False):
+        from mklink.dump_memory import validate_dump_regions
+        validate_dump_regions(regions)
         self.transport = transport
         self.regions = regions
         self.parts = [(index, address+offset, min(128, size-offset))
@@ -59,13 +62,11 @@ class MuxWatchSession:
     def start(self):
         # DumpMemoryStreamSession validates capacity before opening transport.
         # Negotiate units only after the real firmware capabilities are known.
-        if not getattr(self.transport, 'capabilities', 0) & 8:
-            raise RuntimeError('SuperWatch requires the matching grouped-sampling firmware; update the probe firmware and host together')
-        timing_v2 = bool(self.transport.capabilities & self.TIMING_V2_CAPABILITY)
+        capabilities = getattr(self.transport, 'capabilities', 0)
+        if capabilities & self.REQUIRED_CAPABILITIES != self.REQUIRED_CAPABILITIES:
+            raise RuntimeError('SuperWatch requires MUX sampling capabilities 0x618; update the probe firmware and host together')
         self.timing = None
         self._narrow_batch = False
-        if self.fastest and not timing_v2:
-            raise RuntimeError('Fastest sampling requires WATCH_TIMING=2 firmware with MUX capability bit 9')
         # Select before any target command. HELLO support alone must never
         # enable new event widths for an old/ordinary START subscription.
         narrow = bool(self.transport.capabilities & self.NARROW_BATCH_CAPABILITY
@@ -78,29 +79,28 @@ class MuxWatchSession:
         with self.transport._commands:
             answer = self.transport.request(command, body)
             self.transport.watch_running = True
-            if timing_v2 or narrow:
-                contract = 'WATCH_NARROW_BATCH' if narrow else 'WATCH_TIMING=2'
+            contract = 'WATCH_NARROW_BATCH' if narrow else 'WATCH_TIMING=2'
+            try:
+                if not isinstance(answer, (bytes, bytearray)) or len(answer) != 8:
+                    raise RuntimeError(f'Invalid {contract} START acknowledgement length')
+                accepted, timebase_hz = struct.unpack('<II', answer)
+                if accepted != self.period or timebase_hz == 0:
+                    raise RuntimeError(f'{contract} START acknowledgement does not match requested period/timebase')
+            except RuntimeError as error:
+                # The command succeeded but its timing contract is invalid.
+                # Stop this subscription once; never replay START or use REPL.
                 try:
-                    if not isinstance(answer, (bytes, bytearray)) or len(answer) != 8:
-                        raise RuntimeError(f'Invalid {contract} START acknowledgement length')
-                    accepted, timebase_hz = struct.unpack('<II', answer)
-                    if accepted != self.period or timebase_hz == 0:
-                        raise RuntimeError(f'{contract} START acknowledgement does not match requested period/timebase')
-                except RuntimeError as error:
-                    # The command succeeded but its timing contract is invalid.
-                    # Stop this subscription once; never replay START or use REPL.
-                    try:
-                        self.stop()
-                    except Exception as stop_error:
-                        self.transport.fail(stop_error)
-                        raise RuntimeError(f'{error}; stopping the unconfirmed capture failed: {stop_error}') from error
-                    raise
-                self.timing = {
-                    'mode': 'fastest' if self.fastest else 'periodic',
-                    'requested_period_us': self.period,
-                    'accepted_period_us': accepted,
-                    'timebase_hz': timebase_hz,
-                }
+                    self.stop()
+                except Exception as stop_error:
+                    self.transport.fail(stop_error)
+                    raise RuntimeError(f'{error}; stopping the unconfirmed capture failed: {stop_error}') from error
+                raise
+            self.timing = {
+                'mode': 'fastest' if self.fastest else 'periodic',
+                'requested_period_us': self.period,
+                'accepted_period_us': accepted,
+                'timebase_hz': timebase_hz,
+            }
             self._narrow_batch = narrow
 
     def read_frames(self, *, packed=False):

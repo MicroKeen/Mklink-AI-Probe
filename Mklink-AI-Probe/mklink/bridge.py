@@ -43,7 +43,6 @@ _SYSTEMVIEW_STOP_COMMANDS = [
 # 其他流模式的文本兜底命令，仅在 SystemView 专用恢复没有得到提示符时发送。
 _STREAM_FALLBACK_STOP_COMMANDS = [
     b"RTTView.stop()\n",
-    b"cmd.dump_memory(0x20000054, 4, -1.0)\n",
 ]
 _STREAM_READ_POLL_INTERVAL = 0.01
 _SYNC_TIMEOUTS = (0.3, 0.7)
@@ -124,16 +123,10 @@ class MKLinkSerialBridge:
     # 连接管理
     # ------------------------------------------------------------------
     def supports_dump_write(self) -> bool:
-        if self._mux_supported is True:
-            return True
-        return "DUMP_WRITE=1" in self._get_firmware_capabilities()
+        return self.supports_multiplex()
 
     def supports_hpm_dump_write(self) -> bool:
-        return "DUMP_WRITE_HPM=1" in self._get_firmware_capabilities()
-
-    def prepare_dump_stop(self) -> None:
-        """Cache the stop-ACK contract before entering the binary stream."""
-        self._get_firmware_capabilities()
+        return self.supports_multiplex()
 
     def _get_firmware_capabilities(self) -> frozenset[str]:
         # Capture all advertised features before entering MUX. Later dashboard
@@ -823,7 +816,7 @@ class MKLinkSerialBridge:
     def _recover_failed_stream_start(self, stop_command: bytes) -> bool:
         return self._stop_stream_and_sync(stop_command)
 
-    def _stop_stream_and_sync(self, stop_command: bytes, *, dump_prefix: bytes = b'') -> bool:
+    def _stop_stream_and_sync(self, stop_command: bytes) -> bool:
         """Stop a stream and verify command mode within a bounded timeout.
 
         A raw stop may return its ``>>>`` well after the write.  Returning as
@@ -836,8 +829,7 @@ class MKLinkSerialBridge:
         """
         with self._cmd_lock:
             if stop_command.startswith(b'cmd.dump_memory('):
-                from .dump_control import stop_dump_and_sync
-                return stop_dump_and_sync(self, stop_command, dump_prefix)
+                raise RuntimeError('Legacy dump control was removed; update the probe firmware and host together')
             self._cancel_stream_arm()
             if self._transport_error is not None:
                 self._ctx.state = DeviceState.ERROR

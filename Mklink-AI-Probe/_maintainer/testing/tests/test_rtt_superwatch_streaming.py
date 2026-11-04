@@ -1463,55 +1463,44 @@ def test_superwatch_uses_dump_stream_and_reports_protocol_integrity():
     block = SimpleNamespace(address=0x20000000, size=4, items=[item])
     runtime = SimpleNamespace(items=[item], blocks=[block])
 
-    class Bridge:
-        def __init__(self):
-            self.chunks = [b"text" + _dump_frame(10, struct.pack("<f", 4.5))]
-            self.writes = []
-
-        def _enter_stream(self, state):
-            self.state = state
-
-        def _write_raw(self, data):
-            self.writes.append(data)
-
-        def _stop_stream_and_sync(self, command):
-            self._write_raw(command)
-            from mklink._types import DeviceState
-            self.state = DeviceState.READY
-            return True
-
-        def drain_stream_bytes(self, max_bytes=None):
-            return self.chunks.pop(0) if self.chunks else b""
-
-        def _exit_stream(self):
-            return ""
+    from test_watch_timing_v2 import peer, bridge_for
+    transport, calls = peer()
+    request = transport.request
+    emitted = False
+    def start(op, *args, **kwargs):
+        nonlocal emitted
+        answer = request(op, *args, **kwargs)
+        if op == 0x32 and not emitted:
+            from mklink.mux import packet
+            transport.feed(packet(0x41, 17, 1, struct.pack('<BBIf',0,0,10,4.5)))
+            emitted = True
+        return answer
+    transport.request = start
 
     hub = StreamHub(max_batches_per_client=4)
     manager = SuperWatchStreamManager(stream_hub=hub, batch_samples=1)
     assert manager.get_status()["interval"] == 0.001
     manager._runtime = runtime
-    bridge = Bridge()
+    bridge = bridge_for(transport)
     manager.start(SimpleNamespace(_bridge=bridge))
     deadline = time.perf_counter() + 1.0
     while manager.get_status()["read_cycles"] < 1 and time.perf_counter() < deadline:
         time.sleep(0.001)
     manager.set_interval(0.002)
     restart_deadline = time.perf_counter() + 1.0
-    expected_restart = b"cmd.dump_memory(0x20000000, 4, 0.002)\n"
-    while expected_restart not in bridge.writes and time.perf_counter() < restart_deadline:
+    expected_restart = (0x32, struct.pack("<IBIB", 2000, 1, 0x20000000, 4))
+    while expected_restart not in calls and time.perf_counter() < restart_deadline:
         time.sleep(0.001)
     manager.stop()
 
     status = manager.get_status()
-    assert status["acquisition_mode"] == "dump-memory"
+    assert status["acquisition_mode"] == "cdc-mux"
     assert status["read_cycles"] == 1
-    assert status["stream_integrity"]["parser_dropped_bytes"] == 4
+    assert status["stream_integrity"]["parser_dropped_bytes"] == 0
     assert status["stream_integrity"]["parser_crc_errors"] == 0
     assert hub.stats().produced_items == 1
-    assert bridge.writes[0] == b"cmd.dump_memory(0x20000000, 4, 0.001)\n"
-    assert expected_restart in bridge.writes
-    assert bridge.writes[-1] == b"cmd.dump_memory(0x20000000, 4, -1.0)\n"
-    assert b"cmd.dump_memory(0x20000000, 4, 0)\n" not in bridge.writes
+    assert [op for op,_ in calls] == [1,4,0x32,0x31,0x32,0x31]
+    assert expected_restart in calls
 
 
 def test_superwatch_mux_transient_read_failure_keeps_capture_and_connection():
@@ -1574,12 +1563,12 @@ def test_superwatch_rejects_bridge_without_dump_stream_instead_of_read_ram_fallb
     assert not manager.running
     assert any(
         call.args[0].get("event") == "error"
-        and "read_ram fallback is disabled" in call.args[0].get("message", "")
+        and "update the probe firmware" in call.args[0].get("message", "")
         for call in events.put.call_args_list
     )
     assert manager.get_status()["acquisition_mode"] != "read-memory"
     assert manager.get_status()["state"] == "stopped"
-    assert "read_ram fallback is disabled" in manager.get_status()["error"]
+    assert "update the probe firmware" in manager.get_status()["error"]
     assert not manager._collecting.is_set()
 
 

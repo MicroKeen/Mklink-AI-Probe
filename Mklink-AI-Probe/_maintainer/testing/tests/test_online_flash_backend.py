@@ -108,7 +108,7 @@ def assert_error(code: FlashErrorCode, call) -> FlashError:
     return raised.value
 
 
-def test_hpm_rom_backend_reads_via_dump_memory(monkeypatch) -> None:
+def test_hpm_rom_backend_preserves_bounded_readback_calls(monkeypatch) -> None:
     class Device:
         _bridge = object()
 
@@ -142,6 +142,39 @@ def test_hpm_rom_backend_reads_via_dump_memory(monkeypatch) -> None:
     ]
     assert backend.memory_regions()[0].start == 0x80000000
     backend.disconnect()
+
+
+@pytest.mark.parametrize('failure', [None, 'crc', 'unsupported'])
+def test_hpm_readback_uses_mux_with_no_text_fallback(failure):
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+    from test_mux_block_read import peer, reply
+    from test_sampling_contract import memory_bridge
+    from mklink.mux import MuxError
+    from mklink.dump_memory import DumpMemoryUnsupported
+
+    def damaged(op, seq, data):
+        wire = reply(op | 0x80, 17, seq, b'\0'+data)
+        return wire[:-1] + bytes([wire[-1]^1])
+    transport, calls = peer(failure=damaged if failure == 'crc' else None)
+    bridge = memory_bridge(transport)
+    bridge.send_command = Mock(side_effect=AssertionError('must not retry through text'))
+    if failure == 'unsupported':
+        bridge.supports_multiplex.return_value = False
+    device = SimpleNamespace(_bridge=bridge, close=lambda:None)
+    backend = HpmRomBackend(device_factory=lambda **_:device, port_resolver=lambda _: 'probe-port')
+    backend.connect(probe='probe', target='HPM5300', frequency=10_000_000, board='hpm5300evk')
+    try:
+        if failure:
+            with pytest.raises(DumpMemoryUnsupported if failure == 'unsupported' else MuxError):
+                backend.read_memory(0x80000000, 32769)
+            assert len([op for op,_ in calls if op == 0x16]) == (0 if failure == 'unsupported' else 1)
+        else:
+            assert backend.read_memory(0x80000000, 32769) == bytes(range(256))*128 + b'\0'
+            assert len([op for op,_ in calls if op == 0x16]) == 9
+        bridge.send_command.assert_not_called()
+    finally:
+        backend.disconnect()
 
 
 def test_pyocd_backend_reads_exact_bytes_from_target() -> None:

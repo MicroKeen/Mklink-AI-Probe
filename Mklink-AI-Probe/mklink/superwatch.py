@@ -1,6 +1,6 @@
 """SuperWatch binary-stream visualizer support.
 
-Continuous waveform acquisition uses the device ``cmd.dump_memory`` stream.
+Continuous waveform acquisition uses the negotiated MUX sampling stream.
 The ``read_ram`` helpers in this module are retained for one-shot inspection
 and compatibility APIs; they are never a SuperWatch sampling fallback.
 """
@@ -948,10 +948,12 @@ class SuperWatchRuntime:
 
 def _run_visualizer_stream(bridge, server, runtime, stop_event, reconfigure,
                            *, clock=time.monotonic, stall_timeout=5.0, max_recoveries=3):
-    """Keep the standalone stream observable and recover bounded session faults."""
+    """Keep faults observable; restart only for an explicit configuration change.
+
+    max_recoveries remains accepted for callers, but faults never replay START.
+    """
     from mklink.dump_memory import DumpMemoryStreamSession
 
-    failures = 0
     origin_us = None
     while not stop_event.is_set():
         blocks = runtime.blocks
@@ -963,7 +965,7 @@ def _run_visualizer_stream(bridge, server, runtime, stop_event, reconfigure,
         period = server._interval
         decoder = compile_frame_decoder([item for block in blocks for item in block.items], blocks)
         session = DumpMemoryStreamSession(bridge, [(b.address, b.size) for b in blocks], period)
-        started = last_valid = clock()
+        last_valid = clock()
         fault = None
         stop_failed = False
         try:
@@ -988,8 +990,6 @@ def _run_visualizer_stream(bridge, server, runtime, stop_event, reconfigure,
                     points = [{"_t": (timestamp - origin_us) / 1_000_000,
                                "timestamp_us": timestamp, **dict(zip(decoder.channel_names, values))}]
                     last_valid = clock()
-                    if last_valid - started >= 30:
-                        failures = 0
                     if server.collecting.is_set():
                         for point in points:
                             server.push_data_point(point)
@@ -1012,15 +1012,10 @@ def _run_visualizer_stream(bridge, server, runtime, stop_event, reconfigure,
         if stop_event.is_set():
             return
         if fault:
-            failures += 1
-            server.push_event("error", {"message": fault, "recovery_attempt": failures})
-            if failures > max_recoveries:
-                server.set_stream_health("error", fault + "; recovery limit reached")
-                return
-            server.set_stream_health("recovering", fault)
-            if stop_event.wait(min(failures * 0.25, 1.0)):
-                return
-        # A recovered or reconfigured session gets a fresh timeline.
+            server.push_event("error", {"message": fault})
+            server.set_stream_health("error", fault + "; restart capture explicitly")
+            return
+        # An explicitly reconfigured session gets a fresh timeline.
         origin_us = None
         server.push_event("stream_reset", {})
 

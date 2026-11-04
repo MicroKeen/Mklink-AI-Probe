@@ -9,21 +9,12 @@ from fastmcp import Client
 from mklink import dump_memory, runtime_mcp
 from mklink.runtime import RuntimeClient, RuntimeErrorResponse
 from test_runtime_memory import batch
-from test_dump_memory_session import FakeBridge, _b1_frame, _old_regions_frame
-
-
-def test_shared_route_assembles_real_b1_blocks_and_confirms_stop(batch):
-    client,state,device,_,_=batch
-    payload=bytes(range(256))*16
-    bridge=FakeBridge([_b1_frame(1,payload[:2048],block_index=0,block_count=2,total_size=4096),
-                       _b1_frame(2,payload[2048:],block_index=1,block_count=2,total_size=4096)])
-    device._bridge=bridge
-    response=client.post('/api/device/dump-memory',json={'regions':[{'address':0x08000000,'size':4096}]})
-    assert response.status_code==200,response.text
-    assert bytes.fromhex(response.json()['samples'][0]['regions'][0]['data_hex'])==payload
-    writes=[c[1] for c in bridge.calls if c[0]=='write']
-    assert writes==[b'cmd.dump_memory(0x08000000, 4096, 0)\n',b'cmd.dump_memory(0x08000000, 1, -1.0)\n']
-    assert not state['resource_manager'].get_status()
+from types import SimpleNamespace
+import struct
+from test_sampling_contract import memory_bridge
+from test_mux_block_read import peer as memory_peer, reply
+from test_watch_timing_v2 import peer as watch_peer, bridge_for
+from mklink.mux import packet
 
 
 @pytest.mark.parametrize('overrides',[{'regions':[]},{'regions':[{'address':True,'size':4}]},
@@ -41,19 +32,6 @@ def test_dump_validates_entire_request_before_clock_or_capture(batch,monkeypatch
     response=client.post('/api/device/dump-memory',json={'regions':[{'address':0,'size':4}],'speed_profile':'low',**overrides})
     assert response.status_code==422,response.text
     read.assert_not_called();device.set_debug_speed.assert_not_called()
-
-
-@pytest.mark.parametrize('failure',['crc','stop'])
-def test_bad_crc_or_unconfirmed_stop_is_failure_without_sample_replay(batch,failure):
-    client,state,device,_,_=batch
-    frame=_old_regions_frame(1,[(0,b'abcd')])
-    if failure=='crc': frame=frame[:-1]+bytes([frame[-1]^255])
-    bridge=FakeBridge([frame]);device._bridge=bridge
-    if failure=='stop': bridge._stop_stream_and_sync=Mock(return_value=False)
-    response=client.post('/api/device/dump-memory',json={'regions':[{'address':0,'size':4}],'sample_count':2})
-    assert response.status_code==500,response.text
-    assert sum(c==('write',b'cmd.dump_memory(0x00000000, 4, 0)\n') for c in bridge.calls)==1
-    assert not state['resource_manager'].get_status()
 
 
 def test_shared_dump_does_not_preempt_gui_or_change_clock(batch,monkeypatch):
@@ -136,46 +114,6 @@ def test_periodic_capture_invalid_arguments_never_start_or_change_clock(batch,op
     device._bridge._enter_stream.assert_not_called()
 
 
-def test_periodic_capture_assembles_each_sample_and_ignores_extra_queued_samples(batch):
-    client,_,device,_,_=batch
-    raw=b''.join(_b1_frame(t,value*2048,block_index=i,block_count=2,total_size=4096)
-                 for t,value,i in ((1,b'A',0),(2,b'A',1),(3,b'B',0),(4,b'B',1),(5,b'C',0),(6,b'C',1)))
-    device._bridge=FakeBridge([raw])
-    response=client.post('/api/device/dump-memory/capture',json={'regions':[{'address':0,'size':4096}], 'period':.001,'frames':2})
-    assert response.status_code==200,response.text
-    result=response.json()
-    assert result['sample_count']==2 and result['total_bytes']==8192 and result['stopped_by']=='frames'
-    assert [sample['timestamp_us'] for sample in result['samples']]==[1,3]
-    assert [bytes.fromhex(s['regions'][0]['data_hex']) for s in result['samples']]==[b'A'*4096,b'B'*4096]
-    assert device._bridge.calls[-1]==('exit',)
-
-
-@pytest.mark.parametrize('case',['missing_first','duplicate_first','crc','limit','stop'])
-def test_periodic_capture_never_succeeds_with_incomplete_or_unconfirmed_data(batch,monkeypatch,case):
-    client,state,device,_,_=batch
-    first=_b1_frame(1,b'A'*2048,block_index=0,block_count=2,total_size=4096)
-    last=_b1_frame(2,b'A'*2048,block_index=1,block_count=2,total_size=4096)
-    raw=last if case=='missing_first' else first+first+last if case=='duplicate_first' else first+last
-    if case=='crc':raw=raw[:-1]+bytes([raw[-1]^255])
-    device._bridge=FakeBridge([raw])
-    if case=='limit':monkeypatch.setattr(dump_memory,'MAX_DUMP_RESULT_JSON_BYTES',20)
-    if case=='stop':device._bridge._stop_stream_and_sync=Mock(return_value=False)
-    response=client.post('/api/device/dump-memory/capture',json={'regions':[{'address':0,'size':4096}],'period':.001,'frames':1})
-    assert response.status_code== (422 if case=='limit' else 500),response.text
-    assert not state['resource_manager'].get_status()
-    assert sum(c==('write',b'cmd.dump_memory(0x00000000, 4096, 0.001)\n') for c in device._bridge.calls)==1
-
-
-def test_periodic_capture_duration_reports_only_complete_samples_and_partial_tail(monkeypatch):
-    from types import SimpleNamespace
-    good=_b1_frame(1,b'A'*2048,block_index=0,block_count=2,total_size=4096)+_b1_frame(2,b'A'*2048,block_index=1,block_count=2,total_size=4096)
-    tail=_b1_frame(3,b'B'*2048,block_index=0,block_count=2,total_size=4096)
-    ticks=iter([0,0,.1,1])
-    monkeypatch.setattr(dump_memory.time,'monotonic',lambda:next(ticks))
-    result=dump_memory.capture_dump_stream(SimpleNamespace(_bridge=FakeBridge([good+tail])),[{'address':0,'size':4096}],period=.01,frames=0,duration=.25)
-    assert result['sample_count']==1 and result['incomplete_tail'] and result['stopped_by']=='duration'
-
-
 @pytest.mark.parametrize('byte_limit_delta', [0, -1])
 def test_packed_capture_keeps_payloads_timestamps_and_exact_json_limit(monkeypatch, byte_limit_delta):
     import json
@@ -185,7 +123,6 @@ def test_packed_capture_keeps_payloads_timestamps_and_exact_json_limit(monkeypat
         {'address': '0x20000000', 'size': 4, 'data_hex': '0001feff'},
         {'address': '0x20000010', 'size': 4, 'data_hex': '10203040'}]}]
     session = Mock()
-    session.parser.crc_errors = 0
     session.stats = {'parser_dropped_bytes': 0}
     session.read_frames.return_value = [PackedWatchSample(2**32 + 12,
         bytes.fromhex('aabb0001feff10203040'), 2)]
@@ -210,7 +147,6 @@ def test_periodic_capture_rejects_queue_loss_after_confirmed_stop(monkeypatch):
     from types import SimpleNamespace
     from mklink.mux_watch import PackedWatchSample
     session = Mock()
-    session.parser.crc_errors = 0
     session.stats = {'parser_dropped_bytes': 1024}
     session.read_frames.return_value = [PackedWatchSample(1, b'abcd', 0)]
     monkeypatch.setattr(dump_memory, 'DumpMemoryStreamSession', lambda *a, **k: session)
@@ -218,25 +154,6 @@ def test_periodic_capture_rejects_queue_loss_after_confirmed_stop(monkeypatch):
         dump_memory.capture_dump_stream(SimpleNamespace(_bridge=None),
             [{'address': 0x20000000, 'size': 4}], period=.000001, frames=1)
     session.stop.assert_called_once()
-
-
-@pytest.mark.parametrize('before_start', [False, True])
-def test_capture_session_cancel_stops_without_returning_partial_result(before_start):
-    from types import SimpleNamespace
-    bridge = FakeBridge([_b1_frame(1,b'A'*2048,block_index=0,block_count=2,total_size=4096)])
-    checks = 0
-    def cancelled():
-        nonlocal checks
-        checks += 1
-        return before_start or checks >= 4
-    with pytest.raises(InterruptedError, match='owning session ended'):
-        dump_memory.capture_dump_stream(SimpleNamespace(_bridge=bridge), [{'address':0,'size':4096}],
-                                        period=.01, frames=0, duration=8, cancelled=cancelled)
-    if before_start:
-        assert not bridge.calls
-    else:
-        assert bridge.calls[-1] == ('exit',)
-        assert bridge.calls.count(('write', b'cmd.dump_memory(0x00000000, 4096, 0.01)\n')) == 1
 
 
 def test_capture_owner_lease_check_ignores_other_clients():
@@ -258,17 +175,6 @@ def test_capture_owner_lease_check_ignores_other_clients():
     finally:
         active_operation.reset(token)
     assert not operation_session_ended()
-
-
-def test_cancel_does_not_hide_failed_stop_confirmation():
-    from types import SimpleNamespace
-    bridge = FakeBridge([])
-    bridge._stop_stream_and_sync = Mock(return_value=False)
-    checks = iter([False, True])
-    with pytest.raises(TimeoutError, match='stop'):
-        dump_memory.capture_dump_stream(SimpleNamespace(_bridge=bridge), [{'address':0,'size':4096}],
-                                        period=.01, frames=0, duration=8, cancelled=lambda: next(checks))
-    bridge._stop_stream_and_sync.assert_called_once()
 
 
 @pytest.mark.parametrize('path,implementation', [
@@ -314,15 +220,6 @@ def test_disconnected_capture_holds_admission_until_worker_cleanup(batch, monkey
     assert not state['resource_manager'].get_status()
 
 
-def test_periodic_capture_startup_does_not_consume_collection_window(monkeypatch):
-    from types import SimpleNamespace
-    ticks=iter([0,.5,.5,.6,.9])
-    monkeypatch.setattr(dump_memory.time,'monotonic',lambda:next(ticks))
-    bridge=FakeBridge([_old_regions_frame(1,[(0,b'AAAA')]),_old_regions_frame(2,[(0,b'BBBB')])])
-    result=dump_memory.capture_dump_stream(SimpleNamespace(_bridge=bridge),[{'address':0,'size':4}],period=.01,frames=0,duration=.25)
-    assert result['sample_count']==2 and result['stopped_by']=='duration'
-
-
 def test_periodic_capture_busy_rejects_without_stopping_gui(batch):
     client,_,device,_,managers=batch
     managers['rtt'].running=True
@@ -339,64 +236,113 @@ def test_periodic_transport_budget_covers_count_only_request(monkeypatch):
     client.call('capture_dump',{'regions':[{'address':0,'size':4}],'period':.001,'frames':10,'duration':0})
     assert call.call_args.kwargs['timeout']==320
 
-@pytest.mark.parametrize('failure', [None, 'active sampling', 'exit response lost'])
-def test_legacy_snapshot_leaves_mux_before_claiming_or_writing(failure):
-    bridge=FakeBridge([_old_regions_frame(1,[(0,b'abcd')])])
-    events=[]
-    original_enter=bridge._enter_stream
-    original_write=bridge._write_raw
-    def leave():
-        events.append('leave_mux')
-        if failure:raise RuntimeError(failure)
-    bridge._leave_multiplex=leave
-    def enter(state):
-        events.append('claim_legacy')
-        original_enter(state)
-    def write(data):
-        events.append('write')
-        original_write(data)
-    bridge._enter_stream=enter
-    bridge._write_raw=write
-    if failure:
-        with pytest.raises(RuntimeError,match=failure):
-            dump_memory.read_dump_memory_regions_once(bridge,[(0,4)])
-        assert events==['leave_mux']
-    else:
-        assert dump_memory.read_dump_memory_regions_once(bridge,[(0,4)])==(b'abcd',)
-        assert events[:3]==['leave_mux','claim_legacy','write']
+
+def test_shared_route_reads_full_mux_blocks_and_releases_lease(batch):
+    client, state, device, _, _ = batch
+    transport, calls = memory_peer()
+    device._bridge = memory_bridge(transport)
+    response = client.post('/api/device/dump-memory', json={'regions':[{'address':0x80000000,'size':32769}]})
+    assert response.status_code == 200, response.text
+    assert bytes.fromhex(response.json()['samples'][0]['regions'][0]['data_hex']) == bytes(range(256))*128 + b'\0'
+    assert len([op for op, _ in calls if op == 0x16]) == 9
+    assert not state['resource_manager'].get_status()
+
+
+@pytest.mark.parametrize('failure', ['crc', 'short', 'epoch'])
+def test_bad_memory_response_never_retries_or_publishes(batch, failure):
+    client, state, device, _, _ = batch
+    def corrupt(op, seq, data):
+        wire = reply(op | 0x80, 18 if failure == 'epoch' else 17, seq,
+                     b'\0' + (data[:-1] if failure == 'short' else data))
+        return wire[:-1] + bytes([wire[-1] ^ 255]) if failure == 'crc' else wire
+    transport, calls = memory_peer(failure=corrupt)
+    device._bridge = memory_bridge(transport)
+    response = client.post('/api/device/dump-memory', json={'regions':[{'address':0,'size':8192}], 'sample_count':2})
+    assert response.status_code == 500, response.text
+    assert [op for op, _ in calls] == [1, 4, 0x16]
+    assert 'samples' not in response.json() and not state['resource_manager'].get_status()
+
+
+def sample_peer(*, payloads=(), stop_status=0):
+    transport, calls = watch_peer(stop_status=stop_status)
+    original = transport.request
+    def request(op, *a, **kw):
+        result = original(op, *a, **kw)
+        if op == 0x32:
+            for seq, payload in enumerate(payloads, 1):
+                transport.feed(packet(0x41, 17, seq, payload))
+        return result
+    transport.request = request
+    return transport, calls, bridge_for(transport)
+
+
+def test_periodic_route_preserves_samples_and_discards_only_unrequested_tail(batch):
+    client, state, device, _, _ = batch
+    payload = bytes([0,9,3,4]) + b''.join(struct.pack('<I', t)+v for t,v in [(1,b'AAAA'),(47,b'BBBB'),(51,b'CCCC')])
+    transport, calls, device._bridge = sample_peer(payloads=[payload])
+    response=client.post('/api/device/dump-memory/capture',json={'regions':[{'address':0,'size':4}],'period':.001,'frames':2})
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert [s['timestamp_us'] for s in result['samples']] == [1,47]
+    assert [bytes.fromhex(s['regions'][0]['data_hex']) for s in result['samples']] == [b'AAAA',b'BBBB']
+    assert [op for op, _ in calls] == [1,4,0x32,0x31]
+    assert not transport.watch_running and not state['resource_manager'].get_status()
+
+
+@pytest.mark.parametrize('case', ['short', 'width', 'invalidated', 'reset_timeout', 'limit', 'stop'])
+def test_capture_failure_returns_no_partial_samples_and_never_replays(batch, monkeypatch, case):
+    client, state, device, _, _ = batch
+    payload = bytes([0,9,1,4])+struct.pack('<I',1)+b'AAAA'
+    if case == 'short': payload = payload[:-1]
+    if case == 'width': payload = payload[:3]+bytes([8])+payload[4:]
+    if case in ('invalidated','reset_timeout'): payload = struct.pack('<BBI',0,7 if case=='invalidated' else 8,1)
+    if case == 'limit': monkeypatch.setattr(dump_memory, 'MAX_DUMP_RESULT_JSON_BYTES', 20)
+    transport, calls, device._bridge = sample_peer(payloads=[payload], stop_status=6 if case=='stop' else 0)
+    response = client.post('/api/device/dump-memory/capture',json={'regions':[{'address':0,'size':4}],'period':.001,'frames':1})
+    assert response.status_code == (422 if case=='limit' else 500), response.text
+    assert [op for op,_ in calls] == [1,4,0x32,0x31]
+    assert 'samples' not in response.json() and not state['resource_manager'].get_status()
+
 
 @pytest.mark.parametrize('before_start,stop_fails', [(True,False),(False,False),(False,True)])
-def test_snapshot_cancel_during_partial_frame_confirms_stop(before_start,stop_fails):
-    from types import SimpleNamespace
-    bridge=FakeBridge([_b1_frame(1,b'A'*2048,block_index=0,block_count=2,total_size=4096)])
-    if stop_fails:
-        bridge._stop_stream_and_sync=Mock(side_effect=TimeoutError('stop unconfirmed'))
-    checks=0
-    def cancelled():
-        nonlocal checks
-        checks+=1
-        return before_start or checks>=6
-    with pytest.raises(TimeoutError if stop_fails else InterruptedError):
-        dump_memory.capture_memory(SimpleNamespace(_bridge=bridge),[{'address':0,'size':4096}],sample_count=4,cancelled=cancelled)
-    if before_start:
-        assert not bridge.calls
-    elif stop_fails:
-        bridge._stop_stream_and_sync.assert_called_once()
-    else:
-        assert bridge.calls[-1]==('exit',)
-        assert bridge.calls.count(('write',b'cmd.dump_memory(0x00000000, 4096, 0)\n'))==1
+def test_capture_cancel_is_not_success_and_stop_failure_remains_visible(before_start, stop_fails):
+    transport, calls, bridge = sample_peer(stop_status=6 if stop_fails else 0)
+    checks = iter([before_start, True])
+    with pytest.raises(RuntimeError if stop_fails else InterruptedError):
+        dump_memory.capture_dump_stream(SimpleNamespace(_bridge=bridge), [{'address':0,'size':4}],
+            period=.001, frames=0, duration=1, cancelled=lambda:next(checks))
+    assert [op for op,_ in calls] == ([1,4] if before_start else [1,4,0x32,0x31])
 
 
-def test_snapshot_cancel_between_samples_does_not_issue_next_read():
-    from types import SimpleNamespace
-    bridge=FakeBridge([_old_regions_frame(1,[(0,b'ABCD')])])
-    ended=False
-    def published(*args):
-        nonlocal ended
-        ended=True
-        return True
+def test_snapshot_cancel_between_samples_never_reads_next_sample():
+    transport, calls = memory_peer()
+    ended = [False]
+    def published(*a): ended[0] = True; return True
     with pytest.raises(InterruptedError):
-        dump_memory.capture_memory(SimpleNamespace(_bridge=bridge),[{'address':0,'size':4}],sample_count=2,
-                                   publish_sample=published,cancelled=lambda:ended)
-    assert bridge.calls.count(('write',b'cmd.dump_memory(0x00000000, 4, 0)\n'))==1
-    assert bridge.calls[-1]==('exit',)
+        dump_memory.capture_memory(SimpleNamespace(_bridge=memory_bridge(transport)), [{'address':0,'size':4}],
+            sample_count=2, publish_sample=published, cancelled=lambda:ended[0])
+    assert [op for op,_ in calls] == [1,4,0x16]
+
+
+def test_capture_startup_does_not_consume_requested_duration(monkeypatch):
+    session = Mock()
+    session.stats = {}
+    session.read_frames.side_effect = [[{'format':'mux','flags':0,'timestamp_us':1,'regions':[(0,b'AAAA')]}],
+                                      [{'format':'mux','flags':0,'timestamp_us':2,'regions':[(0,b'BBBB')]}]]
+    ticks = iter([0,.5,.5,.6,.9])
+    monkeypatch.setattr(dump_memory, 'time', SimpleNamespace(monotonic=lambda:next(ticks)))
+    monkeypatch.setattr(dump_memory, 'DumpMemoryStreamSession', lambda *a,**k:session)
+    result = dump_memory.capture_dump_stream(SimpleNamespace(_bridge=None), [{'address':0,'size':4}], period=.01, frames=0,duration=.25)
+    assert result['sample_count'] == 2 and result['stopped_by'] == 'duration'
+    session.stop.assert_called_once()
+
+
+def test_duration_reports_current_single_region_frames_with_incomplete_tail():
+    payloads = [struct.pack('<BBI', index, 0, ts) + data for index, ts, data in (
+        (0, 1, b'AAAA'), (1, 2, b'BBBB'), (0, 3, b'CCCC'))]
+    transport, calls, bridge = sample_peer(payloads=payloads)
+    result = dump_memory.capture_dump_stream(SimpleNamespace(_bridge=bridge),
+        [{'address':0x20010000,'size':4},{'address':0x20020000,'size':4}], period=.001, frames=0, duration=.005)
+    assert result['sample_count'] == 1 and result['incomplete_tail']
+    assert [r['data_hex'] for r in result['samples'][0]['regions']] == ['41414141','42424242']
+    assert [op for op,_ in calls] == [1,4,0x32,0x31]

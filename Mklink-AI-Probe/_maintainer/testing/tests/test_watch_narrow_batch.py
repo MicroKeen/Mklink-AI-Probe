@@ -16,7 +16,7 @@ from test_runtime_memory import batch
 from test_runtime_watch_timing import shared_client
 
 
-CAPS = 15 | (1 << 9) | (1 << 10)
+CAPS = 31 | (1 << 9) | (1 << 10)
 ADDRESS = 0x58021010
 
 
@@ -113,18 +113,17 @@ def test_start_negotiates_exact_width_and_preserves_first_ack_adjacent_sample(wi
 
 @pytest.mark.parametrize('caps', [15, 15 | (1 << 9)])
 @pytest.mark.parametrize('width', [1, 2])
-def test_new_host_old_firmware_uses_original_start_and_single_sample_events(caps, width):
+def test_old_firmware_rejected_without_target_command(caps, width):
     transport, calls = peer(caps=caps)
     watch = MuxWatchSession(transport, [(ADDRESS, width)], 4e-6)
-    watch.start()
-    assert calls[-1] == (0x32, struct.pack('<IBIB', 4, 1, ADDRESS, width))
-    transport.feed(wire(0x41, struct.pack('<BBI', 0, 0, 12) + bytes([0xa5]) * width))
-    assert watch.read_frames()[0]['regions'] == [(0, bytes([0xa5]) * width)]
-    assert not watch._narrow_batch
+    before = list(calls)
+    with pytest.raises(RuntimeError, match='update the probe firmware'):
+        watch.start()
+    assert calls == before
 
 
 @pytest.mark.parametrize('width', [1, 2])
-@pytest.mark.parametrize('caps', [CAPS, CAPS & ~(1 << 9)])
+@pytest.mark.parametrize('caps', [CAPS])
 def test_new_start_also_accepts_legacy_sample_path_used_by_jtag(width, caps):
     transport, calls = peer(caps=caps)
     watch = MuxWatchSession(transport, [(ADDRESS, width)], 4e-6)

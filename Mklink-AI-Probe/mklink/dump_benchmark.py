@@ -8,7 +8,7 @@ import time
 
 def validate_measurement(regions: list[tuple[int, int]], duration: float = 3,
                          period: float = 0.000001, speed_profile: str | None = None) -> int:
-    from mklink.dump_memory import build_dump_mem_command
+    from mklink.mux_watch import MuxWatchSession
 
     if isinstance(duration, bool) or not isinstance(duration, (float, int)) or not math.isfinite(duration) or not .5 <= duration <= 30:
         raise ValueError("duration must be 0.5..30 seconds")
@@ -25,7 +25,7 @@ def validate_measurement(regions: list[tuple[int, int]], duration: float = 3,
     size = sum(n for _, n in regions)
     if size > 4096:
         raise ValueError("measurement is limited to 4096 bytes per sample")
-    build_dump_mem_command(regions, period)
+    MuxWatchSession(None, regions, period)
     if speed_profile is not None and speed_profile not in ('low', 'medium', 'high', 'ultra'):
         raise ValueError('speed_profile must be low/medium/high/ultra')
     return size
@@ -51,7 +51,7 @@ def measure(device, regions: list[tuple[int, int]], *, duration: float = 3,
     device._require_connected()
     if speed_profile is not None:
         device.set_debug_speed(speed_profile)
-    session = DumpMemoryStreamSession(device._bridge, regions, period, allow_legacy_bulk=True)
+    session = DumpMemoryStreamSession(device._bridge, regions, period)
     # MUX batches already contain validated complete samples. Avoid expanding
     # each one into region dictionaries and assembling it a second time.
     session.packed_frames = True

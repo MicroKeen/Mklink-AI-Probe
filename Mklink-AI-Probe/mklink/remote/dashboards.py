@@ -2158,12 +2158,8 @@ class SuperWatchStreamManager:
         if not blocks:
             return  # An empty selection is a valid idle configuration.
         regions = [(block.address, block.size) for block in blocks]
-        from mklink.dump_memory import build_dump_mem_command
-        build_dump_mem_command(regions, self._interval)
-        bridge = getattr(self._device, "_bridge", None)
-        if getattr(bridge, "_mux_supported", None) is True:
-            from mklink.mux_watch import MuxWatchSession
-            MuxWatchSession(None, regions, self._interval)
+        from mklink.mux_watch import MuxWatchSession
+        MuxWatchSession(None, regions, self._interval)
 
     def _validate_scalar_edit_locked(self, items):
         self._validate_sampling_layout_locked(self._array_snapshot, items)
@@ -2236,22 +2232,14 @@ class SuperWatchStreamManager:
                         time.sleep(0.5)
                         continue
                     bridge = getattr(device, "_bridge", None)
-                    supports_dump = bridge is not None and all(
-                        callable(getattr(bridge, name, None))
-                        for name in (
-                            "_enter_stream", "_write_raw",
-                            "drain_stream_bytes", "_exit_stream",
-                        )
-                    )
-                    from mklink.dump_memory import MAX_SAFE_REPL_REGIONS
-                    if not supports_dump:
+                    from mklink.dump_memory import MAX_SAMPLING_REGIONS
+                    if bridge is None:
                         raise RuntimeError(
-                            "SuperWatch requires dump_memory binary streaming; "
-                            "read_ram fallback is disabled"
+                            "SuperWatch requires an active MUX probe connection"
                         )
-                    if len(dump_blocks) > MAX_SAFE_REPL_REGIONS:
+                    if len(dump_blocks) > MAX_SAMPLING_REGIONS:
                         raise RuntimeError(
-                            "SuperWatch needs more than 15 dump_memory regions; "
+                            "SuperWatch needs more than 15 MUX sampling regions; "
                             "select fewer or closer variables"
                         )
                     if dump_blocks:

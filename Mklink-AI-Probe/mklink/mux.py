@@ -136,14 +136,16 @@ class MuxTransport:
             self.fail(exc)
             raise
 
-    def request(self, op, payload=b''):
+    def request(self, op, payload=b'', *, deadline=None):
         with self._commands, self._condition:
             self._check()
             while self._pending:
-                self._wait()
+                self._wait(deadline)
+            if deadline is not None and time.monotonic() >= deadline:
+                raise TimeoutError('Memory capture deadline expired before command delivery')
             self._send(op, payload)
             while self._pending:
-                self._wait()
+                self._wait(deadline)
             self._check()
             answer = self._reply
             self._reply = None
@@ -156,10 +158,14 @@ class MuxTransport:
                 raise MuxTargetError(answer[0])
             return answer[1:]
 
-    def _wait(self):
+    def _wait(self, deadline=None):
         self._check()
-        remaining = self._pending[2]-time.monotonic()
+        limit = self._pending[2] if deadline is None else min(self._pending[2], deadline)
+        remaining = limit-time.monotonic()
         if remaining <= 0:
+            if limit < self._pending[2]:
+                op, req, _, heartbeat = self._pending
+                self._pending = (op, req, limit, heartbeat)
             self._expire_pending('command')
             self._check()
         self._condition.wait(min(remaining, .1))
@@ -352,7 +358,7 @@ class MuxTransport:
                 self._sizes.pop(key, None)
             return frames
 
-    def read_memory(self, address, size):
+    def read_memory(self, address, size, *, deadline=None):
         if not 0 <= address <= 0xffffffff or size < 0 or address+size > 0x100000000:
             raise ValueError('Invalid memory range')
         result = bytearray()
@@ -361,7 +367,9 @@ class MuxTransport:
         command = self.BLOCK_READ_COMMAND if block_read else 0x11
         for offset in range(0, size, chunk_size):
             n = min(chunk_size, size-offset)
-            data = self.request(command, struct.pack('<IH', address+offset, n))
+            payload = struct.pack('<IH', address+offset, n)
+            data = (self.request(command, payload) if deadline is None
+                    else self.request(command, payload, deadline=deadline))
             if len(data) != n:
                 self.fail('Incomplete memory response')
                 raise self._error
