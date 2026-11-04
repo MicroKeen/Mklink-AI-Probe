@@ -38,6 +38,12 @@
 [AHB 对照](v043-control-ahb-ab.md)；最大间隔 20 µs 和 40 µs 零漏采仍未达到。
 用户另外授权的最小 ILM 试验正在协调，尚无候选性能结论。
 
+后续 ILM 编译在链接前因 F 盘空间耗尽失败。仅清理本次两个安装证据目录中的
+重复 `payload/` 解包副本，释放约 0.65 GiB；先验证范围和无链接，再重新核验
+保留 NSIS 的 SHA-256 与 7-Zip 归档完整性。完整安装匹配报告、安装器及其他
+原始证据均保留，缓存和历史目录未动。现有余量不足以安全完成固件构建与
+三阶段原始数据采集，待用户决定临时 D 盘目录或腾出 F 盘空间；未刷设备。
+
 证据根：`F:/MKLink-Build/artifacts/v043-install-f9b1ae8a-20261104/`。
 安装器、`installer-manifest.json`、`install-result.json`、`installed-smoke.json`、
 `native-check.json`、`exit-check.json`、`version-tests.log`、`version-notes.jpg`

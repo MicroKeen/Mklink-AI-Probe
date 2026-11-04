@@ -14,7 +14,7 @@
   },
   "current_session": {
     "status": "v043_receive_installed_ilm_trial_preparing",
-    "current_task": "接收/连续性修复已构建覆盖本机0.4.3，安装源f9b1ae8a，载荷/冻结MCP/Web/原生/正常退出通过，见v043-receive-local-install.md。USB7原包保持，最小六函数ILM B静态方案完成，等待构建；未实测候选收益。"
+    "current_task": "接收修复已覆盖本机0.4.3，源f9b1ae8a，安装资格通过，见v043-receive-local-install.md。原USB7保持；用户授权ILM B六小函数试验，构建在链接前因F盘不足失败，尚无性能结论。"
   },
   "milestones": [
     {
@@ -50,12 +50,8 @@
   ],
   "verification": [
     {
-      "area": "0.4.3接收修复本地安装",
-      "result": "f9b1ae8a本地NSIS覆盖退出0，两配置不变；3649载荷、7059FLM/2224blob、4800SVD、56冻结MCP、42Web、原生与真实浏览器、Windows-only PATH及正常退出通过，更新说明5项测试通过。仅说明/生产dist变化，未新作硬件性能认证，见v043-receive-local-install.md。"
-    },
-    {
       "area": "0.4.3接收、连续性与性能",
-      "result": "0a0c97b3接收/连续性：382后端/307GUI，最终记录9/回放164及Web通过；搜索1.75–1.87s→35–72ms，队列删除归零，见v043-receive-backpressure.md。内置浏览器四图/缺失回放及2369439样本raw比对见v043-iab-waveforms.md。本轮AHB A/B/A：36轮21377916样本、144宽度、66MiB RTT、900次DAP共存通过；AHB ECHO批间恶化，恢复USB7后42–49us、4B持续264.435k/s、RTT853.53/853.58KiB/s。最大43–67us，20us/40us零漏采未达，见v043-control-ahb-ab.md。普通读/协议/实装仍见v043-tail-latency.md、v043-mux-sampling-contract.md、v043-desktop-waveforms.md。"
+      "result": "接收修复0a0c97b3：382后端/307GUI、9记录/164回放，搜索降至35–72ms、队列删除归零；见v043-receive-backpressure.md。IAB四图与2369439点raw一致见v043-iab-waveforms.md。AHB A/B/A的21377916点、144宽度、66MiB RTT、900DAP通过，但候选负收益已恢复USB7，见v043-control-ahb-ab.md。安装f9b1ae8a：3649载荷、56冻结MCP、42Web、原生/浏览器及退出通过，5说明测试；见v043-receive-local-install.md。最大间隔20us/40us零漏采未达。普通读/协议旧证据见v043-tail-latency.md、v043-mux-sampling-contract.md。"
     },
     {
       "area": "0.4.2正式构建安装及公开发布",
@@ -115,7 +111,7 @@
   ],
   "next_actions": [
     "继续codex/v0.4.3-fixes/草稿PR69，本机安装已更新f9b1ae8a。普通读P95/间隔<1ms、采样最大间隔<20us仍开放；合并/签名/正式发布须新授权。",
-    "用户已授权一轮最小ILM方案。固件会话01a1a1a2-9adc-79e2-b30e-07c07d5f90c6准备六小函数638B原始输入、固定768B段，dispatch保留XIP；放不下则停止，不挪旧热点/减缓冲/改SWD与调度。待安装释放构建窗口后链接审查，再新USB7/ILM/USB7 A/B/A。刷写前另核身份/占用；原USB7手动恢复已有明确授权，自动保护不改。",
+    "ILM B六小函数638B/固定768B段、dispatch留XIP，由固件会话01a1a1a2-9adc-79e2-b30e-07c07d5f90c6负责。先解决本轮构建空间，再链接审查及USB7/ILM/USB7对照；放不下则停，不挪旧热点/减缓冲/改SWD调度。先核占用；原USB7手动恢复已有授权，自动保护不改。",
     "保留正式包、唯一验收证据及含链接目录；本机新START_HERE与v042-postrelease-handoff.md记录清理清单和接手入口。历史V3掉线/冷插拔/长稳等仍按known-limits-20261030.md和最终资格报告处理。",
     "监控上海90GiB告警/95GiB停止，套餐截止北京时间2026-11-26 00:00。未核验续费不清除停止锁、不清零账本、不申请新私钥。"
   ],
