@@ -47,14 +47,14 @@
 
 ## 真机环境
 
-- **state**：H743保持40us PE2映像AXF SHA77e05091；专用固件会话独占，ec185ffc基线与三通道波形完成，临时诊断6fa4f507/09:41:47已刷入。新增统计查询Malformed multiplex frame已保留失败证据、不作验收；当前候选/占用须重核。宿主未接硬件，<20us/漏采/最终性能资格未完成。
+- **state**：H743保持40us PE2映像AXF SHA77e05091；专用固件会话独占。ec185ffc同步波形已确认至少漏4个完整脉冲/8边沿，稳定GPIO值无不符，最大读间隔81.694us。曾刷临时诊断6fa4f507，统计帧异常保留且正修订；当前候选/占用须重核。宿主未接硬件，<20us/最终性能资格未完成。
 - **installer**：本机Windows与全局Skill均为正式0.4.2源0e82ba6f，NSIS SHA5ff079bb/Skill SHA14af7a5f；签名、覆盖、载荷、56MCP/126能力与正常退出通过。当前不是旧测试包。AI客户端需重启加载新Skill。
 - **backups**：原安装包/正式七资产及四固件、CI ZIP、唯一验收证据、Skill备份和缓存均保留；旧detached树不删除。清理详情见v042-postrelease-handoff.md；本机新入口为v042-postrelease-handoff-20261102/START_HERE.txt。29可再生目录已删，含链接135组保留清单供人工检查。
 
 ## 下一动作
 
 1. 继续codex/v0.4.3-fixes/草稿PR69；稳定<1ms的P95/间隔仍开放。流速条件区别/RTT808差距见v043-stream-maximum.md，失败候选见v043-tail-latency.md。保留完整门禁和Watch性能，不改目标迁就对照；暂不构建发布，合并/签名/发布须新授权。
-2. 固件会话01a1a1a2-9adc-79e2-b30e-07c07d5f90c6继续GPIO/RAM批间批内优化，诊断统计帧异常待修；PE2/SWD核验40us漏采。不得改目标/降负载适应采集；保留RTT/调试公平性，错开测速负载并核对占用。<20us未达，见v043-sample-gap-visibility.md。
+2. 固件会话01a1a1a2-9adc-79e2-b30e-07c07d5f90c6继续GPIO/RAM阶段诊断/批间批内优化，并复验40us不漏采。不得改目标/降负载适应采集；保留RTT/调试公平性，错开测速负载并核对占用。<20us未达，见v043-sample-gap-visibility.md。
 3. 保留正式包、唯一验收证据及含链接目录；本机新START_HERE与v042-postrelease-handoff.md记录清理清单和接手入口。历史V3掉线/冷插拔/长稳等仍按known-limits-20261030.md和最终资格报告处理。
 4. 监控上海90GiB告警/95GiB停止，套餐截止北京时间2026-11-26 00:00。未核验续费不清除停止锁、不清零账本、不申请新私钥。
 
