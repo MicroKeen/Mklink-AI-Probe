@@ -4,12 +4,12 @@
 
 ## 当前断点
 
-- 更新时间：`2026-11-04T19:00:57+08:00`
+- 更新时间：`2026-11-04T19:39:37+08:00`
 - 分支：`codex/v0.4.3-fixes`
 - HEAD：`基于main 4f3be7a4；采集产品0a0c97b3，安装源f9b1ae8a（仅更新说明）；确切提交以Git为准。`
 - 远端 HEAD：`microkeen/main已合并PR66、67、68，基线4f3be7a4；正式tag/包不变。`
 - 工作树：复用E盘主工作区，保留旧v0.4.2分支和两个detached工作树；本轮及后续修复共用codex/v0.4.3-fixes。
-- 当前任务：接收修复已覆盖本机0.4.3，源f9b1ae8a，安装资格通过，见v043-receive-local-install.md。原USB7保持；用户授权ILM B六小函数试验，构建在链接前因F盘不足失败，尚无性能结论。
+- 当前任务：本机0.4.3源f9b1ae8a安装资格通过。用户授权E/F旧记录和脚本清理已完成，不用D盘；见v043-workspace-cleanup.md。原USB7保持；ILM B先前磁盘满失败，待重建审查，尚无性能结论。
 - 状态：`v043_receive_installed_ilm_trial_preparing`
 
 ## 里程碑
@@ -49,13 +49,13 @@
 
 - **state**：普通V4已按用户新增手动UF2授权恢复原USB7源465a9b69/build11:01:27（原SHA db6fdfe2）；AHB16:49:28负收益已撤销。三阶段H743 Flash223656B逐字节相符，映像77e05091不变；30MHz，最终TIM7 ARR99。反测完成，流停止并断开、子后台退出；旧内置浏览器离线回放不持有探针。操作前仍重核占用，20us/长稳未达。
 - **installer**：本机Windows已覆盖0.4.3本地未签名测试版，源f9b1ae8a，NSIS SHA55d17d0e，含0a0c97b3接收/连续性修复。3649载荷/冻结MCP/42 Web/原生/正常退出通过，见v043-receive-local-install.md；正式0.4.2资产保留。全局Skill及SiteAgent仍0.4.2。没有合并/签名/发布。
-- **backups**：保留正式包/七资产/四固件、CI ZIP、唯一验收证据、Skill备份、缓存及旧detached树。29目录清理/135含链接组人工检查清单见v042-postrelease-handoff.md及本机v042-postrelease-handoff-20261102/START_HERE.txt。
+- **backups**：正式包/四固件、当前资格/恢复包、缓存及工作树保留。用户授权旧记录和脚本清理：F释放18.055GiB、E释放5.326GiB；32份旧raw已退役，不能重解码，保留分析。114含链接组未动；见v043-workspace-cleanup.md。
 
 ## 下一动作
 
 1. 继续codex/v0.4.3-fixes/草稿PR69，本机安装已更新f9b1ae8a。普通读P95/间隔<1ms、采样最大间隔<20us仍开放；合并/签名/正式发布须新授权。
-2. ILM B六小函数638B/固定768B段、dispatch留XIP，由固件会话01a1a1a2-9adc-79e2-b30e-07c07d5f90c6负责。先解决本轮构建空间，再链接审查及USB7/ILM/USB7对照；放不下则停，不挪旧热点/减缓冲/改SWD调度。先核占用；原USB7手动恢复已有授权，自动保护不改。
-3. 保留正式包、唯一验收证据及含链接目录；本机新START_HERE与v042-postrelease-handoff.md记录清理清单和接手入口。历史V3掉线/冷插拔/长稳等仍按known-limits-20261030.md和最终资格报告处理。
+2. ILM B六小函数638B/固定768B段、dispatch留XIP，由固件会话01a1a1a2-9adc-79e2-b30e-07c07d5f90c6负责。E/F清理已解空间限制，不用D盘；先链接审查再USB7/ILM/USB7对照。放不下则停，不挪旧热点/减缓冲/改SWD调度；先核占用，原USB7手动恢复已授权，自动保护不改。
+3. 保留正式包、当前唯一验收证据、缓存和含链接目录；旧记录/脚本退役范围见v043-workspace-cleanup.md。历史V3掉线/冷插拔/长稳等仍按known-limits-20261030.md处理。
 4. 监控上海90GiB告警/95GiB停止，套餐截止北京时间2026-11-26 00:00。未核验续费不清除停止锁、不清零账本、不申请新私钥。
 
 ## 已知限制
