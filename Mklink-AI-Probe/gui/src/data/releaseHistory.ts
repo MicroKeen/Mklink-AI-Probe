@@ -9,6 +9,27 @@ export interface ReleaseHistoryEntry {
 
 export const releaseHistory: ReleaseHistoryEntry[] = [
   {
+    version: '0.4.3', date: '2026-11-04',
+    summary: '降低读取延迟，显示 SuperWatch 采样空隙',
+    summaryEn: 'Reduce read latency and reveal SuperWatch sampling gaps',
+    changes: [
+      '优化串口工作进程事件通知和后台请求路径，降低普通内存读取的等待开销。',
+      'SuperWatch 显示当前视窗的最大采样间隔和空隙数量；空隙处断线并标记，保留原始时间戳与采样值。',
+      '优化 RAM 窄变量的读取布局，保持变量宽度、符号和偏移解码正确。',
+      '实时采样要求配套的新固件能力，能力不足时明确提示；旧采样记录仍可离线读取。',
+      '完善采样启动、取消和错误处理，避免失败后重复请求或将不完整读取当作成功。',
+      '最大采样间隔尚未保证低于 20 µs；空隙标记不能恢复未采到的脉冲。',
+    ],
+    changesEn: [
+      'Improve serial worker event notifications and backend request handling to reduce ordinary memory-read waits.',
+      'Show the maximum sample interval and gap count in the current SuperWatch viewport; break and mark gaps while preserving raw timestamps and values.',
+      'Improve read layouts for narrow RAM variables while preserving width, signedness and offset decoding.',
+      'Require compatible new probe firmware for live sampling, with clear capability errors; existing recordings remain readable offline.',
+      'Improve sampling startup, cancellation and error handling to avoid replaying failed requests or reporting incomplete reads as successful.',
+      'A maximum sample interval below 20 µs is not yet guaranteed; gap markers cannot recover missed pulses.',
+    ],
+  },
+  {
     version: '0.4.2', date: '2026-10-31',
     summary: '完善 HPM 调试、采集恢复与界面体验',
     summaryEn: 'Improve HPM debugging, capture recovery and the interface',

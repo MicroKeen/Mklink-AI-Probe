@@ -15,7 +15,7 @@ import threading
 import time
 
 PROTOCOL = 53  # Guarded probe/OTP/offline workflows and complete clock capabilities.
-VERSION = "0.4.2"
+VERSION = "0.4.3"
 STARTUP_TIMEOUT_SECONDS = 60
 
 # One loopback connection per thread, never shared with the lease heartbeat.

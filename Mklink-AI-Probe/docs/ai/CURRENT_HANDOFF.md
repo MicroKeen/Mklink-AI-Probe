@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-11-04T11:24:57+08:00`
+- 更新时间：`2026-11-04T11:42:32+08:00`
 - 分支：`codex/v0.4.3-fixes`
 - HEAD：`基于main 4f3be7a4；宿主实现1bed6807，含窄批量/视窗空隙/MUX契约；确切文档提交以Git为准。`
 - 远端 HEAD：`microkeen/main已合并PR66、67、68，基线4f3be7a4；正式tag/包不变。`
 - 工作树：复用E盘主工作区，保留旧v0.4.2分支和两个detached工作树；本轮及后续修复共用codex/v0.4.3-fixes。
-- 当前任务：宿主1bed6807与USB7实机配套通过；1234软件项、Watch/RTT/DAP共存/48组宽度/有限导出正确。波形记录未漏边沿，但其他GPIO间隔62/65us，20us硬上限未达。不改目标，未构建发布。
-- 状态：`v043_mux_paired_verified_gap_limit_open`
+- 当前任务：用户11月4日授权版本升0.4.3、增加中英更新说明、Windows本地构建覆盖安装及真实SuperWatch展示PE2寄存器/实时RAM镜像；以USB7/1bed速度为基线，不签名发布，不改目标。版本UI19项通过；构建/安装/波形待执行。
+- 状态：`v043_local_desktop_build_in_progress`
 
 ## 里程碑
 

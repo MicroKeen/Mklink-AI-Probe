@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-04T11:24:57+08:00",
+  "updated_at": "2026-11-04T11:42:32+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
@@ -13,8 +13,8 @@
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "v043_mux_paired_verified_gap_limit_open",
-    "current_task": "宿主1bed6807与USB7实机配套通过；1234软件项、Watch/RTT/DAP共存/48组宽度/有限导出正确。波形记录未漏边沿，但其他GPIO间隔62/65us，20us硬上限未达。不改目标，未构建发布。"
+    "status": "v043_local_desktop_build_in_progress",
+    "current_task": "用户11月4日授权版本升0.4.3、增加中英更新说明、Windows本地构建覆盖安装及真实SuperWatch展示PE2寄存器/实时RAM镜像；以USB7/1bed速度为基线，不签名发布，不改目标。版本UI19项通过；构建/安装/波形待执行。"
   },
   "milestones": [
     {
