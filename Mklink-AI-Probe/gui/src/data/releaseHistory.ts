@@ -10,11 +10,12 @@ export interface ReleaseHistoryEntry {
 export const releaseHistory: ReleaseHistoryEntry[] = [
   {
     version: '0.4.3', date: '2026-11-04',
-    summary: '降低读取延迟，显示 SuperWatch 采样空隙',
-    summaryEn: 'Reduce read latency and reveal SuperWatch sampling gaps',
+    summary: '降低读取延迟，改善 SuperWatch 接收与波形连续性',
+    summaryEn: 'Reduce read latency and improve SuperWatch reception and waveform continuity',
     changes: [
       '优化串口工作进程事件通知和后台请求路径，降低普通内存读取的等待开销。',
-      'SuperWatch 显示当前视窗的最大采样间隔和空隙数量；空隙处断线并标记，保留原始时间戳与采样值。',
+      'SuperWatch 按实际采样时间戳统计 Hz，精简工具栏；仅对已确认缺失的数据区间置灰断线，不将超过 20 µs 的间隔直接判为丢失。',
+      '改善高速采集时的接收处理，减少积压；实时显示和离线回放保留原始时间戳、采样值及数据缺失标记。',
       '优化 RAM 窄变量的读取布局，保持变量宽度、符号和偏移解码正确。',
       '实时采样要求配套的新固件能力，能力不足时明确提示；旧采样记录仍可离线读取。',
       '完善采样启动、取消和错误处理，避免失败后重复请求或将不完整读取当作成功。',
@@ -22,7 +23,8 @@ export const releaseHistory: ReleaseHistoryEntry[] = [
     ],
     changesEn: [
       'Improve serial worker event notifications and backend request handling to reduce ordinary memory-read waits.',
-      'Show the maximum sample interval and gap count in the current SuperWatch viewport; break and mark gaps while preserving raw timestamps and values.',
+      'Calculate SuperWatch Hz from actual sample timestamps and simplify the toolbar. Shade and break confirmed data-loss intervals; an interval over 20 µs alone does not imply lost data.',
+      'Improve reception during high-speed capture to reduce backlog. Preserve raw timestamps, values and data-loss markers in live views and offline replay.',
       'Improve read layouts for narrow RAM variables while preserving width, signedness and offset decoding.',
       'Require compatible new probe firmware for live sampling, with clear capability errors; existing recordings remain readable offline.',
       'Improve sampling startup, cancellation and error handling to avoid replaying failed requests or reporting incomplete reads as successful.',
