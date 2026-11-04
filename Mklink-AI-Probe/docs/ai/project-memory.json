@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-04T21:39:31.7920313+08:00",
+  "updated_at": "2026-11-04T22:05:19.2243872+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
@@ -14,7 +14,7 @@
   },
   "current_session": {
     "status": "v043_host_baseline_accepted_notes_simplified",
-    "current_task": "用户确认当前0.4.3上位机为后续不退化基线；产品0a0c97b3/已安装源f9b1ae8a，见v043-host-baseline.md。本轮仅精简中英文更新说明并同步Web资源；USB7保持，ILM B不采用。"
+    "current_task": "当前0.4.3上位机已确认为不退化基线，见v043-host-baseline.md；中英文说明7条精简为4条，5组件测试/生产Web/IAB双语核验通过，构建源c85d1c64。本轮未重装，已安装源仍f9b1ae8a；产品0a0c97b3不变。"
   },
   "milestones": [
     {
@@ -95,7 +95,7 @@
     "编译完成不代表目标已下载：文件变化仅发待重载提示，不后台解析。用户明确加载/重载文件时自动停止目标采集，确认worker退出后原子换表，保持停止；失败保留旧目录/选择。不要求连接下载器；断开保留文件和选中变量但清空旧采样。公式只改变可视化，原始记录不变；不恢复旧地址采集或重放写操作。"
   ],
   "hardware": {
-    "state": "原USB7 build11:01:27/源465a9b69（UF2 SHA db6fdfe2）已手动恢复，ILM B19:41:56试验结束不采用。三阶段H743 Flash223656B逐字节相符、映像77e05091不变；30MHz，最终TIM7 ARR99。反测通过，流停止/探针断开/子后台退出。PE7实读AF12/FMC，合法全字FF00/FF04/FF80/FF84的证据保留。操作前仍重新核对占用；20us/长稳未达。",
+    "state": "本会话ILM A/B/A结束：原USB7已恢复、反测通过、流停止/探针断开/子后台退出，见v043-control-ilm-b-ab.md；20us/长稳未达。固件会话随后报告用户已换V3并开展移植验证，当前设备与占用须向该会话协调并重新核对，不沿用原V4身份。",
     "installer": "本机Windows已覆盖0.4.3本地未签名测试版，源f9b1ae8a，NSIS SHA55d17d0e，含0a0c97b3接收/连续性修复。3649载荷/冻结MCP/42 Web/原生/正常退出通过，见v043-receive-local-install.md；正式0.4.2资产保留。全局Skill及SiteAgent仍0.4.2。没有合并/签名/发布。",
     "backups": "正式包/四固件、当前资格/恢复包、缓存及工作树保留。用户授权旧记录和脚本清理：F释放18.055GiB、E释放5.326GiB；32份旧raw已退役，不能重解码，保留分析。114含链接组未动；见v043-workspace-cleanup.md。"
   },
