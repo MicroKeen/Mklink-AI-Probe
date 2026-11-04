@@ -838,6 +838,7 @@ function syncIntervalFromServer(value) {
   var normalized = Number(value);
   if (!Number.isFinite(normalized) || normalized <= 0 || normalized > 60) return;
   currentInterval = normalized;
+  updateSampleTimingStatus();
   if (!intervalDirty && !intervalUpdatePending) {
     intervalInput.value = String(normalized);
   }
@@ -3129,6 +3130,7 @@ function freezeRenderedView() {
 
 function discardPausedBinarySnapshot() {
   binaryEnvelope = null;
+  updateSampleTimingStatus();
   for (var channel = 0; channel < binaryChannelNames.length; channel++) {
     var field = FIELDS[binaryChannelNames[channel]];
     if (field && field.ringBuf) field.ringBuf.clear();
@@ -3217,6 +3219,7 @@ function configureBinaryChannels(channels) {
   binaryLastSequence = null;
   binaryLastDetailSequence = null;
   binaryEnvelope = null;
+  updateSampleTimingStatus();
   binaryBufferStart = null;
   binaryBufferEnd = null;
   binaryBufferedSamples = 0;
@@ -3395,8 +3398,27 @@ function getBinaryVisibleRange() {
   return {
     start: (binaryTimeOrigin + range.tMin) * 1000,
     end: (binaryTimeOrigin + range.tMax) * 1000,
-    pixelWidth: pixelWidth
+    pixelWidth: pixelWidth,
+    gapThresholdMs: IS_SUPERWATCH_MODE ? Math.max(0.02, currentInterval * 2000) : undefined
   };
+}
+
+function formatSampleInterval(ms) {
+  if (!Number.isFinite(ms)) return '—';
+  var scale = ms < 1 ? 1000 : ms < 1000 ? 1 : 0.001;
+  return Number((ms * scale).toFixed(3)) + (ms < 1 ? ' µs' : ms < 1000 ? ' ms' : ' s');
+}
+
+function updateSampleTimingStatus() {
+  if (!IS_SUPERWATCH_MODE) return;
+  var host = document.getElementById('sample-timing-status');
+  if (!host) return;
+  var timing = binaryEnvelope && binaryEnvelope.sampleTiming;
+  document.getElementById('sample-interval-max').textContent = timing && timing.maxIntervalMs !== null ? formatSampleInterval(timing.maxIntervalMs) : '—';
+  document.getElementById('sample-gap-threshold').textContent = formatSampleInterval(timing ? timing.thresholdMs : Math.max(0.02, currentInterval * 2000));
+  document.getElementById('sample-gap-count').textContent = timing ? String(timing.gapCount) : '—';
+  host.classList.toggle('has-gaps', !!timing && timing.gapCount > 0);
+  host.dataset.gapCount = timing ? String(timing.gapCount) : '';
 }
 
 function parseBinaryEnvelope(envelope) {
@@ -3420,7 +3442,22 @@ function parseBinaryEnvelope(envelope) {
   for (var time = 0; time < times.length; time++) {
     if (!Number.isFinite(times[time])) return null;
   }
-  return { times: times, timeIndices: timeIndices, values: values, offsets: offsets };
+  var timing = null;
+  if (IS_SUPERWATCH_MODE && envelope.sampleTiming && !envelope.replay) {
+    var supplied = envelope.sampleTiming;
+    var columns = new Uint8Array(supplied.columns);
+    var segments = new Uint32Array(supplied.segmentIds);
+    if (!Number.isFinite(supplied.startMs) || !Number.isFinite(supplied.endMs) || supplied.endMs < supplied.startMs ||
+        !Number.isFinite(supplied.thresholdMs) || supplied.thresholdMs <= 0 ||
+        (supplied.maxIntervalMs !== null && (!Number.isFinite(supplied.maxIntervalMs) || supplied.maxIntervalMs < 0)) ||
+        !Number.isSafeInteger(supplied.intervalCount) || supplied.intervalCount < 0 ||
+        !Number.isSafeInteger(supplied.gapCount) || supplied.gapCount < 0 || supplied.gapCount > supplied.intervalCount ||
+        columns.length !== envelope.pixelWidth || segments.length !== envelope.pointCount) return null;
+    timing = { startMs: supplied.startMs, endMs: supplied.endMs, thresholdMs: supplied.thresholdMs,
+      maxIntervalMs: supplied.maxIntervalMs, intervalCount: supplied.intervalCount, gapCount: supplied.gapCount,
+      columns: columns, segmentIds: segments };
+  }
+  return { times: times, timeIndices: timeIndices, values: values, offsets: offsets, sampleTiming: timing };
 }
 
 function getBinaryEnvelopeChannelRange(name) {
@@ -3496,6 +3533,7 @@ function renderBinaryEnvelope(envelope, renderWhilePaused) {
   }
   canvas.dataset.binaryEnvelopePoints = String(envelope.pointCount);
   binaryEnvelope = parsed;
+  updateSampleTimingStatus();
   if (!paused || renderWhilePaused) {
     drawChart();
     drawMinimap();
@@ -3521,6 +3559,7 @@ function resetBinaryStream() {
   binaryLastDetailSequence = null;
   binaryEnvelope = null;
   binaryBufferStart = null;
+  updateSampleTimingStatus();
   binaryBufferEnd = null;
   binaryBufferedSamples = 0;
   requestBinaryDetail(false);
@@ -4468,6 +4507,26 @@ function drawChart() {
     ctx.fillRect(ml, mainTop + mainHeight + Math.floor(panelGap / 2), pw, 1);
   }
 
+  // Render missing-observation spans independently of channel extrema. Never
+  // infer gaps from the spacing of points selected by the min/max envelope.
+  if (useBinaryEnvelope && binaryEnvelope.sampleTiming && !arrayOnly) {
+    var gapTiming = binaryEnvelope.sampleTiming;
+    var gapColumns = gapTiming.columns;
+    ctx.save();
+    ctx.beginPath(); ctx.rect(ml, mt, pw, ph); ctx.clip();
+    ctx.fillStyle = 'rgba(128,128,128,0.22)';
+    for (var column = 0; column < gapColumns.length;) {
+      if (!gapColumns[column]) { column++; continue; }
+      var gapFirst = column++;
+      while (column < gapColumns.length && gapColumns[column]) column++;
+      var gapSpan = gapTiming.endMs - gapTiming.startMs;
+      var gapLeft = tx((gapTiming.startMs + gapSpan * gapFirst / gapColumns.length) / 1000 - binaryTimeOrigin);
+      var gapRight = tx((gapTiming.startMs + gapSpan * column / gapColumns.length) / 1000 - binaryTimeOrigin);
+      ctx.fillRect(gapLeft, mt, gapRight - gapLeft, ph);
+    }
+    ctx.restore();
+  }
+
   var names = sortedFieldNames().slice().sort(function(a,b){return Number(!!signalStyle(a).emphasis)-Number(!!signalStyle(b).emphasis);});
   for (var ni = 0; ni < names.length; ni++) {
     var name = names[ni];
@@ -4510,7 +4569,13 @@ function drawChart() {
     if (useBinaryEnvelope && envelopeChannel !== undefined) {
       var envelopeStart = binaryEnvelope.offsets[envelopeChannel];
       var envelopeEnd = binaryEnvelope.offsets[envelopeChannel + 1];
+      var previousSegment = -1;
       for (var envelopePoint = envelopeStart; envelopePoint < envelopeEnd; envelopePoint++) {
+        if (binaryEnvelope.sampleTiming) {
+          var pointSegment = binaryEnvelope.sampleTiming.segmentIds[envelopePoint];
+          if (pointSegment !== previousSegment) started = false;
+          previousSegment = pointSegment;
+        }
         var timeIndex = binaryEnvelope.timeIndices[envelopePoint];
         var envelopeTime = binaryEnvelope.times[timeIndex] / 1000 - binaryTimeOrigin;
         var envelopeX = tx(envelopeTime);
@@ -4518,7 +4583,11 @@ function drawChart() {
         if (!Number.isFinite(envelopeY)) { started = false; continue; }
         if (envelopeX < ml - 10 || envelopeX > ml + pw + 10) continue;
         if (pointsOnly) ctx.fillRect(envelopeX-pointSize/2,envelopeY-pointSize/2,pointSize,pointSize);
-        else if (!started) { ctx.moveTo(envelopeX, envelopeY); started = true; }
+        else if (!started) {
+          // Keep isolated observed points visible between two unknown spans.
+          if (binaryEnvelope.sampleTiming) ctx.fillRect(envelopeX-1,envelopeY-1,2,2);
+          ctx.moveTo(envelopeX, envelopeY); started = true;
+        }
         else ctx.lineTo(envelopeX, envelopeY);
       }
     } else {
@@ -5690,6 +5759,7 @@ function copyBufferedTriggerPoints(points) {
 function freezeSingleTriggerCapture() {
   singleTriggerCaptureFrozen = true;
   binaryEnvelope = null;
+  updateSampleTimingStatus();
   binaryExportPending = false;
   var start = Infinity, end = -Infinity, count = 0;
   for (var name in FIELDS) {

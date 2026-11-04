@@ -49,6 +49,13 @@ function floats(...values: number[]): Uint8Array {
   return new Uint8Array(Float32Array.from(values).buffer)
 }
 
+function timestampedSamples(times: number[], values: number[]): Uint8Array {
+  const payload = new Uint8Array(times.length * 8 + values.length * 4)
+  payload.set(new Uint8Array(Float64Array.from(times).buffer))
+  payload.set(floats(...values), times.length * 8)
+  return payload
+}
+
 function rttLines(...lines: Array<{ timestampNs: bigint; level: number; text: string }>): Uint8Array {
   const encoder = new TextEncoder()
   const encoded = lines.map(line => ({ ...line, bytes: encoder.encode(line.text) }))
@@ -120,6 +127,46 @@ function setup() {
 }
 
 describe('StreamDecoder worker controller', () => {
+  it('keeps cross-frame gaps and frozen timing separate from transport loss and later data', () => {
+    const { decoder, messages, transfers } = setup()
+    decoder.handle({ type: 'configure', capacity: 8, channelCount: 1 })
+    const send = (seq: number, times: number[]) => decoder.handle({ type: 'frame',
+      buffer: frame(BigInt(seq), times.length, timestampedSamples(times, times.map((_, i) => i % 2)), StreamType.SUPERWATCH, 1n, 3),
+      connectionGeneration: 1, frameTicket: seq })
+    decoder.handle({ type: 'frame', buffer: frame(1n, 0, new TextEncoder().encode(JSON.stringify({version: 1, channels: [{name: 'GPIO'}]})), StreamType.SUPERWATCH, 1n, 2), connectionGeneration: 1, frameTicket: 1 })
+    send(2, [0, .007])
+    send(3, [.053, .060])
+    decoder.handle({ type: 'waveform-freeze', frozen: true })
+    send(4, [1, 2])
+    decoder.handle({ type: 'visible-range', requestId: 1, start: 0, end: .060, pixelWidth: 8, gapThresholdMs: .020 })
+    const selected = messages.at(-1)
+    if (selected?.type !== 'render-envelope') throw new Error('missing envelope')
+    expect(selected.sampleTiming).toMatchObject({ gapCount: 1, intervalCount: 3 })
+    expect(selected.sampleTiming?.maxIntervalMs).toBeCloseTo(.046, 9)
+    expect(new Uint32Array(selected.sampleTiming!.segmentIds)).toEqual(Uint32Array.of(0, 0, 1, 1))
+    expect(transfers.at(-1)).toContain(selected.sampleTiming!.columns)
+    expect(transfers.at(-1)).toContain(selected.sampleTiming!.segmentIds)
+    const telemetry = messages.filter(x => x.type === 'telemetry').at(-1)
+    expect(telemetry).toMatchObject({ transportDroppedBatches: 0, backendDroppedItems: 0 })
+    decoder.handle({ type: 'waveform-freeze', frozen: false })
+    decoder.handle({ type: 'visible-range', requestId: 2, start: 0, end: 2, pixelWidth: 8, gapThresholdMs: .020 })
+    expect(messages.at(-1)).toMatchObject({ sampleTiming: { gapCount: 3, maxIntervalMs: 1 } })
+    decoder.handle({ type: 'reset' })
+    decoder.handle({ type: 'visible-range', requestId: 3, start: 0, end: 2, pixelWidth: 8, gapThresholdMs: .020 })
+    expect(messages.at(-1)).not.toHaveProperty('sampleTiming')
+  })
+
+  it('never reports estimated legacy timestamps as observed sample gaps', () => {
+    const { decoder, messages } = setup()
+    decoder.handle({ type: 'configure', capacity: 8, channelCount: 1 })
+    decoder.handle({ type: 'frame', buffer: frame(1n, 0, new TextEncoder().encode(JSON.stringify({version: 1, channels: [{name: 'A'}]})), StreamType.SUPERWATCH, 1n, 2), connectionGeneration: 1, frameTicket: 1 })
+    decoder.handle({ type: 'frame', buffer: frame(2n, 2, floats(1,2), StreamType.SUPERWATCH, 1_000_000n, 1), connectionGeneration: 1, frameTicket: 2 })
+    decoder.handle({ type: 'visible-range', requestId: 1, start: 0, end: 2, pixelWidth: 8, gapThresholdMs: .020 })
+    expect(messages.at(-1)).not.toHaveProperty('sampleTiming')
+    decoder.handle({ type: 'visible-range', requestId: 2, start: 0, end: 2, pixelWidth: 8, gapThresholdMs: NaN })
+    expect(messages.at(-1)).toMatchObject({ type: 'error', code: 'INVALID_RANGE' })
+  })
+
   it('filters serial ports before decoding without treating other ports as loss', () => {
     const { decoder, messages } = setup()
     decoder.handle({ type: 'configure', capacity: 100, channelCount: 1, decoderMode: 'serial-terminal' })

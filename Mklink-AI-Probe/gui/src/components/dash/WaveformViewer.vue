@@ -86,7 +86,8 @@ function requestLatestVisibleRange(interactive = false): void {
   visibleRequestInFlight = ++visibleRequestId
   if (interactive) interactiveVisibleRequests.add(visibleRequestInFlight)
   const formulas = viewer.getFormulas?.()
-  if (formulas?.some(Boolean)) binary.requestVisibleRange(visibleRequestInFlight, start, end, pixelWidth, formulas)
+  if (props.mode === 'SuperWatch' && Number.isFinite(range.gapThresholdMs)) binary.requestVisibleRange(visibleRequestInFlight, start, end, pixelWidth, formulas?.some(Boolean) ? formulas : undefined, range.gapThresholdMs)
+  else if (formulas?.some(Boolean)) binary.requestVisibleRange(visibleRequestInFlight, start, end, pixelWidth, formulas)
   else binary.requestVisibleRange(visibleRequestInFlight, start, end, pixelWidth)
 }
 
@@ -511,6 +512,8 @@ function buildTemplate(mode: string): string {
     <button id="btn-apply-interval" class="ctrl-btn" data-i18n="apply">Apply</button>
   </div>
 </div>
+
+${mode === 'SuperWatch' ? '<div id="sample-timing-status" class="sample-timing-status" data-i18n-title="sample_timing_tip"><span><span data-i18n="sample_interval_max">视窗最大间隔</span> <output id="sample-interval-max">—</output></span><span><span class="sample-gap-swatch"></span><span data-i18n="sample_gaps">视窗空隙</span> &gt;<span id="sample-gap-threshold">20 µs</span>: <output id="sample-gap-count">—</output></span></div>' : ''}
 
 <div id="trigger-toolbar">
   <button id="trigger-enable-btn" data-i18n="trigger">Trigger</button>

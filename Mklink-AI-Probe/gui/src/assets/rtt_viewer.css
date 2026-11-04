@@ -1493,6 +1493,10 @@ tr.watch-child-row td[data-col="value"] {
 /* SuperWatch: one acquisition row below the workspace/clock row. */
 .waveform-viewer.superwatch-desktop > header { display: none; }
 .watch-toolbar-row { display:flex; align-items:center; flex:0 0 auto; min-height:42px; flex-wrap:wrap; gap:4px 8px; border-bottom:1px solid var(--border); }
+.sample-timing-status { display:flex; flex:0 0 auto; flex-wrap:wrap; align-items:center; gap:6px 20px; padding:4px 12px; color:var(--muted); font-size:12px; border-bottom:1px solid var(--border); }
+.sample-timing-status output { color:var(--fg); font-variant-numeric:tabular-nums; }
+.sample-timing-status.has-gaps #sample-gap-count { color:var(--accent); }
+.sample-gap-swatch { display:inline-block; width:10px; height:10px; margin-right:5px; background:rgba(128,128,128,.3); border:1px solid var(--muted); vertical-align:middle; }
 .waveform-viewer.superwatch-desktop .watch-toolbar-row #control-toolbar { border:0; padding:4px; flex:0 1 auto; min-width:0; max-height:none; overflow:visible; flex-wrap:wrap; gap:6px; }
 .waveform-viewer.superwatch-desktop .watch-toolbar-row .header-actions { display:flex; align-items:center; flex:0 1 auto; flex-wrap:wrap; gap:5px; padding:4px; }
 .watch-extra-actions { display:inline-flex; }

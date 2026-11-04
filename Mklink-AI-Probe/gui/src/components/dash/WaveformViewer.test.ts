@@ -95,7 +95,10 @@ function canvasContext(): CanvasRenderingContext2D {
         return (value: unknown) => { (window as any).__canvasLabels?.push(String(value)) }
       }
       if (property === 'moveTo' || property === 'lineTo') {
-        return visitPoint
+        return (...args: unknown[]) => {
+          visitPoint()
+          ;(window as any).__canvasPaths?.push({op: property, color: target.strokeStyle, args})
+        }
       }
       if (!(property in target)) return noop
       return target[property as keyof CanvasRenderingContext2D]
@@ -230,6 +233,7 @@ window.__rttTestProbe = {
   fullTimeRange: function() { return getFullTimeRange(); },
   visibleTimeRange: function() { return getVisibleTimeRange(); },
   binaryEnvelope: function() { return binaryEnvelope; },
+  drawChart: drawChart,
   addSuperwatchName: superwatchAddName
 };`
   new Function(instrumented).call(window)
@@ -3072,6 +3076,68 @@ describe('VOFA viewer hot path source guard', () => {
 })
 
 describe('VOFA viewer typed-ring runtime', () => {
+  it('shades observed timestamp gaps, breaks the curve, and retains the stopped statistics', async () => {
+    const runtime = await loadRttViewerRuntime('SuperWatch', 8)
+    try {
+      runtime.viewer.configureBinaryChannels([{ name: 'A' }])
+      runtime.probe.syncStatus({ state: 'running', interval: .000004, items: [{ name: 'A' }] })
+      runtime.viewer.acceptBinaryBatch({ sequence: 1n, timestampNs: 60000n, itemCount: 4, channelCount: 1,
+        layout: 'sample-major-float32', times: Float64Array.of(0, .007, .053, .060).buffer,
+        values: Float32Array.of(0, 1, 0, 1).buffer })
+      const envelope = {
+        type: 'render-envelope', mode: 'min-max-v1', timestampKind: 'sample-milliseconds',
+        requestId: 1, pixelWidth: 8, channelCount: 1, pointCount: 4, candidateSampleCount: 4,
+        times: Float64Array.of(0, .007, .053, .060).buffer, timeIndices: Uint32Array.of(0,1,2,3).buffer,
+        values: Float32Array.of(0,1,0,1).buffer, channelOffsets: Uint32Array.of(0,4).buffer,
+        sampleTiming: { thresholdMs: .020, maxIntervalMs: .046, intervalCount: 3, gapCount: 1,
+          startMs: 0, endMs: .060, columns: Uint8Array.of(1,1,1,1,1,1,1,1).buffer,
+          segmentIds: Uint32Array.of(0,0,1,1).buffer },
+      }
+      expect(runtime.viewer.renderBinaryEnvelope(envelope, true)).toBe(true)
+      expect(runtime.viewer.getBinaryVisibleRange().gapThresholdMs).toBe(.020)
+      expect(document.getElementById('sample-interval-max')!.textContent).toBe('46 µs')
+      expect(document.getElementById('sample-gap-count')!.textContent).toBe('1')
+      ;(window as any).__canvasPaths = []
+      ;(window as any).__canvasDraws = []
+      runtime.probe.drawChart()
+      const curve = (window as any).__canvasPaths.filter((p: any) => p.color === runtime.probe.fields().A.color)
+      expect(curve.map((p: any) => p.op)).toEqual(['moveTo','lineTo','moveTo','lineTo'])
+      expect((window as any).__canvasDraws.some((d: any) => d.op === 'fillRect' && d.color === 'rgba(128,128,128,0.22)')).toBe(true)
+      document.getElementById('btn-pause')!.click()
+      runtime.viewer.renderBinaryEnvelope({ ...envelope, sampleTiming: { ...envelope.sampleTiming, maxIntervalMs: 9 } })
+      expect(document.getElementById('sample-interval-max')!.textContent).toBe('46 µs')
+      runtime.viewer.configureBinaryChannels([{ name: 'B' }])
+      expect(document.getElementById('sample-interval-max')!.textContent).toBe('—')
+      expect(document.getElementById('sample-gap-count')!.textContent).toBe('—')
+    } finally {
+      delete (window as any).__canvasPaths
+      delete (window as any).__canvasDraws
+      runtime.cleanup()
+    }
+  })
+
+  it('labels unavailable timing honestly and scales the marking threshold for slow sampling', async () => {
+    const runtime = await loadRttViewerRuntime('SuperWatch', 8)
+    try {
+      runtime.viewer.configureBinaryChannels([{ name: 'A' }])
+      runtime.probe.syncStatus({ state: 'running', interval: .1, items: [{ name: 'A' }] })
+      runtime.viewer.acceptBinaryBatch({ sequence: 1n, timestampNs: 100000000n, itemCount: 2, channelCount: 1,
+        layout: 'sample-major-float32', times: Float64Array.of(0,100).buffer, values: Float32Array.of(0,1).buffer })
+      expect(runtime.viewer.getBinaryVisibleRange().gapThresholdMs).toBe(200)
+      const envelope = { type: 'render-envelope', mode: 'min-max-v1', timestampKind: 'sample-milliseconds',
+        requestId: 1, pixelWidth: 8, channelCount: 1, pointCount: 2, candidateSampleCount: 2,
+        times: Float64Array.of(0,100).buffer, timeIndices: Uint32Array.of(0,1).buffer,
+        values: Float32Array.of(0,1).buffer, channelOffsets: Uint32Array.of(0,2).buffer }
+      expect(runtime.viewer.renderBinaryEnvelope(envelope, true)).toBe(true)
+      expect(document.getElementById('sample-interval-max')!.textContent).toBe('—')
+      expect(document.getElementById('sample-gap-threshold')!.textContent).toBe('200 ms')
+      expect(runtime.viewer.renderBinaryEnvelope({ ...envelope, sampleTiming: {
+        thresholdMs: 200, startMs: 0, endMs: 100, intervalCount: 1, maxIntervalMs: 100, gapCount: 2,
+        columns: new Uint8Array(8).buffer, segmentIds: new Uint32Array(2).buffer,
+      } }, true)).toBe(false)
+    } finally { runtime.cleanup() }
+  })
+
   it('preserves configured waveform fields when status omits channel metadata', async () => {
     const runtime = await loadRttViewerRuntime()
     try {
