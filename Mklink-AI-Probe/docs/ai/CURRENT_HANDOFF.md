@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-11-04T19:39:37+08:00`
+- 更新时间：`2026-11-04T20:45:31+08:00`
 - 分支：`codex/v0.4.3-fixes`
 - HEAD：`基于main 4f3be7a4；采集产品0a0c97b3，安装源f9b1ae8a（仅更新说明）；确切提交以Git为准。`
 - 远端 HEAD：`microkeen/main已合并PR66、67、68，基线4f3be7a4；正式tag/包不变。`
 - 工作树：复用E盘主工作区，保留旧v0.4.2分支和两个detached工作树；本轮及后续修复共用codex/v0.4.3-fixes。
-- 当前任务：本机0.4.3源f9b1ae8a安装资格通过。用户授权E/F旧记录和脚本清理已完成，不用D盘；见v043-workspace-cleanup.md。原USB7保持；ILM B先前磁盘满失败，待重建审查，尚无性能结论。
-- 状态：`v043_receive_installed_ilm_trial_preparing`
+- 当前任务：本机0.4.3源f9b1ae8a安装通过；E/F历史清理完成，不用D盘。最小ILM B已完成A/B/A：局部ECHO收益但20us/40us零漏采未达，不采用候选；原USB7已恢复反测，见v043-control-ilm-b-ab.md。
+- 状态：`v043_ilm_b_evaluated_usb7_restored`
 
 ## 里程碑
 
@@ -23,7 +23,7 @@
 
 ## 验证证据
 
-- **0.4.3接收、连续性与性能**：接收修复0a0c97b3：382后端/307GUI、9记录/164回放，搜索降至35–72ms、队列删除归零；见v043-receive-backpressure.md。IAB四图与2369439点raw一致见v043-iab-waveforms.md。AHB A/B/A的21377916点、144宽度、66MiB RTT、900DAP通过，但候选负收益已恢复USB7，见v043-control-ahb-ab.md。安装f9b1ae8a：3649载荷、56冻结MCP、42Web、原生/浏览器及退出通过，5说明测试；见v043-receive-local-install.md。最大间隔20us/40us零漏采未达。普通读/协议旧证据见v043-tail-latency.md、v043-mux-sampling-contract.md。
+- **0.4.3接收、连续性与性能**：接收0a0c97b3：382后端/307GUI、9记录/164回放，队列删除归零，见v043-receive-backpressure.md；IAB2369439点raw一致见v043-iab-waveforms.md。AHB负收益恢复USB7，见v043-control-ahb-ab.md。ILM B A/B/A：69273303点、144宽度、66MiB RTT、900DAP通过；ECHO中位降至39us但普通批间21–22us、40us仍漏边沿，DAP P95略高，不采用，原USB7反测通过，见v043-control-ilm-b-ab.md。安装f9b1ae8a的3649载荷/冻结MCP/Web/原生及退出通过，见v043-receive-local-install.md。普通读/协议旧证据见v043-tail-latency.md、v043-mux-sampling-contract.md。
 - **0.4.2正式构建安装及公开发布**：正式源0e82ba6f，Windows/完整Skill/SiteAgent及四固件正式覆盖、签名、三渠道与故障回退验证通过；PR66/67/68已合并，正式资产不可变。安装器元数据修复cb30b703/PR63已纳入。详细计数/SHA见v042-release-handoff.md、installer-metadata-cleanup-20261027.md。后续清理29目录约6.587GiB、629保留文件哈希不变，135含链接组保留人工检查，见v042-postrelease-handoff.md。
 - **0.4.2正式候选最终资格**：90e676db与产品1ca9b8fd等价：6453Python/2skip、1182GUI、生产Web/冻结/Rust/NSIS/覆盖及真实界面交互通过。HPM时钟/镜像/RAM/XML/RTT/Watch/串口、Trace独立并行、烧录后三流恢复与原生退出通过。完整计数及限制见v042-formal-qualification.md、v042-traffic-replay.md，历史Trace溢出失败保留。
 - **HPM AI Skill能力核实**：源cafe835f：749Python/65GUI、生产Web/浏览器与完整Skill覆盖校验通过，56 MCP/126能力/协议53一致。时钟、离线门禁、探针诊断/供电/ISP/OTP入口和文档已补齐。该轮无USB操作，详见firmware-skill-fixes-20261101.md；后续正式固件范围见发布报告。
@@ -47,14 +47,14 @@
 
 ## 真机环境
 
-- **state**：普通V4已按用户新增手动UF2授权恢复原USB7源465a9b69/build11:01:27（原SHA db6fdfe2）；AHB16:49:28负收益已撤销。三阶段H743 Flash223656B逐字节相符，映像77e05091不变；30MHz，最终TIM7 ARR99。反测完成，流停止并断开、子后台退出；旧内置浏览器离线回放不持有探针。操作前仍重核占用，20us/长稳未达。
+- **state**：原USB7 build11:01:27/源465a9b69（UF2 SHA db6fdfe2）已手动恢复，ILM B19:41:56试验结束不采用。三阶段H743 Flash223656B逐字节相符、映像77e05091不变；30MHz，最终TIM7 ARR99。反测通过，流停止/探针断开/子后台退出。PE7实读AF12/FMC，合法全字FF00/FF04/FF80/FF84的证据保留。操作前仍重新核对占用；20us/长稳未达。
 - **installer**：本机Windows已覆盖0.4.3本地未签名测试版，源f9b1ae8a，NSIS SHA55d17d0e，含0a0c97b3接收/连续性修复。3649载荷/冻结MCP/42 Web/原生/正常退出通过，见v043-receive-local-install.md；正式0.4.2资产保留。全局Skill及SiteAgent仍0.4.2。没有合并/签名/发布。
 - **backups**：正式包/四固件、当前资格/恢复包、缓存及工作树保留。用户授权旧记录和脚本清理：F释放18.055GiB、E释放5.326GiB；32份旧raw已退役，不能重解码，保留分析。114含链接组未动；见v043-workspace-cleanup.md。
 
 ## 下一动作
 
 1. 继续codex/v0.4.3-fixes/草稿PR69，本机安装已更新f9b1ae8a。普通读P95/间隔<1ms、采样最大间隔<20us仍开放；合并/签名/正式发布须新授权。
-2. ILM B六小函数638B/固定768B段、dispatch留XIP，由固件会话01a1a1a2-9adc-79e2-b30e-07c07d5f90c6负责。E/F清理已解空间限制，不用D盘；先链接审查再USB7/ILM/USB7对照。放不下则停，不挪旧热点/减缓冲/改SWD调度；先核占用，原USB7手动恢复已授权，自动保护不改。
+2. 最小ILM B试验已完成且不扩大；原USB7保持，候选/失败和A/B/A原始证据保留，见v043-control-ilm-b-ab.md。后续采样优化应重新定位普通批间21–22us与批内长尾，不能靠平均速率宣称无漏采；固件会话01a1a1a2-9adc-79e2-b30e-07c07d5f90c6本轮设备工作结束。
 3. 保留正式包、当前唯一验收证据、缓存和含链接目录；旧记录/脚本退役范围见v043-workspace-cleanup.md。历史V3掉线/冷插拔/长稳等仍按known-limits-20261030.md处理。
 4. 监控上海90GiB告警/95GiB停止，套餐截止北京时间2026-11-26 00:00。未核验续费不清除停止锁、不清零账本、不申请新私钥。
 
