@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-04T17:20:44+08:00",
+  "updated_at": "2026-11-04T19:00:57+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.4.3-fixes",
-    "head": "基于main 4f3be7a4；本轮接收/连续性修改对照c71d6995，本地安装源14160cc6；确切提交以Git为准。",
+    "head": "基于main 4f3be7a4；采集产品0a0c97b3，安装源f9b1ae8a（仅更新说明）；确切提交以Git为准。",
     "remote_head": "microkeen/main已合并PR66、67、68，基线4f3be7a4；正式tag/包不变。",
     "working_tree": "复用E盘主工作区，保留旧v0.4.2分支和两个detached工作树；本轮及后续修复共用codex/v0.4.3-fixes。"
   },
@@ -13,8 +13,8 @@
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "v043_control_ahb_rejected_usb7_restored",
-    "current_task": "控制热点AHB布局A/B/A完成，ECHO批间中位44–49→70–74→42–49us，负收益已撤销；用户明确授权手动恢复原USB7后反测通过。36轮21377916样本原始MUX逐点相符，144宽度/66MiB RTT/900次DAP共存通过。见v043-control-ahb-ab.md；产品0a0c97b3、安装14160cc6不变。"
+    "status": "v043_receive_installed_ilm_trial_preparing",
+    "current_task": "接收/连续性修复已构建覆盖本机0.4.3，安装源f9b1ae8a，载荷/冻结MCP/Web/原生/正常退出通过，见v043-receive-local-install.md。USB7原包保持，最小六函数ILM B静态方案完成，等待构建；未实测候选收益。"
   },
   "milestones": [
     {
@@ -49,6 +49,10 @@
     }
   ],
   "verification": [
+    {
+      "area": "0.4.3接收修复本地安装",
+      "result": "f9b1ae8a本地NSIS覆盖退出0，两配置不变；3649载荷、7059FLM/2224blob、4800SVD、56冻结MCP、42Web、原生与真实浏览器、Windows-only PATH及正常退出通过，更新说明5项测试通过。仅说明/生产dist变化，未新作硬件性能认证，见v043-receive-local-install.md。"
+    },
     {
       "area": "0.4.3接收、连续性与性能",
       "result": "0a0c97b3接收/连续性：382后端/307GUI，最终记录9/回放164及Web通过；搜索1.75–1.87s→35–72ms，队列删除归零，见v043-receive-backpressure.md。内置浏览器四图/缺失回放及2369439样本raw比对见v043-iab-waveforms.md。本轮AHB A/B/A：36轮21377916样本、144宽度、66MiB RTT、900次DAP共存通过；AHB ECHO批间恶化，恢复USB7后42–49us、4B持续264.435k/s、RTT853.53/853.58KiB/s。最大43–67us，20us/40us零漏采未达，见v043-control-ahb-ab.md。普通读/协议/实装仍见v043-tail-latency.md、v043-mux-sampling-contract.md、v043-desktop-waveforms.md。"
@@ -96,7 +100,7 @@
   ],
   "hardware": {
     "state": "普通V4已按用户新增手动UF2授权恢复原USB7源465a9b69/build11:01:27（原SHA db6fdfe2）；AHB16:49:28负收益已撤销。三阶段H743 Flash223656B逐字节相符，映像77e05091不变；30MHz，最终TIM7 ARR99。反测完成，流停止并断开、子后台退出；旧内置浏览器离线回放不持有探针。操作前仍重核占用，20us/长稳未达。",
-    "installer": "本机Windows已覆盖为0.4.3本地未签名测试版，源14160cc6，NSIS SHA2fb705ce，安装/载荷/冻结MCP/Web/正常退出通过；正式0.4.2资产保留不变。全局Skill及独立SiteAgent仍0.4.2，未覆盖。没有合并/签名/发布。",
+    "installer": "本机Windows已覆盖0.4.3本地未签名测试版，源f9b1ae8a，NSIS SHA55d17d0e，含0a0c97b3接收/连续性修复。3649载荷/冻结MCP/42 Web/原生/正常退出通过，见v043-receive-local-install.md；正式0.4.2资产保留。全局Skill及SiteAgent仍0.4.2。没有合并/签名/发布。",
     "backups": "保留正式包/七资产/四固件、CI ZIP、唯一验收证据、Skill备份、缓存及旧detached树。29目录清理/135含链接组人工检查清单见v042-postrelease-handoff.md及本机v042-postrelease-handoff-20261102/START_HERE.txt。"
   },
   "known_limits": [
@@ -110,14 +114,14 @@
     "nRF54L15保护闭环、全部擦除/拔插/休眠/断电、电源精度未全测。每次VCC需确认具体电压。26个无可靠扇区FLM禁用扇区操作，Bank模式须匹配。HPM5301 OTP组18/19历史永久锁定；128字读取及批准Word69 0→1已实测，其余型号/区域不继承授权，锁最后写/逐项校验，多Word不可回滚；熔丝/影子/临时锁语义未知，UART按ROM状态及回读为准。详见hpm-offline-otp-handoff.md及known-limits-20261030.md。"
   ],
   "next_actions": [
-    "继续codex/v0.4.3-fixes/草稿PR69。安装版仍14160cc6，本轮Web试构建仅F盘。普通读P95/间隔<1ms、采样最大间隔<20us仍开放；合并/签名/正式发布须新授权。",
-    "AHB控制代码布局负收益，已恢复USB7并完成A/B/A，见v043-control-ahb-ab.md。ILM因预布局空间不足未实测；后续控制解析/USB OUT/RTOS须独立测量并协调固件会话01a1a1a2-9adc-79e2-b30e-07c07d5f90c6。保留一次WATCH START 501.7369ms准入超时证据；不停心跳、不改目标迁就采集、不自动试刷其他候选。",
+    "继续codex/v0.4.3-fixes/草稿PR69，本机安装已更新f9b1ae8a。普通读P95/间隔<1ms、采样最大间隔<20us仍开放；合并/签名/正式发布须新授权。",
+    "用户已授权一轮最小ILM方案。固件会话01a1a1a2-9adc-79e2-b30e-07c07d5f90c6准备六小函数638B原始输入、固定768B段，dispatch保留XIP；放不下则停止，不挪旧热点/减缓冲/改SWD与调度。待安装释放构建窗口后链接审查，再新USB7/ILM/USB7 A/B/A。刷写前另核身份/占用；原USB7手动恢复已有明确授权，自动保护不改。",
     "保留正式包、唯一验收证据及含链接目录；本机新START_HERE与v042-postrelease-handoff.md记录清理清单和接手入口。历史V3掉线/冷插拔/长稳等仍按known-limits-20261030.md和最终资格报告处理。",
     "监控上海90GiB告警/95GiB停止，套餐截止北京时间2026-11-26 00:00。未核验续费不清除停止锁、不清零账本、不申请新私钥。"
   ],
   "continuation_protocol": [
     "后续多个修复共用codex/v0.4.3-fixes，先fetch核对实际状态；不直接修改main，不逐任务另建分支，不自动切回main。旧v0.4.2分支及两个detached工作树保留。0.4.2正式源0e82ba6f和全部已发布资产不可覆盖。",
-    "正式资格/渠道仍以v042-formal-qualification.md和v042-release-handoff.md为准；本机0.4.3安装源14160cc6未更新，最新源码Web/40与100us复验见v043-iab-waveforms.md。设备已断开，内置浏览器仅回放；操作前重核占用。",
+    "正式资格/渠道仍以v042-formal-qualification.md和v042-release-handoff.md为准；本机0.4.3安装源f9b1ae8a已更新，见v043-receive-local-install.md。原生验证已正常退出，旧内置浏览器仅回放；硬件操作前仍重新核对占用。",
     "V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。",
     "CDC995和SDK10048根因保留待排查。恢复仅同身份CDC故障5秒内；超时不自动接回/新建AI会话，主动断开立即生效，未知写入不重放。历史实例释放记录见v035-transport-recovery.md；当前硬件占用以本交接真机状态及指定固件会话为准。",
     "客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。"
