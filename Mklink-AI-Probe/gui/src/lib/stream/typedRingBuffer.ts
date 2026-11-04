@@ -37,6 +37,7 @@ export interface NumericEnvelopeSelection {
  */
 export class TypedRingBuffer {
   readonly timestamps: Float64Array
+  readonly boundaries: Uint8Array
   readonly values: Float32Array
   readonly capacity: number
   readonly channelCount: number
@@ -54,6 +55,7 @@ export class TypedRingBuffer {
     this.capacity = capacity
     this.channelCount = channelCount
     this.timestamps = new Float64Array(capacity)
+    this.boundaries = new Uint8Array(capacity)
     this.values = new Float32Array(capacity * channelCount)
   }
 
@@ -69,7 +71,7 @@ export class TypedRingBuffer {
     for (let logical = first; logical < this.sampleCount; logical++) {
       const slot = (this.startSlot + logical) % this.capacity
       const offset = slot * this.channelCount
-      next.append(this.timestamps[slot], this.values.subarray(offset, offset + this.channelCount))
+      next.append(this.timestamps[slot], this.values.subarray(offset, offset + this.channelCount), this.boundaries[slot])
     }
     return next
   }
@@ -79,9 +81,11 @@ export class TypedRingBuffer {
     const next = new TypedRingBuffer(Math.max(1, this.sampleCount), this.channelCount)
     const firstCount = Math.min(this.sampleCount, this.capacity - this.startSlot)
     next.timestamps.set(this.timestamps.subarray(this.startSlot, this.startSlot + firstCount))
+    next.boundaries.set(this.boundaries.subarray(this.startSlot, this.startSlot + firstCount))
     next.values.set(this.values.subarray(this.startSlot * this.channelCount, (this.startSlot + firstCount) * this.channelCount))
     const remaining = this.sampleCount - firstCount
     next.timestamps.set(this.timestamps.subarray(0, remaining), firstCount)
+    next.boundaries.set(this.boundaries.subarray(0, remaining), firstCount)
     next.values.set(this.values.subarray(0, remaining * this.channelCount), firstCount * this.channelCount)
     next.sampleCount = this.sampleCount
     return next
@@ -105,7 +109,7 @@ export class TypedRingBuffer {
     return this.values[slot * this.channelCount + channel]
   }
 
-  append(timestamp: number, channels: Float32Array): void {
+  append(timestamp: number, channels: Float32Array, boundary = 0): void {
     if (channels.length !== this.channelCount) {
       throw new RangeError(`expected ${this.channelCount} channel values`)
     }
@@ -118,19 +122,22 @@ export class TypedRingBuffer {
       this.startSlot = (this.startSlot + 1) % this.capacity
     }
     this.timestamps[slot] = timestamp
+    this.boundaries[slot] = boundary
     this.values.set(channels, slot * this.channelCount)
   }
 
   /** Append sample-major values: sample 0 channels, then sample 1 channels. */
-  appendBatch(timestamps: Float64Array, sampleMajorValues: Float32Array): void {
+  appendBatch(timestamps: Float64Array, sampleMajorValues: Float32Array, boundaries?: Uint8Array): void {
     if (sampleMajorValues.length !== timestamps.length * this.channelCount) {
       throw new RangeError('sample-major values must contain channelCount values per timestamp')
     }
+    if (boundaries && boundaries.length !== timestamps.length) throw new RangeError('Boundary count does not match samples')
     for (let sample = 0; sample < timestamps.length; sample += 1) {
       const offset = sample * this.channelCount
       this.append(
         timestamps[sample],
         sampleMajorValues.subarray(offset, offset + this.channelCount),
+        boundaries?.[sample] ?? 0,
       )
     }
   }
@@ -232,10 +239,13 @@ export class TypedRingBuffer {
       if (!(interval > 0)) return
       timing.intervalCount++
       timing.maxIntervalMs = Math.max(timing.maxIntervalMs ?? 0, interval)
-      // 1 ns tolerance avoids treating a rounded 20 us interval as >20 us.
-      if (interval <= timing.thresholdMs + 0.000001) return
-      timing.gapCount++
+      const reason = this.boundaries[(this.startSlot + logical) % this.capacity]
+      if (!reason) return
       gapStarts!.push(logical)
+      // Unknown wire continuity breaks the line, but does not claim lost
+      // samples. Elapsed time alone never paints a loss region.
+      if (!(reason & 1)) return
+      timing.gapCount++
       const left = Math.max(0, Math.floor((Math.max(start, previous) - start) / span * pixelWidth))
       const right = Math.min(pixelWidth, Math.max(left + 1, Math.ceil((Math.min(end, timestamp) - start) / span * pixelWidth)))
       timing.columns.fill(1, left, right)

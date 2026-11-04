@@ -98,6 +98,7 @@ vi.mock('../../composables/useSymbolCatalog', () => ({
     writeSymbol: mocks.writeSymbol,
     loadBrowseChildren: mocks.loadBrowseChildren,
     searchSymbols: mocks.searchSymbols,
+    resolveSymbol: async (path: string) => (await mocks.searchSymbols(path)).find((item: any) => item.path === path),
   }),
 }))
 

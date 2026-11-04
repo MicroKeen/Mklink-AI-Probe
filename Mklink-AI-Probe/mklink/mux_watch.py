@@ -9,6 +9,7 @@ class PackedWatchSample(NamedTuple):
     timestamp_us: int
     payload: bytes
     offset: int
+    break_before: int = 0
 
 
 class MuxWatchCapacityError(ValueError):
@@ -48,6 +49,7 @@ class MuxWatchSession:
         if self.period > 60000000:
             raise MuxWatchCapacityError('Multiplex watch period exceeds 60 seconds')
         self._pending = []
+        self._break_before = 0
         self._reset_generation = None
         self._last_clock = None
         self._clock_high = 0
@@ -110,6 +112,10 @@ class MuxWatchSession:
         # budget. Draining 64 KiB expands into thousands of Python sample
         # objects and can stall the next drain long enough to overflow it.
         for event in self.transport.drain(0x41, 255, max_bytes=16384):
+            boundary = getattr(event, 'break_before', 0)
+            if boundary:
+                self._pending = []
+                self._break_before |= boundary
             generation = getattr(event, 'reset_generation', None)
             if generation != self._reset_generation:
                 self._pending = []
@@ -133,6 +139,7 @@ class MuxWatchSession:
                 self._pending = []
                 self.gaps += 1
                 self.read_errors += 1
+                self._break_before |= 1
                 if self._read_failure_since is None:
                     self._read_failure_since = now
                 # Firmware retains the subscription. Do not replay commands,
@@ -154,7 +161,7 @@ class MuxWatchSession:
                 for offset in range(4, len(event), stride):
                     timestamp = struct.unpack_from('<I', event, offset)[0]
                     if packed:
-                        result.append(PackedWatchSample(self._timestamp(timestamp), event, offset+4))
+                        result.append(PackedWatchSample(self._timestamp(timestamp), event, offset+4, self._take_break()))
                         continue
                     cursor = offset+4
                     regions = []
@@ -167,10 +174,12 @@ class MuxWatchSession:
             if index == 0:
                 if self._pending:
                     self.gaps += 1
+                    self._break_before |= 1
                 self._pending = []
             if index >= len(self.parts) or index != len(self._pending) or status or len(event)-6 != self.parts[index][2]:
                 self._pending = []
                 self.gaps += 1
+                self._break_before |= 1
                 continue
             self._pending.append(event[6:])
             if len(self._pending) != len(self.parts):
@@ -193,7 +202,12 @@ class MuxWatchSession:
 
     def _frame(self, timestamp, regions):
         return {'format': 'mux', 'timestamp_us': self._timestamp(timestamp),
-                'flags': 0, 'regions': regions}
+                'flags': 0, 'regions': regions, 'break_before': self._take_break()}
+
+    def _take_break(self):
+        boundary = self._break_before
+        self._break_before = 0
+        return boundary
 
     def _timestamp(self, timestamp):
         if self._last_clock is not None and timestamp < self._last_clock:

@@ -32,6 +32,19 @@ def test_acquisition_does_not_record_until_explicit_start(tmp_path):
     assert not list(tmp_path.iterdir())
 
 
+def test_recording_keeps_ordered_boundaries_without_inventing_values(tmp_path):
+    sw = manager()
+    sw.start_recording(str(tmp_path))
+    for i, boundary in enumerate((0, 0, 1, 0, 2)):
+        sw._publish_sample_values_locked([i], channel_count=1, sample_time=i*10, break_before=boundary)
+    result = sw.stop_recording()
+    assert result['samples'] == 5
+    data = rows(tmp_path)
+    assert [r['value'] for r in data if 'value' in r] == list(range(5))
+    assert data[2] == {'event': 'discontinuity', 'reason': 1}
+    assert data[5] == {'event': 'discontinuity', 'reason': 2}
+
+
 def test_recording_keeps_all_samples_beyond_display_buffer_and_drains_tail(tmp_path):
     sw = manager()
     sw._publish_sample_values_locked([-1], channel_count=1, sample_time=0)

@@ -33,6 +33,8 @@ class MuxWatchEvent(bytes):
     def __new__(cls, payload, reset_generation):
         value = super().__new__(cls, payload)
         value.reset_generation = reset_generation
+        # 1: confirmed discarded/read-failed records; 2: wire continuity unknown.
+        value.break_before = 0
         return value
 
 
@@ -84,6 +86,7 @@ class MuxTransport:
         self.dropped_bytes = {}
         self.event_gaps = 0
         self._event_id = None
+        self._watch_wire_gap = False
         self._last_receive = None
         self._last_reply = None
         self._last_timeout = None
@@ -306,7 +309,9 @@ class MuxTransport:
                         self.fail('Invalid event channel')
                         return
                     if self._event_id is not None:
-                        self.event_gaps += (req-self._event_id-1) & 0xffffffff
+                        missing = (req-self._event_id-1) & 0xffffffff
+                        self.event_gaps += missing
+                        self._watch_wire_gap |= bool(missing)
                     self._event_id = req
                     if op == 0x40 and self._rtt_manager is not None:
                         self._rtt_manager.publish(payload)
@@ -315,13 +320,23 @@ class MuxTransport:
                     key = (op, payload[0] if op == 0x40 else 255)
                     if op == 0x41:
                         payload = MuxWatchEvent(payload, self._reset_generation)
+                        if self._watch_wire_gap:
+                            payload.break_before = 2
+                            self._watch_wire_gap = False
                     queue = self._queues.setdefault(key, deque())
                     size = self._sizes.get(key, 0)
                     budget = self.WATCH_QUEUE_BYTES if op == 0x41 else self.MAX_QUEUE_BYTES
+                    lost = 0
                     while queue and size+len(payload) > budget:
                         removed = queue.popleft()
                         size -= len(removed)
                         self.dropped_bytes[key] = self.dropped_bytes.get(key, 0)+len(removed)-6
+                        if op == 0x41:
+                            # Carry the boundary with the first retained event,
+                            # including when a previously marked event is evicted.
+                            lost |= removed.break_before | (1 if removed[1] in (0, 5, 9) else 2)
+                    if lost:
+                        (queue[0] if queue else payload).break_before |= lost
                     queue.append(payload)
                     self._sizes[key] = size+len(payload)
                     self._condition.notify_all()

@@ -250,7 +250,7 @@ def test_catalog_pages_each_dimension_of_nested_arrays(tmp_path):
     assert catalog.by_path("matrix[2][299]").address == 0x20001000 + (2 * 300 + 299) * 4
 
 
-def test_device_reads_and_writes_array_elements_beyond_initial_catalog_page(tmp_path):
+def test_device_reads_and_writes_array_elements_beyond_initial_catalog_page(tmp_path, monkeypatch):
     axf = tmp_path / "app.axf"
     axf.write_bytes(b"axf")
     info = DwarfInfo(
@@ -267,6 +267,15 @@ def test_device_reads_and_writes_array_elements_beyond_initial_catalog_page(tmp_
         axf_path=str(axf),
         ram_ranges=[(0x20000000, 0x20010000)],
     )
+    original_child = SymbolCatalog._array_child
+    visited = []
+    def child(self, node, index):
+        visited.append(index)
+        return original_child(self, node, index)
+    monkeypatch.setattr(SymbolCatalog, '_array_child', child)
+    assert catalog.search('GPIOE.IDR.ID2') == ()
+    assert visited == []  # Register digits must not force a full RAM-array walk.
+    assert catalog.search('values[999]')[0].path == 'values[999]'
     device = Device(axf=str(axf))
     device._connected = True
     device._bridge = object()

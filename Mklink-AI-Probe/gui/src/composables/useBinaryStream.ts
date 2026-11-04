@@ -46,12 +46,12 @@ function streamUrl(stream: BinaryStreamName): string {
     const base = new URL(API_BASE, window.location.href)
     base.protocol = base.protocol === 'https:' ? 'wss:' : 'ws:'
     base.pathname = `${base.pathname.replace(/\/+$/, '')}/ws/streams/${stream}`
-    base.search = ''
+    base.search = stream === 'superwatch' ? '?continuity=1' : ''
     base.hash = ''
     return base.toString()
   }
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  return `${protocol}//${window.location.host}/ws/streams/${stream}`
+  return `${protocol}//${window.location.host}/ws/streams/${stream}${stream === 'superwatch' ? '?continuity=1' : ''}`
 }
 
 export function useBinaryStream(

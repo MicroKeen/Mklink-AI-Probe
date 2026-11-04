@@ -4091,11 +4091,18 @@ def create_app(
                     "size": item.size,
                     "descriptor": item.to_dict(),
                 }
-                for item in catalog.search(q, limit=50)
+                for item in await run_in_threadpool(catalog.search, q, limit=50)
             ]
             return {"results": results}
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
+
+    @app.get("/api/symbols/resolve")
+    async def symbols_resolve(path: str = ""):
+        catalog = _require_symbol_catalog()
+        descriptor = await run_in_threadpool(catalog.by_path, path, writable_only=False)
+        return {"descriptor": descriptor.to_dict() if descriptor is not None else None,
+                "generation": catalog.generation}
 
     @app.get("/api/symbols/typeinfo")
     async def symbols_typeinfo(name: str = ""):

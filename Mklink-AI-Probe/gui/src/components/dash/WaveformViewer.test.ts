@@ -300,7 +300,7 @@ describe('WaveformViewer VOFA binary transport', () => {
       const canvas = document.querySelector('#chart')
       expect(viewer.beginReplay({ duration: 60, rows: 100, channels: [{ name: 'log' }] }, control)).toBe(true)
       viewer.setReplayPosition(20, true, true)
-      viewer.renderReplayView({ id: 1, position: 20, width: 800, channels: [{ name: 'log', latest: 5, points: [[10, 2], [20, 5]] }] })
+      viewer.renderReplayView({ id: 1, start: 0, end: 60, position: 20, width: 800, channels: [{ name: 'log', latest: 5, points: [[10, 2], [20, 5]] }] })
       expect(document.querySelector('#chart')).toBe(canvas)
       expect(probe.binaryEnvelope().values).toEqual(Float64Array.of(2, 5))
       viewer.updateAcquisitionStatus({ state: 'stopped', channel_metadata: { wrong: { type: 'float' } } })
@@ -3095,8 +3095,8 @@ describe('VOFA viewer typed-ring runtime', () => {
       }
       expect(runtime.viewer.renderBinaryEnvelope(envelope, true)).toBe(true)
       expect(runtime.viewer.getBinaryVisibleRange().gapThresholdMs).toBe(.020)
-      expect(document.getElementById('sample-interval-max')!.textContent).toBe('46 µs')
-      expect(document.getElementById('sample-gap-count')!.textContent).toBe('1')
+      expect(document.getElementById('sample-timing-status')).toBeNull()
+      expect(document.getElementById('sample-timing-status')).toBeNull()
       ;(window as any).__canvasPaths = []
       ;(window as any).__canvasDraws = []
       runtime.probe.drawChart()
@@ -3105,10 +3105,10 @@ describe('VOFA viewer typed-ring runtime', () => {
       expect((window as any).__canvasDraws.some((d: any) => d.op === 'fillRect' && d.color === 'rgba(128,128,128,0.22)')).toBe(true)
       document.getElementById('btn-pause')!.click()
       runtime.viewer.renderBinaryEnvelope({ ...envelope, sampleTiming: { ...envelope.sampleTiming, maxIntervalMs: 9 } })
-      expect(document.getElementById('sample-interval-max')!.textContent).toBe('46 µs')
+      expect(document.getElementById('sample-timing-status')).toBeNull()
       runtime.viewer.configureBinaryChannels([{ name: 'B' }])
-      expect(document.getElementById('sample-interval-max')!.textContent).toBe('—')
-      expect(document.getElementById('sample-gap-count')!.textContent).toBe('—')
+      expect(document.getElementById('sample-timing-status')).toBeNull()
+      expect(document.getElementById('sample-timing-status')).toBeNull()
     } finally {
       delete (window as any).__canvasPaths
       delete (window as any).__canvasDraws
@@ -3129,8 +3129,8 @@ describe('VOFA viewer typed-ring runtime', () => {
         times: Float64Array.of(0,100).buffer, timeIndices: Uint32Array.of(0,1).buffer,
         values: Float32Array.of(0,1).buffer, channelOffsets: Uint32Array.of(0,2).buffer }
       expect(runtime.viewer.renderBinaryEnvelope(envelope, true)).toBe(true)
-      expect(document.getElementById('sample-interval-max')!.textContent).toBe('—')
-      expect(document.getElementById('sample-gap-threshold')!.textContent).toBe('200 ms')
+      expect(document.getElementById('sample-timing-status')).toBeNull()
+      expect(document.getElementById('sample-timing-status')).toBeNull()
       expect(runtime.viewer.renderBinaryEnvelope({ ...envelope, sampleTiming: {
         thresholdMs: 200, startMs: 0, endMs: 100, intervalCount: 1, maxIntervalMs: 100, gapCount: 2,
         columns: new Uint8Array(8).buffer, segmentIds: new Uint32Array(2).buffer,

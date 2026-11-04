@@ -1,7 +1,7 @@
 import {
   decodeFrame, RTT_RAW_UTF8_LINES, RTT_TERMINAL_UTF8, SERIAL_RX_BYTES, SERIAL_TX_BYTES,
   StreamType, SUPERWATCH_METADATA_JSON,
-  SUPERWATCH_SAMPLE_MAJOR_FLOAT32, SUPERWATCH_TIMESTAMPED_FLOAT32,
+  SUPERWATCH_SAMPLE_MAJOR_FLOAT32, SUPERWATCH_TIMESTAMPED_FLOAT32, SUPERWATCH_CONTINUITY_FLOAT32,
   WAVEFORM_SAMPLE_MAJOR_FLOAT32, type StreamFrame,
 } from '../lib/stream/protocol'
 import { signalFormula } from '../lib/signalFormula'
@@ -265,6 +265,7 @@ export class StreamDecoder {
   private ring: TypedRingBuffer | null = null
   private frozenRing: TypedRingBuffer | null = null
   private exactSampleTimes: boolean | null = null
+  private nextSampleOrdinal: bigint | null = null
   private frozenExactSampleTimes: boolean | null = null
   private lastDataSequence: bigint | null = null
   private transportDroppedBatches = 0
@@ -386,6 +387,7 @@ export class StreamDecoder {
       this.ring = ring
       this.frozenRing = null
       this.exactSampleTimes = null
+      this.nextSampleOrdinal = null
       this.frozenExactSampleTimes = null
       this.configuredCapacity = capacity
       this.decoderMode = decoderMode
@@ -629,6 +631,7 @@ export class StreamDecoder {
       this.exactSampleTimes = null
       this.frozenExactSampleTimes = null
       this.superwatchMetadataVersion = version
+      this.nextSampleOrdinal = null
       this.superwatchMetadataSignature = signature
       this.lastNumericTimestampMs = null
       this.lastNumericSpacingMs = null
@@ -637,17 +640,44 @@ export class StreamDecoder {
       this.post({ type: 'superwatch-metadata', version, channels })
       return
     }
-    const timestamped = decoded.flags === SUPERWATCH_TIMESTAMPED_FLOAT32
+    const continuity = decoded.flags === SUPERWATCH_CONTINUITY_FLOAT32
+    const timestamped = continuity || decoded.flags === SUPERWATCH_TIMESTAMPED_FLOAT32
     if ((!timestamped && decoded.flags !== SUPERWATCH_SAMPLE_MAJOR_FLOAT32) || this.superwatchMetadataVersion <= 0) {
       throw new RangeError('SuperWatch samples require current metadata and sample-major Float32')
     }
     const ring = this.ring as TypedRingBuffer
     const timeBytes = timestamped ? decoded.itemCount * Float64Array.BYTES_PER_ELEMENT : 0
-    const expectedBytes = timeBytes + decoded.itemCount * ring.channelCount * Float32Array.BYTES_PER_ELEMENT
+    const view = new DataView(decoded.payload)
+    if (continuity && view.byteLength < 16) throw new RangeError('Truncated SuperWatch continuity header')
+    const prefixBytes = continuity ? 16 : 0
+    const firstOrdinal = continuity ? view.getBigUint64(0, true) : null
+    const markerCount = continuity ? view.getUint32(8, true) : 0
+    const dataBytes = timeBytes + decoded.itemCount * ring.channelCount * Float32Array.BYTES_PER_ELEMENT
+    const expectedBytes = prefixBytes + dataBytes + markerCount * 8
     if (decoded.itemCount <= 0 || decoded.payload.byteLength !== expectedBytes) {
       throw new RangeError('SuperWatch payload does not match metadata channel alignment')
     }
-    const valueBuffer = timestamped ? decoded.payload.slice(timeBytes) : decoded.payload
+    const boundaries = continuity ? new Uint8Array(decoded.itemCount) : undefined
+    if (continuity) {
+      if (view.getUint32(12, true) !== 0 || markerCount > decoded.itemCount
+        || (this.nextSampleOrdinal !== null && firstOrdinal! < this.nextSampleOrdinal)) {
+        throw new RangeError('Invalid SuperWatch sample ordinal or boundaries')
+      }
+      let previousIndex = -1
+      for (let marker = 0; marker < markerCount; marker++) {
+        const at = prefixBytes + dataBytes + marker * 8
+        const index = view.getUint32(at, true), reason = view.getUint32(at + 4, true)
+        if (index <= previousIndex || index >= decoded.itemCount || reason < 1 || reason > 3) {
+          throw new RangeError('Invalid SuperWatch boundary marker')
+        }
+        boundaries![index] = reason
+        previousIndex = index
+      }
+      // A missing data ordinal proves loss for THIS subscriber. Metadata and
+      // CONTROL sequence numbers do not identify missing sample records.
+      if (this.nextSampleOrdinal !== null && firstOrdinal! > this.nextSampleOrdinal) boundaries![0] |= 1
+    }
+    const valueBuffer = timestamped ? decoded.payload.slice(prefixBytes + timeBytes, prefixBytes + dataBytes) : decoded.payload
     const values = new Float32Array(valueBuffer)
     for (let index = 0; index < values.length; index++) {
       if (!Number.isFinite(values[index])) throw new RangeError('SuperWatch samples must be finite')
@@ -656,7 +686,7 @@ export class StreamDecoder {
     if (!Number.isFinite(timestampMs)) throw new RangeError('SuperWatch timestamp is outside numeric range')
     let timing: { times: Float64Array; lastTimestamp: number | null; spacing: number | null }
     if (timestamped) {
-      const times = new Float64Array(decoded.payload.slice(0, timeBytes))
+      const times = new Float64Array(decoded.payload.slice(prefixBytes, prefixBytes + timeBytes))
       let previous = this.lastNumericTimestampMs ?? -Infinity
       for (const time of times) {
         if (!Number.isFinite(time) || time < 0 || time <= previous) {
@@ -669,7 +699,8 @@ export class StreamDecoder {
       // Compatibility with older backends that do not carry sample timestamps.
       timing = this.buildMonotonicTimes(timestampMs, decoded.itemCount)
     }
-    ring.appendBatch(timing.times, values)
+    ring.appendBatch(timing.times, values, boundaries)
+    this.nextSampleOrdinal = firstOrdinal === null ? null : firstOrdinal + BigInt(decoded.itemCount)
     this.exactSampleTimes = (this.exactSampleTimes ?? true) && timestamped
     this.lastNumericTimestampMs = timing.lastTimestamp
     this.lastNumericSpacingMs = timing.spacing
@@ -1286,6 +1317,7 @@ export class StreamDecoder {
   private resetSession(): void {
     this.frozenRing = null
     this.exactSampleTimes = null
+    this.nextSampleOrdinal = null
     this.frozenExactSampleTimes = null
     this.ring?.reset()
     this.systemViewMode = false

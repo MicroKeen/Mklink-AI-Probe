@@ -764,8 +764,7 @@ function applyRebindSummary(summary: { removed: string[] }): void {
 async function refreshSelectedDescriptors(): Promise<void> {
   const paths = [...selected.value]
   const resolved = await Promise.all(paths.map(async path => {
-    const matches = await catalog.searchSymbols(path).catch(() => [])
-    return matches.find(item => item.path === path)
+    return catalog.resolveSymbol(path).catch(() => undefined)
   }))
   selectedDescriptors.value = new Map(
     resolved.filter((item): item is SymbolDescriptor => Boolean(item)).map(item => [item.path, item]),

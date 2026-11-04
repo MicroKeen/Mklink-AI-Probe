@@ -56,6 +56,19 @@ function timestampedSamples(times: number[], values: number[]): Uint8Array {
   return payload
 }
 
+function continuitySamples(first: bigint, times: number[], markers: Array<[number, number]> = []): Uint8Array {
+  const data = timestampedSamples(times, times.map((_, index) => index % 2))
+  const bytes = new Uint8Array(16 + data.length + markers.length * 8)
+  const view = new DataView(bytes.buffer)
+  view.setBigUint64(0, first, true); view.setUint32(8, markers.length, true)
+  bytes.set(data, 16)
+  markers.forEach(([index, reason], n) => {
+    view.setUint32(16 + data.length + n * 8, index, true)
+    view.setUint32(20 + data.length + n * 8, reason, true)
+  })
+  return bytes
+}
+
 function rttLines(...lines: Array<{ timestampNs: bigint; level: number; text: string }>): Uint8Array {
   const encoder = new TextEncoder()
   const encoded = lines.map(line => ({ ...line, bytes: encoder.encode(line.text) }))
@@ -127,11 +140,29 @@ function setup() {
 }
 
 describe('StreamDecoder worker controller', () => {
+  it('identifies subscriber data loss by ordinal, not missing metadata sequence numbers', () => {
+    const { decoder, messages } = setup()
+    decoder.handle({ type: 'configure', capacity: 20, channelCount: 1 })
+    const send = (seq: number, ordinal: bigint, times: number[], markers: Array<[number, number]> = []) => decoder.handle({
+      type: 'frame', buffer: frame(BigInt(seq), times.length, continuitySamples(ordinal, times, markers), StreamType.SUPERWATCH, 1n, 4), connectionGeneration: 1, frameTicket: seq,
+    })
+    decoder.handle({ type: 'frame', buffer: frame(1n, 0, new TextEncoder().encode(JSON.stringify({version: 1, channels: [{name: 'A'}]})), StreamType.SUPERWATCH, 1n, 2), connectionGeneration: 1, frameTicket: 1 })
+    send(2, 0n, [0, .007])
+    send(4, 2n, [1, 1.007]) // Missing metadata frame, samples continuous.
+    send(6, 8n, [2, 2.007]) // Four published sample ordinals are absent.
+    send(7, 10n, [3, 3.007, 3.014], [[1, 1]]) // Interior read failure.
+    decoder.handle({ type: 'visible-range', requestId: 1, start: 0, end: 4, pixelWidth: 100, gapThresholdMs: .020 })
+    expect(messages.at(-1)).toMatchObject({ sampleTiming: { gapCount: 2 } })
+    send(8, 13n, [4, 4.007], [[2, 1]]) // Invalid marker cannot consume the ordinal.
+    expect(messages.at(-1)).toMatchObject({ type: 'error' })
+    send(9, 13n, [4, 4.007])
+    expect(messages.filter(m => m.type === 'error')).toHaveLength(1)
+  })
   it('keeps cross-frame gaps and frozen timing separate from transport loss and later data', () => {
     const { decoder, messages, transfers } = setup()
     decoder.handle({ type: 'configure', capacity: 8, channelCount: 1 })
     const send = (seq: number, times: number[]) => decoder.handle({ type: 'frame',
-      buffer: frame(BigInt(seq), times.length, timestampedSamples(times, times.map((_, i) => i % 2)), StreamType.SUPERWATCH, 1n, 3),
+      buffer: frame(BigInt(seq), times.length, continuitySamples(BigInt((seq-2)*2), times, seq === 3 ? [[0, 1]] : []), StreamType.SUPERWATCH, 1n, 4),
       connectionGeneration: 1, frameTicket: seq })
     decoder.handle({ type: 'frame', buffer: frame(1n, 0, new TextEncoder().encode(JSON.stringify({version: 1, channels: [{name: 'GPIO'}]})), StreamType.SUPERWATCH, 1n, 2), connectionGeneration: 1, frameTicket: 1 })
     send(2, [0, .007])
@@ -150,7 +181,7 @@ describe('StreamDecoder worker controller', () => {
     expect(telemetry).toMatchObject({ transportDroppedBatches: 0, backendDroppedItems: 0 })
     decoder.handle({ type: 'waveform-freeze', frozen: false })
     decoder.handle({ type: 'visible-range', requestId: 2, start: 0, end: 2, pixelWidth: 8, gapThresholdMs: .020 })
-    expect(messages.at(-1)).toMatchObject({ sampleTiming: { gapCount: 3, maxIntervalMs: 1 } })
+    expect(messages.at(-1)).toMatchObject({ sampleTiming: { gapCount: 1, maxIntervalMs: 1 } })
     decoder.handle({ type: 'reset' })
     decoder.handle({ type: 'visible-range', requestId: 3, start: 0, end: 2, pixelWidth: 8, gapThresholdMs: .020 })
     expect(messages.at(-1)).not.toHaveProperty('sampleTiming')

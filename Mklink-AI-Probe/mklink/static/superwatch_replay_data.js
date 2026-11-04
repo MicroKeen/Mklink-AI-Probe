@@ -38,12 +38,13 @@ function timestamp(raw, scale = 1) {
 }
 
 class Channel {
-  constructor(name) { this.name = name; this.parts = []; this.count = 0; }
-  add(t, v) {
+  constructor(name) { this.name = name; this.parts = []; this.count = 0; this.breaks = []; }
+  add(t, v, boundary = 0) {
     const last = this.count - 1;
     if (last >= 0) {
       const part = this.parts[Math.floor(last / CHUNK)];
       if (part.times[last % CHUNK] === t) { part.values[last % CHUNK] = v; return false; }
+      if (boundary) this.breaks.push({ index: this.count, before: part.times[last % CHUNK], after: t, reason: boundary });
     }
     if (this.count % CHUNK === 0) this.parts.push({ times: new Float64Array(CHUNK), values: new Float64Array(CHUNK) });
     const part = this.parts[Math.floor(this.count / CHUNK)];
@@ -65,7 +66,8 @@ class Channel {
       if (mins[b] === undefined || values[i] < values[mins[b]]) mins[b] = i;
       if (maxs[b] === undefined || values[i] > values[maxs[b]]) maxs[b] = i;
     }
-    return { name: this.name, times, values, mins: Uint32Array.from(mins), maxs: Uint32Array.from(maxs) };
+    return { name: this.name, times, values, mins: Uint32Array.from(mins), maxs: Uint32Array.from(maxs),
+      breaks: this.breaks.map(b => ({ ...b, before: b.before - origin, after: b.after - origin })) };
   }
 }
 
@@ -85,6 +87,11 @@ export class ReplayParser {
       // samples. They are metadata, not samples in the capture's time domain.
       if (line.startsWith('{')) {
         const event = JSON.parse(line);
+        if (event.event === 'discontinuity') {
+          if (!Number.isInteger(event.reason) || event.reason < 1 || event.reason > 3) throw new Error('Invalid continuity marker');
+          this.pendingBoundary = (this.pendingBoundary || 0) | event.reason;
+          return;
+        }
         if (event.event === 'write') {
           if (typeof event.path !== 'string' || !event.path || event.path.length > 512 ||
               typeof event.verified !== 'boolean' || !['live', 'legacy-gap', 'idle'].includes(event.mode)) {
@@ -96,7 +103,7 @@ export class ReplayParser {
         }
       }
       if (!this.format) this.format = line.startsWith('{') ? 'jsonl' : line.startsWith('[') ? 'raw' : 'csv';
-      let time, fields;
+      let time, fields, boundary = this.pendingBoundary || 0;
       if (this.format === 'csv') {
         if (!this.header) {
           const candidates = [',', ';', '\t'].map(delimiter => {
@@ -143,11 +150,12 @@ export class ReplayParser {
           if (this.channels.size >= REPLAY_LIMITS.channels) throw new Error('At most 64 channels are supported');
           this.channels.set(name, new Channel(name));
         }
-        if (this.channels.get(name).add(time, value)) this.values++;
+        if (this.channels.get(name).add(time, value, boundary)) this.values++;
         if (this.values > REPLAY_LIMITS.values) throw new Error('Log exceeds 8 million numeric values; split the file');
       }
       if (this.origin === null) this.origin = time;
       this.end = time; this.rows++;
+      this.pendingBoundary = 0;
     } catch (error) { throw new Error(`Line ${this.lineNumber}: ${error.message}`); }
   }
   finish() {
@@ -221,16 +229,28 @@ export function replayRange(data, start, displayEnd, position, width, names, pla
   const end = playing ? Math.min(displayEnd, position) : displayEnd;
   const pixels = Math.max(1, Math.min(2048, Math.floor(width)));
   return { start, end: displayEnd, position, width: pixels, channels: data.channels.filter(c => names.includes(c.name)).map(c => {
-    const from = lowerBound(c.times, start), to = lowerBound(c.times, end, true), points = [];
-    if (to - from <= pixels * 2) { for (let i = from; i < to; i++) points.push([c.times[i], c.values[i]]); }
+    const from = lowerBound(c.times, start), to = lowerBound(c.times, end, true), points = [], segments = [], columns = new Uint8Array(pixels);
+    let boundary = 0;
+    const breaks = c.breaks || [];
+    const takePoint = i => {
+      while (boundary < breaks.length && breaks[boundary].index <= i) boundary++;
+      points.push([c.times[i], c.values[i]]); segments.push(boundary);
+    };
+    for (const gap of breaks) {
+      if (!(gap.reason & 1) || gap.after <= start || gap.before >= end || displayEnd <= start) continue;
+      const left = Math.max(0, Math.floor((gap.before-start)/(displayEnd-start)*pixels));
+      const right = Math.min(pixels, Math.max(left+1, Math.ceil((gap.after-start)/(displayEnd-start)*pixels)));
+      columns.fill(1, left, right);
+    }
+    if (to - from <= pixels * 2) { for (let i = from; i < to; i++) takePoint(i); }
     else {
       let a = from;
       for (let x = 0; x < pixels && a < to; x++) {
         const b = Math.min(to, lowerBound(c.times, start + (displayEnd - start) * (x + 1) / pixels, true));
-        if (b > a) { for (const i of extrema(c, a, b, formulas[c.name])) points.push([c.times[i], c.values[i]]); a = b; }
+        if (b > a) { for (const i of extrema(c, a, b, formulas[c.name])) takePoint(i); a = b; }
       }
     }
     const last = lowerBound(c.times, position, true) - 1;
-    return { name: c.name, points, latest: last >= 0 ? c.values[last] : null };
+    return { name: c.name, points, segments, columns, latest: last >= 0 ? c.values[last] : null };
   }) };
 }

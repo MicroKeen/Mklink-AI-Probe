@@ -27,6 +27,7 @@ from mklink.remote.stream_protocol import (
     SUPERWATCH_METADATA_JSON,
     SUPERWATCH_SAMPLE_MAJOR_FLOAT32,
     SUPERWATCH_TIMESTAMPED_FLOAT32,
+    SUPERWATCH_CONTINUITY_FLOAT32,
     StreamType,
     decode_rtt_lines,
     decode_superwatch_metadata,
@@ -174,7 +175,7 @@ def test_superwatch_default_batches_high_rate_samples_without_discarding_rows():
     calls = [call for call in hub.publish.call_args_list if call.kwargs.get("item_count")]
     assert len(calls) == 1
     assert calls[0].kwargs["item_count"] == 4096
-    assert len(calls[0].args[0]) == 4096 * 12
+    assert len(calls[0].args[0]) == 16 + 4096 * 12
 
 
 @pytest.mark.parametrize("offset", [-34.8, 34.8])
@@ -945,9 +946,10 @@ def test_superwatch_sample_rows_are_aligned_and_metadata_is_versioned():
         decoded_meta = decode_superwatch_metadata(metadata.payload)
         assert decoded_meta["version"] == 2
         assert [channel["name"] for channel in decoded_meta["channels"]] == ["a", "b"]
-        assert samples.flags == 0x03
-        assert struct.unpack_from("<2d", samples.payload) == (0.0, 100.0)
-        assert decode_waveform_samples(samples.payload[16:], 2, 2) == ((1.0, 2.0), (3.0, 4.0))
+        assert samples.flags == 0x04
+        assert struct.unpack_from("<QII", samples.payload) == (0, 0, 0)
+        assert struct.unpack_from("<2d", samples.payload, 16) == (0.0, 100.0)
+        assert decode_waveform_samples(samples.payload[32:], 2, 2) == ((1.0, 2.0), (3.0, 4.0))
         hub.unsubscribe(queue)
 
     asyncio.run(scenario())
@@ -1020,8 +1022,8 @@ def test_superwatch_actual_rate_counts_only_complete_samples_on_a_monotonic_wind
     assert not manager.publish_sample_points([{"a": 1.0}])
     assert manager.get_status()["actual_rate"] == 0.0
     for timestamp in (0.0, 0.25, 0.5, 0.75, 1.0):
-        now[0] = timestamp
-        assert manager.publish_sample_points([{"a": timestamp, "b": timestamp + 1}])
+        now[0] = 10 + timestamp / 100  # Burst delivery must not inflate Hz.
+        assert manager.publish_sample_points([{"_t": timestamp, "a": timestamp, "b": timestamp + 1}])
 
     status = manager.get_status()
     assert status["read_cycles"] == 0
@@ -1031,16 +1033,15 @@ def test_superwatch_actual_rate_counts_only_complete_samples_on_a_monotonic_wind
 def test_superwatch_batched_rate_counts_samples_and_expires_old_window():
     now = [0.0]
     manager = SuperWatchStreamManager(clock=lambda: now[0])
-    for timestamp, count in ((0.0, 100), (0.25, 500), (0.5, 1000)):
-        now[0] = timestamp
-        manager._record_sample_rate_locked(count)
-    assert manager.get_status()["actual_rate"] == pytest.approx(3000)
-    now[0] = 2.0
-    manager._record_sample_rate_locked(100)
+    for first, last in ((0, 499), (500, 999), (1000, 1499)):
+        manager._record_sample_rate_locked(500, first, last)
+    assert manager.get_status()["actual_rate"] == pytest.approx(1000)
+    # A real sampling pause stays in the denominator, even if host delivery is instantaneous.
+    manager._record_sample_rate_locked(1, 2499, 2499)
+    assert manager.get_status()["actual_rate"] == pytest.approx(334)
+    manager._rate_timestamps.clear()
+    manager._record_sample_rate_locked(1, None, None)
     assert manager.get_status()["actual_rate"] == 0
-    now[0] = 2.5
-    manager._record_sample_rate_locked(200)
-    assert manager.get_status()["actual_rate"] == pytest.approx(400)
 
 
 def test_superwatch_preserves_device_sample_times_across_host_batch_jitter():
@@ -1052,9 +1053,9 @@ def test_superwatch_preserves_device_sample_times_across_host_batch_jitter():
     batches = [call for call in hub.publish.call_args_list if call.kwargs.get("item_count") == 2]
     assert len(batches) == 2
     for call, times in zip(batches, [(0.0, 0.13), (0.26, 25.0)]):
-        assert call.kwargs["flags"] == 0x03
-        assert struct.unpack_from("<2d", call.args[0]) == pytest.approx(times)
-        assert struct.unpack_from("<2f", call.args[0], 16) == pytest.approx(tuple(t / 1000 for t in times))
+        assert call.kwargs["flags"] == 0x04
+        assert struct.unpack_from("<2d", call.args[0], 16) == pytest.approx(times)
+        assert struct.unpack_from("<2f", call.args[0], 32) == pytest.approx(tuple(t / 1000 for t in times))
 
 
 def test_shared_latest_row_uses_existing_capture_and_invalidates_on_layout_change():
@@ -1364,11 +1365,11 @@ def test_superwatch_concurrent_poll_add_remove_pressure_keeps_batches_aligned(mo
     for batch in hub.snapshot():
         if batch.flags == SUPERWATCH_METADATA_JSON:
             active_channel_count = len(decode_superwatch_metadata(batch.payload)["channels"])
-        elif batch.flags in (SUPERWATCH_SAMPLE_MAJOR_FLOAT32, SUPERWATCH_TIMESTAMPED_FLOAT32):
+        elif batch.flags in (SUPERWATCH_SAMPLE_MAJOR_FLOAT32, SUPERWATCH_CONTINUITY_FLOAT32):
             assert active_channel_count in (1, 2)
             payload = (
-                batch.payload[batch.item_count * 8:]
-                if batch.flags == SUPERWATCH_TIMESTAMPED_FLOAT32
+                batch.payload[16 + batch.item_count * 8:]
+                if batch.flags == SUPERWATCH_CONTINUITY_FLOAT32
                 else batch.payload
             )
             decode_waveform_samples(payload, batch.item_count, active_channel_count)
@@ -1989,7 +1990,7 @@ def test_restart_publishes_new_timeline_metadata_after_flushing_old_samples(monk
     monkeypatch.setattr(threading, "Thread", Mock(return_value=thread))
     manager.start(SimpleNamespace(_bridge=object()))
     batches = hub.snapshot()
-    old_sample = next(i for i, b in enumerate(batches) if b.flags == SUPERWATCH_TIMESTAMPED_FLOAT32)
+    old_sample = next(i for i, b in enumerate(batches) if b.flags == SUPERWATCH_CONTINUITY_FLOAT32)
     new_metadata = [i for i, b in enumerate(batches) if b.flags == SUPERWATCH_METADATA_JSON][-1]
     assert old_sample < new_metadata
     assert decode_superwatch_metadata(batches[new_metadata].payload)["version"] > old_version

@@ -2,9 +2,17 @@ import { describe, expect, it } from 'vitest'
 import { TypedRingBuffer } from './typedRingBuffer'
 
 describe('TypedRingBuffer', () => {
+  it('never infers loss from elapsed time and distinguishes unknown continuity', () => {
+    const ring = new TypedRingBuffer(5, 1)
+    ring.appendBatch(Float64Array.of(0, 9, 10), Float32Array.of(0, 1, 0), Uint8Array.of(0, 0, 2))
+    const selected = ring.selectMinMaxEnvelope(0, 10, 10, undefined, .020)
+    expect(selected.timing?.gapCount).toBe(0)
+    expect([...selected.timing!.columns]).toEqual(Array(10).fill(0))
+    expect([...selected.segmentIds!]).toEqual([0, 0, 1])
+  })
   it('marks raw gaps even when extrema in one pixel hide intermediate samples', () => {
     const ring = new TypedRingBuffer(8, 2)
-    ring.appendBatch(Float64Array.of(0, .007, .053, .060), Float32Array.of(0, 3, 0, 2, 1, 1, 0, 0))
+    ring.appendBatch(Float64Array.of(0, .007, .053, .060), Float32Array.of(0, 3, 0, 2, 1, 1, 0, 0), Uint8Array.of(0, 0, 1, 0))
     const before = ring.snapshot()
     const selected = ring.selectMinMaxEnvelope(0, .060, 1, undefined, .020)
     expect(selected.timing?.maxIntervalMs).toBeCloseTo(.046, 9)
@@ -27,7 +35,7 @@ describe('TypedRingBuffer', () => {
   it('reports a gap spanning an empty viewport after ring wrap and resize', () => {
     const ring = new TypedRingBuffer(3, 1)
     ring.appendBatch(Float64Array.of(0, .007, .014), Float32Array.of(0, 1, 0))
-    ring.appendBatch(Float64Array.of(.060, .067), Float32Array.of(1, 0))
+    ring.appendBatch(Float64Array.of(.060, .067), Float32Array.of(1, 0), Uint8Array.of(1, 0))
     for (const source of [ring, ring.resized(8), ring.frozenCopy()]) {
       const selected = source.selectMinMaxEnvelope(.020, .050, 10, undefined, .020)
       expect(selected.candidateSampleCount).toBe(0)
@@ -41,7 +49,7 @@ describe('TypedRingBuffer', () => {
 
   it('bounds gap shading and segments by pixels regardless of gap count', () => {
     const ring = new TypedRingBuffer(10000, 1)
-    for (let i = 0; i < 10000; i++) ring.append(i, Float32Array.of(i % 2))
+    for (let i = 0; i < 10000; i++) ring.append(i, Float32Array.of(i % 2), 1)
     const selected = ring.selectMinMaxEnvelope(0, 9999, 8, undefined, .020)
     expect(selected.timing?.gapCount).toBe(9999)
     expect(selected.timing?.columns.byteLength).toBe(8)

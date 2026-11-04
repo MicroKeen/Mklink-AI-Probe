@@ -11,6 +11,33 @@ from mklink.rtt_cache import RttChannelCache
 from test_shared_runtime import runtime, attach, call
 
 
+def test_watch_boundaries_identify_loss_in_order_without_guessing_from_time():
+    transport, _ = peer()
+    transport.handshake()
+    watch = MuxWatchSession(transport, [(0x20000000, 4)], .000004)
+    watch.start()
+    def sample(seq, timestamp):
+        transport.feed(packet(0x41, 17, seq, bytes([0, 9, 1, 4])+struct.pack('<II', timestamp, seq)))
+    sample(1, 10)
+    sample(2, 10000)  # Long interval is not evidence of a discarded record.
+    transport.feed(packet(0x41, 17, 3, struct.pack('<BBI', 0, 5, 10001)))
+    sample(4, 10002)
+    sample(5, 10003)
+    frames = watch.read_frames(packed=True)
+    assert [f.break_before for f in frames] == [0, 0, 1, 0]
+    assert [f.timestamp_us for f in frames] == [10, 10000, 10002, 10003]
+    transport.WATCH_QUEUE_BYTES = 24
+    sample(6, 10004)
+    sample(7, 10005)
+    sample(8, 10006)  # Evicts exactly one received batch.
+    frames = watch.read_frames(packed=True)
+    assert [f.break_before for f in frames] == [1, 0]
+    assert [f.timestamp_us for f in frames] == [10005, 10006]
+    sample(10, 10007)  # Missing global wire event; its content is unknown.
+    assert watch.read_frames(packed=True)[0].break_before == 2
+
+
+
 def peer():
     calls = []
     def write(wire):
@@ -237,8 +264,11 @@ def test_watch_split_and_gaps_do_not_mix_rounds():
     watch = MuxWatchSession(transport, [(0x20000000, 130), (0x20000200, 4)], .001)
     watch.start()
     assert len(watch.parts) == 3 and transport.watch_running
+    sequence = 0
     def event(index, data, timestamp=100):
-        transport.feed(packet(0x41, 17, 1, struct.pack('<BBI', index, 0, timestamp)+data))
+        nonlocal sequence
+        sequence += 1
+        transport.feed(packet(0x41, 17, sequence, struct.pack('<BBI', index, 0, timestamp)+data))
     event(0, b'a'*128)
     event(2, b'd'*4)
     assert watch.read_frames() == []
@@ -320,7 +350,7 @@ def test_mux_watch_complete_frames_reuse_dump_coverage_validation(ordered):
     watch=MuxWatchSession(transport,[(0x20000001,130),(0x20000203,4)],.01)
     watch.start()
     for index,payload in enumerate([b'a'*128,b'bc',b'defg']):
-        transport.feed(packet(0x41,17,1,struct.pack('<BBI',index,0,123)+payload))
+        transport.feed(packet(0x41,17,index+1,struct.pack('<BBI',index,0,123)+payload))
     frame=watch.read_frames()[0]
     assert DumpSampleAssembler([130,4],ordered=ordered).feed(frame)==(b'a'*128+b'bc',b'defg')
     for regions in [[(0,b'a'*130)],[(0,b'a'*129),(1,b'defg')]]:

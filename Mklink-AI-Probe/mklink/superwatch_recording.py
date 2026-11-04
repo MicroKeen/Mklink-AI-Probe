@@ -41,8 +41,8 @@ class SuperWatchRecorder:
         with self._condition:
             return dict(self._status)
 
-    def append(self, values, times, channels):
-        size = len(values) * 4 + len(times) * 8
+    def append(self, values, times, channels, *, boundaries=()):
+        size = len(values) * 4 + len(times) * 8 + len(boundaries) * 8
         with self._condition:
             if self._closing or self._status['state'] != 'recording':
                 return
@@ -51,7 +51,7 @@ class SuperWatchRecorder:
                 self._closing = True
             else:
                 # Manager transfers these arrays and never modifies them again.
-                self._queue.append((values, times, tuple(channel['name'] for channel in channels), size))
+                self._queue.append((values, times, tuple(channel['name'] for channel in channels), size, dict(boundaries)))
                 self._queued_bytes += size
             self._condition.notify()
 
@@ -81,7 +81,7 @@ class SuperWatchRecorder:
                         self._condition.wait()
                     if not self._queue:
                         break
-                    values, times, names, size = self._queue.popleft()
+                    values, times, names, size, boundaries = self._queue.popleft()
                 width = len(names)
                 batch_bytes = 0
                 if not width or len(values) != len(times) * width:
@@ -93,6 +93,11 @@ class SuperWatchRecorder:
                         raise ValueError('Recording contains an invalid sample')
                     point['_t'] = timestamp / 1000
                     line = json.dumps(point, ensure_ascii=False, separators=(',', ':'), allow_nan=False) + '\n'
+                    if row in boundaries:
+                        # Separate metadata cannot overwrite a target variable
+                        # with a reserved-looking name such as _break_before.
+                        line = json.dumps({'event': 'discontinuity', 'reason': boundaries[row]},
+                                          separators=(',', ':')) + '\n' + line
                     length = len(line.encode('utf-8'))
                     batch_bytes += length
                     if part_values and (part_values + width > self._max_values or

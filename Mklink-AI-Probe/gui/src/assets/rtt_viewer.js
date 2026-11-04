@@ -3443,7 +3443,7 @@ function parseBinaryEnvelope(envelope) {
     if (!Number.isFinite(times[time])) return null;
   }
   var timing = null;
-  if (IS_SUPERWATCH_MODE && envelope.sampleTiming && !envelope.replay) {
+  if (IS_SUPERWATCH_MODE && envelope.sampleTiming) {
     var supplied = envelope.sampleTiming;
     var columns = new Uint8Array(supplied.columns);
     var segments = new Uint32Array(supplied.segmentIds);
@@ -3688,11 +3688,13 @@ function setReplayPosition(position, playing, follow) {
 
 function renderReplayView(view) {
   if (!replaySession) return;
-  var times = [], values = [], indices = [], offsets = [0];
+  var times = [], values = [], indices = [], offsets = [0], segments = [], columns = new Uint8Array(Math.max(1, view.width));
   view.channels.forEach(function(channel) {
-    channel.points.forEach(function(point) {
+    channel.points.forEach(function(point, index) {
       indices.push(times.length); times.push(point[0] * 1000); values.push(point[1]);
+      segments.push(channel.segments ? channel.segments[index] : 0);
     });
+    if (channel.columns) channel.columns.forEach(function(value, index) { columns[index] |= value; });
     offsets.push(values.length);
     var field = FIELDS[channel.name];
     if (field && field.ringBuf) {
@@ -3703,7 +3705,9 @@ function renderReplayView(view) {
   renderBinaryEnvelope({replay: true, requestId: view.id, mode: 'min-max-v1', timestampKind: 'sample-milliseconds',
     channelCount: view.channels.length, pointCount: values.length, pixelWidth: Math.max(1, view.width),
     times: new Float64Array(times).buffer, timeIndices: new Uint32Array(indices).buffer,
-    values: new Float64Array(values).buffer, channelOffsets: new Uint32Array(offsets).buffer}, true);
+    values: new Float64Array(values).buffer, channelOffsets: new Uint32Array(offsets).buffer,
+    sampleTiming: { thresholdMs: .020, maxIntervalMs: null, intervalCount: 0, gapCount: 0,
+      startMs: view.start * 1000, endMs: view.end * 1000, columns: columns.buffer, segmentIds: new Uint32Array(segments).buffer }}, true);
   updateUI(); updateWatchTable();
 }
 
