@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-04T15:04:07+08:00",
+  "updated_at": "2026-11-04T16:04:28+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
@@ -13,8 +13,8 @@
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "v043_receive_backpressure_fixed_sub20us_open",
-    "current_task": "修复GPIO数字搜索阻塞接收；Hz按设备时间戳，删除阈值统计，只对明确缺失置灰，未知连续性只断线。40/100us同负载八组max46–56us、队列丢弃0；20us/40us零漏采未达。详见v043-receive-backpressure.md。本轮未更新安装版。"
+    "status": "v043_iab_waveforms_verified_echo_gap_open",
+    "current_task": "0a0c97b3接收修复后，内置浏览器四组40/100us波形/PNG及缺失回放完成；max47–62us，原始MUX与2369439个发布样本逐点相符。四组峰值均在ECHO回复前后批间，20us/40us零漏采未达。见v043-iab-waveforms.md；未更新安装版。"
   },
   "milestones": [
     {
@@ -51,7 +51,7 @@
   "verification": [
     {
       "area": "0.4.3接收、连续性与性能",
-      "result": "本轮382后端/307GUI通过；最终记录9/回放164及Web构建通过。GPIO搜索1.75–1.87s→35–72ms；同负载八组max14–86ms→46–56us，队列丢弃均0；PE2约14.25万/RAM23.70万每秒。RTT两份10MiB全验853.3→853.5–853.8KiB/s；DAP300+Watch+RTT通过，P95 1.2515→1.135ms。40us仍可能漏脉冲、20us未达。见v043-receive-backpressure.md。此前MUX1234/48宽度/有限读及1bed验收见v043-mux-sampling-contract.md；安装14160cc6与旧波形见v043-desktop-waveforms.md，普通读尾延迟见v043-tail-latency.md。"
+      "result": "0a0c97b3：382后端/307GUI，最终记录9/回放164及Web通过。搜索1.75–1.87s→35–72ms，同负载八组max14–86ms→46–56us、队列丢弃0。RTT两份10MiB全验853.3→853.5–853.8KiB/s；DAP300+Watch+RTT通过，P95 1.2515→1.135ms，见v043-receive-backpressure.md。内置浏览器四图/缺失回放完成，原始MUX与2369439样本相符，max47–62us均关联ECHO，见v043-iab-waveforms.md；20us/40us零漏采未达。旧MUX1234/48宽度见v043-mux-sampling-contract.md；安装14160cc6见v043-desktop-waveforms.md，普通读见v043-tail-latency.md。"
     },
     {
       "area": "0.4.2正式构建安装及公开发布",
@@ -95,7 +95,7 @@
     "编译完成不代表目标已下载：文件变化仅发待重载提示，不后台解析。用户明确加载/重载文件时自动停止目标采集，确认worker退出后原子换表，保持停止；失败保留旧目录/选择。不要求连接下载器；断开保留文件和选中变量但清空旧采样。公式只改变可视化，原始记录不变；不恢复旧地址采集或重放写操作。"
   ],
   "hardware": {
-    "state": "普通V4 USB7源465a9b69/H743映像77e05091不变；30MHz/4us采样，按用户40/100us要求仅改TIM7 ARR39/99并回读，最终99。测试流及安装版已断开；开发浏览器可能留有保存对话框/租约，重新操作须核对设备占用。20us及长期资格未达，USB背压未证实。",
+    "state": "普通V4 USB7源465a9b69/H743映像77e05091不变；30MHz/4us采样，只改TIM7 ARR39/99并回读，最终99。流已停止并断开，内置浏览器保留RAM100us真实记录的离线回放；GUI后台可仍有租约但不持有探针，操作前重核占用。20us/长期资格未达，USB背压未证实。",
     "installer": "本机Windows已覆盖为0.4.3本地未签名测试版，源14160cc6，NSIS SHA2fb705ce，安装/载荷/冻结MCP/Web/正常退出通过；正式0.4.2资产保留不变。全局Skill及独立SiteAgent仍0.4.2，未覆盖。没有合并/签名/发布。",
     "backups": "保留正式包/七资产/四固件、CI ZIP、唯一验收证据、Skill备份、缓存及旧detached树。29目录清理/135含链接组人工检查清单见v042-postrelease-handoff.md及本机v042-postrelease-handoff-20261102/START_HERE.txt。"
   },
@@ -111,13 +111,13 @@
   ],
   "next_actions": [
     "继续codex/v0.4.3-fixes/草稿PR69。安装版仍14160cc6，本轮Web试构建仅F盘。普通读P95/间隔<1ms、采样最大间隔<20us仍开放；合并/签名/正式发布须新授权。",
-    "GPIO模糊搜索阻塞事件循环/队列删除已复现修复；批界对齐不能独证USB背压，旧七处缺口不作唯一归因。固件会话01a1a1a2-9adc-79e2-b30e-07c07d5f90c6协调剩余间隔；不改目标迁就采集/不自动刷固件。界面PNG导出因Computer Use无法可靠识别URL中止，后台八组/RTT/DAP完成，见v043-receive-backpressure.md。",
+    "GPIO搜索阻塞/队列删除已修复；内置浏览器补齐PNG。原始MUX确认127点批边界，普通批间PE2/RAM中位22/21us，四组峰值在ECHO回复附近。固件会话01a1a1a2-9adc-79e2-b30e-07c07d5f90c6继续分析调度/热点布局；不停心跳、不改目标迁就采集、不自动刷固件，见v043-iab-waveforms.md。",
     "保留正式包、唯一验收证据及含链接目录；本机新START_HERE与v042-postrelease-handoff.md记录清理清单和接手入口。历史V3掉线/冷插拔/长稳等仍按known-limits-20261030.md和最终资格报告处理。",
     "监控上海90GiB告警/95GiB停止，套餐截止北京时间2026-11-26 00:00。未核验续费不清除停止锁、不清零账本、不申请新私钥。"
   ],
   "continuation_protocol": [
     "后续多个修复共用codex/v0.4.3-fixes，先fetch核对实际状态；不直接修改main，不逐任务另建分支，不自动切回main。旧v0.4.2分支及两个detached工作树保留。0.4.2正式源0e82ba6f和全部已发布资产不可覆盖。",
-    "正式资格/渠道仍以v042-formal-qualification.md和v042-release-handoff.md为准；当前本机0.4.3本地测试安装、40/100us波形及未闭环异常见v043-desktop-waveforms.md。GUI最后保持连接，操作前重核占用。",
+    "正式资格/渠道仍以v042-formal-qualification.md和v042-release-handoff.md为准；本机0.4.3安装源14160cc6未更新，最新源码Web/40与100us复验见v043-iab-waveforms.md。设备已断开，内置浏览器仅回放；操作前重核占用。",
     "V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。",
     "CDC995和SDK10048根因保留待排查。恢复仅同身份CDC故障5秒内；超时不自动接回/新建AI会话，主动断开立即生效，未知写入不重放。历史实例释放记录见v035-transport-recovery.md；当前硬件占用以本交接真机状态及指定固件会话为准。",
     "客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。"
