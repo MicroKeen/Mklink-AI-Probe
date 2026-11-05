@@ -545,14 +545,14 @@ class RuntimeClient:
                 from mklink.dump_benchmark import measurement_regions, validate_measurement
                 args = arguments or {}
                 validate_measurement(measurement_regions(args.get('regions')), args.get('duration', 3.0),
-                                     args.get('period', 0.000001), args.get('speed_profile'))
+                                     args.get('period', 0.000001), args.get('speed_profile'), protocol=args.get('protocol', 'mux'))
                 transport_options['timeout'] = max(35, args.get('duration', 3.0) + 20)
             if capability == 'capture_dump':
                 from mklink.dump_memory import validate_dump_stream
                 args = arguments or {}
                 validate_dump_stream(args.get('regions'), args.get('period', 0.0), args.get('frames', 1),
                                      args.get('duration', 2.0), args.get('speed_profile'),
-                                     fastest=args.get('fastest', False))
+                                     fastest=args.get('fastest', False), protocol=args.get('protocol', 'mux'))
                 transport_options['timeout'] = max(35, (args.get('duration', 2.0) or 300) + 20)
             return request(self.info, "POST", "/_runtime/call", {
                 "session_id": self.session_id, "capability": capability, "arguments": arguments or {},

@@ -1999,6 +1999,8 @@ def main():
     measure_parser.add_argument("--project-root", default=None)
     measure_parser.add_argument("--duration", type=float, default=3.0)
     measure_parser.add_argument("--period", type=float, default=0.000001)
+    measure_parser.add_argument("--protocol", choices=("mux", "dmpm"), default="mux",
+                                help="默认 MUX；dmpm 显式选择固件兼容采集，不自动回退")
     config_parser = subparsers.add_parser(
         "configuration",
         help="Inspect option bytes/OTP and generate option configuration scripts",
@@ -2211,6 +2213,8 @@ def main():
     )
     dump_memory_parser.add_argument("--port", help="共享后台 CMD 端口")
     dump_memory_parser.add_argument("--project-root", default=None)
+    dump_memory_parser.add_argument("--protocol", choices=("mux", "dmpm"), default="mux",
+                                    help="默认 MUX；dmpm 显式选择固件兼容采集，不自动回退")
     dump_memory_parser.add_argument("--speed", choices=("low", "medium", "high", "ultra"), default=None,
                                     help="显式改变当前共享速度；省略保持后台速度")
     dump_memory_parser.add_argument(

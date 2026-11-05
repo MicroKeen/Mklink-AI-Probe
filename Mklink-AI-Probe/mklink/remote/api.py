@@ -2356,7 +2356,8 @@ def create_app(
         snapshot = clock_snapshot(device, config)
         hz = snapshot['clock_hz']
         profile = next((name for name, value in PROFILES.items() if value == hz), None)
-        return {**snapshot, "profile": profile, "default": "medium", "profiles": PROFILES,
+        return {**snapshot, "profile": profile, "default": "medium",
+                "profiles": {name: value for name, value in PROFILES.items() if value in snapshot['clocks_hz']},
                 "device_generation": _state.get('device_generation', 0)}
 
     @asynccontextmanager

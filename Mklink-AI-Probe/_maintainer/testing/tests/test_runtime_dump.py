@@ -17,6 +17,24 @@ from test_watch_timing_v2 import peer as watch_peer, bridge_for
 from mklink.mux import packet
 
 
+def test_shared_api_defaults_to_complete_mux_bulk_and_preserves_metadata(batch):
+    from test_mux_bulk_watch import peer
+    client, state, device, _, _ = batch
+    expected = bytes(range(256)) * 16
+    transport, calls = peer(first_data=expected)
+    device._bridge = bridge_for(transport)
+    response = client.post('/api/device/dump-memory/capture', json={
+        'regions': [{'address': 0x24040000, 'size': 4096}], 'frames': 1, 'fastest': True})
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert result['protocol'] == 'mux'
+    assert bytes.fromhex(result['samples'][0]['regions'][0]['data_hex']) == expected
+    assert result['samples'][0]['acquisition']['dap_intervened']
+    assert not result['samples'][0]['acquisition']['atomic_snapshot']
+    assert calls[-1][0] == 0x35
+    assert not state['resource_manager'].get_status()
+
+
 @pytest.mark.parametrize('overrides',[{'regions':[]},{'regions':[{'address':True,'size':4}]},
     {'regions':[{'address':-1,'size':4}]},{'regions':[{'address':2**32,'size':4}]},{'regions':[{'address':0,'size':True}]},
     {'regions':[{'address':2**64-1,'size':2}]},{'regions':[{'address':0,'size':524289}]},

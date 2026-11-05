@@ -28,8 +28,8 @@ def test_current_single_frames_keep_device_time_and_sample_count(monkeypatch):
 
 def test_oversized_continuous_sample_rejected_before_io():
     dev = Mock()
-    with pytest.raises(ValueError, match='15 regions'):
-        measure(dev, [(0x90000,4096)], duration=1)
+    with pytest.raises(ValueError, match='4096 bytes'):
+        measure(dev, [(0x90000,4097)], duration=1)
     dev._require_connected.assert_not_called()
 
 

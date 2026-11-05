@@ -16,6 +16,16 @@ class MuxWatchCapacityError(ValueError):
     """Configuration cannot fit the bounded multiplex sampler."""
 
 
+def create_mux_capture_session(transport, regions, period, *, fastest=False):
+    """Extend explicit dump capture without widening the live GUI layout gate."""
+    from mklink.dump_memory import validate_dump_regions
+    validate_dump_regions(regions)
+    if sum((size + 127) // 128 for _, size in regions) > 15:
+        from mklink.mux_bulk_watch import MuxBulkWatchSession
+        return MuxBulkWatchSession(transport, regions, period, fastest=fastest)
+    return MuxWatchSession(transport, regions, period, fastest=fastest)
+
+
 class MuxWatchSession:
     REQUIRED_CAPABILITIES = (1 << 3) | (1 << 4) | (1 << 9) | (1 << 10)
     TIMING_V2_CAPABILITY = 1 << 9

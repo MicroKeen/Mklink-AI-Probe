@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-04T23:05:57+08:00",
+  "updated_at": "2026-11-05T10:45:17+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
@@ -13,14 +13,14 @@
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "cloud_latest_cos99_verified",
-    "current_task": "腾讯云最新版轻量直出、COS 99%且取消日期截止已验收，见tencent-download-cost-20261104.md。未发布0.4.3，现有基线、安装与性能限制保持。"
+    "status": "bulk_capture_qualification_in_progress",
+    "current_task": "用户要求恢复V3/V4 cmd.dump_memory兼容能力、上位机默认MUX补齐4096B连续采集，并增加4MHz档位。先V4/H7实测后用户换V3；见v043-bulk-capture.md。未合并发布，既有性能基线不能降低。云端11/4已验收策略保持。"
   },
   "milestones": [
     {
       "name": "0.4.2正式版",
       "status": "complete",
-      "notes": "PR66源0e82ba6f，七资产签名/正式覆盖、四固件三源哈希、三渠道/双固件索引、11文件COS及故障回退、0.4.1 Skill两源升级、官网通过。NSIS SHA5ff079bb/Skill SHA14af7a5f；见v042-release-handoff.md。"
+      "notes": "PR66源0e82ba6f，Windows/完整Skill/SiteAgent、四固件正式签名与发布、覆盖安装、渠道及故障回退已完成，PR67/68已合并。资产不可覆盖；完整SHA/计数见v042-release-handoff.md。"
     },
     {
       "name": "0.4.1正式版",
@@ -51,7 +51,7 @@
   "verification": [
     {
       "area": "0.4.3接收、连续性与性能",
-      "result": "接收0a0c97b3：382后端/307GUI、9记录/164回放，队列删除归零，见v043-receive-backpressure.md；IAB2369439点raw一致见v043-iab-waveforms.md。AHB负收益恢复USB7，见v043-control-ahb-ab.md。ILM B A/B/A：69273303点、144宽度、66MiB RTT、900DAP通过；ECHO中位降至39us但普通批间21–22us、40us仍漏边沿，DAP P95略高，不采用，原USB7反测通过，见v043-control-ilm-b-ab.md。安装f9b1ae8a的3649载荷/冻结MCP/Web/原生及退出通过，见v043-receive-local-install.md。普通读/协议旧证据见v043-tail-latency.md、v043-mux-sampling-contract.md。"
+      "result": "用户已接受0.4.3基线：采集0a0c97b3、安装f9b1ae8a，见v043-host-baseline.md、v043-receive-backpressure.md、v043-iab-waveforms.md、v043-receive-local-install.md。AHB/ILM A/B/A均未采用，原USB7恢复反测通过；失败、69,273,303点/144宽度/66MiB RTT/900DAP及限制保留在v043-control-ahb-ab.md、v043-control-ilm-b-ab.md。11/5新增4KiB/显式DMPM/4MHz：512重点及3629完整共享运行时检查通过、21GUI及生产Web通过，实机待验，见v043-bulk-capture.md。"
     },
     {
       "area": "0.4.2正式发布及腾讯云下载",
@@ -86,7 +86,7 @@
     "0.4.2正式源0e82ba6f/PR66与0.4.1正式源514efb86及所有已发布资产不可变。2026-11-02明确发布授权已完成Windows/完整Skill/SiteAgent、V2.9.3/V3.6.8/普通V4.7.2/HPMLinkV4.7.2的腾讯云/Git发布。用户2026-11-03覆盖旧分支约定：后续多个修复共用codex/v0.4.3-fixes，不直接修改main，不逐任务建分支；后续正式发布须另有明确指令。公网中继延期。",
     "后台协议 53：一个 GUI 客户端持有一个固定后台，同窗口切换只改下载器，RTT/Watch/Trace 跟随当前设备并清空旧目标状态；另开客户端才建独立后台。已有 URL 的额外页面共享该后台。工程上下文固定，换工程须停止原后台后重开。",
     "物理探针唯一 OS 所有权、USB 身份核对和 epoch 隔离保留。GUI/AI 明确断开或切换自动停止采集、排空在途操作并释放端口；旧会话不得跨设备，未知结果不得自动重放，不偷取其他后台占用。MCP disconnect 物理断开，detach 仅退出自身；独立 UART 保留。",
-    "SuperWatch 变量写入只认写应答，不做自动回读；烧录/显式内存校验仍保留，真实写错误不得吞掉或重放。外设 ID 基于 Pack 版本/芯片/SVD 相对路径；失效选择不得阻断物理连接，无法迁移时重选。 在线型号提供脱机/外设默认值，各页可独立修改；Pack操作完成自动刷新。下载先预留唯一物理身份，不要求先连接目标；自身预留不重建下载表单，其他设备切换仍清理。 HPM SDK的*_svd.xml按CMSIS-SVD支持；九系列共用目录不要求精确型号，精确Pack优先，型号扩展可手动导入XML；SES CPU寄存器XML不作为外设SVD。保留厂家原始字节/许可证及SHA校验。用户允许旧协议清理；在线采样强制MUX能力0x618，禁DMPM/SW01回退，离线旧记录仍可解析。有限dump/HPM Flash回读迁到MUX分块，校验完整才返回；变量MUX写仍限目标RAM且不重发，deadline/取消不发布部分结果。",
+    "SuperWatch写入只认写应答、不自动回读；显式校验保留，未知写不重放。外设ID按Pack/芯片/SVD，失效选择不阻断连接；厂家原字节/许可证/SHA保留，HPM九系列CMSIS-SVD支持，SES CPU XML不能冒充SVD。在线型号提供默认，脱机/外设页可独立修改；Pack刷新与下载身份预留保留。默认MUX小Watch0x618；11/5恢复显式DMPM，须能力声明和空闲连接，不自动回退或SW01写。capture/benchmark用0x800扩至4096B，GUI/VOFA容量保持；时间/DAP元数据不保证原子快照。离线旧记录可读；有限dump/HPM Flash经MUX完整校验，取消/deadline不返回部分结果。",
     "腾讯云：2026-11-04授权上海无限流量轻量服务器仅存/直出最新正式应用、Skill、SiteAgent及各型号固件；历史COS/Git，已有旧文件未清理。上位机启动/Skill首次加载默认查stable，当前0.4.2。COS210GiB，189告警/207.9(99%)锁停；用户明确取消套餐日期截止，保留累计账本、180秒短链和持久监控，不自动清零或扩大额度。套餐到期可按量计费，非账单硬上限。仅现有控制台/TAT，无新SSH。后续发布核验新集及归档后退役旧本地副本，不自动发布。旧桶及Git迁移边界见v040-release-handoff.md；新策略见tencent-download-cost-20261104.md、tencent-updates.md。",
     "测试直接使用用户原工程及 build/keil/Obj ELF，允许修改且无需备份还原，不复制工程；硬件路径只留本地。HPM 使用 ROM API，不使用 FLM/第二次通用 SWD reset；VCC 每次改动需确认具体电压，固件修改另开会话。 HPM AI可选固件声明的JTAG档位；旧4/10/20/30、新能力14档，默认10MHz。SWD/JTAG配置独立，不声称切换接口或物理测量。固件修复由用户指定会话01a186cd-c52a-7ea0-af29-8de6775d143b负责，用户后续允许提供本会话ID、通知和更新固件；指定会话已协作完成固件测试；明确授权的四个build已发布，见v042-release-handoff.md。后续仍双向核对占用，不自动升级或降级。",
     "默认只构建Windows；仅明确要求Linux/macOS时才构建或触发对应原生CI。完整Skill仍须FLM/Pack资格检查。构建使用scripts/build_workspace.ps1和F:/MKLink-Build，保留正式包、唯一证据、依赖与缓存。历史获授权本地Unix清理不影响线上正式附件；过时可再生产物仅依清理授权处理，链接/不可访问目录不强删。 通用请求延迟：每线程HTTP keep-alive按后台instance/port/probe/token隔离，空闲2秒或EOF前置退役，失败绝不重放。路径完全一致时不重复resolve；准入只读活动AXF路径，继续核验目录generation/fingerprint。无批量替代独立请求，无客户专用快照协议，无固件修改。",
@@ -95,7 +95,7 @@
     "编译完成不代表目标已下载：文件变化仅发待重载提示，不后台解析。用户明确加载/重载文件时自动停止目标采集，确认worker退出后原子换表，保持停止；失败保留旧目录/选择。不要求连接下载器；断开保留文件和选中变量但清空旧采样。公式只改变可视化，原始记录不变；不恢复旧地址采集或重放写操作。"
   ],
   "hardware": {
-    "state": "本会话ILM A/B/A结束：原USB7已恢复、反测通过、流停止/探针断开/子后台退出，见v043-control-ilm-b-ab.md；20us/长稳未达。固件会话随后报告用户已换V3并开展移植验证，当前设备与占用须向该会话协调并重新核对，不沿用原V4身份。",
+    "state": "11/5当前V4/H7原USB7，同一40us目标映像；本日原USB7基线4B约264420/s、RTT约853.6KiB/s，全值/RTT完整性已验。新候选尚未刷入。10:10只读核验 installed GUI为未连接lobby，采集停止、无SDK探针所有者；操作前仍重新核对。固件协作会话01a1a1a2-9adc-79e2-b30e-07c07d5f90c6负责V3/V4恢复，用户确认V4测完后换接V3。",
     "installer": "本机Windows已覆盖0.4.3本地未签名测试版，源f9b1ae8a，NSIS SHA55d17d0e，含0a0c97b3接收/连续性修复。3649载荷/冻结MCP/42 Web/原生/正常退出通过，见v043-receive-local-install.md；正式0.4.2资产保留。全局Skill及SiteAgent仍0.4.2。没有合并/签名/发布。",
     "backups": "正式包/四固件、当前资格/恢复包、缓存及工作树保留。用户授权旧记录和脚本清理：F释放18.055GiB、E释放5.326GiB；32份旧raw已退役，不能重解码，保留分析。114含链接组未动；见v043-workspace-cleanup.md。"
   },
@@ -111,7 +111,7 @@
   ],
   "next_actions": [
     "继续codex/v0.4.3-fixes/草稿PR69；后续修复须按v043-host-baseline.md保留功能、数据正确性和性能，不能后退。普通读P95/间隔<1ms、采样最大间隔<20us仍开放；合并/签名/正式发布须新授权。",
-    "最小ILM B试验已完成且不扩大；原USB7保持，候选/失败和A/B/A原始证据保留，见v043-control-ilm-b-ab.md。后续采样优化应重新定位普通批间21–22us与批内长尾，不能靠平均速率宣称无漏采；固件会话01a1a1a2-9adc-79e2-b30e-07c07d5f90c6本轮设备工作结束。",
+    "完成v043-bulk-capture.md：同H7映像测试V4 4096B MUX周期/全速/DMPM各三轮及4MHz精确设置，逐字节校验；复测SuperWatch/RTT/DAP及普通读P95/间隔，不降低基线。V4通过后释放设备请用户换V3。原ILM/AHB失败及USB7证据保留；当前固件会话继续构建/验收，未获合并发布授权。",
     "保留正式包、当前唯一验收证据、缓存和含链接目录；旧记录/脚本退役范围见v043-workspace-cleanup.md。历史V3掉线/冷插拔/长稳等仍按known-limits-20261030.md处理。",
     "按tencent-updates.md维护最新本地集；COS189GiB告警/207.9停止，已取消日期截止，关注实际扣量/到期后费用。不清零/扩大额度/恢复停止锁；监控断档超30天须账单重锚定。"
   ],

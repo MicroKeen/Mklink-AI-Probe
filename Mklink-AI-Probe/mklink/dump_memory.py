@@ -1,4 +1,4 @@
-"""Current MUX capture helpers and offline historical Dump Memory parsing.
+"""Default MUX capture with explicitly selected legacy Dump Memory support.
 
 Implements the streaming binary frame parser for both OLD and B1 (chunked)
 frame formats defined in the dump_memory protocol specification.
@@ -28,9 +28,9 @@ Frame formats (per firmware spec, 2026-06-06):
     +0x23  ... region[i] = idx(1) + size(2) + data(size)
     +EOF-4 4B crc32            (crc32 of magic..last region data byte)
 
-These formats are retained for offline historical records only. Live capture
-helpers use MUX, accepting an existing bridge and sharing the operation-
-observation and memory-result contracts.
+These formats serve offline records and explicit ``protocol='dmpm'`` capture.
+Live helpers default to MUX, accepting an existing shared bridge; they never
+fall back to the legacy protocol after a failed or unsupported MUX operation.
 """
 
 from __future__ import annotations
@@ -754,7 +754,12 @@ def capture_memory(device, regions, *, sample_count=1, timeout=10.0, speed_profi
 MAX_DUMP_RESULT_JSON_BYTES = 16 * 1024 * 1024
 
 
-def validate_dump_stream(regions, period=0.0, frames=1, duration=2.0, speed_profile=None, *, fastest=False):
+def validate_sampling_protocol(protocol):
+    if protocol not in ('mux', 'dmpm'):
+        raise ValueError('protocol must be mux (default) or explicit dmpm')
+
+
+def validate_dump_stream(regions, period=0.0, frames=1, duration=2.0, speed_profile=None, *, fastest=False, protocol='mux'):
     """Validate the finite CLI capture contract before a bridge or clock is touched."""
     import math
     if not isinstance(regions, list) or not 1 <= len(regions) <= MAX_SAMPLING_REGIONS:
@@ -776,8 +781,15 @@ def validate_dump_stream(regions, period=0.0, frames=1, duration=2.0, speed_prof
         if not isinstance(region, dict) or set(region) != {'address', 'size'}:
             raise ValueError('Each region requires exactly address and size')
         pairs.append((region['address'], region['size']))
-    from mklink.mux_watch import MuxWatchSession
-    MuxWatchSession(None, pairs, period, fastest=fastest)
+    validate_sampling_protocol(protocol)
+    if protocol == 'mux':
+        from mklink.mux_watch import create_mux_capture_session
+        create_mux_capture_session(None, pairs, period, fastest=fastest)
+    else:
+        from mklink.legacy_dump import command_for
+        if fastest:
+            raise ValueError('DMPM has no acknowledged fastest mode; use a positive period')
+        command_for(pairs, period)
     return pairs
 
 
@@ -787,7 +799,7 @@ def check_capture_cancelled(cancelled):
 
 
 def capture_dump_stream(device, regions, *, period=0.0, frames=1, duration=2.0, speed_profile=None,
-                        fastest=False, cancelled=None):
+                        fastest=False, protocol='mux', cancelled=None):
     """Collect complete samples using the existing session and shared assembler.
 
     First sample has a 2s startup allowance; duration starts at that sample.
@@ -799,11 +811,11 @@ def capture_dump_stream(device, regions, *, period=0.0, frames=1, duration=2.0, 
     """
     import json
     from mklink.mux_watch import PackedWatchSample
-    pairs = validate_dump_stream(regions, period, frames, duration, speed_profile, fastest=fastest)
+    pairs = validate_dump_stream(regions, period, frames, duration, speed_profile, fastest=fastest, protocol=protocol)
     check_capture_cancelled(cancelled)
     if speed_profile is not None:
         device.set_debug_speed(speed_profile)
-    session = DumpMemoryStreamSession(device._bridge, pairs, period, fastest=fastest)
+    session = DumpMemoryStreamSession(device._bridge, pairs, period, fastest=fastest, protocol=protocol)
     session.packed_frames = True
     assembler = DumpSampleAssembler([size for _, size in pairs], ordered=True)
     region_metadata = [{'address': f'0x{address:08X}', 'size': size} for address, size in pairs]
@@ -832,11 +844,13 @@ def capture_dump_stream(device, regions, *, period=0.0, frames=1, duration=2.0, 
                     if payloads is None:
                         continue
                     timestamp = assembler.timestamp_us
-                    sample = (timestamp, payloads)
+                    sample = (timestamp, payloads, frame.get('acquisition'))
                     assembler = DumpSampleAssembler([size for _, size in pairs], ordered=True)
                 if not samples:
                     deadline = time.monotonic() + (duration or 300)
                 result_bytes += sample_fixed_bytes + len(str(len(samples))) + len(str(timestamp))
+                if not isinstance(sample, PackedWatchSample) and sample[2] is not None:
+                    result_bytes += len(json.dumps({'acquisition': sample[2]}, separators=(',', ':'))) - 1
                 if result_bytes > MAX_DUMP_RESULT_JSON_BYTES:
                     raise ValueError('Dump result exceeds 16 MiB JSON limit; reduce frames, duration or regions')
                 samples.append(sample)
@@ -860,6 +874,7 @@ def capture_dump_stream(device, regions, *, period=0.0, frames=1, duration=2.0, 
     for index, sample in enumerate(samples):
         check_capture_cancelled(cancelled)
         if isinstance(sample, PackedWatchSample):
+            acquisition = None
             timestamp = sample.timestamp_us
             cursor = sample.offset
             payloads = []
@@ -867,23 +882,25 @@ def capture_dump_stream(device, regions, *, period=0.0, frames=1, duration=2.0, 
                 payloads.append(sample.payload[cursor:cursor+size])
                 cursor += size
         else:
-            timestamp, payloads = sample
+            timestamp, payloads, acquisition = sample
         samples[index] = {'sample_index': index, 'timestamp_us': timestamp,
                           'regions': [{**region, 'data_hex': data.hex()}
                                       for region, data in zip(region_metadata, payloads)]}
+        if acquisition is not None:
+            samples[index]['acquisition'] = acquisition
     return {'sample_count': len(samples), 'region_count': len(pairs),
             'total_bytes': sum(size for _, size in pairs) * len(samples), 'samples': samples,
             'stopped_by': stopped_by, 'incomplete_tail': bool(assembler.blocks or assembler.incomplete_region_count
                                                             or stats.get('incomplete_samples', 0)),
-            'stats': stats, 'timing': timing}
+            'stats': stats, 'timing': timing, 'protocol': protocol}
 
 
 class DumpMemoryStreamSession:
-    """Own a current MUX sampling subscription; historical parsing is offline only."""
+    """Default to MUX; DMPM requires explicit selection before any I/O."""
 
     packed_frames = False
 
-    def __init__(self, bridge, region_pairs, period, *, write_ranges=ARM_WRITE_RANGES, fastest=False):
+    def __init__(self, bridge, region_pairs, period, *, write_ranges=ARM_WRITE_RANGES, fastest=False, protocol='mux'):
         import math
         if not math.isfinite(period) or period < 0:
             raise ValueError('dump period must be nonnegative and finite')
@@ -892,9 +909,17 @@ class DumpMemoryStreamSession:
         self.period = float(period)
         self.write_ranges = tuple(write_ranges)
         self.fastest = fastest
+        validate_sampling_protocol(protocol)
+        self.protocol = protocol
+        self._legacy = None
         validate_dump_regions(self.region_pairs)
         if type(fastest) is not bool or (fastest and period != 0):
             raise ValueError('Fastest sampling requires fastest=True and period=0')
+        if protocol == 'dmpm':
+            from mklink.legacy_dump import LegacyDumpSession
+            if fastest:
+                raise ValueError('DMPM has no acknowledged fastest mode; use a positive period')
+            self._legacy = LegacyDumpSession(bridge, self.region_pairs, self.period)
         # Capacity validation is repeated at start before any connection I/O.
         self.started = False
         self._mux_watch = None
@@ -903,8 +928,14 @@ class DumpMemoryStreamSession:
     def start(self):
         if self.started:
             return
-        from mklink.mux_watch import MuxWatchSession
-        watch = MuxWatchSession(None, self.region_pairs, self.period, fastest=self.fastest)
+        if self._legacy is not None:
+            try:
+                self._legacy.start()
+            finally:
+                self.started = self._legacy.started
+            return
+        from mklink.mux_watch import create_mux_capture_session
+        watch = create_mux_capture_session(None, self.region_pairs, self.period, fastest=self.fastest)
         supported = getattr(self.bridge, 'supports_multiplex', None)
         if not callable(supported) or supported() is not True:
             raise DumpMemoryUnsupported('SuperWatch requires MUX sampling firmware; update the probe firmware and host together')
@@ -912,19 +943,24 @@ class DumpMemoryStreamSession:
         if watch.transport is None:
             raise DumpMemoryUnsupported('SuperWatch requires MUX sampling firmware; update the probe firmware and host together')
         self._mux_watch = watch
-        self._mux_dropped_bytes_start = watch.transport.stats()['watch_dropped_bytes']
+        self._mux_drop_key = 'bulk_dropped_bytes' if getattr(watch, 'EVENT', None) == 0x42 else 'watch_dropped_bytes'
+        self._mux_dropped_bytes_start = watch.transport.stats()[self._mux_drop_key]
         watch.start()
         self.started = True
 
     @property
     def timing(self):
         """Accepted wire timing, not a measured sampling-rate guarantee."""
+        if self._legacy is not None:
+            return self._legacy.timing
         value = self._mux_watch.timing if self._mux_watch is not None else None
         return dict(value) if value is not None else None
 
     def request_write(self, address, data, future):
         if not self.started:
             raise RuntimeError('Sampling stream is not started')
+        if self._legacy is not None:
+            raise RuntimeError('Live variable writes require MUX; DMPM compatibility capture is read-only')
         if len(data) not in (1, 2, 4, 8) or not any(
             start <= address and address + len(data) <= end for start, end in self.write_ranges
         ):
@@ -934,22 +970,26 @@ class DumpMemoryStreamSession:
     def read_frames(self, max_bytes=None):
         if not self.started:
             raise RuntimeError('dump-memory stream is not started')
+        if self._legacy is not None:
+            return self._legacy.read_frames(max_bytes)
         return self._mux_watch.read_frames(packed=self.packed_frames)
 
     def stop(self):
         if not self.started:
             return
         try:
-            self._mux_watch.stop()
+            (self._legacy if self._legacy is not None else self._mux_watch).stop()
         finally:
             self.started = False
 
     @property
     def stats(self):
+        if self._legacy is not None:
+            return self._legacy.stats
         watch = self._mux_watch
         return {'protocol_frames': watch.samples if watch else 0,
                 'complete_samples': watch.samples if watch else 0,
-                'parser_dropped_bytes': (watch.transport.stats()['watch_dropped_bytes']
+                'parser_dropped_bytes': (watch.transport.stats()[self._mux_drop_key]
                                          - self._mux_dropped_bytes_start) if watch else 0,
                 'parser_dropped_frames': watch.gaps if watch else 0,
                 'firmware_read_errors': watch.read_errors if watch else 0,

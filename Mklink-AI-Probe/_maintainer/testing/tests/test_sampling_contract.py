@@ -45,11 +45,15 @@ def test_continuous_capacity_never_falls_back_to_old_bulk(size):
     transport, calls = watch_peer()
     bridge = memory_bridge(transport)
     session = DumpMemoryStreamSession(bridge, [(0x20010000, size)], .001)
-    if size > 1920:
-        with pytest.raises(ValueError, match='15 regions'):
+    if size > 4096:
+        with pytest.raises(ValueError, match='4096 bytes'):
             session.start()
         bridge.supports_multiplex.assert_not_called()
         bridge.enable_multiplex.assert_not_called()
+    elif size > 1920:
+        with pytest.raises(RuntimeError, match='0x800'):
+            session.start()
+        assert all(op not in (0x32, 0x34) for op, _ in calls)
     else:
         session.start()
         session.stop()

@@ -140,18 +140,19 @@ def breakpoints(device, body):
 
 def memory_measure(device, body, *, cancelled=None):
     from mklink.dump_benchmark import measure, measurement_regions
-    _fields(body, {'regions', 'duration', 'period', 'speed_profile'})
+    _fields(body, {'regions', 'duration', 'period', 'speed_profile', 'protocol'})
     return measure(device, measurement_regions(body.get('regions')), duration=body.get('duration', 3.0),
-                   period=body.get('period', 0.000001), speed_profile=body.get('speed_profile'), cancelled=cancelled)
+                   period=body.get('period', 0.000001), speed_profile=body.get('speed_profile'),
+                   protocol=body.get('protocol', 'mux'), cancelled=cancelled)
 
 
 def memory_dump_stream(device, body, *, cancelled=None):
     from mklink.dump_memory import capture_dump_stream
-    _fields(body, {'regions', 'period', 'frames', 'duration', 'speed_profile', 'fastest'})
+    _fields(body, {'regions', 'period', 'frames', 'duration', 'speed_profile', 'fastest', 'protocol'})
     return capture_dump_stream(device, body.get('regions'), period=body.get('period', 0.0),
                                frames=body.get('frames', 1), duration=body.get('duration', 2.0),
                                speed_profile=body.get('speed_profile'), fastest=body.get('fastest', False),
-                               cancelled=cancelled)
+                               protocol=body.get('protocol', 'mux'), cancelled=cancelled)
 
 
 def watch_runtime_stats(device, body):

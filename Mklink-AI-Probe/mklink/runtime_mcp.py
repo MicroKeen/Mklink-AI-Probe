@@ -168,7 +168,7 @@ def build_server():
 
     @server.tool()
     def measure_dump_memory(regions: list[dict], duration: float = 3.0,
-                            period: float = 0.000001, speed_profile: str | None = None) -> dict:
+                            period: float = 0.000001, speed_profile: str | None = None, protocol: str = 'mux') -> dict:
         """Measure complete dump samples through the selected shared backend.
 
         1..15 regions, at most 4096 bytes, 0.5..30 seconds; first sample has
@@ -176,9 +176,11 @@ def build_server():
         rate/interval percentiles and integrity counters, not raw samples.
         Requires idle CDC; never stops GUI capture or replays a failed run.
         Omit speed_profile to retain the shared clock.
+        MUX is the default. protocol='dmpm' explicitly selects firmware legacy
+        compatibility; errors never trigger an automatic protocol switch.
         """
         return client().call('measure_dump_memory', {'regions': regions, 'duration': duration,
-                            'period': period, 'speed_profile': speed_profile})
+                            'period': period, 'speed_profile': speed_profile, 'protocol': protocol})
 
     @server.tool()
     def dump_memory(regions: list[dict], sample_count: int = 1, timeout: float = 10.0,

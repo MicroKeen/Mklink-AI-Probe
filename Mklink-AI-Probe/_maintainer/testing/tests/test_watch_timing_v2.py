@@ -111,7 +111,7 @@ def test_fastest_capacity_error_does_not_use_legacy_bulk():
     transport, calls = peer()
     session = DumpMemoryStreamSession(bridge_for(transport), [(0x20000000, 2048)], 0,
                                       fastest=True)
-    with pytest.raises(ValueError, match='15 regions'):
+    with pytest.raises(RuntimeError, match='0x800'):
         session.start()
     assert all(op != 0x32 for op, _ in calls)
 

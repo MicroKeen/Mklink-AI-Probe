@@ -112,6 +112,31 @@ def test_old_four_megahertz_requires_explicit_migration(tmp_path,kind):
     dev._bridge.send_command.assert_not_called()
 
 
+@pytest.mark.parametrize('model', ['V3.6.8', 'V4.7.2'])
+@pytest.mark.parametrize('kind', ['number', 'profile'])
+def test_restored_four_megahertz_is_exact_and_does_not_offer_migration(tmp_path, model, kind):
+    dev = v3_device(tmp_path)
+    dev._bridge._firmware_capabilities = (dev._bridge._firmware_capabilities - {'V3.6.8'}) | {
+        model, 'SWD_CLOCKS_EXTRA=4000000'}
+    options = clock_options(dev._bridge)
+    assert options['clocks_hz'] == sorted([*V3_CLOCKS, 4000000])
+    assert clock_options(dev._bridge, interface='JTAG')['clocks_hz'] == [4000000, 10000000, 20000000, 30000000]
+    result = dev.set_debug_clock(4000000) if kind == 'number' else dev.set_debug_speed('low')
+    assert result['configured_hz'] == result['applied_hz'] == 4000000
+    dev._bridge.send_command.assert_called_once()
+    assert dev._bridge.send_command.call_args.args == ('cmd.set_swd_clock(4000000)',)
+    assert clock_snapshot(dev, {'swd_clock': '4000000'})['migration'] is None
+
+
+def test_clock_extension_does_not_invent_base_or_other_interface_capabilities(tmp_path):
+    dev = v3_device(tmp_path)
+    dev._bridge._firmware_capabilities |= {'JTAG_CLOCKS_EXTRA=4000000'}
+    assert 4000000 not in clock_options(dev._bridge)['clocks_hz']
+    dev._bridge._firmware_capabilities = frozenset({'V4.7.2', 'SWD_CLOCKS_EXTRA=4000000'})
+    assert clock_options(dev._bridge)['clock_source'] == 'legacy'
+    assert clock_options(dev._bridge)['clocks_hz'] == [4000000, 10000000, 20000000, 30000000]
+
+
 @pytest.fixture
 def api_clock(tmp_path,monkeypatch):
     managers={name:SimpleNamespace(running=False,stop=Mock()) for name in ('rtt','superwatch','systemview','vofa','serial','modbus')}
@@ -145,6 +170,21 @@ def test_migration_is_explicit_and_only_saved_after_ack(api_clock,tmp_path):
     saved=load_config(str(tmp_path))
     assert saved['swd_clock']=='2000000' and 'debug_speed' not in saved
     assert client.get('/api/device/debug-speed').json()['migration'] is None
+
+
+def test_advertised_4mhz_roundtrips_without_migration_or_mapping(api_clock, tmp_path):
+    client, dev, _ = api_clock
+    dev._bridge._firmware_capabilities |= {'SWD_CLOCKS_EXTRA=4000000'}
+    dev._bridge.send_command.side_effect = lambda *a, **k: 'set clock 4000000\nSWD clock_state=applied'
+    response = client.post('/api/device/debug-speed', json={'clock_hz': 4000000, 'save': True})
+    assert response.status_code == 200, response.text
+    assert response.json()['applied_hz'] == 4000000
+    status = client.get('/api/device/debug-speed').json()
+    assert status['requested_hz'] == status['configured_hz'] == status['applied_hz'] == 4000000
+    assert status['migration'] is None and status['profiles']['low'] == 4000000
+    assert load_config(str(tmp_path))['swd_clock'] == '4000000'
+    dev._bridge.send_command.assert_called_once()
+    assert dev._bridge.send_command.call_args.args[0] == 'cmd.set_swd_clock(4000000)'
 
 
 @pytest.mark.parametrize('shared',[False,True])
