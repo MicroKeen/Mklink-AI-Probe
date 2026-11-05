@@ -7,8 +7,11 @@ import type { StreamClientOptions } from '../lib/stream/streamClient'
 vi.mock('../lib/runtimeEndpoint', () => ({ API_BASE: '/apps/probe/content' }))
 
 describe('binary streams behind a directory proxy', () => {
-  it.each<BinaryStreamName>(['serial', 'superwatch', 'rtt', 'rtt-terminal', 'systemview', 'vofa'])(
-    'connects %s under the same prefix as HTTP', stream => {
+  it.each<[BinaryStreamName, string]>([
+    ['serial', ''], ['superwatch', '?continuity=1'], ['rtt', ''],
+    ['rtt-terminal', ''], ['systemview', ''], ['vofa', ''],
+  ])(
+    'connects %s under the same prefix as HTTP', (stream, expectedSearch) => {
       let options: StreamClientOptions | undefined
       const dispose = vi.fn()
       const wrapper = mount(defineComponent({
@@ -29,7 +32,7 @@ describe('binary streams behind a directory proxy', () => {
       const url = new URL(options!.url)
       expect(url.host).toBe(window.location.host)
       expect(url.pathname).toBe(`/apps/probe/content/ws/streams/${stream}`)
-      expect(url.search).toBe('')
+      expect(url.search).toBe(expectedSearch)
       expect(url.hash).toBe('')
       wrapper.unmount()
       expect(dispose).toHaveBeenCalledOnce()

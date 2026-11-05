@@ -108,8 +108,10 @@ jobs:
           $tests += @('test_hpm_debug_protocol', 'test_hpm_clock_contract', 'test_debug_speed', 'test_systemview_parser')
           $tests += 'test_offline_verify'
           $tests += 'test_offline_h7_dualcore'
+          $tests += 'test_skill_update'
           $arguments = @('-m', 'pytest', '-q', '--tb=short', "--junitxml=$($paths.reports)/shared-runtime.xml")
           $arguments += $tests | ForEach-Object { "_maintainer/testing/tests/$_.py" }
+          $arguments += '_maintainer/testing/tests/test_remote_packaging.py::test_final_package_evidence_is_explicitly_deferred_to_n5'
           ./scripts/build_workspace.ps1 -Action run -Executable python -ArgumentList $arguments
       - name: Attach contract report
         if: always()
@@ -143,6 +145,10 @@ jobs:
         shell: pwsh
         working-directory: Mklink-AI-Probe
         run: ./scripts/build_workspace.ps1 -Action run -WorkingDirectory ./gui -Executable npm -ArgumentList @('test', '--', 'src/views/OfflineFlashView.test.ts', 'src/composables/useOfflineFlashApi.test.ts')
+      - name: Check binary stream proxy negotiation
+        shell: pwsh
+        working-directory: Mklink-AI-Probe
+        run: ./scripts/build_workspace.ps1 -Action run -WorkingDirectory ./gui -Executable npm -ArgumentList @('test', '--', 'src/composables/useBinaryStreamProxy.test.ts')
       - name: Check types and production bundle
         shell: pwsh
         working-directory: Mklink-AI-Probe
