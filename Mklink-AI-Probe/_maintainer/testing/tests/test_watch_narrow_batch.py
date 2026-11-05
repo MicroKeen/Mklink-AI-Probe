@@ -94,7 +94,7 @@ def test_firmware_production_golden_frames(row, packed):
 
 
 @pytest.mark.parametrize('width', [1, 2])
-@pytest.mark.parametrize('period,fastest,accepted', [(0, False, 2000), (0, True, 0), (4e-6, False, 4)])
+@pytest.mark.parametrize('period,fastest,accepted', [(0, False, 2000), (0, True, 0), (1e-6, False, 1), (4e-6, False, 4)])
 def test_start_negotiates_exact_width_and_preserves_first_ack_adjacent_sample(width, period, fastest, accepted):
     maximum = (1 << (width * 8)) - 1
     transport, calls = peer(first_event=wire(0x41, batch_payload(width, [maximum])))

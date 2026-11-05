@@ -48,19 +48,19 @@ def test_superwatch_dashboard_template_defaults_interval_to_1ms():
 
     assert 'id="interval-input" value="0.001"' in superwatch_html
     assert 'id="interval-input" value="0"' in vofa_html
-    assert 'step="0.000001" min="0.000004"' in superwatch_html
+    assert 'step="0.000001" min="0.000001"' in superwatch_html
     assert 'step="0.001" min="0"' in vofa_html
 
 
-@pytest.mark.parametrize("interval", [0.000004, 0.000005, 0.00001, 0.001, 60.0])
+@pytest.mark.parametrize("interval", [0.000001, 0.000002, 0.000003, 0.000004, 0.000005, 0.00001, 0.001, 60.0])
 def test_superwatch_interval_accepts_supported_range(interval):
     assert normalize_superwatch_interval(interval) == pytest.approx(interval)
 
 
 @pytest.mark.parametrize(
-    "interval", [float("nan"), float("inf"), -float("inf"), 0, 0.000001, 0.000003999, 60.000001],
+    "interval", [float("nan"), float("inf"), -float("inf"), 0, 0.0000005, 0.000000999, 60.000001],
 )
-def test_superwatch_interval_rejects_values_outside_4us_to_60s(interval):
+def test_superwatch_interval_rejects_values_outside_1us_to_60s(interval):
     manager = SuperWatchStreamManager()
     before = manager.get_status()["interval"]
 
@@ -68,6 +68,40 @@ def test_superwatch_interval_rejects_values_outside_4us_to_60s(interval):
         manager.set_interval(interval)
 
     assert manager.get_status()["interval"] == before
+
+
+@pytest.mark.parametrize("mode,minimum", [("SuperWatch", 0.000001), ("VOFA", 0.0)])
+def test_standalone_interval_boundary_does_not_change_current_capture(mode, minimum):
+    import http.client
+    import json
+    from mklink.rtt_viewer import VisualizationServer
+
+    server = VisualizationServer(host="127.0.0.1", port=0, mode=mode, idle_timeout=0)
+    callback = Mock()
+    server._on_interval_change = callback
+    server.start()
+    client = http.client.HTTPConnection("127.0.0.1", server.port, timeout=3)
+
+    def post(value):
+        client.request("POST", "/api/interval", json.dumps({"interval": value}), {"Content-Type": "application/json"})
+        response = client.getresponse()
+        content = response.read()
+        return response.status, content
+
+    try:
+        status, content = post(minimum)
+        assert status == 200
+        assert json.loads(content)["interval"] == minimum
+        callback.assert_called_once_with(minimum)
+        for value in (minimum - 0.0000001, "NaN", "Infinity", "bad", None, 60.000001):
+            status, _ = post(value)
+            assert status == 400
+            assert server._interval == minimum
+            assert server._collection_state == "running"
+            callback.assert_called_once_with(minimum)
+    finally:
+        client.close()
+        server.stop()
 
 
 def _watch_item(name, address):

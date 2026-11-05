@@ -557,8 +557,10 @@ document.getElementById('btn-apply-buffer').addEventListener('click', function()
 document.getElementById('btn-apply-interval').addEventListener('click', function() {
   if (replaySession) return;
   var val = parseFloat(intervalInput.value);
-  if (isNaN(val) || val < 0 || val > 60) {
-    alert('Interval must be between 0 and 60 seconds');
+  var minimumInterval = IS_SUPERWATCH_MODE ? 0.000001 : 0;
+  if (!Number.isFinite(val) || val < minimumInterval || val > 60) {
+    alert(IS_SUPERWATCH_MODE ? t('superwatch_interval_invalid') : 'Interval must be between 0 and 60 seconds');
+    intervalInput.focus();
     return;
   }
   intervalDirty = false;

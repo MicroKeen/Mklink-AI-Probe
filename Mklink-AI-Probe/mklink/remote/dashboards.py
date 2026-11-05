@@ -1836,7 +1836,7 @@ class SystemViewStreamManager:
 # SuperWatch SSE Generator
 # ---------------------------------------------------------------------------
 
-SUPERWATCH_MIN_INTERVAL = 0.000004
+SUPERWATCH_MIN_INTERVAL = 0.000001
 
 
 def normalize_superwatch_interval(interval: float) -> float:

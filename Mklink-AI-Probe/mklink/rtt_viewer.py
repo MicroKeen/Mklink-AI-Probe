@@ -398,9 +398,13 @@ class VisualizationServer:
                 elif path == "/api/interval":
                     length = int(this.headers.get('Content-Length', 0))
                     body = json.loads(this.rfile.read(length)) if length else {}
-                    new_interval = float(body.get("interval", 0))
-                    if new_interval < 0 or new_interval > 60:
-                        this.send_error(400, "Interval must be 0-60 seconds")
+                    minimum_interval = 0.000001 if server._mode == "SuperWatch" else 0
+                    try:
+                        new_interval = float(body.get("interval", 0))
+                    except (TypeError, ValueError):
+                        new_interval = float("nan")
+                    if not math.isfinite(new_interval) or new_interval < minimum_interval or new_interval > 60:
+                        this.send_error(400, f"Interval must be finite and in the range [{minimum_interval:.6f}, 60] seconds")
                         return
                     with server._control_lock:
                         server._interval = new_interval
@@ -782,7 +786,7 @@ def _build_dashboard_html(max_points: int = 500, title: str = "MKLink RTT View",
     html = html.replace(_MARKER_LANG, _load_lang_preference())
     html = html.replace(_MARKER_INTERVAL, "0.001" if mode == "SuperWatch" else "0")
     html = html.replace("__INTERVAL_STEP__", "0.000001" if mode == "SuperWatch" else "0.001")
-    html = html.replace("__INTERVAL_MIN__", "0.000004" if mode == "SuperWatch" else "0")
+    html = html.replace("__INTERVAL_MIN__", "0.000001" if mode == "SuperWatch" else "0")
     return html
 
 
