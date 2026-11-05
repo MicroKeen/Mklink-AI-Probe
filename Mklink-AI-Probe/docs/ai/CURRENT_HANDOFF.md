@@ -4,7 +4,7 @@
 
 ## 当前断点
 
-- 更新时间：`2026-11-05T12:22:06+08:00`
+- 更新时间：`2026-11-05T13:11:46+08:00`
 - 分支：`codex/v0.4.3-fixes`
 - HEAD：`基于main 4f3be7a4；采集产品0a0c97b3，安装源f9b1ae8a（仅更新说明）；确切提交以Git为准。`
 - 远端 HEAD：`microkeen/main已合并PR66、67、68，基线4f3be7a4；正式tag/包不变。`
@@ -23,7 +23,7 @@
 
 ## 验证证据
 
-- **0.4.3接收、连续性与性能**：用户已接受0.4.3基线：采集0a0c97b3/安装f9b1ae8a，见v043-host-baseline.md。产品7507cc46：512重点、3629共享运行时、21GUI、生产Web通过；27c89d7f两项CI均绿，Skill边界76过。V4 4096矩阵12045组49.34MB全值正确，MUX最快1052KiB/s；4MHz浏览器及LA通过。同线USB7/11:50:12候选A/B各62MiB RTT和RAM/PE2/DAP值全正确，但候选RTT中位下降0.856%/0.900%，RAM最大间隔53/56/76us对原47/49/48us，性能不通过。闲态ready修复未消除退化，基线不降低；详见v043-bulk-capture.md。
+- **0.4.3接收、连续性与性能**：已接受基线仍为采集0a0c97b3/安装f9b1ae8a，见v043-host-baseline.md。7507cc46的512重点/3629共享运行时/21GUI及Web通过，036a49f0两项CI绿。V4经LA定位及D布局恢复RTT至853.78–853.96KiB/s；A/D/A2各62MiB全对。最终13:02:03与D仅时间字符不同，4096矩阵12043组49.33MB全对、MUX最快1056KiB/s。短读最终包P95连续1.119–1.150/间隔2.389ms高于USB7 1.081–1.099/1.890ms，未放行。波形、峰值和失败记录见v043-bulk-capture.md。
 - **0.4.2正式发布及腾讯云下载**：正式源0e82ba6f，Windows/完整Skill/SiteAgent及四固件正式覆盖、签名、三渠道与故障回退验证通过；PR66/67/68已合并，正式资产不可变。安装器元数据修复cb30b703/PR63已纳入。详细计数/SHA见v042-release-handoff.md、installer-metadata-cleanup-20261027.md。后续清理29目录约6.587GiB、629保留文件哈希不变，135含链接组保留人工检查，见v042-postrelease-handoff.md。 11/4轻量11文件341MiB全哈希/HEAD/Range/缺文件回退、25保护和18GUI通过；更新32过/1已有开发版本不一致，Skill实时检查通过。99%及无日期截止部署回读通过，详见tencent-download-cost-20261104.md（含账单分析、误部署恢复及限制）。
 - **0.4.2正式候选最终资格**：90e676db与产品1ca9b8fd等价：6453Python/2skip、1182GUI、生产Web/冻结/Rust/NSIS/覆盖及真实界面交互通过。HPM时钟/镜像/RAM/XML/RTT/Watch/串口、Trace独立并行、烧录后三流恢复与原生退出通过。完整计数及限制见v042-formal-qualification.md、v042-traffic-replay.md，历史Trace溢出失败保留。
 - **HPM AI Skill能力核实**：源cafe835f：749Python/65GUI、生产Web/浏览器与完整Skill覆盖校验通过，56 MCP/126能力/协议53一致。时钟、离线门禁、探针诊断/供电/ISP/OTP入口和文档已补齐。该轮无USB操作，详见firmware-skill-fixes-20261101.md；后续正式固件范围见发布报告。
@@ -47,14 +47,14 @@
 
 ## 真机环境
 
-- **state**：11/5 V4/H7当前闲态调度候选V4.7.2/build11:50:12，SHAeb43a3cb…70d4eb8，同线USB7 A/B正确性通过但RTT约0.9%退化及长间隔仍在，未采用为基线。目标40us/223656B Flash全字节不变；LA CH0 SWCLK/CH1 SWDIO。上位机SDK已disconnect/detach，30MHz，硬件和F构建测试锁交固件协作会话01a1a1a2-9adc-79e2-b30e-07c07d5f90c6继续定位及真实Keil共存。V4通过后用户换V3。操作前须重新协调占用。
+- **state**：11/5 V4/H7当前V4.7.2/build13:02:03，SHA2946fa27…d586eb，RTT恢复，4096/4MHz正确；普通读P95差异未关闭。目标40us/223656B Flash不变，LA CH0时钟/CH1数据。SDK已disconnect/detach，30MHz，待交固件会话01a1a1a2-9adc-79e2-b30e-07c07d5f90c6定位命令/唤醒路径及Keil/bulk共存。操作前协调设备/F锁，V4通过再换V3。
 - **installer**：本机Windows已覆盖0.4.3本地未签名测试版，源f9b1ae8a，NSIS SHA55d17d0e，含0a0c97b3接收/连续性修复。3649载荷/冻结MCP/42 Web/原生/正常退出通过，见v043-receive-local-install.md；正式0.4.2资产保留。全局Skill及SiteAgent仍0.4.2。没有合并/签名/发布。
 - **backups**：正式包/四固件、当前资格/恢复包、缓存及工作树保留。用户授权旧记录和脚本清理：F释放18.055GiB、E释放5.326GiB；32份旧raw已退役，不能重解码，保留分析。114含链接组未动；见v043-workspace-cleanup.md。
 
 ## 下一动作
 
 1. 继续codex/v0.4.3-fixes/草稿PR69；后续修复须按v043-host-baseline.md保留功能、数据正确性和性能，不能后退。普通读P95/间隔<1ms、采样最大间隔<20us仍开放；合并/签名/正式发布须新授权。
-2. 继续固件侧定位同接线A/B确认的RTT约0.9%退化与采样长间隔，不能降低基线；新候选须重复相同资格并完成实际Keil共存。公共capture_dump保持独占流资源租约，协议层bulk并行未实测，不外推小Watch+RTT+DAP结果。V4通过释放后请用户换V3验收DMPM/4096/4MHz；原USB7及失败包证据保留，未获合并发布授权。
+2. D布局已恢复RTT，最终同码包矩阵通过；继续定位普通读P95差异，不据单项或CI放行。实际Keil及bulk并行待验，公共capture_dump仍独占流租约。V4资格完成后换V3验收DMPM/4096/4MHz；USB7及A/B/C/D/A2证据保留，未获合并发布授权。
 3. 保留正式包、当前唯一验收证据、缓存和含链接目录；旧记录/脚本退役范围见v043-workspace-cleanup.md。历史V3掉线/冷插拔/长稳等仍按known-limits-20261030.md处理。
 4. 按tencent-updates.md维护最新本地集；COS189GiB告警/207.9停止，已取消日期截止，关注实际扣量/到期后费用。不清零/扩大额度/恢复停止锁；监控断档超30天须账单重锚定。
 
