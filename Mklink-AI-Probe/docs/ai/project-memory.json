@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-05T10:45:17+08:00",
+  "updated_at": "2026-11-05T11:41:58+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
@@ -13,7 +13,7 @@
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "bulk_capture_qualification_in_progress",
+    "status": "bulk_capture_performance_review",
     "current_task": "用户要求恢复V3/V4 cmd.dump_memory兼容能力、上位机默认MUX补齐4096B连续采集，并增加4MHz档位。先V4/H7实测后用户换V3；见v043-bulk-capture.md。未合并发布，既有性能基线不能降低。云端11/4已验收策略保持。"
   },
   "milestones": [
@@ -51,7 +51,7 @@
   "verification": [
     {
       "area": "0.4.3接收、连续性与性能",
-      "result": "用户已接受0.4.3基线：采集0a0c97b3、安装f9b1ae8a，见v043-host-baseline.md、v043-receive-backpressure.md、v043-iab-waveforms.md、v043-receive-local-install.md。AHB/ILM A/B/A均未采用，原USB7恢复反测通过；失败、69,273,303点/144宽度/66MiB RTT/900DAP及限制保留在v043-control-ahb-ab.md、v043-control-ilm-b-ab.md。11/5新增4KiB/显式DMPM/4MHz：512重点及3629完整共享运行时检查通过、21GUI及生产Web通过，实机待验，见v043-bulk-capture.md。"
+      "result": "用户已接受0.4.3基线：采集0a0c97b3/安装f9b1ae8a，见v043-host-baseline.md及接收/浏览器/本机安装报告。AHB/ILM均未采用，原USB7恢复反测通过，失败证据保留。11/5产品7507cc46：512重点、3629完整共享运行时、21GUI、生产Web通过；PR69共享运行时/GUI CI绿，Skill边界两失败修复后76过。V4 4096矩阵12045组49.34MB全值正确、MUX最快1052KiB/s，4MHz浏览器及LA通过。4B持续264.94k/s；RTT重复845.4–846.7较原853.6KiB/s低约1%，尾延迟也有增加，未判无退化，见v043-bulk-capture.md。"
     },
     {
       "area": "0.4.2正式发布及腾讯云下载",
@@ -95,7 +95,7 @@
     "编译完成不代表目标已下载：文件变化仅发待重载提示，不后台解析。用户明确加载/重载文件时自动停止目标采集，确认worker退出后原子换表，保持停止；失败保留旧目录/选择。不要求连接下载器；断开保留文件和选中变量但清空旧采样。公式只改变可视化，原始记录不变；不恢复旧地址采集或重放写操作。"
   ],
   "hardware": {
-    "state": "11/5当前V4/H7原USB7，同一40us目标映像；本日原USB7基线4B约264420/s、RTT约853.6KiB/s，全值/RTT完整性已验。新候选尚未刷入。10:10只读核验 installed GUI为未连接lobby，采集停止、无SDK探针所有者；操作前仍重新核对。固件协作会话01a1a1a2-9adc-79e2-b30e-07c07d5f90c6负责V3/V4恢复，用户确认V4测完后换接V3。",
+    "state": "11/5 V4/H7已刷入4096候选V4.7.2/build10:35:55，SHA6429248d…12e4ee，源与包见v043-bulk-capture.md。目标40us映像/Flash不变；LA CH0 SWCLK/CH1 SWDIO。矩阵和小变量/RTT/DAP正确性通过，但RTT约1%差异及尾延迟待同线USB7 A/B，候选不能替代基线。浏览器4MHz验证后恢复30MHz并释放。固件协作会话01a1a1a2-9adc-79e2-b30e-07c07d5f90c6负责修复；V4完成后用户换V3。操作前重新核对占用。",
     "installer": "本机Windows已覆盖0.4.3本地未签名测试版，源f9b1ae8a，NSIS SHA55d17d0e，含0a0c97b3接收/连续性修复。3649载荷/冻结MCP/42 Web/原生/正常退出通过，见v043-receive-local-install.md；正式0.4.2资产保留。全局Skill及SiteAgent仍0.4.2。没有合并/签名/发布。",
     "backups": "正式包/四固件、当前资格/恢复包、缓存及工作树保留。用户授权旧记录和脚本清理：F释放18.055GiB、E释放5.326GiB；32份旧raw已退役，不能重解码，保留分析。114含链接组未动；见v043-workspace-cleanup.md。"
   },
@@ -111,7 +111,7 @@
   ],
   "next_actions": [
     "继续codex/v0.4.3-fixes/草稿PR69；后续修复须按v043-host-baseline.md保留功能、数据正确性和性能，不能后退。普通读P95/间隔<1ms、采样最大间隔<20us仍开放；合并/签名/正式发布须新授权。",
-    "完成v043-bulk-capture.md：同H7映像测试V4 4096B MUX周期/全速/DMPM各三轮及4MHz精确设置，逐字节校验；复测SuperWatch/RTT/DAP及普通读P95/间隔，不降低基线。V4通过后释放设备请用户换V3。原ILM/AHB失败及USB7证据保留；当前固件会话继续构建/验收，未获合并发布授权。",
+    "先闭环V4候选RTT及尾延迟差异，同接线USB7 A/B、闲态调度审查，不降低基线；完善大块与小Watch/RTT/DAP并行及失效边界实测。完成后释放设备请用户换V3，分别验收DMPM/4096/4MHz。原ILM/AHB失败及USB7证据保留；未获合并发布授权。",
     "保留正式包、当前唯一验收证据、缓存和含链接目录；旧记录/脚本退役范围见v043-workspace-cleanup.md。历史V3掉线/冷插拔/长稳等仍按known-limits-20261030.md处理。",
     "按tencent-updates.md维护最新本地集；COS189GiB告警/207.9停止，已取消日期截止，关注实际扣量/到期后费用。不清零/扩大额度/恢复停止锁；监控断档超30天须账单重锚定。"
   ],

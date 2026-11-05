@@ -9,16 +9,15 @@ description: 使用 MKLink/MicroLink 操作目标 MCU：固件烧录、内存与
 
 - 首次加载立即检查版本：MCP `ping(force_update_check=True)` 读取 `update`；
   缺 MCP/参数时在 Skill 根目录运行 `python scripts/skill_update.py check --force --json`。
-  本会话只查一次，不沿用旧缓存。离线继续任务；新版简要提示，安装须用户同意，见
+  本会话只查一次。离线可继续；新版安装须用户同意，见
   [安装与更新](references/install.md)。
-- **下载固件先选后端**：除 HPM ROM 路径或用户明确指定方式外，优先使用用户
-  工程已配置的 IDE（Keil 等）编译下载，其次 pyOCD 在线下载，最后脱机下载。
-  先读[下载优先级](references/firmware-download-priority.md)，复用已确认可用的 Keil 配置。
+- **下载后端**：除 HPM ROM 或用户指定方式外，依次选工程现有 IDE、pyOCD、脱机。
+  先读[下载优先级](references/firmware-download-priority.md)，复用已确认的 Keil 配置。
 - 优先使用共享 MCP；先读[共享后台](references/shared-runtime.md)，参数以 schema/`--help` 为准。
   **GUI 已打开也可连接**：`connect(probe=...)` 复用工程和符号；`gui_call` 调用已声明的共享能力。
   RTT 已运行时无参数 `rtt_start()` 订阅，用 `rtt_read_channel` 读取。
   不发送旧 `RTTView.start/stop`，不另开串口；缺能力不退回独占。
-  默认后台采集；需用户看效果才用 `gui_present`，先选窗口。
+  默认后台采集；展示用 `gui_present`，先选窗口。
 - **占用先查后台**：`runtime_status(probe=...)` 无需连接，查询会话、采集和任务。
   GUI 关闭不等于后台退出，AI 任务完成须 `detach`。占用/失败时读
   [控制权与恢复](references/runtime-recovery.md)。
@@ -32,14 +31,12 @@ description: 使用 MKLink/MicroLink 操作目标 MCU：固件烧录、内存与
   执行一个命令；配套固件 RTT/SystemView/SuperWatch 统一调度并行，按实际协商能力判断。共享客户端可
   同时读缓存。多下载器用 `discover_probes` 明确 ID/别名，不默认选第一台。
   `detach` 仅退出本客户端；明确 `disconnect` 自动停采集并断开设备；读变量不停止他人采集。独立工具复用连接，停流再断开。
-- **VOFA 与 dump**：`read_memory`/`read_ram` 只做快照；连续曲线用
-  `dump_memory`。dump/SuperWatch 每次最多 **15 个**离散地址或 region；共享
-  VOFA 最多 **64 路**、对齐合并后最多 **15 个读取分组**，连续 float 简写最多
-  **16 路**。默认 MUX；SuperWatch/VOFA 保持最多 15 个 128 B 分片。
-  `capture_dump` / `measure_dump_memory` 超过该容量时，须协商大块采样能力
-  `0x800`，每个完整样本最多 **4096 B**。显式 `protocol=dmpm` 仅供兼容采集，
-  须有 `DUMP_MEMORY=1`、`DUMP_STOP=1` 且连接空闲，Pika 命令最多
-  **511 UTF-8 字节**；不会自动回退。不得用循环 `read_ram` 绕过流边界。
+- **VOFA 与 dump**：`read_memory`/`read_ram` 只做快照，不能循环绕过流边界。
+  dump/SuperWatch 最多 **15 个**离散地址；VOFA 最多 **64 路**，合并后最多
+  **15 个读取分组**，连续 float 简写最多 **16 路**。SuperWatch/VOFA 最多 15 个
+  128 B 分片；MUX 大块采集最多 4096 B，须协商能力。兼容 DMPM 须显式选择、
+  固件支持且连接空闲，命令最多 **511 UTF-8 字节**；不自动回退。
+  详见[内存与符号](references/commands-memory.md)。
 - **内存通道**：共享读写自动优先 MUX，无需先启动采集；失败不改道重发。
 - **flush**：单批总数据最多 **12 KiB**、最多 **8 个地址项**。超额时按批串行，
   每批等待提示符；不得与 dump、VOFA、RTT 或 SystemView 并发。

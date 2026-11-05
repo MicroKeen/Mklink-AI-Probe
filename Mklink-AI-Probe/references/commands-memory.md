@@ -161,7 +161,7 @@ python -m mklink dump-memory 0x08000000:256 --period 0.001 --frames 0 --duration
 - 序列化结果上限 **16 MiB**；超额报错，不返回截断数据。`period=0` 保留单次读取含义。
   共享 SDK `capture_dump` 的全速模式须显式传 `fastest=True, period=0`，且固件支持。
 - 显式 DMPM 要求连接空闲及 `DUMP_MEMORY=1`、`DUMP_STOP=1`；不抢停其他采集，
-  不允许流内写入。兼容入口最多 15 个 region、512 KiB、511 字节 Pika 命令。
+  不允许流内写入。兼容入口最多 15 个 region、512 KiB、511 UTF-8 字节 Pika 命令。
   合计不超过 2048 B 使用 OLD 帧，超过则使用 B1 分块，完整校验后才计一个样本。
   512 KiB 是兼容入口边界，不是 MUX 连续采集容量或新固件实测速度保证。
 
