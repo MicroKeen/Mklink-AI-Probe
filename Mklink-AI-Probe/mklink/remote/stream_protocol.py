@@ -30,6 +30,11 @@ SUPERWATCH_SAMPLE_MAJOR_FLOAT32 = 0x01
 SUPERWATCH_METADATA_JSON = 0x02
 # Float64 sample times (milliseconds), then sample-major Float32 values.
 SUPERWATCH_TIMESTAMPED_FLOAT32 = 0x03
+# Opt-in continuity extension: <QII> first sample ordinal, marker count, zero;
+# then the v3 times/values, then <II> sample index + reason for each boundary.
+# Reason bit 1 is confirmed loss/read failure; bit 2 is unknown wire continuity.
+SUPERWATCH_CONTINUITY_FLOAT32 = 0x04
+SUPERWATCH_CONTINUITY_HEADER = struct.Struct('<QII')
 MEMORY_JSON_V1 = 0x01
 MAX_MEMORY_CHUNK_BYTES = 256
 MAX_MEMORY_JSON_BYTES = 2048

@@ -11,6 +11,9 @@ V3_CLOCKS = (1000, 5000, 10000, 20000, 50000, 100000, 200000, 500000,
              1000000, 2000000, 5000000, 10000000, 20000000, 30000000)
 LEGACY_SWD_CLOCKS = (4000000, 10000000, 20000000, 30000000)
 HPM_CLOCKS = (4000000, 10000000, 20000000, 30000000)
+# Keep the original advertised list stable for already installed clients.
+# New firmware advertises the restored compatibility choice separately.
+CONFIGURATION_CLOCKS = tuple(sorted((*V3_CLOCKS, 4000000)))
 
 
 def firmware_lines(bridge):
@@ -71,8 +74,12 @@ def clock_options(bridge, *, hpm=False, interface=None):
     modern = not hpm and 'SWD_CLOCK_ACK=1' in lines and advertised in lines
     v3 = modern and any(re.fullmatch(r'V3\.\d+\.\d+', line) for line in lines)
     modern_jtag = hpm and jtag_multiclock(bridge)
+    choices = V3_CLOCKS if modern_jtag or modern else HPM_CLOCKS if hpm else LEGACY_SWD_CLOCKS
+    mode = 'JTAG' if hpm else 'SWD'
+    if (modern_jtag or modern) and f'{mode}_CLOCKS_EXTRA=4000000' in lines:
+        choices = CONFIGURATION_CLOCKS
     return {'interface': 'JTAG' if hpm else 'SWD',
-            'clocks_hz': list(V3_CLOCKS if modern_jtag or modern else HPM_CLOCKS if hpm else LEGACY_SWD_CLOCKS),
+            'clocks_hz': list(choices),
             'clock_source': 'jtag-advertised' if modern_jtag else 'v3-advertised' if v3 else 'swd-advertised' if modern else 'hpm-profiles' if hpm else 'legacy',
             'live_change_supported': False}
 
@@ -81,7 +88,7 @@ def configuration_clock_options(bridge, *, hpm=False, interface=None):
     """Offer the full offline catalog without asserting probe capabilities."""
     options = clock_options(bridge, hpm=hpm, interface=interface)
     if bridge is None:
-        options.update(clocks_hz=list(V3_CLOCKS), clock_source='configuration')
+        options.update(clocks_hz=list(CONFIGURATION_CLOCKS), clock_source='configuration')
     return options
 
 
@@ -206,7 +213,8 @@ def clock_snapshot(device, config):
     state = getattr(context, 'clock_apply_state', 'unknown') if hz else 'unknown'
     requested = requested_clock(config, options['interface'])
     migration = None
-    if options['clock_source'] in ('v3-advertised', 'swd-advertised') and (requested == 4000000 or hz == 4000000):
+    if (options['clock_source'] in ('v3-advertised', 'swd-advertised')
+            and 4000000 not in options['clocks_hz'] and (requested == 4000000 or hz == 4000000)):
         migration = {'from_hz': 4000000, 'to_hz': 2000000, 'pending': True}
     interfaces = {mode: {**configuration_clock_options(bridge, interface=mode),
                          'requested_hz': requested_clock(config, mode)} for mode in ('SWD', 'JTAG')}

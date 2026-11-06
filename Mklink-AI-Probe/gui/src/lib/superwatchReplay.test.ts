@@ -10,6 +10,14 @@ function parse(text: string) {
 }
 
 describe('SuperWatch file replay', () => {
+  it('keeps recorded loss annotations out of channels and breaks only annotated intervals', () => {
+    const data = parse('{"_t":0,"a":0}\n{"_t":1,"a":1}\n{"event":"discontinuity","reason":1}\n{"_t":2,"a":0}')
+    expect(data.channels.map((c: any) => c.name)).toEqual(['a'])
+    const view = replayRange(data, 0, 2, 2, 10, ['a'], false)
+    expect(view.channels[0].points).toEqual([[0,0],[1,1],[2,0]])
+    expect(view.channels[0].segments).toEqual([0,0,1])
+    expect([...view.channels[0].columns]).toEqual([0,0,0,0,0,1,1,1,1,1])
+  })
   it('keeps the raw samples at extrema of the converted curve during decimation', () => {
     const data = parse('timestamp,a\n0,-3\n1,-1\n2,0\n3,2\n')
     const range = replayRange(data, 0, 3, 3, 1, ['a'], false, { a: 'x^2' })

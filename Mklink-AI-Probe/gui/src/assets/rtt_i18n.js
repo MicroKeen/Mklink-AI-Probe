@@ -3,6 +3,8 @@
 // ============================================================
 var I18N = {
   zh: {
+    sample_interval_max: '视窗最大间隔', sample_gaps: '视窗空隙',
+    sample_timing_tip: '按与视窗相交的原始相邻采样时间戳统计，包含跨批次间隔。灰区表示缺少观测，不代表目标波形；空隙次数不等于漏边沿数。标记阈值为20 µs与设置间隔两倍中的较大值。没有逐点时间戳时不估算。',
     logs: '日志', export_sample_log: '导出采样日志', trigger_settings: '触发设置', close: '关闭',
     view_channel: '界面通道', device_disconnected: '设备未连接',
     view_channel_tip: '显示界面与后台的数据通道状态；设备连接和采集状态单独显示。',
@@ -19,6 +21,7 @@ var I18N = {
     // Control toolbar
     start: '开始', pause: '暂停', resume: '恢复', stop: '停止',
     running: '运行中', buffer: '缓冲区', interval: '间隔', apply: '应用',
+    superwatch_interval_invalid: '采样间隔不能小于 1 µs（0.000001 s），且不能大于 60 s。',
     buffer_memory_tip: 'Worker 历史缓存预计内存',
     // Trigger toolbar
     trigger: '触发', idle: '空闲', armed: '待触发', triggered: '已触发', done: '完成',
@@ -111,6 +114,8 @@ var I18N = {
     lang_label: '中/En'
   },
   en: {
+    sample_interval_max: 'View max interval', sample_gaps: 'View gaps',
+    sample_timing_tip: 'Original adjacent sample timestamps overlapping this view, including batch boundaries. Shading marks unobserved intervals, not target waveforms or a count of missed edges. Threshold: the greater of 20 µs and twice the configured interval. Unavailable without per-sample timestamps.',
     logs: 'Logs', export_sample_log: 'Export sample log', trigger_settings: 'Trigger settings', close: 'Close',
     view_channel: 'View channel', device_disconnected: 'Device disconnected',
     view_channel_tip: 'Data channel between this view and the backend; device connection and acquisition have separate states.',
@@ -125,6 +130,7 @@ var I18N = {
     y_axis_tip: 'Y axis: scroll to zoom; hold the left mouse button and drag; double-click for auto range',
     start: 'Start', pause: 'Pause', resume: 'Resume', stop: 'Stop',
     running: 'Running', buffer: 'Buffer', interval: 'Interval', apply: 'Apply',
+    superwatch_interval_invalid: 'Sampling interval must be at least 1 µs (0.000001 s) and at most 60 s.',
     buffer_memory_tip: 'Estimated Worker history memory',
     trigger: 'Trigger', idle: 'Idle', armed: 'Armed', triggered: 'Triggered', done: 'Done',
     source: 'Source', edge: 'Edge', level: 'Level', mode: 'Mode', pretrig: 'Pre-trig',

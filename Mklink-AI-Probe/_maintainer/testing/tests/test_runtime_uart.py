@@ -56,7 +56,7 @@ def test_uart_lobby_attach_ignores_target_locks_and_never_connects(runtime):
                 return response.json()
     result = client.portal.call(scenario)
     assert result['scope'] == 'uart' and result['attached']
-    assert result['capabilities'] == ['modbus_history', 'modbus_loop_start', 'modbus_loop_stop', 'modbus_probe', 'modbus_start', 'modbus_status', 'modbus_stop', 'modbus_transaction',
+    assert result['capabilities'] == ['gui_present', 'gui_windows', 'modbus_history', 'modbus_loop_start', 'modbus_loop_stop', 'modbus_probe', 'modbus_start', 'modbus_status', 'modbus_stop', 'modbus_transaction',
                                      'serial_broadcast', 'serial_exchange', 'serial_history', 'serial_recording_start', 'serial_recording_stop', 'serial_send', 'serial_send_file', 'serial_sequence_start', 'serial_sequence_stop', 'serial_start', 'serial_status', 'serial_stop', 'serial_ymodem_cancel', 'serial_ymodem_start', 'serial_ymodem_status', 'serial_ymodem_trace', 'uart_ports']
     assert app.state.mklink_state['device'] is None and calls == []
     session = result['session_id']
@@ -84,6 +84,7 @@ def test_uart_state_survives_symbol_changes_and_does_not_block_device_release(ru
     uart = client.post('/_runtime/attach', json={'scope': 'uart'}).json()['session_id']
     target = attach(client)
     app.state.mklink_state['device'].axf_status = {'axf_path': 'different.axf'}
+    app.state.mklink_state['device'].axf_path = 'different.axf'
     assert call(client, target, 'device_status').status_code == 409
     assert call(client, target, 'serial_status').status_code == 200
     assert call(client, uart, 'modbus_status').status_code == 200

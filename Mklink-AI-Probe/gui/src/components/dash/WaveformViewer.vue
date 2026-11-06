@@ -86,7 +86,8 @@ function requestLatestVisibleRange(interactive = false): void {
   visibleRequestInFlight = ++visibleRequestId
   if (interactive) interactiveVisibleRequests.add(visibleRequestInFlight)
   const formulas = viewer.getFormulas?.()
-  if (formulas?.some(Boolean)) binary.requestVisibleRange(visibleRequestInFlight, start, end, pixelWidth, formulas)
+  if (props.mode === 'SuperWatch' && Number.isFinite(range.gapThresholdMs)) binary.requestVisibleRange(visibleRequestInFlight, start, end, pixelWidth, formulas?.some(Boolean) ? formulas : undefined, range.gapThresholdMs)
+  else if (formulas?.some(Boolean)) binary.requestVisibleRange(visibleRequestInFlight, start, end, pixelWidth, formulas)
   else binary.requestVisibleRange(visibleRequestInFlight, start, end, pixelWidth)
 }
 
@@ -466,7 +467,7 @@ function buildTemplate(mode: string): string {
   const minPoints = mode === 'SuperWatch' ? 50000 : 2
   const maxPoints = mode === 'SuperWatch' ? 50000 : 10000
   const intervalValue = mode === 'SuperWatch' ? '0.001' : '0'
-  const intervalMinimum = mode === 'SuperWatch' ? '0.000004' : '0'
+  const intervalMinimum = mode === 'SuperWatch' ? '0.000001' : '0'
   const intervalStep = mode === 'SuperWatch' ? '0.000001' : '0.001'
   return `
 <header>
@@ -506,12 +507,12 @@ function buildTemplate(mode: string): string {
   <div class="ctrl-sep"></div>
   <div id="interval-group">
     <label data-i18n="interval">Interval</label>
-    <input type="number" id="interval-input" value="${intervalValue}" step="${intervalStep}" min="${intervalMinimum}" max="60">
+    <input type="number" id="interval-input" value="${intervalValue}" step="${intervalStep}" min="${intervalMinimum}" max="60" aria-describedby="interval-error">
     <span class="interval-unit">s</span>
     <button id="btn-apply-interval" class="ctrl-btn" data-i18n="apply">Apply</button>
   </div>
 </div>
-
+<div id="interval-error" role="alert" hidden></div>
 <div id="trigger-toolbar">
   <button id="trigger-enable-btn" data-i18n="trigger">Trigger</button>
   <span id="trigger-state-badge" class="trigger-state-idle" data-i18n="idle">Idle</span>

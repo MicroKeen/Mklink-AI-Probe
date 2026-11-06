@@ -192,6 +192,13 @@ async function searchSymbols(query: string): Promise<SymbolDescriptor[]> {
   return [...merged.values()]
 }
 
+async function resolveSymbol(path: string): Promise<SymbolDescriptor | undefined> {
+  const payload = await request<{ descriptor: SymbolDescriptor | null; generation: number }>(
+    `/api/symbols/resolve?${new URLSearchParams({ path }).toString()}`,
+  )
+  return payload.generation === generation.value ? payload.descriptor ?? undefined : undefined
+}
+
 async function loadCatalog(): Promise<void> {
   const epoch = deviceEpoch
   loading.value = true
@@ -338,5 +345,6 @@ export function useSymbolCatalog() {
     writeSymbol,
     loadBrowseChildren,
     searchSymbols,
+    resolveSymbol,
   }
 }

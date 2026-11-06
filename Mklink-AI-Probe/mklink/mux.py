@@ -33,6 +33,8 @@ class MuxWatchEvent(bytes):
     def __new__(cls, payload, reset_generation):
         value = super().__new__(cls, payload)
         value.reset_generation = reset_generation
+        # 1: confirmed discarded/read-failed records; 2: wire continuity unknown.
+        value.break_before = 0
         return value
 
 
@@ -50,6 +52,7 @@ class MuxTransport:
     FAST_TRANSFER_BYTES = 480
     BLOCK_READ_CAPABILITY = 1 << 6
     BLOCK_READ_COMMAND = 0x16
+    BULK_WATCH_CAPABILITY = 1 << 11
     SOFTWARE_RESET_CAPABILITY = 1 << 5
     SOFTWARE_RESET_COMMAND = 0x15
     MAX_QUEUE_BYTES = 65536
@@ -65,6 +68,7 @@ class MuxTransport:
         self._commands = command_lock or threading.RLock()
         self._rx = bytearray()
         self._pending = None
+        self._request_waiting = False
         self._reply = None
         self._error = None
         self._next_id = 0
@@ -78,19 +82,22 @@ class MuxTransport:
         self.rtt_mask = 0
         self._rtt_manager = None
         self.watch_running = False
+        self.bulk_running = False
         self._last_command = time.monotonic()
         self._queues = {}
         self._sizes = {}
         self.dropped_bytes = {}
         self.event_gaps = 0
         self._event_id = None
+        self._watch_wire_gap = False
+        self._bulk_wire_gap = False
         self._last_receive = None
         self._last_reply = None
         self._last_timeout = None
 
     @property
     def sampling(self):
-        return bool(self.rtt_mask or self.watch_running)
+        return bool(self.rtt_mask or self.watch_running or self.bulk_running)
 
     def fail(self, error):
         with self._condition:
@@ -136,14 +143,20 @@ class MuxTransport:
             self.fail(exc)
             raise
 
-    def request(self, op, payload=b''):
+    def request(self, op, payload=b'', *, deadline=None):
         with self._commands, self._condition:
             self._check()
+            self._request_waiting = True
+            try:
+                while self._pending:
+                    self._wait(deadline)
+                if deadline is not None and time.monotonic() >= deadline:
+                    raise TimeoutError('Memory capture deadline expired before command delivery')
+                self._send(op, payload)
+            finally:
+                self._request_waiting = False
             while self._pending:
-                self._wait()
-            self._send(op, payload)
-            while self._pending:
-                self._wait()
+                self._wait(deadline)
             self._check()
             answer = self._reply
             self._reply = None
@@ -156,10 +169,14 @@ class MuxTransport:
                 raise MuxTargetError(answer[0])
             return answer[1:]
 
-    def _wait(self):
+    def _wait(self, deadline=None):
         self._check()
-        remaining = self._pending[2]-time.monotonic()
+        limit = self._pending[2] if deadline is None else min(self._pending[2], deadline)
+        remaining = limit-time.monotonic()
         if remaining <= 0:
+            if limit < self._pending[2]:
+                op, req, _, heartbeat = self._pending
+                self._pending = (op, req, limit, heartbeat)
             self._expire_pending('command')
             self._check()
         self._condition.wait(min(remaining, .1))
@@ -196,7 +213,11 @@ class MuxTransport:
                 return
             if self._pending and time.monotonic() >= self._pending[2]:
                 self._expire_pending('response')
-            elif self.ready and not self._pending and self._reply is None and time.monotonic()-self._last_command >= 1:
+            elif (self.ready and not self._pending and self._reply is None
+                  and not self._request_waiting and time.monotonic()-self._last_command >= 1):
+                # A delayed heartbeat reply must release the request slot to
+                # an already waiting command, not immediately start another
+                # heartbeat before the notified command thread can run.
                 self._send(2, b'', heartbeat=True)
 
     def _expire_pending(self, source):
@@ -236,6 +257,12 @@ class MuxTransport:
                     return
                 _, version, op, n, epoch, req = struct.unpack_from('<4sBBHII', self._rx)
                 limit = 1024 if op == 0x41 and self.capabilities & 8 else 256
+                if op == 0x42:
+                    if not self.capabilities & self.BULK_WATCH_CAPABILITY:
+                        self.fail('Unnegotiated bulk sampling event')
+                        self._rx.clear()
+                        return
+                    limit = 492  # 40-byte header plus 452 bytes, CRC-v1 frame <=512.
                 if op == 0x96 and self.capabilities & self.BLOCK_READ_CAPABILITY:
                     limit = 4097  # Status plus one bounded block; CRC v1 only.
                 if (self.capabilities & self.FAST_TRANSFER_CAPABILITY
@@ -292,15 +319,18 @@ class MuxTransport:
                     if heartbeat:
                         self._reply = None
                     self._condition.notify_all()
-                elif op in (0x40, 0x41):
-                    if epoch != self.epoch or len(payload) < 6:
+                elif op in (0x40, 0x41, 0x42):
+                    if epoch != self.epoch or len(payload) < (40 if op == 0x42 else 6):
                         self.fail('Invalid stream event')
                         return
-                    if payload[0] >= (8 if op == 0x40 else 15):
+                    if op != 0x42 and payload[0] >= (8 if op == 0x40 else 15):
                         self.fail('Invalid event channel')
                         return
                     if self._event_id is not None:
-                        self.event_gaps += (req-self._event_id-1) & 0xffffffff
+                        missing = (req-self._event_id-1) & 0xffffffff
+                        self.event_gaps += missing
+                        self._watch_wire_gap |= bool(missing)
+                        self._bulk_wire_gap |= bool(missing)
                     self._event_id = req
                     if op == 0x40 and self._rtt_manager is not None:
                         self._rtt_manager.publish(payload)
@@ -309,13 +339,30 @@ class MuxTransport:
                     key = (op, payload[0] if op == 0x40 else 255)
                     if op == 0x41:
                         payload = MuxWatchEvent(payload, self._reset_generation)
+                        if self._watch_wire_gap:
+                            payload.break_before = 2
+                            self._watch_wire_gap = False
+                    elif op == 0x42:
+                        payload = MuxWatchEvent(payload, self._reset_generation)
+                        if self._bulk_wire_gap:
+                            payload.break_before = 2
+                            self._bulk_wire_gap = False
                     queue = self._queues.setdefault(key, deque())
                     size = self._sizes.get(key, 0)
-                    budget = self.WATCH_QUEUE_BYTES if op == 0x41 else self.MAX_QUEUE_BYTES
+                    budget = self.WATCH_QUEUE_BYTES if op in (0x41, 0x42) else self.MAX_QUEUE_BYTES
+                    lost = 0
                     while queue and size+len(payload) > budget:
                         removed = queue.popleft()
                         size -= len(removed)
-                        self.dropped_bytes[key] = self.dropped_bytes.get(key, 0)+len(removed)-6
+                        self.dropped_bytes[key] = self.dropped_bytes.get(key, 0)+len(removed)-(40 if op == 0x42 else 6)
+                        if op == 0x41:
+                            # Carry the boundary with the first retained event,
+                            # including when a previously marked event is evicted.
+                            lost |= removed.break_before | (1 if removed[1] in (0, 5, 9) else 2)
+                        elif op == 0x42:
+                            lost |= removed.break_before | 1
+                    if lost:
+                        (queue[0] if queue else payload).break_before |= lost
                     queue.append(payload)
                     self._sizes[key] = size+len(payload)
                     self._condition.notify_all()
@@ -326,7 +373,8 @@ class MuxTransport:
                     'transfer_quantum': self.transfer_quantum,
                     'last_timeout': dict(self._last_timeout) if self._last_timeout else None,
                     'rtt_dropped_bytes': {ch: self.dropped_bytes.get((0x40, ch), 0) for ch in range(8)},
-                    'watch_dropped_bytes': self.dropped_bytes.get((0x41, 255), 0)}
+                    'watch_dropped_bytes': self.dropped_bytes.get((0x41, 255), 0),
+                    'bulk_dropped_bytes': self.dropped_bytes.get((0x42, 255), 0)}
 
     def drain(self, op, channel, *, max_bytes=None):
         with self._condition:
@@ -352,7 +400,7 @@ class MuxTransport:
                 self._sizes.pop(key, None)
             return frames
 
-    def read_memory(self, address, size):
+    def read_memory(self, address, size, *, deadline=None):
         if not 0 <= address <= 0xffffffff or size < 0 or address+size > 0x100000000:
             raise ValueError('Invalid memory range')
         result = bytearray()
@@ -361,7 +409,9 @@ class MuxTransport:
         command = self.BLOCK_READ_COMMAND if block_read else 0x11
         for offset in range(0, size, chunk_size):
             n = min(chunk_size, size-offset)
-            data = self.request(command, struct.pack('<IH', address+offset, n))
+            payload = struct.pack('<IH', address+offset, n)
+            data = (self.request(command, payload) if deadline is None
+                    else self.request(command, payload, deadline=deadline))
             if len(data) != n:
                 self.fail('Incomplete memory response')
                 raise self._error

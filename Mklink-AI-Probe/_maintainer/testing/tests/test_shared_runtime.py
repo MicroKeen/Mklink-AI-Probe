@@ -16,7 +16,8 @@ from mklink.remote.resource_manager import ResourceManager
 @pytest.fixture
 def runtime(monkeypatch, tmp_path):
     app = FastAPI()
-    device = SimpleNamespace(connected=True, port="COM9", axf_status={"axf_path": str(tmp_path / "test.axf")})
+    device = SimpleNamespace(connected=True, port="COM9", axf_path=str(tmp_path / "test.axf"),
+                             axf_status={"axf_path": str(tmp_path / "test.axf")})
     app.state.mklink_state = {"device": device, "project_root": str(tmp_path), "last_device_connection": {},
                              "resource_manager": ResourceManager()}
     calls = []
@@ -90,7 +91,7 @@ def test_detach_never_closes_gui_device(runtime):
     assert len(control.sessions) == 1
 
 
-@pytest.mark.parametrize('change', ['generation', 'fingerprint'])
+@pytest.mark.parametrize('change', ['generation', 'fingerprint', 'path'])
 def test_session_rejects_same_path_symbol_revision_until_explicit_reattach(runtime, change):
     client, control, calls, _, app = runtime
     catalog = SimpleNamespace(generation=1, fingerprint=SimpleNamespace(sha256='old'))
@@ -99,8 +100,11 @@ def test_session_rejects_same_path_symbol_revision_until_explicit_reattach(runti
     assert call(client, session, 'device_status').status_code == 200
     if change == 'generation':
         catalog.generation += 1
-    else:
+    elif change == 'fingerprint':
         catalog.fingerprint.sha256 = 'new'
+    else:
+        device = app.state.mklink_state['device']
+        device.axf_path = device.axf_status['axf_path'] = 'another.axf'
     for capability in ['device_status', 'read_memory']:
         arguments = {'address': '0x20000000', 'size': 4} if capability == 'read_memory' else {}
         response = call(client, session, capability, arguments)

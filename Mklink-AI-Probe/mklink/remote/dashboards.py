@@ -45,6 +45,8 @@ from mklink.remote.stream_protocol import (
     SUPERWATCH_METADATA_JSON,
     SUPERWATCH_SAMPLE_MAJOR_FLOAT32,
     SUPERWATCH_TIMESTAMPED_FLOAT32,
+    SUPERWATCH_CONTINUITY_FLOAT32,
+    SUPERWATCH_CONTINUITY_HEADER,
     WAVEFORM_SAMPLE_MAJOR_FLOAT32,
     RttLine,
     StreamType,
@@ -1834,7 +1836,7 @@ class SystemViewStreamManager:
 # SuperWatch SSE Generator
 # ---------------------------------------------------------------------------
 
-SUPERWATCH_MIN_INTERVAL = 0.000004
+SUPERWATCH_MIN_INTERVAL = 0.000001
 
 
 def normalize_superwatch_interval(interval: float) -> float:
@@ -1907,6 +1909,7 @@ class SuperWatchStreamManager:
         self._clock = clock
         self._pending_values = array("f")
         self._pending_sample_times = array("d")
+        self._pending_boundaries = []
         self._pending_sample_count = 0
         self._pending_channel_count = 0
         self._pending_started_at: float | None = None
@@ -2158,12 +2161,8 @@ class SuperWatchStreamManager:
         if not blocks:
             return  # An empty selection is a valid idle configuration.
         regions = [(block.address, block.size) for block in blocks]
-        from mklink.dump_memory import build_dump_mem_command
-        build_dump_mem_command(regions, self._interval)
-        bridge = getattr(self._device, "_bridge", None)
-        if getattr(bridge, "_mux_supported", None) is True:
-            from mklink.mux_watch import MuxWatchSession
-            MuxWatchSession(None, regions, self._interval)
+        from mklink.mux_watch import MuxWatchSession
+        MuxWatchSession(None, regions, self._interval)
 
     def _validate_scalar_edit_locked(self, items):
         self._validate_sampling_layout_locked(self._array_snapshot, items)
@@ -2236,22 +2235,14 @@ class SuperWatchStreamManager:
                         time.sleep(0.5)
                         continue
                     bridge = getattr(device, "_bridge", None)
-                    supports_dump = bridge is not None and all(
-                        callable(getattr(bridge, name, None))
-                        for name in (
-                            "_enter_stream", "_write_raw",
-                            "drain_stream_bytes", "_exit_stream",
-                        )
-                    )
-                    from mklink.dump_memory import MAX_SAFE_REPL_REGIONS
-                    if not supports_dump:
+                    from mklink.dump_memory import MAX_SAMPLING_REGIONS
+                    if bridge is None:
                         raise RuntimeError(
-                            "SuperWatch requires dump_memory binary streaming; "
-                            "read_ram fallback is disabled"
+                            "SuperWatch requires an active MUX probe connection"
                         )
-                    if len(dump_blocks) > MAX_SAFE_REPL_REGIONS:
+                    if len(dump_blocks) > MAX_SAMPLING_REGIONS:
                         raise RuntimeError(
-                            "SuperWatch needs more than 15 dump_memory regions; "
+                            "SuperWatch needs more than 15 MUX sampling regions; "
                             "select fewer or closer variables"
                         )
                     if dump_blocks:
@@ -2340,6 +2331,7 @@ class SuperWatchStreamManager:
                                             break
                                         batch_time = self._clock()
                                         completed = 0
+                                        first_sample_time = None
                                         for frame in frames[offset:offset+256]:
                                             row = decoder.decode(frame)
                                             timestamp_us = (frame.timestamp_us if isinstance(frame, PackedWatchSample)
@@ -2353,15 +2345,19 @@ class SuperWatchStreamManager:
                                                 channel_count=scalar_count,
                                                 sample_time=sample_time_ms,
                                                 batch_time=batch_time,
+                                                break_before=(frame.break_before if isinstance(frame, PackedWatchSample)
+                                                              else frame.get('break_before', 0)),
                                             )
                                             snapshot_updated = self._update_array_snapshot_values_locked(
                                                 row, decoder.channel_index, timestamp_us,
                                             )
                                             if published or snapshot_updated:
                                                 completed += 1
+                                                if first_sample_time is None:
+                                                    first_sample_time = sample_time_ms
                                         if completed:
                                             self._completed_read_cycles += completed
-                                            self._record_sample_rate_locked(completed)
+                                            self._record_sample_rate_locked(completed, first_sample_time, sample_time_ms)
                         except Exception as exc:
                             if getattr(self, "_generation", None) is generation:
                                 self._error = str(exc)
@@ -2424,14 +2420,23 @@ class SuperWatchStreamManager:
     def start_recording(self, directory: str) -> dict:
         from mklink.superwatch_recording import SuperWatchRecorder
 
-        with self._recording_lock, self._read_lock:
+        with self._recording_lock:
             if self._recorder and self._recorder.status()['active']:
                 raise RuntimeError('SuperWatch recording is already active')
             if not self.running and self._thread is not None and self._thread.is_alive():
                 raise RuntimeError('SuperWatch acquisition is still stopping')
-            # Exclude samples received before the user pressed Start recording.
-            self._flush_binary_batch_locked()
-            self._recorder = SuperWatchRecorder(directory)
+            # Worker startup/file creation must not hold the acquisition lock.
+            recorder = SuperWatchRecorder(directory)
+            try:
+                with self._read_lock:
+                    if not self.running and self._thread is not None and self._thread.is_alive():
+                        raise RuntimeError('SuperWatch acquisition is still stopping')
+                    # The recording begins at this batch boundary after ready.
+                    self._flush_binary_batch_locked()
+                    self._recorder = recorder
+            except BaseException:
+                recorder.stop()
+                raise
             return self._recorder.status()
 
     def stop_recording(self) -> dict:
@@ -2888,6 +2893,7 @@ class SuperWatchStreamManager:
         channel_count: int,
         sample_time: float | None,
         batch_time: float | None = None,
+        break_before: int = 0,
     ) -> bool:
         """Append one numeric row to typed batch buffers without row objects."""
         if channel_count <= 0 or len(values) < channel_count:
@@ -2911,11 +2917,13 @@ class SuperWatchStreamManager:
             )
         except (OverflowError, TypeError, ValueError):
             return False
+        if break_before:
+            self._pending_boundaries.append((self._pending_sample_count, break_before))
         self._pending_sample_count += 1
         if (self._clock() if batch_time is None else batch_time) - self._last_metadata_publish_at >= 1.0:
             self._publish_cached_metadata()
         if batch_time is None:
-            self._record_sample_rate_locked()
+            self._record_sample_rate_locked(1, sample_time, sample_time)
         if self._binary_batch_due_locked(batch_time):
             self._flush_binary_batch_locked()
         return True
@@ -2943,12 +2951,19 @@ class SuperWatchStreamManager:
                 return True
             return self._flush_binary_batch_locked()
 
-    def _record_sample_rate_locked(self, count: int = 1) -> None:
-        completed_at = self._clock()
+    def _record_sample_rate_locked(self, count: int, first_ms, last_ms) -> None:
+        # Device time includes acquisition pauses; host drain bursts do not
+        # increase this rate. No host-clock estimate when timestamps are absent.
+        if first_ms is None or last_ms is None:
+            self._actual_rate = 0.0
+            return
+        completed_at = last_ms / 1000.0
         total = (self._rate_timestamps[-1][1] if self._rate_timestamps else 0) + count
+        if not self._rate_timestamps:
+            self._rate_timestamps.append((first_ms / 1000.0, total-count+1))
         self._rate_timestamps.append((completed_at, total))
         cutoff = completed_at - 1.0
-        while self._rate_timestamps and self._rate_timestamps[0][0] < cutoff:
+        while len(self._rate_timestamps) > 2 and self._rate_timestamps[1][0] < cutoff:
             self._rate_timestamps.popleft()
         if len(self._rate_timestamps) >= 2:
             elapsed = self._rate_timestamps[-1][0] - self._rate_timestamps[0][0]
@@ -2970,7 +2985,10 @@ class SuperWatchStreamManager:
         times = self._pending_sample_times
         self._pending_sample_times = array("d")
         sample_count = self._pending_sample_count
+        boundaries = self._pending_boundaries
+        self._pending_boundaries = []
         channel_count = self._pending_channel_count
+        first_sequence = self._latest_sample_sequence
         self._latest_sample_sequence += sample_count
         self._latest_sample = {
             "sequence": self._latest_sample_sequence,
@@ -2985,7 +3003,7 @@ class SuperWatchStreamManager:
         self._pending_started_at = None
         try:
             if self._recorder:
-                self._recorder.append(values, times, self._latest_sample['channels'])
+                self._recorder.append(values, times, self._latest_sample['channels'], boundaries=boundaries)
             if self._stream_hub is None:
                 raise RuntimeError("SuperWatch binary stream hub is unavailable")
             if sys.byteorder != "little":
@@ -2994,8 +3012,10 @@ class SuperWatchStreamManager:
             payload = values.tobytes()
             flags = SUPERWATCH_SAMPLE_MAJOR_FLOAT32
             if len(times) == sample_count and all(math.isfinite(value) for value in times):
-                payload = times.tobytes() + payload
-                flags = SUPERWATCH_TIMESTAMPED_FLOAT32
+                payload = (SUPERWATCH_CONTINUITY_HEADER.pack(first_sequence, len(boundaries), 0)
+                           + times.tobytes() + payload
+                           + b''.join(struct.pack('<II', index, reason) for index, reason in boundaries))
+                flags = SUPERWATCH_CONTINUITY_FLOAT32
             self._stream_hub.publish(
                 payload, item_count=sample_count, flags=flags,
                 stream_type=StreamType.SUPERWATCH,

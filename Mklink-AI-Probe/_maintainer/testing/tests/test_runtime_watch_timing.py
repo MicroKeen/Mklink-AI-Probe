@@ -60,6 +60,13 @@ def test_shared_capture_10000_samples_roundtrips_ack_and_microsecond_wrap(batch,
     transport, calls = peer(timing_v2=timing_v2)
     device._bridge = bridge_for(transport)
     feed_samples(monkeypatch, transport, 10000)
+    if not timing_v2:
+        with pytest.raises(RuntimeErrorResponse, match='0x618'):
+            shared_client(batch, monkeypatch).call('capture_dump', {
+                'regions': REGIONS, 'period': period, 'frames': 10000, 'duration': 0})
+        assert [op for op, _ in calls] == [1, 4]
+        assert not control.operation_lock.locked() and not state['resource_manager'].get_status()
+        return
     result = shared_client(batch, monkeypatch).call('capture_dump', {
         'regions': REGIONS, 'period': period, 'fastest': fastest, 'frames': 10000, 'duration': 0})
     assert result['sample_count'] == 10000 and result['total_bytes'] == 40000
@@ -83,6 +90,11 @@ def test_default_zero_still_returns_one_sample_with_no_fastest_wire_request(batc
     transport, calls = peer(timing_v2=timing_v2)
     batch[2]._bridge = bridge_for(transport)
     feed_samples(monkeypatch, transport, 3)
+    if not timing_v2:
+        with pytest.raises(RuntimeErrorResponse, match='0x618'):
+            shared_client(batch, monkeypatch).call('capture_dump', {'regions': REGIONS})
+        assert [op for op, _ in calls] == [1, 4]
+        return
     result = shared_client(batch, monkeypatch).call('capture_dump', {'regions': REGIONS})
     assert result['sample_count'] == 1
     assert struct.unpack_from('<I', next(body for op, body in calls if op == 0x32))[0] == 2000

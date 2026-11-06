@@ -130,8 +130,9 @@ V4.3.8 在 STM32H743 上实测旧入口、bytes 字面量、重复字节折叠�
 验证写入应使用工程明确预留的测试缓冲；`.bss` 之后、读到全零或短时间未变化都不
 证明空闲，堆、栈、DMA 和业务代码仍可能使用该地址。没有已确认的缓冲时先做只读验证。
 
-#### `python -m mklink dump-memory <region> [<region> ...] [--period SEC] [--frames N] [--duration SEC] [--save FILE] [--json]`
-公共高速内存 dump，直接调用固件 `cmd.dump_memory(addr1, size1, ..., period)` 并解析 `MPMDMPMD` 二进制帧。别名：`python -m mklink dump ...`。
+#### `python -m mklink dump-memory <region> [<region> ...] [--protocol mux|dmpm] [--period SEC] [--frames N] [--duration SEC] [--save FILE] [--json]`
+通过共享后台采集完整样本，默认使用 MUX。别名：`python -m mklink dump ...`。
+只有显式 `--protocol dmpm` 才调用兼容的 `cmd.dump_memory`，不因 MUX 失败自动切换协议。
 
 `<region>` 格式：`ADDR:SIZE`，可重复传入多个区域。默认 `--period 0 --frames 1 --duration 2`，即只采集 1 个完整样本，避免命令意外长期占用串口流模式。
 
@@ -146,26 +147,33 @@ python -m mklink dump-memory 0x20000000:16 0x20001000:4 --json
 python -m mklink dump-memory 0x20000000:16 --period 0.01 --frames 10
 
 # 按时长采集并保存 region payload 到本地文件
-python -m mklink dump-memory 0x08000000:256 --frames 0 --duration 1 --save flash_payload.bin
+python -m mklink dump-memory 0x08000000:256 --period 0.001 --frames 0 --duration 1 --save flash_payload.bin
 ```
 
 - `--save` 保存的是已解析出的 region payload，不是包含 magic/CRC 的原始协议帧。
-- **最多 15 个 region**。固件数据结构容量虽为 16，但 16 组 `(addr,size)` 加 period
-  正好占满 Pika 的 33 参数上限；V4.3.8 实测会使 REPL 失去响应。不得用 SDK 或串口
-  绕过。16 个常见连续变量应合并为一个区域；离散快照用 MCP `read_memory_regions`。
+- **最多 15 个 region**，只合并实际相接的地址。MUX 的小变量快路径最多容纳
+  15 个 128 B 分片；超出时须协商大块能力 `0x800`，合计最多 **4096 B**。
+  大块样本校验 CRC、序号、区域和连续偏移，完整组装后才返回；缺少能力直接报错。
+  结果中的 `acquisition` 保留开始/结束时间戳及调试命令介入标记；分段读取
+  **不是原子快照**，不能用它证明运动控制变量在同一时刻的一致性。
 - CLI 还限制 `--duration <= 300`、`--frames <= 100000`；AI 发起的单次采集进一步
   限制为 **30 秒**，需要更长观察时分段并在每段后确认设备状态。
-- `total_size <= 2048` 走 OLD 帧；`total_size > 2048` 走 B1 分块帧，CLI 会等到 B1 最后一块后计为 1 个完整样本。
-- 单次 `cmd.dump_memory()` 总长度默认 **512 KiB**（固件 V4.3.3 实测整片 Flash 稳定，256 个 B1 块全 `flags=0x0000`）。**老固件**（pre-V4.3.3，BUG-5：>64 KiB 末块截尾 512B）请传 ≤32 KiB 的 `ADDR:SIZE` region 规避。
-- 如果没有解析到任何帧，CLI 会打印设备返回的可见文本，常见原因是固件未暴露 `cmd.dump_memory` 或设备仍处于异常流模式。
+- 序列化结果上限 **16 MiB**；超额报错，不返回截断数据。`period=0` 保留单次读取含义。
+  共享 SDK `capture_dump` 的全速模式须显式传 `fastest=True, period=0`，且固件支持。
+- 显式 DMPM 要求连接空闲及 `DUMP_MEMORY=1`、`DUMP_STOP=1`；不抢停其他采集，
+  不允许流内写入。兼容入口最多 15 个 region、512 KiB、511 UTF-8 字节 Pika 命令。
+  合计不超过 2048 B 使用 OLD 帧，超过则使用 B1 分块，完整校验后才计一个样本。
+  512 KiB 是兼容入口边界，不是 MUX 连续采集容量或新固件实测速度保证。
 
-#### `python -m mklink dump-benchmark <ADDR:SIZE> ... [--probe ID] [--duration 3] [--period 0.000001] [--speed PROFILE]`
+#### `python -m mklink dump-benchmark <ADDR:SIZE> ... [--probe ID] [--duration 3] [--period 0.000001] [--protocol mux|dmpm] [--speed PROFILE]`
 
 通过共享后台测量完整 dump 样本的频率、有效载荷吞吐和采样间隔。
 活动 MCP 使用 `measure_dump_memory`，共享 SDK 使用同名 `call`；
 都复用既有采样会话和完整样本组装器。GUI 正在采集时返回忙，不抢停。
 
 - 1..15 个地址/大小区域，合计不超过 4096 字节；时长 0.5..30 秒，周期 1 微秒至 100 毫秒。
+- 默认 MUX；`--protocol dmpm` 只显式选择上述兼容路径。MUX 大块报告
+  `max_acquisition_us`、`dap_intervened_samples`，不把分段采样当成原子快照。
 - 首个完整样本最多等待 2 秒；之后开始计算时长，其中前 200 ms 为预热，
   不计入统计。频率和分位数来自下载器时间戳，不代表主机界面刷新率。
 - B1 样本使用第一块的时间戳，所有块及区域完整后才计数；周期 `dump-memory`
@@ -180,7 +188,7 @@ python -m mklink dump-memory 0x08000000:256 --frames 0 --duration 1 --save flash
 legacy/B1 停止收到 `Error: DAP busy`、超时或其他错误，整次采集无有效性能结论。
 提示符或身份查询成功仅说明解释器有响应。固件声明 `DUMP_STOP=1` 时，配套后台必须
 在有效二进制帧之外收到完整 `DUMP_STOPPED` 行，再完成命令同步；不得手工查找 RAM
-内容中的同名字节作确认。没有该能力的旧固件仍需无错误且停止产生帧。
+内容中的同名字节作确认。当前显式兼容采集拒绝缺少停止确认能力的固件。
 失败后保持错误状态，不继续读写、循环发停止、重跑基准或自动更改时钟；保留原始错误，
 按 [控制权与恢复](runtime-recovery.md#dump-停止失败) 处理。固件与上位机都需要配套修复，
 仅更新 Skill 文本不能修复旧后台。命令明确返回的 busy/SBA 错误也不能解释为“读到 0 字节”。
@@ -255,8 +263,8 @@ python -m mklink vofa --probe "电机板" --duration 10
 `read_errors` 和 `stream_integrity`。首次 start 成功只证明命令送达；CLI 结束前
 检查实际完整样本，空流、终止错误或停止确认失败会非零退出。
 
-通道上限 64，地址按 4 字节边界合并后最多 15 个读取分组，完整 REPL 命令最多
-511 UTF-8 字节。超过限制会拒绝，不退回主机逐变量轮询。支持 float、bool、
+通道上限 64，地址按 4 字节边界合并后最多 15 个读取分组，使用 MUX 采样。
+超过限制会拒绝，不退回主机逐变量轮询或 DMPM。支持 float、bool、
 int8/16/32_t、uint8/16/32_t，以及 char/uchar、short/ushort、int/uint、fp32 等别名。
 符号类型由当前目录确定，显式类型须匹配；double、64 位整数和整体结构/数组不能
 作为单个通道。读取非原子快照；对齐读取的邻接地址也必须可安全读取，不宜猜测
@@ -313,7 +321,7 @@ python -m mklink watch g_config.setpoint,samples[1] --probe "电机板" --period
 ```
 
 #### `python -m mklink superwatch <变量/字段/寄存器...> [--source <firmware.axf>] [--svd <device.svd>] [--visualize]`
-基于 MKLink `cmd.dump_memory` 二进制帧内的设备时间戳连续采样，适合同时观察 RAM 变量、`struct.field` 路径和寄存器。变量解析依赖 AXF/DWARF；寄存器可使用内置寄存器表，或通过 `--svd`/Keil Pack 自动发现 CMSIS-SVD 后支持外设寄存器名。未加 `--visualize` 时输出采样 JSON；加 `--visualize` 时启动 Web 看板，可搜索/添加 AXF 符号或寄存器。
+基于 MKLink MUX 二进制帧内的设备时间戳连续采样，适合同时观察 RAM 变量、`struct.field` 路径和寄存器。变量解析依赖 AXF/DWARF；寄存器可使用内置寄存器表，或通过 `--svd`/Keil Pack 自动发现 CMSIS-SVD 后支持外设寄存器名。未加 `--visualize` 时输出采样 JSON；加 `--visualize` 时启动 Web 看板，可搜索/添加 AXF 符号或寄存器。
 
 `read_ram`/`read_memory` 只用于单次 RAM 快照、变量详情和 AI 故障分析，不用于 SuperWatch 曲线采样，也不作为固件或连接不支持二进制流时的后备方案。此时 SuperWatch 会明确报错并停止。
 
@@ -337,8 +345,10 @@ python -m mklink superwatch TIM2.CNT,ADC1.DR --svd path/to/device.svd --visualiz
 MCP 先查 `gui_call("debug_speed")` 的接口与档位，再传 `set_debug_speed(clock_hz=...)`。
 声明能力的 SWD/JTAG 支持完整 14 档；旧固件仅四档，新档位需更新匹配型号固件，详见
 [共享时钟](shared-runtime.md) 与 [HPM](hpm.md)。HPM 不支持任意 8 MHz。
-兼容 profile 为 low=4 MHz、medium=10 MHz、high=20 MHz、ultra=30 MHz；现代 SWD
-不接受旧 4 MHz，需显式改选，JTAG 保留兼容。时钟不等于采样率。
+兼容 profile 为 low=4 MHz、medium=10 MHz、high=20 MHz、ultra=30 MHz；现代接口
+只有声明相应 `SWD_CLOCKS_EXTRA=4000000` / `JTAG_CLOCKS_EXTRA=4000000` 才在原
+14 档上增加 4 MHz。未声明的旧固件不自动映射档位；以当前后台返回的能力为准。
+时钟设置回执不等于电气波形测量，调试时钟也不等于采样率。
 
 CLI 示例：`python -m mklink debug-speed --clock-hz 5000 --project-root <工程目录>`。
 也可传 `medium`；profile 与 `--clock-hz` 二选一，加 `--save` 保存供后续连接使用。
@@ -352,9 +362,8 @@ CDC 多路复用微秒采样；当前开发固件设置 1 μs（`0.000001` 秒�
 更长周期按实际读取能力定时，读取超时不额外等待。早期开发固件采用过 20 μs 分界，
 测全速统一使用 1 μs。RTT 独立按 1 ms 轮询。
 单个对齐 4 B 变量可走批量快路径；速率依目标和区域布局而变，设置值不是速率保证。
-测峰值时单独运行 SuperWatch，共存测试另测。旧固件使用
-`cmd.dump_memory(addr1, size1, ..., period)` 的 `MPMDMPMD` 帧；旧 MUX 为毫秒采样。
-公共 CLI `python -m mklink dump-memory ...` 自动选择协议。旧 `--dump-mem` 仍接受。
+测峰值时单独运行 SuperWatch，共存测试另测。SuperWatch 不自动回退旧协议。
+需要兼容 `cmd.dump_memory` 时，使用公共 CLI `dump-memory --protocol dmpm`。
 
 判断数据质量时分开记录：目标采样时间戳的相邻间隔、持续采样率、协议序号缺口、
 传输丢弃和客户端历史覆盖。`drops=0` 仅说明相应传输/缓存层没有报告丢弃，不能
@@ -366,13 +375,12 @@ CDC 多路复用微秒采样；当前开发固件设置 1 μs（`0.000001` 秒�
 python -m mklink superwatch g_counter,g_sensor --source path/to/firmware.axf --visualize --period 0.01
 ```
 
-- `total_size <= 2048`: OLD 普通帧。
-- `total_size > 2048`: B1 分块帧，每块最大 2048B，包含 `block_index` / `block_count` / `block_crc32`。
 - SuperWatch 只合并相接或重叠的地址，不跨地址空洞多读；V4.3.8 真机测量显示跨 16B 空洞已降低采样率。
-- SuperWatch 最多提交 **15 个离散 region**。固件帧虽可容纳 16 个 region，但 V4.3.8 的 Pika 文本入口在 16 组地址/长度加 period 时会超过安全参数边界。
-- `build_dump_mem_command()` 默认允许单次最多 **512 KiB**（V4.3.3 实测整片 Flash 稳定）；老固件请传 ≤32 KiB region；更大范围仍应由 host 分块。
-- V4.3.1 官方 API 直测（2026-06-07）：`0x08000000/256`、`0x20010200/32`、`0x08020000/2049` 均 PASS，flags=`0x0000`，B1 为 2048B + 1B 两块。
-- 若 flags=`0x0004`，含义是 `Region error`，优先排查目标供电、Vref、SWD、NRST、MCU 运行/低功耗/复位状态；这不是 host parser CRC 失败。
+- SuperWatch 最多提交 **15 个离散 region**，拆分后最多 15 个 128 B 分片，
+  保持既有 MUX 快路径和修改选区前的容量检查。4096 B 大块连续采集使用
+  上文的 `capture_dump` / `measure_dump_memory`，不扩大 GUI/VOFA 的容量边界。
+- 读取错误、复位/编程失效、CRC 或已确认分片缺失均不能作为有效完整样本。
+  不通过跨空洞合并、伪造时间戳或返回旧缓存来提高表面速率。
 
 #### `python -m mklink hardfault [--source <firmware.axf>] [--sp <异常栈帧地址>]`
 读取 SCB Fault 寄存器并解码 CFSR/HFSR。提供 `--sp` 时再读取 32 字节异常栈帧，并默认通过内置 DWARF line program 映射 PC/LR；显式 external 模式才调用本机 `addr2line`。

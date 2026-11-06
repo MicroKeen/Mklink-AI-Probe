@@ -819,12 +819,21 @@ if (es) {
 // ============================================================
 var IS_VOFA_MODE = CONFIG.mode === 'VOFA';
 var IS_SUPERWATCH_MODE = CONFIG.mode === 'SuperWatch';
-var SUPERWATCH_MIN_INTERVAL = 0.000004;
+var SUPERWATCH_MIN_INTERVAL = 0.000001;
 var IS_BINARY_WAVEFORM_MODE = IS_VOFA_MODE || IS_SUPERWATCH_MODE;
 var collectionState = 'stopped';
 var acquisitionState = 'stopped';
 var currentInterval = IS_SUPERWATCH_MODE ? 0.001 : 0;
 var intervalInput = document.getElementById('interval-input');
+var intervalError = document.getElementById('interval-error');
+function setIntervalError(invalid) {
+  intervalError.hidden = !invalid;
+  intervalInput.setAttribute('aria-invalid', String(invalid));
+  if (invalid) {
+    if (IS_SUPERWATCH_MODE) intervalError.setAttribute('data-i18n', 'superwatch_interval_invalid');
+    intervalError.textContent = IS_SUPERWATCH_MODE ? t('superwatch_interval_invalid') : 'Interval must be between 0 and 60 seconds';
+  }
+}
 var intervalDirty = false;
 var intervalUpdatePending = false;
 var restoredInterval = null;
@@ -838,6 +847,7 @@ function syncIntervalFromServer(value) {
   var normalized = Number(value);
   if (!Number.isFinite(normalized) || normalized <= 0 || normalized > 60) return;
   currentInterval = normalized;
+  updateSampleTimingStatus();
   if (!intervalDirty && !intervalUpdatePending) {
     intervalInput.value = String(normalized);
   }
@@ -845,6 +855,8 @@ function syncIntervalFromServer(value) {
 
 intervalInput.addEventListener('input', function() {
   intervalDirty = true;
+  var value = intervalInput.valueAsNumber;
+  if (Number.isFinite(value) && value >= (IS_SUPERWATCH_MODE ? SUPERWATCH_MIN_INTERVAL : 0) && value <= 60) setIntervalError(false);
 });
 
 // Hide interval controls in RTT mode (data rate is firmware-controlled)
@@ -1148,9 +1160,11 @@ document.getElementById('btn-apply-interval').addEventListener('click', function
   var val = parseFloat(intervalInput.value);
   var minimumInterval = IS_SUPERWATCH_MODE ? SUPERWATCH_MIN_INTERVAL : 0;
   if (!Number.isFinite(val) || val < minimumInterval || val > 60) {
-    alert('Interval must be between ' + minimumInterval + ' and 60 seconds');
+    setIntervalError(true);
+    intervalInput.focus();
     return;
   }
+  setIntervalError(false);
   intervalDirty = false;
   intervalUpdatePending = true;
   fetch(API_CTRL + 'interval', {
@@ -3129,6 +3143,7 @@ function freezeRenderedView() {
 
 function discardPausedBinarySnapshot() {
   binaryEnvelope = null;
+  updateSampleTimingStatus();
   for (var channel = 0; channel < binaryChannelNames.length; channel++) {
     var field = FIELDS[binaryChannelNames[channel]];
     if (field && field.ringBuf) field.ringBuf.clear();
@@ -3217,6 +3232,7 @@ function configureBinaryChannels(channels) {
   binaryLastSequence = null;
   binaryLastDetailSequence = null;
   binaryEnvelope = null;
+  updateSampleTimingStatus();
   binaryBufferStart = null;
   binaryBufferEnd = null;
   binaryBufferedSamples = 0;
@@ -3395,8 +3411,27 @@ function getBinaryVisibleRange() {
   return {
     start: (binaryTimeOrigin + range.tMin) * 1000,
     end: (binaryTimeOrigin + range.tMax) * 1000,
-    pixelWidth: pixelWidth
+    pixelWidth: pixelWidth,
+    gapThresholdMs: IS_SUPERWATCH_MODE ? Math.max(0.02, currentInterval * 2000) : undefined
   };
+}
+
+function formatSampleInterval(ms) {
+  if (!Number.isFinite(ms)) return '—';
+  var scale = ms < 1 ? 1000 : ms < 1000 ? 1 : 0.001;
+  return Number((ms * scale).toFixed(3)) + (ms < 1 ? ' µs' : ms < 1000 ? ' ms' : ' s');
+}
+
+function updateSampleTimingStatus() {
+  if (!IS_SUPERWATCH_MODE) return;
+  var host = document.getElementById('sample-timing-status');
+  if (!host) return;
+  var timing = binaryEnvelope && binaryEnvelope.sampleTiming;
+  document.getElementById('sample-interval-max').textContent = timing && timing.maxIntervalMs !== null ? formatSampleInterval(timing.maxIntervalMs) : '—';
+  document.getElementById('sample-gap-threshold').textContent = formatSampleInterval(timing ? timing.thresholdMs : Math.max(0.02, currentInterval * 2000));
+  document.getElementById('sample-gap-count').textContent = timing ? String(timing.gapCount) : '—';
+  host.classList.toggle('has-gaps', !!timing && timing.gapCount > 0);
+  host.dataset.gapCount = timing ? String(timing.gapCount) : '';
 }
 
 function parseBinaryEnvelope(envelope) {
@@ -3420,7 +3455,22 @@ function parseBinaryEnvelope(envelope) {
   for (var time = 0; time < times.length; time++) {
     if (!Number.isFinite(times[time])) return null;
   }
-  return { times: times, timeIndices: timeIndices, values: values, offsets: offsets };
+  var timing = null;
+  if (IS_SUPERWATCH_MODE && envelope.sampleTiming) {
+    var supplied = envelope.sampleTiming;
+    var columns = new Uint8Array(supplied.columns);
+    var segments = new Uint32Array(supplied.segmentIds);
+    if (!Number.isFinite(supplied.startMs) || !Number.isFinite(supplied.endMs) || supplied.endMs < supplied.startMs ||
+        !Number.isFinite(supplied.thresholdMs) || supplied.thresholdMs <= 0 ||
+        (supplied.maxIntervalMs !== null && (!Number.isFinite(supplied.maxIntervalMs) || supplied.maxIntervalMs < 0)) ||
+        !Number.isSafeInteger(supplied.intervalCount) || supplied.intervalCount < 0 ||
+        !Number.isSafeInteger(supplied.gapCount) || supplied.gapCount < 0 || supplied.gapCount > supplied.intervalCount ||
+        columns.length !== envelope.pixelWidth || segments.length !== envelope.pointCount) return null;
+    timing = { startMs: supplied.startMs, endMs: supplied.endMs, thresholdMs: supplied.thresholdMs,
+      maxIntervalMs: supplied.maxIntervalMs, intervalCount: supplied.intervalCount, gapCount: supplied.gapCount,
+      columns: columns, segmentIds: segments };
+  }
+  return { times: times, timeIndices: timeIndices, values: values, offsets: offsets, sampleTiming: timing };
 }
 
 function getBinaryEnvelopeChannelRange(name) {
@@ -3496,6 +3546,7 @@ function renderBinaryEnvelope(envelope, renderWhilePaused) {
   }
   canvas.dataset.binaryEnvelopePoints = String(envelope.pointCount);
   binaryEnvelope = parsed;
+  updateSampleTimingStatus();
   if (!paused || renderWhilePaused) {
     drawChart();
     drawMinimap();
@@ -3521,6 +3572,7 @@ function resetBinaryStream() {
   binaryLastDetailSequence = null;
   binaryEnvelope = null;
   binaryBufferStart = null;
+  updateSampleTimingStatus();
   binaryBufferEnd = null;
   binaryBufferedSamples = 0;
   requestBinaryDetail(false);
@@ -3649,11 +3701,13 @@ function setReplayPosition(position, playing, follow) {
 
 function renderReplayView(view) {
   if (!replaySession) return;
-  var times = [], values = [], indices = [], offsets = [0];
+  var times = [], values = [], indices = [], offsets = [0], segments = [], columns = new Uint8Array(Math.max(1, view.width));
   view.channels.forEach(function(channel) {
-    channel.points.forEach(function(point) {
+    channel.points.forEach(function(point, index) {
       indices.push(times.length); times.push(point[0] * 1000); values.push(point[1]);
+      segments.push(channel.segments ? channel.segments[index] : 0);
     });
+    if (channel.columns) channel.columns.forEach(function(value, index) { columns[index] |= value; });
     offsets.push(values.length);
     var field = FIELDS[channel.name];
     if (field && field.ringBuf) {
@@ -3664,7 +3718,9 @@ function renderReplayView(view) {
   renderBinaryEnvelope({replay: true, requestId: view.id, mode: 'min-max-v1', timestampKind: 'sample-milliseconds',
     channelCount: view.channels.length, pointCount: values.length, pixelWidth: Math.max(1, view.width),
     times: new Float64Array(times).buffer, timeIndices: new Uint32Array(indices).buffer,
-    values: new Float64Array(values).buffer, channelOffsets: new Uint32Array(offsets).buffer}, true);
+    values: new Float64Array(values).buffer, channelOffsets: new Uint32Array(offsets).buffer,
+    sampleTiming: { thresholdMs: .020, maxIntervalMs: null, intervalCount: 0, gapCount: 0,
+      startMs: view.start * 1000, endMs: view.end * 1000, columns: columns.buffer, segmentIds: new Uint32Array(segments).buffer }}, true);
   updateUI(); updateWatchTable();
 }
 
@@ -4468,6 +4524,26 @@ function drawChart() {
     ctx.fillRect(ml, mainTop + mainHeight + Math.floor(panelGap / 2), pw, 1);
   }
 
+  // Render missing-observation spans independently of channel extrema. Never
+  // infer gaps from the spacing of points selected by the min/max envelope.
+  if (useBinaryEnvelope && binaryEnvelope.sampleTiming && !arrayOnly) {
+    var gapTiming = binaryEnvelope.sampleTiming;
+    var gapColumns = gapTiming.columns;
+    ctx.save();
+    ctx.beginPath(); ctx.rect(ml, mt, pw, ph); ctx.clip();
+    ctx.fillStyle = 'rgba(128,128,128,0.22)';
+    for (var column = 0; column < gapColumns.length;) {
+      if (!gapColumns[column]) { column++; continue; }
+      var gapFirst = column++;
+      while (column < gapColumns.length && gapColumns[column]) column++;
+      var gapSpan = gapTiming.endMs - gapTiming.startMs;
+      var gapLeft = tx((gapTiming.startMs + gapSpan * gapFirst / gapColumns.length) / 1000 - binaryTimeOrigin);
+      var gapRight = tx((gapTiming.startMs + gapSpan * column / gapColumns.length) / 1000 - binaryTimeOrigin);
+      ctx.fillRect(gapLeft, mt, gapRight - gapLeft, ph);
+    }
+    ctx.restore();
+  }
+
   var names = sortedFieldNames().slice().sort(function(a,b){return Number(!!signalStyle(a).emphasis)-Number(!!signalStyle(b).emphasis);});
   for (var ni = 0; ni < names.length; ni++) {
     var name = names[ni];
@@ -4510,7 +4586,13 @@ function drawChart() {
     if (useBinaryEnvelope && envelopeChannel !== undefined) {
       var envelopeStart = binaryEnvelope.offsets[envelopeChannel];
       var envelopeEnd = binaryEnvelope.offsets[envelopeChannel + 1];
+      var previousSegment = -1;
       for (var envelopePoint = envelopeStart; envelopePoint < envelopeEnd; envelopePoint++) {
+        if (binaryEnvelope.sampleTiming) {
+          var pointSegment = binaryEnvelope.sampleTiming.segmentIds[envelopePoint];
+          if (pointSegment !== previousSegment) started = false;
+          previousSegment = pointSegment;
+        }
         var timeIndex = binaryEnvelope.timeIndices[envelopePoint];
         var envelopeTime = binaryEnvelope.times[timeIndex] / 1000 - binaryTimeOrigin;
         var envelopeX = tx(envelopeTime);
@@ -4518,7 +4600,11 @@ function drawChart() {
         if (!Number.isFinite(envelopeY)) { started = false; continue; }
         if (envelopeX < ml - 10 || envelopeX > ml + pw + 10) continue;
         if (pointsOnly) ctx.fillRect(envelopeX-pointSize/2,envelopeY-pointSize/2,pointSize,pointSize);
-        else if (!started) { ctx.moveTo(envelopeX, envelopeY); started = true; }
+        else if (!started) {
+          // Keep isolated observed points visible between two unknown spans.
+          if (binaryEnvelope.sampleTiming) ctx.fillRect(envelopeX-1,envelopeY-1,2,2);
+          ctx.moveTo(envelopeX, envelopeY); started = true;
+        }
         else ctx.lineTo(envelopeX, envelopeY);
       }
     } else {
@@ -5690,6 +5776,7 @@ function copyBufferedTriggerPoints(points) {
 function freezeSingleTriggerCapture() {
   singleTriggerCaptureFrozen = true;
   binaryEnvelope = null;
+  updateSampleTimingStatus();
   binaryExportPending = false;
   var start = Infinity, end = -Infinity, count = 0;
   for (var name in FIELDS) {

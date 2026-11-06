@@ -14,7 +14,10 @@ import anyio
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from mklink.remote.stream_hub import StreamHub
-from mklink.remote.stream_protocol import Frame, StreamType, encode_frame
+from mklink.remote.stream_protocol import (
+    Frame, StreamType, encode_frame, SUPERWATCH_CONTINUITY_FLOAT32,
+    SUPERWATCH_CONTINUITY_HEADER, SUPERWATCH_TIMESTAMPED_FLOAT32,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -78,17 +81,22 @@ async def _authenticate(websocket: WebSocket, auth_token: Optional[str]) -> bool
 
 
 def _encoded_data_frame(
-    stream_type: StreamType, batch,
+    stream_type: StreamType, batch, *, continuity: bool = False,
 ) -> bytes:
     batch_stream_type = batch.stream_type or stream_type
+    flags, payload = batch.flags, batch.payload
+    if batch_stream_type == StreamType.SUPERWATCH and flags == SUPERWATCH_CONTINUITY_FLOAT32 and not continuity:
+        _, count, _ = SUPERWATCH_CONTINUITY_HEADER.unpack_from(payload)
+        payload = payload[SUPERWATCH_CONTINUITY_HEADER.size:len(payload)-count*8]
+        flags = SUPERWATCH_TIMESTAMPED_FLOAT32
     return encode_frame(Frame(
         stream_type=batch_stream_type,
-        flags=batch.flags,
+        flags=flags,
         stream_id=int(stream_type),
         sequence=batch.sequence,
         timestamp_ns=batch.timestamp_ns,
         item_count=batch.item_count,
-        payload=batch.payload,
+        payload=payload,
     ))
 
 
@@ -166,7 +174,9 @@ async def stream_websocket(
                     await websocket.send_bytes(_encoded_status_frame(stream_type, hub))
                     next_status = time.monotonic() + HEARTBEAT_INTERVAL_SECONDS
                 await websocket.send_bytes(
-                    _encoded_data_frame(stream_type, batch)
+                    _encoded_data_frame(stream_type, batch, continuity=(
+                        stream_type == StreamType.SUPERWATCH and websocket.query_params.get('continuity') == '1'
+                    ))
                 )
             finally:
                 queue.task_done()

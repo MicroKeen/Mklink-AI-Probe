@@ -52,11 +52,13 @@ def discovery_device(tmp_path, *, mux, jtag=False, read_status=0, counts=(1, 1))
         if 0x10 <= op < 0x40:
             assert payload[:8] == bridge._mux.nonce
             payload = payload[8:]
-        answer = {1: struct.pack('<IHH', 15, 256, 1), 4: payload, 0x20: bytes(counts),
+        answer = {1: struct.pack('<IHH', 0x61f, 256, 1), 4: payload, 0x20: bytes(counts),
                   0x10: bytes(15) + bytes([2 if jtag else 1])}.get(op, b'')
         if op == 0x11:
             address, length = struct.unpack('<IH', payload)
             answer = ram[address-base:address-base+length]
+        elif op == 0x32:
+            answer = struct.pack('<II', struct.unpack_from('<I', payload)[0], 360000000)
         status = read_status if op == 0x11 else 0
         bridge._mux.feed(packet(op | 0x80, 17, seq, bytes([status]) + answer))
         return len(wire)

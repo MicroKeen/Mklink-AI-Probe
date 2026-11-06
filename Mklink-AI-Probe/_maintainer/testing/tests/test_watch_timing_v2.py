@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from mklink.dump_memory import DumpMemoryStreamSession, build_dump_mem_command
+from mklink.dump_memory import DumpMemoryStreamSession
 from mklink.mux import MuxTargetError, MuxTransport, packet
 from mklink.mux_watch import MuxWatchSession
 
@@ -21,7 +21,7 @@ def peer(*, timing_v2=True, ack=None, timebase=360_000_000,
         answer = b''
         status = 0
         if op == 1:
-            answer = struct.pack('<IHH', 15 | (512 if timing_v2 else 0), 256, 1)
+            answer = struct.pack('<IHH', 31 | 1024 | (512 if timing_v2 else 0), 256, 1)
         elif op == 4:
             answer = payload
         elif op == 0x32:
@@ -81,12 +81,11 @@ def test_fastest_is_explicit_and_preserves_ack_adjacent_first_sample():
 
 
 def test_old_zero_dump_still_means_single_read():
-    assert build_dump_mem_command([(0x20000000, 4)], 0).endswith(', 0)')
-    transport, calls = peer(timing_v2=False)
+    transport, calls = peer()
     watch = MuxWatchSession(transport, [(0x20000000, 4)], 0)
     watch.start()
     assert struct.unpack_from('<I', next(body for op, body in calls if op == 0x32))[0] == 2000
-    assert watch.timing is None
+    assert watch.timing['accepted_period_us'] == 2000
     watch.stop()
 
 
@@ -101,8 +100,8 @@ def test_conflicting_or_untyped_mode_is_rejected_before_io(factory, period, fast
 def test_unsupported_fastest_never_starts_or_falls_back(multiplex):
     transport, calls = peer(timing_v2=False)
     session = DumpMemoryStreamSession(bridge_for(transport, multiplex=multiplex),
-                                      [(0x20000000, 4)], 0, fastest=True, allow_legacy_bulk=True)
-    with pytest.raises(RuntimeError, match='Fastest sampling requires'):
+                                      [(0x20000000, 4)], 0, fastest=True)
+    with pytest.raises(RuntimeError, match='update the probe firmware'):
         session.start()
     assert not session.started and not transport.watch_running
     assert all(op not in (0x31, 0x32) for op, _ in calls)
@@ -111,8 +110,8 @@ def test_unsupported_fastest_never_starts_or_falls_back(multiplex):
 def test_fastest_capacity_error_does_not_use_legacy_bulk():
     transport, calls = peer()
     session = DumpMemoryStreamSession(bridge_for(transport), [(0x20000000, 2048)], 0,
-                                      fastest=True, allow_legacy_bulk=True)
-    with pytest.raises(ValueError, match='15 regions'):
+                                      fastest=True)
+    with pytest.raises(RuntimeError, match='0x800'):
         session.start()
     assert all(op != 0x32 for op, _ in calls)
 

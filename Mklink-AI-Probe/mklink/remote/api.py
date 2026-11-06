@@ -1680,7 +1680,19 @@ def create_app(
     @app.get("/api/ports/uart")
     async def list_uart_ports():
         from mklink.serial._port import list_uart_ports as enumerate_uart
-        return await run_in_threadpool(enumerate_uart)
+        from mklink.uart_baud import describe_ports
+        return await run_in_threadpool(lambda: describe_ports(_state, enumerate_uart()))
+
+    @app.post('/api/runtime/uart-baudrates')
+    async def read_uart_baudrates(body: dict):
+        from mklink.uart_baud import read_options
+        from mklink.runtime import RuntimeErrorResponse
+        try:
+            return await run_in_threadpool(read_options, _state, body.get('port'))
+        except ValueError as error:
+            raise HTTPException(400, str(error)) from error
+        except RuntimeErrorResponse as error:
+            raise HTTPException(409, str(error)) from error
 
     @app.post("/api/runtime/alias")
     async def runtime_alias(body: dict):
@@ -2356,7 +2368,8 @@ def create_app(
         snapshot = clock_snapshot(device, config)
         hz = snapshot['clock_hz']
         profile = next((name for name, value in PROFILES.items() if value == hz), None)
-        return {**snapshot, "profile": profile, "default": "medium", "profiles": PROFILES,
+        return {**snapshot, "profile": profile, "default": "medium",
+                "profiles": {name: value for name, value in PROFILES.items() if value in snapshot['clocks_hz']},
                 "device_generation": _state.get('device_generation', 0)}
 
     @asynccontextmanager
@@ -3783,6 +3796,9 @@ def create_app(
             except Exception as e:
                 raise HTTPException(status_code=500, detail=str(e))
 
+    # The shared runtime calls the same leased/executor-backed implementation.
+    app.state.shared_memory_read = read_memory
+
     @app.post("/api/device/write-memory")
     async def write_memory(
         address: str = Body(...),
@@ -4088,11 +4104,18 @@ def create_app(
                     "size": item.size,
                     "descriptor": item.to_dict(),
                 }
-                for item in catalog.search(q, limit=50)
+                for item in await run_in_threadpool(catalog.search, q, limit=50)
             ]
             return {"results": results}
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
+
+    @app.get("/api/symbols/resolve")
+    async def symbols_resolve(path: str = ""):
+        catalog = _require_symbol_catalog()
+        descriptor = await run_in_threadpool(catalog.by_path, path, writable_only=False)
+        return {"descriptor": descriptor.to_dict() if descriptor is not None else None,
+                "generation": catalog.generation}
 
     @app.get("/api/symbols/typeinfo")
     async def symbols_typeinfo(name: str = ""):

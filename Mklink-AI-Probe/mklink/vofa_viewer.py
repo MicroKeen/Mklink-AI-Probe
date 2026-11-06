@@ -245,9 +245,9 @@ def parse_vofa_inputs(variables: list[str], names: str | None = None) -> list[di
 
 
 def validate_vofa_groups(channels, interval):
-    from mklink.dump_memory import build_dump_mem_command
+    from mklink.mux_watch import MuxWatchSession
     groups = build_vofa_read_groups(channels)
-    build_dump_mem_command([(group.address, group.size) for group in groups], interval)
+    MuxWatchSession(None, [(group.address, group.size) for group in groups], interval)
     return groups
 
 

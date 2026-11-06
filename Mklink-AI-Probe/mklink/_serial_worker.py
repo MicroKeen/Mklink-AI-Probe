@@ -26,6 +26,27 @@ class _PendingReadTimeout(serial.SerialException):
     """Only process termination may release storage still owned by the driver."""
 
 
+def _windows_read_api():
+    """Capture native errors before ctypes reacquires the Python GIL."""
+    import ctypes
+    from types import SimpleNamespace
+    from serial import win32
+
+    api = SimpleNamespace(**vars(win32))
+    kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+    # A later GetLastError() can observe an error overwritten while reacquiring
+    # the GIL. In particular, losing IO_INCOMPLETE would retire a live buffer.
+    # Keep these bindings private: pyserial's other calls use native last-error.
+    for name in ('ReadFile', 'GetOverlappedResult', 'WaitForSingleObject'):
+        original = getattr(win32, name)
+        function = getattr(kernel, name)
+        function.argtypes = original.argtypes
+        function.restype = original.restype
+        setattr(api, name, function)
+    api.GetLastError = ctypes.get_last_error
+    return api
+
+
 class _WindowsReadQueue:
     """Keep CDC reads posted while Python is descheduled (128 KiB bounded).
 
@@ -37,7 +58,7 @@ class _WindowsReadQueue:
     def __init__(self, port):
         import ctypes
         from collections import deque
-        from serial import win32
+        win32 = _windows_read_api()
 
         self._ctypes, self._api, self._port = ctypes, win32, port
         self._slots = deque()
@@ -46,10 +67,12 @@ class _WindowsReadQueue:
         timeout = win32.COMMTIMEOUTS()
         if not win32.GetCommTimeouts(port._port_handle, ctypes.byref(timeout)):
             raise serial.SerialException('Cannot read CDC timeouts')
-        # A quiet command reply completes promptly; continuous acquisition fills
-        # requests without depending on a new user-space ReadFile every 4 KiB.
-        timeout.ReadIntervalTimeout = 1
-        timeout.ReadTotalTimeoutMultiplier = 0
+        # Return buffered bytes, or wait for the first arrival, without a 1 ms
+        # inter-byte aggregation delay. Keep eight reads posted for acquisition
+        # and a bounded idle timeout. This is COMMTIMEOUTS' first-byte mode,
+        # not the MAXDWORD/0/0 mode that returns empty immediately and spins.
+        timeout.ReadIntervalTimeout = 0xFFFFFFFF
+        timeout.ReadTotalTimeoutMultiplier = 0xFFFFFFFF
         timeout.ReadTotalTimeoutConstant = 100
         if not win32.SetCommTimeouts(port._port_handle, ctypes.byref(timeout)):
             raise serial.SerialException('Cannot set CDC receive timeouts')

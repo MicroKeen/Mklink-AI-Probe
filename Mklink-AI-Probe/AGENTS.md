@@ -61,6 +61,11 @@ Paths below are relative to the source root containing this file and
 
 ## Verification
 
+- The maintainer accepted the current 0.4.3 host as the non-regression baseline
+  on 2026-11-04. Follow `docs/verification/v043-host-baseline.md` for the pinned
+  implementation, evidence and affected-surface gates. Later fixes must preserve
+  correctness, capabilities and performance; unresolved baseline limits remain open.
+
 - For each fix, test the changed behavior and its affected surface: real browser
   for Web behavior, actual installation/upgrade for installer behavior, and
   physical hardware for device behavior. Documentation changes need document,

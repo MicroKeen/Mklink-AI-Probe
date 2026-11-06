@@ -13,6 +13,7 @@ var I18N = {
     // Control toolbar
     start: '开始', pause: '暂停', resume: '恢复', stop: '停止',
     running: '运行中', buffer: '缓冲区', interval: '间隔', apply: '应用',
+    superwatch_interval_invalid: '采样间隔不能小于 1 µs（0.000001 s），且不能大于 60 s。',
     // Trigger toolbar
     trigger: '触发', idle: '空闲', armed: '待触发', triggered: '已触发', done: '完成',
     source: '源', edge: '边沿', level: '电平', mode: '模式', pretrig: '预触发',
@@ -114,6 +115,7 @@ var I18N = {
     export_png_tip: 'Export PNG', help_tip: 'Help',
     start: 'Start', pause: 'Pause', resume: 'Resume', stop: 'Stop',
     running: 'Running', buffer: 'Buffer', interval: 'Interval', apply: 'Apply',
+    superwatch_interval_invalid: 'Sampling interval must be at least 1 µs (0.000001 s) and at most 60 s.',
     trigger: 'Trigger', idle: 'Idle', armed: 'Armed', triggered: 'Triggered', done: 'Done',
     source: 'Source', edge: 'Edge', level: 'Level', mode: 'Mode', pretrig: 'Pre-trig',
     rising: 'Rising', falling: 'Falling', both: 'Both',

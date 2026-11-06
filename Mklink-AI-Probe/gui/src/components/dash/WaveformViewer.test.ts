@@ -95,7 +95,10 @@ function canvasContext(): CanvasRenderingContext2D {
         return (value: unknown) => { (window as any).__canvasLabels?.push(String(value)) }
       }
       if (property === 'moveTo' || property === 'lineTo') {
-        return visitPoint
+        return (...args: unknown[]) => {
+          visitPoint()
+          ;(window as any).__canvasPaths?.push({op: property, color: target.strokeStyle, args})
+        }
       }
       if (!(property in target)) return noop
       return target[property as keyof CanvasRenderingContext2D]
@@ -230,6 +233,7 @@ window.__rttTestProbe = {
   fullTimeRange: function() { return getFullTimeRange(); },
   visibleTimeRange: function() { return getVisibleTimeRange(); },
   binaryEnvelope: function() { return binaryEnvelope; },
+  drawChart: drawChart,
   addSuperwatchName: superwatchAddName
 };`
   new Function(instrumented).call(window)
@@ -296,7 +300,7 @@ describe('WaveformViewer VOFA binary transport', () => {
       const canvas = document.querySelector('#chart')
       expect(viewer.beginReplay({ duration: 60, rows: 100, channels: [{ name: 'log' }] }, control)).toBe(true)
       viewer.setReplayPosition(20, true, true)
-      viewer.renderReplayView({ id: 1, position: 20, width: 800, channels: [{ name: 'log', latest: 5, points: [[10, 2], [20, 5]] }] })
+      viewer.renderReplayView({ id: 1, start: 0, end: 60, position: 20, width: 800, channels: [{ name: 'log', latest: 5, points: [[10, 2], [20, 5]] }] })
       expect(document.querySelector('#chart')).toBe(canvas)
       expect(probe.binaryEnvelope().values).toEqual(Float64Array.of(2, 5))
       viewer.updateAcquisitionStatus({ state: 'stopped', channel_metadata: { wrong: { type: 'float' } } })
@@ -605,7 +609,7 @@ describe('WaveformViewer VOFA binary transport', () => {
     } finally { runtime.cleanup() }
   })
 
-  it('defaults SuperWatch to 1 ms and applies a new interval while running', async () => {
+  it.each(['0.000001', '0.000004'])('defaults SuperWatch to 1 ms and applies %s s while running', async interval => {
     const runtime = await loadRttViewerRuntime('SuperWatch')
     try {
       const input = document.getElementById('interval-input') as HTMLInputElement
@@ -615,7 +619,7 @@ describe('WaveformViewer VOFA binary transport', () => {
       expect(bufferInput.max).toBe('1000000')
       expect(bufferInput.step).toBe('1')
       expect(input.value).toBe('0.001')
-      expect(input.min).toBe('0.000004')
+      expect(input.min).toBe('0.000001')
       expect(input.step).toBe('0.000001')
       expect(runtime.probe.currentInterval()).toBe(0.001)
 
@@ -625,15 +629,15 @@ describe('WaveformViewer VOFA binary transport', () => {
       const fetchMock = vi.fn().mockResolvedValue({
         ok: true,
         status: 200,
-        json: async () => ({ interval: 0.000004 }),
+        json: async () => ({ interval: Number(interval) }),
       })
       vi.stubGlobal('fetch', fetchMock)
       input.focus()
-      input.value = '0.000004'
+      input.value = interval
       input.dispatchEvent(new Event('input', { bubbles: true }))
       input.blur()
       runtime.probe.syncStatus({ state: 'running', interval: 0.001, items: [] })
-      expect(input.value).toBe('0.000004')
+      expect(input.value).toBe(interval)
       document.getElementById('btn-apply-interval')?.click()
       for (let turn = 0; turn < 6; turn++) await Promise.resolve()
 
@@ -641,18 +645,18 @@ describe('WaveformViewer VOFA binary transport', () => {
         '/api/dash/superwatch/interval',
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify({ interval: 0.000004 }),
+          body: JSON.stringify({ interval: Number(interval) }),
         }),
       )
-      expect(runtime.probe.currentInterval()).toBe(0.000004)
-      expect(input.value).toBe('0.000004')
+      expect(runtime.probe.currentInterval()).toBe(Number(interval))
+      expect(input.value).toBe(interval)
       expect(runtime.probe.collectionState().state).toBe('running')
     } finally {
       runtime.cleanup()
     }
   })
 
-  it('rejects SuperWatch intervals below 4 us without changing a running acquisition', async () => {
+  it('rejects SuperWatch intervals below 1 us without changing a running acquisition', async () => {
     const runtime = await loadRttViewerRuntime('SuperWatch')
     try {
       await flushPromises()
@@ -661,18 +665,28 @@ describe('WaveformViewer VOFA binary transport', () => {
       vi.stubGlobal('fetch', requests)
       vi.stubGlobal('alert', vi.fn())
       const input = document.getElementById('interval-input') as HTMLInputElement
-      for (const value of ['0', '0.000001', '0.000003', '0.000003999']) {
+      const error = document.getElementById('interval-error')!
+      expect(error.hidden).toBe(true)
+      for (const value of ['0', '0.0000001', '0.0000005', '0.000000999']) {
         input.value = value
         expect(input.validity.rangeUnderflow).toBe(true)
         document.getElementById('btn-apply-interval')!.click()
+        expect(error.hidden).toBe(false)
+        expect(error.textContent).toBe('superwatch_interval_invalid')
+        expect(input.getAttribute('aria-invalid')).toBe('true')
+        expect(document.activeElement).toBe(input)
+        expect(alert).not.toHaveBeenCalled()
         expect(requests).not.toHaveBeenCalled()
         expect(runtime.probe.currentInterval()).toBe(0.001)
         expect(runtime.probe.collectionState().state).toBe('running')
       }
-      input.value = '0.000004'
+      input.value = '0.000001'
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+      expect(error.hidden).toBe(true)
+      expect(input.getAttribute('aria-invalid')).toBe('false')
       expect(input.checkValidity()).toBe(true)
       input.stepUp()
-      expect(input.valueAsNumber).toBeCloseTo(0.000005, 12)
+      expect(input.valueAsNumber).toBeCloseTo(0.000002, 12)
     } finally { runtime.cleanup() }
   })
 
@@ -2967,7 +2981,7 @@ describe('VOFA viewer hot path source guard', () => {
   })
 
   it.each([false, true])('restores interval without changing a live shared acquisition (running=%s)', async running => {
-    const saved = JSON.stringify({ channels: [null], interval: 0.00001 })
+    const saved = JSON.stringify({ channels: [null], interval: 0.000001 })
     vi.stubGlobal('localStorage', { getItem: () => saved, setItem: vi.fn() })
     const requests = vi.fn(async (url: any, options?: RequestInit) => ({
       ok: !String(url).endsWith('/start'),
@@ -2979,20 +2993,20 @@ describe('VOFA viewer hot path source guard', () => {
     try {
       await flushPromises()
       expect(requests.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false)
-      expect((document.getElementById('interval-input') as HTMLInputElement).value).toBe(running ? '0.002' : '0.00001')
+      expect((document.getElementById('interval-input') as HTMLInputElement).value).toBe(running ? '0.002' : '0.000001')
       if (!running) {
         document.getElementById('btn-start')!.click()
         await flushPromises()
         expect(requests.mock.calls.some(([url]) => String(url).endsWith('/start'))).toBe(true)
         expect(requests.mock.calls.some(([url]) => String(url).endsWith('/interval'))).toBe(false)
         const start = requests.mock.calls.find(([url]) => String(url).endsWith('/start'))!
-        expect(JSON.parse(start[1]!.body as string)).toEqual({ interval: 0.00001 })
+        expect(JSON.parse(start[1]!.body as string)).toEqual({ interval: 0.000001 })
         expect(document.getElementById('conn-status')!.textContent).toContain('Interval rejected')
       }
     } finally { runtime.cleanup(); vi.unstubAllGlobals() }
   })
 
-  it.each([0.000001, 0.000003, 0.000003999])('does not replay a saved SuperWatch interval below 4 us (%s)', async interval => {
+  it.each([0.0000001, 0.0000005, 0.000000999])('does not replay a saved SuperWatch interval below 1 us (%s)', async interval => {
     vi.stubGlobal('localStorage', {
       getItem: () => JSON.stringify({ channels: [], interval }), setItem: vi.fn(),
     })
@@ -3072,6 +3086,68 @@ describe('VOFA viewer hot path source guard', () => {
 })
 
 describe('VOFA viewer typed-ring runtime', () => {
+  it('shades observed timestamp gaps, breaks the curve, and retains the stopped statistics', async () => {
+    const runtime = await loadRttViewerRuntime('SuperWatch', 8)
+    try {
+      runtime.viewer.configureBinaryChannels([{ name: 'A' }])
+      runtime.probe.syncStatus({ state: 'running', interval: .000004, items: [{ name: 'A' }] })
+      runtime.viewer.acceptBinaryBatch({ sequence: 1n, timestampNs: 60000n, itemCount: 4, channelCount: 1,
+        layout: 'sample-major-float32', times: Float64Array.of(0, .007, .053, .060).buffer,
+        values: Float32Array.of(0, 1, 0, 1).buffer })
+      const envelope = {
+        type: 'render-envelope', mode: 'min-max-v1', timestampKind: 'sample-milliseconds',
+        requestId: 1, pixelWidth: 8, channelCount: 1, pointCount: 4, candidateSampleCount: 4,
+        times: Float64Array.of(0, .007, .053, .060).buffer, timeIndices: Uint32Array.of(0,1,2,3).buffer,
+        values: Float32Array.of(0,1,0,1).buffer, channelOffsets: Uint32Array.of(0,4).buffer,
+        sampleTiming: { thresholdMs: .020, maxIntervalMs: .046, intervalCount: 3, gapCount: 1,
+          startMs: 0, endMs: .060, columns: Uint8Array.of(1,1,1,1,1,1,1,1).buffer,
+          segmentIds: Uint32Array.of(0,0,1,1).buffer },
+      }
+      expect(runtime.viewer.renderBinaryEnvelope(envelope, true)).toBe(true)
+      expect(runtime.viewer.getBinaryVisibleRange().gapThresholdMs).toBe(.020)
+      expect(document.getElementById('sample-timing-status')).toBeNull()
+      expect(document.getElementById('sample-timing-status')).toBeNull()
+      ;(window as any).__canvasPaths = []
+      ;(window as any).__canvasDraws = []
+      runtime.probe.drawChart()
+      const curve = (window as any).__canvasPaths.filter((p: any) => p.color === runtime.probe.fields().A.color)
+      expect(curve.map((p: any) => p.op)).toEqual(['moveTo','lineTo','moveTo','lineTo'])
+      expect((window as any).__canvasDraws.some((d: any) => d.op === 'fillRect' && d.color === 'rgba(128,128,128,0.22)')).toBe(true)
+      document.getElementById('btn-pause')!.click()
+      runtime.viewer.renderBinaryEnvelope({ ...envelope, sampleTiming: { ...envelope.sampleTiming, maxIntervalMs: 9 } })
+      expect(document.getElementById('sample-timing-status')).toBeNull()
+      runtime.viewer.configureBinaryChannels([{ name: 'B' }])
+      expect(document.getElementById('sample-timing-status')).toBeNull()
+      expect(document.getElementById('sample-timing-status')).toBeNull()
+    } finally {
+      delete (window as any).__canvasPaths
+      delete (window as any).__canvasDraws
+      runtime.cleanup()
+    }
+  })
+
+  it('labels unavailable timing honestly and scales the marking threshold for slow sampling', async () => {
+    const runtime = await loadRttViewerRuntime('SuperWatch', 8)
+    try {
+      runtime.viewer.configureBinaryChannels([{ name: 'A' }])
+      runtime.probe.syncStatus({ state: 'running', interval: .1, items: [{ name: 'A' }] })
+      runtime.viewer.acceptBinaryBatch({ sequence: 1n, timestampNs: 100000000n, itemCount: 2, channelCount: 1,
+        layout: 'sample-major-float32', times: Float64Array.of(0,100).buffer, values: Float32Array.of(0,1).buffer })
+      expect(runtime.viewer.getBinaryVisibleRange().gapThresholdMs).toBe(200)
+      const envelope = { type: 'render-envelope', mode: 'min-max-v1', timestampKind: 'sample-milliseconds',
+        requestId: 1, pixelWidth: 8, channelCount: 1, pointCount: 2, candidateSampleCount: 2,
+        times: Float64Array.of(0,100).buffer, timeIndices: Uint32Array.of(0,1).buffer,
+        values: Float32Array.of(0,1).buffer, channelOffsets: Uint32Array.of(0,2).buffer }
+      expect(runtime.viewer.renderBinaryEnvelope(envelope, true)).toBe(true)
+      expect(document.getElementById('sample-timing-status')).toBeNull()
+      expect(document.getElementById('sample-timing-status')).toBeNull()
+      expect(runtime.viewer.renderBinaryEnvelope({ ...envelope, sampleTiming: {
+        thresholdMs: 200, startMs: 0, endMs: 100, intervalCount: 1, maxIntervalMs: 100, gapCount: 2,
+        columns: new Uint8Array(8).buffer, segmentIds: new Uint32Array(2).buffer,
+      } }, true)).toBe(false)
+    } finally { runtime.cleanup() }
+  })
+
   it('preserves configured waveform fields when status omits channel metadata', async () => {
     const runtime = await loadRttViewerRuntime()
     try {

@@ -56,6 +56,8 @@ async def settle(task):
 
 
 def same_path(left, right):
+    if left == right:
+        return True
     return str(Path(left).resolve()).casefold() == str(Path(right).resolve()).casefold()
 
 
@@ -170,7 +172,10 @@ class RuntimeControl:
 
     def presence(self):
         from mklink.probes import inventory
-        probes = inventory()
+        return self._record_presence(inventory())
+
+    def _record_presence(self, probes):
+        self._presence_revision = getattr(self, '_presence_revision', 0) + 1
         selected = next((p for p in probes if p['probe_id'] == self.info.get('probe_id')), None)
         device = self.app.state.mklink_state.get('device')
         status = 'present' if selected else 'missing'
@@ -263,7 +268,9 @@ class RuntimeControl:
             raise HTTPException(409, 'Project changed; reconnect explicitly')
         if not target:
             return session
-        active_axf = (getattr(state.get('device'), 'axf_status', {}) or {}).get('axf_path')
+        # Admission needs the active source and catalog generation, not the
+        # status page's filesystem/toolchain discovery on every memory call.
+        active_axf = getattr(state.get('device'), 'axf_path', None)
         if session.axf != active_axf or session.symbol_version != self.symbol_version():
             raise HTTPException(409, 'Symbols changed; reconnect explicitly before reading the new target layout')
         return session
@@ -380,7 +387,23 @@ class RuntimeControl:
                 self.lifecycle_pending -= 1
         return await settle(asyncio.create_task(transition()))
 
+    def prepare_call(self, body):
+        session_id = body.get('session_id')
+        capability = body.get('capability')
+        if not isinstance(capability, str) or capability not in CAPABILITIES:
+            raise HTTPException(422, 'Unsupported shared capability; no direct CDC fallback')
+        self.validate_session(session_id, target=capability not in UART_CAPABILITIES)
+        arguments = body.get('arguments', {})
+        argument_limit = 48 * 1024 if capability == 'flush_memory' else 16 * 1024
+        if not isinstance(arguments, dict) or len(json.dumps(arguments)) > argument_limit:
+            raise HTTPException(422, f'Arguments must be an object of at most {argument_limit // 1024} KiB')
+        return session_id, capability, validate_arguments(capability, arguments)
+
     async def invoke(self, method, path, arguments=None, *, session_id=None):
+        if (method == 'POST' and path == '/api/device/read-memory' and session_id
+                and callable(getattr(self.app.state, 'shared_memory_read', None))):
+            from mklink.runtime_memory import MemoryCall
+            return await MemoryCall(self, arguments, session_id).run()
         import httpx
         headers = {"X-Auth-Token": self.info["token"]}
         if session_id:
@@ -468,6 +491,10 @@ class RuntimeGate:
             c.last_activity = time.monotonic()
         # Static assets, caches, and subscription reads never reserve the CDC.
         method = scope.get("method", "GET")
+        if (path == '/_runtime/call' and method == 'POST' and not origin
+                and callable(getattr(c.app.state, 'shared_memory_read', None))):
+            from mklink.runtime_memory import dispatch_read_call
+            return await dispatch_read_call(self.app, c, scope, receive, send)
         hardware = path.startswith("/api/") and (
             method not in {"GET", "HEAD", "OPTIONS"}
             or path in {"/api/device/core-registers", "/api/device/hardfault", "/api/device/hardfault-detail",
@@ -526,33 +553,45 @@ class RuntimeGate:
         validated_capability = next((name for name in ('read_memory', 'write_memory', 'write_variable', 'rtt_write')
                                      if CAPABILITIES[name][1] == path), None)
         online_flash = path in {"/api/online-flash/jobs", "/api/online-flash/memory/read", "/api/online-flash/memory/read-stream"}
+        from mklink.runtime_memory import MemoryCall
+        memory_call = scope.get('mklink_memory_call')
+        if not (isinstance(memory_call, MemoryCall) and memory_call.control is c
+                and path == '/api/device/read-memory' and method == 'POST'):
+            memory_call = None
         if online_flash or validated_capability:
             if online_flash:
                 try:
                     selected = select_probe(c.info.get("probe_id"))
                 except RuntimeErrorResponse as exc:
                     return await reject(409, str(exc))
-            chunks = bytearray()
-            while True:
-                message = await receive()
-                if message["type"] != "http.request":
-                    return
-                chunks.extend(message.get("body", b""))
-                if len(chunks) > 64 * 1024:
-                    return await reject(413, "Control request exceeds 64 KiB")
-                if not message.get("more_body"):
-                    break
-            try:
-                body = json.loads(chunks)
-            except (ValueError, UnicodeError):
-                return await reject(422, "Invalid JSON control request")
+            if memory_call is not None:
+                body = memory_call.arguments
+            else:
+                chunks = bytearray()
+                while True:
+                    message = await receive()
+                    if message["type"] != "http.request":
+                        return
+                    chunks.extend(message.get("body", b""))
+                    if len(chunks) > 64 * 1024:
+                        return await reject(413, "Control request exceeds 64 KiB")
+                    if not message.get("more_body"):
+                        break
+                try:
+                    body = json.loads(chunks)
+                except (ValueError, UnicodeError):
+                    return await reject(422, "Invalid JSON control request")
             if not isinstance(body, dict):
                 return await reject(422, 'Control body must be an object')
             if online_flash and str(body.get("probe_id", "")).casefold() != selected["serial_number"].casefold():
                 return await reject(409, "CMSIS-DAP probe does not match this window's physical probe")
             if validated_capability:
                 try:
-                    chunks = json.dumps(validate_arguments(validated_capability, body)).encode('utf-8')
+                    body = validate_arguments(validated_capability, body)
+                    if memory_call is not None:
+                        memory_call.arguments = body
+                    else:
+                        chunks = json.dumps(body).encode('utf-8')
                 except HTTPException as exc:
                     return await reject(exc.status_code, exc.detail)
             original_receive = receive
@@ -563,7 +602,8 @@ class RuntimeGate:
                     replayed = True
                     return {"type": "http.request", "body": bytes(chunks), "more_body": False}
                 return await original_receive()
-            receive = replay
+            if memory_call is None:
+                receive = replay
         c.prune()
         if path == '/api/dash/superwatch/peripherals/select' and (
                 c.attach_lock.locked() or any(key != session_id for key in c.target_sessions)):
@@ -612,6 +652,8 @@ class RuntimeGate:
             # Receiving a body may yield across a completed switch. Validate
             # again under admission before any old request reaches hardware.
             check_connection()
+            if memory_call is not None:
+                return await memory_call.execute(scope, observe)
             if path in {'/api/offline-download/deploy', '/api/offline-download/trigger', '/api/offline-download/trigger-job',
                         '/api/offline-download/algorithm', '/api/online-flash/memory/read',
                         '/api/online-flash/memory/read-stream'}:
@@ -642,6 +684,23 @@ def install_runtime(app, info):
 
     from mklink.remote.gui_sessions import install_remote_windows
     install_remote_windows(app, api)
+    from mklink.runtime_memory import install_memory_channel
+    install_memory_channel(api, control)
+
+    gui_tickets = {}
+
+    @api.post('/gui-link')
+    async def gui_link(body: dict):
+        control.session(body.get('session_id'))
+        now = time.monotonic()
+        for ticket, expires in list(gui_tickets.items()):
+            if expires <= now:
+                gui_tickets.pop(ticket, None)
+        if len(gui_tickets) >= 8:
+            raise HTTPException(429, 'Too many pending GUI launch links')
+        ticket = 'gui-' + secrets.token_urlsafe(32)
+        gui_tickets[ticket] = now + 60
+        return JSONResponse({'ticket': ticket, 'expires_in': 60}, headers={'Cache-Control': 'no-store'})
 
     @api.get("/open", response_class=HTMLResponse)
     async def open_gui():
@@ -660,16 +719,19 @@ fetch('/_runtime/login', {method:'POST', headers:{'Content-Type':'application/js
     @api.post("/login")
     async def login(body: dict):
         token = body.get("token")
-        if not isinstance(token, str) or not hmac.compare_digest(token, info["token"]):
+        ticket_expires = gui_tickets.pop(token, None) if isinstance(token, str) else None
+        if not isinstance(token, str) or not token.isascii() or not (hmac.compare_digest(token, info["token"])
+                                             or (ticket_expires is not None and ticket_expires > time.monotonic())):
             raise HTTPException(401, "Unauthorized")
         response = JSONResponse({"ok": True}, headers={"Cache-Control": "no-store"})
-        response.set_cookie("mklink_runtime_" + info["instance_id"], token, httponly=True, samesite="strict")
+        response.set_cookie("mklink_runtime_" + info["instance_id"], info['token'], httponly=True, samesite="strict")
         return response
 
     @api.get("/status")
     async def status():
         control.prune()
         return {"protocol": PROTOCOL, "version": VERSION, "instance_id": info["instance_id"],
+                "gui_launch": 1,
                 "pid": info.get("pid"), "project_root": state["project_root"], "transport": "cdc",
                 "probe_id": info.get("probe_id"), "clients": len(control.sessions), "busy": control.operation_lock.locked(),
                 "capabilities": sorted(CAPABILITIES)}
@@ -694,7 +756,9 @@ fetch('/_runtime/login', {method:'POST', headers:{'Content-Type':'application/js
         capabilities = UART_CAPABILITIES if scope == 'uart' else CAPABILITIES
         return {**device_status, 'session_id': session_id, 'shared': True, 'scope': scope,
                 'instance_id': info['instance_id'], 'probe_id': info.get('probe_id'),
-                'capabilities': sorted(capabilities)}
+                'capabilities': sorted(capabilities),
+                'memory_transport': ('websocket-v1' if scope == 'target'
+                    and callable(getattr(app.state, 'shared_memory_read', None)) else None)}
 
     @api.post("/attach")
     async def attach(body: dict):
@@ -783,18 +847,7 @@ fetch('/_runtime/login', {method:'POST', headers:{'Content-Type':'application/js
 
     @api.post("/call")
     async def call(body: dict):
-        session_id = body.get("session_id")
-        capability = body.get("capability")
-        if not isinstance(capability, str) or capability not in CAPABILITIES:
-            raise HTTPException(422, "Unsupported shared capability; no direct CDC fallback")
-        session = control.validate_session(session_id, target=capability not in UART_CAPABILITIES)
-        arguments = body.get("arguments", {})
-        # Flush carries up to 12 KiB as hex (optionally space-separated), plus
-        # eight region headers. Its decoded write bounds remain enforced below.
-        argument_limit = 48 * 1024 if capability == 'flush_memory' else 16 * 1024
-        if not isinstance(arguments, dict) or len(json.dumps(arguments)) > argument_limit:
-            raise HTTPException(422, f"Arguments must be an object of at most {argument_limit // 1024} KiB")
-        arguments = validate_arguments(capability, arguments)
+        session_id, capability, arguments = control.prepare_call(body)
         stream, action = LIFECYCLE_CAPABILITIES.get(capability, (None, None))
         if action == 'start':
             if stream in STREAMS and control.operation_lock.locked():

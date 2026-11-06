@@ -384,8 +384,15 @@ class SymbolCatalog:
             if shape is not None:
                 dimensions, element = shape
                 possible = node.path + ' ' + node.type_name + ' ' + summary(element)
-                # Numeric index queries are resolved against actual element paths.
-                if not matches(possible) and not any(any(c.isdigit() for c in key) for keys in query_keys for key in keys):
+                # Only actual index syntax/bare index terms can be absent from
+                # the array summary. A digit in ID2/uint32_t is not a reason to
+                # traverse every element of every target buffer.
+                folded = possible.casefold()
+                possible_index = any(all(
+                    key.isdecimal() or re.sub(r'\[\d+\]', '', key) in folded
+                    for key in keys
+                ) for keys in query_keys)
+                if not matches(possible) and not possible_index:
                     return
                 for index in range(dimensions[0]):
                     yield from walk(self._array_child(node, index), ancestors, depth + 1)

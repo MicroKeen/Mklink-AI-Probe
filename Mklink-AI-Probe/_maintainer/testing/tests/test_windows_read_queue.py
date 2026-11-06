@@ -11,6 +11,8 @@ pytestmark = pytest.mark.skipif(sys.platform != 'win32', reason='Windows CDC API
 @pytest.fixture
 def native_reads(monkeypatch):
     from serial import win32
+    from mklink import _serial_worker
+    monkeypatch.setattr(_serial_worker, '_windows_read_api', lambda: win32)
     state = SimpleNamespace(pending={}, events=set(), next_event=1, error=0,
                             posts=0, resets=0, fail_at=None, read_error=None)
 
@@ -190,3 +192,35 @@ def test_failed_cancellation_never_purges_reposts_or_frees_live_requests(native_
     monkeypatch.setattr(worker.time, 'monotonic', lambda: 0)
     reader.close()
     worker._unreaped_readers.remove(reader)
+
+
+@pytest.mark.parametrize('operation', ['pending', 'read_error', 'wait_error'])
+def test_native_error_survives_intervening_windows_calls(operation):
+    from serial import win32
+    from mklink._serial_worker import _windows_read_api
+    api = _windows_read_api()
+    native = ctypes.WinDLL('kernel32')
+    native.SetLastError.argtypes = [win32.DWORD]
+    native.SetLastError.restype = None
+    event = win32.CreateEvent(None, True, False, None)
+    assert event
+    try:
+        ov, count = win32.OVERLAPPED(), win32.DWORD()
+        ov.hEvent = event
+        if operation == 'pending':
+            # GetOverlappedResult reports an in-flight OVERLAPPED without waiting.
+            ov.Internal = 0x103  # STATUS_PENDING
+            assert not api.GetOverlappedResult(event, ctypes.byref(ov), ctypes.byref(count), False)
+            expected = 996  # ERROR_IO_INCOMPLETE
+        elif operation == 'read_error':
+            buffer = ctypes.create_string_buffer(1)
+            assert not api.ReadFile(win32.INVALID_HANDLE_VALUE, buffer, 1, ctypes.byref(count), ctypes.byref(ov))
+            expected = 6  # ERROR_INVALID_HANDLE
+        else:
+            assert api.WaitForSingleObject(None, 0) == 0xFFFFFFFF
+            expected = 6
+        native.SetLastError(0)  # Model native work while Python regains the GIL.
+        assert win32.GetLastError() == 0
+        assert api.GetLastError() == expected
+    finally:
+        win32.CloseHandle(event)

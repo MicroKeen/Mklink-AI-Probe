@@ -1,4 +1,4 @@
-"""Dump Memory binary protocol parser for MKLink SuperWatch.
+"""Default MUX capture with explicitly selected legacy Dump Memory support.
 
 Implements the streaming binary frame parser for both OLD and B1 (chunked)
 frame formats defined in the dump_memory protocol specification.
@@ -28,23 +28,13 @@ Frame formats (per firmware spec, 2026-06-06):
     +0x23  ... region[i] = idx(1) + size(2) + data(size)
     +EOF-4 4B crc32            (crc32 of magic..last region data byte)
 
-Maximum single dump_memory call is 32 KiB (32768 bytes). Firmware currently
-truncates the last block by ~512B when total_size > 32 KiB, so the safe
-upper bound is 32 KiB. Callers needing more must chunk the request at the
-host level.
-
-2026-06-07 direct official API retest on MKLink V4.3.1 confirmed:
-  - cmd.dump_memory(0x08000000, 256, 0): OLD, full 256B, flags=0
-  - cmd.dump_memory(0x20010200, 32, 0): OLD, full 32B, flags=0
-  - cmd.dump_memory(0x08020000, 2049, 0): B1, 2048B + 1B, flags=0
-
-The parser uses standard-library primitives. Capture helpers accept an existing
-bridge and share the operation-observation and memory-result contracts.
+These formats serve offline records and explicit ``protocol='dmpm'`` capture.
+Live helpers default to MUX, accepting an existing shared bridge; they never
+fall back to the legacy protocol after a failed or unsupported MUX operation.
 """
 
 from __future__ import annotations
 
-from concurrent.futures import Future
 import secrets
 
 import binascii
@@ -82,28 +72,11 @@ MIN_B1_FRAME_LEN = B1_HEADER_LEN + 3 + B1_TRAILER_LEN  # 1 region(3) + 4 = 42
 
 MAX_FRAME_LEN = 65535
 MAX_REGIONS = 16
-# V4 firmware advertises 16 regions, but the text API needs 33 positional
-# arguments at that point (16 address/size pairs plus period), exactly equal to
-# the current PIKA_ARG_NUM_MAX. Field testing on V4.3.8 showed this exact
-# parameter-count boundary can wedge the REPL; it is independent of free heap.
-# Keep one argument-pair of headroom until firmware exposes a non-varargs/binary
-# configuration entry point or raises and validates its VM argument capacity.
-MAX_SAFE_REPL_REGIONS = 15
-MAX_REPL_COMMAND_BYTES = 511  # PIKA_LINE_BUFF_SIZE is 512 including NUL.
-DUMP_MEMORY_STOP_PERIOD = -1.0
+# Current MUX sampling has 15 physical region slots (each at most 128 bytes).
+MAX_SAMPLING_REGIONS = 15
 EXPECTED_BLOCK_SIZE = 2048  # firmware-fixed per spec
 
-# Maximum total bytes per dump_memory() call.
-#
-# Default raised to 512 KiB on 2026-06-26: firmware V4.3.3 was retested end-to-end
-# on GD32F303CE (512 KiB Flash) and dumps the *entire* 512 KiB Flash cleanly —
-# 256 B1 blocks, all flags=0x0000, every block_crc32 + frame_crc32 valid. Full
-# retest data in docs/Mklink/2026-06-26-gd32f303-dump-flush-boundary-retest-report.md.
-#
-# CAUTION for older firmware: pre-V4.3.3 builds may still carry BUG-5 (>64 KiB
-# truncates the last block by 512B). On such firmware, pass smaller ADDR:SIZE
-# regions (≤32 KiB) from the host instead of relying on the raised default.
-# Use set_max_total_data_size() to lower the cap programmatically if needed.
+# Bounded finite-capture result size, independent of MUX sampling capacity.
 MAX_TOTAL_DATA_SIZE = 512 * 1024  # 524288
 
 _DUMP_MEMORY_CAPTURE_LOCK = threading.RLock()
@@ -132,7 +105,7 @@ class DumpMemoryReadError(RuntimeError):
 
 
 class DumpMemoryUnsupported(DumpMemoryReadError):
-    """The connected firmware did not expose a usable dump-memory response."""
+    """The connected firmware cannot supply current MUX capture operations."""
 
 
 class DumpMemoryBusyError(RuntimeError):
@@ -146,47 +119,19 @@ def exclusive_dump_memory_capture() -> Iterator[None]:
         yield
 
 
-def _enter_dump_stream(bridge) -> None:
-    """Atomically claim DUMP_STREAM, with a safe fallback for narrow adapters."""
+def _require_memory_mux(bridge):
+    """Select the current transport; never leave MUX or send a legacy dump."""
     from mklink._types import DeviceState
-
-    # This one-shot B1 path sends a textual command directly. A stopped MUX
-    # capture still leaves the framed decoder active; use the bridge's normal
-    # acknowledged exit before claiming the legacy stream. Active sampling
-    # and failed transitions are rejected by the bridge, without replay.
-    leave_multiplex = getattr(bridge, "_leave_multiplex", None)
-    if callable(leave_multiplex):
-        leave_multiplex()
-
-    # Feature negotiation is a command-mode operation. Never query firmware
-    # while another stream owns the bridge.
-    prepare_stop = getattr(bridge, 'prepare_dump_stop', None)
-    if callable(prepare_stop) and getattr(bridge, 'state', None) is DeviceState.READY:
-        prepare_stop()
-
-    try_enter = getattr(bridge, "_try_enter_stream", None)
-    if callable(try_enter):
-        if try_enter(DeviceState.DUMP_STREAM):
-            return
-        state = getattr(bridge, "state", None)
-        state_name = getattr(state, "value", "unavailable")
-        raise DumpMemoryBusyError(
-            f"dump_memory requires an idle READY bridge; current state is {state_name}"
-        )
-
-    try:
-        state = bridge.state
-    except AttributeError:
-        # Narrow test doubles and older bridge adapters do not expose state.
-        bridge._enter_stream(DeviceState.DUMP_STREAM)
-        return
-    if state is DeviceState.READY:
-        bridge._enter_stream(DeviceState.DUMP_STREAM)
-        return
-    state_name = getattr(state, "value", "unavailable")
-    raise DumpMemoryBusyError(
-        f"dump_memory requires an idle READY bridge; current state is {state_name}"
-    )
+    state = getattr(bridge, 'state', DeviceState.READY)
+    if state is not DeviceState.READY:
+        raise DumpMemoryBusyError(f'memory capture requires an idle READY bridge; current state is {state.value}')
+    supported = getattr(bridge, 'supports_multiplex', None)
+    if not callable(supported) or supported() is not True:
+        raise DumpMemoryUnsupported('Memory capture requires MUX firmware; update the probe firmware and host together')
+    transport = bridge.enable_multiplex()
+    if transport is None:
+        raise DumpMemoryUnsupported('Memory capture requires MUX firmware; update the probe firmware and host together')
+    return transport
 
 
 # Sentinel return values for _try_parse
@@ -471,187 +416,32 @@ def set_max_total_data_size(size: int) -> None:
     MAX_TOTAL_DATA_SIZE = size
 
 
-def build_dump_mem_command(
-    region_pairs: list[tuple[int, int]],
-    period: float,
-) -> str:
-    """Build the cmd.dump_memory() command string.
-
-    Args:
-        region_pairs: list of (address, size) tuples.
-        period: sampling period in seconds (float). 0 = single read / stop streaming.
-
-    Returns:
-        Command string like "cmd.dump_memory(0x20000054, 4, 0x2000006C, 2, 0.01)"
-
-    Raises:
-        ValueError: if total region size exceeds MAX_TOTAL_DATA_SIZE (default 512 KiB).
-                    Pass smaller ADDR:SIZE regions to split large requests at the host level
-                    (e.g. on older firmware that truncates >64 KiB dumps — BUG-5).
-    """
-    import math
-
-    if not region_pairs:
-        raise ValueError("dump-memory requires at least one region")
-    if len(region_pairs) > MAX_SAFE_REPL_REGIONS:
-        raise ValueError(
-            f"dump-memory text API safely supports at most "
-            f"{MAX_SAFE_REPL_REGIONS} regions; firmware protocol capacity is "
-            f"{MAX_REGIONS}, but the 16-region Pika varargs boundary is unsafe"
-        )
-    if not math.isfinite(float(period)) or float(period) < -1:
-        raise ValueError("dump-memory period must be -1, 0, or a positive finite value")
+def validate_dump_regions(region_pairs):
+    """Validate finite memory ranges without generating a REPL command."""
+    if not isinstance(region_pairs, (list, tuple)) or not 1 <= len(region_pairs) <= MAX_SAMPLING_REGIONS:
+        raise ValueError(f'dump-memory supports at most {MAX_SAMPLING_REGIONS} regions and requires at least one')
     for index, pair in enumerate(region_pairs):
         if not isinstance(pair, (tuple, list)) or len(pair) != 2:
-            raise ValueError(f"region_pairs[{index}] must be an (address, size) pair")
-        addr, size = pair
-        if type(addr) is not int or not 0 <= addr <= 0xFFFFFFFF:
-            raise ValueError(f"region_pairs[{index}] address is outside 32-bit range")
+            raise ValueError(f'region_pairs[{index}] must be an (address, size) pair')
+        address, size = pair
+        if type(address) is not int or not 0 <= address <= 0xffffffff:
+            raise ValueError(f'region_pairs[{index}] address is outside 32-bit range')
         if type(size) is not int or size <= 0:
-            raise ValueError(f"region_pairs[{index}] size must be a positive integer")
-        if addr + size > 0x100000000:
-            raise ValueError(f"region_pairs[{index}] exceeds the 32-bit address space")
-
-    total_size = sum(size for _, size in region_pairs)
-    if total_size > MAX_TOTAL_DATA_SIZE:
-        raise ValueError(
-            f"Total region size {total_size} exceeds maximum {MAX_TOTAL_DATA_SIZE} bytes "
-            f"(512 KiB). Split the request into smaller ADDR:SIZE regions at the host level."
-        )
-    parts = []
-    for addr, size in region_pairs:
-        parts.append(f"0x{addr:08X}")
-        parts.append(str(size))
-    if period == 0:
-        parts.append("0")
-    else:
-        s = f"{period:.6f}".rstrip('0').rstrip('.')
-        if '.' not in s:
-            s += ".0"
-        parts.append(s)
-    command = f"cmd.dump_memory({', '.join(parts)})"
-    if len(command.encode("utf-8")) > MAX_REPL_COMMAND_BYTES:
-        raise ValueError(
-            f"dump-memory command is longer than the safe "
-            f"{MAX_REPL_COMMAND_BYTES}-byte Pika REPL line"
-        )
-    return command
+            raise ValueError(f'region_pairs[{index}] size must be a positive integer')
+        if address + size > 0x100000000:
+            raise ValueError(f'region_pairs[{index}] exceeds the 32-bit address space')
+    if sum(size for _, size in region_pairs) > MAX_TOTAL_DATA_SIZE:
+        raise ValueError(f'Total region size exceeds maximum {MAX_TOTAL_DATA_SIZE} bytes')
 
 
-def read_dump_memory_range_once(
-    bridge,
-    address: int,
-    size: int,
-    *,
-    timeout: float = 10.0,
-    poll_interval: float = 0.0005,
-) -> bytes:
-    """Read and validate a complete single-region OLD/B1 sample."""
-    if type(address) is not int or address < 0:
-        raise ValueError("dump-memory address must be a non-negative integer")
-    if type(size) is not int or size <= 0 or size > MAX_TOTAL_DATA_SIZE:
-        raise ValueError(
-            f"dump-memory size must be between 1 and {MAX_TOTAL_DATA_SIZE} bytes"
-        )
-    from mklink._types import DeviceState
+def read_dump_memory_range_once(bridge, address, size, *, timeout=10.0, poll_interval=0.0005):
+    """Read exact bytes using MUX memory commands; the API name is retained.
 
-    command = build_dump_mem_command([(address, size)], 0)
-    parser = DumpMemoryParser(region_sizes=[size], startup_command=command)
-    stop_command = build_dump_mem_command(
-        [(address, 1)], DUMP_MEMORY_STOP_PERIOD,
-    )
-    deadline = time.monotonic() + max(0.001, float(timeout))
-    blocks: dict[int, bytes] = {}
-    expected_blocks: int | None = None
-    raw_tail = bytearray()
-    _enter_dump_stream(bridge)
-    try:
-        # ``period=0`` emits one complete sample before the firmware returns
-        # to idle.  The previous request is stopped in the finally block with
-        # ``period=-1``; if a caller was interrupted, bridge.connect() also
-        # uses that state-machine stop value during stream recovery.
-        bridge._write_raw((command + "\n").encode("utf-8"))
-        while time.monotonic() < deadline:
-            raw = bridge.drain_stream_bytes(max_bytes=1024 * 1024)
-            if raw:
-                raw_tail.extend(raw[-4096:])
-            for frame in parser.feed(raw) if raw else ():
-                flags = int(frame.get("flags", 0))
-                if flags:
-                    raise DumpMemoryReadError(
-                        f"dump_memory returned error flags 0x{flags:04X}"
-                    )
-                regions = frame.get("regions", ())
-                payload = b"".join(
-                    data for region_index, data in regions if region_index == 0
-                )
-                if frame.get("format") == "OLD":
-                    # OLD frames are valid only for a single <=2048-byte
-                    # request.  Any such frame left over from another caller
-                    # must be discarded rather than returned as this range.
-                    if size > 2048:
-                        continue
-                    if len(payload) != size:
-                        continue
-                    return payload
-
-                total_size = int(frame.get("total_size", 0))
-                # A prior request may have already placed B1 frames in the
-                # USB queue.  The protocol has no address field, so total size
-                # is the only safe discriminator; discard mismatched samples
-                # until the current request's first block arrives.
-                if total_size != size:
-                    continue
-                block_size = int(frame.get("block_size", 0))
-                block_index = int(frame.get("block_index", -1))
-                block_count = int(frame.get("block_count", 0))
-                if (
-                    total_size != size
-                    or block_size <= 0
-                    or block_count <= 0
-                    or block_index < 0
-                    or block_index >= block_count
-                    or not bool(frame.get("block_crc_ok", False))
-                ):
-                    raise DumpMemoryReadError("dump_memory block metadata is invalid")
-                expected_blocks = block_count if expected_blocks is None else expected_blocks
-                if expected_blocks != block_count:
-                    raise DumpMemoryReadError("dump_memory block count changed")
-                expected_size = min(block_size, size - block_index * block_size)
-                if expected_size <= 0 or len(payload) != expected_size:
-                    raise DumpMemoryReadError(
-                        f"dump_memory block {block_index} returned {len(payload)} bytes"
-                    )
-                blocks[block_index] = payload
-                if len(blocks) == expected_blocks:
-                    result = b"".join(blocks[index] for index in range(expected_blocks))
-                    if len(result) != size:
-                        raise DumpMemoryReadError(
-                            f"dump_memory assembled {len(result)} bytes for {size}"
-                        )
-                    return result
-            if poll_interval:
-                time.sleep(poll_interval)
-        diagnostic = bytes(raw_tail).decode("utf-8", errors="replace").lower()
-        if (
-            "command not found" in diagnostic
-            or "attributeerror" in diagnostic
-            or "dump_memory fail" in diagnostic
-        ):
-            raise DumpMemoryUnsupported("cmd.dump_memory is not supported by the probe")
-        raise TimeoutError("timed out waiting for one complete dump-memory range")
-    finally:
-        _stop_dump_read(bridge, stop_command, parser)
-
-
-def _stop_dump_read(bridge, stop_command, parser=None):
-    # Use the current bridge contract; a delay cannot prove command readiness.
-    # Failed confirmation leaves the bridge in ERROR and must invalidate success.
-    prefix = parser.pending_bytes if parser is not None else b''
-    options = {'dump_prefix': prefix} if prefix else {}
-    if not bridge._stop_stream_and_sync((stop_command + "\n").encode("utf-8"), **options):
-        detail = getattr(bridge, 'last_stream_stop_error', None)
-        raise TimeoutError("dump-memory stop did not restore command mode" + (f": {detail}" if detail else ""))
+    poll_interval is retained for callers but MUX waits on response notification.
+    Large requests are sequential reads, not an atomic target snapshot.
+    """
+    return read_dump_memory_regions_once(bridge, [(address, size)], timeout=timeout,
+                                         poll_interval=poll_interval)[0]
 
 
 def read_dump_memory_regions_once(
@@ -839,109 +629,44 @@ class DumpSampleAssembler:
             return tuple(bytes(data) for data in assembled)
 
 
-def _read_dump_memory_regions_once_locked(
-    bridge,
-    region_pairs: list[tuple[int, int]],
-    *,
-    timeout: float = 10.0,
-    poll_interval: float = 0.0005,
-    cancelled=None,
-) -> tuple[bytes, ...]:
-    """Read one validated multi-region sample on an already-owned bridge.
+def _read_dump_memory_regions_once_locked(bridge, region_pairs, *, timeout=10.0,
+                                          poll_interval=0.0005, cancelled=None):
+    """Read exact ranges, rejecting active streams and never publishing partial data."""
+    import math
+    from contextlib import nullcontext
+    validate_dump_regions(region_pairs)
+    if type(timeout) not in (int, float) or not math.isfinite(timeout) or timeout <= 0:
+        raise ValueError('timeout must be positive and finite')
+    deadline = time.monotonic() + timeout
 
-    B1 blocks may split one region or cross a region boundary.  They are
-    collected by block index, checked for continuity, and only exposed after
-    every declared region has exact byte coverage.
-    """
-    if not isinstance(region_pairs, list) or not 1 <= len(region_pairs) <= MAX_REGIONS:
-        raise ValueError(f"dump-memory requires 1..{MAX_REGIONS} regions")
-    normalized: list[tuple[int, int]] = []
-    total_size = 0
-    for index, pair in enumerate(region_pairs):
-        if not isinstance(pair, (tuple, list)) or len(pair) != 2:
-            raise ValueError(f"dump-memory region {index} must be (address, size)")
-        address, size = pair
-        if (
-            type(address) is not int
-            or address < 0
-            or address > 0xFFFFFFFFFFFFFFFF
-            or type(size) is not int
-            or size <= 0
-            or address + size > 0x10000000000000000
-        ):
-            raise ValueError(f"dump-memory region {index} has an invalid range")
-        total_size += size
-        if total_size > MAX_TOTAL_DATA_SIZE:
-            raise ValueError(
-                f"dump-memory total size must not exceed {MAX_TOTAL_DATA_SIZE} bytes"
-            )
-        normalized.append((address, size))
+    def check():
+        check_capture_cancelled(cancelled)
+        if time.monotonic() >= deadline:
+            raise TimeoutError('timed out waiting for complete memory capture')
 
-    region_sizes = [size for _, size in normalized]
-    command = build_dump_mem_command(normalized, 0)
-    parser = DumpMemoryParser(region_sizes=region_sizes, startup_command=command)
-    stop_command = build_dump_mem_command([(normalized[0][0], 1)], -1)
-    deadline = time.monotonic() + max(0.001, float(timeout))
-    assembler = DumpSampleAssembler(region_sizes)
-    raw_tail = bytearray()
-    check_capture_cancelled(cancelled)
-    _enter_dump_stream(bridge)
-    try:
-        bridge._write_raw((command + "\n").encode("utf-8"))
-        while time.monotonic() < deadline:
-            check_capture_cancelled(cancelled)
-            raw = bridge.drain_stream_bytes(max_bytes=1024 * 1024)
-            if raw:
-                raw_tail.extend(raw[-4096:])
-            frames = parser.feed(raw) if raw else ()
-            if parser.crc_errors:
-                raise DumpMemoryReadError(
-                    "dump_memory frame CRC validation failed",
-                    gap_fact="crc_error_count",
-                    gap_count=parser.crc_errors,
-                )
-            for frame in frames:
-                check_capture_cancelled(cancelled)
-                payloads = assembler.feed(frame)
-                if payloads is not None:
-                    return payloads
-            if poll_interval:
-                time.sleep(poll_interval)
-
-        diagnostic = bytes(raw_tail).decode("utf-8", errors="replace").lower()
-        if (
-            "command not found" in diagnostic
-            or "attributeerror" in diagnostic
-            or "dump_memory fail" in diagnostic
-        ):
-            raise DumpMemoryUnsupported(
-                "cmd.dump_memory is not supported by the probe",
-                gap_fact="firmware_error_count",
-            )
-        if parser.crc_errors:
-            raise DumpMemoryReadError(
-                "dump_memory frame CRC validation failed",
-                gap_fact="crc_error_count",
-                gap_count=parser.crc_errors,
-            )
-        if assembler.incomplete_region_count:
-            raise DumpMemoryReadError(
-                "dump_memory region coverage is incomplete",
-                gap_fact="region_gap_count",
-                gap_count=assembler.incomplete_region_count,
-            )
-        missing = (
-            max(1, assembler.expected_blocks - len(assembler.blocks))
-            if assembler.expected_blocks is not None
-            else 1
-        )
-        raise DumpMemoryReadError(
-            "timed out waiting for a complete dump-memory sample",
-            gap_fact="missing_block_count",
-            gap_count=missing,
-        )
-    finally:
-        _stop_dump_read(bridge, stop_command, parser)
+    check()
+    # The real bridge shares this lock with MUX command/start/stop admission.
+    # Capture remains exclusive; it must not consume another sampler's events.
+    with getattr(bridge, '_cmd_lock', nullcontext()):
+        transport = _require_memory_mux(bridge)
+        with transport._commands:
+            if transport.sampling:
+                raise DumpMemoryBusyError('Memory capture requires idle RTT and SuperWatch')
+            result = []
+            chunk_size = 4096 if transport.capabilities & transport.BLOCK_READ_CAPABILITY else transport.transfer_quantum
+            for address, size in region_pairs:
+                data = bytearray()
+                for offset in range(0, size, chunk_size):
+                    check()
+                    length = min(chunk_size, size - offset)
+                    block = transport.read_memory(address + offset, length, deadline=deadline)
+                    check()
+                    if not isinstance(block, bytes) or len(block) != length:
+                        raise DumpMemoryReadError('Incomplete memory response', gap_fact='region_gap_count')
+                    data.extend(block)
+                result.append(bytes(data))
+            check()
+            return tuple(result)
 
 
 def validate_dump_capture(regions, sample_count=1, timeout=10.0, speed_profile=None):
@@ -970,8 +695,8 @@ def validate_dump_capture(regions, sample_count=1, timeout=10.0, speed_profile=N
         raise ValueError(f"one sample exceeds the {MAX_TOTAL_DATA_SIZE}-byte device limit")
     if total * sample_count > 512 * 1024:
         raise ValueError("capture exceeds the 524288-byte result limit")
-    # Validate the actual 32-bit Pika command before changing the debug clock.
-    build_dump_mem_command(pairs, 0)
+    # Validate wire addresses before changing the debug clock.
+    validate_dump_regions(pairs)
     return pairs
 
 
@@ -1029,11 +754,16 @@ def capture_memory(device, regions, *, sample_count=1, timeout=10.0, speed_profi
 MAX_DUMP_RESULT_JSON_BYTES = 16 * 1024 * 1024
 
 
-def validate_dump_stream(regions, period=0.0, frames=1, duration=2.0, speed_profile=None, *, fastest=False):
+def validate_sampling_protocol(protocol):
+    if protocol not in ('mux', 'dmpm'):
+        raise ValueError('protocol must be mux (default) or explicit dmpm')
+
+
+def validate_dump_stream(regions, period=0.0, frames=1, duration=2.0, speed_profile=None, *, fastest=False, protocol='mux'):
     """Validate the finite CLI capture contract before a bridge or clock is touched."""
     import math
-    if not isinstance(regions, list) or not 1 <= len(regions) <= MAX_SAFE_REPL_REGIONS:
-        raise ValueError('dump capture requires 1..15 regions (safe Pika API boundary)')
+    if not isinstance(regions, list) or not 1 <= len(regions) <= MAX_SAMPLING_REGIONS:
+        raise ValueError('dump capture requires 1..15 regions (MUX sampling capacity)')
     if type(frames) is not int or not 0 <= frames <= 100000:
         raise ValueError('frames must be between 0 and 100000')
     if any(type(value) not in (int, float) or not math.isfinite(value) for value in (period, duration)):
@@ -1051,7 +781,15 @@ def validate_dump_stream(regions, period=0.0, frames=1, duration=2.0, speed_prof
         if not isinstance(region, dict) or set(region) != {'address', 'size'}:
             raise ValueError('Each region requires exactly address and size')
         pairs.append((region['address'], region['size']))
-    build_dump_mem_command(pairs, period)
+    validate_sampling_protocol(protocol)
+    if protocol == 'mux':
+        from mklink.mux_watch import create_mux_capture_session
+        create_mux_capture_session(None, pairs, period, fastest=fastest)
+    else:
+        from mklink.legacy_dump import command_for
+        if fastest:
+            raise ValueError('DMPM has no acknowledged fastest mode; use a positive period')
+        command_for(pairs, period)
     return pairs
 
 
@@ -1061,7 +799,7 @@ def check_capture_cancelled(cancelled):
 
 
 def capture_dump_stream(device, regions, *, period=0.0, frames=1, duration=2.0, speed_profile=None,
-                        fastest=False, cancelled=None):
+                        fastest=False, protocol='mux', cancelled=None):
     """Collect complete samples using the existing session and shared assembler.
 
     First sample has a 2s startup allowance; duration starts at that sample.
@@ -1073,11 +811,11 @@ def capture_dump_stream(device, regions, *, period=0.0, frames=1, duration=2.0, 
     """
     import json
     from mklink.mux_watch import PackedWatchSample
-    pairs = validate_dump_stream(regions, period, frames, duration, speed_profile, fastest=fastest)
+    pairs = validate_dump_stream(regions, period, frames, duration, speed_profile, fastest=fastest, protocol=protocol)
     check_capture_cancelled(cancelled)
     if speed_profile is not None:
         device.set_debug_speed(speed_profile)
-    session = DumpMemoryStreamSession(device._bridge, pairs, period, allow_legacy_bulk=True, fastest=fastest)
+    session = DumpMemoryStreamSession(device._bridge, pairs, period, fastest=fastest, protocol=protocol)
     session.packed_frames = True
     assembler = DumpSampleAssembler([size for _, size in pairs], ordered=True)
     region_metadata = [{'address': f'0x{address:08X}', 'size': size} for address, size in pairs]
@@ -1096,8 +834,6 @@ def capture_dump_stream(device, regions, *, period=0.0, frames=1, duration=2.0, 
         while time.monotonic() < deadline:
             check_capture_cancelled(cancelled)
             batch = session.read_frames(max_bytes=1024 * 1024)
-            if session.parser.crc_errors:
-                raise DumpMemoryReadError('dump_memory frame CRC validation failed', gap_fact='crc_error_count')
             for frame in batch:
                 check_capture_cancelled(cancelled)
                 if isinstance(frame, PackedWatchSample):
@@ -1108,11 +844,13 @@ def capture_dump_stream(device, regions, *, period=0.0, frames=1, duration=2.0, 
                     if payloads is None:
                         continue
                     timestamp = assembler.timestamp_us
-                    sample = (timestamp, payloads)
+                    sample = (timestamp, payloads, frame.get('acquisition'))
                     assembler = DumpSampleAssembler([size for _, size in pairs], ordered=True)
                 if not samples:
                     deadline = time.monotonic() + (duration or 300)
                 result_bytes += sample_fixed_bytes + len(str(len(samples))) + len(str(timestamp))
+                if not isinstance(sample, PackedWatchSample) and sample[2] is not None:
+                    result_bytes += len(json.dumps({'acquisition': sample[2]}, separators=(',', ':'))) - 1
                 if result_bytes > MAX_DUMP_RESULT_JSON_BYTES:
                     raise ValueError('Dump result exceeds 16 MiB JSON limit; reduce frames, duration or regions')
                 samples.append(sample)
@@ -1136,6 +874,7 @@ def capture_dump_stream(device, regions, *, period=0.0, frames=1, duration=2.0, 
     for index, sample in enumerate(samples):
         check_capture_cancelled(cancelled)
         if isinstance(sample, PackedWatchSample):
+            acquisition = None
             timestamp = sample.timestamp_us
             cursor = sample.offset
             payloads = []
@@ -1143,209 +882,119 @@ def capture_dump_stream(device, regions, *, period=0.0, frames=1, duration=2.0, 
                 payloads.append(sample.payload[cursor:cursor+size])
                 cursor += size
         else:
-            timestamp, payloads = sample
+            timestamp, payloads, acquisition = sample
         samples[index] = {'sample_index': index, 'timestamp_us': timestamp,
                           'regions': [{**region, 'data_hex': data.hex()}
                                       for region, data in zip(region_metadata, payloads)]}
+        if acquisition is not None:
+            samples[index]['acquisition'] = acquisition
     return {'sample_count': len(samples), 'region_count': len(pairs),
             'total_bytes': sum(size for _, size in pairs) * len(samples), 'samples': samples,
-            'stopped_by': stopped_by, 'incomplete_tail': bool(assembler.blocks or assembler.incomplete_region_count),
-            'stats': stats, 'timing': timing}
+            'stopped_by': stopped_by, 'incomplete_tail': bool(assembler.blocks or assembler.incomplete_region_count
+                                                            or stats.get('incomplete_samples', 0)),
+            'stats': stats, 'timing': timing, 'protocol': protocol}
 
 
 class DumpMemoryStreamSession:
-    """Own one MKLink ``cmd.dump_memory`` binary-stream lifecycle.
-
-    Protocol parsing stays in :class:`DumpMemoryParser`; this class only
-    coordinates bridge mode, command delivery, draining, and explicit stop.
-    """
+    """Default to MUX; DMPM requires explicit selection before any I/O."""
 
     packed_frames = False
 
-    def __init__(
-        self,
-        bridge,
-        region_pairs: list[tuple[int, int]],
-        period: float,
-        *,
-        write_ranges: tuple[tuple[int, int], ...] = ARM_WRITE_RANGES,
-        allow_legacy_bulk: bool = False,
-        fastest: bool = False,
-    ):
-        if not region_pairs:
-            raise ValueError("dump-memory requires at least one region")
-        if len(region_pairs) > MAX_SAFE_REPL_REGIONS:
-            raise ValueError(
-                f"too many regions for the safe text API: {len(region_pairs)} > "
-                f"{MAX_SAFE_REPL_REGIONS}"
-            )
+    def __init__(self, bridge, region_pairs, period, *, write_ranges=ARM_WRITE_RANGES, fastest=False, protocol='mux'):
         import math
         if not math.isfinite(period) or period < 0:
-            raise ValueError("dump period must be nonnegative and finite")
-        if type(fastest) is not bool or (fastest and period != 0):
-            raise ValueError("Fastest sampling requires fastest=True and period=0")
+            raise ValueError('dump period must be nonnegative and finite')
         self.bridge = bridge
         self.region_pairs = list(region_pairs)
         self.period = float(period)
         self.write_ranges = tuple(write_ranges)
-        self.allow_legacy_bulk = allow_legacy_bulk
         self.fastest = fastest
-        self.parser = DumpMemoryParser(region_sizes=[size for _, size in region_pairs])
+        validate_sampling_protocol(protocol)
+        self.protocol = protocol
+        self._legacy = None
+        validate_dump_regions(self.region_pairs)
+        if type(fastest) is not bool or (fastest and period != 0):
+            raise ValueError('Fastest sampling requires fastest=True and period=0')
+        if protocol == 'dmpm':
+            from mklink.legacy_dump import LegacyDumpSession
+            if fastest:
+                raise ValueError('DMPM has no acknowledged fastest mode; use a positive period')
+            self._legacy = LegacyDumpSession(bridge, self.region_pairs, self.period)
+        # Capacity validation is repeated at start before any connection I/O.
         self.started = False
         self._mux_watch = None
         self._mux_dropped_bytes_start = 0
-        self._write_pending = None
-        self._protocol_frames = 0
-        self._complete_samples = 0
-        self._firmware_flagged_frames = 0
-        self._firmware_sample_drop_flags = 0
 
-    def start(self) -> None:
+    def start(self):
         if self.started:
             return
-        capability = getattr(self.bridge, 'supports_multiplex', None)
-        if callable(capability) and capability() is True:
-            from mklink.mux_watch import MuxWatchSession, MuxWatchCapacityError
+        if self._legacy is not None:
             try:
-                watch = MuxWatchSession(None, self.region_pairs, self.period, fastest=self.fastest)
-            except MuxWatchCapacityError:
-                # Only exclusive finite bulk callers opt in. This is selection
-                # before starting IO, never recovery from a failed MUX request.
-                if self.fastest or not self.allow_legacy_bulk:
-                    raise
-            else:
-                watch.transport = self.bridge.enable_multiplex()
-                self._mux_watch = watch
-                self._mux_dropped_bytes_start = watch.transport.stats()['watch_dropped_bytes']
-                watch.start()
-                self.started = True
-                return
-
-        if self.fastest:
-            raise RuntimeError('Fastest sampling requires WATCH_TIMING=2 multiplex firmware; legacy dump has no equivalent mode')
-        command = build_dump_mem_command(self.region_pairs, self.period)
-        self.parser = DumpMemoryParser(
-            region_sizes=[size for _, size in self.region_pairs], startup_command=command,
-        )
-        _enter_dump_stream(self.bridge)
-        try:
-            self.bridge._write_raw((command + "\n").encode("utf-8"))
-        except Exception:
-            self.bridge._exit_stream()
-            raise
+                self._legacy.start()
+            finally:
+                self.started = self._legacy.started
+            return
+        from mklink.mux_watch import create_mux_capture_session
+        watch = create_mux_capture_session(None, self.region_pairs, self.period, fastest=self.fastest)
+        supported = getattr(self.bridge, 'supports_multiplex', None)
+        if not callable(supported) or supported() is not True:
+            raise DumpMemoryUnsupported('SuperWatch requires MUX sampling firmware; update the probe firmware and host together')
+        watch.transport = self.bridge.enable_multiplex()
+        if watch.transport is None:
+            raise DumpMemoryUnsupported('SuperWatch requires MUX sampling firmware; update the probe firmware and host together')
+        self._mux_watch = watch
+        self._mux_drop_key = 'bulk_dropped_bytes' if getattr(watch, 'EVENT', None) == 0x42 else 'watch_dropped_bytes'
+        self._mux_dropped_bytes_start = watch.transport.stats()[self._mux_drop_key]
+        watch.start()
         self.started = True
 
     @property
-    def timing(self) -> dict | None:
-        """Accepted wire timing, not a measurement or sustainable-rate guarantee."""
+    def timing(self):
+        """Accepted wire timing, not a measured sampling-rate guarantee."""
+        if self._legacy is not None:
+            return self._legacy.timing
         value = self._mux_watch.timing if self._mux_watch is not None else None
         return dict(value) if value is not None else None
 
-    def request_write(self, address: int, data: bytes, future: Future) -> None:
-        """Called by the sole stream owner; ACKs arrive through read_frames()."""
-        if not self.started or self._write_pending is not None:
-            raise RuntimeError("No idle dump write slot")
+    def request_write(self, address, data, future):
+        if not self.started:
+            raise RuntimeError('Sampling stream is not started')
+        if self._legacy is not None:
+            raise RuntimeError('Live variable writes require MUX; DMPM compatibility capture is read-only')
         if len(data) not in (1, 2, 4, 8) or not any(
-            start <= address and address + len(data) <= end
-            for start, end in self.write_ranges
+            start <= address and address + len(data) <= end for start, end in self.write_ranges
         ):
-            raise ValueError("Live writes require supported target RAM scalars of 1/2/4/8 bytes")
-        if self._mux_watch is not None:
-            self._mux_watch.write(address, data, future)
-            return
-        request_id = secrets.randbits(32) or 1
-        packet = struct.pack('<4sIIB3x8s', b'SW01', request_id, address, len(data), data)
-        packet += struct.pack('<I', binascii.crc32(packet) & 0xffffffff)
-        self._write_pending = (request_id, address, data, future)
-        self.bridge._write_raw(b'\x1e' + packet.hex().encode('ascii') + b'\n')
+            raise ValueError('Live writes require supported target RAM scalars of 1/2/4/8 bytes')
+        self._mux_watch.write(address, data, future)
 
-    def _write_ack(self, frame: dict) -> None:
-        pending = self._write_pending
-        if pending is None or frame['request_id'] != pending[0]:
-            return
-        self._write_pending = None
-        _, address, data, future = pending
-        if frame['address'] != address or frame['size'] != len(data):
-            future.set_exception(RuntimeError("Live write ACK address/size mismatch; result unknown"))
-        # SW01 firmware statuses 3/5 occur only AFTER a successful SWD write:
-        # its built-in readback failed/differed. Variable writes use the write
-        # acknowledgement only. These are NOT MUX command status codes.
-        elif frame['status'] not in (0, 3, 5):
-            future.set_exception(RuntimeError(f"Live write failed (status={frame['status']})"))
-        else:
-            future.set_result({"data": data, "acknowledged": True, "verified": False,
-                               "timestamp_us": frame['timestamp_us'],
-                               "request_id": frame['request_id'], "mode": "live"})
-
-    def read_frames(self, max_bytes: int | None = None) -> list[dict]:
+    def read_frames(self, max_bytes=None):
         if not self.started:
-            raise RuntimeError("dump-memory stream is not started")
-        if self._mux_watch is not None:
-            if self.packed_frames:
-                return self._mux_watch.read_frames(packed=True)
-            return self._mux_watch.read_frames()
-        raw = self.bridge.drain_stream_bytes(max_bytes=max_bytes)
-        frames = self.parser.feed(raw) if raw else []
-        samples = []
-        for frame in frames:
-            if frame.get("format") == "WRITE_ACK":
-                self._write_ack(frame)
-                continue
-            samples.append(frame)
-            self._protocol_frames += 1
-            flags = int(frame.get("flags", 0))
-            if flags:
-                self._firmware_flagged_frames += 1
-            if flags & FLAG_SAMPLE_DROPPED:
-                self._firmware_sample_drop_flags += 1
-            if (
-                frame.get("format") != "B1"
-                or frame.get("block_index", 0) + 1 >= frame.get("block_count", 1)
-            ):
-                self._complete_samples += 1
-        return samples
+            raise RuntimeError('dump-memory stream is not started')
+        if self._legacy is not None:
+            return self._legacy.read_frames(max_bytes)
+        return self._mux_watch.read_frames(packed=self.packed_frames)
 
-    def stop(self) -> None:
-        if self._write_pending is not None:
-            future = self._write_pending[3]
-            self._write_pending = None
-            if not future.done():
-                future.set_exception(RuntimeError("Stream stopped before write acknowledgement; result unknown"))
+    def stop(self):
         if not self.started:
             return
-        if self._mux_watch is not None:
-            try:
-                self._mux_watch.stop()
-            finally:
-                self.started = False
-            return
-        command = build_dump_mem_command(
-            self.region_pairs, DUMP_MEMORY_STOP_PERIOD,
-        )
         try:
-            _stop_dump_read(self.bridge, command, self.parser)
+            (self._legacy if self._legacy is not None else self._mux_watch).stop()
         finally:
             self.started = False
 
     @property
-    def stats(self) -> dict[str, int]:
-        if self._mux_watch is not None:
-            return {'protocol_frames': self._mux_watch.samples, 'complete_samples': self._mux_watch.samples,
-                    'parser_dropped_bytes': (self._mux_watch.transport.stats()['watch_dropped_bytes']
-                                             - self._mux_dropped_bytes_start),
-                    'parser_dropped_frames': self._mux_watch.gaps,
-                    'firmware_read_errors': self._mux_watch.read_errors,
-                    'parser_crc_errors': 0, 'firmware_flagged_frames': 0, 'firmware_sample_drop_flags': 0}
-        return {
-            "protocol_frames": self._protocol_frames,
-            "complete_samples": self._complete_samples,
-            "parser_dropped_bytes": self.parser.dropped_bytes,
-            "startup_control_bytes": self.parser.startup_control_bytes,
-            "parser_dropped_frames": self.parser.dropped_frames,
-            "parser_crc_errors": self.parser.crc_errors,
-            "firmware_flagged_frames": self._firmware_flagged_frames,
-            "firmware_sample_drop_flags": self._firmware_sample_drop_flags,
-        }
+    def stats(self):
+        if self._legacy is not None:
+            return self._legacy.stats
+        watch = self._mux_watch
+        return {'protocol_frames': watch.samples if watch else 0,
+                'complete_samples': watch.samples if watch else 0,
+                'parser_dropped_bytes': (watch.transport.stats()[self._mux_drop_key]
+                                         - self._mux_dropped_bytes_start) if watch else 0,
+                'parser_dropped_frames': watch.gaps if watch else 0,
+                'firmware_read_errors': watch.read_errors if watch else 0,
+                'incomplete_samples': int(bool(watch and watch._pending)),
+                'parser_crc_errors': 0, 'firmware_flagged_frames': 0, 'firmware_sample_drop_flags': 0}
 
 
 def decode_frame_to_points(

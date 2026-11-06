@@ -49,6 +49,26 @@ function floats(...values: number[]): Uint8Array {
   return new Uint8Array(Float32Array.from(values).buffer)
 }
 
+function timestampedSamples(times: number[], values: number[]): Uint8Array {
+  const payload = new Uint8Array(times.length * 8 + values.length * 4)
+  payload.set(new Uint8Array(Float64Array.from(times).buffer))
+  payload.set(floats(...values), times.length * 8)
+  return payload
+}
+
+function continuitySamples(first: bigint, times: number[], markers: Array<[number, number]> = []): Uint8Array {
+  const data = timestampedSamples(times, times.map((_, index) => index % 2))
+  const bytes = new Uint8Array(16 + data.length + markers.length * 8)
+  const view = new DataView(bytes.buffer)
+  view.setBigUint64(0, first, true); view.setUint32(8, markers.length, true)
+  bytes.set(data, 16)
+  markers.forEach(([index, reason], n) => {
+    view.setUint32(16 + data.length + n * 8, index, true)
+    view.setUint32(20 + data.length + n * 8, reason, true)
+  })
+  return bytes
+}
+
 function rttLines(...lines: Array<{ timestampNs: bigint; level: number; text: string }>): Uint8Array {
   const encoder = new TextEncoder()
   const encoded = lines.map(line => ({ ...line, bytes: encoder.encode(line.text) }))
@@ -120,6 +140,64 @@ function setup() {
 }
 
 describe('StreamDecoder worker controller', () => {
+  it('identifies subscriber data loss by ordinal, not missing metadata sequence numbers', () => {
+    const { decoder, messages } = setup()
+    decoder.handle({ type: 'configure', capacity: 20, channelCount: 1 })
+    const send = (seq: number, ordinal: bigint, times: number[], markers: Array<[number, number]> = []) => decoder.handle({
+      type: 'frame', buffer: frame(BigInt(seq), times.length, continuitySamples(ordinal, times, markers), StreamType.SUPERWATCH, 1n, 4), connectionGeneration: 1, frameTicket: seq,
+    })
+    decoder.handle({ type: 'frame', buffer: frame(1n, 0, new TextEncoder().encode(JSON.stringify({version: 1, channels: [{name: 'A'}]})), StreamType.SUPERWATCH, 1n, 2), connectionGeneration: 1, frameTicket: 1 })
+    send(2, 0n, [0, .007])
+    send(4, 2n, [1, 1.007]) // Missing metadata frame, samples continuous.
+    send(6, 8n, [2, 2.007]) // Four published sample ordinals are absent.
+    send(7, 10n, [3, 3.007, 3.014], [[1, 1]]) // Interior read failure.
+    decoder.handle({ type: 'visible-range', requestId: 1, start: 0, end: 4, pixelWidth: 100, gapThresholdMs: .020 })
+    expect(messages.at(-1)).toMatchObject({ sampleTiming: { gapCount: 2 } })
+    send(8, 13n, [4, 4.007], [[2, 1]]) // Invalid marker cannot consume the ordinal.
+    expect(messages.at(-1)).toMatchObject({ type: 'error' })
+    send(9, 13n, [4, 4.007])
+    expect(messages.filter(m => m.type === 'error')).toHaveLength(1)
+  })
+  it('keeps cross-frame gaps and frozen timing separate from transport loss and later data', () => {
+    const { decoder, messages, transfers } = setup()
+    decoder.handle({ type: 'configure', capacity: 8, channelCount: 1 })
+    const send = (seq: number, times: number[]) => decoder.handle({ type: 'frame',
+      buffer: frame(BigInt(seq), times.length, continuitySamples(BigInt((seq-2)*2), times, seq === 3 ? [[0, 1]] : []), StreamType.SUPERWATCH, 1n, 4),
+      connectionGeneration: 1, frameTicket: seq })
+    decoder.handle({ type: 'frame', buffer: frame(1n, 0, new TextEncoder().encode(JSON.stringify({version: 1, channels: [{name: 'GPIO'}]})), StreamType.SUPERWATCH, 1n, 2), connectionGeneration: 1, frameTicket: 1 })
+    send(2, [0, .007])
+    send(3, [.053, .060])
+    decoder.handle({ type: 'waveform-freeze', frozen: true })
+    send(4, [1, 2])
+    decoder.handle({ type: 'visible-range', requestId: 1, start: 0, end: .060, pixelWidth: 8, gapThresholdMs: .020 })
+    const selected = messages.at(-1)
+    if (selected?.type !== 'render-envelope') throw new Error('missing envelope')
+    expect(selected.sampleTiming).toMatchObject({ gapCount: 1, intervalCount: 3 })
+    expect(selected.sampleTiming?.maxIntervalMs).toBeCloseTo(.046, 9)
+    expect(new Uint32Array(selected.sampleTiming!.segmentIds)).toEqual(Uint32Array.of(0, 0, 1, 1))
+    expect(transfers.at(-1)).toContain(selected.sampleTiming!.columns)
+    expect(transfers.at(-1)).toContain(selected.sampleTiming!.segmentIds)
+    const telemetry = messages.filter(x => x.type === 'telemetry').at(-1)
+    expect(telemetry).toMatchObject({ transportDroppedBatches: 0, backendDroppedItems: 0 })
+    decoder.handle({ type: 'waveform-freeze', frozen: false })
+    decoder.handle({ type: 'visible-range', requestId: 2, start: 0, end: 2, pixelWidth: 8, gapThresholdMs: .020 })
+    expect(messages.at(-1)).toMatchObject({ sampleTiming: { gapCount: 1, maxIntervalMs: 1 } })
+    decoder.handle({ type: 'reset' })
+    decoder.handle({ type: 'visible-range', requestId: 3, start: 0, end: 2, pixelWidth: 8, gapThresholdMs: .020 })
+    expect(messages.at(-1)).not.toHaveProperty('sampleTiming')
+  })
+
+  it('never reports estimated legacy timestamps as observed sample gaps', () => {
+    const { decoder, messages } = setup()
+    decoder.handle({ type: 'configure', capacity: 8, channelCount: 1 })
+    decoder.handle({ type: 'frame', buffer: frame(1n, 0, new TextEncoder().encode(JSON.stringify({version: 1, channels: [{name: 'A'}]})), StreamType.SUPERWATCH, 1n, 2), connectionGeneration: 1, frameTicket: 1 })
+    decoder.handle({ type: 'frame', buffer: frame(2n, 2, floats(1,2), StreamType.SUPERWATCH, 1_000_000n, 1), connectionGeneration: 1, frameTicket: 2 })
+    decoder.handle({ type: 'visible-range', requestId: 1, start: 0, end: 2, pixelWidth: 8, gapThresholdMs: .020 })
+    expect(messages.at(-1)).not.toHaveProperty('sampleTiming')
+    decoder.handle({ type: 'visible-range', requestId: 2, start: 0, end: 2, pixelWidth: 8, gapThresholdMs: NaN })
+    expect(messages.at(-1)).toMatchObject({ type: 'error', code: 'INVALID_RANGE' })
+  })
+
   it('filters serial ports before decoding without treating other ports as loss', () => {
     const { decoder, messages } = setup()
     decoder.handle({ type: 'configure', capacity: 100, channelCount: 1, decoderMode: 'serial-terminal' })

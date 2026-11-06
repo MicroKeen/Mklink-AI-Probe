@@ -14,7 +14,7 @@ import uuid
 class SuperWatchRecorder:
     # Each part stays within the offline player's memory limits. A slow disk
     # fails explicitly instead of silently discarding the oldest samples.
-    def __init__(self, directory, *, max_values=1_000_000, queue_bytes=32 * 1024 * 1024):
+    def __init__(self, directory, *, max_values=1_000_000, queue_bytes=32 * 1024 * 1024, _local=False):
         directory = Path(directory).expanduser()
         if not directory.is_absolute() or not directory.is_dir():
             raise ValueError('Choose an existing absolute directory on the backend computer')
@@ -28,8 +28,14 @@ class SuperWatchRecorder:
         self._status = dict(state='recording', active=True, directory=str(directory), path='',
                             parts=0, samples=0, bytes=0, error='', started_at=time.time())
         self._file = None
-        self._open_part()
-        self._thread = threading.Thread(target=self._run, name='superwatch-recording', daemon=True)
+        if _local:
+            self._open_part()
+        else:
+            from mklink._recording_worker import RecordingWorker
+            self._worker = RecordingWorker(directory, max_values)
+            self._status = self._worker.status
+        self._thread = threading.Thread(target=self._run if _local else self._forward,
+                                        name='superwatch-recording', daemon=True)
         self._thread.start()
 
     def _open_part(self):
@@ -41,8 +47,8 @@ class SuperWatchRecorder:
         with self._condition:
             return dict(self._status)
 
-    def append(self, values, times, channels):
-        size = len(values) * 4 + len(times) * 8
+    def append(self, values, times, channels, *, boundaries=()):
+        size = len(values) * 4 + len(times) * 8 + len(boundaries) * 8
         with self._condition:
             if self._closing or self._status['state'] != 'recording':
                 return
@@ -51,7 +57,7 @@ class SuperWatchRecorder:
                 self._closing = True
             else:
                 # Manager transfers these arrays and never modifies them again.
-                self._queue.append((values, times, tuple(channel['name'] for channel in channels), size))
+                self._queue.append((values, times, tuple(channel['name'] for channel in channels), size, dict(boundaries)))
                 self._queued_bytes += size
             self._condition.notify()
 
@@ -69,10 +75,8 @@ class SuperWatchRecorder:
             raise TimeoutError('Recording is still draining; check status before starting another recording')
         return self.status()
 
-    def _run(self):
-        part_values = 0
-        part_bytes = 0
-        previous_names = None
+    def _forward(self):
+        """Keep JSON encoding off the acquisition process's Python lock."""
         error = ''
         try:
             while True:
@@ -81,7 +85,45 @@ class SuperWatchRecorder:
                         self._condition.wait()
                     if not self._queue:
                         break
-                    values, times, names, size = self._queue.popleft()
+                    values, times, names, size, boundaries = self._queue.popleft()
+                result = self._worker.append(values, times, names, boundaries)
+                with self._condition:
+                    for key in ('path', 'parts', 'samples', 'bytes'):
+                        self._status[key] = result[key]
+                    self._queued_bytes -= size
+                if result['state'] == 'failed':
+                    raise RuntimeError(result['error'])
+            result = self._worker.finish()
+            if result['state'] != 'completed':
+                raise RuntimeError(result['error'] or 'Recording did not complete')
+        except Exception as exc:
+            error = str(exc) or type(exc).__name__
+        finally:
+            try:
+                self._worker.close()
+            except Exception as exc:
+                error = error or str(exc)
+            with self._condition:
+                error = error or self._status['error']
+                self._queue.clear()
+                self._status.update(active=False, state='failed' if error else 'completed',
+                                    error=error, stopped_at=time.time())
+
+    def _run(self):
+        part_values = 0
+        part_bytes = 0
+        previous_names = None
+        error = ''
+        # Reuse the encoder across samples; TextIO already buffers file writes.
+        encode = json.JSONEncoder(ensure_ascii=False, separators=(',', ':'), allow_nan=False).encode
+        try:
+            while True:
+                with self._condition:
+                    while not self._queue and not self._closing:
+                        self._condition.wait()
+                    if not self._queue:
+                        break
+                    values, times, names, size, boundaries = self._queue.popleft()
                 width = len(names)
                 batch_bytes = 0
                 if not width or len(values) != len(times) * width:
@@ -92,7 +134,12 @@ class SuperWatchRecorder:
                     if not point or not math.isfinite(timestamp):
                         raise ValueError('Recording contains an invalid sample')
                     point['_t'] = timestamp / 1000
-                    line = json.dumps(point, ensure_ascii=False, separators=(',', ':'), allow_nan=False) + '\n'
+                    line = encode(point) + '\n'
+                    if row in boundaries:
+                        # Separate metadata cannot overwrite a target variable
+                        # with a reserved-looking name such as _break_before.
+                        line = json.dumps({'event': 'discontinuity', 'reason': boundaries[row]},
+                                          separators=(',', ':')) + '\n' + line
                     length = len(line.encode('utf-8'))
                     batch_bytes += length
                     if part_values and (part_values + width > self._max_values or
@@ -110,6 +157,7 @@ class SuperWatchRecorder:
                     self._queued_bytes -= size
                     self._status['samples'] += len(times)
                     self._status['bytes'] += batch_bytes
+                    self._condition.notify_all()
         except Exception as exc:
             error = str(exc) or type(exc).__name__
         finally:
@@ -122,3 +170,4 @@ class SuperWatchRecorder:
                 self._queue.clear()
                 self._status.update(active=False, state='failed' if error else 'completed',
                                     error=error, stopped_at=time.time())
+                self._condition.notify_all()

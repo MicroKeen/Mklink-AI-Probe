@@ -16,25 +16,21 @@ def run_frames(monkeypatch,frames,size):
     return dev,session
 
 
-def test_b1_uses_first_block_time_and_counts_only_complete_samples(monkeypatch):
-    frames=[]
-    for ts in (0,100000,200000,300000,400000):
-        for block in (0,1):
-            frames.append({'flags':0,'timestamp_us':ts+block*1000,'regions':[(0,b'x'*2048)],
-                           'total_size':4096,'block_size':2048,'block_crc_ok':True,'format':'B1','block_index':block,'block_count':2})
-    dev,session=run_frames(monkeypatch,frames,4096)
-    r=measure(dev,[(0x90000,4096)],duration=1)
-    assert r['samples']==3 and r['sample_hz']==10
-    assert r['payload_bytes_per_second']==40960
+def test_current_single_frames_keep_device_time_and_sample_count(monkeypatch):
+    frames = [{'format':'mux','flags':0,'timestamp_us':t,'regions':[(0,b'x'*128)]}
+              for t in (0,100000,200000,300000,400000)]
+    dev, session = run_frames(monkeypatch, frames, 128)
+    result = measure(dev, [(0x90000,128)], duration=1)
+    assert result['samples'] == 3 and result['sample_hz'] == 10
+    assert result['payload_bytes_per_second'] == 1280
     session.stop.assert_called_once()
 
 
-def test_missing_b1_block_stops_and_fails(monkeypatch):
-    frames=[{'flags':0,'timestamp_us':0,'regions':[(0,b'x'*2048)],
-             'total_size':4096,'block_size':2048,'block_crc_ok':True,'format':'B1','block_index':1,'block_count':2}]
-    dev,session=run_frames(monkeypatch,frames,4096)
-    with pytest.raises(RuntimeError,match='sequence'): measure(dev,[(0x90000,4096)],duration=1)
-    session.stop.assert_called_once()
+def test_oversized_continuous_sample_rejected_before_io():
+    dev = Mock()
+    with pytest.raises(ValueError, match='4096 bytes'):
+        measure(dev, [(0x90000,4097)], duration=1)
+    dev._require_connected.assert_not_called()
 
 
 def test_packed_measurement_preserves_cross_batch_timestamp_gaps(monkeypatch):

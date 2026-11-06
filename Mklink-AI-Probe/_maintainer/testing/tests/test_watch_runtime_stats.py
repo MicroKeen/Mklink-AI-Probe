@@ -45,13 +45,18 @@ def test_stats_follow_confirmed_capture_stop_without_reset_or_unit_conversion(ba
     transport, calls = stats_peer(batch, monkeypatch, timing_v2=timing_v2)
     feed_samples(monkeypatch, transport, 10000)
     client = shared_client(batch, monkeypatch)
-    capture = client.call('capture_dump', {'regions': REGIONS, 'period': 1e-6,
-                                         'frames': 10000, 'duration': 0})
-    assert capture['sample_count'] == 10000
+    if timing_v2:
+        capture = client.call('capture_dump', {'regions': REGIONS, 'period': 1e-6,
+                                             'frames': 10000, 'duration': 0})
+        assert capture['sample_count'] == 10000
+    else:
+        with pytest.raises(RuntimeErrorResponse, match='0x618'):
+            client.call('capture_dump', {'regions': REGIONS, 'period': 1e-6,
+                                        'frames': 10000, 'duration': 0})
     batch[2]._bridge.enable_multiplex = Mock(side_effect=AssertionError('must not reopen'))
     result = client.call('watch_runtime_stats')
     assert result == dict(zip(('batches', 'collected', 'collect_cycles', 'pack_cycles'), COUNTERS))
-    assert [op for op, _ in calls if op >= 0x10] == [0x32, 0x31, 0x14]
+    assert [op for op, _ in calls if op >= 0x10] == ([0x32, 0x31, 0x14] if timing_v2 else [0x14])
     assert transport.ready and not transport.sampling
     batch[2]._bridge.enable_multiplex.assert_not_called()
     assert not batch[1]['resource_manager'].get_status() and not batch[3].operation_lock.locked()

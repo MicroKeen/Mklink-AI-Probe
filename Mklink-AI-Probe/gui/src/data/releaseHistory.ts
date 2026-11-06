@@ -9,6 +9,23 @@ export interface ReleaseHistoryEntry {
 
 export const releaseHistory: ReleaseHistoryEntry[] = [
   {
+    version: '0.4.3', date: '2026-11-04',
+    summary: '优化读取速度与波形显示',
+    summaryEn: 'Improve read speed and waveform display',
+    changes: [
+      '降低内存读取延迟，改善高速采集稳定性。',
+      'SuperWatch 最低采样间隔降至 1 µs，按实际采样时间统计速率，仅标记已确认的数据缺失。',
+      '修复窄变量读取与波形回放，保留原始采样值和时间戳。',
+      '实时采样需配套固件，旧记录可继续回放。',
+    ],
+    changesEn: [
+      'Reduce memory-read latency and improve high-speed capture stability.',
+      'Allow SuperWatch intervals down to 1 µs, show rates from sample timestamps and mark confirmed data loss.',
+      'Fix narrow-variable reads and waveform replay while preserving original values and timestamps.',
+      'Live sampling requires compatible firmware; existing recordings remain playable.',
+    ],
+  },
+  {
     version: '0.4.2', date: '2026-10-31',
     summary: '完善 HPM 调试、采集恢复与界面体验',
     summaryEn: 'Improve HPM debugging, capture recovery and the interface',

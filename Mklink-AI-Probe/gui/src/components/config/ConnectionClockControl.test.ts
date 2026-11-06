@@ -88,6 +88,19 @@ describe('shared connection clock', () => {
     expect(wrapper.find('[data-testid="clock-migration"]').exists()).toBe(false)
   })
 
+  it('applies an advertised 4 MHz choice exactly without requesting migration', async () => {
+    Object.assign(data, { clocks_hz: [...clocks, 4000000].sort((a, b) => a - b) })
+    const wrapper = await setup()
+    expect(wrapper.get('option[value="4000000"]').attributes('disabled')).toBeUndefined()
+    await apply(wrapper, 4000000)
+    const posts = requests.mock.calls.filter(([, init]) => init?.method === 'POST')
+    expect(posts).toHaveLength(1)
+    expect(JSON.parse(posts[0][1].body)).toEqual({ interface: 'SWD', clock_hz: 4000000, save: true })
+    expect(wrapper.get('[data-testid="connection-clock-state"]').text()).toBe('已应用：4 MHz')
+    expect(wrapper.find('[data-testid="clock-migration"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('已迁移到 2 MHz')
+  })
+
   it('does not describe a configured clock as applied or retry it automatically', async () => {
     post = async body => {
       data = { ...data, configured_hz: body.clock_hz, requested_hz: body.clock_hz, applied_hz: null, apply_state: 'configured' }

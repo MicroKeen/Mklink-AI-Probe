@@ -250,3 +250,118 @@ def test_closed_state_is_not_published_until_worker_reap_finishes(monkeypatch):
         port.close()
     assert not thread.is_alive() and len(failures) == 1
     assert not port.is_open and port._process.poll() is not None
+
+
+def test_blocked_reader_wakes_on_data_and_on_close():
+    import threading
+    port = IsolatedSerial('loop://', 115200, timeout=10)
+    result = []
+    entered = threading.Event()
+    def receive():
+        entered.set()
+        try:
+            result.append(collect(port, 4))
+        except serial.SerialException:
+            result.append('closed')
+    try:
+        for expected in (b'wake', 'closed'):
+            entered.clear()
+            thread = threading.Thread(target=receive)
+            thread.start()
+            assert entered.wait(1)
+            if expected == 'closed':
+                port.close()
+            else:
+                port.write(expected)
+            thread.join(2)
+            assert not thread.is_alive() and result[-1] == expected
+    finally:
+        port.close()
+    assert not port._data_inbox._thread.is_alive()
+    assert not port._control_inbox._thread.is_alive()
+
+
+def test_pipe_backpressure_does_not_block_control_or_shutdown(monkeypatch):
+    import sys
+    from mklink import _isolated_serial
+    script = '''
+from mklink import _serial_worker as worker
+class Port:
+    in_waiting = 4096
+    def read(self, size): return b'x' * 4096
+    def write(self, data): return len(data)
+    def cancel_read(self): pass
+    def close(self): pass
+worker.serial.serial_for_url = lambda *a, **kw: Port()
+worker.main(['test', '115200'])
+'''
+    monkeypatch.setattr(_isolated_serial, '_worker_command', lambda *a: [sys.executable, '-c', script])
+    port = IsolatedSerial('test', 115200)
+    try:
+        deadline = time.monotonic() + 3
+        while len(port._data_inbox._buffer) < 1048576:
+            assert time.monotonic() < deadline
+            time.sleep(.01)
+        assert port.write(b'control while full') == 18
+        assert len(port._data_inbox._buffer) == 1048576
+    finally:
+        port.close()
+    assert not port._data_inbox._thread.is_alive()
+    assert not port._control_inbox._thread.is_alive()
+
+
+def test_split_old_frame_survives_reset_framing_but_not_data(monkeypatch):
+    import sys
+    from mklink import _isolated_serial
+    script = '''
+import sys, json, struct
+def reply(value):
+    print(json.dumps(value), file=sys.stderr, flush=True)
+old = struct.pack('<cII', b'D', 0, 3) + b'old'
+reply({'ready': True})
+for line in sys.stdin:
+    op = json.loads(line)['op']
+    if op == 'write':
+        sys.stdout.buffer.write(old[:7]); sys.stdout.buffer.flush()
+        reply({'result': 1})
+    elif op == 'reset_input_buffer':
+        reply({'epoch': 1})
+        sys.stdout.buffer.write(old[7:] + struct.pack('<cII', b'D', 1, 3) + b'new')
+        sys.stdout.buffer.flush()
+    elif op == 'close':
+        reply({'result': None}); break
+'''
+    monkeypatch.setattr(_isolated_serial, '_worker_command', lambda *a: [sys.executable, '-c', script])
+    port = IsolatedSerial('test', 115200)
+    try:
+        port.write(b'x')
+        assert port.read(3) == b''
+        port.reset_input_buffer()
+        assert collect(port, 3) == b'new'
+        assert port.read(1) == b''
+    finally:
+        port.close()
+
+
+@pytest.mark.parametrize('response', [b'not-json\n', b'[]\n', b'x' * 65537, b''],
+                         ids=['invalid-json', 'not-object', 'oversized', 'eof'])
+def test_invalid_or_closed_control_pipe_reaps_worker_without_replay(monkeypatch, response):
+    import sys
+    from mklink import _isolated_serial
+    expression = "b'x' * 65537" if len(response) > 65536 else repr(response)
+    script = f'''
+import sys
+print('{{"ready": true}}', file=sys.stderr, flush=True)
+sys.stdin.readline()
+sys.stderr.buffer.write({expression}); sys.stderr.buffer.flush()
+'''
+    monkeypatch.setattr(_isolated_serial, '_worker_command', lambda *a: [sys.executable, '-c', script])
+    port = IsolatedSerial('test', 115200)
+    try:
+        with pytest.raises(serial.SerialException):
+            port.write(b'once')
+        assert not port.is_open and port._process.poll() is not None
+        with pytest.raises(serial.SerialException, match='closed'):
+            port.write(b'never replay')
+    finally:
+        port.close()

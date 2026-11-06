@@ -42,6 +42,7 @@ const firmwareUpdateNeeded = computed(() => matchingInterface.value
   && ['legacy', 'hpm-profiles'].includes(interfaceConfig.value?.clock_source ?? ''))
 const clocks = computed(() => interfaceConfig.value?.clocks_hz || [])
 const migration = computed(() => ['v3-advertised', 'swd-advertised'].includes(interfaceConfig.value?.clock_source ?? '')
+  && !clocks.value.includes(4_000_000)
   && (interfaceConfig.value?.requested_hz === 4_000_000 || (matchingInterface.value && status.value?.configured_hz === 4_000_000))
   ? { from_hz: 4_000_000, to_hz: 2_000_000, pending: true } : null)
 const legacyChoice = computed(() => selected.value && !clocks.value.includes(Number(selected.value)))
