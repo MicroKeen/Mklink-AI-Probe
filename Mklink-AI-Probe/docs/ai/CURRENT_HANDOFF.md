@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-11-05T22:12:19+08:00`
+- 更新时间：`2026-11-06T09:47:13.9821617+08:00`
 - 分支：`codex/v0.4.3-fixes`
 - HEAD：`基于main 4f3be7a4；采集产品0a0c97b3，安装源f9b1ae8a（仅更新说明）；确切提交以Git为准。`
 - 远端 HEAD：`microkeen/main已合并PR66、67、68，基线4f3be7a4；正式tag/包不变。`
 - 工作树：复用E盘主工作区，保留旧v0.4.2分支和两个detached工作树；本轮及后续修复共用codex/v0.4.3-fixes。
-- 当前任务：SuperWatch下限1us/非法值中英文提醒已验。V3/H7实机4→1us中位237306.60→261976.28/s（+10.40%），9508369样本连续，RTT各2MiB全字节正确。343 Python/136 GUI/生产Web/浏览器通过。详见v043-superwatch-1us.md；未覆盖安装/合并/发布。
-- 状态：`superwatch_1us_hardware_verified_pending_integration`
+- 当前任务：1us安装59d19874/完整Skill已覆盖，原生发现alert仅红框无提醒。改为页面内中英文提示，136GUI/214Python通过；重新构建覆盖及原生/浏览器验收中。采集实现和11/5性能证据不变；未合并/发布。
+- 状态：`superwatch_1us_inline_notice_installing`
 
 ## 里程碑
 

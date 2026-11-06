@@ -665,16 +665,25 @@ describe('WaveformViewer VOFA binary transport', () => {
       vi.stubGlobal('fetch', requests)
       vi.stubGlobal('alert', vi.fn())
       const input = document.getElementById('interval-input') as HTMLInputElement
+      const error = document.getElementById('interval-error')!
+      expect(error.hidden).toBe(true)
       for (const value of ['0', '0.0000001', '0.0000005', '0.000000999']) {
         input.value = value
         expect(input.validity.rangeUnderflow).toBe(true)
         document.getElementById('btn-apply-interval')!.click()
-        expect(alert).toHaveBeenLastCalledWith('superwatch_interval_invalid')
+        expect(error.hidden).toBe(false)
+        expect(error.textContent).toBe('superwatch_interval_invalid')
+        expect(input.getAttribute('aria-invalid')).toBe('true')
+        expect(document.activeElement).toBe(input)
+        expect(alert).not.toHaveBeenCalled()
         expect(requests).not.toHaveBeenCalled()
         expect(runtime.probe.currentInterval()).toBe(0.001)
         expect(runtime.probe.collectionState().state).toBe('running')
       }
       input.value = '0.000001'
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+      expect(error.hidden).toBe(true)
+      expect(input.getAttribute('aria-invalid')).toBe('false')
       expect(input.checkValidity()).toBe(true)
       input.stepUp()
       expect(input.valueAsNumber).toBeCloseTo(0.000002, 12)

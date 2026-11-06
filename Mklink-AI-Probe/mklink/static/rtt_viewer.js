@@ -434,6 +434,15 @@ var IS_SUPERWATCH_MODE = CONFIG.mode === 'SuperWatch';
 var collectionState = 'running';
 var currentInterval = IS_SUPERWATCH_MODE ? 0.001 : 0;
 var intervalInput = document.getElementById('interval-input');
+var intervalError = document.getElementById('interval-error');
+function setIntervalError(invalid) {
+  intervalError.hidden = !invalid;
+  intervalInput.setAttribute('aria-invalid', String(invalid));
+  if (invalid) {
+    if (IS_SUPERWATCH_MODE) intervalError.setAttribute('data-i18n', 'superwatch_interval_invalid');
+    intervalError.textContent = IS_SUPERWATCH_MODE ? t('superwatch_interval_invalid') : 'Interval must be between 0 and 60 seconds';
+  }
+}
 var intervalDirty = false;
 var intervalUpdatePending = false;
 var estimatedInterval = 0;
@@ -451,6 +460,8 @@ function syncIntervalFromServer(value) {
 
 intervalInput.addEventListener('input', function() {
   intervalDirty = true;
+  var value = intervalInput.valueAsNumber;
+  if (Number.isFinite(value) && value >= (IS_SUPERWATCH_MODE ? 0.000001 : 0) && value <= 60) setIntervalError(false);
 });
 
 // Hide interval controls in RTT mode (data rate is firmware-controlled)
@@ -559,10 +570,11 @@ document.getElementById('btn-apply-interval').addEventListener('click', function
   var val = parseFloat(intervalInput.value);
   var minimumInterval = IS_SUPERWATCH_MODE ? 0.000001 : 0;
   if (!Number.isFinite(val) || val < minimumInterval || val > 60) {
-    alert(IS_SUPERWATCH_MODE ? t('superwatch_interval_invalid') : 'Interval must be between 0 and 60 seconds');
+    setIntervalError(true);
     intervalInput.focus();
     return;
   }
+  setIntervalError(false);
   intervalDirty = false;
   intervalUpdatePending = true;
   fetch('/api/interval', {
