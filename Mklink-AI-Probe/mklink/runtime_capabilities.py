@@ -154,7 +154,7 @@ def is_uart_path(path: str) -> bool:
     return path == '/api/ports/uart' or path.startswith(('/api/dash/serial/', '/api/dash/modbus/'))
 
 
-UART_CAPABILITIES = frozenset(name for name, (_, path) in CAPABILITIES.items() if is_uart_path(path))
+UART_CAPABILITIES = frozenset(name for name, (_, path) in CAPABILITIES.items() if is_uart_path(path)) | {'gui_windows', 'gui_present'}
 
 
 def validate_arguments(capability, arguments):

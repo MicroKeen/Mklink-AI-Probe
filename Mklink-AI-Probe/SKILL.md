@@ -17,7 +17,7 @@ description: 使用 MKLink/MicroLink 操作目标 MCU：固件烧录、内存与
   **GUI 已打开也可连接**：`connect(probe=...)` 复用工程和符号；`gui_call` 调用已声明的共享能力。
   RTT 已运行时无参数 `rtt_start()` 订阅，用 `rtt_read_channel` 读取。
   不发送旧 `RTTView.start/stop`，不另开串口；缺能力不退回独占。
-  默认后台采集；展示用 `gui_present`，先选窗口。
+  默认后台执行；展示用 `gui_open`，见共享后台文档。
 - **占用先查后台**：`runtime_status(probe=...)` 无需连接，查询会话、采集和任务。
   GUI 关闭不等于后台退出，AI 任务完成须 `detach`。占用/失败时读
   [控制权与恢复](references/runtime-recovery.md)。

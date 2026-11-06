@@ -155,6 +155,11 @@ def discover(probe_id=None) -> dict | None:
         return entries[0] if entries else None
     try:
         info = json.loads((runtime_dir(probe_id) / "endpoint.json").read_text(encoding="utf-8"))
+        if not isinstance(info, dict):
+            return None
+        from mklink.runtime_registry import endpoint_owner_dead
+        if endpoint_owner_dead(info):
+            return None  # Discovery stays read-only; startup reclaims dead records.
         health = request(info, "GET", "/_runtime/status", timeout=1)
     except (OSError, ValueError, KeyError, RuntimeErrorResponse):
         return None
@@ -207,6 +212,8 @@ def ensure_runtime(*, project_root: str = ".", port: int = 8765, probe=None, dev
             probe_id = 'lobby'
     if new_window and probe_id != 'lobby' and discover(probe_id):
         raise RuntimeErrorResponse('This probe is already owned by another window; disconnect it there or open a window without a probe selection')
+    from mklink.runtime_registry import prune_dead_endpoints
+    prune_dead_endpoints()
     runtime_id = 'local-' + secrets.token_hex(12)
     discovery_id = runtime_id if new_window else probe_id
     info = discover(discovery_id)
@@ -388,7 +395,7 @@ class RuntimeClient:
         self._memory_channel = None
         self.kind, self.name = kind, name
 
-    def connect(self, *, project_root=None, port=None, probe=None, axf=None, mcu=None, elf_backend=None, scope='target'):
+    def connect(self, *, project_root=None, port=None, probe=None, axf=None, mcu=None, elf_backend=None, scope='target', existing_only=False):
         if scope not in ('target', 'uart'):
             raise ValueError('Session scope must be target or uart')
         if scope == 'uart' and any(value is not None for value in (port, axf, mcu, elf_backend)):
@@ -398,6 +405,8 @@ class RuntimeClient:
             self._memory_transport = False
             existing = self.info is not None
             if self.info is None:
+                if existing_only:
+                    raise RuntimeErrorResponse('The selected GUI backend is unavailable; open it explicitly before connecting')
                 options = {'allow_lobby': True} if scope == 'uart' else {}
                 self.info = ensure_runtime(project_root=project_root or self.project_root, probe=probe, device_port=port, **options)
             # Only explicit connect may rediscover or select a target. Ordinary
@@ -414,6 +423,8 @@ class RuntimeClient:
                 if health is None or health.get('instance_id') != self.info.get('instance_id'):
                     self._stop_heartbeat()
                     self.session_id = None
+                    if existing_only:
+                        raise RuntimeErrorResponse('The selected GUI backend changed or exited; reopen explicitly before connecting')
                     self.info = ensure_runtime(project_root=project_root or self.project_root,
                         probe=selected['probe_id'] if selected else self.info['probe_id'], allow_lobby=scope == 'uart')
                 else:
@@ -629,6 +640,8 @@ def _serve_runtime(*, project_root, port, probe_id, runtime_id):
         info = {"port": listener.getsockname()[1], "token": secrets.token_urlsafe(32),
                 "instance_id": secrets.token_hex(16), "protocol": PROTOCOL, "version": VERSION, "pid": os.getpid(),
                 "probe_id": probe_id, "runtime_id": runtime_id}
+        from mklink.web_entry import get_process_identity
+        info['process_identity'] = get_process_identity(os.getpid())
         info['jobs_path'] = str(_private_dir(probe_id if probe_id != 'lobby' else runtime_id) / 'jobs.json')
         app = create_app(project_root=str(Path(project_root).resolve()), backend_port=info["port"])
         mark("runtime_routes")

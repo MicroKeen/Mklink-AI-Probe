@@ -23,6 +23,8 @@ def build_server():
     def close():
         with lock:
             current = holder.pop('client', None)
+            holder.pop('gui_launch', None)
+            holder.pop('gui_only', None)
             if current:
                 holder['last_info'] = current.info
                 current.close()
@@ -65,7 +67,52 @@ def build_server():
                            "batch_read_max_total_bytes": BATCH_READ_MAX_TOTAL_BYTES,
                            "rtt_mux_channels": 8, "rtt_channel_cache_bytes": 65536,
                            "mux_watch_regions": 15, "mux_watch_region_bytes": 128},
-                "guidance": "Call connect, then GUI capabilities. Disconnect stops shared target acquisition and releases the probe; detach only leaves this AI session."}
+                "guidance": "Use gui_open when a visible GUI is requested; confirm its window, then connect to the explicit probe on that same backend. Otherwise connect directly. Disconnect stops shared target acquisition; detach only leaves this AI session."}
+
+    @server.tool()
+    def gui_open(action: Literal['open', 'status'] = 'open', probe: str | None = None,
+                 runtime_id: str | None = None, project_root: str | None = None,
+                 window_id: str | None = None, open_browser: StrictBool = True) -> dict:
+        """Open/reuse MKLink on the MCP computer; never connects hardware or starts capture.
+
+        Call only when the user requests a visible GUI. Reuses this MCP's backend,
+        the probe's existing backend, or a unique unbound GUI. Multiple choices return
+        select_runtime/select_window; choose explicitly, never take the first entry.
+        New backends require an existing project_root. Existing project/symbols stay intact.
+        open_browser=false returns a short-lived one-use open_url for a local browser tool;
+        the backend's long-lived authentication token is never returned. Do not publish it.
+        Browser launch acceptance is NOT page readiness. Check action='status' until ready
+        with a bounded wait, then connect(probe=the intended ID/alias) on this SAME MCP.
+        Use gui_call('gui_present', {window_id, tab}) to display a panel; only displayed
+        confirms navigation. open/status do not focus windows or replay hardware actions.
+        This MCP holds an ordinary hardware-free lease until detach or process exit, so
+        a pending page does not disappear after the CLI launcher's 60 seconds. The login
+        link itself expires in 60 seconds; explicit open can obtain a new link afterwards.
+        A cloud/container localhost is not the user's computer; run MCP/browser together.
+        """
+        from mklink.runtime_gui import GuiLaunch, select_gui_runtime
+        with lock:
+            current = holder.get('client')
+            if action == 'status':
+                if any(value is not None for value in (probe, runtime_id, project_root, window_id)):
+                    raise ValueError('GUI status inspects this MCP session; selectors belong to action=open')
+                if current is None:
+                    return {'status': 'not_open', 'windows': []}
+                return holder.setdefault('gui_launch', GuiLaunch()).inspect(current)
+            info, selection = select_gui_runtime(current=current.info if current else None,
+                                                 probe=probe, runtime_id=runtime_id, project_root=project_root)
+            if info is None:
+                return selection
+            if current is None:
+                current = RuntimeClient(info=info, name='AI GUI session')
+                try:
+                    current.connect(scope='uart', existing_only=True)
+                except BaseException:
+                    current.close()
+                    raise
+                holder['client'], holder['gui_only'] = current, True
+            return {**holder.setdefault('gui_launch', GuiLaunch()).open(current, window_id=window_id,
+                                                                       open_browser=open_browser), **selection}
 
     @server.tool()
     def inspect_mcu(project_root: str = ".", device: str | None = None, flm: str | None = None) -> dict:
@@ -269,6 +316,22 @@ def build_server():
         never replayed. An explicit different probe/port switches in place.
         """
         with lock:
+            if holder.get('gui_only') and scope == 'target':
+                # Establish a target session on the selected GUI backend before
+                # releasing its hardware-free launch lease. Never detach the GUI.
+                previous = holder['client']
+                target = RuntimeClient(info=previous.info, name=client_name)
+                try:
+                    result = target.connect(port=port, probe=probe, axf=axf, mcu=mcu,
+                                            project_root=project_root, elf_backend=elf_backend, scope=scope,
+                                            existing_only=True)
+                except BaseException:
+                    target.close()
+                    raise
+                holder['client'] = target
+                holder.pop('gui_only', None)
+                previous.close()
+                return result
             if "client" not in holder:
                 holder["client"] = RuntimeClient(project_root=project_root or ".", name=client_name)
             return holder['client'].connect(port=port, probe=probe, axf=axf, mcu=mcu, project_root=project_root, elf_backend=elf_backend, scope=scope)

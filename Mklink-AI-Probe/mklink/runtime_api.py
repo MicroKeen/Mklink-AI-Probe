@@ -687,6 +687,21 @@ def install_runtime(app, info):
     from mklink.runtime_memory import install_memory_channel
     install_memory_channel(api, control)
 
+    gui_tickets = {}
+
+    @api.post('/gui-link')
+    async def gui_link(body: dict):
+        control.session(body.get('session_id'))
+        now = time.monotonic()
+        for ticket, expires in list(gui_tickets.items()):
+            if expires <= now:
+                gui_tickets.pop(ticket, None)
+        if len(gui_tickets) >= 8:
+            raise HTTPException(429, 'Too many pending GUI launch links')
+        ticket = 'gui-' + secrets.token_urlsafe(32)
+        gui_tickets[ticket] = now + 60
+        return JSONResponse({'ticket': ticket, 'expires_in': 60}, headers={'Cache-Control': 'no-store'})
+
     @api.get("/open", response_class=HTMLResponse)
     async def open_gui():
         return HTMLResponse("""<!doctype html><meta charset="utf-8"><title>MKLink Runtime</title>
@@ -704,16 +719,19 @@ fetch('/_runtime/login', {method:'POST', headers:{'Content-Type':'application/js
     @api.post("/login")
     async def login(body: dict):
         token = body.get("token")
-        if not isinstance(token, str) or not hmac.compare_digest(token, info["token"]):
+        ticket_expires = gui_tickets.pop(token, None) if isinstance(token, str) else None
+        if not isinstance(token, str) or not token.isascii() or not (hmac.compare_digest(token, info["token"])
+                                             or (ticket_expires is not None and ticket_expires > time.monotonic())):
             raise HTTPException(401, "Unauthorized")
         response = JSONResponse({"ok": True}, headers={"Cache-Control": "no-store"})
-        response.set_cookie("mklink_runtime_" + info["instance_id"], token, httponly=True, samesite="strict")
+        response.set_cookie("mklink_runtime_" + info["instance_id"], info['token'], httponly=True, samesite="strict")
         return response
 
     @api.get("/status")
     async def status():
         control.prune()
         return {"protocol": PROTOCOL, "version": VERSION, "instance_id": info["instance_id"],
+                "gui_launch": 1,
                 "pid": info.get("pid"), "project_root": state["project_root"], "transport": "cdc",
                 "probe_id": info.get("probe_id"), "clients": len(control.sessions), "busy": control.operation_lock.locked(),
                 "capabilities": sorted(CAPABILITIES)}

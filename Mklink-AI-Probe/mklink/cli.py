@@ -1766,7 +1766,7 @@ def _cli_gui(args):
     info = ensure_runtime(project_root=args.project_root, port=args.port, probe=selected_probe,
                           device_port=args.device_port, allow_lobby=True, new_window=True)
     def prepare(client):
-        if args.device_port or args.axf:
+        if selected_probe or args.device_port or args.axf:
             connect_gui_target(info, {'axf': args.axf})
         print(f"[MKLink] Shared CDC runtime: http://127.0.0.1:{info['port']}")
         print("[MKLink] Waiting up to 60 seconds for a GUI window. Ctrl+C cancels this launcher.")
