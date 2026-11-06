@@ -819,7 +819,7 @@ if (es) {
 // ============================================================
 var IS_VOFA_MODE = CONFIG.mode === 'VOFA';
 var IS_SUPERWATCH_MODE = CONFIG.mode === 'SuperWatch';
-var SUPERWATCH_MIN_INTERVAL = 0.000004;
+var SUPERWATCH_MIN_INTERVAL = 0.000001;
 var IS_BINARY_WAVEFORM_MODE = IS_VOFA_MODE || IS_SUPERWATCH_MODE;
 var collectionState = 'stopped';
 var acquisitionState = 'stopped';
@@ -1149,7 +1149,8 @@ document.getElementById('btn-apply-interval').addEventListener('click', function
   var val = parseFloat(intervalInput.value);
   var minimumInterval = IS_SUPERWATCH_MODE ? SUPERWATCH_MIN_INTERVAL : 0;
   if (!Number.isFinite(val) || val < minimumInterval || val > 60) {
-    alert('Interval must be between ' + minimumInterval + ' and 60 seconds');
+    alert(IS_SUPERWATCH_MODE ? t('superwatch_interval_invalid') : 'Interval must be between 0 and 60 seconds');
+    intervalInput.focus();
     return;
   }
   intervalDirty = false;
