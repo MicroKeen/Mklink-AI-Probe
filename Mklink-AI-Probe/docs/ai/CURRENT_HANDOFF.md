@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-11-06T23:25:55+08:00`
+- 更新时间：`2026-11-06T23:43:05+08:00`
 - 分支：`codex/v0.4.3-fixes`
-- HEAD：`GUI/MCP/发现回收已提交e8d3f5f6、f5b5d3c0；UART能力下拉见新提交，HEAD以Git为准。安装仍269d826f。`
+- HEAD：`4c890205已同步生产Web并构建本地NSIS；后续仅测试/文档修正。HEAD以Git为准，安装仍269d826f。`
 - 远端 HEAD：`microkeen/main已合并PR66、67、68，基线4f3be7a4；正式tag/包不变。`
 - 工作树：复用E盘主工作区，保留旧v0.4.2分支和两个detached工作树；本轮及后续修复共用codex/v0.4.3-fixes。
-- 当前任务：100失效记录清理/自动回收及GUI/MCP已完成。普通UART按固件声明34档下拉，离线/浏览器通过，见v043-uart-baud-options.md。未覆盖/合并/发布。
-- 状态：`uart_baud_dropdown_verified`
+- 当前任务：用户已授权覆盖本地应用/完整Skill。4c890205 Web/NSIS构建通过；UART CI旧元数据断言已修正，89相关检查过。安装验收进行中，未发布。
+- 状态：`local_install_in_progress`
 
 ## 里程碑
 

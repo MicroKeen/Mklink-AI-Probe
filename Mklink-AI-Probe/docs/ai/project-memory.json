@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-06T23:25:55+08:00",
+  "updated_at": "2026-11-06T23:43:05+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.4.3-fixes",
-    "head": "GUI/MCP/发现回收已提交e8d3f5f6、f5b5d3c0；UART能力下拉见新提交，HEAD以Git为准。安装仍269d826f。",
+    "head": "4c890205已同步生产Web并构建本地NSIS；后续仅测试/文档修正。HEAD以Git为准，安装仍269d826f。",
     "remote_head": "microkeen/main已合并PR66、67、68，基线4f3be7a4；正式tag/包不变。",
     "working_tree": "复用E盘主工作区，保留旧v0.4.2分支和两个detached工作树；本轮及后续修复共用codex/v0.4.3-fixes。"
   },
@@ -13,8 +13,8 @@
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "uart_baud_dropdown_verified",
-    "current_task": "100失效记录清理/自动回收及GUI/MCP已完成。普通UART按固件声明34档下拉，离线/浏览器通过，见v043-uart-baud-options.md。未覆盖/合并/发布。"
+    "status": "local_install_in_progress",
+    "current_task": "用户已授权覆盖本地应用/完整Skill。4c890205 Web/NSIS构建通过；UART CI旧元数据断言已修正，89相关检查过。安装验收进行中，未发布。"
   },
   "milestones": [
     {

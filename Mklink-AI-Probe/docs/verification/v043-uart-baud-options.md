@@ -38,6 +38,9 @@ Web 产物用于验证，不构建安装包、不覆盖应用或全局 Skill、�
 - 最后调整未连接时的被动缓存检查顺序并补充文档后，定向复核
   **87 Python/Skill/记忆检查、11 GUI 检查通过**；与前述集合重叠，不相加。
   记忆验证和 `git diff --check` 通过，新增能力测试纳入共享后台 CI。
+- 首轮 CI 为 **3813 passed / 1 failed**：远程 `serial.list` 旧断言未包含新增
+  `uart_baud` 元数据。补齐精确返回值和“不查询硬件”断言后，相关 **89 项通过**。
+  产品实现未改；原始 CI 失败保留，须查看修正提交后的 CI。
 
 本机证据位于构建根 `artifacts/uart-baud-host-20261106/`，常规检查日志位于
 `reports/`。浏览器截图为 `uart-10m-browser.png`，查询证据为 `browser-queries.json`。
