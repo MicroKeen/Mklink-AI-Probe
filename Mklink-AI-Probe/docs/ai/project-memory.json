@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-06T23:43:05+08:00",
+  "updated_at": "2026-11-07T00:05:03+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.4.3-fixes",
-    "head": "4c890205已同步生产Web并构建本地NSIS；后续仅测试/文档修正。HEAD以Git为准，安装仍269d826f。",
+    "head": "应用/完整Skill已覆盖b8a1f658（产品等价4c890205）；后续仅验收文档，HEAD以Git为准。",
     "remote_head": "microkeen/main已合并PR66、67、68，基线4f3be7a4；正式tag/包不变。",
     "working_tree": "复用E盘主工作区，保留旧v0.4.2分支和两个detached工作树；本轮及后续修复共用codex/v0.4.3-fixes。"
   },
@@ -13,8 +13,8 @@
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "local_install_in_progress",
-    "current_task": "用户已授权覆盖本地应用/完整Skill。4c890205 Web/NSIS构建通过；UART CI旧元数据断言已修正，89相关检查过。安装验收进行中，未发布。"
+    "status": "local_install_verified",
+    "current_task": "GUI/MCP/记录回收、UART下拉及92ca心跳修复已覆盖应用/完整Skill，验收通过；见v043-gui-uart-local-install.md，未发布。"
   },
   "milestones": [
     {
@@ -25,27 +25,27 @@
     {
       "name": "0.4.1正式版",
       "status": "complete",
-      "notes": "PR61源514efb86，七资源签名/实装、三索引、Skill升级及原生退出通过；正式源见v041-release-handoff.md。"
+      "notes": "PR61源514efb86已发布，签名/索引/实装资格见v041-release-handoff.md。"
     },
     {
       "name": "0.4.0正式版",
       "status": "complete",
-      "notes": "PR58源0c9c2d97，七附件签名/实装/升级、21资源COS及故障备用通过，索引最后切换；Gitee安装包经MicroKeen备用。见v040-release-handoff.md。"
+      "notes": "PR58源0c9c2d97已发布，签名/实装/渠道备用资格见v040-release-handoff.md。"
     },
     {
       "name": "0.3.6正式版",
       "status": "complete",
-      "notes": "PR50/51源d000370b；Windows/Skill/SiteAgent签名、三渠道实装通过，preview撤下、临时SSH撤销。见v036-release-handoff.md。"
+      "notes": "PR50/51源d000370b已发布，preview撤下、临时SSH撤销；资格见v036-release-handoff.md。"
     },
     {
       "name": "0.3.5正式版",
       "status": "complete",
-      "notes": "PR43源2f474f60372e；Windows/Skill/三平台/SiteAgent与17附件、签名/三渠道通过，全局Skill同步。V3.6.5/V4.6.9独立发布，见v035-release-handoff.md和v035-probe-firmware.md。"
+      "notes": "PR43源2f474f60372e已发布，V3.6.5/V4.6.9独立发布；资格见v035-release-handoff.md和v035-probe-firmware.md。"
     },
     {
       "name": "0.3.4正式版",
       "status": "complete",
-      "notes": "源a8fd3fab0403/PR40已发布；PR41正式Web/交接、三渠道验签/实装及清理完成。见v034-release-handoff.md及v034-workspace-cleanup.md；更早发布见各版交接。"
+      "notes": "源a8fd3fab0403/PR40已发布、PR41交接完成；资格见v034-release-handoff.md、v034-workspace-cleanup.md。更早发布见各版交接。"
     }
   ],
   "verification": [
@@ -63,7 +63,7 @@
     },
     {
       "area": "AI Skill与共享GUI",
-      "result": "gui_open最终151检查/Skill/真实浏览器通过；同MCP超60秒保活、展示/复用/退出正确。100失效endpoint清理，扫描7.67ms，冷启1.060s/退出5.220s，见v043-gui-open.md。串口能力下拉139 Python/61 GUI、生产Web/无硬件浏览器通过，最终复核见v043-uart-baud-options.md；RS485不继承UART资格。历史cafe835f资格749Python/65GUI见firmware-skill-fixes-20261101.md；新增第57 MCP工具尚未安装。"
+      "result": "gui_open 151检查/Skill/浏览器通过，100失效记录已清理，见v043-gui-open.md。UART139 Python/61 GUI及87/11重叠复核通过；CI旧元数据断言修正后89过。b8a1f658覆盖应用/完整Skill：3655/2655载荷全匹配、5339数据不变、57 MCP/原生/Web/正常退出通过；冻结MCP无页面84.89秒保活。SDK强制kill-tree边界保留，见v043-gui-uart-local-install.md、v043-uart-baud-options.md；旧cafe资格见firmware-skill-fixes-20261101.md。"
     },
     {
       "area": "RTT自动恢复与在线静默收尾",
@@ -95,8 +95,8 @@
     "编译完成不代表目标已下载：文件变化仅发待重载提示，不后台解析。用户明确加载/重载文件时自动停止目标采集，确认worker退出后原子换表，保持停止；失败保留旧目录/选择。不要求连接下载器；断开保留文件和选中变量但清空旧采样。公式只改变可视化，原始记录不变；不恢复旧地址采集或重放写操作。"
   ],
   "hardware": {
-    "state": "11/6用户已换V4，固件会话01a1a1a2-9adc-79e2-b30e-07c07d5f90c6验收UART候选；主机未开硬件。V3/V4 IAR退出资格见对应报告，每次重核身份/占用。LA CH0/CH1为SWCLK/SWDIO。Keil GUI与磁盘选择器差异未恢复，见V4报告。",
-    "installer": "Windows/完整Skill仍0.4.3/269d826f，NSIS SHA1b476419、Skill f2f8a1cf，见v043-1us-local-install.md。GUI/MCP/回收、UART下拉及92ca修复未覆盖，SiteAgent仍旧；未发布。",
+    "state": "11/6用户已换V3，固件会话01a1a1a2-9adc-79e2-b30e-07c07d5f90c6验收UART最终候选；本轮安装未连接硬件。每次重核身份/占用。IAR退出与Keil选择器限制见V3/V4报告。LA CH0/CH1为SWCLK/SWDIO。",
+    "installer": "Windows/完整Skill为0.4.3/b8a1f658（产品等价4c890205），NSIS SHA08109b2d、Skill abb5797a，验证见v043-gui-uart-local-install.md。SiteAgent仍旧，正式资产不变；未发布。",
     "backups": "正式包/四固件、当前资格/恢复包、缓存及工作树保留。用户授权旧记录和脚本清理：F释放18.055GiB、E释放5.326GiB；32份旧raw已退役，不能重解码，保留分析。114含链接组未动；见v043-workspace-cleanup.md。"
   },
   "known_limits": [
@@ -105,19 +105,19 @@
     "HPM/SES未发Disconnect可留占用，完整SES矩阵/RTT下行未覆盖；status6截图只证busy。IAR9.70.1退出尾包已证无Disconnect/CONNECTED=false，V3/V4上下文修复保留所有权并消除逐批借还，四调试器共存/退出恢复通过。其他IDE/芯片、长期睡眠拔插及旧固件未复现硬锁不外推。原E Watch停止边界457314B队列淘汰未闭环。4096B允许已建立DAP只读，新Connect/Disconnect按契约status7终止，须显式新采集，非原子快照。",
     "共享MUX并行SV仍有容量边界：旧饱和768/drop17371，流水线28/1330、burst26/1164、control15/1442，重启归零不抹去；control独立62.679秒零丢失计数通过。RTT661.208KiB/s为特定配置观测值，H7限定实测新799–801KiB/s、独立/有限并行SV零计数；单次API20样本中位有12.90→20.03ms等退化未归因，旧Watch末组失败保留。采集暂停/下载丢观测、多变量非原子、无时序保证。COS207.9GiB(99%)非账单上限；已取消套餐日期截止，到期可按量计费，存储/请求/SCF另计；旧0.4.0固件Git备用未迁，签名资产不改。",
     "V3无屏幕且不支持HPM；V3.6.4 Keil/OpenOCD共存已测。V4最终无诊断固件完整SES矩阵未完成。旧V3.6.8/build17:56:49的CRLF六轮及1800.028秒空RTT证据见v3-crlf-final-review-20261030.md和v3-empty-rtt-review-20261030.md，不计入新build11:00:39复验。新V3限定RTT/FPB/Keil通过见v3-rtt-systemview-review-20261031.md；历史掉线根因、legacy/睡眠拔插/更长时长仍未测，再现先保存现场。 旧1ms Watch相位跳变归因未闭环；本轮HPM5301周期矩阵已通过，不能外推历史全部场景。",
-    "最后客户端退出约5秒租约后开始排空/关闭，不保证硬实时5秒。每GUI独立后台；单探针仅一个后台持有；已有URL共享页面跟随明确切换。独立操作另开客户端。 Keil BL重载由2增9；用户确认未操作，原因未明。仅恢复重载后9个状态，最初配置未恢复；见h7-fpbv2-systemview-idle-20261031.md。",
+    "最后客户端退出约5秒租约后开始排空/关闭，不保证硬实时5秒。每GUI独立后台；单探针仅一个后台持有；已有URL共享页面跟随明确切换。独立操作另开客户端。 Keil BL重载由2增9；用户确认未操作，原因未明。仅恢复重载后9个状态，最初配置未恢复；见h7-fpbv2-systemview-idle-20261031.md。 Windows MCP宿主若强制清理整个Job进程树，会带走其启动的GUI后台；标准stdio正常EOF已验证独立存活，详见本轮安装报告。",
     "UART5 TTL Modbus历史读写通过，RS485电气层未测；本次仅虚拟串口双向字节/日志，不能替代物理UART。跨主机Agent/全芯片未认证。Unix包仅CI冻结检查，USB/原生UI/升级待测；Mac ad-hoc未公证，Windows无Authenticode，不承诺消除SmartScreen。日志文件回放与原生目录现已通过；Trace最终独立/并行各三轮零新增丢失通过，历史初始溢出1保留且不外推全部负载；HPM HardFault页面仍限Cortex-M。早期浏览器清理未确认的现场记录保留；本轮官网下载验收通过。详见v042-traffic-replay.md。",
     "nRF54L15保护闭环、全部擦除/拔插/休眠/断电、电源精度未全测。每次VCC需确认具体电压。26个无可靠扇区FLM禁用扇区操作，Bank模式须匹配。HPM5301 OTP组18/19历史永久锁定；128字读取及批准Word69 0→1已实测，其余型号/区域不继承授权，锁最后写/逐项校验，多Word不可回滚；熔丝/影子/临时锁语义未知，UART按ROM状态及回读为准。详见hpm-offline-otp-handoff.md及known-limits-20261030.md。"
   ],
   "next_actions": [
     "继续codex/v0.4.3-fixes/草稿PR69，保留v043-host-baseline.md。允许调试占带宽合理下降，数据正确/退出恢复和无IDE基线不降。普通读P95/间隔<1ms、采样最大间隔<20us仍开放；合并/发布须新授权。",
-    "应用/Skill仍269d826f。V3 PR10/V4 PR19资格保留，V4依赖PR18；UART新候选由固件会话验收，主机已按UART_BAUD_PROFILE/UART_BAUDS实现下拉。RS485/旧固件不外推；合并前核对main/CI/全量及安装资格。",
+    "应用/完整Skill已覆盖b8a1f658；V3 PR10/V4 PR19资格保留，V4依赖PR18。UART最终候选由固件会话验收；RS485/旧固件不外推。合并前核对main、精确HEAD CI和全量资格。",
     "保留正式包、当前唯一验收证据、缓存和含链接目录；旧记录/脚本退役范围见v043-workspace-cleanup.md。历史V3掉线/冷插拔/长稳等仍按known-limits-20261030.md处理。",
     "按tencent-updates.md维护最新本地集；COS189GiB告警/207.9停止，已取消日期截止，关注实际扣量/到期后费用。不清零/扩大额度/恢复停止锁；监控断档超30天须账单重锚定。"
   ],
   "continuation_protocol": [
     "后续多个修复共用codex/v0.4.3-fixes，先fetch核对实际状态；不直接修改main，不逐任务另建分支，不自动切回main。旧v0.4.2分支及两个detached工作树保留。0.4.2正式源0e82ba6f和全部已发布资产不可覆盖。",
-    "正式资格/渠道仍见v042-formal-qualification.md与v042-release-handoff.md；本机0.4.3应用/完整Skill源269d826f已更新，见v043-1us-local-install.md。真实界面验证后正常退出，测试浏览器已关闭；硬件操作前仍核对身份/占用。",
+    "正式资格/渠道仍见v042-formal-qualification.md与v042-release-handoff.md；本机0.4.3应用/完整Skill已覆盖b8a1f658，见v043-gui-uart-local-install.md。测试页/原生窗口已正常关闭；AI/MCP重启后加载新Skill，硬件仍由固件会话持有。",
     "V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。",
     "CDC995和SDK10048根因保留待排查。恢复仅同身份CDC故障5秒内；超时不自动接回/新建AI会话，主动断开立即生效，未知写入不重放。历史实例释放记录见v035-transport-recovery.md；当前硬件占用以本交接真机状态及指定固件会话为准。",
     "客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。"
