@@ -68,6 +68,7 @@ class MuxTransport:
         self._commands = command_lock or threading.RLock()
         self._rx = bytearray()
         self._pending = None
+        self._request_waiting = False
         self._reply = None
         self._error = None
         self._next_id = 0
@@ -145,11 +146,15 @@ class MuxTransport:
     def request(self, op, payload=b'', *, deadline=None):
         with self._commands, self._condition:
             self._check()
-            while self._pending:
-                self._wait(deadline)
-            if deadline is not None and time.monotonic() >= deadline:
-                raise TimeoutError('Memory capture deadline expired before command delivery')
-            self._send(op, payload)
+            self._request_waiting = True
+            try:
+                while self._pending:
+                    self._wait(deadline)
+                if deadline is not None and time.monotonic() >= deadline:
+                    raise TimeoutError('Memory capture deadline expired before command delivery')
+                self._send(op, payload)
+            finally:
+                self._request_waiting = False
             while self._pending:
                 self._wait(deadline)
             self._check()
@@ -208,7 +213,11 @@ class MuxTransport:
                 return
             if self._pending and time.monotonic() >= self._pending[2]:
                 self._expire_pending('response')
-            elif self.ready and not self._pending and self._reply is None and time.monotonic()-self._last_command >= 1:
+            elif (self.ready and not self._pending and self._reply is None
+                  and not self._request_waiting and time.monotonic()-self._last_command >= 1):
+                # A delayed heartbeat reply must release the request slot to
+                # an already waiting command, not immediately start another
+                # heartbeat before the notified command thread can run.
                 self._send(2, b'', heartbeat=True)
 
     def _expire_pending(self, source):

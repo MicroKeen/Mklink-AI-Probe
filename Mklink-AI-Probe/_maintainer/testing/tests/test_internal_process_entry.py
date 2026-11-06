@@ -62,3 +62,27 @@ def test_serial_worker_invalid_arguments_report_control_error(capsys):
     captured = capsys.readouterr()
     assert captured.out == ''
     assert 'requires port and baudrate' in json.loads(captured.err)['error']
+
+
+@pytest.mark.parametrize('entry', ['cli', 'remote'])
+def test_recording_worker_entries_finalize_empty_file(entry, tmp_path):
+    command = ([sys.executable, '-m', 'mklink'] if entry == 'cli' else
+               [sys.executable, str(ROOT/'packaging/site_agent/entry.py')])
+    result = subprocess.run(command+['--internal-recording-worker', str(tmp_path), '1000'],
+                            input=bytes(12), capture_output=True,
+                            env=dict(os.environ, PYTHONPATH=str(ROOT)), cwd=ROOT, timeout=10)
+    assert result.returncode == 0, result.stderr
+    status = [json.loads(line) for line in result.stdout.splitlines()]
+    assert [s['state'] for s in status] == ['recording', 'completed']
+    assert status[-1]['samples'] == 0
+    assert Path(status[-1]['path']).read_bytes() == b''
+
+
+def test_recording_worker_filename_launch_without_pythonpath(tmp_path):
+    env = dict(os.environ)
+    env.pop('PYTHONPATH', None)
+    result = subprocess.run(
+        [sys.executable, str(ROOT/'mklink/_recording_worker.py'), str(tmp_path), '1000'],
+        input=bytes(12), capture_output=True, env=env, cwd=tmp_path, timeout=10)
+    assert result.returncode == 0, result.stderr
+    assert [json.loads(line)['state'] for line in result.stdout.splitlines()] == ['recording', 'completed']

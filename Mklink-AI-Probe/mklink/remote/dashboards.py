@@ -2420,14 +2420,23 @@ class SuperWatchStreamManager:
     def start_recording(self, directory: str) -> dict:
         from mklink.superwatch_recording import SuperWatchRecorder
 
-        with self._recording_lock, self._read_lock:
+        with self._recording_lock:
             if self._recorder and self._recorder.status()['active']:
                 raise RuntimeError('SuperWatch recording is already active')
             if not self.running and self._thread is not None and self._thread.is_alive():
                 raise RuntimeError('SuperWatch acquisition is still stopping')
-            # Exclude samples received before the user pressed Start recording.
-            self._flush_binary_batch_locked()
-            self._recorder = SuperWatchRecorder(directory)
+            # Worker startup/file creation must not hold the acquisition lock.
+            recorder = SuperWatchRecorder(directory)
+            try:
+                with self._read_lock:
+                    if not self.running and self._thread is not None and self._thread.is_alive():
+                        raise RuntimeError('SuperWatch acquisition is still stopping')
+                    # The recording begins at this batch boundary after ready.
+                    self._flush_binary_batch_locked()
+                    self._recorder = recorder
+            except BaseException:
+                recorder.stop()
+                raise
             return self._recorder.status()
 
     def stop_recording(self) -> dict:

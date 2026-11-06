@@ -195,6 +195,60 @@ def test_unknown_write_is_never_replayed_or_followed_by_commands():
     assert len(writes) == 1
 
 
+def test_delayed_heartbeat_reply_hands_slot_to_waiting_command(monkeypatch):
+    now = [10.0]
+    monkeypatch.setattr('mklink.mux.time.monotonic', lambda: now[0])
+    writes, answers = [], []
+    waiting = threading.Event()
+    def write(wire):
+        op, req = wire[5], struct.unpack_from('<I', wire, 12)[0]
+        writes.append(op)
+        if op != 2:
+            transport.feed(packet(op | 0x80, 17, req, b'\0'))
+        return len(wire)
+    transport = MuxTransport(write)
+    transport.ready, transport.epoch = True, 17
+    transport._last_command = 8
+    transport.tick()
+    original_wait = transport._wait
+    def wait(deadline=None):
+        waiting.set()
+        original_wait(deadline)
+    transport._wait = wait
+    thread = threading.Thread(target=lambda: answers.append(transport.request(0x12, b'data')))
+    thread.start()
+    try:
+        assert waiting.wait(2)
+        with transport._condition:
+            now[0] += 2  # Reply is valid, but another heartbeat is already due.
+            transport.feed(packet(0x82, 17, 1, b'\0'))
+            transport.tick()  # Sole reader runs this before the waiter wakes.
+            assert writes == [2]
+        thread.join(2)
+        assert not thread.is_alive() and answers == [b'']
+        assert writes == [2, 0x12] and not transport._request_waiting
+        now[0] += 1.1
+        transport.tick()
+        assert writes == [2, 0x12, 2]  # Idle heartbeats remain enabled.
+    finally:
+        transport.fail('test finished')
+        thread.join(2)
+
+
+def test_expired_unsent_command_releases_heartbeat_priority(monkeypatch):
+    now = [10.0]
+    monkeypatch.setattr('mklink.mux.time.monotonic', lambda: now[0])
+    transport, calls = peer()
+    transport.handshake()
+    before = len(calls)
+    with pytest.raises(TimeoutError, match='before command delivery'):
+        transport.request(0x12, b'unsent', deadline=9)
+    assert len(calls) == before and not transport._request_waiting
+    now[0] += 2
+    transport.tick()
+    assert calls[-1][0] == 2 and transport.ready
+
+
 def test_crc_and_expired_epoch_poison_stream():
     transport, _ = peer()
     transport.handshake()

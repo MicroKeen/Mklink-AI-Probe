@@ -73,11 +73,52 @@ def test_parts_retain_every_row_and_layout_without_overwriting(tmp_path):
     second.stop()
 
 
+def test_recording_preserves_unicode_precision_and_valid_prefix_on_error(tmp_path):
+    recorder = SuperWatchRecorder(tmp_path)
+    recorder.append(array('f', [1.25, -2.5, 3.75]),
+                    array('d', [0.125, 1234567.875, float('nan')]),
+                    [{'name': '温度"\\'}], boundaries=((1, 2),))
+    result = recorder.stop()
+    assert result['state'] == 'failed' and 'invalid sample' in result['error']
+    assert rows(tmp_path) == [
+        {'温度"\\': 1.25, '_t': 0.000125},
+        {'event': 'discontinuity', 'reason': 2},
+        {'温度"\\': -2.5, '_t': 1234.567875},
+    ]
+
+
+@pytest.mark.parametrize('names', [('值"\\\n',), ('x', 'x', '_t', '温度')])
+def test_numeric_recording_is_byte_identical_to_json_encoder(tmp_path, names):
+    import math
+    width = len(names)
+    choices = [0.0, -0.0, 1.17549435e-38, 3.4028234e38, -1.0, float('nan')]
+    values = array('f', [choices[i % len(choices)] for i in range(100 * width)])
+    times = array('d', [i * 0.00123456789 for i in range(100)])
+    # Preserve the existing rule that a partially invalid row omits that
+    # channel, while a wholly invalid row fails explicitly.
+    for row in range(100):
+        if not any(math.isfinite(v) for v in values[row*width:(row+1)*width]):
+            values[row*width] = 0.0
+    expected = []
+    for row, timestamp in enumerate(times):
+        point = {name: float(values[row*width+i]) for i, name in enumerate(names)
+                 if math.isfinite(values[row*width+i])}
+        point['_t'] = timestamp / 1000
+        expected.append(json.dumps(point, ensure_ascii=False, separators=(',', ':'), allow_nan=False) + '\n')
+    recorder = SuperWatchRecorder(tmp_path)
+    recorder.append(values, times, [{'name': n} for n in names])
+    result = recorder.stop()
+    assert result['state'] == 'completed'
+    data = b''.join(p.read_bytes() for p in sorted(tmp_path.glob('*.jsonl')))
+    assert data == ''.join(expected).encode('utf-8')
+    assert result['bytes'] == len(data)
+
+
 def test_overflow_and_disk_error_are_visible_not_success(tmp_path):
     recorder = SuperWatchRecorder(tmp_path, queue_bytes=1)
     recorder.append(array('f', [1]), array('d', [0]), [{'name': 'v'}])
     assert recorder.stop()['state'] == 'failed'
-    recorder = SuperWatchRecorder(tmp_path)
+    recorder = SuperWatchRecorder(tmp_path, _local=True)
     recorder._file.close()
     recorder.append(array('f', [1]), array('d', [0]), [{'name': 'v'}])
     result = recorder.stop()
@@ -132,6 +173,63 @@ def test_cannot_arm_recording_while_old_acquisition_is_stopping(tmp_path):
     with pytest.raises(RuntimeError, match='still stopping'):
         sw.start_recording(str(tmp_path))
     assert not list(tmp_path.iterdir())
+
+
+def test_worker_startup_does_not_block_acquisition(tmp_path, monkeypatch):
+    import threading
+    entered, release = threading.Event(), threading.Event()
+    class DelayedRecorder:
+        def __init__(self, directory):
+            entered.set()
+            assert release.wait(2)
+        def status(self): return {'state': 'recording', 'active': True}
+    monkeypatch.setattr('mklink.superwatch_recording.SuperWatchRecorder', DelayedRecorder)
+    sw = manager()
+    thread = threading.Thread(target=sw.start_recording, args=(str(tmp_path),))
+    thread.start()
+    try:
+        assert entered.wait(2)
+        assert sw._read_lock.acquire(timeout=.2)
+        sw._read_lock.release()
+        assert sw.recording_status() == {'state': 'idle', 'active': False}
+    finally:
+        release.set()
+        thread.join(2)
+    assert not thread.is_alive() and sw.recording_status()['active']
+
+
+def test_recording_worker_exit_is_failure_and_reaped(tmp_path):
+    recorder = SuperWatchRecorder(tmp_path)
+    process = recorder._worker.process
+    process.terminate()
+    process.wait(timeout=5)
+    recorder.append(array('f', [1]), array('d', [0]), [{'name': 'v'}])
+    result = recorder.stop()
+    assert result['state'] == 'failed' and result['error'] and result['samples'] == 0
+    assert process.poll() is not None
+    assert not recorder._worker._inbox._thread.is_alive()
+    assert not recorder._worker._writer.is_alive()
+
+
+def test_stalled_worker_pipe_is_bounded_and_reaped(tmp_path, monkeypatch):
+    import sys
+    from mklink import _recording_worker as worker
+    popen = worker.subprocess.Popen
+    stalled = (
+        "import json,sys,time; "
+        "print(json.dumps(dict(state='recording',active=True,path='',parts=0,samples=0,bytes=0,error='')),flush=True); "
+        "sys.stdin.buffer.read(1); time.sleep(60)"
+    )
+    monkeypatch.setattr(worker.subprocess, 'Popen',
+                        lambda command, **kw: popen([sys.executable, '-u', '-c', stalled], **kw))
+    recorder = SuperWatchRecorder(tmp_path)
+    monkeypatch.setattr(worker, 'REPLY_TIMEOUT', .25)
+    recorder.append(array('f', [1]) * 100_000, array('d', range(100_000)), [{'name': 'v'}])
+    result = recorder.stop(timeout=5)
+    assert result['state'] == 'failed' and 'timed out' in result['error']
+    assert recorder._worker.process.poll() is not None
+    assert not recorder._worker._writer.is_alive()
+    assert not recorder._worker._inbox._thread.is_alive()
 
 
 def test_mcp_recording_actions_use_shared_capabilities(monkeypatch):
