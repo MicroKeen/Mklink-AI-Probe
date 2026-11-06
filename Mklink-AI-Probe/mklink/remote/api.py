@@ -1680,7 +1680,19 @@ def create_app(
     @app.get("/api/ports/uart")
     async def list_uart_ports():
         from mklink.serial._port import list_uart_ports as enumerate_uart
-        return await run_in_threadpool(enumerate_uart)
+        from mklink.uart_baud import describe_ports
+        return await run_in_threadpool(lambda: describe_ports(_state, enumerate_uart()))
+
+    @app.post('/api/runtime/uart-baudrates')
+    async def read_uart_baudrates(body: dict):
+        from mklink.uart_baud import read_options
+        from mklink.runtime import RuntimeErrorResponse
+        try:
+            return await run_in_threadpool(read_options, _state, body.get('port'))
+        except ValueError as error:
+            raise HTTPException(400, str(error)) from error
+        except RuntimeErrorResponse as error:
+            raise HTTPException(409, str(error)) from error
 
     @app.post("/api/runtime/alias")
     async def runtime_alias(body: dict):

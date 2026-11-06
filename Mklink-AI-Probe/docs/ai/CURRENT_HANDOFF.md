@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-11-06T22:50:02+08:00`
+- 更新时间：`2026-11-06T23:25:55+08:00`
 - 分支：`codex/v0.4.3-fixes`
-- HEAD：`新增gui_open/同后台连接、进程身份预检和记录回收。HEAD以Git为准，安装仍269d826f。`
+- HEAD：`GUI/MCP/发现回收已提交e8d3f5f6、f5b5d3c0；UART能力下拉见新提交，HEAD以Git为准。安装仍269d826f。`
 - 远端 HEAD：`microkeen/main已合并PR66、67、68，基线4f3be7a4；正式tag/包不变。`
 - 工作树：复用E盘主工作区，保留旧v0.4.2分支和两个detached工作树；本轮及后续修复共用codex/v0.4.3-fixes。
-- 当前任务：GUI启动/确认/退出通过，100份失效记录已清理，见v043-gui-open.md。未覆盖/合并/发布。V3/V4 UART候选由固件会话验收，主机下拉待最终能力列表。
-- 状态：`gui_open_registry_cleanup_verified`
+- 当前任务：100失效记录清理/自动回收及GUI/MCP已完成。普通UART按固件声明34档下拉，离线/浏览器通过，见v043-uart-baud-options.md。未覆盖/合并/发布。
+- 状态：`uart_baud_dropdown_verified`
 
 ## 里程碑
 
@@ -24,9 +24,9 @@
 ## 验证证据
 
 - **0.4.3接收、连续性与性能**：历史基线/1us/安装见v043-host-baseline.md、v043-superwatch-1us.md、v043-1us-local-install.md。92ca心跳/录制193定向/787相关（重叠）/性能1过。V3/V4各IAR GUI2轮、其余IDE各5轮；RTT 60668928/69770240B、样本4210495/3699185全正确，0超时/丢弃。退出混合RTT约355→420/354→416KiB/s、Watch约10→11.7万/s；V4独立849.64KiB/s(-0.0205%相邻E)、26.53万/s，4096B约1053–1056KiB/s。见v043-mux-heartbeat-recording.md和v043-iar-exit-context.md、v043-v4-iar-exit-context.md。
-- **0.4.2正式发布及腾讯云下载**：正式源0e82ba6f，Windows/完整Skill/SiteAgent及四固件正式覆盖、签名、三渠道与故障回退验证通过；PR66/67/68已合并，正式资产不可变。安装器元数据修复cb30b703/PR63已纳入。详细计数/SHA见v042-release-handoff.md、installer-metadata-cleanup-20261027.md。后续清理29目录约6.587GiB、629保留文件哈希不变，135含链接组保留人工检查，见v042-postrelease-handoff.md。 11/4轻量11文件341MiB全哈希/HEAD/Range/缺文件回退、25保护和18GUI通过；更新32过/1已有开发版本不一致，Skill实时检查通过。99%及无日期截止部署回读通过，详见tencent-download-cost-20261104.md（含账单分析、误部署恢复及限制）。
+- **0.4.2正式发布及腾讯云下载**：正式源0e82ba6f，Windows/完整Skill/SiteAgent和四固件发布、覆盖、签名及三渠道/回退通过，PR66/67/68已合并，资产不可变。详细资格见v042-release-handoff.md；安装元数据cb30b703/PR63见installer-metadata-cleanup-20261027.md。清理29目录6.587GiB、629保留哈希不变、135含链接组保留，见v042-postrelease-handoff.md。11/4轻量11文件341MiB哈希/HEAD/Range/回退、25保护/18GUI通过；更新32过/1开发版本不一致，Skill检查通过。99%及无日期截止部署回读通过，见tencent-download-cost-20261104.md（含误部署恢复/限制）。
 - **0.4.2正式候选最终资格**：90e676db与产品1ca9b8fd等价：6453Python/2skip、1182GUI、生产Web/冻结/Rust/NSIS/覆盖及真实界面交互通过。HPM时钟/镜像/RAM/XML/RTT/Watch/串口、Trace独立并行、烧录后三流恢复与原生退出通过。完整计数及限制见v042-formal-qualification.md、v042-traffic-replay.md，历史Trace溢出失败保留。
-- **AI Skill与共享GUI**：gui_open最终151检查/Skill校验/真实浏览器通过；同MCP保活超60秒、展示/复用/退出正确。100失效endpoint清理，扫描7.67ms，源码冷启1.060s/退出5.220s，无硬件连接；详见v043-gui-open.md（含早期失败与重测）。原cafe835f资格749Python/65GUI、完整Skill覆盖及56 MCP/126能力见firmware-skill-fixes-20261101.md；本次新增第57工具，安装仍旧。
+- **AI Skill与共享GUI**：gui_open最终151检查/Skill/真实浏览器通过；同MCP超60秒保活、展示/复用/退出正确。100失效endpoint清理，扫描7.67ms，冷启1.060s/退出5.220s，见v043-gui-open.md。串口能力下拉139 Python/61 GUI、生产Web/无硬件浏览器通过，最终复核见v043-uart-baud-options.md；RS485不继承UART资格。历史cafe835f资格749Python/65GUI见firmware-skill-fixes-20261101.md；新增第57 MCP工具尚未安装。
 - **RTT自动恢复与在线静默收尾**：14417715：347相关+17发现测试通过。V4/HPM5301两次49700B烧录成功，RTT/Watch自动暂停恢复、零恢复错误及零Watch读错；覆盖/载荷/冻结MCP/Web/退出通过。当时为0.4.1测试包，修复后续纳入正式0.4.2。原始包/详细计数见rtt-auto-restore-20261030.md；静默面板d1cf16ec见online-flash-receipt-20261029.md。
 - **Linux/macOS 0.4.1测试包**：Linux a6bdacbc、Mac arm64 eefc6842：CI USB各58/1skip及冻结CLI/MCP/健康/Web/退出通过。DEB SHA7309f377、DMG SHA56dc8e0a，均旧0.4.1；Mac ad-hoc未公证，实机安装/UI/USB待测。见linux-deb-test-20261028.md、macos-arm64-test-20261028.md。
 - **H743正式固件与双核候选边界**：H743正式V4.7.1在线/四脱机/19采集调试通过。私有V4.7.2单核兼容、双核误选写前拒绝、2MiB不变及M7/M4 HEX在线通过；V4.7.2/V3.6.8/V2.9.3双核候选交付，46回归通过。无双核实板正向脱机，V3历史掉线未闭环，当时候选不公开替换；后来明确发布的四个build以v042-release-handoff.md为准，不外推双核验收。见known-limits-20261030.md。
@@ -47,14 +47,14 @@
 
 ## 真机环境
 
-- **state**：11/6用户已换回V3；固件会话01a1a1a2-9adc-79e2-b30e-07c07d5f90c6进行UART候选，主机未开硬件。V3/V4 IAR退出资格见对应报告；每次重核固件/端口/占用。LA CH0/CH1为SWCLK/SWDIO。Keil GUI与磁盘选择器差异未恢复，见V4验收报告。
-- **installer**：已安装Windows/完整Skill仍0.4.3/269d826f，NSIS SHA1b476419、Skill f2f8a1cf；载荷/本地数据校验见v043-1us-local-install.md。GUI/MCP/回收及92ca修复未覆盖，SiteAgent仍旧。正式资产保留，未发布。
+- **state**：11/6用户已换V4，固件会话01a1a1a2-9adc-79e2-b30e-07c07d5f90c6验收UART候选；主机未开硬件。V3/V4 IAR退出资格见对应报告，每次重核身份/占用。LA CH0/CH1为SWCLK/SWDIO。Keil GUI与磁盘选择器差异未恢复，见V4报告。
+- **installer**：Windows/完整Skill仍0.4.3/269d826f，NSIS SHA1b476419、Skill f2f8a1cf，见v043-1us-local-install.md。GUI/MCP/回收、UART下拉及92ca修复未覆盖，SiteAgent仍旧；未发布。
 - **backups**：正式包/四固件、当前资格/恢复包、缓存及工作树保留。用户授权旧记录和脚本清理：F释放18.055GiB、E释放5.326GiB；32份旧raw已退役，不能重解码，保留分析。114含链接组未动；见v043-workspace-cleanup.md。
 
 ## 下一动作
 
 1. 继续codex/v0.4.3-fixes/草稿PR69，保留v043-host-baseline.md。允许调试占带宽合理下降，数据正确/退出恢复和无IDE基线不降。普通读P95/间隔<1ms、采样最大间隔<20us仍开放；合并/发布须新授权。
-2. 应用/Skill仍269d826f，本轮GUI/回收及92ca心跳修复未覆盖。V3 PR10/V4 PR19资格保留，V4依赖PR18；UART候选待固件会话验收后按UART_BAUD_PROFILE/UART_BAUDS实现串口下拉，不外推老固件/RS485。合并前核对main/CI/全量及安装资格，不发布。
+2. 应用/Skill仍269d826f。V3 PR10/V4 PR19资格保留，V4依赖PR18；UART新候选由固件会话验收，主机已按UART_BAUD_PROFILE/UART_BAUDS实现下拉。RS485/旧固件不外推；合并前核对main/CI/全量及安装资格。
 3. 保留正式包、当前唯一验收证据、缓存和含链接目录；旧记录/脚本退役范围见v043-workspace-cleanup.md。历史V3掉线/冷插拔/长稳等仍按known-limits-20261030.md处理。
 4. 按tencent-updates.md维护最新本地集；COS189GiB告警/207.9停止，已取消日期截止，关注实际扣量/到期后费用。不清零/扩大额度/恢复停止锁；监控断档超30天须账单重锚定。
 

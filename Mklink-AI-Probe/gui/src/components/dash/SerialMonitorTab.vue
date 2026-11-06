@@ -3,7 +3,7 @@
     <div class="serial-config-row">
       <label>
         <span>{{ tr('端口', 'Port') }}</span>
-        <select v-model="portName" :disabled="starting || stopping || ymodemStarting">
+        <select v-model="portName" :disabled="starting || stopping || ymodemStarting || readingBaudrates">
           <option v-for="port in selectablePorts" :key="port.device" :value="port.device">
             {{ port.device }}{{ port.description ? ` · ${port.description}` : '' }}
           </option>
@@ -11,21 +11,28 @@
       </label>
       <button
         type="button" class="icon-action" :title="tr('刷新串口', 'Refresh ports')"
-        :aria-label="tr('刷新串口', 'Refresh ports')" :disabled="running || refreshingPorts || ymodemActive || ymodemStarting"
+        :aria-label="tr('刷新串口', 'Refresh ports')" :disabled="running || refreshingPorts || readingBaudrates || ymodemActive || ymodemStarting"
         @click="refreshPorts"
       ><RefreshCw :size="15" :class="{ spinning: refreshingPorts }" /></button>
       <label>
-        <span>{{ tr('波特率（可输入）', 'Baud Rate (editable)') }}</span>
-        <input
-          v-model="baudrate" data-testid="serial-baudrate" type="number"
-          list="serial-baudrates" min="1" step="1" inputmode="numeric"
+        <span>{{ tr('波特率', 'Baud Rate') }}</span>
+        <select
+          v-model.number="baudrate" data-testid="serial-baudrate"
           :aria-invalid="validBaudrate === null"
-          :disabled="running || starting || stopping || ymodemActive || ymodemStarting"
-        />
-        <datalist id="serial-baudrates">
-          <option v-for="rate in baudrates" :key="rate" :value="rate" />
-        </datalist>
+          :title="baudrateSourceLabel"
+          :disabled="running || starting || stopping || readingBaudrates || ymodemActive || ymodemStarting"
+        >
+          <option v-for="rate in baudrates" :key="rate" :value="rate">{{ rate }}</option>
+          <option v-if="running && !baudrates.includes(baudrate)" :value="baudrate" disabled>
+            {{ baudrate }} · {{ tr('当前会话', 'Current session') }}
+          </option>
+        </select>
       </label>
+      <button v-if="selectedPort?.uart_kind === 'mklink_uart' && selectedPort.command_port"
+        type="button" class="btn" data-testid="serial-read-baudrates"
+        :disabled="running || starting || stopping || readingBaudrates || refreshingPorts || ymodemActive || ymodemStarting"
+        @click="readBaudrates"
+      >{{ readingBaudrates ? tr('读取中', 'Reading') : tr('读取下载器档位', 'Read Probe Baud Rates') }}</button>
       <label>
         <span>{{ tr('数据位', 'Data Bits') }}</span>
         <select v-model="databits" :disabled="running || starting || stopping || ymodemActive || ymodemStarting">
@@ -48,7 +55,7 @@
       </label>
       <button
         v-if="!running" type="button" class="btn btn-primary"
-        :disabled="starting || !portName || validBaudrate === null"
+        :disabled="starting || readingBaudrates || !portName || validBaudrate === null"
         @click="doStart"
       >{{ starting ? tr('启动中', 'Starting') : tr('打开串口', 'Open Port') }}</button>
       <button v-else type="button" class="btn btn-danger" :disabled="stopping || ymodemActive || ymodemStarting" @click="doStop">
@@ -251,7 +258,7 @@ const idleYmodemStatus = (): YmodemStatus => ({
   sent_bytes: 0, total_bytes: 0, percent: 0, block: 0, retries: 0, error: '',
 })
 
-const baudrates = [9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600]
+const commonBaudrates = [9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600]
 const toast = useToast()
 const { listUartPorts: fetchPorts } = useMklinkApi()
 const logBinary = useBinaryStream('serial', {
@@ -262,6 +269,21 @@ const terminalBinary = useBinaryStream('serial', {
 })
 const ports = ref<PortInfo[]>([])
 const portName = ref('')
+const readingBaudrates = ref(false)
+const selectedPort = computed(() => ports.value.find(port => port.device === portName.value))
+const hasFirmwareBaudrates = computed(() => {
+  const port = selectedPort.value
+  const options = port?.uart_baud
+  return port?.uart_kind === 'mklink_uart' && options?.profile === 1 && options.source === 'firmware'
+    && Array.isArray(options.rates) && options.rates.length > 0 && options.rates.length <= 64
+    && new Set(options.rates).size === options.rates.length
+    && options.rates.every(rate => Number.isSafeInteger(rate) && rate >= 300 && rate <= 10_000_000)
+})
+const baudrates = computed(() => hasFirmwareBaudrates.value
+  ? [...selectedPort.value!.uart_baud!.rates].sort((a, b) => a - b) : commonBaudrates)
+const baudrateSourceLabel = computed(() => hasFirmwareBaudrates.value
+  ? tr('下载器固件声明的普通 UART 档位', 'Ordinary UART rates advertised by the probe firmware')
+  : tr('常用档位，实际支持以设备为准', 'Common rates; actual support depends on the device'))
 const activeConfigs = ref<Array<Record<string, unknown>>>([])
 const selectablePorts = computed(() => running.value
   ? activeConfigs.value.map(item => ({ device: String(item.port), description: '' })) : ports.value)
@@ -375,7 +397,12 @@ const validBaudrate = computed(() => {
   const value = String(baudrate.value).trim()
   if (!/^\d+$/.test(value)) return null
   const parsed = Number(value)
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null
+  return Number.isSafeInteger(parsed) && parsed > 0 && (running.value || baudrates.value.includes(parsed)) ? parsed : null
+})
+watch([baudrates, running, portName], () => {
+  if (!running.value && !baudrates.value.includes(baudrate.value)) {
+    baudrate.value = baudrates.value.includes(115200) ? 115200 : baudrates.value[0]!
+  }
 })
 const localizedPortStatus = computed(() => {
   const status = currentPortStatus.value
@@ -437,6 +464,28 @@ async function refreshPorts(): Promise<void> {
   } finally {
     refreshingPorts.value = false
     portsLoaded.value = true
+  }
+}
+
+async function readBaudrates(): Promise<void> {
+  if (readingBaudrates.value || running.value || starting.value || stopping.value) return
+  const requested = portName.value
+  readingBaudrates.value = true
+  try {
+    const result = await requestJson('/api/runtime/uart-baudrates', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ port: requested }),
+    }) as PortInfo
+    if (disposed || portName.value !== requested) return
+    if (result.device !== requested) throw new Error(tr('串口身份已变化，请刷新', 'Port identity changed; refresh ports'))
+    ports.value = ports.value.map(port => port.device === requested ? result : port)
+    if (result.uart_baud?.source !== 'firmware') {
+      toast.info(tr('固件未提供已适配档位，保留常用档位', 'Firmware has no adapted-rate list; keeping common rates'))
+    }
+  } catch (caught) {
+    if (!disposed) toast.error(caught instanceof Error ? caught.message : String(caught))
+  } finally {
+    readingBaudrates.value = false
   }
 }
 
@@ -726,7 +775,7 @@ async function pollStatus(): Promise<void> {
 }
 
 async function doStart(): Promise<void> {
-  if (!portName.value || validBaudrate.value === null || starting.value) return
+  if (!portName.value || validBaudrate.value === null || starting.value || readingBaudrates.value) return
   starting.value = true
   runtimeError.value = ''
   try {

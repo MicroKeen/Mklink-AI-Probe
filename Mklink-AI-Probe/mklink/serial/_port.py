@@ -39,12 +39,19 @@ def list_uart_ports() -> list[dict]:
     """列出通用串口，排除 MKLink 命令接口和身份不明的接口。"""
     results: list[dict] = []
     ports = list(serial.tools.list_ports.comports())
-    for info, number in zip(ports, usb_interface_numbers(ports)):
+    interfaces = usb_interface_numbers(ports)
+    commands = [p for p, number in zip(ports, interfaces)
+                if is_mklink_usb_port(p) and number == MKLINK_COMMAND_INTERFACE]
+    for info, number in zip(ports, interfaces):
         is_command = (
             is_mklink_usb_port(info)
             and number in (None, MKLINK_COMMAND_INTERFACE)
         )
         if not is_command:
+            kind = ('mklink_uart' if number == 2 else 'mklink_rs485' if number == 6 else 'mklink_unknown') if is_mklink_usb_port(info) else 'generic'
+            serial_number = str(getattr(info, 'serial_number', None) or '').strip().casefold()
+            siblings = [p for p in commands if serial_number and
+                        str(getattr(p, 'serial_number', None) or '').strip().casefold() == serial_number]
             results.append({
                 "device": info.device,
                 "description": info.description or "",
@@ -52,6 +59,9 @@ def list_uart_ports() -> list[dict]:
                 "vid": info.vid,
                 "pid": info.pid,
                 "is_mklink": False,
+                "uart_kind": kind,
+                "command_port": siblings[0].device if kind == 'mklink_uart' and len(siblings) == 1 else None,
+                "usb_serial": serial_number if is_mklink_usb_port(info) else '',
             })
     return results
 
