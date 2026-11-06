@@ -59,9 +59,14 @@ def test_backend_exits_and_releases_owner_after_stream_clients(tmp_path, monkeyp
                     peer.shutdown(socket.SHUT_WR)
                     peer.close()
             snapshot = control_runtime(probe='lobby')
-            assert snapshot['pid'] == process.pid and snapshot['clients'] == []
+            # Windows venv launchers may spawn the actual backend in a child.
+            backend_pid = info['pid']
+            assert isinstance(backend_pid, int) and backend_pid > 0
+            assert snapshot['pid'] == backend_pid and snapshot['clients'] == []
             assert control_runtime('stop-backend', probe='lobby', confirm=True) == {'status': 'stopping'}
             assert process.wait(timeout=10) == 0
+            runtime_log = (endpoint.parent / 'runtime.log').read_text(encoding='utf-8')
+            assert f'Finished server process [{backend_pid}]' in runtime_log
             assert not endpoint.exists()
             with runtime_lock('owner.lock', 'lobby'):
                 pass

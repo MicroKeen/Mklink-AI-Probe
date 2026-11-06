@@ -4,12 +4,12 @@
 
 ## 当前断点
 
-- 更新时间：`2026-11-06T22:50:58+08:00`
+- 更新时间：`2026-11-06T23:13:23+08:00`
 - 分支：`codex/s3-main-regression`
 - HEAD：`基于 main 4f3be7a46651；本轮提交 SHA 以 Git 为准。`
 - 远端 HEAD：`2026-11-06 再次 fetch microkeen/main：4f3be7a46651，PR #65 尚未替换。`
-- 工作树：隔离任务树；原 S3 分支及用户 _serial_worker.py 修改保留。测试和私有证据位于主仓库忽略的 .build。
-- 当前任务：PR #65 已移植到最新 main 并收拢通用传输策略。1442 通过、18 失败在原 main 全部复现；另 79 文档/记忆/Skill边界检查通过。HTTP/BLE 真实 MCP 和 RTT 共享通过，HTTP 连续 Flash 读取出现 epoch 过期，未提交烧录；显式管理恢复后 BLE 完整备份、采样、原 APP 烧录校验及整片/选项字节不变通过。完整结果见 docs/verification/s3-shared-runtime-20261106.md。PR 创建前须按用户要求确认，当前不具备合并资格。
+- 工作树：隔离任务树；原 S3 分支及用户 _serial_worker.py 修改保留。临时Windows设置已恢复；测试链接及私有证据保留在主仓库忽略的 .build。
+- 当前任务：S3 PR 候选在 b192952b 后修复基线失败：2项 MCP 取消清理缺陷、3项 Windows PID 假设及1项 UART MCP 转换断言。12项符号链接失败经用户授权临时开发者模式后真实验证，已恢复原设置。扩大回归1460全部通过，79文档/记忆/Skill边界检查通过。HTTP长读epoch过期仍未定因；此前BLE烧录/全片比较与台架释放已通过。见docs/verification/s3-shared-runtime-20261106.md。PR创建前仍须用户确认。
 - 状态：`s3_pr_preparation_incomplete_hil`
 
 ## 里程碑
@@ -23,7 +23,7 @@
 
 ## 验证证据
 
-- **S3 main 移植与通用传输契约回归**：219 定点包含在 1442 通过/18 失败的扩大回归中；18 失败在干净 main 同环境复现，涉及 Windows 符号链接/PID 和既有 MCP 测试兼容性。79 文档/记忆/Skill边界检查通过。真实 stdio MCP 动态发现、身份、RTT 在工作台退出后持续接收在 HTTP/BLE 通过；HTTP 长读失败并隔离，显式恢复后 BLE 全片备份/84 完整采样通过。BLE 原 APP 烧录校验通过，独立全片 SHA/选项字节一致、目标运行，收尾无owner/活动流；详见 s3-shared-runtime-20261106.md，不外推旧 STA/AP/BLE 历史验收。
+- **S3 main 移植与通用传输契约回归**：原1442通过/18失败在干净main复现；本轮修复MCP取消下的detach，校正PID与UART协议断言，并满足真实Windows符号链接前提。81定点/62安全检查及同范围1460全通过，零失败/跳过；开发者模式原值已恢复。79文档/记忆/Skill边界检查通过。此前b192952b真机HTTP/BLE MCP/RTT、BLE完整备份/84采样/APP烧录及全片/选项字节一致通过；HTTP长读失败未解决，详见s3-shared-runtime-20261106.md。
 - **0.4.2正式构建安装及公开发布**：0.4.2 正式源0e82ba6f已完成签名构建、覆盖安装、用户文件保留、协议53/56 MCP/126能力、七宿主及四固件哈希、COS/Git双路径升级验收；PR67已合并be0e000c。清理29目录、629保留文件哈希一致，含链接目录保留人工检查。细节与限制见v042-release-handoff.md、v042-postrelease-handoff.md，发布资产不变。
 - **0.4.2正式候选最终资格**：90e676db与产品1ca9b8fd等价：6453Python/2skip、1182GUI、Web/冻结/Rust/NSIS、HPM硬件、原生RTT/Watch/Trace、烧录恢复及退出通过；历史Trace溢出保留。详细数量、范围和限制见v042-formal-qualification.md、v042-traffic-replay.md；正式安装/发布见v042-release-handoff.md。
 - **HPM AI Skill能力核实**：审计修复749Python/65GUI、生产Web及浏览器HPM JTAG 5k/排除8M通过；完整Skill源cafe835f/SHA717cfdfb已覆盖，2644安装文件一致、5340用户文件保留；56 MCP/126能力和协议53安装后schema一致、Skill验证通过。时钟协商/离线档位门禁、探针控制/诊断/供电、离线/ISP/OTP入口及文档补齐。该轮无USB操作；当时固件待办与后续正式固件范围分别见审计/发布报告。见firmware-skill-fixes-20261101.md。

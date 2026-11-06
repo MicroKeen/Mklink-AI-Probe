@@ -28,6 +28,39 @@ Private evidence is retained under the ignored build workspace: expanded run
 `run-20261106-222208-8027f89c.log`. Raw device data and credentials are not part
 of this change.
 
+### Follow-up: repair the 18 baseline failures
+
+The two MCP lifecycle failures exposed a product defect: the in-memory
+FastMCP transport cancels its task group before exiting the server lifespan,
+so cancellation interrupted the awaited detach. The shared MCP lifespan now
+shields that cleanup with the existing AnyIO dependency. The original tests
+verify that its session disappears while the other client's RTT keeps running,
+and that rejected probe switching never submits an operation.
+
+Three Windows shutdown tests now compare authenticated discovery/control PIDs
+and verify that the same backend PID logs normal termination, instead of
+assuming the venv launcher's PID equals the child interpreter's PID. Endpoint
+removal, process exit and owner-lock release assertions are retained.
+
+The UART test now checks raw MCP `structuredContent` for both list and object
+results. FastMCP 2.14.7's convenience `.data` conversion for this union schema
+produced empty model instances even though the wire payload retained the fields.
+No UART response or public tool schema was changed.
+
+The remaining 12 failures needed the Windows symlink prerequisite. With the
+user's explicit permission, Developer Mode was enabled temporarily. All real
+symlink and junction scenarios ran unchanged; none were skipped or replaced
+with mocks. The fixture error now explains the prerequisite, and the maintainer
+development guide documents it. MCP/shutdown/UART: 81 passed; upload-security:
+62 passed. System-setting restoration and the expanded rerun are recorded below.
+
+The same expanded selection then passed **1460 tests, zero failures/skips** in
+412.54 seconds (`run-20261106-230552-91dd6702.log`). The original 18 failures
+above remain historical evidence. After this run, the temporary Developer Mode
+value was removed to restore its original absence, verified by a separate read;
+the elevated helper exited. Future unprivileged Windows runs must still satisfy
+the documented symlink prerequisite. The tests do not weaken that boundary.
+
 ## Hardware evidence
 
 The user confirmed the original S3 → V4 → STM32F411 bench online. These runs
@@ -35,6 +68,9 @@ used candidate source in both the workbench and spawned backend/MCP processes,
 with isolated per-process runtime/configuration directories. The installed
 GUI/MCP runtime and computer Wi-Fi configuration were preserved.
 Firmware observed: S3 `0.7.2-recovery1`, V4 `V4.7.2`; target Flash size 512 KiB.
+Hardware evidence below belongs to `b192952b`, before the active shared-MCP
+lifespan follow-up. That follow-up does not change the S3 transport, remote MCP
+or flashing path; it is covered by the software lifecycle regressions above.
 
 | Check | Current result |
 |---|---|

@@ -7,6 +7,7 @@ import logging
 import threading
 from typing import Literal
 
+import anyio
 from pydantic import StrictBool, StrictInt
 
 from mklink.runtime import RuntimeClient, RuntimeErrorResponse, VERSION
@@ -33,7 +34,9 @@ def build_server():
             yield
         finally:
             try:
-                await asyncio.to_thread(close)
+                # Transport cancellation must not interrupt detaching this session.
+                with anyio.CancelScope(shield=True):
+                    await asyncio.to_thread(close)
             except Exception:
                 logging.getLogger(__name__).warning('Shared MCP detach failed; session will expire', exc_info=True)
 
