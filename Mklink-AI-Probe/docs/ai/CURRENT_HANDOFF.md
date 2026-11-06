@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-11-06T17:40:11.3744551+08:00`
+- 更新时间：`2026-11-06T21:46:07+08:00`
 - 分支：`codex/v0.4.3-fixes`
-- HEAD：`上位机心跳/录制源92ca42e0；本轮只补V3 IAR退出验收交接。确切HEAD以Git为准，已安装源仍269d826f。`
+- HEAD：`上位机产品源92ca42e0；后续只补V3/V4 IAR退出验收交接。确切HEAD以Git为准，已安装源仍269d826f。`
 - 远端 HEAD：`microkeen/main已合并PR66、67、68，基线4f3be7a4；正式tag/包不变。`
 - 工作树：复用E盘主工作区，保留旧v0.4.2分支和两个detached工作树；本轮及后续修复共用codex/v0.4.3-fixes。
-- 当前任务：V3上下文候选修复IAR退出后吞吐残留，四调试器共存及数据验收通过；见v043-iar-exit-context.md。逻辑调试所有权保留，非超时清active。客户旧固件硬锁未复现。上位机未覆盖安装，未合并/发布。
-- 状态：`iar_exit_context_verified`
+- 当前任务：V3/V4 r4退出恢复与四调试器共存通过，见v043-iar-exit-context.md及v043-v4-iar-exit-context.md。E→r3对照完成，最终r4保留；未覆盖安装/合并/发布。
+- 状态：`v3_v4_iar_exit_context_verified`
 
 ## 里程碑
 
@@ -23,7 +23,7 @@
 
 ## 验证证据
 
-- **0.4.3接收、连续性与性能**：历史采集/1us/269d826f安装资格分别见v043-host-baseline.md、v043-superwatch-1us.md、v043-1us-local-install.md。92ca心跳/录制193定向/787相关（重叠）/流性能1过，见v043-mux-heartbeat-recording.md。后续V3上下文候选：44应用/243固定帧及IAR CLI+GUI2轮、Keil/pyOCD/OpenOCD各5轮过；60668928B RTT、4210495采样值/时间戳全核对，0超时/丢弃。IAR退出RTT355→420KiB/s、共同负载Watch9.96→11.70万/s，无IDE持平；见v043-iar-exit-context.md。
+- **0.4.3接收、连续性与性能**：历史基线/1us/安装见v043-host-baseline.md、v043-superwatch-1us.md、v043-1us-local-install.md。92ca心跳/录制193定向/787相关（重叠）/性能1过。V3/V4各IAR GUI2轮、其余IDE各5轮；RTT 60668928/69770240B、样本4210495/3699185全正确，0超时/丢弃。退出混合RTT约355→420/354→416KiB/s、Watch约10→11.7万/s；V4独立849.64KiB/s(-0.0205%相邻E)、26.53万/s，4096B约1053–1056KiB/s。见v043-mux-heartbeat-recording.md和v043-iar-exit-context.md、v043-v4-iar-exit-context.md。
 - **0.4.2正式发布及腾讯云下载**：正式源0e82ba6f，Windows/完整Skill/SiteAgent及四固件正式覆盖、签名、三渠道与故障回退验证通过；PR66/67/68已合并，正式资产不可变。安装器元数据修复cb30b703/PR63已纳入。详细计数/SHA见v042-release-handoff.md、installer-metadata-cleanup-20261027.md。后续清理29目录约6.587GiB、629保留文件哈希不变，135含链接组保留人工检查，见v042-postrelease-handoff.md。 11/4轻量11文件341MiB全哈希/HEAD/Range/缺文件回退、25保护和18GUI通过；更新32过/1已有开发版本不一致，Skill实时检查通过。99%及无日期截止部署回读通过，详见tencent-download-cost-20261104.md（含账单分析、误部署恢复及限制）。
 - **0.4.2正式候选最终资格**：90e676db与产品1ca9b8fd等价：6453Python/2skip、1182GUI、生产Web/冻结/Rust/NSIS/覆盖及真实界面交互通过。HPM时钟/镜像/RAM/XML/RTT/Watch/串口、Trace独立并行、烧录后三流恢复与原生退出通过。完整计数及限制见v042-formal-qualification.md、v042-traffic-replay.md，历史Trace溢出失败保留。
 - **HPM AI Skill能力核实**：源cafe835f：749Python/65GUI、生产Web/浏览器与完整Skill覆盖校验通过，56 MCP/126能力/协议53一致。时钟、离线门禁、探针诊断/供电/ISP/OTP入口和文档已补齐。该轮无USB操作，详见firmware-skill-fixes-20261101.md；后续正式固件范围见发布报告。
@@ -47,14 +47,14 @@
 
 ## 真机环境
 
-- **state**：V3/H7保留已验收上下文r1：V3.6.8/build2026-11-06T16:49:18，UF2 43fe008a…0da45。目标IAR映像未变且运行；IAR/Keil非调试，采集/连接/后台释放。LA CH0时钟/CH1数据，操作前核对身份占用。固件会话01a1a1a2-9adc-79e2-b30e-07c07d5f90c6负责codex/v3-iar-context；旧未验证DAP唤醒候选已撤回。
+- **state**：普通V4/H7保留r4，build2026-11-06T20:51:37，UF2 adb45c86…d1676。目标191607B回读不变且运行，夹具load_enable=0，采集/DAP/后台释放，IDE非调试。Keil GUI选V4/10MHz/禁下载，磁盘仍V3选择器；配置未恢复。LA CH0/CH1为时钟/数据，操作前核对占用。V3前轮r1资格保留；协调会话01a1a1a2-9adc-79e2-b30e-07c07d5f90c6。
 - **installer**：已安装Windows/完整Skill为0.4.3/269d826f，NSIS SHA1b476419、Skill f2f8a1cf；3651/2651载荷及5339本地数据校验通过，见v043-1us-local-install.md。本轮修复未构建覆盖；SiteAgent仍旧安装。正式0.4.2资产保留，未合并/发布。
 - **backups**：正式包/四固件、当前资格/恢复包、缓存及工作树保留。用户授权旧记录和脚本清理：F释放18.055GiB、E释放5.326GiB；32份旧raw已退役，不能重解码，保留分析。114含链接组未动；见v043-workspace-cleanup.md。
 
 ## 下一动作
 
 1. 继续codex/v0.4.3-fixes/草稿PR69，保留v043-host-baseline.md。允许调试占带宽合理下降，数据正确/退出恢复和无IDE基线不降。普通读P95/间隔<1ms、采样最大间隔<20us仍开放；合并/发布须新授权。
-2. 应用/Skill仍269d826f，92ca上位机修复未覆盖；V3上下文r1已实测，分支/CI以各PR实际头为准。合并前核对main、全量及受影响安装资格，不合并/发布。
+2. 应用/Skill仍269d826f，92ca上位机修复未覆盖；V3 PR10、V4 PR19已实测，V4依赖PR18，精确HEAD/CI以远端为准。合并前核对main、依赖、全量及受影响安装资格，不合并/发布。
 3. 保留正式包、当前唯一验收证据、缓存和含链接目录；旧记录/脚本退役范围见v043-workspace-cleanup.md。历史V3掉线/冷插拔/长稳等仍按known-limits-20261030.md处理。
 4. 按tencent-updates.md维护最新本地集；COS189GiB告警/207.9停止，已取消日期截止，关注实际扣量/到期后费用。不清零/扩大额度/恢复停止锁；监控断档超30天须账单重锚定。
 
@@ -62,7 +62,7 @@
 
 - 新MUX整块读普通V4/H7已实测，V3/H7指定会话候选复测通过；HPM本轮映像回读及480B RAM核对通过，未扩全内存区矩阵。安装后20次调用仍有明显调度抖动，前次dce包4KiB最大39.074ms，不承诺固定低延迟。HPM九系列XML已解析/匹配/浏览器导入；用户接回HPM5301后的六GPIO寄存器实读/采集通过，其他系列及IO输出驱动未测；客户F411仍待实板复测。dump定时截止可留半个样本，完整性门槛保留。HPM CPU仅RV32/hart0/HPM5301/槽0实测，其他触发器/型号、新值写入、20/30MHz及断电冷启未扩展，TCK未测。374个历史probe目录启动扫描慢未修复；4551687d仅修复端口复用时HTTP异常中止发现，已含e29d候选，见runtime-endpoint-errors-20261030.md。客户3.11.9、CDC首次离线、F405 PROGRAM100%退出、GD32受限AI、RTT后MUX、HEX2%未知结果及PyInstaller权限故障保持未闭环，详见known-limits-20261030.md及v032-postrelease-incidents.md；不重放未知操作。 旧dce/4be FPBv2曾422，新包已含修复；7843双半字命中及Keil共存已验。采集中共享断点仍409；V2本轮共享step已实测，其他型号不由Keil单步替代验收；见h7-fpbv2-systemview-idle-20261031.md。
 - 30MHz RTT/Watch/UART并行历史存在目标读错：V4.6.8 1kHz +1/最大+273，10MHz0；V4.7.0/F103先Watch后RTT11762周期1错、反顺序12297周期0，10MHz两顺序0。发布接受不等于问题关闭，完整记录见known-limits-20261030.md。
-- HPM/SES未发DAP_Disconnect可遗留占用；完整SES矩阵/RTT下行未覆盖。RTT status6截图只证busy，不推断历史同因。IAR9.70.1 CLI/GUI退出尾包已证未发Disconnect/CONNECTED=false；V3上下文r1保留所有权但消除逐批借还，退出吞吐恢复，四调试器共存通过，见v043-iar-exit-context.md。不按沉默超时清active；其他IDE版本/芯片、长期插拔睡眠和客户旧固件未复现硬锁不外推。
+- HPM/SES未发Disconnect可留占用，完整SES矩阵/RTT下行未覆盖；status6截图只证busy。IAR9.70.1退出尾包已证无Disconnect/CONNECTED=false，V3/V4上下文修复保留所有权并消除逐批借还，四调试器共存/退出恢复通过。其他IDE/芯片、长期睡眠拔插及旧固件未复现硬锁不外推。原E Watch停止边界457314B队列淘汰未闭环。4096B允许已建立DAP只读，新Connect/Disconnect按契约status7终止，须显式新采集，非原子快照。
 - 共享MUX并行SV仍有容量边界：旧饱和768/drop17371，流水线28/1330、burst26/1164、control15/1442，重启归零不抹去；control独立62.679秒零丢失计数通过。RTT661.208KiB/s为特定配置观测值，H7限定实测新799–801KiB/s、独立/有限并行SV零计数；单次API20样本中位有12.90→20.03ms等退化未归因，旧Watch末组失败保留。采集暂停/下载丢观测、多变量非原子、无时序保证。COS207.9GiB(99%)非账单上限；已取消套餐日期截止，到期可按量计费，存储/请求/SCF另计；旧0.4.0固件Git备用未迁，签名资产不改。
 - V3无屏幕且不支持HPM；V3.6.4 Keil/OpenOCD共存已测。V4最终无诊断固件完整SES矩阵未完成。旧V3.6.8/build17:56:49的CRLF六轮及1800.028秒空RTT证据见v3-crlf-final-review-20261030.md和v3-empty-rtt-review-20261030.md，不计入新build11:00:39复验。新V3限定RTT/FPB/Keil通过见v3-rtt-systemview-review-20261031.md；历史掉线根因、legacy/睡眠拔插/更长时长仍未测，再现先保存现场。 旧1ms Watch相位跳变归因未闭环；本轮HPM5301周期矩阵已通过，不能外推历史全部场景。
 - 最后客户端退出约5秒租约后开始排空/关闭，不保证硬实时5秒。每GUI独立后台；单探针仅一个后台持有；已有URL共享页面跟随明确切换。独立操作另开客户端。 Keil BL重载由2增9；用户确认未操作，原因未明。仅恢复重载后9个状态，最初配置未恢复；见h7-fpbv2-systemview-idle-20261031.md。
