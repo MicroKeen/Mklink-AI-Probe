@@ -467,6 +467,7 @@ class MKLinkSerialBridge:
                 return None
             transport = MuxTransport(self._serial.write, self._cmd_lock,
                                      command_timeout=getattr(self, 'mux_timeout', 3.0),
+                                     background_heartbeats=getattr(self, 'mux_background_heartbeats', False),
                                      diagnostic_context={'connection': getattr(self, '_diagnostic_id', None), 'port': getattr(self, '_port', None)})
             self._mux = transport  # The existing reader changes decoder before entry.
             try:

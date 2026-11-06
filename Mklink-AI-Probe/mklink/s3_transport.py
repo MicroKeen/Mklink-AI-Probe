@@ -49,10 +49,15 @@ class _FifoRLock:
 
 
 class WirelessLink:
-    def __init__(self, rpc, node_id, *, owner='Mklink wireless target'):
+    def __init__(self, rpc, node_id, *, owner='Mklink wireless target', pull_rpc=None):
         if len(node_id) != 12 or any(c not in '0123456789abcdef' for c in node_id):
             raise ValueError('Exact S3 device identity required')
         self.rpc = rpc
+        self.pull_rpc = pull_rpc
+        self.duplex = False
+        self.pulling = False
+        self.open_sequence = None
+        self.pull_sequence = 0
         self.node_id = node_id
         self.owner = owner
         self.lock = _FifoRLock()
@@ -62,6 +67,7 @@ class WirelessLink:
         self.poisoned = False
         self.opened = False
         self.renewed = 0
+        self.stream_renews_lease = False
         self.recent_rpc = deque(maxlen=8)
         self.read_limit_supported=False;self.read_max=1024;self.file_chunk=1024
         self.rpc_samples={};self.accepted_native_bytes=0;self.received_native_bytes=0;self.staged_file_bytes=0
@@ -100,6 +106,8 @@ class WirelessLink:
                 raise RuntimeError('Native stream requires compatible S3 firmware and an idle V4')
             self.generation = state['generation']
             self.sequence = state['next_sequence']
+            self.stream_renews_lease = state.get('stream_renews_lease') is True
+            self.duplex = self.pull_rpc is not None and state.get('independent_read_sequence') is True
             self.read_limit_supported=state.get('read_limit_supported') is True
             if self.read_limit_supported:
                 legacy=state.get('max_read_payload',1024)
@@ -111,13 +119,18 @@ class WirelessLink:
             self.file_chunk=state.get('file_chunk_max',1024)
             if type(self.file_chunk) is not int or not 1<=self.file_chunk<=2048:raise ValueError('Invalid negotiated file window')
 
-    def call(self, method, params=None):
+    def renew_if_due(self):
         with self.lock:
             if not self.lease:
                 raise RuntimeError('No wireless target lease')
             if time.monotonic() - self.renewed > 3:
+                started = time.monotonic()
                 self.rpc('control.renew', {'lease_token': self.lease})
-                self.renewed = time.monotonic()
+                self.renewed = started
+
+    def call(self, method, params=None):
+        with self.lock:
+            self.renew_if_due()
             started=time.monotonic()
             try:
                 result=self.rpc(method, dict(params or {}, lease_token=self.lease))
@@ -125,12 +138,49 @@ class WirelessLink:
                 self._timing(method,started,False)
                 raise
             self._timing(method,started,True)
+            if self.stream_renews_lease and method in ('probe.stream.open', 'probe.stream.read', 'probe.stream.write', 'probe.stream.close'):
+                self.renewed = started
             return result
 
+    def pull(self):
+        with self.lock:
+            if self.poisoned or not self.opened or not self.lease or self.pulling:
+                raise ConnectionError('Independent read requires one healthy stream reader')
+            self.renew_if_due()
+            self.pull_sequence += 1
+            limit = min(8192, self.read_max)
+            params = dict(lease_token=self.lease, generation=self.generation,
+                          open_sequence=self.open_sequence, sequence=self.pull_sequence, max_bytes=limit)
+            self.pulling = True
+        started = time.monotonic()
+        try:
+            result = self.pull_rpc('probe.stream.pull', params)
+            reply = base64.b64decode(result['reply_base64'], validate=True)
+            with self.lock:
+                if self.poisoned or result['generation'] != self.generation or len(reply) > limit:
+                    raise ConnectionError('Invalid independent read response')
+                self.received_native_bytes += len(reply)
+                if self.stream_renews_lease:
+                    self.renewed = max(self.renewed, started)
+                self._timing('probe.stream.pull', started, True)
+            return reply
+        except Exception as error:
+            with self.lock:
+                self.poisoned = True
+                self._timing('probe.stream.pull', started, False)
+            raise ConnectionError('Independent read failed; no replay') from error
+        finally:
+            with self.lock:
+                self.pulling = False
+
     def stream(self, action, data=None):
+        if action == 'read' and self.duplex:
+            return self.pull()
         with self.lock:
             if self.poisoned:
                 raise ConnectionError('Native stream outcome unknown; no replay')
+            if action == 'close' and self.pulling:
+                raise ConnectionError('Native reader still owns IO')
             params = dict(generation=self.generation, sequence=self.sequence)
             if action=='read' and self.read_limit_supported:params['max_bytes']=self.read_max
             if data is not None:
@@ -151,6 +201,8 @@ class WirelessLink:
                 if data is not None:self.accepted_native_bytes+=len(data)
                 if action == 'open':
                     self.opened = True
+                    self.open_sequence = params['sequence']
+                    self.pull_sequence = 0
                 elif action == 'close':
                     self.opened = False
                 return reply
@@ -278,6 +330,7 @@ class WirelessBridge(MKLinkSerialBridge):
                            HilFileLock('transport_mklink-rpc_' + link.node_id, lease_s=60)]
         self._held_locks = []
         self._endpoint = None
+        self._pull_endpoint = None
         self._lease_stop = threading.Event()
         self._lease_thread = None
         self.link = link
@@ -309,13 +362,21 @@ class WirelessBridge(MKLinkSerialBridge):
             raise ConnectionError('S3 transport already owned')
         if self._endpoint is not None:
             self._endpoint.open()
+        if self._pull_endpoint is not None:
+            self._pull_endpoint.open()
         self.link.acquire()
+        self.mux_background_heartbeats = self.link.duplex
         def renew():
-            while not self._lease_stop.wait(2):
+            next_renew = time.monotonic() + 2
+            while not self._lease_stop.wait(.2 if self.link.duplex else 2):
                 try:
-                    if not all(lock.renew() for lock in self._held_locks):
-                        raise ConnectionError('Wireless hardware ownership lost')
-                    self.link.call('get_probe_transport')
+                    if time.monotonic() >= next_renew:
+                        if not all(lock.renew() for lock in self._held_locks):
+                            raise ConnectionError('Wireless hardware ownership lost')
+                        self.link.renew_if_due()
+                        next_renew = time.monotonic() + 2
+                    if self.link.duplex and self._mux is not None:
+                        self._mux.tick()
                 except Exception:
                     self.link.poisoned = True
                     return
@@ -362,6 +423,8 @@ class WirelessBridge(MKLinkSerialBridge):
             # a fully stopped local owner after an explicit physical recovery.
             self.last_connect_error = 'Remote session quarantined; explicit USB recovery required'
         finally:
+            if self._pull_endpoint:
+                self._pull_endpoint.close()
             if self._endpoint:
                 self._endpoint.close()
             for lock in reversed(self._held_locks):
@@ -373,8 +436,11 @@ class WirelessBridge(MKLinkSerialBridge):
     def from_node(cls, node):
         from mklink.s3_rpc import Endpoint
         endpoint = Endpoint(node)
-        bridge = cls(WirelessLink(endpoint.rpc, node['node_id'], owner='MKLink shared backend'))
+        pull_endpoint = Endpoint(node) if node['transport'] == 'http' else None
+        bridge = cls(WirelessLink(endpoint.rpc, node['node_id'], owner='MKLink shared backend',
+                                  pull_rpc=pull_endpoint.rpc if pull_endpoint else None))
         bridge._endpoint = endpoint
+        bridge._pull_endpoint = pull_endpoint
         return bridge
 
     def upload_algorithm(self, algorithm):

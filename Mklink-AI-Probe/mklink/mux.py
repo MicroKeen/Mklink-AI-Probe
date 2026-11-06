@@ -1,7 +1,8 @@
 """Bounded V4 CDC multiplex transport, fed by the bridge's sole reader.
 
-No serial handle or reader thread here. Writes share one request slot; a timeout
-poisons the session and is never retried or silently converted into Pika source.
+No serial handle or reader thread here. Target commands share one request slot;
+an opted-in duplex transport can track bounded PINGs while a reply is delayed.
+A timeout poisons the session and is never retried or converted into Pika source.
 """
 from __future__ import annotations
 
@@ -59,12 +60,16 @@ class MuxTransport:
     # sustained overload, never block the sole USB reader or command replies.
     WATCH_QUEUE_BYTES = 262144
 
-    def __init__(self, write, command_lock=None, *, diagnostic_context=None, command_timeout=3.0):
+    def __init__(self, write, command_lock=None, *, diagnostic_context=None, command_timeout=3.0,
+                 background_heartbeats=False):
         if (isinstance(command_timeout, bool) or not isinstance(command_timeout, (int, float))
                 or not math.isfinite(command_timeout) or command_timeout <= 0):
             raise ValueError('MUX command timeout must be finite and positive')
         self._diagnostic_context = diagnostic_context or {}
         self.command_timeout = command_timeout
+        self.background_heartbeats = background_heartbeats
+        self._heartbeats = {}
+        self._closing = False
         self._write = write
         self._condition = threading.Condition()
         self._commands = command_lock or threading.RLock()
@@ -118,7 +123,7 @@ class MuxTransport:
         if self._error:
             raise self._error
 
-    def _send(self, op, payload, heartbeat=False):
+    def _send(self, op, payload, heartbeat=False, *, background=False):
         if op == 0x12 and len(payload) > 4 + self.transfer_quantum:
             raise ValueError('Memory write exceeds negotiated transfer size')
         if op == 0x24 and (self.transfer_quantum != self.FAST_TRANSFER_BYTES
@@ -130,8 +135,12 @@ class MuxTransport:
         req = self._next_id
         wire = packet(op, 0 if op == 1 else self.epoch, req,
                       (self.nonce if 0x10 <= op < 0x40 else b'') + payload)
-        self._pending = (op, req, time.monotonic()+self.command_timeout, heartbeat)
-        self._reply = None
+        deadline = time.monotonic()+self.command_timeout
+        if background:
+            self._heartbeats[req] = deadline
+        else:
+            self._pending = (op, req, deadline, heartbeat)
+            self._reply = None
         self._last_command = time.monotonic()
         try:
             count = self._write(wire)
@@ -195,14 +204,25 @@ class MuxTransport:
                 self._pending_quantum = None
 
     def tick(self):
-        """Called by the serial reader even when no bytes arrive."""
+        """Service deadlines from the reader or a duplex transport's timer."""
         with self._condition:
             if self._error:
                 return
+            if self._heartbeats and time.monotonic() >= next(iter(self._heartbeats.values())):
+                self.fail('Multiplex heartbeat timed out; outcome unknown, no replay')
+                return
             if self._pending and time.monotonic() >= self._pending[2]:
                 self._expire_pending('response')
+            elif self.background_heartbeats and self.ready and not self._closing and time.monotonic()-self._last_command >= 1:
+                if len(self._heartbeats) >= 64:
+                    self.fail('Multiplex heartbeat window full; outcome unknown, no replay')
+                    return
+                # A slow receive path must not expire the probe's live session.
+                # Keep one target command, with separately correlated bounded PINGs.
+                self._send(2, b'', heartbeat=True, background=True)
             elif self.ready and not self._pending and self._reply is None and time.monotonic()-self._last_command >= 1:
-                self._send(2, b'', heartbeat=True)
+                if not self._closing:
+                    self._send(2, b'', heartbeat=True)
 
     def _expire_pending(self, source):
         """Keep the failed request identity; never replay uncertain operations."""
@@ -265,6 +285,14 @@ class MuxTransport:
                     return
                 payload = raw[16:16+n]
                 if op & 0x80:
+                    if req in self._heartbeats:
+                        if op != 0x82 or epoch != self.epoch or payload != b'\0':
+                            self.fail('Invalid multiplex heartbeat response; no replay')
+                            return
+                        del self._heartbeats[req]
+                        self._last_reply = time.monotonic()
+                        self._condition.notify_all()
+                        continue
                     if not self._pending or (op & 0x7f, req) != self._pending[:2]:
                         self.fail('Unexpected multiplex response')
                         return
@@ -395,6 +423,12 @@ class MuxTransport:
 
     def close(self):
         with self._commands:
+            with self._condition:
+                self._closing = True
+                while self._heartbeats and self._error is None:
+                    self.tick()
+                    if self._error is None:
+                        self._condition.wait(.1)
             if self._error is None:
                 self.request(3)
             self.ready = False

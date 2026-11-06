@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-11-06T23:13:23+08:00`
+- 更新时间：`2026-11-06T23:53:14+08:00`
 - 分支：`codex/s3-main-regression`
 - HEAD：`基于 main 4f3be7a46651；本轮提交 SHA 以 Git 为准。`
 - 远端 HEAD：`2026-11-06 再次 fetch microkeen/main：4f3be7a46651，PR #65 尚未替换。`
 - 工作树：隔离任务树；原 S3 分支及用户 _serial_worker.py 修改保留。临时Windows设置已恢复；测试链接及私有证据保留在主仓库忽略的 .build。
-- 当前任务：S3 PR 候选在 b192952b 后修复基线失败：2项 MCP 取消清理缺陷、3项 Windows PID 假设及1项 UART MCP 转换断言。12项符号链接失败经用户授权临时开发者模式后真实验证，已恢复原设置。扩大回归1460全部通过，79文档/记忆/Skill边界检查通过。HTTP长读epoch过期仍未定因；此前BLE烧录/全片比较与台架释放已通过。见docs/verification/s3-shared-runtime-20261106.md。PR创建前仍须用户确认。
-- 状态：`s3_pr_preparation_incomplete_hil`
+- 当前任务：S3 PR候选已修复HTTP长读活性故障：连接复用、协商独立pull、通用MUX有界PING窗口。原版5秒暂停复现epoch过期；修复版5秒及3次10秒暂停、共享后台3轮全片读取均一致，HTTP/BLE真实MCP/RTT共享与退出通过。扩大1628回归通过；早前18基线失败及1460通过记录保留。未改固件/安装版或重放，台架ready无占用。见s3-shared-runtime-20261106.md。提交PR前仍须用户确认。
+- 状态：`s3_http_fix_verified_pr_confirmation_pending`
 
 ## 里程碑
 
@@ -23,7 +23,7 @@
 
 ## 验证证据
 
-- **S3 main 移植与通用传输契约回归**：原1442通过/18失败在干净main复现；本轮修复MCP取消下的detach，校正PID与UART协议断言，并满足真实Windows符号链接前提。81定点/62安全检查及同范围1460全通过，零失败/跳过；开发者模式原值已恢复。79文档/记忆/Skill边界检查通过。此前b192952b真机HTTP/BLE MCP/RTT、BLE完整备份/84采样/APP烧录及全片/选项字节一致通过；HTTP长读失败未解决，详见s3-shared-runtime-20261106.md。
+- **S3 main 移植与通用传输契约回归**：早前18基线失败已修复，1460通过且临时开发者模式恢复；见原报告。HTTP后续：旧版5秒接收暂停失败；独立pull与通用MUX后台PING后，同场景及3次10秒暂停均全片512KiB一致；27个PING全部应答，最大USB写间隔1.209秒。真实共享后台3轮全片一致，HTTP/BLE MCP/RTT及后台退出通过；扩大1628测试全通过，无跳过。未再写Flash或修改固件。详见s3-shared-runtime-20261106.md。
 - **0.4.2正式构建安装及公开发布**：0.4.2 正式源0e82ba6f已完成签名构建、覆盖安装、用户文件保留、协议53/56 MCP/126能力、七宿主及四固件哈希、COS/Git双路径升级验收；PR67已合并be0e000c。清理29目录、629保留文件哈希一致，含链接目录保留人工检查。细节与限制见v042-release-handoff.md、v042-postrelease-handoff.md，发布资产不变。
 - **0.4.2正式候选最终资格**：90e676db与产品1ca9b8fd等价：6453Python/2skip、1182GUI、Web/冻结/Rust/NSIS、HPM硬件、原生RTT/Watch/Trace、烧录恢复及退出通过；历史Trace溢出保留。详细数量、范围和限制见v042-formal-qualification.md、v042-traffic-replay.md；正式安装/发布见v042-release-handoff.md。
 - **HPM AI Skill能力核实**：审计修复749Python/65GUI、生产Web及浏览器HPM JTAG 5k/排除8M通过；完整Skill源cafe835f/SHA717cfdfb已覆盖，2644安装文件一致、5340用户文件保留；56 MCP/126能力和协议53安装后schema一致、Skill验证通过。时钟协商/离线档位门禁、探针控制/诊断/供电、离线/ISP/OTP入口及文档补齐。该轮无USB操作；当时固件待办与后续正式固件范围分别见审计/发布报告。见firmware-skill-fixes-20261101.md。
@@ -47,20 +47,20 @@
 
 ## 真机环境
 
-- **state**：本轮 S3/V4/STM32F411：原 APP 只写回一次，整片512KiB与备份逐字节一致、选项字节不变、目标未暂停。后台已退出，USB管理状态ready、owner为空、stream_active=false。HTTP长读失败仍未解决；见s3-shared-runtime-20261106.md。其他历史台架状态需操作前重新核对。
+- **state**：S3/V4/STM32F411：HTTP长读修复后故障注入、3轮共享全片读取、HTTP/BLE MCP/RTT均通过。未再写Flash；原完整备份保持，所有新读与其一致。后台正常退出，USB管理ready、owner为空、stream_active=false。见s3-shared-runtime-20261106.md；其他台架状态操作前重核。
 - **installer**：本机Windows与全局Skill均为正式0.4.2源0e82ba6f，NSIS SHA5ff079bb/Skill SHA14af7a5f；签名、覆盖、载荷、56MCP/126能力与正常退出通过。当前不是旧测试包。AI客户端需重启加载新Skill。
 - **backups**：原安装包/正式七资产及四固件、CI ZIP、唯一验收证据、Skill备份和缓存均保留；旧detached树不删除。清理详情见v042-postrelease-handoff.md；本机新入口为v042-postrelease-handoff-20261102/START_HERE.txt。29可再生目录已删，含链接135组保留清单供人工检查。
 
 ## 下一动作
 
-1. 依据 s3-shared-runtime-20261106.md 完成 HTTP 长读根因和同负载回归，保留原始失败；需要固件变化时单独确认范围。
-2. 按当前回归报告复核烧录恢复、后台退出及台架状态；不使用历史备份替换当前程序。
+1. 展示HTTP长读修复与新回归证据、最终diff及PR描述，确认后推送提交；保持旧失败和测试边界，不声称全网络/所有固件认证。
+2. 后续合并前按维护规则补全所需完整软件/GUI及实机资格；本次未重复烧录当前APP，也未替换安装版。
 3. 向用户展示最终 diff、测试与限制及 PR 描述，确认后再向 microkeen 提交替代 PR #65 的 PR；禁止擅自合并或发布。
 4. 保持原工作区及已安装 GUI/MCP runtime 不变；原 _serial_worker.py 修复单独处理。
 
 ## 已知限制
 
-- 本轮 HTTP 连续读出现 MUX epoch 过期，根因未定；不得用放宽超时、自动重连或重放来掩盖。AP/C6、当前原生 GUI 包、SystemView 与实体 USB 未复测；旧验收不是本轮资格。
+- HTTP接收停顿故障已受控复现并修复，原自然失败具体网络触发未追溯。无V4源码，未改固件；控制通道中断/超时仍安全失败且不重放。AP/C6、当前原生GUI包、SystemView与实体USB未复测；不是全发布资格。
 - 新MUX整块读普通V4/H7已实测，V3/H7指定会话候选复测通过；HPM本轮映像回读及480B RAM核对通过，未扩全内存区矩阵。安装后20次调用仍有明显调度抖动，前次dce包4KiB最大39.074ms，不承诺固定低延迟。HPM九系列XML已解析/匹配/浏览器导入；用户接回HPM5301后的六GPIO寄存器实读/采集通过，其他系列及IO输出驱动未测；客户F411仍待实板复测。dump定时截止可留半个样本，完整性门槛保留。HPM CPU仅RV32/hart0/HPM5301/槽0实测，其他触发器/型号、新值写入、20/30MHz及断电冷启未扩展，TCK未测。374个历史probe目录启动扫描慢未修复；4551687d仅修复端口复用时HTTP异常中止发现，已含e29d候选，见runtime-endpoint-errors-20261030.md。客户3.11.9、CDC首次离线、F405 PROGRAM100%退出、GD32受限AI、RTT后MUX、HEX2%未知结果及PyInstaller权限故障保持未闭环，详见known-limits-20261030.md及v032-postrelease-incidents.md；不重放未知操作。 旧dce/4be FPBv2曾422，新包已含修复；7843双半字命中及Keil共存已验。采集中共享断点仍409；V2本轮共享step已实测，其他型号不由Keil单步替代验收；见h7-fpbv2-systemview-idle-20261031.md。
 - 30MHz RTT/Watch/UART并行历史存在目标读错：V4.6.8 1kHz +1/最大+273，10MHz0；V4.7.0/F103先Watch后RTT11762周期1错、反顺序12297周期0，10MHz两顺序0。发布接受不等于问题关闭，完整记录见known-limits-20261030.md。
 - HPM/SES未发DAP_Disconnect可遗留占用；显式退出后OpenOCD init/resume/shutdown或用户拔插可恢复，超时不得偷占。完整SES矩阵/RTT下行未覆盖。RTT status6截图只证busy，不推断与历史故障同因，待现场时序/显式重试。

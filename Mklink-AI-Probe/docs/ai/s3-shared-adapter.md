@@ -1,7 +1,7 @@
 # S3 wireless adapter — shared backend integration
 
 Current baseline: microkeen/main 4f3be7a4 (0.4.2), fetched on 2026-11-06.
-Current regression and unresolved HTTP long-read failure are recorded in
+Current regression, the original HTTP long-read failure and its follow-up are recorded in
 [the November 6 report](../verification/s3-shared-runtime-20261106.md).
 This revision ports the original PR #65 adapter onto current main. The existing
 runtime, client sessions, Site Agent protocol, GUI bridge, resource admission
@@ -23,6 +23,18 @@ probe-operation validation and UART/resource interlocks added since PR #65.
 - Acquisition restoration checks transport health without inspecting S3's link
   internals. The wire protocol, authenticated S3 lease, ordered stream, BLE
   framing and verified file upload remain in the S3 adapter.
+- HTTP reuses a direct origin connection and retires it after idle or failure;
+  no POST is replayed. Advertised stream activity renews the S3 lease without
+  periodic transport-status polling. Older nodes retain explicit renewal.
+- When S3 advertises `independent_read_sequence`, HTTP uses a separate bounded
+  pull connection tied to the lease, generation and stream-open sequence. There
+  is still one native byte reader. BLE and older nodes retain the serial path.
+- The shared MUX has an opt-in background PING window for duplex transports:
+  one target command remains in flight, with at most 64 separately identified
+  PINGs. CRC, request, epoch, status and deadlines remain enforced. Shutdown
+  drains PING replies before EXIT; a missing or invalid reply fails closed.
+  This policy is enabled only for the negotiated S3 HTTP duplex path, leaving
+  ordinary USB/default behavior unchanged. S3 lease renewal is not a V4 PING.
 
 This does not combine Site Agent WebSocket JSON-RPC with the S3 relay RPC: they
 are separate hops. No replacement remote server or public tool API is added.

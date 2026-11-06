@@ -119,10 +119,69 @@ application remains the backed-up current application.
 
 ## Remaining qualification
 
-HTTP long-read stability needs investigation before treating this candidate as
-ready to merge. AP/C6, fresh GUI/native packaging, sustained throughput,
+The original HTTP failure and the bounded follow-up below are both retained.
+AP/C6, fresh GUI/native packaging, sustained throughput,
 SystemView and physical USB regressions were not run for this candidate.
 Historical October 28 results in `docs/ai/s3-shared-adapter.md` belong only to
 the old PR #65 baseline and do not fill those gaps.
 
 No S3/V4 firmware, voltage, protection or computer network settings were changed.
+
+## Follow-up: HTTP long-read receive stalls
+
+The original CRC-valid epoch mismatch is not a host command timeout. A read-only
+control experiment reproduced the same error by holding delivery of one HTTP
+read response for five seconds: the next native USB write followed the previous
+one by 5.528 seconds, and V4 replied with a new epoch and status 3. S3's own
+generation did not change. The original adapter also completed one unmodified
+512 KiB read, so a successful run alone does not invalidate the initial failure.
+The initial natural failure lacks the detailed timestamps needed to identify
+its exact network trigger. No V4 firmware source was available.
+
+The host fix reuses HTTP connections, honors negotiated stream lease renewal,
+and uses S3's advertised independent pull sequence on a second HTTP connection.
+The only native reader still parses bytes in order. The shared MUX can opt into
+a bounded PING window while retaining one target-command slot: PING replies
+have distinct request IDs, CRC/epoch/status checks and deadlines. A transport
+timer services that window while its receive path waits. Ordinary USB, BLE and
+non-advertising nodes retain the original scheduling. No target request is
+replayed, and an invalid or missing reply still invalidates the session.
+
+Read-only verification on the original S3/V4/STM32F411 bench:
+
+| Case | Result |
+|---|---|
+| Original adapter, one natural 512 KiB read | Byte-for-byte match; 140.766 seconds including connect/close; maximum read RPC 3.812 seconds |
+| HTTP pooling/lease optimization only | Byte-for-byte match; 48.172 seconds; this alone is not the stall fix |
+| Complete fix, same 5-second delivery pause | Full 512 KiB match; epoch unchanged; 4 PINGs sent/acknowledged; maximum native USB write gap 1.146 seconds |
+| Complete fix, three 10-second pauses before reading HTTP response bodies | Full 512 KiB match; epoch unchanged; 27 PINGs sent/acknowledged; maximum native USB write gap 1.209 seconds |
+| Actual shared backend and authenticated Site Agent | Three consecutive 512 KiB reads matched the original backup; 22.031/23.047/24.641 seconds; two clients shared one backend and the remote client continued after workbench detach |
+| Real stdio MCP over HTTP and BLE after the fix | Live site discovery, exact target identity, shared RTT payload and continued capture after workbench detach passed on both routes |
+
+Expanded affected software regression: **1628 passed**, zero failures/skips,
+401.76 seconds (`run-20261106-234509-63cd7530.log`). This selection adds capture,
+diagnostic and RTT coverage; it does not rerun the unchanged symlink-dependent
+remote review-repair suite from the earlier 1460-pass run. Developer Mode was
+not re-enabled. Dependency deprecation warnings remain.
+Final checks after the bounded-window test and documentation updates:
+**103 passed** (24 focused HTTP/MUX cases and 79 documentation, memory and
+public-skill boundary cases). These overlap the expanded run and are not an
+additional independent 103-case qualification suite.
+
+Both MCP runs initially rejected immediate backend stop with `409 capture_active`
+after the borrowed subscriber detached, as required by shared capture ownership.
+Normal idle shutdown completed and both backend logs confirm process exit.
+The final independent USB management check reports ready, no owner, not busy,
+and no active stream.
+
+These wall times are bounded observations on one network, not controlled
+throughput benchmarks. Delaying response consumption tests slow receiving;
+it does not simulate loss of both network directions. USB timestamps describe
+S3 write calls, not V4 execution time or a physical bus trace. A failed control
+channel, stale epoch or exceeded deadline remains a fail-closed condition.
+
+Private traces and original failures are retained under the ignored
+`http-long-read-20261106` build workspace. No target Flash, firmware, voltage,
+protection or PC network setting was changed for this fix. The explicit cleanup
+after reproducing the old failure did not replay that command or resolve its
+old outcome; subsequent fixed runs shut down normally.
