@@ -102,6 +102,29 @@ def test_same_usb_identity_reconnect_after_hpm_closes_device(capture, monkeypatc
     assert selected == ['bound-probe'] and device._port == 'COM11'
 
 
+@pytest.mark.parametrize('connected', [True, False])
+def test_transport_failure_never_reconnects_or_restarts_capture(capture, connected):
+    from unittest.mock import Mock
+    state, managers, calls = capture
+    device = state['device']
+    device._bridge = SimpleNamespace(auto_recovery=False, transport_healthy=True)
+    device._connect = Mock()
+    device.close = Mock()
+    async def run():
+        with pytest.raises(TimeoutError):
+            async with suspend_acquisition(state) as report:
+                device.connected = connected
+                device._bridge.transport_healthy = False
+                raise TimeoutError('write outcome unknown')
+        assert report['state'] == 'failed'
+        assert report['restored'] == []
+    asyncio.run(run())
+    device._connect.assert_not_called()
+    device.close.assert_not_called()
+    assert not managers['rtt'].running and not managers['superwatch'].running
+    assert managers['serial'].running
+
+
 def test_online_job_holds_suspension_until_worker_and_restoration_finish(capture, tmp_path):
     from fastapi import FastAPI
     from mklink.runtime_api import RuntimeControl, active_operation, Session

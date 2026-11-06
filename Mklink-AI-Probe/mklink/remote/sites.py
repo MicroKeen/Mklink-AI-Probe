@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import inspect
 import os
 import re
@@ -14,7 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
-from mklink.remote.client import RemoteClient, connect_remote, validate_endpoint
+from mklink.remote.client import RemoteClient, connect_remote, validate_endpoint, DEFAULT_FLASH_TIMEOUT_SECONDS
 from mklink.remote.transfer import (
     enforce_owner_only_permissions,
     has_owner_only_permissions,
@@ -35,6 +36,13 @@ class SiteConfig:
     url: str
     token: str = field(repr=False)
     note: str = ""
+    timeout: float | None = None
+    flash_timeout: float | None = None
+
+    def __post_init__(self):
+        for value in (self.timeout, self.flash_timeout):
+            if value is not None and (isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not 0 < value <= 3600):
+                raise ValueError("site timeout must be finite and between 0 and 3600 seconds")
 
     def storage_dict(self) -> dict[str, Any]:
         return {
@@ -42,6 +50,8 @@ class SiteConfig:
             "url": self.url,
             "token": self.token,
             "note": self.note,
+            **({"timeout": self.timeout} if self.timeout is not None else {}),
+            **({"flash_timeout": self.flash_timeout} if self.flash_timeout is not None else {}),
         }
 
     def public_dict(self, *, active: bool, connected: bool) -> dict[str, Any]:
@@ -49,6 +59,8 @@ class SiteConfig:
             "name": self.name,
             "url": self.url,
             "note": self.note,
+            **({"timeout": self.timeout} if self.timeout is not None else {}),
+            **({"flash_timeout": self.flash_timeout} if self.flash_timeout is not None else {}),
             "active": active,
             "connected": connected,
             "token_configured": bool(self.token),
@@ -132,9 +144,15 @@ class SiteRegistry:
         self._sites: dict[str, SiteConfig] = {}
         self._active: str | None = None
         self._clients: dict[str, RemoteClient] = {}
+        self._client_routes: dict[str, tuple[Any, ...]] = {}
         self._site_locks: dict[str, threading.RLock] = {}
         self._lock = threading.RLock()
         self.reload()
+
+    def _route_signature(self, config: SiteConfig) -> tuple[Any, ...]:
+        return (config.url, config.token,
+                config.timeout if config.timeout is not None else self._timeout,
+                config.flash_timeout if config.flash_timeout is not None else DEFAULT_FLASH_TIMEOUT_SECONDS)
 
     def reload(self) -> None:
         with self._lock:
@@ -158,6 +176,8 @@ class SiteRegistry:
                         url=validate_endpoint(item.get("url")),
                         token=str(item.get("token", "")),
                         note=str(item.get("note", "")),
+                        timeout=item.get("timeout"),
+                        flash_timeout=item.get("flash_timeout"),
                     )
                     if not config.token:
                         raise ValueError
@@ -183,17 +203,20 @@ class SiteRegistry:
         *,
         note: str = "",
         make_active: bool | None = None,
+        timeout: float | None = None,
+        flash_timeout: float | None = None,
     ) -> dict[str, Any]:
         name = _validate_name(name)
         url = validate_endpoint(url)
         if not isinstance(token, str) or not token:
             raise ValueError("site token is required")
-        config = SiteConfig(name=name, url=url, token=token, note=str(note))
+        config = SiteConfig(name=name, url=url, token=token, note=str(note), timeout=timeout, flash_timeout=flash_timeout)
         lock = self._lock_for(name)
         with lock:
             with self._lock:
                 overwrote = name in self._sites
                 old_client = self._clients.pop(name, None)
+                self._client_routes.pop(name, None)
                 self._sites[name] = config
                 selected = (
                     self._active is None
@@ -221,6 +244,7 @@ class SiteRegistry:
                     raise SiteError(f"Site '{name}' doesn't exist")
                 was_active = self._active == name
                 client = self._clients.pop(name, None)
+                self._client_routes.pop(name, None)
                 del self._sites[name]
                 if was_active:
                     self._active = None
@@ -237,6 +261,7 @@ class SiteRegistry:
                     connected=bool(
                         self._clients.get(name)
                         and self._clients[name].connected
+                        and self._client_routes.get(name) == self._route_signature(config)
                     ),
                 )
                 for name, config in sorted(self._sites.items())
@@ -278,7 +303,8 @@ class SiteRegistry:
         else:
             with self._lock:
                 existing = self._clients.get(name)
-                connected = bool(existing and existing.connected)
+                config = self._sites[name]
+                connected = bool(existing and existing.connected and self._client_routes.get(name) == self._route_signature(config))
         return {
             "switched": changed,
             "name": name,
@@ -296,6 +322,8 @@ class SiteRegistry:
                     raise SiteError(f"Site '{target}' doesn't exist")
                 current = self._clients.get(target)
             if current is not None and current.connected:
+                if self._client_routes.get(target) != self._route_signature(config):
+                    raise SiteError(f"Site '{target}' configuration changed; explicitly reconnect before operating")
                 return current
             if current is not None:
                 current.close()
@@ -308,15 +336,24 @@ class SiteRegistry:
                 )
                 kwargs: dict[str, Any] = {"token": config.token}
                 if accepts_timeout:
-                    kwargs["timeout"] = self._timeout
+                    kwargs["timeout"] = config.timeout if config.timeout is not None else self._timeout
+                if config.flash_timeout is not None:
+                    if not any(p.name == "flash_timeout" or p.kind is inspect.Parameter.VAR_KEYWORD for p in parameters):
+                        raise ValueError("client factory does not support site flash timeout")
+                    kwargs["flash_timeout"] = config.flash_timeout
                 created = self._client_factory(config.url, **kwargs)
             except Exception as exc:
                 raise SiteError(f"Unable to connect site '{target}'") from exc
             with self._lock:
-                if target not in self._sites:
+                latest = self._sites.get(target)
+                if latest is None:
                     created.close()
                     raise SiteError(f"Site '{target}' was removed")
+                if latest is None or self._route_signature(latest) != self._route_signature(config):
+                    created.close()
+                    raise SiteError(f"Site '{target}' configuration changed during connection")
                 self._clients[target] = created
+                self._client_routes[target] = self._route_signature(config)
             return created
 
     def call(
@@ -337,6 +374,7 @@ class SiteRegistry:
                 with self._lock:
                     if self._clients.get(target) is client:
                         self._clients.pop(target, None)
+                        self._client_routes.pop(target, None)
                 client.close()
                 raise
 
@@ -346,6 +384,7 @@ class SiteRegistry:
         with lock:
             with self._lock:
                 old_client = self._clients.pop(target, None)
+                self._client_routes.pop(target, None)
             if old_client is not None:
                 old_client.close()
             return self.client(target)
@@ -356,6 +395,7 @@ class SiteRegistry:
         with lock:
             with self._lock:
                 client = self._clients.pop(name, None)
+                self._client_routes.pop(name, None)
             if client is not None:
                 client.close()
 

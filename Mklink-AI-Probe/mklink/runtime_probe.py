@@ -12,7 +12,7 @@ def _query(state, capability, arguments=None):
     if capability in PROBE_OPERATIONS:
         from mklink.probe_commands import validate
         arguments = validate(capability, arguments or {})
-    from mklink.bridge import MKLinkSerialBridge
+    from mklink.transport_factory import create_bridge
     from mklink.power import read_power
     from mklink.probes import select_probe
     from mklink.remote.resource_manager import ResourceGroup
@@ -30,7 +30,7 @@ def _query(state, capability, arguments=None):
     bridge = None
     owned = device is None
     try:
-        bridge = MKLinkSerialBridge(selected['port']) if owned else device._bridge
+        bridge = create_bridge(selected['port']) if owned else device._bridge
         if owned and not bridge.connect(recover_stream=False):
             raise HTTPException(409, 'Probe command port unavailable or not idle; no stream recovery attempted')
         if bridge.state != DeviceState.READY:
@@ -81,6 +81,9 @@ def upgrade_firmware(state, firmware_root):
     except RuntimeError:
         return {'status': 'manual_required', 'message': '暂时无法识别下载器，请选择正确型号下载固件后手动升级。'}
 
+    if selected.get('local_usb', True) is not True:
+        return {'status': 'manual_required', 'message': 'Selected transport does not support local USB/UF2 probe updates'}
+
     class CommandPort:
         def copy_rbl(self, source, name, expected_disk):
             from pathlib import Path
@@ -119,7 +122,7 @@ def upgrade_firmware(state, firmware_root):
                 manager.release(owner)
 
         def enter_bootloader(self):
-            from mklink.bridge import MKLinkSerialBridge
+            from mklink.transport_factory import create_bridge
             from mklink.remote.resource_manager import ResourceGroup
             manager = state['resource_manager']
             owner = 'user:api:firmware-upgrade'
@@ -136,7 +139,7 @@ def upgrade_firmware(state, firmware_root):
                         raise RuntimeError('Probe port changed')
                     device.enter_bootloader()
                 else:
-                    bridge = MKLinkSerialBridge(current['port'])
+                    bridge = create_bridge(current['port'])
                     if not bridge.connect(recover_stream=False):
                         raise RuntimeError('Command port unavailable')
                     bridge.enter_bootloader()

@@ -73,6 +73,12 @@ def quote_probe_string(value: str) -> str:
 class MKLinkSerialBridge:
     """通过虚拟串口与 MKLink 烧录器通信的桥接类。"""
 
+    auto_recovery = True
+    allow_algorithm_fallback = True
+    require_reader_exit = False
+    command_timeout_floor = 0.0
+    transport_kind = 'usb-serial'
+
     def __init__(self, port: str, baudrate: int = DEFAULT_BAUDRATE):
         self._port = port
         self._baudrate = baudrate
@@ -395,7 +401,9 @@ class MKLinkSerialBridge:
         self._running = False
         self._prompt_event.set()  # 唤醒可能等待的线程
         if self._reader_thread and self._reader_thread.is_alive():
-            self._reader_thread.join(timeout=2.0)
+            self._reader_thread.join(timeout=getattr(self, 'reader_close_timeout', 2.0))
+            if self.require_reader_exit and self._reader_thread.is_alive():
+                raise ConnectionError('Reader still owns IO; transport ownership retained')
         if self._serial and self._serial.is_open:
             try:
                 self._serial.close()
@@ -430,6 +438,11 @@ class MKLinkSerialBridge:
         return self._mux_supported
 
     @property
+    def transport_healthy(self):
+        return (self._transport_error is None and self.state is not DeviceState.ERROR
+                and (self._mux is None or self._mux._error is None))
+
+    @property
     def live_connection_token(self):
         """Identity may be reused only while this exact locked handle is live."""
         if (self._transport_error is not None or self.state in (DeviceState.DISCONNECTED, DeviceState.ERROR)
@@ -453,6 +466,7 @@ class MKLinkSerialBridge:
             if not self.supports_multiplex():
                 return None
             transport = MuxTransport(self._serial.write, self._cmd_lock,
+                                     command_timeout=getattr(self, 'mux_timeout', 3.0),
                                      diagnostic_context={'connection': getattr(self, '_diagnostic_id', None), 'port': getattr(self, '_port', None)})
             self._mux = transport  # The existing reader changes decoder before entry.
             try:
@@ -504,6 +518,7 @@ class MKLinkSerialBridge:
         stream_state: DeviceState | None = None,
     ) -> str:
         """发送 PikaScript 命令，等待 >>> 提示符后返回完整响应。"""
+        timeout = max(timeout, self.command_timeout_floor)
         with self._cmd_lock:
             self._leave_multiplex()
             if self._transport_error is not None:
@@ -849,7 +864,7 @@ class MKLinkSerialBridge:
                 self._prompt_event.clear()
 
             stop_prompt_seen = False
-            for _attempt in range(_FAILED_STREAM_STOP_ATTEMPTS):
+            for _attempt in range(getattr(self, 'stream_stop_attempts', _FAILED_STREAM_STOP_ATTEMPTS)):
                 if self._transport_error is not None:
                     self._ctx.state = DeviceState.ERROR
                     return False
@@ -864,7 +879,7 @@ class MKLinkSerialBridge:
                     return False
                 except AttributeError:
                     break
-                if self._prompt_event.wait(timeout=_FAILED_STREAM_STOP_TIMEOUT):
+                if self._prompt_event.wait(timeout=getattr(self, 'stream_stop_timeout', _FAILED_STREAM_STOP_TIMEOUT)):
                     if self._transport_error is not None:
                         self._ctx.state = DeviceState.ERROR
                         return False
@@ -894,7 +909,7 @@ class MKLinkSerialBridge:
                 self._ctx.state = DeviceState.ERROR
                 return False
 
-            deadline = time.monotonic() + _FAILED_STREAM_IDENTITY_TIMEOUT
+            deadline = time.monotonic() + getattr(self, 'stream_identity_timeout', _FAILED_STREAM_IDENTITY_TIMEOUT)
             while True:
                 remaining = deadline - time.monotonic()
                 if remaining <= 0 or not self._prompt_event.wait(timeout=remaining):

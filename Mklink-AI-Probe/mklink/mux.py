@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from collections import deque
 import binascii
+import math
 import secrets
 import struct
 import threading
@@ -58,8 +59,12 @@ class MuxTransport:
     # sustained overload, never block the sole USB reader or command replies.
     WATCH_QUEUE_BYTES = 262144
 
-    def __init__(self, write, command_lock=None, *, diagnostic_context=None):
+    def __init__(self, write, command_lock=None, *, diagnostic_context=None, command_timeout=3.0):
+        if (isinstance(command_timeout, bool) or not isinstance(command_timeout, (int, float))
+                or not math.isfinite(command_timeout) or command_timeout <= 0):
+            raise ValueError('MUX command timeout must be finite and positive')
         self._diagnostic_context = diagnostic_context or {}
+        self.command_timeout = command_timeout
         self._write = write
         self._condition = threading.Condition()
         self._commands = command_lock or threading.RLock()
@@ -125,7 +130,7 @@ class MuxTransport:
         req = self._next_id
         wire = packet(op, 0 if op == 1 else self.epoch, req,
                       (self.nonce if 0x10 <= op < 0x40 else b'') + payload)
-        self._pending = (op, req, time.monotonic()+3, heartbeat)
+        self._pending = (op, req, time.monotonic()+self.command_timeout, heartbeat)
         self._reply = None
         self._last_command = time.monotonic()
         try:

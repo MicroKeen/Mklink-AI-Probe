@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-11-02T11:38:35+08:00`
-- 分支：`main（交接落点；后续修改仍用codex/v0.4.2-fixes）`
-- HEAD：`PR66正式源0e82ba6f；PR67维护端修复已合并be0e000c。文档收尾最终SHA见Git及本机START_HERE。`
-- 远端 HEAD：`microkeen/main已含PR66/67；交接经共享修复分支PR集成。正式tag/包不变。`
-- 工作树：E盘主工作区；收尾后回到干净main，保留共享修复分支及两个旧detached树。构建/证据在F盘。
-- 当前任务：0.4.2 Windows/完整Skill/SiteAgent及四固件已发布腾讯云/Git，正式安装与渠道验收通过。PR66/67已合并。按用户要求清理29目录约6.587GiB，629保留文件前后哈希一致；含链接135组保留人工检查。发布见v042-release-handoff.md，收尾见v042-postrelease-handoff.md；下一任务由用户指定。
-- 状态：`v042_postrelease_handoff`
+- 更新时间：`2026-11-06T22:50:58+08:00`
+- 分支：`codex/s3-main-regression`
+- HEAD：`基于 main 4f3be7a46651；本轮提交 SHA 以 Git 为准。`
+- 远端 HEAD：`2026-11-06 再次 fetch microkeen/main：4f3be7a46651，PR #65 尚未替换。`
+- 工作树：隔离任务树；原 S3 分支及用户 _serial_worker.py 修改保留。测试和私有证据位于主仓库忽略的 .build。
+- 当前任务：PR #65 已移植到最新 main 并收拢通用传输策略。1442 通过、18 失败在原 main 全部复现；另 79 文档/记忆/Skill边界检查通过。HTTP/BLE 真实 MCP 和 RTT 共享通过，HTTP 连续 Flash 读取出现 epoch 过期，未提交烧录；显式管理恢复后 BLE 完整备份、采样、原 APP 烧录校验及整片/选项字节不变通过。完整结果见 docs/verification/s3-shared-runtime-20261106.md。PR 创建前须按用户要求确认，当前不具备合并资格。
+- 状态：`s3_pr_preparation_incomplete_hil`
 
 ## 里程碑
 
@@ -23,18 +23,18 @@
 
 ## 验证证据
 
-- **0.4.2正式构建安装及公开发布**：干净main0e82ba6f签名构建并实装exit0；3647载荷/2设置、2647 Skill/5340用户文件一致保留，协议53/56工具/126能力与原生退出通过。Web42文件仅元数据/换行派生ID及引用哈希差异，功能等价和正式浏览器通过。七宿主+四固件云端/Git完整哈希及HEAD/Range通过；三渠道0.4.2/双固件索引一致、preview404、官网历史不变。官方0.4.1 Skill从COS及真实Gitee备用升级均通过，11路由停解析器回退及恢复COS通过。39资产保留90/95、账本/到期，72KB清单超过旧64KB已修至256KB，19保护回归通过。 早期COS迁移/告警详情见v040-release-handoff.md。 PR67已合并be0e000c。后续清理29目录72849文件，629保留文件前后大小/SHA一致；正式资产与唯一证据保留，见v042-postrelease-handoff.md。
-- **0.4.2正式候选最终资格**：90e676db与产品1ca9b8fd等价：6453Python/2skip、1182GUI、生产Web/冻结/Rust/NSIS及覆盖通过。三眼睛样式/双向同步、RTT单行、双日志回放/首尾跳转、五种触发模式通过。HPM14 JTAG、52988B完整镜像/RAM/XML六GPIO、RTT精确收发、Watch8334记录零读错、虚拟串口双向与GUI回显日志通过。原生目录、Trace独立/并行各三轮零新增丢失、GUI烧录后三流恢复和完整回读、临时文件删除/旧文件不变、13进程/两端口退出通过。细节见v042-formal-qualification.md；正式安装/发布见v042-release-handoff.md。更早证据见v042-traffic-replay.md，历史Trace溢出失败保留。
+- **S3 main 移植与通用传输契约回归**：219 定点包含在 1442 通过/18 失败的扩大回归中；18 失败在干净 main 同环境复现，涉及 Windows 符号链接/PID 和既有 MCP 测试兼容性。79 文档/记忆/Skill边界检查通过。真实 stdio MCP 动态发现、身份、RTT 在工作台退出后持续接收在 HTTP/BLE 通过；HTTP 长读失败并隔离，显式恢复后 BLE 全片备份/84 完整采样通过。BLE 原 APP 烧录校验通过，独立全片 SHA/选项字节一致、目标运行，收尾无owner/活动流；详见 s3-shared-runtime-20261106.md，不外推旧 STA/AP/BLE 历史验收。
+- **0.4.2正式构建安装及公开发布**：0.4.2 正式源0e82ba6f已完成签名构建、覆盖安装、用户文件保留、协议53/56 MCP/126能力、七宿主及四固件哈希、COS/Git双路径升级验收；PR67已合并be0e000c。清理29目录、629保留文件哈希一致，含链接目录保留人工检查。细节与限制见v042-release-handoff.md、v042-postrelease-handoff.md，发布资产不变。
+- **0.4.2正式候选最终资格**：90e676db与产品1ca9b8fd等价：6453Python/2skip、1182GUI、Web/冻结/Rust/NSIS、HPM硬件、原生RTT/Watch/Trace、烧录恢复及退出通过；历史Trace溢出保留。详细数量、范围和限制见v042-formal-qualification.md、v042-traffic-replay.md；正式安装/发布见v042-release-handoff.md。
 - **HPM AI Skill能力核实**：审计修复749Python/65GUI、生产Web及浏览器HPM JTAG 5k/排除8M通过；完整Skill源cafe835f/SHA717cfdfb已覆盖，2644安装文件一致、5340用户文件保留；56 MCP/126能力和协议53安装后schema一致、Skill验证通过。时钟协商/离线档位门禁、探针控制/诊断/供电、离线/ISP/OTP入口及文档补齐。该轮无USB操作；当时固件待办与后续正式固件范围分别见审计/发布报告。见firmware-skill-fixes-20261101.md。
 - **RTT自动恢复与在线静默收尾**：14417715：347相关+17发现测试通过。V4/HPM5301两次49700B烧录成功，RTT/Watch自动暂停恢复、零恢复错误及零Watch读错；覆盖/载荷/冻结MCP/Web/退出通过。当时为0.4.1测试包，修复后续纳入正式0.4.2。原始包/详细计数见rtt-auto-restore-20261030.md；静默面板d1cf16ec见online-flash-receipt-20261029.md。
 - **Linux/macOS 0.4.1测试包**：Linux a6bdacbc、Mac arm64 eefc6842：CI USB各58/1skip及冻结CLI/MCP/健康/Web/退出通过。DEB SHA7309f377、DMG SHA56dc8e0a，均旧0.4.1；Mac ad-hoc未公证，实机安装/UI/USB待测。见linux-deb-test-20261028.md、macos-arm64-test-20261028.md。
 - **安装器旧元数据自动清理**：cb30b703/PR63：62定点、5577Python/2skip、1133GUI及NSIS通过；覆盖清理旧元数据、保留文件/载荷/原生退出通过。已纳入0.4.2，正式0.4.1不变；见installer-metadata-cleanup-20261027.md。
-- **H743正式固件与双核候选边界**：H743正式V4.7.1在线/四脱机/19采集调试通过。私有V4.7.2单核兼容、双核误选写前拒绝、2MiB不变及M7/M4 HEX在线通过；V4.7.2/V3.6.8/V2.9.3双核候选交付，46回归通过。无双核实板正向脱机，V3历史掉线未闭环，当时候选不公开替换；后来明确发布的四个build以v042-release-handoff.md为准，不外推双核验收。见known-limits-20261030.md。
-- **共享RTT/SystemView及480量子**：共享MUX/480/二进制订阅996回归及浏览器、76307模板104回归/真实H7头文件通过。H7八份10MiB全字节核对，新799–801/旧528–633KiB/s，独立SV307134事件和有限共存零计数通过。旧Watch末组失败及饱和丢失保留，不能外推。详见h7-rtt-control-20261031.md、systemview-rtthread-template-20261031.md及known-limits-20261030.md。
+- **H743正式固件与双核候选边界及共享采集历史**：H743正式V4.7.1在线/四脱机/19采集调试通过。私有V4.7.2单核兼容、双核误选写前拒绝、2MiB不变及M7/M4 HEX在线通过；V4.7.2/V3.6.8/V2.9.3双核候选交付，46回归通过。无双核实板正向脱机，V3历史掉线未闭环，当时候选不公开替换；后来明确发布的四个build以v042-release-handoff.md为准，不外推双核验收。见known-limits-20261030.md。 共享MUX/480/二进制订阅996回归及浏览器、76307模板104回归/真实H7头文件通过。H7八份10MiB全字节核对，新799–801/旧528–633KiB/s，独立SV307134事件和有限共存零计数通过。旧Watch末组失败及饱和丢失保留，不能外推。详见h7-rtt-control-20261031.md、systemview-rtthread-template-20261031.md及known-limits-20261030.md。
 
 ## 架构决策
 
-- 0.4.2正式源0e82ba6f/PR66与0.4.1正式源514efb86及所有已发布资产不可变。2026-11-02明确发布授权已完成Windows/完整Skill/SiteAgent、V2.9.3/V3.6.8/普通V4.7.2/HPMLinkV4.7.2的腾讯云/Git发布。收尾回到main，后续修改沿用codex/v0.4.2-fixes并先同步；后续正式发布须另有明确指令。公网中继延期。
+- 0.4.2正式源0e82ba6f/PR66与0.4.1正式源514efb86及所有已发布资产不可变。2026-11-02明确发布授权已完成Windows/完整Skill/SiteAgent、V2.9.3/V3.6.8/普通V4.7.2/HPMLinkV4.7.2的腾讯云/Git发布。收尾回到main，后续修改沿用codex/v0.4.2-fixes并先同步；后续正式发布须另有明确指令。公网中继延期。 本轮是用户新授权的 S3 PR 准备，使用 codex/s3-main-regression；创建 PR 前需用户确认，不合并或发布。
 - 后台协议 53：一个 GUI 客户端持有一个固定后台，同窗口切换只改下载器，RTT/Watch/Trace 跟随当前设备并清空旧目标状态；另开客户端才建独立后台。已有 URL 的额外页面共享该后台。工程上下文固定，换工程须停止原后台后重开。
 - 物理探针唯一 OS 所有权、USB 身份核对和 epoch 隔离保留。GUI/AI 明确断开或切换自动停止采集、排空在途操作并释放端口；旧会话不得跨设备，未知结果不得自动重放，不偷取其他后台占用。MCP disconnect 物理断开，detach 仅退出自身；独立 UART 保留。
 - SuperWatch 变量写入只认写应答，不做自动回读；烧录/显式内存校验仍保留，真实写错误不得吞掉或重放。外设 ID 基于 Pack 版本/芯片/SVD 相对路径；失效选择不得阻断物理连接，无法迁移时重选。 在线型号提供脱机/外设默认值，各页可独立修改；Pack操作完成自动刷新。下载先预留唯一物理身份，不要求先连接目标；自身预留不重建下载表单，其他设备切换仍清理。 HPM SDK的*_svd.xml按CMSIS-SVD支持；九系列共用目录不要求精确型号，精确Pack优先，型号扩展可手动导入XML；SES CPU寄存器XML不作为外设SVD。保留厂家原始字节/许可证及SHA校验。dump停止根据DUMP_STOP能力验证回执，旧固件错误不得凭身份token误报READY；启动命令回显独立计数，duration尾部不算完整样本。
@@ -47,26 +47,27 @@
 
 ## 真机环境
 
-- **state**：最后验证HPMLink V4/HPM5301、正式固件f06af597/build22:37:10，保存JTAG30MHz。候选Trace六轮及烧录三流恢复通过；正式原生退出曾释放13进程/两端口。本轮清理盘点发现用户已重新打开正式上位机，保持运行，未操作硬件；不能据历史退出结果推断当前空闲，操作前重新核对。
+- **state**：本轮 S3/V4/STM32F411：原 APP 只写回一次，整片512KiB与备份逐字节一致、选项字节不变、目标未暂停。后台已退出，USB管理状态ready、owner为空、stream_active=false。HTTP长读失败仍未解决；见s3-shared-runtime-20261106.md。其他历史台架状态需操作前重新核对。
 - **installer**：本机Windows与全局Skill均为正式0.4.2源0e82ba6f，NSIS SHA5ff079bb/Skill SHA14af7a5f；签名、覆盖、载荷、56MCP/126能力与正常退出通过。当前不是旧测试包。AI客户端需重启加载新Skill。
 - **backups**：原安装包/正式七资产及四固件、CI ZIP、唯一验收证据、Skill备份和缓存均保留；旧detached树不删除。清理详情见v042-postrelease-handoff.md；本机新入口为v042-postrelease-handoff-20261102/START_HERE.txt。29可再生目录已删，含链接135组保留清单供人工检查。
 
 ## 下一动作
 
-1. 接到新任务后先核对Git/fetch；本轮收尾回到main，修改沿用codex/v0.4.2-fixes并同步最新main。PR66/67已合并，0.4.2及四固件已正式发布，不重签/覆盖附件或移动tag。
-2. 保留正式包、唯一验收证据及含链接目录；本机新START_HERE与v042-postrelease-handoff.md记录清理清单和接手入口。历史V3掉线/冷插拔/长稳等仍按known-limits-20261030.md和最终资格报告处理。
-3. 监控上海90GiB告警/95GiB停止，套餐截止北京时间2026-11-26 00:00。未核验续费不清除停止锁、不清零账本、不申请新私钥。
+1. 依据 s3-shared-runtime-20261106.md 完成 HTTP 长读根因和同负载回归，保留原始失败；需要固件变化时单独确认范围。
+2. 按当前回归报告复核烧录恢复、后台退出及台架状态；不使用历史备份替换当前程序。
+3. 向用户展示最终 diff、测试与限制及 PR 描述，确认后再向 microkeen 提交替代 PR #65 的 PR；禁止擅自合并或发布。
+4. 保持原工作区及已安装 GUI/MCP runtime 不变；原 _serial_worker.py 修复单独处理。
 
 ## 已知限制
 
+- 本轮 HTTP 连续读出现 MUX epoch 过期，根因未定；不得用放宽超时、自动重连或重放来掩盖。AP/C6、当前原生 GUI 包、SystemView 与实体 USB 未复测；旧验收不是本轮资格。
 - 新MUX整块读普通V4/H7已实测，V3/H7指定会话候选复测通过；HPM本轮映像回读及480B RAM核对通过，未扩全内存区矩阵。安装后20次调用仍有明显调度抖动，前次dce包4KiB最大39.074ms，不承诺固定低延迟。HPM九系列XML已解析/匹配/浏览器导入；用户接回HPM5301后的六GPIO寄存器实读/采集通过，其他系列及IO输出驱动未测；客户F411仍待实板复测。dump定时截止可留半个样本，完整性门槛保留。HPM CPU仅RV32/hart0/HPM5301/槽0实测，其他触发器/型号、新值写入、20/30MHz及断电冷启未扩展，TCK未测。374个历史probe目录启动扫描慢未修复；4551687d仅修复端口复用时HTTP异常中止发现，已含e29d候选，见runtime-endpoint-errors-20261030.md。客户3.11.9、CDC首次离线、F405 PROGRAM100%退出、GD32受限AI、RTT后MUX、HEX2%未知结果及PyInstaller权限故障保持未闭环，详见known-limits-20261030.md及v032-postrelease-incidents.md；不重放未知操作。 旧dce/4be FPBv2曾422，新包已含修复；7843双半字命中及Keil共存已验。采集中共享断点仍409；V2本轮共享step已实测，其他型号不由Keil单步替代验收；见h7-fpbv2-systemview-idle-20261031.md。
 - 30MHz RTT/Watch/UART并行历史存在目标读错：V4.6.8 1kHz +1/最大+273，10MHz0；V4.7.0/F103先Watch后RTT11762周期1错、反顺序12297周期0，10MHz两顺序0。发布接受不等于问题关闭，完整记录见known-limits-20261030.md。
 - HPM/SES未发DAP_Disconnect可遗留占用；显式退出后OpenOCD init/resume/shutdown或用户拔插可恢复，超时不得偷占。完整SES矩阵/RTT下行未覆盖。RTT status6截图只证busy，不推断与历史故障同因，待现场时序/显式重试。
 - 共享MUX并行SV仍有容量边界：旧饱和768/drop17371，流水线28/1330、burst26/1164、control15/1442，重启归零不抹去；control独立62.679秒零丢失计数通过。RTT661.208KiB/s为特定配置观测值，H7限定实测新799–801KiB/s、独立/有限并行SV零计数；单次API20样本中位有12.90→20.03ms等退化未归因，旧Watch末组失败保留。采集暂停/下载丢观测、多变量非原子、无时序保证。COS95GiB非账单上限，存储/请求/SCF另计；旧0.4.0固件Git备用未迁，签名资产不改。
 - V3无屏幕且不支持HPM；V3.6.4 Keil/OpenOCD共存已测。V4最终无诊断固件完整SES矩阵未完成。旧V3.6.8/build17:56:49的CRLF六轮及1800.028秒空RTT证据见v3-crlf-final-review-20261030.md和v3-empty-rtt-review-20261030.md，不计入新build11:00:39复验。新V3限定RTT/FPB/Keil通过见v3-rtt-systemview-review-20261031.md；历史掉线根因、legacy/睡眠拔插/更长时长仍未测，再现先保存现场。 旧1ms Watch相位跳变归因未闭环；本轮HPM5301周期矩阵已通过，不能外推历史全部场景。
 - 最后客户端退出约5秒租约后开始排空/关闭，不保证硬实时5秒。每GUI独立后台；单探针仅一个后台持有；已有URL共享页面跟随明确切换。独立操作另开客户端。 Keil BL重载由2增9；用户确认未操作，原因未明。仅恢复重载后9个状态，最初配置未恢复；见h7-fpbv2-systemview-idle-20261031.md。
-- UART5 TTL Modbus历史读写通过，RS485电气层未测；本次仅虚拟串口双向字节/日志，不能替代物理UART。跨主机Agent/全芯片未认证。Unix包仅CI冻结检查，USB/原生UI/升级待测；Mac ad-hoc未公证，Windows无Authenticode，不承诺消除SmartScreen。日志文件回放与原生目录现已通过；Trace最终独立/并行各三轮零新增丢失通过，历史初始溢出1保留且不外推全部负载；HPM HardFault页面仍限Cortex-M。早期浏览器清理未确认的现场记录保留；本轮官网下载验收通过。详见v042-traffic-replay.md。
-- nRF54L15保护闭环、全部擦除/拔插/休眠/断电、电源精度未全测。每次VCC需确认具体电压。26个无可靠扇区FLM禁用扇区操作，Bank模式须匹配。HPM5301 OTP组18/19历史永久锁定；128字读取及批准Word69 0→1已实测，其余型号/区域不继承授权，锁最后写/逐项校验，多Word不可回滚；熔丝/影子/临时锁语义未知，UART按ROM状态及回读为准。详见hpm-offline-otp-handoff.md及known-limits-20261030.md。
+- UART5 TTL Modbus历史读写通过，RS485电气层未测；本次仅虚拟串口双向字节/日志，不能替代物理UART。跨主机Agent/全芯片未认证。Unix包仅CI冻结检查，USB/原生UI/升级待测；Mac ad-hoc未公证，Windows无Authenticode，不承诺消除SmartScreen。日志文件回放与原生目录现已通过；Trace最终独立/并行各三轮零新增丢失通过，历史初始溢出1保留且不外推全部负载；HPM HardFault页面仍限Cortex-M。早期浏览器清理未确认的现场记录保留；本轮官网下载验收通过。详见v042-traffic-replay.md。 nRF54L15保护闭环、全部擦除/拔插/休眠/断电、电源精度未全测。每次VCC需确认具体电压。26个无可靠扇区FLM禁用扇区操作，Bank模式须匹配。HPM5301 OTP组18/19历史永久锁定；128字读取及批准Word69 0→1已实测，其余型号/区域不继承授权，锁最后写/逐项校验，多Word不可回滚；熔丝/影子/临时锁语义未知，UART按ROM状态及回读为准。详见hpm-offline-otp-handoff.md及known-limits-20261030.md。
 
 ## 延续协议
 

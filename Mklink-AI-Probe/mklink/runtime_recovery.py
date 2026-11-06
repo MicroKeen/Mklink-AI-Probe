@@ -66,6 +66,7 @@ class TransportRecovery:
         c = self.control
         device = c.app.state.mklink_state.get('device')
         return bool(not c.stopping and device is not None and not self.expire_if_due()
+                    and getattr(getattr(device, '_bridge', None), 'auto_recovery', True) is not False
                     and c.info.get('probe_id') not in (None, 'lobby')
                     and self.attempts < 5
                     and ((self.pending and self.device is device and self.identity == c.info.get('probe_id'))
@@ -82,6 +83,9 @@ class TransportRecovery:
         if c.stopping or not device or identity in (None, 'lobby'):
             self.reset()
             return
+        if getattr(getattr(device, '_bridge', None), 'auto_recovery', True) is False:
+            self.reset()
+            return  # Wireless uncertainty requires explicit user recovery; never replay.
         if self.device is not device or self.identity != identity:
             self.reset()
             self.device, self.identity = device, identity
