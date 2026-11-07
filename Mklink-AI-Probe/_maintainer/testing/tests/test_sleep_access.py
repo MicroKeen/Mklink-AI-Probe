@@ -199,6 +199,21 @@ def test_busy_stream_is_not_interrupted_to_enable_sleep_access():
     assert peer.frames == [] and peer.mux.watch_running and not peer.mux.sleep_access
 
 
+@pytest.mark.parametrize('dashboard', ['rtt', 'superwatch', 'systemview'])
+def test_atomic_session_rejects_live_start_before_claim_or_worker(dashboard):
+    import asyncio
+    from fastapi import HTTPException
+    from mklink.remote.api import start_dashboard_manager
+
+    state = {'device': atomic_device(AtomicPeer())}
+    configure(state['device'], True)
+    manager = SimpleNamespace(running=False, worker_alive=False)
+    with pytest.raises(HTTPException) as failure:
+        asyncio.run(start_dashboard_manager(state, dashboard, manager,
+                    lambda: pytest.fail('No acquisition worker should start')))
+    assert failure.value.status_code == 409 and 'sleep access' in failure.value.detail
+
+
 def test_lost_atomic_capability_does_not_fall_back_to_ordinary_read_or_write():
     peer = AtomicPeer()
     device = atomic_device(peer)

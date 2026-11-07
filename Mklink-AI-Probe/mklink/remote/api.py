@@ -546,6 +546,9 @@ async def _start_dashboard_manager_transaction(
         if manager.running:
             return "already_running", []
         raise DashboardStopPending(dashboard)
+    bridge = getattr(state.get('device'), '_bridge', None)
+    if dashboard in ('rtt', 'superwatch', 'systemview') and getattr(bridge, '_sleep_debug_atomic', False) is True:
+        raise HTTPException(409, 'Turn off atomic sleep access before starting live acquisition')
     loop = asyncio.get_running_loop()
     owner = f"user:dashboard:{dashboard}"
     release_lock = threading.Lock()
