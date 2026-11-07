@@ -38,11 +38,16 @@ def atomic_transport(device):
     return mux if getattr(mux, 'supports_atomic_sleep', False) is True else None
 
 
+def selected_clock(bridge):
+    clock = getattr(bridge, '_sleep_debug_previous_clock', None)
+    return clock if type(clock) is int and clock > 0 else None
+
+
 def memory_transport(device):
     """An explicitly selected sleep mode must not silently switch protocols."""
     bridge = device._bridge
     mux = bridge.enable_multiplex()
-    if getattr(bridge, '_sleep_debug_previous_clock', None) is not None:
+    if selected_clock(bridge) is not None:
         atomic = getattr(bridge, '_sleep_debug_atomic', False)
         if mux is None or (getattr(mux, 'supports_atomic_sleep', False) is True) != atomic:
             raise RuntimeError('Selected sleep access is unavailable on this connection')
@@ -67,7 +72,7 @@ def slow_control(device):
         require_applied(device)
         yield
         return
-    saved_mode = getattr(device._bridge, '_sleep_debug_previous_clock', None)
+    saved_mode = selected_clock(device._bridge)
     atomic = getattr(device._bridge, '_sleep_debug_atomic', False)
     device.set_debug_clock(slow, interface='SWD')
     try:
@@ -83,7 +88,7 @@ def preserve_access_clock(operation):
     @wraps(operation)
     def run(device, *args, **kwargs):
         bridge = device._bridge
-        previous = getattr(bridge, '_sleep_debug_previous_clock', None)
+        previous = selected_clock(bridge)
         atomic = getattr(bridge, '_sleep_debug_atomic', False)
         clock = device.clock_hz if previous is not None else None
         try:
@@ -182,7 +187,7 @@ def halted_snapshot(device):
 
 def configure(device, enabled):
     bridge = device._bridge
-    previous = getattr(bridge, '_sleep_debug_previous_clock', None)
+    previous = selected_clock(bridge)
     if enabled != (previous is not None) and getattr(getattr(bridge, '_mux', None), 'sampling', False) is True:
         raise RuntimeError('Stop acquisition before changing sleep access mode')
     if not enabled:

@@ -204,7 +204,7 @@ def save_interface_clock(config, interface, hz=None):
 
 
 def clock_snapshot(device, config):
-    from mklink.sleep_debug import control_clock
+    from mklink.sleep_debug import control_clock, selected_clock
     connected = bool(device and device.connected)
     bridge = getattr(device, '_bridge', None) if connected else None
     options = configuration_clock_options(bridge, hpm=str(getattr(device, '_mcu_hint', '')).upper().startswith('HPM'))
@@ -227,7 +227,7 @@ def clock_snapshot(device, config):
             'sleep_access_supported': bool(connected and (control_clock(device) or (
                 active_clock_interface(bridge) == 'SWD' and
                 getattr(getattr(bridge, '_mux', None), 'supports_atomic_sleep', False) is True))),
-            'sleep_access_enabled': bool(connected and getattr(bridge, '_sleep_debug_previous_clock', None)),
+            'sleep_access_enabled': bool(connected and selected_clock(bridge) is not None),
             'sleep_access_atomic': bool(connected and getattr(bridge, '_sleep_debug_atomic', False) is True),
             'clock_hz': hz, 'configured_hz': hz, 'apply_state': state,
             'applied_hz': hz if state == 'applied' else None, 'migration': migration,

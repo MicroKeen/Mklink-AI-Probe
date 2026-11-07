@@ -30,7 +30,7 @@ from pathlib import Path
 from typing import Any
 
 from mklink._types import DeviceState, DEFAULT_BAUDRATE
-from mklink.sleep_debug import memory_transport, preserve_access_clock, set_mode
+from mklink.sleep_debug import memory_transport, preserve_access_clock, selected_clock, set_mode
 
 
 @dataclass
@@ -520,7 +520,7 @@ class Device:
             except Exception:
                 pass
         if self._bridge:
-            previous_clock = getattr(self._bridge, '_sleep_debug_previous_clock', None)
+            previous_clock = selected_clock(self._bridge)
             if previous_clock is not None and self.connected:
                 try:
                     from mklink.sleep_debug import configure
@@ -1130,7 +1130,7 @@ class Device:
         from contextlib import nullcontext
         from mklink.sleep_debug import halted
         atomic_flash = getattr(self._bridge, '_sleep_debug_atomic', False) is True
-        guarded = not atomic_flash and getattr(self._bridge, '_sleep_debug_previous_clock', None) is not None
+        guarded = not atomic_flash and selected_clock(self._bridge) is not None
 
         def program(burn, *args, **kwargs):
             with halted(self, release_on_error=False) if guarded else nullcontext():
@@ -1282,7 +1282,7 @@ class Device:
         if getattr(self._bridge, '_sleep_debug_atomic', False) is True:
             mux = memory_transport(self)
         framed = isinstance(mux, MuxTransport)
-        legacy_sleep = (getattr(self._bridge, '_sleep_debug_previous_clock', None) is not None
+        legacy_sleep = (selected_clock(self._bridge) is not None
                         and not getattr(self._bridge, '_sleep_debug_atomic', False))
         if framed and (mux.sampling or not legacy_sleep):
             # A live stream retains its existing transport and clock.
