@@ -176,6 +176,8 @@ class MKLinkSerialBridge:
         self.last_connect_error = 'Command port did not return a prompt; check the probe firmware/USB connection and retry'
         self._mux_supported = None  # Re-negotiate after reconnect/firmware changes.
         self._firmware_capabilities = None
+        self._sleep_debug_previous_clock = None
+        self._sleep_debug_atomic = False
         # 进程级互斥：获取文件锁
         if not self._port_lock.acquire():
             error = getattr(self._port_lock, 'last_error', None)

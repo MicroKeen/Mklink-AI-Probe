@@ -53,10 +53,13 @@ def test_reconnect_discards_all_firmware_capabilities():
     bridge = MKLinkSerialBridge('TEST_CAPABILITIES')
     bridge.send_command = Mock(return_value='MUX_TARGET=1\nDUMP_WRITE=1\nDUMP_WRITE_HPM=1')
     assert bridge.supports_multiplex() and bridge.supports_hpm_dump_write()
+    bridge._sleep_debug_previous_clock = 10_000_000
+    bridge._sleep_debug_atomic = True
     # Fail before opening any physical port; even a failed new connection must
     # not retain knowledge about the previous probe/firmware.
     bridge._port_lock.acquire = Mock(return_value=False)
     assert not bridge.connect()
+    assert bridge._sleep_debug_previous_clock is None and not bridge._sleep_debug_atomic
     bridge.send_command.return_value = 'old firmware\nDUMP_WRITE=1'
     assert not bridge.supports_multiplex()
     assert not bridge.supports_hpm_dump_write()
