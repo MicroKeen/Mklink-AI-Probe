@@ -395,11 +395,13 @@ def build_server():
 
     @server.tool()
     def set_sleep_debug(enabled: bool) -> dict:
-        """Opt in to slower Cortex-M/SWD sleep access for this session, or restore its prior clock.
+        """Enable Cortex-M/SWD sleep access for this session, or restore its prior clock.
 
         Stop active acquisition before changing modes. Uses only the probe's advertised
-        clocks and standard core identification. Idle memory snapshots and writes briefly halt
-        the core. RTT uses the slower clock while the application runs. No vendor registers are written.
+        clocks and standard core identification. Probes advertising atomic sleep transfers
+        keep the current clock and restore the core within each request. Verified RAM writes
+        require a known RAM range. Asynchronous streams are unavailable in this atomic mode.
+        Older probes use a negotiated slow clock and the legacy bounded halt path.
         """
         return client().call('set_sleep_debug', {'enabled': enabled})
 

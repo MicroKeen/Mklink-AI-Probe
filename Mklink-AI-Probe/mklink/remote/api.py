@@ -2330,12 +2330,17 @@ def create_app(
 
     @app.post("/api/device/sleep-debug")
     async def set_sleep_debug(enabled: bool = Body(..., embed=True, strict=True)):
+        from mklink.mux import MuxTargetError
         from mklink.sleep_debug import configure
         try:
             async with _exclusive_probe_control('sleep-debug') as (device, _):
                 return await run_in_threadpool(configure, device, enabled)
         except (ValueError, KeyError) as error:
             raise HTTPException(400, str(error)) from error
+        except MuxTargetError as error:
+            raise HTTPException(409 if error.status == 6 else 502, str(error)) from error
+        except (ConnectionError, RuntimeError) as error:
+            raise HTTPException(502, str(error)) from error
 
     @app.post("/api/device/debug-speed")
     async def set_debug_speed(profile: str | None = Body(None), clock_hz: int | None = Body(None, strict=True), save: bool = Body(True, strict=True), interface: str | None = Body(None)):

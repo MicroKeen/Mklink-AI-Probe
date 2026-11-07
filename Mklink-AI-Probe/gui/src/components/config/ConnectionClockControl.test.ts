@@ -44,12 +44,13 @@ afterEach(() => {
 })
 
 describe('shared connection clock', () => {
-  it('changes sleep access only on explicit click and confirms both transitions', async () => {
+  it.each([false, true])('changes sleep access only on explicit click (atomic=%s)', async (atomic) => {
     Object.assign(data, { sleep_access_supported: true, sleep_access_enabled: false })
     requests.mockImplementation(async (url: string, init?: RequestInit) => {
       if (url.endsWith('/sleep-debug') && init?.method === 'POST') {
         const { enabled } = JSON.parse(String(init.body))
-        Object.assign(data, { sleep_access_enabled: enabled, configured_hz: enabled ? 100000 : 10000000 })
+        Object.assign(data, { sleep_access_enabled: enabled, sleep_access_atomic: enabled && atomic,
+          configured_hz: enabled && !atomic ? 100000 : 10000000 })
         return response({ enabled })
       }
       return response(structuredClone(data))
@@ -60,6 +61,7 @@ describe('shared connection clock', () => {
     expect(requests.mock.calls.every(([, init]) => !init?.method)).toBe(true)
     await button.trigger('click'); await flushPromises()
     expect(button.attributes('aria-pressed')).toBe('true')
+    expect(wrapper.text().includes('实时采集不可用')).toBe(atomic)
     await button.trigger('click'); await flushPromises()
     expect(button.attributes('aria-pressed')).toBe('false')
   })

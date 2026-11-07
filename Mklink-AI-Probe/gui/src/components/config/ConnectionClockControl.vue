@@ -20,6 +20,7 @@ interface ClockStatus {
   warning?: string | null
   sleep_access_supported?: boolean
   sleep_access_enabled?: boolean
+  sleep_access_atomic?: boolean
 }
 const props = defineProps<{ deviceConnected: boolean; deviceGeneration?: number; disabled?: boolean }>()
 const emit = defineEmits<{ busy: [value: boolean]; firmwareUpdate: [] }>()
@@ -223,7 +224,8 @@ onUnmounted(() => { disposed = true; revision++; clearTimeout(timer); emit('busy
       <button type="button" class="btn btn-sm" data-testid="sleep-access" :aria-pressed="!!status.sleep_access_enabled"
         :disabled="busy || disabled" @click="toggleSleepAccess">{{ status.sleep_access_enabled
           ? tr('关闭睡眠访问', 'Turn off sleep access') : tr('开启睡眠访问', 'Enable sleep access') }}</button>
-      {{ tr('适用于周期性唤醒的 Cortex-M。临时降低 SWD 速度，独立读写内存时短暂停核，RTT 期间目标继续运行。', 'For Cortex-M targets that wake periodically. Uses a slower SWD clock, briefly halts for standalone memory access, and keeps the target running during RTT.') }}
+      <span v-if="status.sleep_access_atomic">{{ tr('下载器保持当前 SWD 时钟，访问后恢复原运行状态。RTT、SuperWatch 和 SystemView 实时采集不可用，关闭睡眠访问后可启动。', 'The probe keeps the current SWD clock and restores the previous core state after each transfer. Turn off sleep access to start RTT, SuperWatch or SystemView.') }}</span>
+      <span v-else>{{ tr('适用于周期性唤醒的 Cortex-M。访问内存会短暂停核。原子睡眠访问使用当前 SWD 时钟，期间不能启动实时采集。旧协议使用低速 SWD。', 'For Cortex-M targets that wake periodically. Memory access briefly halts the core. Atomic sleep access uses the current SWD clock and blocks live streams. The legacy protocol uses low-speed SWD.') }}</span>
     </p>
     <p class="clock-help">{{ tr('SWD/JTAG 分别保存，默认 10 MHz；连接后按下载器支持的档位应用，采集与内存访问共用。', 'SWD/JTAG settings are saved separately, defaulting to 10 MHz. Supported settings apply on connection and are shared by acquisition and memory access.') }}</p>
     <p v-if="firmwareUpdateNeeded" class="clock-message" role="status" data-testid="clock-firmware-update">

@@ -224,8 +224,11 @@ def clock_snapshot(device, config):
             'active_interface': active_clock_interface(bridge) if connected else 'unknown',
             'selected_interface': selected if selected in interfaces else options['interface'],
             'interfaces': interfaces,
-            'sleep_access_supported': bool(connected and control_clock(device)),
+            'sleep_access_supported': bool(connected and (control_clock(device) or (
+                active_clock_interface(bridge) == 'SWD' and
+                getattr(getattr(bridge, '_mux', None), 'supports_atomic_sleep', False) is True))),
             'sleep_access_enabled': bool(connected and getattr(bridge, '_sleep_debug_previous_clock', None)),
+            'sleep_access_atomic': bool(connected and getattr(bridge, '_sleep_debug_atomic', False) is True),
             'clock_hz': hz, 'configured_hz': hz, 'apply_state': state,
             'applied_hz': hz if state == 'applied' else None, 'migration': migration,
             'warning': getattr(device, 'clock_warning', None)}

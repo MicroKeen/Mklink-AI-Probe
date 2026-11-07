@@ -80,6 +80,7 @@ class MKLinkSerialBridge:
         self._serial: serial.Serial | IsolatedSerial | None = None
         self._ctx = DeviceContext()
         self._sleep_debug_previous_clock: int | None = None
+        self._sleep_debug_atomic = False
         self._reader_thread: threading.Thread | None = None
         self._running = False
         self._response_buffer: list[str | bytes] = []
@@ -455,6 +456,8 @@ class MKLinkSerialBridge:
                 self._serial.write(b'~MKLINK-MUX1\n')
                 transport.sleep_access = bool(getattr(self, '_sleep_debug_previous_clock', None))
                 transport.handshake()
+                if transport.sleep_access and transport.supports_atomic_sleep != getattr(self, '_sleep_debug_atomic', False):
+                    raise RuntimeError('Probe sleep access capability changed; reconfigure the connection')
             except Exception as exc:
                 transport.fail(exc)
                 raise  # No text-mode fallback after a failed protocol transition.

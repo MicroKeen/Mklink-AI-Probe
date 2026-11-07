@@ -30,7 +30,7 @@ from pathlib import Path
 from typing import Any
 
 from mklink._types import DeviceState, DEFAULT_BAUDRATE
-from mklink.sleep_debug import preserve_access_clock
+from mklink.sleep_debug import memory_transport, preserve_access_clock, set_mode
 
 
 @dataclass
@@ -468,7 +468,7 @@ class Device:
             self.clock_warning = str(error)
             raise
         self.clock_warning = None
-        self._bridge._sleep_debug_previous_clock = None
+        set_mode(self._bridge)
         return result
 
     def set_debug_clock(self, clock_hz: int, *, interface: str | None = None) -> dict:
@@ -498,7 +498,7 @@ class Device:
             self.clock_warning = str(error)
             raise ValueError(str(error)) from error
         self.clock_warning = None
-        self._bridge._sleep_debug_previous_clock = None
+        set_mode(self._bridge)
         return clock_snapshot(self, {})
 
     @property
@@ -523,7 +523,8 @@ class Device:
             previous_clock = getattr(self._bridge, '_sleep_debug_previous_clock', None)
             if previous_clock is not None and self.connected:
                 try:
-                    self.set_debug_clock(previous_clock, interface='SWD')
+                    from mklink.sleep_debug import configure
+                    configure(self, False)
                 except Exception as error:
                     self.clock_warning = f'Sleep access ended; prior SWD clock was not confirmed: {error}'
             self._bridge.close()
@@ -1127,8 +1128,9 @@ class Device:
             )
 
         from contextlib import nullcontext
-        from mklink.sleep_debug import control_clock, halted
-        guarded = control_clock(self) is not None
+        from mklink.sleep_debug import halted
+        atomic_flash = getattr(self._bridge, '_sleep_debug_atomic', False) is True
+        guarded = not atomic_flash and getattr(self._bridge, '_sleep_debug_previous_clock', None) is not None
 
         def program(burn, *args, **kwargs):
             with halted(self, release_on_error=False) if guarded else nullcontext():
@@ -1201,10 +1203,18 @@ class Device:
         elif catalog_fallback:
             result["algorithm_source"] = "legacy-profile-fallback"
         result["verified"] = False
+        if atomic_flash:
+            # The FLM may use its own clock. Reapply the selected access rate before readback/reset.
+            from mklink.sleep_debug import require_applied
+            access_hz = self._bridge._sleep_debug_previous_clock
+            if self.clock_hz != access_hz:
+                self.set_debug_clock(access_hz, interface='SWD')
+                set_mode(self._bridge, access_hz, atomic=True)
+            require_applied(self)
         if verify:
             try:
                 with halted(self) if guarded else nullcontext():
-                    self._verify_firmware_readback(firmware, flash_base)
+                    self._verify_firmware_readback(firmware, flash_base, atomic=atomic_flash)
             except Exception as error:
                 raise DeviceError(f"Flash programmed; readback verification failed: {error}") from error
             result["verified"] = True
@@ -1217,7 +1227,7 @@ class Device:
             result['temporary_files'] = cleanup_firmware(self._flash, result)
         return result
 
-    def _verify_firmware_readback(self, firmware: str, flash_base: str) -> None:
+    def _verify_firmware_readback(self, firmware: str, flash_base: str, *, atomic: bool = False) -> None:
         path = Path(firmware)
         if path.suffix.lower() == ".hex":
             from intelhex import IntelHex
@@ -1230,11 +1240,19 @@ class Device:
         else:
             regions = [(int(flash_base, 0), path.read_bytes())]
 
+        read = self.read_memory
+        if atomic:
+            # The loader used the text interface. Require bit 12 again on the new claim.
+            from mklink.sleep_debug import atomic_transport
+            transport = atomic_transport(self)
+            if transport is None:
+                raise DeviceError('Atomic Flash readback capability is unavailable')
+            read = transport.read_atomic_memory
         for start, expected in regions:
             for offset in range(0, len(expected), _FLASH_VERIFY_CHUNK):
                 chunk = expected[offset:offset + _FLASH_VERIFY_CHUNK]
                 address = start + offset
-                actual = self.read_memory(address, len(chunk))
+                actual = read(address, len(chunk))
                 if actual != chunk:
                     raise DeviceError(
                         f"Flash verify failed at 0x{address:08X}"
@@ -1259,14 +1277,18 @@ class Device:
         self._require_connected()
         from contextlib import nullcontext
         from mklink.mux import MuxTransport
-        from mklink.sleep_debug import control_clock, slow_control
+        from mklink.sleep_debug import slow_control
         mux = getattr(self._bridge, '_mux', None)
+        if getattr(self._bridge, '_sleep_debug_atomic', False) is True:
+            mux = memory_transport(self)
         framed = isinstance(mux, MuxTransport)
-        if framed and (mux.sampling or not control_clock(self)):
+        legacy_sleep = (getattr(self._bridge, '_sleep_debug_previous_clock', None) is not None
+                        and not getattr(self._bridge, '_sleep_debug_atomic', False))
+        if framed and (mux.sampling or not legacy_sleep):
             # A live stream retains its existing transport and clock.
             mux.software_reset()
             return
-        with slow_control(self) if control_clock(self) else nullcontext():
+        with slow_control(self) if legacy_sleep else nullcontext():
             if framed:
                 self._bridge.enable_multiplex().software_reset()
                 return
@@ -1725,6 +1747,8 @@ class Device:
         still propagate immediately and no failed stream command is replayed.
         """
         self._require_connected()
+        if getattr(self._bridge, '_sleep_debug_atomic', False) is True:
+            raise DeviceError('RTT streaming is unavailable in atomic sleep access mode; disable sleep access before starting RTT')
         addr, channel, search_size, mode = _resolve_rtt_stream_parameters(
             addr, channel, search_size, mode, self._project_root, source_path=self._axf,
         )
@@ -2201,6 +2225,8 @@ class Device:
             mode: 0=动态搜寻 / 1=静态编译。None 时从 rtt_config.json 读。
         """
         self._require_connected()
+        if getattr(self._bridge, '_sleep_debug_atomic', False) is True:
+            raise DeviceError('SystemView requires an RTT stream, which is unavailable in atomic sleep access mode')
         addr, channel, search_size, mode = _resolve_rtt_stream_parameters(
             addr,
             channel,
@@ -2432,12 +2458,14 @@ class Device:
         # Negotiate on the first snapshot too; no dummy RTT/Watch is required.
         # Only an explicitly unsupported bridge returns None. Transition and
         # target failures propagate without replaying through the legacy path.
-        mux = self._bridge.enable_multiplex()
+        mux = memory_transport(self)
         if mux is not None:
-            if (getattr(mux, 'sleep_access', False) is True and not mux.sampling
+            if (getattr(mux, 'sleep_access', False) is True and not getattr(self._bridge, '_sleep_debug_atomic', False)
                     and size > 0 and 0 <= address < address + size <= 0xe0000000):
-                from mklink.sleep_debug import halted
-                with halted(self):
+                if mux.sampling:
+                    raise DeviceError('Stop acquisition before a halted sleep-access read')
+                from mklink.sleep_debug import halted_snapshot
+                with halted_snapshot(self):
                     return self._bridge.enable_multiplex().read_memory(address, size)
             return mux.read_memory(address, size)
         from mklink.memory_access import parse_read_ram_response
@@ -2498,14 +2526,19 @@ class Device:
         self._require_connected()
         if not data:
             return
-        mux = self._bridge.enable_multiplex()
+        mux = memory_transport(self)
+        if getattr(self._bridge, '_sleep_debug_atomic', False) is True:
+            if not self._target_ram_contains(address, len(data)):
+                raise DeviceError('Verified sleep writes require the entire range to be in known writable RAM')
+            mux.write_atomic_ram(address, data)
+            return
         if mux is not None:
             if (getattr(mux, 'sleep_access', False) is True
                     and 0 <= address < address + len(data) <= 0xe0000000):
                 if mux.sampling:
                     raise DeviceError('Stop acquisition before a halted sleep-access write')
-                from mklink.sleep_debug import halted
-                with halted(self):
+                from mklink.sleep_debug import halted_snapshot
+                with halted_snapshot(self):
                     self._bridge.enable_multiplex().write_memory(address, data)
                 return
             mux.write_memory(address, data)
