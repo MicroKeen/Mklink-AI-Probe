@@ -5,8 +5,12 @@
 | 检查 | 结果 |
 |---|---|
 | HPM5301 / hpm5301evklite / HPMLink | 实机在线与脱机界面均显示 JTAG。有效选项为 1、5、10、20、50、100、200、500 kHz，以及 1、2、4、5、10、20、30 MHz，共 15 档。两页均无 8 MHz。 |
-| 在线 BIN | 请求为 4 000 000 Hz。在线任务与共享 Runtime 最终回执均为 `succeeded`，RTT、SuperWatch 和 SystemView 均已恢复，恢复错误为空。重新读取完整 65 536 B 窗口所得 SHA-256 与烧录前一致。最初的测试脚本在 Runtime 仍为 `running` 时做了终态断言，最终回执和回读另行核实。 |
-| 脱机脚本和 BIN | 实际界面选 2 MHz，请求携带 `swd_clock_hz=2000000`。生成的 HPM JTAG 脚本含 `cmd.set_swd_clock(2000000)`，部署成功。BIN 的硬件触发回执为 `completed`，完整 65 536 B 回读哈希与烧录前一致。另一次 HEX 测试未取得所查作业的终态回执，仅核实了脚本、部署和事后回读。 |
+| 在线 BIN | 分别在页面选择并提交 500 000 Hz、4 000 000 Hz，两次在线任务与共享 Runtime 最终回执均为 `succeeded`。两次重新读取的 65 536 B 窗口 SHA-256 均与烧录前一致。4 MHz 首次测试脚本在 Runtime 仍为 `running` 时做了终态断言，最终回执和回读另行核实。 |
+| 采集恢复 | 500 kHz 烧录结束后，RTT、SuperWatch、SystemView 均自动恢复，恢复错误为空。从恢复后的 RTT 游标收到 236 B 新数据；SuperWatch 的读取周期数继续增加，记录值为 8 439；SystemView 的累计事件数继续增加，记录值为 21 837。目标溢出事件、解析丢弃字节及解析丢弃包三个计数均为 0。 |
+| 脱机脚本和 BIN | 实际界面选 2 MHz，预览请求携带 `swd_clock_hz=2000000`，脚本含 `cmd.set_swd_clock(2000000)`。从页面部署 BIN 并触发后，NDJSON 最终结果为 `completed`。回读完整 52 988 B 镜像及覆盖其边界的 65 536 B 窗口，两者的 SHA-256 均与烧录前一致。另一次 HEX 测试未取得所查作业的终态回执，仅核实了脚本、部署和事后回读。 |
+| 目标端 JTAG 重新插接 | 下载器 USB 保持连接，沿用原软件会话。从检测到目标断开到重新检测到 IDCODE 约 6.13 秒。恢复后从第一笔起连续 6/6 次 32 B Flash 读取正确，整段镜像比较一致，核心继续运行。另一次刚接回时出现过首读失败，本次结果不保证每次插接后首读都成功。 |
 | MUX 状态 5 | 普通访问失败提示核对目标供电与调试连接。写入或复位仍提示结果可能未知，专用原子睡眠命令仍报告状态确认失败。 |
 
-515 项相关 Python 测试、227 项相关 GUI 测试及 1202 项全量 GUI 测试通过。独立 Edge 测试使用模拟探针，核对了生产页面的两组选择器。固件会话的实机记录为 `hpm5301-full-20261107` 下的 `clock-menus.json`、`web-bin-reconciled.json`、`web-offline-reconciled.json` 和 `web-offline-bin.json`。本轮实板范围是 HPM JTAG；ARM/SWD 档位切换与探针身份隔离通过自动化测试。
+515 项相关 Python 测试、227 项相关 GUI 测试及 1202 项全量 GUI 测试通过。独立 Edge 测试使用模拟探针，核对了生产页面的两组选择器。本轮实板范围是 HPM JTAG；ARM/SWD 档位切换与探针身份隔离通过自动化测试。
+
+实机原始记录位于 `hpm5301-full-20261107`。菜单见 `clock-menus.json`，在线 500 kHz 和 4 MHz 分别见 `web-low.json`、`web-bin-reconciled.json`。脱机 BIN 的预览、部署和回读见 `web-offline-bin.json`，触发终态见 `offline-gui-ndjson.txt`；HEX 的补充核对见 `web-offline-reconciled.json`。同会话 JTAG 拔插的逐次读取见 `replug-original.json`。

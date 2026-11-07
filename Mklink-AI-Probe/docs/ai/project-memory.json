@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-07T14:37:00+08:00",
+  "updated_at": "2026-11-07T14:42:00+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
@@ -14,7 +14,7 @@
   },
   "current_session": {
     "status": "hpm_flash_clocks_verified",
-    "current_task": "HPM5301实机JTAG双页15档、在线4MHz、脱机2MHz见v043-hpm-flash-clock-ui.md；H743/F103四组睡眠UF2与验收见v043-cortex-m-sleep.md。"
+    "current_task": "HPM5301 JTAG在线0.5/4MHz、脱机2MHz、三路恢复及拔插6/6见v043-hpm-flash-clock-ui.md；H743/F103四组睡眠UF2见v043-cortex-m-sleep.md。"
   },
   "milestones": [
     {
