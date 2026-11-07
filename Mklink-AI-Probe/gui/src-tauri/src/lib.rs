@@ -928,7 +928,32 @@ pub fn run() {
     ));
 
     let startup_timing = startup_timing::StartupTiming::new(runtime_info_path.with_extension("timing.json"));
-    tauri::Builder::default()
+    let context = tauri::generate_context!();
+    let builder = tauri::Builder::default();
+    #[cfg(target_os = "windows")]
+    let (builder, context) = {
+        // WebView2 creates the HWND before it has navigated to our inline splash.
+        // Present the loaded document once, independently of backend readiness.
+        let mut context = context;
+        if let Some(main) = context.config_mut().app.windows.iter_mut().find(|w| w.label == "main") {
+            main.visible = false;
+        }
+        let revealed = AtomicBool::new(false);
+        let builder = builder.on_page_load(move |view, payload| {
+            if view.label() == "main"
+                && payload.url().scheme() != "about"
+                && matches!(payload.event(), tauri::webview::PageLoadEvent::Finished)
+                && !revealed.swap(true, Ordering::Relaxed)
+            {
+                if let Err(error) = view.window().show() {
+                    revealed.store(false, Ordering::Relaxed);
+                    eprintln!("[tauri] could not show the startup window: {error}");
+                }
+            }
+        });
+        (builder, context)
+    };
+    builder
         .manage(startup_timing)
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
@@ -1078,7 +1103,7 @@ pub fn run() {
 
             Ok(())
         })
-        .run(tauri::generate_context!())
+        .run(context)
         .expect("error while running tauri application");
 }
 
