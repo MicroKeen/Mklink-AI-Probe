@@ -452,6 +452,9 @@ class WirelessBridge(MKLinkSerialBridge):
             return self.link.upload_file(path, 'FLM')
 
     def prepare_firmware(self, path):
+        from mklink.file_content import is_metadata_file
+        if is_metadata_file(path):
+            raise ValueError('Invalid firmware file')
         path = Path(path).resolve(strict=True)
         if path.suffix.lower() != '.bin':
             raise ValueError('S3 relay currently supports BIN firmware; HEX must be converted explicitly')

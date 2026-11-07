@@ -20,6 +20,8 @@ from mklink.hpm_config import HPM_BOARD_FLASH_CFG, default_hpm_board, is_hpm_tar
 from mklink.profiles import load_mcu_profiles
 from mklink.utils import parse_download_progress, parse_load_result
 from mklink._types import FLM_LOAD_TIMEOUT
+from mklink.file_content import is_metadata_file
+from mklink.transport_factory import file_transfer_hook
 
 
 def parse_hpm_program_result(output: str) -> dict:
@@ -491,14 +493,18 @@ class MKLinkFlash:
         Returns:
             MICROKEEN 上的文件名（不含路径），失败返回 None
         """
-        provider = getattr(self._bridge, 'upload_firmware', None)
+        src = Path(local_path)
+        filename = microkeen_filename or src.name
+        if (not filename or filename in {".", ".."} or "/" in filename
+                or "\\" in filename or ":" in filename or is_metadata_file(filename)):
+            return None
+        provider = file_transfer_hook(self._bridge, 'upload_firmware')
         if provider is not None:
             return provider(local_path)
         disk = find_microkeen_disk()
         if not disk:
             return None
 
-        src = Path(local_path)
         if not src.exists():
             return None
 
@@ -511,12 +517,7 @@ class MKLinkFlash:
             except (OSError, ValueError):
                 return None
 
-        filename = microkeen_filename or src.name
         dest = Path(disk) / filename
-
-        if (not filename or filename in {".", ".."} or "/" in filename
-                or "\\" in filename or ":" in filename):
-            return None
         from mklink.file_content import copy_verified
         try:
             changed = copy_verified(src, dest)

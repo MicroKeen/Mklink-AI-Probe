@@ -80,5 +80,7 @@ def test_algorithm_and_firmware_use_transport_providers(monkeypatch, tmp_path):
     algorithm = object()
     assert device._deploy_flash_algorithm(algorithm) == '/FLM/verified.flm'
     assert MKLinkFlash(bridge)._copy_to_microkeen(str(tmp_path / 'firmware.bin')) == '/verified.bin'
+    assert MKLinkFlash(bridge)._copy_to_microkeen(str(tmp_path / 'firmware.bin'), '../bad.bin') is None
+    bridge.upload_firmware.assert_called_once()
     bridge.upload_algorithm.assert_called_once_with(algorithm)
     deploy.assert_not_called()

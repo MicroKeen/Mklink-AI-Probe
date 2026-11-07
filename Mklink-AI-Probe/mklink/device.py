@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Any
 
 from mklink._types import DeviceState, DEFAULT_BAUDRATE
+from mklink.transport_factory import file_transfer_hook
 from mklink.sleep_debug import memory_transport, preserve_access_clock, selected_clock, set_mode
 
 
@@ -455,7 +456,7 @@ class Device:
                 raise
 
     def _deploy_flash_algorithm(self, algorithm):
-        provider = getattr(self._bridge, 'upload_algorithm', None)
+        provider = file_transfer_hook(self._bridge, 'upload_algorithm')
         if provider is not None:
             return provider(algorithm)
         from mklink.cmsis_dap.algorithm_catalog import deploy_algorithm_to_probe
@@ -1043,7 +1044,7 @@ class Device:
                 result['temporary_files'] = cleanup_firmware(self._flash, result)
             return result
 
-        prepare = getattr(self._bridge, 'prepare_firmware', None)
+        prepare = file_transfer_hook(self._bridge, 'prepare_firmware')
         if prepare is not None:
             prepare(firmware)  # Radio staging must finish before FLM halts the target.
 
