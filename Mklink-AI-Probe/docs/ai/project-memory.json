@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-07T15:28:00+08:00",
+  "updated_at": "2026-11-07T16:14:00+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.4.3-fixes",
-    "head": "0.4.3 Windows 候选产品固定在6ec4e553；后续验收记录单独提交。",
+    "head": "0.4.3 Windows 修复候选2a3cbb77；第一轮6ec4e553及证据保留。",
     "remote_head": "PR69已合并main/186b6a0f。0.4.3继续共用修复分支和草稿PR71。",
     "working_tree": "复用E盘主工作区，保留旧v0.4.2分支和两个detached工作树；本轮及后续修复共用codex/v0.4.3-fixes。"
   },
@@ -14,7 +14,7 @@
   },
   "current_session": {
     "status": "v043_candidate_qualification",
-    "current_task": "两款V4.7.3 GUI升级通过。普通V4/F103桌面与Skill自动打开/共用GUI及WFI快照通过；100 ms WFI普通流RTT 0 B、Watch 0样本，分别运行也失败。详情、候选包及发布待办见v043-release-candidate-acceptance.md。"
+    "current_task": "编号版普通V4/F103睡后续采：140帧RTT无遗漏，Watch保留断点。最终候选与三款固件GUI升级见v043-f103-wake-data.md。未发布。"
   },
   "milestones": [
     {
@@ -63,7 +63,7 @@
     },
     {
       "area": "AI Skill与共享GUI",
-      "result": "6ec4e553候选：6757 Python/2跳过、1202 GUI、23 Rust通过。桌面与Skill GUI实板5处一致，42个Web文件和完整Skill核对见v043-release-candidate-acceptance.md。早期实装、GUI/回收/UART见v043-gui-uart-local-install.md、v043-gui-open.md、v043-uart-baud-options.md。SuperWatch列表见v043-superwatch-list-actions.md；RTT日志菜单裁剪由20/48降为0/48，证据在构建根artifacts/v043-rtt-log-menu-20261107。"
+      "result": "2a3cbb77候选：6759 Python/2跳过、1202 GUI、23 Rust通过。F103续采与最终三款UF2见v043-f103-wake-data.md，首轮见v043-release-candidate-acceptance.md。历史实装见v043-gui-uart-local-install.md，Watch列表见v043-superwatch-list-actions.md。"
     },
     {
       "area": "RTT自动恢复与在线静默收尾",
