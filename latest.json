@@ -1,20 +1,20 @@
 {
-  "version": "0.4.2",
-  "notes": "# MKLink AI Probe 0.4.2\n\n- 完善 HPM 烧录与调试，修复烧录后 RTT 恢复及遗留请求提示；在线烧录成功后自动清理本次复制的临时镜像。\n- SuperWatch 内置九个 HPM 系列外设目录，支持手动导入 SVD/XML，统一搜索变量、信号分组和图例的曲线显隐按钮。\n- RTT、串口支持持续记录到本地并在原窗口回放；RTT 编码、显示和日志控制合并为一行。\n- 连接配置分别保存 SWD/JTAG 时钟，默认 10 MHz，按下载器能力提供完整档位。\n- 完善 Skill、MCP 和上位机的命令能力检查、HPM 核心调试及采集恢复，改善 RTT/RTOS Trace 并行采集和 STM32H7 硬件断点；相关能力需配套固件。\n- 优化内存读写、设备识别和连接失败提示；HPMLink 连接后自动显示对应品牌。\n- 修复 Windows 覆盖升级后仍显示旧版本的问题。\n\n下载包含 Windows 安装包、完整 AI Skill 和 Site Agent。安装包与 Skill 使用同一版本源码；下载器固件独立更新，不包含在安装包中。公网远程中继继续延期。\n",
-  "pub_date": "2026-11-02T01:26:29+00:00",
+  "version": "0.4.3",
+  "notes": "# MKLink AI Probe 0.4.3\n\n- 优化内存读取延迟和高速采集，SuperWatch 最低采样间隔为 1 µs。界面按实际采样时间戳统计速率，并在已确认的数据缺口处断线。\n- SuperWatch 支持在所选变量和常用变量中写入，移除所选变量后同步取消勾选。修复 RTT 终端与 HEX 视图的日志遮挡。\n- 完善调试器与 RTT、SuperWatch 共存及调试退出后的恢复，改进周期睡眠目标的数据接收。在线烧录保留原有连接方式。\n- AI 可通过完整 Skill 打开上位机 GUI、选择下载器并与桌面共享采集。改善 Windows 首次打开时的黑屏和 USB 文件拷贝兼容性。\n\n本次提供 Windows 安装包、完整 Skill 及 Site Agent。MicroLink V3.6.9、MicroLink V4.7.3 和 HPMLink V4.7.3 按型号独立分发。\n",
+  "pub_date": "2026-11-07T14:58:48+00:00",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWkJ5dmZ4MnVLVWJNQWVWaCttYmVLWS9BZURvMGhTRDF1dFB2Z05RV0dUcFBxVHZqV0tWZmhxcDA3dXhLMCs2RmhTUUdVanhpUkFhQTdYeVh5Rng2SGs5UTR3eWdMMVFJPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkzNTgxNzMxCWZpbGU6TWtsaW5rIEFJIFByb2JlXzAuNC4yX3g2NC1zZXR1cC5leGUKV3ZKMHNza3ovbTVGc0VBc3pEbXREY0pnclZVaTl1emx3Y2wzeWI5QUdlQWcxekx1bGRGeEFHdFQ4bitOaU9mMGoxUjVCdVVzdnh4ZkVKbC9wZ3ZoQXc9PQo=",
-      "url": "https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/v0.4.2/Mklink-AI-Probe-v0.4.2-x64-Setup.exe",
-      "sha256": "5ff079bbac008b518d1db409940e95bbfb7102c8e8070f22d4e0b6d610abd766",
-      "size": 186039108
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWkJ5dmZ4MnVLVVhlTS9BMW5Id3JmRk4wNkpaYUZsUFNJVVpSaU1jZm5wR0pWZjByT2wvbGhxUmtlSTY5UDc1R2dBZy9TcmNNU0NsK1JhMWU4ZlBJeGVhY0NXenFOd3drPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk0MDYwMzE5CWZpbGU6TWtsaW5rIEFJIFByb2JlXzAuNC4zX3g2NC1zZXR1cC5leGUKOUxpQXFtRXd1ZWJJc1pvN0FReFN6NmNvNWJVYmQvQlQxMDF1R29MMVk5NzZ3Y1JWKzNXc0lvdFgvdkd2Mm8zeXlyeEVTei9mR2FtWTBvWFRVb2dSQUE9PQo=",
+      "url": "https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/v0.4.3/Mklink-AI-Probe-v0.4.3-x64-Setup.exe",
+      "sha256": "45786abdfac3ad49671988ac5a8b6fcb5054259964a8dca961090a8a92d90342",
+      "size": 186759560
     }
   },
   "skill": {
-    "version": "0.4.2",
-    "url": "https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/v0.4.2/Mklink-AI-Probe-v0.4.2-Skill.zip",
-    "sha256": "14af7a5facd84cdb2892c810606c12483840e17529383eff6c716c5385cebc2c",
-    "size": 100274310,
-    "source_commit": "0e82ba6f47096e1cb1589726f630446af792c0c3"
+    "version": "0.4.3",
+    "url": "https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/v0.4.3/Mklink-AI-Probe-v0.4.3-Skill.zip",
+    "sha256": "9fd2d80cd85be2f8e6189524f16fce650bb4d9914ead7480c7fd2f94df92fc78",
+    "size": 100333143,
+    "source_commit": "3905a68bceaf6d863b9159de2a390e161788af48"
   }
 }
