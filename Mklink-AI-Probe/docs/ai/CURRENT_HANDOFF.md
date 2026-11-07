@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-11-07T14:42:00+08:00`
+- 更新时间：`2026-11-07T15:28:00+08:00`
 - 分支：`codex/v0.4.3-fixes`
-- HEAD：`SuperWatch cfb1bae8、RTT菜单 bb2c8d27、睡眠时限 87085550；烧录时钟 29c5d817、Web e2e329c6。`
+- HEAD：`0.4.3 Windows 候选产品固定在6ec4e553；后续验收记录单独提交。`
 - 远端 HEAD：`PR69已合并main/186b6a0f。0.4.3继续共用修复分支和草稿PR71。`
 - 工作树：复用E盘主工作区，保留旧v0.4.2分支和两个detached工作树；本轮及后续修复共用codex/v0.4.3-fixes。
-- 当前任务：HPM5301 JTAG在线0.5/4MHz、脱机2MHz、三路恢复及拔插6/6见v043-hpm-flash-clock-ui.md；H743/F103四组睡眠UF2见v043-cortex-m-sleep.md。
-- 状态：`hpm_flash_clocks_verified`
+- 当前任务：两款V4.7.3 GUI升级通过。普通V4/F103桌面与Skill自动打开/共用GUI及WFI快照通过；100 ms WFI普通流RTT 0 B、Watch 0样本，分别运行也失败。详情、候选包及发布待办见v043-release-candidate-acceptance.md。
+- 状态：`v043_candidate_qualification`
 
 ## 里程碑
 
@@ -26,7 +26,7 @@
 - **0.4.3接收、连续性与性能**：0.4.3基线/1µs见v043-host-baseline.md、v043-superwatch-1us.md。IAR退出后V3/V4混合RTT约355→420/354→416KiB/s，Watch约10→11.7万/s，四调试器共存通过。V4独立849.64KiB/s、26.53万/s，4096B约1053–1056KiB/s。见v043-mux-heartbeat-recording.md、v043-iar-exit-context.md、v043-v4-iar-exit-context.md。V3/F103 Cortex-M3 72MHz/100ms WFI，NRST未接，两种复位启动计数递增、双向烧录独立校验、RAM 12/12、持续RTT通过，DBGMCU_CR=0。见v043-cortex-m-sleep.md。
 - **0.4.2正式发布及腾讯云下载**：正式源0e82ba6f，Windows/完整Skill/SiteAgent和四固件发布、覆盖、签名及三渠道/回退通过，PR66/67/68已合并，资产不可变。详细资格见v042-release-handoff.md；安装元数据cb30b703/PR63见installer-metadata-cleanup-20261027.md。清理29目录6.587GiB、629保留哈希不变、135含链接组保留，见v042-postrelease-handoff.md。11/4轻量11文件341MiB哈希/HEAD/Range/回退、25保护/18GUI通过；更新32过/1开发版本不一致，Skill检查通过。99%及无日期截止部署回读通过，见tencent-download-cost-20261104.md（含误部署恢复/限制）。
 - **0.4.2正式候选最终资格**：90e676db与产品1ca9b8fd等价：6453Python/2skip、1182GUI、生产Web/冻结/Rust/NSIS/覆盖及真实界面交互通过。HPM时钟/镜像/RAM/XML/RTT/Watch/串口、Trace独立并行、烧录后三流恢复与原生退出通过。完整计数及限制见v042-formal-qualification.md、v042-traffic-replay.md，历史Trace溢出失败保留。
-- **AI Skill与共享GUI**：GUI/回收/UART及实装见v043-gui-open.md、v043-uart-baud-options.md、v043-gui-uart-local-install.md。3655/2655载荷匹配，5339数据不变。全量与打包补验见v043-merge-cleanup.md，MCP强杀进程树边界保留。SuperWatch三列表写入/移除/帮助174项与Edge通过，见v043-superwatch-list-actions.md。RTT日志菜单在8种宽度×2通道×3模式，裁剪20/48→0/48，记录/回放入口均可点击。验收在构建根artifacts/v043-rtt-log-menu-20261107。
+- **AI Skill与共享GUI**：6ec4e553候选：6757 Python/2跳过、1202 GUI、23 Rust通过。桌面与Skill GUI实板5处一致，42个Web文件和完整Skill核对见v043-release-candidate-acceptance.md。早期实装、GUI/回收/UART见v043-gui-uart-local-install.md、v043-gui-open.md、v043-uart-baud-options.md。SuperWatch列表见v043-superwatch-list-actions.md；RTT日志菜单裁剪由20/48降为0/48，证据在构建根artifacts/v043-rtt-log-menu-20261107。
 - **RTT自动恢复与在线静默收尾**：14417715：347相关+17发现测试通过。V4/HPM5301两次49700B烧录成功，RTT/Watch自动暂停恢复、零恢复错误及零Watch读错；覆盖/载荷/冻结MCP/Web/退出通过。当时为0.4.1测试包，修复后续纳入正式0.4.2。原始包/详细计数见rtt-auto-restore-20261030.md；静默面板d1cf16ec见online-flash-receipt-20261029.md。
 - **Linux/macOS 0.4.1测试包**：Linux a6bdacbc、Mac arm64 eefc6842：CI USB各58/1skip及冻结CLI/MCP/健康/Web/退出通过。DEB SHA7309f377、DMG SHA56dc8e0a，均旧0.4.1；Mac ad-hoc未公证，实机安装/UI/USB待测。见linux-deb-test-20261028.md、macos-arm64-test-20261028.md。
 - **H743正式固件与双核候选边界**：H743正式V4.7.1在线/四脱机/19采集调试通过。私有V4.7.2单核兼容、双核误选写前拒绝、2MiB不变及M7/M4 HEX在线通过；V4.7.2/V3.6.8/V2.9.3双核候选交付，46回归通过。无双核实板正向脱机，V3历史掉线未闭环，当时候选不公开替换；后来明确发布的四个build以v042-release-handoff.md为准，不外推双核验收。见known-limits-20261030.md。
@@ -47,7 +47,7 @@
 
 ## 真机环境
 
-- **state**：11/7 固件会话实测V3.6.9和HPMLink V4.7.3，见v043-cortex-m-sleep.md。普通V4上次为r4，V3 #9–11/V4 #18–20合并见v043-merge-cleanup.md。每次重核身份/占用；LA CH0/CH1为SWCLK/SWDIO。
+- **state**：11/7普通V4已通过GUI从4.7.2升到普通4.7.3，F103镜像回读见v043-release-candidate-acceptance.md。V3.6.9与专用HPMLink资格见v043-cortex-m-sleep.md。每次重新核对设备和占用；LA CH0/CH1为SWCLK/SWDIO。
 - **installer**：Windows/完整Skill为0.4.3/b8a1f658（产品等价4c890205），NSIS SHA08109b2d、Skill abb5797a，验证见v043-gui-uart-local-install.md。SiteAgent仍旧，正式资产不变；未发布。
 - **backups**：最新b8a1f658应用/Skill、f9b1ae8a基准、正式包/固件、原始测试记录及公共缓存保留。11/7清理29.558GiB，4383保留哈希一致；112含链接组未删，见v043-space-cleanup-20261107.md。旧ELF/试包退役；11/4历史清理见v043-workspace-cleanup.md。
 
