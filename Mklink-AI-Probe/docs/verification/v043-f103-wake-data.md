@@ -41,8 +41,10 @@
 
 在最终普通 V4 上，单开 SuperWatch 得到 998 个有效记录，608 与 1359 之间有 7.509674 s 间隔和一个断点。两项同时运行时，RTT 收齐 140/140 帧，其中睡眠阶段写入 7 帧，环满 0 次；SuperWatch 留下 1001 个有效记录，时间戳和值均已核对。两次都在真实候选 Skill 打开的 GUI 和同一后台上完成。上板验证结束后再次还原并核对原 1024 B 镜像。原始数据为 `numbered-watch.json`、`numbered-both.json`、`numbered-restored.json`，固件升级证据位于构建根 `artifacts/device-docs-numbered-20261107`。
 
-全量 Python 6759 项通过，两个依赖可选 `hil_core.observe` 的测试跳过，60 条警告；GUI 104 个文件、1202 项通过；桌面 Rust 23 项通过。生产 Web 42 个文件逐文件匹配 Git、候选桌面和完整 Skill。独立打包的 Windows Site Agent 便携 ZIP 与 manifest 校验通过，SHA-256 为 `f183c40251fb2e589bd0baaf2def8756132b5718a10cade5c6e76d3c1eb7ccac`。精确候选的系统覆盖安装及全局 Skill 替换留待正式发布流程。
+全量 Python 6759 项通过，两个依赖可选 `hil_core.observe` 的测试跳过，60 条警告；GUI 104 个文件、1202 项通过；桌面 Rust 23 项通过。生产 Web 42 个文件逐文件匹配 Git、候选桌面和完整 Skill。独立打包的 Windows Site Agent 便携 ZIP 与 manifest 校验通过，SHA-256 为 `f183c40251fb2e589bd0baaf2def8756132b5718a10cade5c6e76d3c1eb7ccac`。
 
 在同机用两个完整 Skill 的打包代码交错运行 4 B 正常批量解码，各测 8 轮，CPU 时间计量下的中位均约 276 万样本/秒。此实验仅覆盖上位机解码，H7 实机吞吐采用上述既有基线。
+
+随后使用上述准确的 `2a3cbb77` NSIS 在原位置覆盖安装，退出码为 0，3656 个实装载荷文件逐一匹配，七份原配置哈希一致。全局 Skill 的 2656 个文件与 ZIP 匹配，5339 个本地数据文件哈希一致。分别从已安装的桌面程序和全局 Skill 的 stdio MCP 打开可见 GUI，在最终普通 V4 与同一 F103 上并行采集 RTT 和 SuperWatch。两次各收齐序号 0–139 的 1680 B，逐帧校验通过，环满 0 次；AI 路径记录 1005 个有效样本，睡眠后续采。结束后原 1024 B 镜像已还原并复读一致。证据位于构建根 `artifacts/v043-overwrite-2a3cbb77-20261107`。
 
 构建根 `artifacts/v043-formal-rc-2a3cbb77-20261107` 含 `wake-data-audit.json`、`native-cycle.json`、`native-wake-waveform.png`、候选及构建日志。此前的同板对照和原始 RTT 字节在 `artifacts/v043-formal-rc-6ec4e553-20261107`，其中 `watch-only-256.json`、`watch-recording.json`、`candidate-both-256.json`、`cold-retention.json`、`restored-wfi-final.json` 分别对应失败、修复、打包后并行、首次启动边界和还原回读。
