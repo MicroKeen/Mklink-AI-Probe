@@ -3789,14 +3789,21 @@ def create_app(
             except Exception as error:
                 raise HTTPException(400, str(error)) from error
 
-    @app.post("/api/device/read-memory")
-    async def read_memory(
-        address: str = Body(...),
-        size: int = Body(...),
-    ):
+    def check_memory_mode(expected):
+        actual = getattr(getattr(_state["device"], '_bridge', None), '_sleep_debug_atomic', False) is True
+        if expected is not None and expected is not actual:
+            raise HTTPException(409, 'Sleep access mode changed before memory access; request was not sent')
+        return actual
+
+    async def shared_memory_read(address, size, *, sleep_notice=None, expected_atomic_sleep=None):
         if not _state["device"] or not _state["device"].connected:
             raise HTTPException(status_code=400, detail="Device not connected")
         async with async_target_debug_lease(_state, "read-memory"):
+            if expected_atomic_sleep is not None:
+                check_memory_mode(expected_atomic_sleep)
+            if sleep_notice and check_memory_mode(None):
+                from mklink.mux import sleep_rpc_timeout
+                await sleep_notice(sleep_rpc_timeout(size))
             try:
                 loop = asyncio.get_event_loop()
                 addr = int(address, 0) if isinstance(address, str) else address
@@ -3814,17 +3821,25 @@ def create_app(
                 raise HTTPException(status_code=500, detail=str(e))
 
     # The shared runtime calls the same leased/executor-backed implementation.
-    app.state.shared_memory_read = read_memory
+    app.state.shared_memory_read = shared_memory_read
+
+    @app.post("/api/device/read-memory")
+    async def read_memory(address: str = Body(...), size: int = Body(...),
+                          expected_atomic_sleep: bool | None = Body(None)):
+        return await shared_memory_read(address, size, expected_atomic_sleep=expected_atomic_sleep)
 
     @app.post("/api/device/write-memory")
     async def write_memory(
         address: str = Body(...),
         data_hex: str = Body(...),
         verify: bool = Body(default=False),
+        expected_atomic_sleep: bool | None = Body(None),
     ):
         if not _state["device"] or not _state["device"].connected:
             raise HTTPException(status_code=400, detail="Device not connected")
         async with async_target_debug_lease(_state, "write-memory"):
+            if expected_atomic_sleep is not None:
+                check_memory_mode(expected_atomic_sleep)
             try:
                 loop = asyncio.get_event_loop()
                 addr = int(address, 0) if isinstance(address, str) else address

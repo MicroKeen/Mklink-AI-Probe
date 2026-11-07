@@ -114,6 +114,8 @@ def execute_flush(device, parsed, *, verify=False):
     from mklink.observe_bridge import memory_flush_facts, observe_operation
     if type(verify) is not bool:
         raise ValueError('verify must be boolean')
+    if getattr(device._bridge, '_sleep_debug_atomic', False) is True:
+        raise ValueError('Atomic sleep access requires verified RAM writes; use write_memory')
     with observe_operation(
         "memory.flush",
         capability="target.memory",

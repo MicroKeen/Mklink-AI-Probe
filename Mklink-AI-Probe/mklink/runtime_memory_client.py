@@ -17,7 +17,8 @@ class MemoryChannel:
                 additional_headers={'Authorization': 'Bearer ' + info['token'],
                                     'X-MKLink-Session': session_id,
                                     'X-MKLink-Probe': info.get('probe_id') or '',
-                                    'X-MKLink-Instance': info['instance_id']},
+                                    'X-MKLink-Instance': info['instance_id'],
+                                    'X-MKLink-Sleep-Budget': '1'},
                 compression=None, open_timeout=3, close_timeout=1, max_size=65536,
             )
         except BaseException:
@@ -28,6 +29,12 @@ class MemoryChannel:
         from mklink.runtime import RuntimeErrorResponse
         self.connection.send(json.dumps(arguments).encode())
         response = json.loads(self.connection.recv(timeout=35))
+        if isinstance(response, dict) and response.get('status') == 102:
+            from mklink.mux import sleep_rpc_timeout
+            budget = sleep_rpc_timeout(arguments.get('size'))
+            if budget <= 35 or response.get('sleep_timeout') != budget:
+                raise RuntimeErrorResponse('Invalid pending memory read budget; command was not retried')
+            response = json.loads(self.connection.recv(timeout=budget))
         if not isinstance(response, dict) or type(response.get('status')) is not int:
             raise RuntimeErrorResponse('Invalid memory channel response; command was not retried')
         if response['status'] != 200:

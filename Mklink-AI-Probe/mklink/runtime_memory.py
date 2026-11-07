@@ -11,11 +11,13 @@ import time
 
 from fastapi import HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
+from mklink.mux import SLEEP_READ_MAX
 
 
 class MemoryCall:
-    def __init__(self, control, arguments, session_id):
+    def __init__(self, control, arguments, session_id, sleep_notice=None):
         self.control, self.arguments, self.session_id = control, arguments, session_id
+        self.sleep_notice = sleep_notice
         self.result = None
         self.status = None
         self.error_body = bytearray()
@@ -24,8 +26,11 @@ class MemoryCall:
         from mklink.remote.resource_manager import ResourceError
         from mklink.remote.api import _resource_error_detail
         try:
+            options = {'sleep_notice': self.sleep_notice} if self.sleep_notice else {}
+            if 'expected_atomic_sleep' in self.arguments:
+                options['expected_atomic_sleep'] = self.arguments['expected_atomic_sleep']
             self.result = await self.control.app.state.shared_memory_read(
-                address=self.arguments['address'], size=self.arguments['size'])
+                address=self.arguments['address'], size=self.arguments['size'], **options)
         except ResourceError as error:
             raise HTTPException(409, _resource_error_detail(error)) from error
         # Preserve operation status accounting; no internal JSON response needed.
@@ -148,6 +153,7 @@ def install_memory_channel(api, control):
     @api.websocket('/memory')
     async def memory_channel(ws: WebSocket):
         nonlocal users, refresher
+        sleep_budget = ws.headers.get('x-mklink-sleep-budget') == '1'
         session_id = ws.headers.get('x-mklink-session')
         probe_id = control.info.get('probe_id') or ''
         instance_id = control.info['instance_id']
@@ -161,6 +167,9 @@ def install_memory_channel(api, control):
             await ws.close(code=1008)
             return
         await ws.accept()
+        async def notify_sleep(budget):
+            await ws.send_bytes(json.dumps({'status': 102, 'sleep_timeout': budget}).encode())
+
         users += 1
         if refresher is None:
             refresher = asyncio.create_task(refresh())
@@ -194,8 +203,9 @@ def install_memory_channel(api, control):
                         raise HTTPException(422, 'Invalid memory request') from error
                     _, _, arguments = control.prepare_call({
                         'session_id': session_id, 'capability': 'read_memory', 'arguments': arguments})
+                    notice = notify_sleep if sleep_budget and arguments['size'] > 2 * SLEEP_READ_MAX else None
                     result = await control.invoke('POST', '/api/device/read-memory', arguments,
-                                                  session_id=session_id)
+                                                  session_id=session_id, sleep_notice=notice)
                     response = {'status': 200, 'result': result}
                 except HTTPException as error:
                     response = {'status': error.status_code, 'detail': error.detail}

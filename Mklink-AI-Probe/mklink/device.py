@@ -1276,8 +1276,9 @@ class Device:
         """Reset the target MCU while keeping the probe session connected."""
         self._require_connected()
         from contextlib import nullcontext
-        from mklink.mux import MuxTransport
-        from mklink.sleep_debug import slow_control
+        from mklink.mux import MuxTransport, SLEEP_COMMAND_TIMEOUT
+        from mklink.sleep_debug import advertised_atomic_sleep, slow_control
+        from mklink.capture_clock import active_clock_interface
         mux = getattr(self._bridge, '_mux', None)
         if getattr(self._bridge, '_sleep_debug_atomic', False) is True:
             mux = memory_transport(self)
@@ -1292,8 +1293,17 @@ class Device:
             if framed:
                 self._bridge.enable_multiplex().software_reset()
                 return
+            timeout = 10.0
+            if active_clock_interface(self._bridge) == 'SWD' and advertised_atomic_sleep(self._bridge):
+                # Record the acknowledgement, without issuing another clock or reset command.
+                from mklink.connection_diagnostics import event
+                timeout = SLEEP_COMMAND_TIMEOUT
+                ctx = self._bridge._ctx
+                event('target.reset.request', transport='text', timeout=timeout,
+                      clock_state=ctx.clock_apply_state, configured_hz=ctx.swd_clock_hz,
+                      applied_hz=ctx.applied_clock_hz if ctx.clock_apply_state == 'applied' else None)
             response = self._bridge.send_command(
-                "print('MKLINK_RESET_RC=' + str(cmd.reset_target(1)))", timeout=10.0)
+                "print('MKLINK_RESET_RC=' + str(cmd.reset_target(1)))", timeout=timeout)
         receipts = [line.strip() for line in response.splitlines() if line.strip().startswith('MKLINK_RESET_RC=')]
         if receipts != ['MKLINK_RESET_RC=0']:
             raise DeviceError(f'Software reset not confirmed by the probe; outcome unknown, do not replay: {response.strip()}')

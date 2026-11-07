@@ -226,6 +226,16 @@ def test_lost_atomic_capability_does_not_fall_back_to_ordinary_read_or_write():
     assert peer.frames == [(2, 0, 0)] and not peer.ordinary
 
 
+def test_legacy_flush_cannot_bypass_atomic_write_receipts():
+    from mklink.memory_write import execute_flush
+    peer = AtomicPeer()
+    device = atomic_device(peer)
+    configure(device, True)
+    with pytest.raises(ValueError, match='verified RAM writes'):
+        execute_flush(device, [(0x40000000, b'word')])
+    assert peer.frames == [(2, 0, 0)] and not peer.writes
+
+
 def test_atomic_mode_uses_original_clock_and_segments_only_validated_ram():
     peer = AtomicPeer()
     device = atomic_device(peer)
@@ -272,3 +282,29 @@ def test_short_atomic_read_poisons_session_without_partial_result():
     peer.mux.capabilities = 3
     with pytest.raises(ValueError, match='advertise'):
         peer.mux.probe_sleep_core()
+
+
+@pytest.mark.parametrize('op, atomic, selected, seconds', [
+    (0x17, True, False, 12), (0x17, True, True, 12),
+    (0x15, True, False, 12), (0x15, True, True, 12),
+    (0x15, False, False, 3), (0x15, False, True, 4.8),
+    (0x11, True, False, 3), (0x12, True, False, 3), (0x02, True, True, 4.8),
+])
+def test_command_deadline_only_changes_for_negotiated_sleep_operations(monkeypatch, op, atomic, selected, seconds):
+    import mklink.mux as protocol
+    now = [100.0]
+    monkeypatch.setattr(protocol, 'time', SimpleNamespace(monotonic=lambda: now[0]))
+    frames = []
+    mux = MuxTransport(frames.append)
+    mux.sleep_access = selected
+    mux.capabilities = MuxTransport.ATOMIC_SLEEP_CAPABILITY if atomic else 0
+    mux._send(op, b'')
+    assert mux._pending[2] == 100.0 + seconds
+    now[0] = mux._pending[2] - 0.001
+    mux.tick()
+    mux._check()
+    now[0] += 0.002
+    mux.tick()
+    with pytest.raises(MuxError, match='outcome unknown, no replay'):
+        mux._check()
+    assert len(frames) == 1

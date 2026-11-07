@@ -19,9 +19,21 @@ class MuxError(ConnectionError):
 
 
 SLEEP_ACCESS_COMMAND = 0x17
+SLEEP_COMMAND_TIMEOUT = 12.0
 SLEEP_READ_MAX = 480
 # Keep a write in a single 512-byte wire frame (20 header/CRC + 8 nonce + 7 parameters).
 SLEEP_WRITE_MAX = 477
+
+
+def sleep_rpc_timeout(size, *, write=False, verify=False):
+    """Bound a bulk RPC by the number of acknowledged firmware commands it needs."""
+    if type(size) is not int or not 1 <= size <= 4096:
+        return 35
+    chunk = SLEEP_WRITE_MAX if write else SLEEP_READ_MAX
+    commands = (size + chunk - 1) // chunk
+    if write and verify:
+        commands += (size + SLEEP_READ_MAX - 1) // SLEEP_READ_MAX
+    return max(35, commands * SLEEP_COMMAND_TIMEOUT + 5)
 
 
 class MuxTargetError(RuntimeError):
@@ -155,7 +167,9 @@ class MuxTransport:
                       (self.nonce if 0x10 <= op < 0x40 else b'') + payload)
         # At 10 Hz WFI, a 128-byte RTT poll plus its cursor update can span
         # over three seconds. Keep the deadline inside the probe's 5 s lease.
-        timeout = 6.0 if op == SLEEP_ACCESS_COMMAND else (4.8 if self.sleep_access else 3)
+        timeout = 4.8 if self.sleep_access else 3
+        if op in (SLEEP_ACCESS_COMMAND, self.SOFTWARE_RESET_COMMAND) and self.supports_atomic_sleep:
+            timeout = SLEEP_COMMAND_TIMEOUT
         self._pending = (op, req, time.monotonic() + timeout, heartbeat)
         self._reply = None
         self._last_command = time.monotonic()

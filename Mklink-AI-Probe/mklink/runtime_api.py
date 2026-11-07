@@ -399,11 +399,11 @@ class RuntimeControl:
             raise HTTPException(422, f'Arguments must be an object of at most {argument_limit // 1024} KiB')
         return session_id, capability, validate_arguments(capability, arguments)
 
-    async def invoke(self, method, path, arguments=None, *, session_id=None):
+    async def invoke(self, method, path, arguments=None, *, session_id=None, sleep_notice=None):
         if (method == 'POST' and path == '/api/device/read-memory' and session_id
                 and callable(getattr(self.app.state, 'shared_memory_read', None))):
             from mklink.runtime_memory import MemoryCall
-            return await MemoryCall(self, arguments, session_id).run()
+            return await MemoryCall(self, arguments, session_id, sleep_notice).run()
         import httpx
         headers = {"X-Auth-Token": self.info["token"]}
         if session_id:
@@ -754,9 +754,17 @@ fetch('/_runtime/login', {method:'POST', headers:{'Content-Type':'application/js
             session = control.session(session_id)
             session.project_root, session.axf, session.symbol_version = state['project_root'], axf, symbol_version
         capabilities = UART_CAPABILITIES if scope == 'uart' else CAPABILITIES
+        from mklink.capture_clock import active_clock_interface, firmware_lines
+        bridge = getattr(state.get('device'), '_bridge', None)
+        mux = getattr(bridge, '_mux', None)
+        # Before the first HELLO an older probe may advertise bit 12 only in MUX.
+        check_sleep_budget = (scope == 'target' and active_clock_interface(bridge) == 'SWD'
+                              and 'MUX_TARGET=1' in firmware_lines(bridge)
+                              and (mux is None or getattr(mux, 'supports_atomic_sleep', False) is True))
         return {**device_status, 'session_id': session_id, 'shared': True, 'scope': scope,
                 'instance_id': info['instance_id'], 'probe_id': info.get('probe_id'),
                 'capabilities': sorted(capabilities),
+                'check_sleep_budget': check_sleep_budget,
                 'memory_transport': ('websocket-v1' if scope == 'target'
                     and callable(getattr(app.state, 'shared_memory_read', None)) else None)}
 

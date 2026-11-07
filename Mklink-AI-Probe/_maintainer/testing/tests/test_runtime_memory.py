@@ -200,6 +200,35 @@ def test_memory_channel_revalidates_every_message(batch, guard):
     assert control.inflight_requests == 0
 
 
+@pytest.mark.parametrize('atomic,negotiated,size,pending', [
+    (True, True, 4096, True), (False, True, 4096, False),
+    (True, False, 4096, False), (True, True, 480, False)])
+def test_bulk_sleep_budget_is_announced_only_for_the_admitted_read(batch, atomic, negotiated, size, pending):
+    client, _, device, _, _ = batch
+    headers = memory_channel_headers(batch)
+    if negotiated:
+        headers['X-MKLink-Sleep-Budget'] = '1'
+    device._bridge._sleep_debug_atomic = atomic
+    with client.websocket_connect('/_runtime/memory', headers=headers) as ws:
+        ws.send_bytes(json.dumps({'address': '0x20000000', 'size': size}).encode())
+        if pending:
+            assert json.loads(ws.receive_bytes()) == {'status': 102, 'sleep_timeout': 113}
+        result = json.loads(ws.receive_bytes())
+        assert result['status'] == 200 and len(bytes.fromhex(result['result']['data_hex'])) == size
+    device.read_memory.assert_called_once_with(0x20000000, size)
+
+
+def test_changed_sleep_mode_rejects_bulk_http_write_before_dispatch(batch):
+    client, _, device, _, _ = batch
+    request = sdk_read_body(batch)
+    device._bridge._sleep_debug_atomic = True
+    device.write_memory = Mock()
+    request.update(capability='write_memory', arguments={
+        'address': '0x20000000', 'data_hex': '42', 'expected_atomic_sleep': False})
+    assert client.post('/_runtime/call', json=request).status_code == 409
+    device.write_memory.assert_not_called()
+
+
 def test_memory_channel_idle_expiry_closes_without_renewing(batch):
     from starlette.websockets import WebSocketDisconnect
     client, _, device, control, _ = batch

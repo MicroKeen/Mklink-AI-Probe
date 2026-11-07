@@ -30,6 +30,15 @@ def require_applied(device):
         raise RuntimeError('SWD clock is pending debugger handoff; release the debugger before sleep access')
 
 
+def advertised_atomic_sleep(bridge):
+    """Passive capability lookup for a text-mode command on this connection."""
+    from mklink.mux import MuxTransport
+    caps = getattr(bridge, '_mux_capabilities', None)
+    if type(caps) is int:
+        return bool(caps & MuxTransport.ATOMIC_SLEEP_CAPABILITY)
+    return 'MUX_ATOMIC_SLEEP=1' in firmware_lines(bridge)
+
+
 def atomic_transport(device):
     bridge = device._bridge
     if active_clock_interface(bridge) != 'SWD' or 'MUX_TARGET=1' not in firmware_lines(bridge):

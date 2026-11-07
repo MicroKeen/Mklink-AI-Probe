@@ -117,6 +117,37 @@ def test_normal_swd_reset_only_sends_one_checked_reset():
     assert bridge.calls == [("print('MKLINK_RESET_RC=' + str(cmd.reset_target(1)))", 10.0)]
 
 
+@pytest.mark.parametrize('mode,declared,timeout', [('SWD', True, 12), ('SWD', False, 10), ('JTAG', True, 10)])
+def test_fresh_text_reset_keeps_clock_and_uses_only_advertised_budget(mode, declared, timeout):
+    from types import SimpleNamespace
+    bridge = _BridgeStub()
+    bridge._ctx = SimpleNamespace(clock_interface=mode, swd_clock_hz=10_000_000,
+                                  applied_clock_hz=10_000_000, clock_apply_state='applied')
+    bridge._firmware_capabilities = {'MUX_ATOMIC_SLEEP=1'} if declared else set()
+    bridge.reply = 'MKLINK_RESET_RC=-5'
+    device = _device(None)
+    device._bridge = bridge
+    with pytest.raises(DeviceError, match='outcome unknown'):
+        Device.reset(device)
+    assert bridge.calls == [("print('MKLINK_RESET_RC=' + str(cmd.reset_target(1)))", timeout)]
+    assert device.clock_hz == bridge._ctx.applied_clock_hz == 10_000_000
+
+
+@pytest.mark.parametrize('cached,expected', [(0x1003, 12), (3, 10)])
+def test_text_reset_reuses_actual_hello_for_the_current_connection(cached, expected):
+    from types import SimpleNamespace
+    bridge = _BridgeStub()
+    bridge._ctx = SimpleNamespace(clock_interface='SWD', swd_clock_hz=10_000_000,
+                                  applied_clock_hz=10_000_000, clock_apply_state='applied')
+    bridge._firmware_capabilities = {'MUX_TARGET=1'}
+    bridge._mux_capabilities = cached
+    bridge.reply = 'MKLINK_RESET_RC=0'
+    device = _device(None)
+    device._bridge = bridge
+    Device.reset(device)
+    assert bridge.calls == [("print('MKLINK_RESET_RC=' + str(cmd.reset_target(1)))", expected)]
+
+
 def test_atomic_flash_verifies_separate_hex_regions_and_requires_capability(tmp_path):
     from types import SimpleNamespace
 
