@@ -4,12 +4,12 @@
 
 ## 当前断点
 
-- 更新时间：`2026-11-07T17:57:17+08:00`
+- 更新时间：`2026-11-07T19:07:57+08:00`
 - 分支：`codex/v0.4.3-fixes`
-- HEAD：`0.4.3 产品 d04164d1，整合 #70 与 #71，见 v043-s3-integration.md。`
+- HEAD：`0.4.3 产品 3c486786；S3/USB 及五项拷贝回归见 v043-s3-integration.md。`
 - 远端 HEAD：`0.4.3继续共用修复分支，交付集为上位机PR71、V3 PR13、V4 PR22，保留分支。`
 - 工作树：复用E盘主工作区，保留旧v0.4.2分支和两个detached工作树；本轮及后续修复共用codex/v0.4.3-fixes。
-- 当前任务：整合 S3 HTTP/BLE，USB 连接、跨睡眠采集与安装验收见 v043-s3-integration.md；尚未正式发布。
+- 当前任务：0.4.3 已修复 USB 文件拷贝回归。V4/F103 实装采集与 A/B 性能见 v043-s3-integration.md。正式发布需独立指令。
 - 状态：`v043_candidate_qualification`
 
 ## 里程碑
@@ -48,7 +48,7 @@
 ## 真机环境
 
 - **state**：11/7普通V4已通过GUI从4.7.2升到普通4.7.3，F103镜像回读见v043-release-candidate-acceptance.md。V3.6.9与专用HPMLink资格见v043-cortex-m-sleep.md。每次重新核对设备和占用；LA CH0/CH1为SWCLK/SWDIO。
-- **installer**：Windows 和本地完整 Skill 已安装 0.4.3/d04164d1，NSIS SHA 00e78bfe、Skill bbe767fc；见 v043-s3-integration.md。
+- **installer**：Windows/本地完整 Skill 已安装 0.4.3/3c486786，NSIS SHA e0e02850、Skill 9dbe4b0b，V4/F103 双端睡后采集通过，见 v043-s3-integration.md。
 - **backups**：最新b8a1f658应用/Skill、f9b1ae8a基准、正式包/固件、原始测试记录及公共缓存保留。11/7清理29.558GiB，4383保留哈希一致；112含链接组未删，见v043-space-cleanup-20261107.md。旧ELF/试包退役；11/4历史清理见v043-workspace-cleanup.md。
 
 ## 下一动作
