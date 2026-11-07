@@ -4,12 +4,12 @@
 
 ## 当前断点
 
-- 更新时间：`2026-11-07T13:15:00+08:00`
+- 更新时间：`2026-11-07T13:28:00+08:00`
 - 分支：`codex/v0.4.3-fixes`
 - HEAD：`SuperWatch cfb1bae8、RTT菜单 bb2c8d27、睡眠访问/复位时限 87085550；生产Web e83ecc12。`
 - 远端 HEAD：`PR69已合并main/186b6a0f。0.4.3继续共用修复分支和草稿PR71。`
 - 工作树：复用E盘主工作区，保留旧v0.4.2分支和两个detached工作树；本轮及后续修复共用codex/v0.4.3-fixes。
-- 当前任务：HPMLink cb982bb/H743 100ms WFI，上位机3beca4e8：96/96、Flash 6/6、复位2→8、Web 12/12。普通10MHz对照见v043-cortex-m-sleep.md。V3已移植待实板。
+- 当前任务：HPMLink cb982bb、V3.6.9 同板H743/100ms WFI各96/96、Flash 6/6、Web 12/12、复位2→8及3→9。普通10MHz对照见v043-cortex-m-sleep.md。
 - 状态：`host_and_h743_verified`
 
 ## 里程碑
@@ -47,7 +47,7 @@
 
 ## 真机环境
 
-- **state**：11/7 V3最终UART r6在用、V4上次为普通r4；固件会话已释放硬件并合并V3 #9–11/V4 #18–20，详见v043-merge-cleanup.md。每次重核身份/占用；LA CH0/CH1为SWCLK/SWDIO。
+- **state**：11/7 固件会话实测V3.6.9和HPMLink V4.7.3，见v043-cortex-m-sleep.md。普通V4上次为r4，V3 #9–11/V4 #18–20合并见v043-merge-cleanup.md。每次重核身份/占用；LA CH0/CH1为SWCLK/SWDIO。
 - **installer**：Windows/完整Skill为0.4.3/b8a1f658（产品等价4c890205），NSIS SHA08109b2d、Skill abb5797a，验证见v043-gui-uart-local-install.md。SiteAgent仍旧，正式资产不变；未发布。
 - **backups**：最新b8a1f658应用/Skill、f9b1ae8a基准、正式包/固件、原始测试记录及公共缓存保留。11/7清理29.558GiB，4383保留哈希一致；112含链接组未删，见v043-space-cleanup-20261107.md。旧ELF/试包退役；11/4历史清理见v043-workspace-cleanup.md。
 

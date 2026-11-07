@@ -72,4 +72,24 @@ Python 全量首轮 6720 项通过、2 项跳过，3 项旧内存接口失败，
 | 4096 B RAM（ms） | 8.164 | 8.028 |
 | 4096 B Flash（ms） | 8.486 | 8.387 |
 
-原始记录为 `hpmlink-final-summary.json`、`hpmlink-final-web.json`、`install-last-candidate.json` 和 `performance-comparison.json`。这次实板验收适用于 HPMLink 与 H743 的上述配置。V3 已移植，待换接实机验证。普通 RTT 峰值仍沿用既有基线。
+原始记录为 `hpmlink-final-summary.json`、`hpmlink-final-web.json`、`install-last-candidate.json` 和 `performance-comparison.json`。这组结果适用于 HPMLink 与 H743 的上述配置。普通 RTT 峰值仍沿用既有基线。
+
+## 普通 V3 同板最终实测
+
+在同一 STM32H743、100 ms WFI、NRST 断开、SWD 10 MHz 条件下，旧 V3.6.8（2026-11-06 23:26:36 构建）开启睡眠访问时未能确认 Cortex-M 身份。新连接软件复位返回 `unknown`，前后独立启动计数均为 2。这一结果限定于本轮 H743 场景，F103 的测试条件见本文首节。
+
+固件会话实刷 V3.6.9（固件提交 `224a473` 和 `7731c38`，UF2 SHA-256 为 `89cdec712dab48f0611fa96b1aebb222c36a48973735b54dc6807e4a7c41dec8`）。盘符说明与 `cmd.get_version()` 均报告 V3.6.9。使用上位机 `29029de2`，6 个独立会话共 96/96 次 SRAM 校验正确，每轮完整 1432 B Flash 均逐字节一致。文本与 MUX 软件复位各 3 次，均返回 `succeeded`，独立启动计数从 3 逐次增到 9，每次复位后心跳继续，DBGMCU_CR 保持 0。实际 Web 配置页额外读对 12/12，完整 Flash 及 RAM 写入、回读、还原均通过。
+
+常醒普通模式的同条件测量如下。每个版本使用一组测试数据，表中为各项中位数。
+
+| 指标 | V3.6.8 | V3.6.9 |
+|---|---:|---:|
+| 8 位连续采样（次/秒） | 76 115 | 76 584 |
+| 16 位连续采样（次/秒） | 75 787 | 76 579 |
+| 32 位连续采样（次/秒） | 150 873 | 151 001 |
+| 4 B RAM（ms） | 0.814 | 0.824 |
+| 4096 B RAM（ms） | 7.858 | 7.953 |
+| 4 B Flash（ms） | 0.813 | 0.780 |
+| 4096 B Flash（ms） | 8.196 | 8.095 |
+
+原始记录位于 `v3-wfi-followup-20261107` 下的 `v3-install.json`、`v3-final-summary.json`、`v3-final-web.json` 和 `performance-comparison.json`。本轮未复测 RTT 峰值。
