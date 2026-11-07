@@ -394,6 +394,16 @@ def build_server():
         return client().call('set_debug_speed', {'profile': profile} if profile is not None else {'clock_hz': clock_hz})
 
     @server.tool()
+    def set_sleep_debug(enabled: bool) -> dict:
+        """Opt in to slower Cortex-M/SWD sleep access for this session, or restore its prior clock.
+
+        Stop active acquisition before changing modes. Uses only the probe's advertised
+        clocks and standard core identification. Idle memory snapshots and writes briefly halt
+        the core. RTT uses the slower clock while the application runs. No vendor registers are written.
+        """
+        return client().call('set_sleep_debug', {'enabled': enabled})
+
+    @server.tool()
     def hpm_debug(action: Literal['capabilities', 'status', 'halt', 'resume', 'step',
                                   'read-register', 'write-register', 'breakpoint-query',
                                   'breakpoint-set', 'breakpoint-clear'] = 'status',

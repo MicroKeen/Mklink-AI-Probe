@@ -19,12 +19,18 @@ class MuxError(ConnectionError):
 
 
 class MuxTargetError(RuntimeError):
-    def __init__(self, status):
+    def __init__(self, status, op=None):
         self.status = status
-        message = ('Multiplex target busy (status 6); debugger access is currently reserved. '
-                   'Retry explicitly when available; the request was not replayed'
-                   if status == 6 else
-                   f'Multiplex target status {status}; failed writes may have an unknown outcome')
+        if status == 6:
+            message = ('Multiplex target busy (status 6); debugger access is currently reserved. '
+                       'Retry explicitly when available; the request was not replayed')
+        elif status == 5:
+            message = ('Multiplex target status 5; target access failed. Check target power and debug access. '
+                       'For a periodically sleeping Cortex-M, enable sleep access before reading or starting RTT.')
+            if op not in (0x11, 0x13, 0x16):
+                message += ' A submitted write or reset may have an unknown outcome.'
+        else:
+            message = f'Multiplex target status {status}; failed writes may have an unknown outcome'
         super().__init__(message)
 
 
@@ -77,6 +83,7 @@ class MuxTransport:
         self.ready = False
         self.capabilities = 0
         self.transfer_quantum = 128
+        self.sleep_access = False
         self._pending_quantum = None
         self._reset_generation = 0
         self.rtt_mask = 0
@@ -132,7 +139,9 @@ class MuxTransport:
         req = self._next_id
         wire = packet(op, 0 if op == 1 else self.epoch, req,
                       (self.nonce if 0x10 <= op < 0x40 else b'') + payload)
-        self._pending = (op, req, time.monotonic()+3, heartbeat)
+        # At 10 Hz WFI, a 128-byte RTT poll plus its cursor update can span
+        # over three seconds. Keep the deadline inside the probe's 5 s lease.
+        self._pending = (op, req, time.monotonic() + (4.8 if self.sleep_access else 3), heartbeat)
         self._reply = None
         self._last_command = time.monotonic()
         try:
@@ -166,7 +175,7 @@ class MuxTransport:
                 self.fail('Claim expired or request duplicated; reconnect explicitly')
                 self._check()
             if answer[0]:
-                raise MuxTargetError(answer[0])
+                raise MuxTargetError(answer[0], op)
             return answer[1:]
 
     def _wait(self, deadline=None):
@@ -189,7 +198,7 @@ class MuxTransport:
         self.capabilities = struct.unpack_from('<I', caps)[0]
         if self.request(4, self.nonce) != self.nonce:
             raise MuxError('Session claim mismatch')
-        if self.capabilities & self.FAST_TRANSFER_CAPABILITY:
+        if self.capabilities & self.FAST_TRANSFER_CAPABILITY and not self.sleep_access:
             self.set_transfer_quantum(self.FAST_TRANSFER_BYTES)
         self.ready = True
 
@@ -405,7 +414,7 @@ class MuxTransport:
             raise ValueError('Invalid memory range')
         result = bytearray()
         block_read = bool(self.capabilities & self.BLOCK_READ_CAPABILITY)
-        chunk_size = 4096 if block_read else self.transfer_quantum
+        chunk_size = 32 if self.sleep_access else (4096 if block_read else self.transfer_quantum)
         command = self.BLOCK_READ_COMMAND if block_read else 0x11
         for offset in range(0, size, chunk_size):
             n = min(chunk_size, size-offset)
@@ -421,7 +430,7 @@ class MuxTransport:
     def write_memory(self, address, data):
         if not 0 <= address <= 0xffffffff or address+len(data) > 0x100000000:
             raise ValueError('Invalid memory range')
-        chunk_size = self.transfer_quantum
+        chunk_size = 32 if self.sleep_access else self.transfer_quantum
         for offset in range(0, len(data), chunk_size):
             self.request(0x12, struct.pack('<I', address+offset)+data[offset:offset+chunk_size])
 

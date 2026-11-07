@@ -71,6 +71,7 @@ jobs:
           $tests += 'test_remote_capabilities'
           $tests += 'test_remote_upstream_integration'
           $tests += 'test_serial_protocol_buffer'
+          $tests += @('test_sleep_access', 'test_device_flash_verify', 'test_capture_reset')
           $tests += 'test_serial_exchange'
           $tests += 'test_remote_offline_identity'
           $tests += 'test_offline_deployment_jobs'

@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Any
 
 from mklink._types import DeviceState, DEFAULT_BAUDRATE
+from mklink.sleep_debug import preserve_access_clock
 
 
 @dataclass
@@ -467,6 +468,7 @@ class Device:
             self.clock_warning = str(error)
             raise
         self.clock_warning = None
+        self._bridge._sleep_debug_previous_clock = None
         return result
 
     def set_debug_clock(self, clock_hz: int, *, interface: str | None = None) -> dict:
@@ -496,6 +498,7 @@ class Device:
             self.clock_warning = str(error)
             raise ValueError(str(error)) from error
         self.clock_warning = None
+        self._bridge._sleep_debug_previous_clock = None
         return clock_snapshot(self, {})
 
     @property
@@ -517,6 +520,12 @@ class Device:
             except Exception:
                 pass
         if self._bridge:
+            previous_clock = getattr(self._bridge, '_sleep_debug_previous_clock', None)
+            if previous_clock is not None and self.connected:
+                try:
+                    self.set_debug_clock(previous_clock, interface='SWD')
+                except Exception as error:
+                    self.clock_warning = f'Sleep access ended; prior SWD clock was not confirmed: {error}'
             self._bridge.close()
         self._bridge = None
         self._flash = None
@@ -832,6 +841,7 @@ class Device:
     # ------------------------------------------------------------------
     # Flash
     # ------------------------------------------------------------------
+    @preserve_access_clock
     def flash(
         self,
         firmware: str,
@@ -1116,6 +1126,20 @@ class Device:
                 f"MCU profile {resolved_key or mcu_profile.get('name', '')!r} has no FLM path"
             )
 
+        from contextlib import nullcontext
+        from mklink.sleep_debug import control_clock, halted
+        guarded = control_clock(self) is not None
+
+        def program(burn, *args, **kwargs):
+            with halted(self, release_on_error=False) if guarded else nullcontext():
+                try:
+                    programmed = burn(*args, **kwargs)
+                    if not programmed.get("success"):
+                        raise DeviceError(str(programmed))
+                except Exception as error:
+                    raise DeviceError(f"Flash programming failed; the target may be halted: {error}") from error
+                return programmed
+
         if len(catalog_selections) > 1:
             if ext != ".hex" or catalog_image is None:
                 raise DeviceError("Multiple Flash algorithms require an Intel HEX image")
@@ -1146,27 +1170,22 @@ class Device:
                                 int((region_index * 100 + percent) / len(catalog_selections))
                             )
 
-                    region_result = self._flash.burn_hex(
-                        str(region_path),
+                    region_result = program(
+                        self._flash.burn_hex, str(region_path),
                         progress_callback=region_progress,
                     )
-                    if not region_result.get("success"):
-                        raise DeviceError(f"Flash failed: {region_result}")
                     region_results.append(dict(region_result))
             result = {"success": True, "regions": region_results}
         elif ext == ".hex":
-            result = self._flash.burn_hex(
-                firmware, progress_callback=progress_callback
+            result = program(
+                self._flash.burn_hex, firmware, progress_callback=progress_callback
             )
         elif ext == ".bin":
-            result = self._flash.burn_bin(
-                firmware, flash_base, progress_callback=progress_callback
+            result = program(
+                self._flash.burn_bin, firmware, flash_base, progress_callback=progress_callback
             )
         else:
             raise DeviceError(f"Unsupported firmware format: {ext}")
-
-        if not result.get("success"):
-            raise DeviceError(f"Flash failed: {result}")
 
         result = dict(result)
         if catalog_algorithm is not None:
@@ -1183,7 +1202,11 @@ class Device:
             result["algorithm_source"] = "legacy-profile-fallback"
         result["verified"] = False
         if verify:
-            self._verify_firmware_readback(firmware, flash_base)
+            try:
+                with halted(self) if guarded else nullcontext():
+                    self._verify_firmware_readback(firmware, flash_base)
+            except Exception as error:
+                raise DeviceError(f"Flash programmed; readback verification failed: {error}") from error
             result["verified"] = True
 
         if reset_after:
@@ -1234,14 +1257,24 @@ class Device:
     def reset(self) -> None:
         """Reset the target MCU while keeping the probe session connected."""
         self._require_connected()
+        from contextlib import nullcontext
         from mklink.mux import MuxTransport
+        from mklink.sleep_debug import control_clock, slow_control
         mux = getattr(self._bridge, '_mux', None)
-        if isinstance(mux, MuxTransport):
-            # The framed request shares the command slot with memory access.
-            # Never leave MUX, stop streams, clear queues or replay a reset.
+        framed = isinstance(mux, MuxTransport)
+        if framed and (mux.sampling or not control_clock(self)):
+            # A live stream retains its existing transport and clock.
             mux.software_reset()
             return
-        self._bridge.send_command("cmd.set_reset()", timeout=10.0)
+        with slow_control(self) if control_clock(self) else nullcontext():
+            if framed:
+                self._bridge.enable_multiplex().software_reset()
+                return
+            response = self._bridge.send_command(
+                "print('MKLINK_RESET_RC=' + str(cmd.reset_target(1)))", timeout=10.0)
+        receipts = [line.strip() for line in response.splitlines() if line.strip().startswith('MKLINK_RESET_RC=')]
+        if receipts != ['MKLINK_RESET_RC=0']:
+            raise DeviceError(f'Software reset not confirmed by the probe; outcome unknown, do not replay: {response.strip()}')
 
     def _stop_active_probe_streams(self) -> None:
         if self._rtt_session and self._rtt_session._running:
@@ -2401,6 +2434,11 @@ class Device:
         # target failures propagate without replaying through the legacy path.
         mux = self._bridge.enable_multiplex()
         if mux is not None:
+            if (getattr(mux, 'sleep_access', False) is True and not mux.sampling
+                    and size > 0 and 0 <= address < address + size <= 0xe0000000):
+                from mklink.sleep_debug import halted
+                with halted(self):
+                    return self._bridge.enable_multiplex().read_memory(address, size)
             return mux.read_memory(address, size)
         from mklink.memory_access import parse_read_ram_response
         cmd = f"cmd.read_ram(0x{address:08X}, {size})"
@@ -2462,6 +2500,14 @@ class Device:
             return
         mux = self._bridge.enable_multiplex()
         if mux is not None:
+            if (getattr(mux, 'sleep_access', False) is True
+                    and 0 <= address < address + len(data) <= 0xe0000000):
+                if mux.sampling:
+                    raise DeviceError('Stop acquisition before a halted sleep-access write')
+                from mklink.sleep_debug import halted
+                with halted(self):
+                    self._bridge.enable_multiplex().write_memory(address, data)
+                return
             mux.write_memory(address, data)
             return
         from mklink.memory_write import execute_flush, validate_writes

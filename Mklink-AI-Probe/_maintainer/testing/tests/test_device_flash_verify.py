@@ -46,7 +46,7 @@ class _BridgeStub:
 
     def send_command(self, command: str, timeout: float):
         self.calls.append((command, timeout))
-        return "0"
+        return self.reply
 
 
 def _device(read_memory):
@@ -552,12 +552,20 @@ def test_device_flash_verify_reads_bin_from_flash_base(tmp_path: Path):
     assert calls == [(0x08000000, 1024), (0x08000400, 76)]
 
 
-def test_device_reset_sends_target_reset_command_only():
+@pytest.mark.parametrize('reply,confirmed', [
+    ('MKLINK_RESET_RC=0\r\n>>>', True), ('>>>', False), ('0', False),
+    ('MKLINK_RESET_RC=-4\r\n>>>', False), ('MKLINK_RESET_RC=0\nMKLINK_RESET_RC=-5', False),
+])
+def test_device_reset_requires_checked_target_receipt(reply, confirmed):
     device = Device()
     bridge = _BridgeStub()
+    bridge.reply = reply
     device._connected = True
     device._bridge = bridge
 
-    device.reset()
-
-    assert bridge.calls == [("cmd.set_reset()", 10.0)]
+    if confirmed:
+        device.reset()
+    else:
+        with pytest.raises(DeviceError, match='outcome unknown'):
+            device.reset()
+    assert len(bridge.calls) == 1 and 'cmd.reset_target(1)' in bridge.calls[0][0]

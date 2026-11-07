@@ -79,6 +79,7 @@ class MKLinkSerialBridge:
         self._mux_marker = Path(self._port_lock._path + ".mux")
         self._serial: serial.Serial | IsolatedSerial | None = None
         self._ctx = DeviceContext()
+        self._sleep_debug_previous_clock: int | None = None
         self._reader_thread: threading.Thread | None = None
         self._running = False
         self._response_buffer: list[str | bytes] = []
@@ -452,6 +453,7 @@ class MKLinkSerialBridge:
                 self._mux_marker.parent.mkdir(parents=True, exist_ok=True)
                 self._mux_marker.write_text('MLX1', encoding='ascii')
                 self._serial.write(b'~MKLINK-MUX1\n')
+                transport.sleep_access = bool(getattr(self, '_sleep_debug_previous_clock', None))
                 transport.handshake()
             except Exception as exc:
                 transport.fail(exc)

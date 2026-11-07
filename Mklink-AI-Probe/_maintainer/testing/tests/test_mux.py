@@ -123,8 +123,9 @@ def test_target_busy_or_error_does_not_poison_claimed_bridge(monkeypatch, tmp_pa
         return len(wire)
     bridge._serial = SimpleNamespace(write=write)
     if attach_status == 5:
-        with pytest.raises(MuxTargetError, match='unknown outcome'):
+        with pytest.raises(MuxTargetError, match='sleep access') as failure:
             bridge.enable_multiplex()
+        assert 'submitted write' not in str(failure.value)
     else:
         assert bridge.enable_multiplex() is bridge._mux
     device = Device()

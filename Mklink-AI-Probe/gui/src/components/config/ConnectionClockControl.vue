@@ -18,6 +18,8 @@ interface ClockStatus {
   apply_state: 'unknown' | 'acknowledged' | 'configured' | 'applied'
   migration?: { from_hz: number; to_hz: number; pending: boolean } | null
   warning?: string | null
+  sleep_access_supported?: boolean
+  sleep_access_enabled?: boolean
 }
 const props = defineProps<{ deviceConnected: boolean; deviceGeneration?: number; disabled?: boolean }>()
 const emit = defineEmits<{ busy: [value: boolean]; firmwareUpdate: [] }>()
@@ -137,6 +139,31 @@ async function selectClock() {
   await apply()
 }
 
+async function toggleSleepAccess() {
+  if (busy.value || props.disabled || !matchingInterface.value || !status.value?.sleep_access_supported) return
+  const enabled = !status.value.sleep_access_enabled
+  const current = ++revision
+  busy.value = true
+  message.value = ''
+  try {
+    const response = await fetch(`${API_BASE}/api/device/sleep-debug`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json',
+        ...(status.value.device_generation !== undefined
+          ? { 'X-MKLink-Device-Generation': String(status.value.device_generation) } : {}) },
+      body: JSON.stringify({ enabled }),
+    })
+    const payload = await response.json()
+    if (!response.ok || payload.enabled !== enabled) {
+      throw new Error(typeof payload.detail === 'string' ? payload.detail
+        : payload.detail?.hint || tr('睡眠访问设置未确认', 'Sleep access setting unconfirmed'))
+    }
+  } catch (error) {
+    if (!disposed && current === revision) message.value = error instanceof Error ? error.message : String(error)
+  } finally {
+    if (!disposed && current === revision) { busy.value = false; await refresh() }
+  }
+}
+
 async function selectInterface() {
   if (busy.value || props.disabled || !status.value) return
   const current = ++revision
@@ -192,6 +219,12 @@ onUnmounted(() => { disposed = true; revision++; clearTimeout(timer); emit('busy
       <span class="clock-state" data-testid="connection-clock-state">{{ effectiveLabel }}</span>
       <span v-if="deviceConnected" class="clock-state">{{ tr('当前接口：', 'Active interface: ') }}{{ activeInterface === 'unknown' ? tr('未确认', 'Unconfirmed') : activeInterface }}</span>
     </div>
+    <p v-if="matchingInterface && status?.sleep_access_supported">
+      <button type="button" class="btn btn-sm" data-testid="sleep-access" :aria-pressed="!!status.sleep_access_enabled"
+        :disabled="busy || disabled" @click="toggleSleepAccess">{{ status.sleep_access_enabled
+          ? tr('关闭睡眠访问', 'Turn off sleep access') : tr('开启睡眠访问', 'Enable sleep access') }}</button>
+      {{ tr('适用于周期性唤醒的 Cortex-M。临时降低 SWD 速度，独立读写内存时短暂停核，RTT 期间目标继续运行。', 'For Cortex-M targets that wake periodically. Uses a slower SWD clock, briefly halts for standalone memory access, and keeps the target running during RTT.') }}
+    </p>
     <p class="clock-help">{{ tr('SWD/JTAG 分别保存，默认 10 MHz；连接后按下载器支持的档位应用，采集与内存访问共用。', 'SWD/JTAG settings are saved separately, defaulting to 10 MHz. Supported settings apply on connection and are shared by acquisition and memory access.') }}</p>
     <p v-if="firmwareUpdateNeeded" class="clock-message" role="status" data-testid="clock-firmware-update">
       {{ tr('当前固件不支持完整时钟档位，请更新下载器固件。', 'This firmware does not support the full clock range. Please update the probe firmware.') }}

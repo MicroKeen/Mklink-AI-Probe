@@ -11,6 +11,7 @@ CAPABILITIES = {
     'device_status': ('GET', '/api/device/status'),
     'debug_speed': ('GET', '/api/device/debug-speed'),
     'set_debug_speed': ('POST', '/api/device/debug-speed'),
+    'set_sleep_debug': ('POST', '/api/device/sleep-debug'),
     'hpm_debug': ('POST', '/api/device/hpm-debug'),
     'halt': ('POST', '/api/device/halt'),
     'resume': ('POST', '/api/device/resume'),
@@ -160,6 +161,8 @@ UART_CAPABILITIES = frozenset(name for name, (_, path) in CAPABILITIES.items() i
 def validate_arguments(capability, arguments):
     """Reject malformed/range-overflow writes before a device is touched."""
     arguments = dict(arguments)
+    if capability == 'set_sleep_debug' and (set(arguments) != {'enabled'} or type(arguments['enabled']) is not bool):
+        raise HTTPException(422, 'Set enabled to true or false for this connection')
     if capability in PROBE_OPERATIONS:
         from mklink.probe_commands import validate
         try:

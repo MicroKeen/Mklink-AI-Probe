@@ -2328,6 +2328,15 @@ def create_app(
                 await run_in_threadpool(device.reset)
         return {"status": "ok", "stopped": []}
 
+    @app.post("/api/device/sleep-debug")
+    async def set_sleep_debug(enabled: bool = Body(..., embed=True, strict=True)):
+        from mklink.sleep_debug import configure
+        try:
+            async with _exclusive_probe_control('sleep-debug') as (device, _):
+                return await run_in_threadpool(configure, device, enabled)
+        except (ValueError, KeyError) as error:
+            raise HTTPException(400, str(error)) from error
+
     @app.post("/api/device/debug-speed")
     async def set_debug_speed(profile: str | None = Body(None), clock_hz: int | None = Body(None, strict=True), save: bool = Body(True, strict=True), interface: str | None = Body(None)):
         from mklink.debug_speed import profile_clock, validate_clock_hz, PROFILES
@@ -2379,7 +2388,7 @@ def create_app(
         from mklink.remote.dashboards import BRIDGE_DASHBOARD_TYPES, stop_bridge_dashboards
 
         async with _dashboard_start_lock(_state):
-            if _state.get("shared_runtime") or operation in ('debug-speed', 'config-clock'):
+            if _state.get("shared_runtime") or operation in ('debug-speed', 'config-clock', 'sleep-debug'):
                 active = [name for name in BRIDGE_DASHBOARD_TYPES
                           if _dashboard_worker_alive(get_managers().get(name))]
                 if active:

@@ -44,6 +44,25 @@ afterEach(() => {
 })
 
 describe('shared connection clock', () => {
+  it('changes sleep access only on explicit click and confirms both transitions', async () => {
+    Object.assign(data, { sleep_access_supported: true, sleep_access_enabled: false })
+    requests.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.endsWith('/sleep-debug') && init?.method === 'POST') {
+        const { enabled } = JSON.parse(String(init.body))
+        Object.assign(data, { sleep_access_enabled: enabled, configured_hz: enabled ? 100000 : 10000000 })
+        return response({ enabled })
+      }
+      return response(structuredClone(data))
+    })
+    const wrapper = await setup()
+    const button = wrapper.get('[data-testid="sleep-access"]')
+    expect(button.attributes('aria-pressed')).toBe('false')
+    expect(requests.mock.calls.every(([, init]) => !init?.method)).toBe(true)
+    await button.trigger('click'); await flushPromises()
+    expect(button.attributes('aria-pressed')).toBe('true')
+    await button.trigger('click'); await flushPromises()
+    expect(button.attributes('aria-pressed')).toBe('false')
+  })
   it.each([['SWD', 'legacy'], ['JTAG', 'hpm-profiles']])('prompts to update connected legacy %s firmware without starting an upgrade', async (mode, source) => {
     Object.assign(data, { interface: mode, active_interface: mode, clock_source: source,
       clocks_hz: [4000000,10000000,20000000,30000000] })
