@@ -93,3 +93,20 @@ Python 全量首轮 6720 项通过、2 项跳过，3 项旧内存接口失败，
 | 4096 B Flash（ms） | 8.196 | 8.095 |
 
 原始记录位于 `v3-wfi-followup-20261107` 下的 `v3-install.json`、`v3-final-summary.json`、`v3-final-web.json` 和 `performance-comparison.json`。本轮未复测 RTT 峰值。
+
+## STM32F103 最终构建与实板结果
+
+固件会话在 512 KiB Flash 的 STM32F103 Cortex-M3 上测试。系统时钟 72 MHz，目标每 100 ms 从 WFI 唤醒，SWD 为 10 MHz，上位机检出 `9b2b11b0`。固件在选择 CPUID 或 DHCSR 前省去额外的 RAM 属性读取，遇到 AP WAIT 时取回已提交的寄存器读取，并用 CPUID 和 DHCSR 再次核实停核状态。此轮沿用已有上位机实现。
+
+下表按实测目标板和下载器列出实刷 UF2 的 SHA-256。每一行对应本板使用的具体构建。
+
+| 目标板 | 下载器固件 | UF2 SHA-256 |
+|---|---|---|
+| STM32H743 | V3.6.9 | `89cdec712dab48f0611fa96b1aebb222c36a48973735b54dc6807e4a7c41dec8` |
+| STM32H743 | HPMLink V4.7.3 | `148bb2238b4007a6d87f903f18505e7eb6e04db8037844a12a7a0d056c0d8fb6` |
+| STM32F103 | V3.6.9（13:41:31 构建） | `7400d8c9415b95faeec4e338ddce9f1b2b4cd4c4f7135bd7bc330f3a398c0788` |
+| STM32F103 | HPMLink V4.7.3（13:43:21 构建） | `fbf5ef666b60727647aef8bcdf8925298f1f6e30af68a949dae89c475f66e76f` |
+
+两款下载器在 F103 上各完成 6 个独立会话。每款均读对 SRAM 96/96 次，完整 1024 B 睡眠镜像逐字节比较 6/6 一致。3 次文本复位和 3 次 MUX 复位全部成功，独立启动计数从 3 逐次增到 9，每轮心跳继续，DBGMCU_CR 均为 0。实际 Web 配置页每款额外读对 12/12，完整镜像、RAM 写入、回读与还原均通过。从睡眠镜像烧入 936 B 常醒镜像、再烧回 1024 B 睡眠镜像，两次任务均返回 `verified=true`，两款下载器的独立回读也均一致。
+
+F103 原始证据分别保存在 `release-wfi-20261107-V3` 和 `release-wfi-20261107-HPMLink`，各自的 `qualification.json` 记录会话、复位、Web 和镜像校验结果。V3 固件修复已合并，合并提交为 `f0a4d960`；HPMLink 固件由固件会话跟进交付。[V3 固件 PR #12](https://github.com/Aladdin-Wang/MicroLinkV3/pull/12)

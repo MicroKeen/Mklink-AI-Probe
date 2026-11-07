@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-11-07T13:28:00+08:00`
+- 更新时间：`2026-11-07T13:53:00+08:00`
 - 分支：`codex/v0.4.3-fixes`
 - HEAD：`SuperWatch cfb1bae8、RTT菜单 bb2c8d27、睡眠访问/复位时限 87085550；生产Web e83ecc12。`
 - 远端 HEAD：`PR69已合并main/186b6a0f。0.4.3继续共用修复分支和草稿PR71。`
 - 工作树：复用E盘主工作区，保留旧v0.4.2分支和两个detached工作树；本轮及后续修复共用codex/v0.4.3-fixes。
-- 当前任务：HPMLink cb982bb、V3.6.9 同板H743/100ms WFI各96/96、Flash 6/6、Web 12/12、复位2→8及3→9。普通10MHz对照见v043-cortex-m-sleep.md。
-- 状态：`host_and_h743_verified`
+- 当前任务：H743、F103各用V3.6.9和HPMLink V4.7.3验证100ms WFI，四组均96/96、Flash 6/6、Web 12/12。四个UF2按板留档，见v043-cortex-m-sleep.md。V3固件PR12已合并。
+- 状态：`host_h743_f103_verified`
 
 ## 里程碑
 
