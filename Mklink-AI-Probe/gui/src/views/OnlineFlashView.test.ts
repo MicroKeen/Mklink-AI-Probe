@@ -12,7 +12,6 @@ import actionBarSource from '../components/online-flash/FlashActionBar.vue?raw'
 import logPanelSource from '../components/online-flash/FlashLogPanel.vue?raw'
 import firmwareWorkspaceSource from '../components/online-flash/FirmwareWorkspace.vue?raw'
 import onlineFlashViewSource from './OnlineFlashView.vue?raw'
-import probeSettingsSource from '../components/online-flash/ProbeSettingsPanel.vue?raw'
 
 async function onlineFlashView() {
   const path = './OnlineFlashView.vue'
@@ -255,8 +254,28 @@ describe('useOnlineFlashApi', () => {
     expect(new Headers(flmOptions?.headers).has('Content-Type')).toBe(false)
   })
 
-  it('offers the supported 10 MHz online SWD frequency', () => {
-    expect(probeSettingsSource).toContain('<option :value="10000000">10 MHz</option>')
+  it('uses the selected probe and target interface for the flash clock menu', async () => {
+    const fallback = viewFetch([regularTarget, hpmTarget])
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, options?: RequestInit) =>
+      String(input).endsWith('/probes') ? Promise.resolve(new Response(JSON.stringify([
+        { ...probeFixture, flash_clocks_hz: { SWD: [1000000, 8000000, 10000000], JTAG: [5000, 4000000, 10000000] } },
+      ]))) : fallback(input, options)))
+    const wrapper = mount(await onlineFlashView())
+    await vi.waitFor(() => expect(wrapper.find('[data-testid="target-HPM5300"]').exists()).toBe(true))
+    const select = wrapper.get<HTMLSelectElement>('[data-testid="frequency"]')
+    const choices = () => [...select.element.options].filter(o => !o.disabled).map(o => Number(o.value))
+    expect(choices()).toEqual([1000000, 8000000, 10000000])
+    await select.setValue('8000000')
+    await wrapper.get('[data-testid="target-HPM5300"]').trigger('click')
+    expect(choices()).toEqual([5000, 4000000, 10000000])
+    expect(select.element.value).toBe('')
+    expect(wrapper.get('details.connection-details').text()).toContain('JTAG')
+    expect(wrapper.get('[data-testid="start-job"]').attributes('disabled')).toBeDefined()
+    await select.setValue('5000')
+    expect(wrapper.get('.connection-details summary').text()).toContain('JTAG 5 kHz')
+    await wrapper.get('[data-testid="target-DEVICE_A"]').trigger('click')
+    expect(choices()).toEqual([1000000, 8000000, 10000000])
+    wrapper.unmount()
   })
 
   it('locks target selection while a custom algorithm mutation is active', async () => {
@@ -1667,6 +1686,8 @@ describe('online flash task workspace behavior', () => {
 
     expect(wrapper.get('[data-testid="hpm-board"]').element).toHaveProperty('value', 'hpm5300evk')
     expect(wrapper.text()).toContain('内置 ROM API')
+    const hz = format === 'bin' ? 1000 : 4000000
+    await wrapper.get('[data-testid="frequency"]').setValue(String(hz))
     await chooseFirmware(wrapper, `firmware.${format}`)
     if (format === 'bin') {
       expect(wrapper.get<HTMLInputElement>('[data-testid="bin-address-dialog-input"]').element.value).toBe('0x80000400')
@@ -1680,6 +1701,7 @@ describe('online flash task workspace behavior', () => {
     const call = vi.mocked(fetch).mock.calls.find(([url]) => String(url).endsWith('/jobs'))
     const body = JSON.parse(String(call?.[1]?.body))
     expect(body.board).toBe('hpm5300evk')
+    expect(body.frequency).toBe(hz)
     expect(body.sector_addresses).toEqual([])
     expect(body.base_address).toBe(format === 'bin' ? 0x80000400 : null)
     wrapper.unmount()

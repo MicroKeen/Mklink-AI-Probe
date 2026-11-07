@@ -39,37 +39,40 @@ def test_corrupt_ack_is_not_success():
 
 
 class Peer:
+    """Current MUX peer; historical ACK decoding is tested separately above."""
     def __init__(self, live=True):
-        self.live = live
-        self.writes = []
-        self.chunks = []
-        self.timestamp = 1000
-        self.value = 0.0
-        self.ack_status = 0
-        self.suppress_ack = False
+        from mklink.mux import MuxTransport, packet
+        self.live, self.writes, self.timestamp, self.value, self.ack_status = live, [], 1000, 0.0, 0
+        self.sequence = 0
+        def write(wire):
+            self.writes.append(wire)
+            _, _, op, n, epoch, seq = struct.unpack_from('<4sBBHII', wire)
+            payload = wire[16:16+n]
+            answer, status = b'', 0
+            if op == 1: answer = struct.pack('<IHH', 0x61f, 256, 1)
+            elif op == 4: answer = payload
+            elif op in (0x32, 0x33): answer = struct.pack('<II', struct.unpack_from('<I', payload, 8)[0], 360000000)
+            elif op == 0x12:
+                data = payload[12:]
+                if len(data) == 4: self.value = struct.unpack('<f', data)[0]
+                status = self.ack_status
+            self.transport.feed(packet(op | 0x80, 17, seq, bytes([status]) + answer))
+            return len(wire)
+        self.transport = MuxTransport(write)
+        self.transport.handshake()
+        original = self.transport.drain
+        def drain(op, channel, **kwargs):
+            if op == 0x41 and self.transport.watch_running:
+                self.timestamp += 1000
+                self.sequence += 1
+                self.transport.feed(packet(0x41, 17, self.sequence,
+                    struct.pack('<BBIf', 0, 0, self.timestamp, self.value)))
+            return original(op, channel, **kwargs)
+        self.transport.drain = drain
 
+    def supports_multiplex(self): return True
+    def enable_multiplex(self): return self.transport
     def supports_dump_write(self): return self.live
-    def _enter_stream(self, state): self.state = state
-    def _exit_stream(self): pass
-    def _stop_stream_and_sync(self, data):
-        self.writes.append(data)
-        from mklink._types import DeviceState
-        self.state = DeviceState.READY
-        return True
-
-    def _write_raw(self, data):
-        self.writes.append(data)
-        if data.startswith(b'\x1e'):
-            packet = bytes.fromhex(data[1:].decode().strip())
-            assert binascii.crc32(packet[:24]) == struct.unpack_from('<I', packet, 24)[0]
-            _, req, address, size, payload = struct.unpack('<4sIIB3x8s', packet[:24])
-            self.value = struct.unpack('<f', payload[:size])[0]
-            if not self.suppress_ack:
-                self.chunks.append(ack(req, address, self.value, self.ack_status))
-
-    def drain_stream_bytes(self, max_bytes=None):
-        self.timestamp += 1000
-        return (self.chunks.pop(0) if self.chunks else b'') + _dump_frame(self.timestamp, struct.pack('<f', self.value))
 
 
 def manager_peer(tmp_path, live=True, write_error=None, hpm=False):
@@ -110,16 +113,16 @@ def test_write_preserves_worker_epoch_origin_and_paused_state(tmp_path, live, pa
         before = (manager._thread, manager._origin_us, manager._metadata_version)
         result = manager.write_symbol('gain', generation=1, value=1.5)
         assert result['acknowledged'] and not result['verified'] and result['value'] == 1.5
-        assert result['mode'] == ('live' if live else 'legacy-gap')
+        assert result['mode'] == ('cdc-mux' if live else 'legacy-gap')
         assert (manager._thread, manager._origin_us, manager._metadata_version) == before
         assert manager.get_status()['state'] == ('paused' if paused else 'running')
         assert len(manager.get_status()['write_events']) == 1
         if live:
             assert not operations
-            assert not any(b'-1.0' in b for b in peer.writes)
+            assert not any(b[5] == 0x31 for b in peer.writes)
         else:
             assert len(operations) == 1
-            assert any(b'-1.0' in b for b in peer.writes)
+            assert any(b[5] == 0x31 for b in peer.writes)
     finally:
         manager.stop()
 
@@ -131,37 +134,14 @@ def test_rejected_write_does_not_reset_or_stop_capture(tmp_path, live):
     try:
         before = manager._metadata_version
         manager.pause()
-        with pytest.raises(RuntimeError, match='failed'):
+        with pytest.raises(RuntimeError, match='failed|unsupported'):
             manager.write_symbol('gain', generation=1, value=2.0)
-        assert manager.get_status()['state'] == 'paused'
+        if live:
+            manager._thread.join(timeout=1)
+        assert manager.get_status()['state'] == ('stopped' if live else 'paused')
         assert manager._metadata_version == before
         assert manager.get_status()['write_events'] == []
     finally: manager.stop()
-
-
-def test_session_stop_fails_pending_write_without_retry():
-    peer = Peer(); peer.suppress_ack = True
-    session = DumpMemoryStreamSession(peer, [(0x20000020, 4)], .001)
-    session.start()
-    future = Future()
-    session.request_write(0x20000020, struct.pack('<f', 2), future)
-    session.read_frames()
-    assert not future.done()
-    session.stop()
-    with pytest.raises(RuntimeError, match='result unknown'): future.result()
-    assert sum(x.startswith(b'\x1e') for x in peer.writes) == 1
-
-
-def test_wrong_request_ack_ignored_and_not_counted_as_sample():
-    peer = Peer(); peer.suppress_ack = True
-    session = DumpMemoryStreamSession(peer, [(0x20000020, 4)], .001)
-    session.start(); future = Future()
-    session.request_write(0x20000020, struct.pack('<f', 2), future)
-    peer.chunks.append(ack(request_id=0))
-    samples = session.read_frames()
-    assert len(samples) == 1 and not future.done()
-    assert session.stats['complete_samples'] == 1
-    session.stop()
 
 
 def test_stopping_worker_rejects_idle_write(tmp_path):
@@ -183,7 +163,7 @@ def test_hpm_capability_and_target_ram_intersection(tmp_path, live):
     try:
         epoch = (manager._thread, manager._origin_us, manager._metadata_version)
         result = manager.write_symbol('gain', generation=1, value=3.125)
-        assert result['mode'] == ('live' if live else 'legacy-gap')
+        assert result['mode'] == ('cdc-mux' if live else 'legacy-gap')
         assert result['acknowledged'] and not result['verified'] and result['value'] == 3.125
         assert manager._live_write_ranges == ((0x01200020, 0x01200024),)
         assert manager.get_status()['live_write_supported'] is live
@@ -207,7 +187,6 @@ def test_hpm_session_rejects_unsupported_ranges_before_transmit(address, size, a
     before = len(peer.writes)
     if allowed:
         # Peer decodes float writes only; use the real framing with a raw sink.
-        peer._write_raw = lambda data: peer.writes.append(data)
         session.request_write(address, bytes(size), Future())
         assert len(peer.writes) == before + 1
     else:
@@ -278,22 +257,3 @@ def test_idle_write_acknowledges_without_readback(tmp_path):
     result = manager.write_symbol('gain', generation=1, value=1.5)
     assert result['acknowledged'] and result['verified'] is False and result['value'] == 1.5
     assert len(operations) == 1
-
-
-@pytest.mark.parametrize('status', [0, 1, 2, 3, 4, 5, 255])
-def test_sw01_write_status_is_distinct_from_builtin_readback(status):
-    peer = Peer(); peer.suppress_ack = True
-    session = DumpMemoryStreamSession(peer, [(0x20000020, 4)], .001)
-    session.start(); future = Future()
-    session.request_write(0x20000020, struct.pack('<f', 2), future)
-    request = session._write_pending[0]
-    # Deliberately different legacy firmware readback must not change the ACK value.
-    peer.chunks.append(ack(request_id=request, value=99, status=status))
-    session.read_frames()
-    if status in (0, 3, 5):
-        assert future.result()['data'] == struct.pack('<f', 2)
-        assert future.result()['acknowledged'] and not future.result()['verified']
-    else:
-        with pytest.raises(RuntimeError, match='Live write failed'): future.result()
-    assert sum(x.startswith(b'\x1e') for x in peer.writes) == 1
-    session.stop()

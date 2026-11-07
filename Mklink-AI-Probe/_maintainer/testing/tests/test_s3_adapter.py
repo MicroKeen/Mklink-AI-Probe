@@ -252,3 +252,34 @@ def test_frozen_remote_mcp_entry_reuses_existing_server(monkeypatch):
     monkeypatch.setattr(sys, 'argv', ['mklink-sidecar', 'remote-mcp'])
     assert cli.main() == 0
     called.assert_called_once_with()
+
+@pytest.mark.parametrize('transport', ['http', 'ble'])
+def test_runtime_binding_reports_registered_transport_until_release(registry, transport, monkeypatch, tmp_path):
+    from mklink.runtime_binding import RuntimeBinding
+    from mklink import probes
+    address = registry['address'] if transport == 'http' else '01:23:45:67:89:AB'
+    probe = register_node({**registry, 'transport': transport, 'address': address})
+    info = {'runtime_id': 'local-' + 'd' * 24, 'instance_id': 'instance', 'probe_id': 'lobby'}
+    binding = RuntimeBinding(info)
+    monkeypatch.setattr(probes, '_bound_probe', 'lobby')
+    try:
+        with binding.reserve(probe['probe_id']) as commit:
+            commit()
+        assert info['transport'] == 's3-' + transport
+        from fastapi.testclient import TestClient
+        from mklink.remote.api import create_app
+        from mklink.runtime_api import install_runtime
+        info.update(token='test', port=8765, pid=123)
+        app = create_app(project_root=str(tmp_path))
+        install_runtime(app, info)
+        monkeypatch.setattr(probes, 'inventory', Mock(side_effect=AssertionError('Health check scanned USB')))
+        with TestClient(app, base_url='http://127.0.0.1:8765', headers={'X-Auth-Token': 'test'}) as client:
+            response = client.get('/_runtime/status')
+            assert response.status_code == 200, response.text
+            assert response.json()['transport'] == 's3-' + transport
+            assert response.json()['gui_launch'] == 1
+        with binding.reserve('lobby') as commit:
+            commit()
+        assert info['transport'] == 'cdc'
+    finally:
+        binding.close()

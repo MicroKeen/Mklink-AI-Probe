@@ -93,3 +93,21 @@ def test_ping_window_stays_bounded_without_acknowledgements(monkeypatch):
         mux.tick()
     assert len(writes) == len(mux._heartbeats) == 64
     assert 'window full' in str(mux._error)
+
+@pytest.mark.parametrize(('carrier', 'expected'), [(3, 12), (60, 60)])
+def test_atomic_command_preserves_both_deadlines(monkeypatch, carrier, expected):
+    mux, now, wires = session(monkeypatch, background_heartbeats=carrier == 60)
+    mux.command_timeout = carrier
+    mux.capabilities = mux.ATOMIC_SLEEP_CAPABILITY
+    mux.sleep_access = True
+    mux._send(0x17, b'')
+    assert mux._pending[2] == now[0] + expected
+    now[0] += 5
+    mux.tick()
+    assert mux._pending[0] == 0x17 and len(wires) == (2 if carrier == 60 else 1)
+    with pytest.raises(RuntimeError, match='sampling'):
+        mux._send(0x32, b'')
+    mux.feed(packet(0x97, mux.epoch, 1, b'\0data'))
+    if carrier == 60:
+        mux.feed(packet(0x82, mux.epoch, 2, b'\0'))
+    assert not mux._error and not mux._heartbeats and mux._reply == b'\0data'

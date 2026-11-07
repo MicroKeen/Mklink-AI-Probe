@@ -21,7 +21,8 @@ INVALID_RESPONSES = [
 
 def json_response(body):
     data = json.dumps(body).encode('utf-8')
-    return b'HTTP/1.1 200 OK\r\nContent-Length: ' + str(len(data)).encode() + b'\r\n\r\n' + data
+    # This fixture handles exactly one request per socket.
+    return b'HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: ' + str(len(data)).encode() + b'\r\n\r\n' + data
 
 
 @pytest.fixture
@@ -74,6 +75,20 @@ def save_endpoint(info, digit):
     path.parent.mkdir(parents=True)
     path.write_text(json.dumps(info), encoding='utf-8')
     return probe_id, path
+
+
+@pytest.mark.parametrize('alive', [False, True])
+def test_process_precheck_only_skips_confirmed_dead_backend(endpoints, monkeypatch, alive):
+    health = dict(instance_id='live', probe_id='lobby', protocol=runtime.PROTOCOL, version=runtime.VERSION)
+    info, calls = endpoints(json_response(health))
+    identity, path = save_endpoint({**info, 'pid': 12345, 'instance_id': 'live'}, '2')
+    original = path.read_bytes()
+    monkeypatch.setattr('mklink.runtime_registry._pid_exists', lambda pid: alive)
+    result = runtime.discover(identity)
+    # A reused PID still needs the HTTP instance/protocol/identity checks.
+    assert result is None
+    assert len(calls) == int(alive)
+    assert path.read_bytes() == original
 
 
 @pytest.mark.parametrize('response', INVALID_RESPONSES)

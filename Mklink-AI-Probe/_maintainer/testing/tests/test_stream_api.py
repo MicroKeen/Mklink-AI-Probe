@@ -2,6 +2,7 @@ import asyncio
 import json
 import threading
 import time
+import struct
 
 import pytest
 from fastapi.testclient import TestClient
@@ -17,6 +18,23 @@ def _receive_data_frame(websocket):
         frame = decode_frame(websocket.receive_bytes())
         if frame.stream_type is not StreamType.CONTROL:
             return frame
+
+
+@pytest.mark.parametrize('extended', [False, True])
+def test_superwatch_continuity_is_opt_in_and_preserves_legacy_payload(client, app, extended):
+    from mklink.remote.stream_protocol import SUPERWATCH_CONTINUITY_FLOAT32
+    values = struct.pack('<2d2f', 1.0, 2.0, 3.0, 4.0)
+    payload = struct.pack('<QII', 40, 1, 0) + values + struct.pack('<II', 1, 1)
+    url = '/ws/streams/superwatch' + ('?continuity=1' if extended else '')
+    with client.websocket_connect(url) as ws:
+        assert decode_frame(ws.receive_bytes()).stream_type == StreamType.CONTROL
+        app.state.stream_registry['superwatch'].publish(payload, item_count=2,
+            flags=SUPERWATCH_CONTINUITY_FLOAT32, stream_type=StreamType.SUPERWATCH)
+        frame = _receive_data_frame(ws)
+        while frame.item_count == 0:
+            frame = _receive_data_frame(ws)
+        assert frame.flags == (4 if extended else 3)
+        assert frame.payload == (payload if extended else values)
 
 
 @pytest.fixture

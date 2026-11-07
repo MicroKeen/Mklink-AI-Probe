@@ -43,7 +43,6 @@ _SYSTEMVIEW_STOP_COMMANDS = [
 # 其他流模式的文本兜底命令，仅在 SystemView 专用恢复没有得到提示符时发送。
 _STREAM_FALLBACK_STOP_COMMANDS = [
     b"RTTView.stop()\n",
-    b"cmd.dump_memory(0x20000054, 4, -1.0)\n",
 ]
 _STREAM_READ_POLL_INTERVAL = 0.01
 _SYNC_TIMEOUTS = (0.3, 0.7)
@@ -86,6 +85,9 @@ class MKLinkSerialBridge:
         self._mux_marker = Path(self._port_lock._path + ".mux")
         self._serial: serial.Serial | IsolatedSerial | None = None
         self._ctx = DeviceContext()
+        self._sleep_debug_previous_clock: int | None = None
+        self._sleep_debug_atomic = False
+        self._mux_capabilities = None
         self._reader_thread: threading.Thread | None = None
         self._running = False
         self._response_buffer: list[str | bytes] = []
@@ -130,16 +132,10 @@ class MKLinkSerialBridge:
     # 连接管理
     # ------------------------------------------------------------------
     def supports_dump_write(self) -> bool:
-        if self._mux_supported is True:
-            return True
-        return "DUMP_WRITE=1" in self._get_firmware_capabilities()
+        return self.supports_multiplex()
 
     def supports_hpm_dump_write(self) -> bool:
-        return "DUMP_WRITE_HPM=1" in self._get_firmware_capabilities()
-
-    def prepare_dump_stop(self) -> None:
-        """Cache the stop-ACK contract before entering the binary stream."""
-        self._get_firmware_capabilities()
+        return self.supports_multiplex()
 
     def _get_firmware_capabilities(self) -> frozenset[str]:
         # Capture all advertised features before entering MUX. Later dashboard
@@ -186,7 +182,10 @@ class MKLinkSerialBridge:
         self._transport_error = None
         self.last_connect_error = 'Command port did not return a prompt; check the probe firmware/USB connection and retry'
         self._mux_supported = None  # Re-negotiate after reconnect/firmware changes.
+        self._mux_capabilities = None
         self._firmware_capabilities = None
+        self._sleep_debug_previous_clock = None
+        self._sleep_debug_atomic = False
         # 进程级互斥：获取文件锁
         if not self._port_lock.acquire():
             error = getattr(self._port_lock, 'last_error', None)
@@ -474,7 +473,11 @@ class MKLinkSerialBridge:
                 self._mux_marker.parent.mkdir(parents=True, exist_ok=True)
                 self._mux_marker.write_text('MLX1', encoding='ascii')
                 self._serial.write(b'~MKLINK-MUX1\n')
+                transport.sleep_access = bool(getattr(self, '_sleep_debug_previous_clock', None))
                 transport.handshake()
+                self._mux_capabilities = transport.capabilities
+                if transport.sleep_access and transport.supports_atomic_sleep != getattr(self, '_sleep_debug_atomic', False):
+                    raise RuntimeError('Probe sleep access capability changed; reconfigure the connection')
             except Exception as exc:
                 transport.fail(exc)
                 raise  # No text-mode fallback after a failed protocol transition.
@@ -839,7 +842,7 @@ class MKLinkSerialBridge:
     def _recover_failed_stream_start(self, stop_command: bytes) -> bool:
         return self._stop_stream_and_sync(stop_command)
 
-    def _stop_stream_and_sync(self, stop_command: bytes, *, dump_prefix: bytes = b'') -> bool:
+    def _stop_stream_and_sync(self, stop_command: bytes) -> bool:
         """Stop a stream and verify command mode within a bounded timeout.
 
         A raw stop may return its ``>>>`` well after the write.  Returning as
@@ -852,8 +855,7 @@ class MKLinkSerialBridge:
         """
         with self._cmd_lock:
             if stop_command.startswith(b'cmd.dump_memory('):
-                from .dump_control import stop_dump_and_sync
-                return stop_dump_and_sync(self, stop_command, dump_prefix)
+                raise RuntimeError('Legacy dump control was removed; update the probe firmware and host together')
             self._cancel_stream_arm()
             if self._transport_error is not None:
                 self._ctx.state = DeviceState.ERROR

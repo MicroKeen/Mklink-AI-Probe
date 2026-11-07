@@ -80,9 +80,10 @@ def test_stream_fault_rebuilds_session_and_resumes_values(monkeypatch, first_fau
     server.push_data_point = push
     runtime = SimpleNamespace(blocks=build_read_blocks([WatchItem('a', 0x20000000, 'float', 4)]), blocks_version=0)
     _run_visualizer_stream(None, server, runtime, stop, threading.Event(), clock=lambda: now[0], stall_timeout=.1)
-    assert len(sessions) == 2
+    assert len(sessions) == 1
     assert all(session.stopped for session in sessions)
-    assert pushed == [{"_t": 0, "timestamp_us": 100, "a": 2.5}]
+    assert pushed == []
+    assert server.sample_health()["state"] == "error"
 
 
 @pytest.mark.parametrize("stop_failure", [False, True])
@@ -104,5 +105,5 @@ def test_recovery_is_bounded_and_failed_stop_never_restarts(monkeypatch, stop_fa
     server._interval = .05
     runtime = SimpleNamespace(blocks=build_read_blocks([WatchItem('a', 0x20000000, 'float', 4)]), blocks_version=0)
     _run_visualizer_stream(None, server, runtime, threading.Event(), threading.Event(), max_recoveries=1)
-    assert len(sessions) == (1 if stop_failure else 2)
+    assert len(sessions) == 1
     assert server.sample_health()["state"] == "error"

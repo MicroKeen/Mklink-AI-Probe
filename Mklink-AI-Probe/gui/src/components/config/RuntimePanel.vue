@@ -7,6 +7,8 @@ import DiagnosticsExport from '../DiagnosticsExport.vue'
 
 interface Client { id: string; name: string; kind: string; streams: string[]; expires_in: number | null }
 interface Runtime {
+  sleep_access_supported?: boolean; sleep_access_enabled?: boolean; sleep_access_atomic?: boolean
+  device_generation?: number
   jobs?: { job_id: string; request_id: string; action: string; state: string; error: string | null }[]
   probe_id: string; status: string; connected: boolean; busy: boolean; project_root: string
   probe: { alias: string; port: string; identity_stable?: boolean } | null
@@ -67,6 +69,30 @@ async function refresh() {
     }
   } catch (e: any) { if (!disposed) error.value = e.message }
   finally { refreshing = false }
+}
+
+async function toggleSleepAccess() {
+  const current = state.value
+  if (!current?.connected || !current.sleep_access_supported || current.device_generation === undefined || acting.value) return
+  const enabled = !current.sleep_access_enabled
+  acting.value = true
+  error.value = ''
+  try {
+    const response = await fetch(`${API_BASE}/api/device/sleep-debug`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-MKLink-Probe': current.probe_id,
+        'X-MKLink-Device-Generation': String(current.device_generation) },
+      body: JSON.stringify({ enabled }),
+    })
+    const result = await response.json()
+    if (!response.ok || result.enabled !== enabled) {
+      throw new Error(typeof result.detail === 'string' ? result.detail : result.detail?.hint
+        || tr('请核对当前采集和睡眠访问状态', 'Check active captures and sleep access status'))
+    }
+  } catch (e: any) { if (!disposed) error.value = e.message }
+  finally {
+    if (!disposed) { await refresh(); acting.value = false }
+  }
 }
 
 async function saveProbeAlias() {
@@ -142,6 +168,16 @@ onUnmounted(() => { disposed = true; if (timer) clearInterval(timer) })
         <button class="btn btn-sm" data-testid="save-probe-alias" :disabled="aliasSaving || !aliasEdited" @click="saveProbeAlias">{{ tr('保存别名', 'Save alias') }}</button>
         <span v-if="aliasSaved" role="status">{{ tr('别名已保存', 'Alias saved') }}</span>
         <p class="runtime-muted">{{ tr('别名仅保存在本机，用于区分下载器，不修改下载器固件。', 'Aliases identify probes on this computer only; probe firmware is unchanged.') }}</p>
+      </div>
+      <div v-if="state.connected && state.status === 'present' && state.sleep_access_supported" class="runtime-row">
+        <div><strong>{{ tr('睡眠访问', 'Sleep access') }}</strong>
+          <p class="runtime-muted">{{ state.sleep_access_atomic
+            ? tr('内存访问后恢复原运行状态。关闭睡眠访问后可启动 RTT、SuperWatch 或 SystemView。', 'Memory access restores the previous core state. Turn off sleep access to start RTT, SuperWatch or SystemView.')
+            : tr('用于周期唤醒的 Cortex-M 内存访问，可能短暂停核。开启前请停止实时采集。', 'For memory access on periodically waking Cortex-M targets. The core may halt briefly. Stop live captures before enabling.') }}</p>
+        </div>
+        <button class="btn btn-sm" data-testid="sleep-access" :aria-pressed="!!state.sleep_access_enabled"
+          :disabled="acting || state.busy || state.device_generation === undefined" @click="toggleSleepAccess">{{ state.sleep_access_enabled
+            ? tr('关闭睡眠访问', 'Turn off sleep access') : tr('开启睡眠访问', 'Enable sleep access') }}</button>
       </div>
       <h3>{{ tr('客户端', 'Clients') }} · {{ state.clients.length }}</h3>
       <p v-if="!state.clients.length">{{ tr('暂无客户端', 'No clients') }}</p>

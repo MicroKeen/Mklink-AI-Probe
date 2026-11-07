@@ -25,7 +25,7 @@ def decide(config, state, now, measured):
         raise ValueError("invalid usage")
     usage = max(state.get("used_bytes", 0), measured)
     reason = state.get("stop_reason", "")
-    if not reason and now >= config["expires_at"]:
+    if not reason and config.get("enforce_package_expiry", True) is not False and now >= config["expires_at"]:
         reason = "package_expired"
     if not reason and now < config["starts_at"]:
         reason = "package_not_started"
@@ -59,10 +59,17 @@ def sum_points(response, bucket, start, end):
 
 
 def measure(config, now):
-    total = 0
+    # A verified settled-billing checkpoint replaces only the historical part
+    # of the estimate; subsequent monitoring starts at its exclusive boundary.
+    checkpoint = config.get("billing_checkpoint_at", config["starts_at"])
+    total = config.get("billing_checkpoint_bytes", 0)
+    if (not isinstance(checkpoint, int) or not config["starts_at"] <= checkpoint <= now
+            or not isinstance(total, (int, float)) or not math.isfinite(total) or total < 0
+            or ("billing_checkpoint_at" in config) != ("billing_checkpoint_bytes" in config)):
+        raise ValueError("invalid billing checkpoint")
     for item in config["metered_buckets"]:
         # Five-minute summed periods, paginated below the API's 7200-point limit.
-        start = config["starts_at"]
+        start = checkpoint
         while start < now:
             end = min(start + 7 * 86400, now)
             result = cloud_call("GetMonitorData", {
@@ -75,12 +82,48 @@ def measure(config, now):
     return total
 
 
+def meter_with_checkpoint(config, state, now, meter):
+    """Retain cumulative usage before five-minute monitoring history expires.
+
+    Re-query the last seven days for delayed points. The checkpoint is saved
+    with the normal state write only after both queries succeed. A verified
+    billing correction supersedes a checkpoint derived from an older baseline.
+    """
+    if ("billing_checkpoint_at" in config) != ("billing_checkpoint_bytes" in config):
+        raise ValueError("incomplete billing checkpoint")
+    basis = [config.get("billing_checkpoint_at", config["starts_at"]),
+             config.get("billing_checkpoint_bytes", 0)]
+    checkpoint = state.get("monitor_checkpoint")
+    if checkpoint is None or checkpoint.get("basis") != basis:
+        checkpoint = {"basis": basis, "at": basis[0], "bytes": basis[1]}
+    at, total = checkpoint["at"], checkpoint["bytes"]
+    if (not isinstance(at, int) or not basis[0] <= at <= now
+            or not isinstance(total, (int, float)) or not math.isfinite(total)
+            or total < basis[1]):
+        raise ValueError("invalid persisted monitor checkpoint")
+    if now - at > 30 * 86400:
+        raise ValueError("monitor history gap: verified billing checkpoint required")
+    anchored = {**config, "billing_checkpoint_at": at, "billing_checkpoint_bytes": total}
+    settled_at = (now - 7 * 86400) // 86400 * 86400
+    if settled_at > at:
+        settled = meter(anchored, settled_at)
+        if not math.isfinite(settled) or settled < total:
+            raise ValueError("invalid settled monitor usage")
+        checkpoint = {"basis": basis, "at": settled_at, "bytes": settled}
+        anchored.update(billing_checkpoint_at=settled_at, billing_checkpoint_bytes=settled)
+    return meter(anchored, now), checkpoint
+
+
 def run(config, now, read, write, meter, sign, alarm):
     state = read(STATE_KEY)  # A missing/corrupt state must never reset the budget.
     state = decide(config, state, now, state.get("used_bytes", 0))
     if not state["stop_reason"]:
-        state = decide(config, state, now, meter(config, now))
-    expires = min(now + config["lease_seconds"], config["expires_at"])
+        measured, checkpoint = meter_with_checkpoint(config, state, now, meter)
+        state = decide(config, state, now, measured)
+        state["monitor_checkpoint"] = checkpoint
+    expires = now + config["lease_seconds"]
+    if config.get("enforce_package_expiry", True) is not False:
+        expires = min(expires, config["expires_at"])
     opened = not state["stop_reason"] and config.get("enabled") is True
     # Persist threshold latch before publishing new links.
     write(STATE_KEY, state)

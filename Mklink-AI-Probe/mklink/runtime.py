@@ -2,27 +2,27 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from http.client import HTTPException
+from http.client import HTTPConnection, HTTPException
 import json
 import os
 from pathlib import Path
 import secrets
+import select
 import socket
 import subprocess
 import sys
 import threading
 import time
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, build_opener, ProxyHandler
 
 PROTOCOL = 53  # Guarded probe/OTP/offline workflows and complete clock capabilities.
-VERSION = "0.4.2"
+VERSION = "0.4.3"
 STARTUP_TIMEOUT_SECONDS = 60
 
-# urllib's default opener builds an HTTPS context even for loopback HTTP.
-# Keep one per thread: no shared mutable handlers and no per-call Windows
-# certificate-store scan. Proxy isolation and default TLS verification remain.
+# One loopback connection per thread, never shared with the lease heartbeat.
+# Retire before uvicorn's five-second idle timeout. A failed request is never
+# retried: even a lost response may represent a completed target write.
 _local_http = threading.local()
+_HTTP_IDLE_SECONDS = 2
 
 
 class RuntimeErrorResponse(RuntimeError):
@@ -95,27 +95,51 @@ def request(info: dict, method: str, path: str, payload=None, *, timeout=35, for
                "application/x-www-form-urlencoded" if form else "application/json"}
     if info.get('probe_id'):
         headers['X-MKLink-Probe'] = info['probe_id']
-    req = Request(f"http://127.0.0.1:{port}{path}", data=data, headers=headers, method=method)
-    # Local IPC must never travel through environment-configured HTTP proxies.
+    # A fixed numeric loopback destination neither consults proxies nor follows
+    # redirects. Bind reuse to this backend and target, not just a recycled port.
+    key = (port, info.get('instance_id'), info.get('probe_id'), info['token'])
+    connection = getattr(_local_http, 'connection', None)
+    if connection is not None:
+        stale = (getattr(_local_http, 'key', None) != key
+                 or time.monotonic() - _local_http.used_at >= _HTTP_IDLE_SECONDS)
+        if not stale and connection.sock is not None:
+            try:
+                # The previous body was consumed completely. Readability now
+                # means EOF or unsolicited bytes: discard before sending work.
+                stale = bool(select.select([connection.sock], [], [], 0)[0])
+            except (OSError, ValueError):
+                stale = True
+        if stale:
+            connection.close()
+            connection = None
+    if connection is None:
+        connection = HTTPConnection('127.0.0.1', port, timeout=timeout)
+        _local_http.connection, _local_http.key = connection, key
+    connection.timeout = timeout
     try:
-        opener = getattr(_local_http, 'opener', None)
-        if opener is None:
-            opener = _local_http.opener = build_opener(ProxyHandler({}))
-        with opener.open(req, timeout=timeout) as response:
-            return json.load(response)
-    except HTTPError as exc:
-        detail = exc.read(65536).decode("utf-8", "replace")
-        try:
-            body = json.loads(detail)
-            structured_detail = body.get("detail") if isinstance(body, dict) else None
-        except ValueError:
-            structured_detail = None
-        raise RuntimeErrorResponse(f"Runtime HTTP {exc.code}: {detail}",
-                                   status_code=exc.code, detail=structured_detail) from exc
-    except (URLError, TimeoutError, OSError, HTTPException) as exc:
+        if connection.sock is not None:
+            connection.sock.settimeout(timeout)
+        connection.request(method, path, body=data, headers=headers)
+        with connection.getresponse() as response:
+            if response.status >= 300:
+                detail = response.read(65536).decode('utf-8', 'replace')
+                connection.close()  # An oversized error may have unread bytes.
+                try:
+                    body = json.loads(detail)
+                    structured_detail = body.get('detail') if isinstance(body, dict) else None
+                except ValueError:
+                    structured_detail = None
+                raise RuntimeErrorResponse(f'Runtime HTTP {response.status}: {detail}',
+                                           status_code=response.status, detail=structured_detail)
+            payload = response.read()
+        return json.loads(payload)
+    except (TimeoutError, OSError, HTTPException) as exc:
+        connection.close()
         # A stale endpoint's port may now speak another protocol. Treat failed
         # HTTP parsing like other transport failures, without replaying work.
         raise RuntimeErrorResponse("Shared runtime is unavailable; no direct CDC fallback was attempted") from exc
+    finally:
+        _local_http.used_at = time.monotonic()
 
 
 def discover(probe_id=None) -> dict | None:
@@ -131,6 +155,11 @@ def discover(probe_id=None) -> dict | None:
         return entries[0] if entries else None
     try:
         info = json.loads((runtime_dir(probe_id) / "endpoint.json").read_text(encoding="utf-8"))
+        if not isinstance(info, dict):
+            return None
+        from mklink.runtime_registry import endpoint_owner_dead
+        if endpoint_owner_dead(info):
+            return None  # Discovery stays read-only; startup reclaims dead records.
         health = request(info, "GET", "/_runtime/status", timeout=1)
     except (OSError, ValueError, KeyError, RuntimeErrorResponse):
         return None
@@ -183,6 +212,8 @@ def ensure_runtime(*, project_root: str = ".", port: int = 8765, probe=None, dev
             probe_id = 'lobby'
     if new_window and probe_id != 'lobby' and discover(probe_id):
         raise RuntimeErrorResponse('This probe is already owned by another window; disconnect it there or open a window without a probe selection')
+    from mklink.runtime_registry import prune_dead_endpoints
+    prune_dead_endpoints()
     runtime_id = 'local-' + secrets.token_hex(12)
     discovery_id = runtime_id if new_window else probe_id
     info = discover(discovery_id)
@@ -360,16 +391,24 @@ class RuntimeClient:
         self._stop = threading.Event()
         self._heartbeat = None
         self._lock = threading.Lock()
+        self._memory_transport = False
+        self._check_sleep_budget = False
+        self._memory_channel = None
         self.kind, self.name = kind, name
 
-    def connect(self, *, project_root=None, port=None, probe=None, axf=None, mcu=None, elf_backend=None, scope='target'):
+    def connect(self, *, project_root=None, port=None, probe=None, axf=None, mcu=None, elf_backend=None, scope='target', existing_only=False):
         if scope not in ('target', 'uart'):
             raise ValueError('Session scope must be target or uart')
         if scope == 'uart' and any(value is not None for value in (port, axf, mcu, elf_backend)):
             raise ValueError('UART-only attachment accepts a probe selector, not target connection settings')
         with self._lock:
+            self._close_memory_channel()
+            self._memory_transport = False
+            self._check_sleep_budget = False
             existing = self.info is not None
             if self.info is None:
+                if existing_only:
+                    raise RuntimeErrorResponse('The selected GUI backend is unavailable; open it explicitly before connecting')
                 options = {'allow_lobby': True} if scope == 'uart' else {}
                 self.info = ensure_runtime(project_root=project_root or self.project_root, probe=probe, device_port=port, **options)
             # Only explicit connect may rediscover or select a target. Ordinary
@@ -386,6 +425,8 @@ class RuntimeClient:
                 if health is None or health.get('instance_id') != self.info.get('instance_id'):
                     self._stop_heartbeat()
                     self.session_id = None
+                    if existing_only:
+                        raise RuntimeErrorResponse('The selected GUI backend changed or exited; reopen explicitly before connecting')
                     self.info = ensure_runtime(project_root=project_root or self.project_root,
                         probe=selected['probe_id'] if selected else self.info['probe_id'], allow_lobby=scope == 'uart')
                 else:
@@ -412,6 +453,8 @@ class RuntimeClient:
                 'kind': self.kind, 'name': self.name, 'scope': scope,
             })
             self.session_id = result["session_id"]
+            self._memory_transport = result.get('memory_transport') == 'websocket-v1'
+            self._check_sleep_budget = result.get('check_sleep_budget') is True
             if project_root is not None:
                 self.project_root = project_root
             self._stop_heartbeat()
@@ -454,7 +497,26 @@ class RuntimeClient:
         with self._lock:
             if not self.session_id:
                 raise RuntimeErrorResponse("Call connect first")
+            if capability == 'read_memory' and self._memory_transport:
+                from mklink.runtime_memory_client import MemoryChannel
+                try:
+                    if self._memory_channel is None:
+                        self._memory_channel = MemoryChannel(self.info, self.session_id)
+                    return self._memory_channel.read(arguments or {})
+                except BaseException as error:
+                    try:
+                        self._close_memory_channel()
+                    except Exception:
+                        pass  # Preserve the original failure; never retry it.
+                    if isinstance(error, (RuntimeErrorResponse, KeyboardInterrupt, SystemExit)):
+                        raise
+                    raise RuntimeErrorResponse(
+                        'Memory channel failed; command was not retried') from error
             transport_options = {}
+            bulk_sleep_timeout = 35
+            if self._check_sleep_budget and capability == 'read_memory' and isinstance(arguments, dict):
+                from mklink.mux import sleep_rpc_timeout
+                bulk_sleep_timeout = sleep_rpc_timeout(arguments.get('size'))
             if capability == 'offline_deploy':
                 transport_options['timeout'] = 650
             elif capability == 'isp_link_probe':
@@ -481,6 +543,19 @@ class RuntimeClient:
                     write_budget = max(10 * len(plan_flush_batches(parsed)), native_budget)
                     read_budget = max(10, native_budget) if args.get('verify') else 0
                     transport_options['timeout'] = max(35, write_budget + read_budget + 15)
+                    if self._check_sleep_budget:
+                        from mklink.mux import sleep_rpc_timeout
+                        bulk_sleep_timeout = sleep_rpc_timeout(len(parsed[0][1]), write=True,
+                                                              verify=args.get('verify') is True)
+            if bulk_sleep_timeout > transport_options.get('timeout', 35):
+                # Only large HTTP requests can outlast the existing budget. Mode belongs
+                # to the shared backend and may have been changed by another client.
+                state = request(self.info, 'POST', '/_runtime/call', {
+                    'session_id': self.session_id, 'capability': 'debug_speed', 'arguments': {}})
+                atomic = state.get('sleep_access_atomic') is True
+                arguments = {**arguments, 'expected_atomic_sleep': atomic}
+                if atomic:
+                    transport_options['timeout'] = bulk_sleep_timeout
             if capability == 'flush_memory':
                 from mklink.memory_write import validate_writes, plan_flush_batches
                 args = arguments or {}
@@ -501,14 +576,14 @@ class RuntimeClient:
                 from mklink.dump_benchmark import measurement_regions, validate_measurement
                 args = arguments or {}
                 validate_measurement(measurement_regions(args.get('regions')), args.get('duration', 3.0),
-                                     args.get('period', 0.000001), args.get('speed_profile'))
+                                     args.get('period', 0.000001), args.get('speed_profile'), protocol=args.get('protocol', 'mux'))
                 transport_options['timeout'] = max(35, args.get('duration', 3.0) + 20)
             if capability == 'capture_dump':
                 from mklink.dump_memory import validate_dump_stream
                 args = arguments or {}
                 validate_dump_stream(args.get('regions'), args.get('period', 0.0), args.get('frames', 1),
                                      args.get('duration', 2.0), args.get('speed_profile'),
-                                     fastest=args.get('fastest', False))
+                                     fastest=args.get('fastest', False), protocol=args.get('protocol', 'mux'))
                 transport_options['timeout'] = max(35, (args.get('duration', 2.0) or 300) + 20)
             return request(self.info, "POST", "/_runtime/call", {
                 "session_id": self.session_id, "capability": capability, "arguments": arguments or {},
@@ -526,8 +601,14 @@ class RuntimeClient:
     def job_status(self, job_id=None):
         return job_status(self.info, job_id)
 
+    def _close_memory_channel(self):
+        channel, self._memory_channel = self._memory_channel, None
+        if channel is not None:
+            channel.close()
+
     def close(self):
         with self._lock:
+            self._close_memory_channel()
             session_id = self.session_id
             # A lost detach response must not leave this client able to send
             # commands on a session it has already relinquished locally.
@@ -539,6 +620,7 @@ class RuntimeClient:
     def disconnect(self):
         """Explicit physical disconnect; close() remains attachment-only cleanup."""
         with self._lock:
+            self._close_memory_channel()
             if self.info is None:
                 return {'status': 'disconnected', 'device_closed': False}
             result = request(self.info, 'POST', '/api/runtime/control/release-device',
@@ -578,6 +660,8 @@ def _serve_runtime(*, project_root, port, probe_id, runtime_id):
         info = {"port": listener.getsockname()[1], "token": secrets.token_urlsafe(32),
                 "instance_id": secrets.token_hex(16), "protocol": PROTOCOL, "version": VERSION, "pid": os.getpid(),
                 "probe_id": probe_id, "runtime_id": runtime_id}
+        from mklink.web_entry import get_process_identity
+        info['process_identity'] = get_process_identity(os.getpid())
         info['jobs_path'] = str(_private_dir(probe_id if probe_id != 'lobby' else runtime_id) / 'jobs.json')
         app = create_app(project_root=str(Path(project_root).resolve()), backend_port=info["port"])
         mark("runtime_routes")

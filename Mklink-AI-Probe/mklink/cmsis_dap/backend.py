@@ -788,39 +788,14 @@ class HpmRomBackend:
                 FlashErrorCode.CONNECT_FAIL,
                 "HPM device bridge is unavailable",
             )
-        from mklink.dump_memory import (
-            DumpMemoryUnsupported,
-            read_dump_memory_range_once,
-        )
-
-        try:
-            # Reads do not need erase-sector boundaries. Batch up to the safe
-            # 32 KiB dump limit; the protocol still validates every 2 KiB frame.
-            parts = []
-            for offset in range(0, size, self.READ_CHUNK_SIZE):
-                part_size = min(self.READ_CHUNK_SIZE, size - offset)
-                parts.append(
-                    read_dump_memory_range_once(
-                        bridge, address + offset, part_size, timeout=10.0,
-                    )
-                )
-            return b"".join(parts)
-        except DumpMemoryUnsupported:
-            # Older probe firmware may expose only the text API.  It is slower,
-            # but preserves compatibility for small or diagnostic reads.
-            from mklink.memory_access import parse_read_ram_response
-
-            raw = bridge.send_command(
-                f"cmd.read_flash(0x{address:08X}, {size})",
-                timeout=max(10.0, size / 1200.0),
-            )
-            data = parse_read_ram_response(raw)
-            if len(data) != size:
-                raise FlashError(
-                    FlashErrorCode.CONNECT_FAIL,
-                    f"HPM read_flash returned {len(data)} bytes for {size}",
-                )
-            return data
+        from mklink.dump_memory import read_dump_memory_range_once
+        # Preserve bounded HPM readback, using exact CRC-validated MUX blocks.
+        # Failure never retries through text commands or returns partial data.
+        parts = []
+        for offset in range(0, size, self.READ_CHUNK_SIZE):
+            part_size = min(self.READ_CHUNK_SIZE, size - offset)
+            parts.append(read_dump_memory_range_once(bridge, address + offset, part_size, timeout=10.0))
+        return b"".join(parts)
 
     def memory_regions(self) -> Tuple[MemoryRegion, ...]:
         self._require_device()

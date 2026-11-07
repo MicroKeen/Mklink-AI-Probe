@@ -7,8 +7,9 @@ import time
 
 
 def validate_measurement(regions: list[tuple[int, int]], duration: float = 3,
-                         period: float = 0.000001, speed_profile: str | None = None) -> int:
-    from mklink.dump_memory import build_dump_mem_command
+                         period: float = 0.000001, speed_profile: str | None = None, *, protocol='mux') -> int:
+    from mklink.mux_watch import create_mux_capture_session
+    from mklink.dump_memory import validate_sampling_protocol
 
     if isinstance(duration, bool) or not isinstance(duration, (float, int)) or not math.isfinite(duration) or not .5 <= duration <= 30:
         raise ValueError("duration must be 0.5..30 seconds")
@@ -25,7 +26,12 @@ def validate_measurement(regions: list[tuple[int, int]], duration: float = 3,
     size = sum(n for _, n in regions)
     if size > 4096:
         raise ValueError("measurement is limited to 4096 bytes per sample")
-    build_dump_mem_command(regions, period)
+    validate_sampling_protocol(protocol)
+    if protocol == 'mux':
+        create_mux_capture_session(None, regions, period)
+    else:
+        from mklink.legacy_dump import command_for
+        command_for(regions, period)
     if speed_profile is not None and speed_profile not in ('low', 'medium', 'high', 'ultra'):
         raise ValueError('speed_profile must be low/medium/high/ultra')
     return size
@@ -38,7 +44,7 @@ def measurement_regions(regions):
 
 
 def measure(device, regions: list[tuple[int, int]], *, duration: float = 3,
-            period: float = 0.000001, speed_profile: str | None = None, cancelled=None) -> dict:
+            period: float = 0.000001, speed_profile: str | None = None, protocol='mux', cancelled=None) -> dict:
     """Measure complete samples, using the common assembler and stream lifecycle.
 
     Allow 2s for startup; duration begins at the first complete sample and
@@ -46,18 +52,19 @@ def measure(device, regions: list[tuple[int, int]], *, duration: float = 3,
     """
     from mklink.dump_memory import DumpMemoryStreamSession, DumpSampleAssembler, check_capture_cancelled
     from mklink.mux_watch import PackedWatchSample
-    size = validate_measurement(regions, duration, period, speed_profile)
+    size = validate_measurement(regions, duration, period, speed_profile, protocol=protocol)
     check_capture_cancelled(cancelled)
     device._require_connected()
     if speed_profile is not None:
         device.set_debug_speed(speed_profile)
-    session = DumpMemoryStreamSession(device._bridge, regions, period, allow_legacy_bulk=True)
+    session = DumpMemoryStreamSession(device._bridge, regions, period, protocol=protocol)
     # MUX batches already contain validated complete samples. Avoid expanding
     # each one into region dictionaries and assembling it a second time.
     session.packed_frames = True
     intervals = Counter()
     first_seen = first = last = last_complete = None
     count = 0
+    max_acquisition_us = dap_intervened_samples = 0
     assembler = DumpSampleAssembler([n for _, n in regions], ordered=True)
     # Keep only interval counts, not millions of raw sample objects.
     try:
@@ -70,11 +77,13 @@ def measure(device, regions: list[tuple[int, int]], *, duration: float = 3,
                 check_capture_cancelled(cancelled)
                 if isinstance(frame, PackedWatchSample):
                     ts = frame.timestamp_us
+                    acquisition = None
                 else:
                     payloads = assembler.feed(frame)
                     if payloads is None:
                         continue
                     ts = assembler.timestamp_us
+                    acquisition = frame.get('acquisition')
                     assembler = DumpSampleAssembler([n for _, n in regions], ordered=True)
                 if last_complete is not None and ts <= last_complete:
                     raise RuntimeError('mem_dump non-increasing timestamp')
@@ -90,6 +99,9 @@ def measure(device, regions: list[tuple[int, int]], *, duration: float = 3,
                     first = ts
                 last = ts
                 count += 1
+                if acquisition is not None:
+                    max_acquisition_us = max(max_acquisition_us, acquisition['end_us'] - acquisition['start_us'])
+                    dap_intervened_samples += bool(acquisition['dap_intervened'])
             if not frames:
                 time.sleep(.0005)
     finally:
@@ -114,5 +126,6 @@ def measure(device, regions: list[tuple[int, int]], *, duration: float = 3,
             'samples': count, 'sample_hz': hz, 'payload_bytes_per_second': hz*size,
             'median_interval_us': quantile(.5), 'p99_interval_us': quantile(.99),
             'max_interval_us': max(intervals), 'integrity': stats,
-            'incomplete_tail': bool(assembler.blocks),
-            'timing_source': 'probe sample timestamps; complete samples only'}
+            'incomplete_tail': bool(assembler.blocks or stats.get('incomplete_samples', 0)),
+            'timing_source': 'probe sample timestamps; complete samples only', 'protocol': protocol,
+            'max_acquisition_us': max_acquisition_us or None, 'dap_intervened_samples': dap_intervened_samples}

@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from mklink._types import DeviceContext, DeviceState
-from mklink.capture_clock import V3_CLOCKS, clock_options, clock_snapshot, requested_clock, save_interface_clock
+from mklink.capture_clock import CONFIGURATION_CLOCKS, V3_CLOCKS, clock_options, clock_snapshot, requested_clock, save_interface_clock
 from mklink.device import Device
 from mklink.project_config import load_config, save_config
 from _maintainer.testing.tests.test_capture_clock import api_clock, v3_device
@@ -29,7 +29,7 @@ def test_new_interface_settings_default_to_ten_megahertz():
 
 
 @pytest.mark.parametrize('mode', ['SWD', 'JTAG'])
-@pytest.mark.parametrize('hz', V3_CLOCKS)
+@pytest.mark.parametrize('hz', CONFIGURATION_CLOCKS)
 def test_disconnected_full_catalog_is_saved_without_claiming_hardware_support(api_clock, tmp_path, mode, hz):
     client, dev, _ = api_clock
     # A retained bridge from a former connection must not restrict offline choices.
@@ -40,7 +40,7 @@ def test_disconnected_full_catalog_is_saved_without_claiming_hardware_support(ap
     status = client.get('/api/device/debug-speed').json()
     assert status['interfaces'][mode]['requested_hz'] == hz
     for interface in ('SWD', 'JTAG'):
-        assert status['interfaces'][interface]['clocks_hz'] == list(V3_CLOCKS)
+        assert status['interfaces'][interface]['clocks_hz'] == list(CONFIGURATION_CLOCKS)
         assert status['interfaces'][interface]['clock_source'] == 'configuration'
     assert status['active_interface'] == 'unknown' and status['applied_hz'] is None
     assert not status['connected']

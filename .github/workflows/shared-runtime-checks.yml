@@ -24,7 +24,7 @@ jobs:
       - name: Install shared runtime dependencies
         shell: pwsh
         working-directory: Mklink-AI-Probe
-        run: ./scripts/build_workspace.ps1 -Action run -Executable python -ArgumentList @('-m', 'pip', 'install', '.[mcp]', 'pytest==8.4.2')
+        run: ./scripts/build_workspace.ps1 -Action run -Executable python -ArgumentList @('-m', 'pip', 'install', '.[mcp,s3]', 'pytest==8.4.2')
       - name: Check COS budget guard and fallback leases
         shell: pwsh
         working-directory: Mklink-AI-Probe
@@ -39,6 +39,7 @@ jobs:
           $tests += 'test_remote_client_sessions'
           $tests += 'test_remote_cli'
           $tests += 'test_uart_session'
+          $tests += 'test_uart_baud'
           $tests += 'test_mux'
           $tests += 'test_remote_shared_modbus'
           $tests += 'test_remote_shared_serial'
@@ -50,6 +51,7 @@ jobs:
           $tests += 'test_desktop_runtime'
           $tests += 'test_legacy_server_removed'
           $tests += 'test_runtime_spawn'
+          $tests += @('test_runtime_gui', 'test_runtime_registry', 'test_runtime_endpoint_errors', 'test_runtime_presentation', 'test_skill_context_boundaries')
           $tests += 'test_runtime_reconnect'
           $tests += 'test_download_acquisition'
           $tests += 'test_rtt_restore'
@@ -69,6 +71,8 @@ jobs:
           $tests += 'test_remote_capabilities'
           $tests += 'test_remote_upstream_integration'
           $tests += 'test_serial_protocol_buffer'
+          $tests += @('test_sleep_access', 'test_device_flash_verify', 'test_capture_reset')
+          $tests += @('test_mux_remote_keepalive', 'test_s3_http', 'test_s3_adapter', 'test_transport_contracts')
           $tests += 'test_serial_exchange'
           $tests += 'test_remote_offline_identity'
           $tests += 'test_offline_deployment_jobs'
@@ -102,13 +106,16 @@ jobs:
           $tests += 'test_peripheral_restore'
           $tests += @('test_hpm_peripherals', 'test_peripheral_import')
           $tests += 'test_dump_control'
+          $tests += @('test_legacy_dump', 'test_mux_bulk_watch', 'test_capture_clock', 'test_clock_configuration_interfaces', 'test_watch_timing_v2')
           $tests += 'test_runtime_switch'
           $tests += 'test_hpm_isp_offline'
           $tests += @('test_hpm_debug_protocol', 'test_hpm_clock_contract', 'test_debug_speed', 'test_systemview_parser')
           $tests += 'test_offline_verify'
           $tests += 'test_offline_h7_dualcore'
+          $tests += 'test_skill_update'
           $arguments = @('-m', 'pytest', '-q', '--tb=short', "--junitxml=$($paths.reports)/shared-runtime.xml")
           $arguments += $tests | ForEach-Object { "_maintainer/testing/tests/$_.py" }
+          $arguments += '_maintainer/testing/tests/test_remote_packaging.py::test_final_package_evidence_is_explicitly_deferred_to_n5'
           ./scripts/build_workspace.ps1 -Action run -Executable python -ArgumentList $arguments
       - name: Attach contract report
         if: always()
@@ -142,6 +149,10 @@ jobs:
         shell: pwsh
         working-directory: Mklink-AI-Probe
         run: ./scripts/build_workspace.ps1 -Action run -WorkingDirectory ./gui -Executable npm -ArgumentList @('test', '--', 'src/views/OfflineFlashView.test.ts', 'src/composables/useOfflineFlashApi.test.ts')
+      - name: Check binary stream proxy negotiation
+        shell: pwsh
+        working-directory: Mklink-AI-Probe
+        run: ./scripts/build_workspace.ps1 -Action run -WorkingDirectory ./gui -Executable npm -ArgumentList @('test', '--', 'src/composables/useBinaryStreamProxy.test.ts')
       - name: Check types and production bundle
         shell: pwsh
         working-directory: Mklink-AI-Probe

@@ -11,13 +11,42 @@ from mklink.rtt_cache import RttChannelCache
 from test_shared_runtime import runtime, attach, call
 
 
+def test_watch_boundaries_identify_loss_in_order_without_guessing_from_time():
+    transport, _ = peer()
+    transport.handshake()
+    watch = MuxWatchSession(transport, [(0x20000000, 4)], .000004)
+    watch.start()
+    def sample(seq, timestamp):
+        transport.feed(packet(0x41, 17, seq, bytes([0, 9, 1, 4])+struct.pack('<II', timestamp, seq)))
+    sample(1, 10)
+    sample(2, 10000)  # Long interval is not evidence of a discarded record.
+    transport.feed(packet(0x41, 17, 3, struct.pack('<BBI', 0, 5, 10001)))
+    sample(4, 10002)
+    sample(5, 10003)
+    frames = watch.read_frames(packed=True)
+    assert [f.break_before for f in frames] == [0, 0, 1, 0]
+    assert [f.timestamp_us for f in frames] == [10, 10000, 10002, 10003]
+    transport.WATCH_QUEUE_BYTES = 24
+    sample(6, 10004)
+    sample(7, 10005)
+    sample(8, 10006)  # Evicts exactly one received batch.
+    frames = watch.read_frames(packed=True)
+    assert [f.break_before for f in frames] == [1, 0]
+    assert [f.timestamp_us for f in frames] == [10005, 10006]
+    sample(10, 10007)  # Missing global wire event; its content is unknown.
+    assert watch.read_frames(packed=True)[0].break_before == 2
+
+
+
 def peer():
     calls = []
     def write(wire):
         _, _, op, size, epoch, req = struct.unpack_from('<4sBBHII', wire)
         payload = wire[16:16+size]
         calls.append((op, payload))
-        answer = {1: struct.pack('<IHH', 15, 256, 1), 4: payload, 0x20: b'\x08\x08'}.get(op, b'')
+        answer = {1: struct.pack('<IHH', 0x61f, 256, 1), 4: payload, 0x20: b'\x08\x08'}.get(op, b'')
+        if op in (0x32, 0x33):
+            answer = struct.pack('<II', struct.unpack_from('<I', payload, 8)[0], 360_000_000)
         raw = packet(op | 0x80, 17, req, b'\0'+answer)
         transport.feed(raw[:9])
         transport.feed(raw[9:])
@@ -88,14 +117,16 @@ def test_target_busy_or_error_does_not_poison_claimed_bridge(monkeypatch, tmp_pa
         calls.append(op)
         payload = wire[16:16+size]
         status = attach_status if op == 0x13 else 6 if op == 0x12 else 0
-        answer = {1: struct.pack('<IHH', 15, 256, 1), 4: payload,
+        answer = {1: struct.pack('<IHH', 0x61f, 256, 1), 4: payload,
                   0x10: bytes(15)+b'\x01', 0x11: b'test'}.get(op, b'')
         bridge._mux.feed(packet(op | 0x80, 17, req, bytes([status])+answer))
         return len(wire)
     bridge._serial = SimpleNamespace(write=write)
     if attach_status == 5:
-        with pytest.raises(MuxTargetError, match='unknown outcome'):
+        with pytest.raises(MuxTargetError, match='status 5') as failure:
             bridge.enable_multiplex()
+        assert 'Cortex-M' not in str(failure.value) and 'sleep access' not in str(failure.value)
+        assert 'submitted write' not in str(failure.value)
     else:
         assert bridge.enable_multiplex() is bridge._mux
     device = Device()
@@ -164,6 +195,60 @@ def test_unknown_write_is_never_replayed_or_followed_by_commands():
         transport.request(0x11)
     transport.close()
     assert len(writes) == 1
+
+
+def test_delayed_heartbeat_reply_hands_slot_to_waiting_command(monkeypatch):
+    now = [10.0]
+    monkeypatch.setattr('mklink.mux.time.monotonic', lambda: now[0])
+    writes, answers = [], []
+    waiting = threading.Event()
+    def write(wire):
+        op, req = wire[5], struct.unpack_from('<I', wire, 12)[0]
+        writes.append(op)
+        if op != 2:
+            transport.feed(packet(op | 0x80, 17, req, b'\0'))
+        return len(wire)
+    transport = MuxTransport(write)
+    transport.ready, transport.epoch = True, 17
+    transport._last_command = 8
+    transport.tick()
+    original_wait = transport._wait
+    def wait(deadline=None):
+        waiting.set()
+        original_wait(deadline)
+    transport._wait = wait
+    thread = threading.Thread(target=lambda: answers.append(transport.request(0x12, b'data')))
+    thread.start()
+    try:
+        assert waiting.wait(2)
+        with transport._condition:
+            now[0] += 2  # Reply is valid, but another heartbeat is already due.
+            transport.feed(packet(0x82, 17, 1, b'\0'))
+            transport.tick()  # Sole reader runs this before the waiter wakes.
+            assert writes == [2]
+        thread.join(2)
+        assert not thread.is_alive() and answers == [b'']
+        assert writes == [2, 0x12] and not transport._request_waiting
+        now[0] += 1.1
+        transport.tick()
+        assert writes == [2, 0x12, 2]  # Idle heartbeats remain enabled.
+    finally:
+        transport.fail('test finished')
+        thread.join(2)
+
+
+def test_expired_unsent_command_releases_heartbeat_priority(monkeypatch):
+    now = [10.0]
+    monkeypatch.setattr('mklink.mux.time.monotonic', lambda: now[0])
+    transport, calls = peer()
+    transport.handshake()
+    before = len(calls)
+    with pytest.raises(TimeoutError, match='before command delivery'):
+        transport.request(0x12, b'unsent', deadline=9)
+    assert len(calls) == before and not transport._request_waiting
+    now[0] += 2
+    transport.tick()
+    assert calls[-1][0] == 2 and transport.ready
 
 
 def test_crc_and_expired_epoch_poison_stream():
@@ -235,8 +320,11 @@ def test_watch_split_and_gaps_do_not_mix_rounds():
     watch = MuxWatchSession(transport, [(0x20000000, 130), (0x20000200, 4)], .001)
     watch.start()
     assert len(watch.parts) == 3 and transport.watch_running
+    sequence = 0
     def event(index, data, timestamp=100):
-        transport.feed(packet(0x41, 17, 1, struct.pack('<BBI', index, 0, timestamp)+data))
+        nonlocal sequence
+        sequence += 1
+        transport.feed(packet(0x41, 17, sequence, struct.pack('<BBI', index, 0, timestamp)+data))
     event(0, b'a'*128)
     event(2, b'd'*4)
     assert watch.read_frames() == []
@@ -318,7 +406,7 @@ def test_mux_watch_complete_frames_reuse_dump_coverage_validation(ordered):
     watch=MuxWatchSession(transport,[(0x20000001,130),(0x20000203,4)],.01)
     watch.start()
     for index,payload in enumerate([b'a'*128,b'bc',b'defg']):
-        transport.feed(packet(0x41,17,1,struct.pack('<BBI',index,0,123)+payload))
+        transport.feed(packet(0x41,17,index+1,struct.pack('<BBI',index,0,123)+payload))
     frame=watch.read_frames()[0]
     assert DumpSampleAssembler([130,4],ordered=ordered).feed(frame)==(b'a'*128+b'bc',b'defg')
     for regions in [[(0,b'a'*130)],[(0,b'a'*129),(1,b'defg')]]:
@@ -329,31 +417,6 @@ def test_mux_watch_complete_frames_reuse_dump_coverage_validation(ordered):
         else:assert assembler.feed(invalid) is None
     watch.stop()
 
-@pytest.mark.parametrize('size,bulk',[(1920,False),(1921,False),(1921,True),(4096,True)])
-def test_finite_bulk_selects_protocol_before_hardware(size,bulk):
-    from unittest.mock import Mock
-    from mklink.dump_memory import DumpMemoryStreamSession
-    from test_dump_memory_session import FakeBridge
-    transport,_=peer();transport.handshake()
-    bridge=FakeBridge([])
-    bridge.supports_multiplex=lambda:True
-    bridge.enable_multiplex=Mock(return_value=transport)
-    bridge._leave_multiplex=Mock()
-    session=DumpMemoryStreamSession(bridge,[(0x08005000,size)],.01,allow_legacy_bulk=bulk)
-    if size>1920 and not bulk:
-        with pytest.raises(ValueError,match='15 regions'):session.start()
-        bridge.enable_multiplex.assert_not_called();bridge._leave_multiplex.assert_not_called()
-        assert not bridge.calls
-        return
-    session.start()
-    if size<=1920:
-        bridge.enable_multiplex.assert_called_once();bridge._leave_multiplex.assert_not_called()
-        assert session._mux_watch is not None
-    else:
-        bridge.enable_multiplex.assert_not_called();bridge._leave_multiplex.assert_called_once()
-        assert session._mux_watch is None and session.started
-        assert any(call[0]=='write' and b'cmd.dump_memory' in call[1] for call in bridge.calls)
-    session.stop()
 
 
 def test_finite_bulk_never_falls_back_after_mux_start_failure():
@@ -364,13 +427,13 @@ def test_finite_bulk_never_falls_back_after_mux_start_failure():
     transport.request=Mock(side_effect=RuntimeError('response lost'))
     bridge=FakeBridge([]);bridge.supports_multiplex=lambda:True
     bridge.enable_multiplex=Mock(return_value=transport);bridge._leave_multiplex=Mock()
-    session=DumpMemoryStreamSession(bridge,[(0x08005000,4)],.01,allow_legacy_bulk=True)
+    session=DumpMemoryStreamSession(bridge,[(0x08005000,4)],.01)
     with pytest.raises(RuntimeError,match='response lost'):session.start()
     bridge._leave_multiplex.assert_not_called()
     assert not bridge.calls
 
 
-@pytest.mark.parametrize('capabilities,op,unit', [(15, 0x32, 1)])
+@pytest.mark.parametrize('capabilities,op,unit', [(0x61f, 0x32, 1)])
 def test_watch_negotiates_precision_and_clock_wrap(capabilities, op, unit):
     transport, calls = peer()
     transport.handshake()
@@ -389,7 +452,7 @@ def test_watch_negotiates_precision_and_clock_wrap(capabilities, op, unit):
 @pytest.mark.parametrize('period', [-.1, -1, float('nan'), float('inf'), 60.1])
 def test_watch_rejects_invalid_period_before_target_command(period):
     transport, calls = peer()
-    transport.capabilities = 15
+    transport.capabilities = 0x61f
     with pytest.raises(ValueError):
         MuxWatchSession(transport, [(0x20000000, 4)], period)
     assert not calls
@@ -398,7 +461,7 @@ def test_watch_rejects_invalid_period_before_target_command(period):
 def test_watch_compact_batch_preserves_values_and_microsecond_wrap():
     transport, _ = peer()
     transport.handshake()
-    transport.capabilities = 15
+    transport.capabilities = 0x61f
     watch = MuxWatchSession(transport, [(0x20000000, 4)], .000019)
     watch.start()
     payload = bytes([0, 9, 2, 4])+struct.pack('<IIII', 0xfffffffe, 123, 3, 456)
@@ -413,7 +476,7 @@ def test_watch_compact_batch_preserves_values_and_microsecond_wrap():
 def test_watch_target_error_stops_instead_of_silently_discarding_forever(status):
     transport, calls = peer()
     transport.handshake()
-    transport.capabilities = 15
+    transport.capabilities = 0x61f
     watch = MuxWatchSession(transport, [(0x20000000, 4)], .000001)
     watch.start()
     previous_commands = len(calls)
@@ -448,13 +511,14 @@ def test_watch_transient_read_error_preserves_valid_samples_and_subscription(pac
     assert watch._read_failure_since is None
 
 
-def test_watch_continuous_read_failure_times_out_even_if_firmware_goes_silent(monkeypatch):
+@pytest.mark.parametrize('wait_after_sample', [False, True])
+def test_watch_continuous_read_failure_times_out_even_if_firmware_goes_silent(monkeypatch, wait_after_sample):
     from types import SimpleNamespace
     clock = [10.0]
     monkeypatch.setattr('mklink.mux_watch.time', SimpleNamespace(monotonic=lambda: clock[0]))
     transport, calls = peer()
     transport.handshake()
-    watch = MuxWatchSession(transport, [(0x20000000, 4)], .001)
+    watch = MuxWatchSession(transport, [(0x20000000, 4)], .001, wait_after_sample=wait_after_sample)
     watch.start()
     transport.feed(packet(0x41, 17, 1, struct.pack('<BBI', 0, 5, 100)))
     assert watch.read_frames() == []
@@ -466,6 +530,27 @@ def test_watch_continuous_read_failure_times_out_even_if_firmware_goes_silent(mo
     with pytest.raises(RuntimeError, match='failed continuously.*status 5'):
         watch.read_frames()
     assert calls == commands and watch.read_errors == 2
+
+
+def test_live_watch_recovers_after_long_sleep_without_restarting_or_filling_gap(monkeypatch):
+    from types import SimpleNamespace
+    clock = [0.0]
+    monkeypatch.setattr('mklink.mux_watch.time', SimpleNamespace(monotonic=lambda: clock[0]))
+    transport, commands = peer()
+    transport.handshake()
+    watch = MuxWatchSession(transport, [(0x20000000, 4)], .01, wait_after_sample=True)
+    watch.start()
+    original_commands = list(commands)
+    transport.feed(packet(0x41, 17, 1, struct.pack('<BBBBII', 0, 9, 1, 4, 10, 123)))
+    assert watch.read_frames(packed=True)[0].timestamp_us == 10
+    transport.feed(packet(0x41, 17, 2, struct.pack('<BBI', 0, 5, 20)))
+    assert watch.read_frames(packed=True) == []
+    clock[0] = 12
+    assert watch.read_frames(packed=True) == []
+    transport.feed(packet(0x41, 17, 3, struct.pack('<BBBBII', 0, 9, 1, 4, 12000010, 456)))
+    frame, = watch.read_frames(packed=True)
+    assert (frame.timestamp_us, frame.break_before, struct.unpack_from('<I', frame.payload, frame.offset)) == (12000010, 1, (456,))
+    assert watch.samples == 2 and watch.read_errors == 1 and commands == original_commands
 
 
 def test_watch_valid_complete_sample_resets_failure_window(monkeypatch):
@@ -536,7 +621,7 @@ def test_watch_transient_recovery_never_masks_invalidation_or_transport_failure(
 def test_watch_rejects_malformed_compact_batch(payload):
     transport, _ = peer()
     transport.handshake()
-    transport.capabilities = 15
+    transport.capabilities = 0x61f
     watch = MuxWatchSession(transport, [(0x20000000, 4)], .000001)
     transport.feed(packet(0x41, 17, 1, payload))
     with pytest.raises(RuntimeError, match='Invalid multiplex watch batch'):
@@ -547,7 +632,7 @@ def test_watch_negotiates_after_deferred_transport_assignment():
     watch = MuxWatchSession(None, [(0x20000000, 4)], .000020)
     transport, calls = peer()
     transport.handshake()
-    transport.capabilities = 15
+    transport.capabilities = 0x61f
     watch.transport = transport
     watch.start()
     assert calls[-1][0] == 0x32
@@ -556,7 +641,7 @@ def test_watch_negotiates_after_deferred_transport_assignment():
 
 def test_watch_accepts_bounded_large_event_only_after_capability_negotiation():
     payload = bytes([0,9,127,4])+b''.join(struct.pack('<II', i*4,i) for i in range(127))
-    for capabilities in (3,15):
+    for capabilities in (3,0x61f):
         transport, _ = peer()
         transport.handshake()
         transport.capabilities = capabilities

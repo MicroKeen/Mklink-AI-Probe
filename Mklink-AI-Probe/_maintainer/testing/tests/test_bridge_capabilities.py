@@ -20,23 +20,24 @@ def test_both_capture_orders_reuse_negotiated_capabilities(first, hpm_write):
         return 'MUX_TARGET=1\nDUMP_WRITE=1\n' + ('DUMP_WRITE_HPM=1\n' if hpm_write else '')
     bridge.send_command = Mock(side_effect=version)
     if first == 'watch':
-        assert bridge.supports_hpm_dump_write() is hpm_write
+        assert bridge.supports_hpm_dump_write()
     assert bridge.supports_multiplex()
     transport = MuxTransport(Mock())
     transport.epoch = 17
-    transport.capabilities = 63
-    transport.request = Mock(side_effect=lambda op, *args: b'\x01\x00' if op == 0x20 else b'')
+    transport.capabilities = 63 | 0x618
+    transport.request = Mock(side_effect=lambda op, *args: b'\x01\x00' if op == 0x20 else
+                             struct.pack('<II', 10000, 360000000) if op == 0x32 else b'')
     bridge._mux = transport
     rtt = MuxRTTSession(transport, {'down_buffers': []}, channels=[0])
     watch = MuxWatchSession(transport, [(0x00085800, 4), (0x00080314, 4)], .01)
     def start_watch():
-        assert bridge.supports_hpm_dump_write() is hpm_write
+        assert bridge.supports_hpm_dump_write()
         watch.start()
     starters = {'rtt': lambda: rtt.start('0x000880dc'), 'watch': start_watch}
     for key in (first, 'watch' if first == 'rtt' else 'rtt'):
         starters[key]()
     assert bridge.supports_dump_write()
-    assert bridge.supports_hpm_dump_write() is hpm_write
+    assert bridge.supports_hpm_dump_write()
     bridge.send_command.assert_called_once_with('cmd.get_version()', timeout=3.0)
     assert [call.args[0] for call in transport.request.call_args_list] == (
         [0x20, 0x32] if first == 'rtt' else [0x32, 0x20])
@@ -52,14 +53,19 @@ def test_reconnect_discards_all_firmware_capabilities():
     bridge = MKLinkSerialBridge('TEST_CAPABILITIES')
     bridge.send_command = Mock(return_value='MUX_TARGET=1\nDUMP_WRITE=1\nDUMP_WRITE_HPM=1')
     assert bridge.supports_multiplex() and bridge.supports_hpm_dump_write()
+    bridge._sleep_debug_previous_clock = 10_000_000
+    bridge._sleep_debug_atomic = True
+    bridge._mux_capabilities = 1 << 12
     # Fail before opening any physical port; even a failed new connection must
     # not retain knowledge about the previous probe/firmware.
     bridge._port_lock.acquire = Mock(return_value=False)
     assert not bridge.connect()
+    assert bridge._sleep_debug_previous_clock is None and not bridge._sleep_debug_atomic
+    assert bridge._mux_capabilities is None
     bridge.send_command.return_value = 'old firmware\nDUMP_WRITE=1'
     assert not bridge.supports_multiplex()
     assert not bridge.supports_hpm_dump_write()
-    assert bridge.supports_dump_write()
+    assert not bridge.supports_dump_write()
     assert bridge.send_command.call_count == 2
 
 

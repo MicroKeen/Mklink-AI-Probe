@@ -44,6 +44,10 @@ afterEach(() => {
 })
 
 describe('shared connection clock', () => {
+  it('keeps sleep access off the local connection page', async () => {
+    Object.assign(data, { sleep_access_supported: true })
+    expect((await setup()).find('[data-testid="sleep-access"]').exists()).toBe(false)
+  })
   it.each([['SWD', 'legacy'], ['JTAG', 'hpm-profiles']])('prompts to update connected legacy %s firmware without starting an upgrade', async (mode, source) => {
     Object.assign(data, { interface: mode, active_interface: mode, clock_source: source,
       clocks_hz: [4000000,10000000,20000000,30000000] })
@@ -86,6 +90,19 @@ describe('shared connection clock', () => {
     await apply(wrapper, 2000000)
     expect(wrapper.text()).toContain('已迁移到 2 MHz')
     expect(wrapper.find('[data-testid="clock-migration"]').exists()).toBe(false)
+  })
+
+  it('applies an advertised 4 MHz choice exactly without requesting migration', async () => {
+    Object.assign(data, { clocks_hz: [...clocks, 4000000].sort((a, b) => a - b) })
+    const wrapper = await setup()
+    expect(wrapper.get('option[value="4000000"]').attributes('disabled')).toBeUndefined()
+    await apply(wrapper, 4000000)
+    const posts = requests.mock.calls.filter(([, init]) => init?.method === 'POST')
+    expect(posts).toHaveLength(1)
+    expect(JSON.parse(posts[0][1].body)).toEqual({ interface: 'SWD', clock_hz: 4000000, save: true })
+    expect(wrapper.get('[data-testid="connection-clock-state"]').text()).toBe('已应用：4 MHz')
+    expect(wrapper.find('[data-testid="clock-migration"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('已迁移到 2 MHz')
   })
 
   it('does not describe a configured clock as applied or retry it automatically', async () => {

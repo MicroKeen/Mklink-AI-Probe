@@ -10,7 +10,8 @@ from mklink import cli, dump_benchmark, runtime_cli, runtime_mcp
 from mklink.dump_memory import DumpMemoryStreamSession
 from mklink.runtime import RuntimeClient, RuntimeErrorResponse
 from test_runtime_memory import batch
-from test_dump_memory_session import FakeBridge, _b1_frame, _b1_regions_frame, _old_regions_frame
+from test_dump_memory_session import _b1_frame, _b1_regions_frame, _old_regions_frame
+from test_legacy_dump import LegacyBridge as FakeBridge
 
 
 def wire_samples(size=4096, tail=False):
@@ -36,15 +37,16 @@ def clock(monkeypatch, ticks=(0,.1,.1,3)):
 def test_actual_api_wire_parser_and_measurement(batch,monkeypatch,size):
     client,state,device,_,_=batch
     device._bridge=FakeBridge([wire_samples(size)])
-    device._bridge._ctx=SimpleNamespace(swd_clock_hz=30000000)
+    device._bridge._ctx.swd_clock_hz=30000000
     clock(monkeypatch)
-    result=client.post('/api/device/dump-memory/measure',json={'regions':[{'address':0,'size':size}],'duration':1})
+    result=client.post('/api/device/dump-memory/measure',json={'regions':[{'address':0,'size':size}],'duration':1,'protocol':'dmpm'})
     assert result.status_code==200,result.text
     r=result.json()
     assert r['samples']==3 and r['sample_hz']==10 and r['payload_bytes_per_second']==size*10
     assert r['median_interval_us']==r['p99_interval_us']==r['max_interval_us']==100000
     assert not r['incomplete_tail'] and r['clock_hz']==30000000
-    assert device._bridge.calls[-1]==('exit',)
+    from mklink._types import DeviceState
+    assert device._bridge.state is DeviceState.READY
     assert not state['resource_manager'].get_status()
 
 
@@ -73,10 +75,10 @@ def test_measurement_does_not_report_success_for_corrupt_or_unconfirmed_data(bat
     if case=='coverage': raw=_b1_regions_frame(0,[(1,b'a'*2048)],block_index=0,block_count=2,total_size=4096)
     if case=='wrong_total': raw=_b1_frame(0,b'a'*2048,block_index=0,block_count=2,total_size=4095)
     if case=='regressed': raw=_old_regions_frame(100,[(0,b'a'*4096)])+_old_regions_frame(99,[(0,b'a'*4096)])
-    device._bridge=FakeBridge([raw]);device._bridge._ctx=SimpleNamespace(swd_clock_hz=30000000)
-    if case=='stop':device._bridge._stop_stream_and_sync=Mock(return_value=False)
+    device._bridge=FakeBridge([raw]);device._bridge._ctx.swd_clock_hz=30000000
+    if case=='stop':device._bridge.stop_reply=b'Error: stop rejected\r\n>>> '
     clock(monkeypatch)
-    response=client.post('/api/device/dump-memory/measure',json={'regions':[{'address':0,'size':4096}],'duration':1})
+    response=client.post('/api/device/dump-memory/measure',json={'regions':[{'address':0,'size':4096}],'duration':1,'protocol':'dmpm'})
     assert response.status_code==500,response.text
     assert not state['resource_manager'].get_status()
     assert sum(c[0]=='enter' for c in device._bridge.calls)==1
@@ -84,11 +86,12 @@ def test_measurement_does_not_report_success_for_corrupt_or_unconfirmed_data(bat
 
 def test_startup_allowance_and_partial_tail(monkeypatch):
     bridge=FakeBridge([b'',wire_samples(tail=True)])
-    bridge._ctx=SimpleNamespace(swd_clock_hz=30000000)
+    bridge._ctx.swd_clock_hz=30000000
     clock(monkeypatch,(0,.6,1.5,1.5,2.6))
-    result=dump_benchmark.measure(SimpleNamespace(_bridge=bridge,_require_connected=lambda:None),[(0,4096)],duration=1)
+    result=dump_benchmark.measure(SimpleNamespace(_bridge=bridge,_require_connected=lambda:None),[(0,4096)],duration=1,protocol='dmpm')
     assert result['samples']==3 and result['incomplete_tail']
-    assert bridge.calls[-1]==('exit',)
+    from mklink._types import DeviceState
+    assert bridge.state is DeviceState.READY
 
 
 def test_gui_capture_is_not_preempted(batch):
@@ -99,13 +102,12 @@ def test_gui_capture_is_not_preempted(batch):
     device._bridge._enter_stream.assert_not_called()
 
 
-def test_stop_requires_current_bridge_contract_without_delay_fallback():
+def test_legacy_selection_requires_current_bridge_contract_before_start():
     bridge=SimpleNamespace(_enter_stream=Mock(),_write_raw=Mock(),_exit_stream=Mock(),drain_stream_bytes=Mock())
-    session=DumpMemoryStreamSession(bridge,[(0,4)],.001)
-    session.start()
-    with pytest.raises(AttributeError):session.stop()
+    session=DumpMemoryStreamSession(bridge,[(0,4)],.001,protocol='dmpm')
+    with pytest.raises(AttributeError):session.start()
     bridge._exit_stream.assert_not_called()
-    bridge._write_raw.assert_called_once()
+    bridge._write_raw.assert_not_called()
     assert not session.started
 
 
@@ -127,7 +129,7 @@ def test_cli_uses_shared_backend_and_detaches_without_replay(monkeypatch,failure
         with pytest.raises(SystemExit,match='failed measurement'):cli.main()
     else:cli.main()
     assert calls[0][1]['probe']=='chosen' and calls[0][1]['project_root'] is None
-    assert calls[1]==('measure_dump_memory',{'regions':[{'address':0x20000000,'size':4}],'duration':.5,'period':.000001,'speed_profile':None})
+    assert calls[1]==('measure_dump_memory',{'regions':[{'address':0x20000000,'size':4}],'duration':.5,'period':.000001,'speed_profile':None,'protocol':'mux'})
     assert len(calls)==3 and calls[-1]==('detach',None)
 
 
@@ -156,4 +158,4 @@ def test_mcp_measure_requires_connect_and_forwards_once(monkeypatch):
             await client.call_tool('connect',{'probe':'chosen'})
             assert not (await client.call_tool('measure_dump_memory',body)).is_error
     asyncio.run(run())
-    assert calls==['new',('measure_dump_memory',{**body,'duration':3.0,'period':.000001,'speed_profile':None})]
+    assert calls==['new',('measure_dump_memory',{**body,'duration':3.0,'period':.000001,'speed_profile':None,'protocol':'mux'})]

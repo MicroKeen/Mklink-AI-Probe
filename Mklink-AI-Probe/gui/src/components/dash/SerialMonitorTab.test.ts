@@ -288,7 +288,7 @@ describe('SerialMonitorTab', () => {
     expect(mocks.terminalBinary.stop).toHaveBeenCalled()
   })
 
-  it('accepts a custom positive integer baud rate', async () => {
+  it('selects listed baud rates and rejects values outside the dropdown', async () => {
     let status = { ...runningStatus(), running: false, ports: {}, config: [] }
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input)
@@ -305,9 +305,10 @@ describe('SerialMonitorTab', () => {
 
     const baudrateInput = wrapper.get('[data-testid="serial-baudrate"]')
     expect((baudrateInput.element as HTMLInputElement).value).toBe('115200')
-    expect(wrapper.findAll('#serial-baudrates option').map(option => option.attributes('value')))
+    expect(baudrateInput.element.tagName).toBe('SELECT')
+    expect(baudrateInput.findAll('option').map(option => option.attributes('value')))
       .toContain('115200')
-    for (const invalid of ['', '0', '-1', '1.5', '9007199254740992']) {
+    for (const invalid of ['', '0', '-1', '1.5', '250000', '4000000', '10000000']) {
       await baudrateInput.setValue(invalid)
       expect(baudrateInput.attributes('aria-invalid')).toBe('true')
       expect(wrapper.get('.btn-primary').attributes('disabled')).toBeDefined()
@@ -315,17 +316,55 @@ describe('SerialMonitorTab', () => {
       expect(fetchMock.mock.calls.some(call => String(call[0]).endsWith('/api/dash/serial/start')))
         .toBe(false)
     }
-    await baudrateInput.setValue('250000')
+    await baudrateInput.setValue('230400')
     expect(baudrateInput.attributes('aria-invalid')).toBe('false')
     expect(wrapper.get('.btn-primary').attributes('disabled')).toBeUndefined()
     await wrapper.get('.btn-primary').trigger('click')
 
     await vi.waitFor(() => {
       const start = fetchMock.mock.calls.find(call => String(call[0]).endsWith('/api/dash/serial/start'))
-      expect(JSON.parse(String(start?.[1]?.body)).ports[0].baudrate).toBe(250000)
+      expect(JSON.parse(String(start?.[1]?.body)).ports[0].baudrate).toBe(230400)
     })
     await vi.waitFor(() => expect(baudrateInput.attributes('disabled')).toBeDefined())
-    expect((baudrateInput.element as HTMLInputElement).value).toBe('250000')
+    expect((baudrateInput.element as HTMLSelectElement).value).toBe('230400')
+    wrapper.unmount()
+  })
+
+  it('loads ordinary UART rates only on explicit request and does not copy them to RS485', async () => {
+    const uart = { device: 'UART', description: 'MKLink UART', uart_kind: 'mklink_uart', command_port: 'CMD' }
+    const rs485 = { device: 'RS485', description: 'MKLink RS485', uart_kind: 'mklink_rs485',
+      uart_baud: { profile: 1, source: 'firmware', rates: [115200, 4000000, 10000000] } }
+    mocks.listUartPorts.mockResolvedValue([uart, rs485])
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith('/api/runtime/uart-baudrates')) {
+        expect(JSON.parse(String(init?.body))).toEqual({ port: 'UART' })
+        return jsonResponse({ ...uart, uart_baud: { profile: 1, source: 'firmware', rates: [115200, 4000000, 10000000] } })
+      }
+      return jsonResponse({ running: false, ports: {}, config: [] })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const wrapper = mount(SerialMonitorTab)
+    await vi.waitFor(() => expect(wrapper.get('select').findAll('option')).toHaveLength(2))
+    const rates = () => wrapper.get('[data-testid="serial-baudrate"]').findAll('option').map(o => o.attributes('value'))
+    expect(rates()).not.toContain('4000000')
+    expect(fetchMock.mock.calls.some(call => String(call[0]).endsWith('/uart-baudrates'))).toBe(false)
+    await wrapper.get('[data-testid="serial-read-baudrates"]').trigger('click')
+    await vi.waitFor(() => expect(rates()).toEqual(['115200', '4000000', '10000000']))
+    await wrapper.get('[data-testid="serial-baudrate"]').setValue('4000000')
+    await wrapper.get('select').setValue('RS485')
+    expect(rates()).not.toContain('4000000')
+    expect(wrapper.find('[data-testid="serial-read-baudrates"]').exists()).toBe(false)
+    expect((wrapper.get('[data-testid="serial-baudrate"]').element as HTMLSelectElement).value).toBe('115200')
+    wrapper.unmount()
+  })
+
+  it.each([0, 2])('does not accept an unknown baud profile %s', async profile => {
+    mocks.listUartPorts.mockResolvedValue([{ device: 'UART', description: 'MKLink UART', uart_kind: 'mklink_uart',
+      uart_baud: { profile, source: 'firmware', rates: [4000000, 10000000] } }])
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ running: false, ports: {}, config: [] })))
+    const wrapper = mount(SerialMonitorTab)
+    await vi.waitFor(() => expect(wrapper.text()).toContain('MKLink UART'))
+    expect(wrapper.get('[data-testid="serial-baudrate"]').findAll('option').map(o => o.attributes('value'))).not.toContain('4000000')
     wrapper.unmount()
   })
 

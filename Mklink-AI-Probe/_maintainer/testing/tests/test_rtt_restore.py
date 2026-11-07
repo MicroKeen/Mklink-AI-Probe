@@ -21,6 +21,7 @@ class Target:
         self.reading = threading.Event()
         self.starts = 0
         self.failure = None
+        self._bridge = SimpleNamespace(_mux=SimpleNamespace(stats=lambda: {}))
 
     def rtt_start(self, *args, **kwargs):
         self.starts += 1

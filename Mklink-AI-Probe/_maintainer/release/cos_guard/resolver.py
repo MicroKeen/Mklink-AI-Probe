@@ -13,10 +13,13 @@ def select_url(config, health, path, method, now):
     if not fallback:
         return None
     try:
+        deadline = health["expires_at"]
+        if config.get("enforce_package_expiry", True) is not False:
+            deadline = min(deadline, config["expires_at"])
         if (health.get("schema") == "mklink-cos-lease-v1" and health.get("open") is True
                 and health["cycle_id"] == config["cycle_id"]
                 and 0 <= now - health["checked_at"] <= 180
-                and now + 15 < min(health["expires_at"], config["expires_at"])):
+                and now + 15 < deadline):
             url = health["urls"][path][method]
             parsed = urllib.parse.urlsplit(url)
             query = urllib.parse.parse_qs(parsed.query)

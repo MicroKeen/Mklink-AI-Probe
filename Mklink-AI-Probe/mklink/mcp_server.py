@@ -1651,19 +1651,21 @@ def build_server() -> Any:
     @mcp.tool()
     @_exclusive_hardware_tool
     def measure_dump_memory(regions: list[dict], duration: float = 3.0,
-                            period: float = 0.000001, speed_profile: str | None = None) -> dict:
+                            period: float = 0.000001, speed_profile: str | None = None, protocol: str = 'mux') -> dict:
         """Measure periodic mem_dump throughput without SuperWatch.
 
         At most 15 {address,size} regions, 4096 bytes total, 0.5..30 seconds.
         Returns sample frequency, payload throughput, interval percentiles and
         integrity counters. speed_profile is low/medium/high/ultra (4/10/20/30 MHz).
         Omit it to retain the session's profile (new HPM session defaults to 10 MHz).
+        MUX is the default; explicit protocol='dmpm' requires restored firmware
+        compatibility. No automatic protocol switch after an error.
         """
         from mklink.dump_benchmark import measure, measurement_regions, validate_measurement
         pairs = measurement_regions(regions)
-        validate_measurement(pairs, duration, period, speed_profile)
+        validate_measurement(pairs, duration, period, speed_profile, protocol=protocol)
         return measure(_connected_device(), pairs,
-                       duration=duration, period=period, speed_profile=speed_profile)
+                       duration=duration, period=period, speed_profile=speed_profile, protocol=protocol)
 
     # Phase 4: symbol search/typeinfo, SKILL.md methodology realignment,
     # and test_mcp_server.py unit tests.

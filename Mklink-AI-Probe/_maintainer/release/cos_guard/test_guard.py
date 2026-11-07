@@ -39,12 +39,80 @@ class GuardTests(unittest.TestCase):
         stopped = decide(self.config, self.state, 1, 90)
         self.assertEqual(decide(self.config, stopped, 2, 0)["stop_reason"], "traffic_limit")
 
+    def test_210gb_package_99_percent_boundary_preserves_usage(self):
+        config = {**self.config, "warn_bytes": 189*1024**3,
+                  "stop_bytes": 210*1024**3*99//100}
+        state = {**self.state, "used_bytes": 100*1024**3}
+        self.assertEqual(decide(config, state, 1, 0)["used_bytes"], state["used_bytes"])
+        self.assertEqual(decide(config, state, 1, config["stop_bytes"]-1)["stop_reason"], "")
+        self.assertEqual(decide(config, state, 1, config["stop_bytes"])["stop_reason"], "traffic_limit")
+
+    def test_billing_checkpoint_adds_only_subsequent_monitoring(self):
+        config = {**self.config, "appid": "test", "billing_checkpoint_at": 300,
+                  "billing_checkpoint_bytes": 1000,
+                  "metered_buckets": [{"bucket": "a", "region": "test"},
+                                      {"bucket": "b", "region": "test"}]}
+        def monitor(action, payload, region):
+            self.assertEqual(payload["StartTime"], index.iso(300))
+            bucket = payload["Instances"][0]["Dimensions"][1]["Value"]
+            return {"DataPoints": [{"Dimensions": [{"Name": "bucket", "Value": bucket}],
+                                   "Timestamps": [0, 300, 600], "Values": [999, 5, 7]}]}
+        with patch.object(index, "cloud_call", side_effect=monitor):
+            self.assertEqual(index.measure(config, 600), 1010)
+        for changes in ({"billing_checkpoint_at": 601}, {"billing_checkpoint_bytes": -1},
+                        {"billing_checkpoint_bytes": float("nan")}):
+            with self.assertRaises(ValueError):
+                index.measure({**config, **changes}, 600)
+        config.pop("billing_checkpoint_bytes")
+        with self.assertRaises(ValueError):
+            index.measure(config, 600)
+
     def test_no_calendar_or_expiry_reset(self):
         stopped = decide(self.config, self.state, 1000, 1)
         self.assertEqual(stopped["stop_reason"], "package_expired")
         self.assertEqual(decide(self.config, stopped, 2000, 0)["stop_reason"], "package_expired")
         with self.assertRaises(ValueError):
             decide({**self.config, "cycle_id": "renewed"}, stopped, 2001, 0)
+
+    def test_no_package_deadline_still_caps_lease_and_budget(self):
+        config = {**self.config, "enforce_package_expiry": False, "expires_at": 50}
+        storage, _, result = self.exercise(79, config=config)
+        self.assertTrue(result["open"])
+        self.assertEqual(result["expires_at"], 280)
+        self.assertEqual(storage[STATE_KEY]["used_bytes"], 79)
+        _, _, stopped = self.exercise(90, config=config)
+        self.assertEqual(stopped["reason"], "traffic_limit")
+        self.assertFalse(stopped["open"])
+
+    def test_rolling_checkpoint_retains_over_31_days_without_reset(self):
+        day = 86400
+        config = {**self.config, "enforce_package_expiry": False}
+        state = dict(self.state)
+        def meter(c, end):
+            # Two bytes/second, including a nonzero previously settled balance.
+            return c["billing_checkpoint_bytes"] + (end-c["billing_checkpoint_at"])*2
+        for n in range(1, 70):
+            now = n*day
+            used, checkpoint = index.meter_with_checkpoint(config, state, now, meter)
+            self.assertEqual(used, now*2)
+            self.assertLessEqual(now-checkpoint["at"], 7*day)
+            state["monitor_checkpoint"] = checkpoint
+        # A later authoritative correction supersedes the old derived baseline.
+        corrected = {**config, "billing_checkpoint_at": 68*day,
+                     "billing_checkpoint_bytes": 200*day}
+        used, _ = index.meter_with_checkpoint(corrected, state, 69*day, meter)
+        self.assertEqual(used, 202*day)
+
+    def test_missing_history_and_corrupt_checkpoint_fail_closed(self):
+        meter = lambda c, n: 0
+        for partial in ({"billing_checkpoint_at": 1}, {"billing_checkpoint_bytes": 1}):
+            with self.assertRaisesRegex(ValueError, "incomplete billing"):
+                index.meter_with_checkpoint({**self.config, **partial}, self.state, 100, meter)
+        with self.assertRaisesRegex(ValueError, "history gap"):
+            index.meter_with_checkpoint(self.config, self.state, 31*86400, meter)
+        state = {**self.state, "monitor_checkpoint": {"basis": [0, 0], "at": 1, "bytes": -1}}
+        with self.assertRaisesRegex(ValueError, "invalid persisted"):
+            index.meter_with_checkpoint(self.config, state, 100, meter)
 
     def test_high_water_and_invalid_usage(self):
         self.assertEqual(decide(self.config, {**self.state, "used_bytes": 70}, 1, 20)["used_bytes"], 70)
@@ -184,6 +252,12 @@ class ResolverTests(unittest.TestCase):
         self.health["urls"]["/release.zip"]["GET"] = "https://evil.example/release.zip?q-sign-time=0;200"
         self.assertEqual(select_url(self.config, self.health, "/release.zip", "GET", 110), self.config["assets"]["/release.zip"])
         self.assertIsNone(select_url(self.config, self.health, "/../secret", "GET", 110))
+
+    def test_no_package_deadline_still_requires_fresh_signed_lease(self):
+        config = {**self.config, "expires_at": 50, "enforce_package_expiry": False}
+        self.assertEqual(select_url(config, self.health, "/release.zip", "GET", 110), self.url)
+        self.assertEqual(select_url(config, self.health, "/release.zip", "GET", 200),
+                         config["assets"]["/release.zip"])
 
     def test_bad_health_and_wrong_cycle(self):
         for changes in ({"open": False}, {"expires_at": None}, {"cycle_id": "old"}, {"urls": {}}):

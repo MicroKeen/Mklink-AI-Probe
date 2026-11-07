@@ -67,7 +67,11 @@ def test_agent_settings_conflict_leaves_gui_connection(shared_serial, uart_app):
 def test_agent_list_uses_backend_without_starting_monitor(shared_serial, monkeypatch):
     http, control, _, factory = shared_serial
     monkeypatch.setattr('mklink.serial._port.list_uart_ports', lambda: [{'device': 'TEST'}])
-    assert dispatch_capability('serial.list', {}) == [{'device': 'TEST'}]
+    monkeypatch.setattr('mklink.runtime.query_probe', lambda *a, **k: pytest.fail('Passive list queried hardware'))
+    assert dispatch_capability('serial.list', {}) == [{'device': 'TEST', 'uart_baud': {
+        'profile': None, 'source': 'common',
+        'rates': [9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600],
+    }}]
     assert not control.sessions and not factory.instances
 
 

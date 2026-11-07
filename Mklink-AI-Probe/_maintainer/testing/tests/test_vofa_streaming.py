@@ -1,5 +1,4 @@
 import asyncio
-import binascii
 import math
 import struct
 import threading
@@ -19,7 +18,6 @@ from mklink.vofa_viewer import (
     encode_vofa_samples,
     normalize_vofa_channels,
 )
-from mklink.dump_memory import MAGIC
 
 
 def _channels(count=3):
@@ -101,37 +99,40 @@ def test_vofa_status_exposes_binary_stream_stats():
     assert manager.get_status()["stream"] == hub.stats().__dict__
 
 
-def _dump_frame(timestamp_us, payload, *, flags=0):
-    region = b"\x00" + struct.pack("<H", len(payload)) + payload
-    length = 19 + len(region) + 6
-    body = MAGIC + struct.pack("<QHB", timestamp_us, length, 1) + region + struct.pack("<H", flags)
-    return body + struct.pack("<I", binascii.crc32(body) & 0xFFFFFFFF)
+def _mux_device(values=(1.0, 2.0), *, queue_bytes=262144):
+    from types import SimpleNamespace
+    from mklink.mux import MuxTransport, packet
+    from test_watch_timing_v2 import bridge_for
+
+    calls = []
+    def write(wire):
+        _, _, op, size, epoch, request = struct.unpack_from('<4sBBHII', wire)
+        payload = wire[16:16+size]
+        body = payload[8:] if 0x10 <= op < 0x40 else payload
+        calls.append((op, body))
+        answer = b''
+        if op == 1:
+            answer = struct.pack('<IHH', 0x61f, 256, 1)
+        elif op == 4:
+            answer = payload
+        elif op == 0x32:
+            answer = struct.pack('<II', struct.unpack_from('<I', body)[0], 360000000)
+        transport.feed(packet(op | 0x80, 17, request, b'\0' + answer))
+        if op == 0x32:
+            for index, value in enumerate(values, 1):
+                transport.feed(packet(0x41, 17, index, struct.pack('<BBIf', 0, 0, index*100, value)))
+        return len(wire)
+
+    transport = MuxTransport(write)
+    transport.WATCH_QUEUE_BYTES = queue_bytes
+    transport.handshake()
+    return SimpleNamespace(_bridge=bridge_for(transport), connected=True, close=lambda: None), calls
 
 
 def test_running_manager_uses_probe_dump_stream_and_exposes_integrity_metrics():
-    class Bridge:
-        def __init__(self):
-            self.chunks = [b"junk" + _dump_frame(100, struct.pack("<f", 7.25))]
-            self.writes = []
-
-        def _enter_stream(self, state):
-            self.state = state
-
-        def _write_raw(self, data):
-            self.writes.append(data)
-
-        def _stop_stream_and_sync(self, command):
-            self._write_raw(command)
-            return True
-
-        def drain_stream_bytes(self, max_bytes=None):
-            return self.chunks.pop(0) if self.chunks else b""
-
-        def _exit_stream(self):
-            return ""
-
-    bridge = Bridge()
-    device = type("Device", (), {"_bridge": bridge})()
+    # A real bounded MUX queue discards the first four-byte value. The manager
+    # must retain the second value and expose the loss, without a legacy fallback.
+    device, calls = _mux_device((0.0, 7.25), queue_bytes=10)
     manager = VofaStreamManager(batch_samples=1)
     manager.start(device, _channels(1), interval=0.0001)
     deadline = time.perf_counter() + 1.0
@@ -145,9 +146,9 @@ def test_running_manager_uses_probe_dump_stream_and_exposes_integrity_metrics():
     assert status["stream_integrity"]["parser_dropped_bytes"] == 4
     assert status["stream_integrity"]["parser_crc_errors"] == 0
     assert manager._history[-1]["ch0"] == pytest.approx(7.25)
-    assert bridge.writes[0] == b"cmd.dump_memory(0x20000000, 4, 0.0001)\n"
-    assert bridge.writes[-1] == b"cmd.dump_memory(0x20000000, 4, -1.0)\n"
-    assert b"cmd.dump_memory(0x20000000, 4, 0)\n" not in bridge.writes
+    assert next(body for op, body in calls if op == 0x32) == struct.pack('<IBIB', 100, 1, 0x20000000, 4)
+    assert calls[-1][0] == 0x31
+    assert sum(op == 0x32 for op, _ in calls) == 1
 
 
 def test_sample_major_payload_preserves_10000_ids_and_channel_alignment():
@@ -438,19 +439,8 @@ def test_zero_interval_api_normalizes_before_start_and_reports_current_interval(
         assert status_response.json()["interval"] == pytest.approx(0.000001)
 
 
-class _DumpDevice:
-    connected = True
-    def __init__(self):
-        class Bridge:
-            def _enter_stream(self, state): pass
-            def _write_raw(self, data): pass
-            def _exit_stream(self): pass
-            def _stop_stream_and_sync(self, command): return True
-            def drain_stream_bytes(self, max_bytes=None):
-                time.sleep(.001)
-                return _dump_frame(100, struct.pack('<f', 1.0))
-        self._bridge = Bridge()
-    def close(self): pass
+def _DumpDevice():
+    return _mux_device()[0]
 
 
 def test_paused_60_second_interval_stop_is_interruptible():

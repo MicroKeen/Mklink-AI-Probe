@@ -18,6 +18,7 @@ def service(tmp_path, monkeypatch):
     monkeypatch.setenv('MKLINK_SITE_AGENT_ENABLED', '0')
     app = create_app(auth_token=None, project_root=str(tmp_path))
     device, _ = _connected_symbol_device(tmp_path)
+    device.clock_hz = 10_000_000
     device.read_memory = Mock(return_value=bytes(4))
     app.state.mklink_state['device'] = device
     probe_id = 'usb-'+'a'*24
@@ -33,6 +34,25 @@ def service(tmp_path, monkeypatch):
                 raise sdk.RuntimeErrorResponse(response.text, status_code=response.status_code)
             return response.json()
         monkeypatch.setattr(sdk, 'request', request)
+        # The production client negotiates a binary memory channel. Route that
+        # socket into the same ASGI application, preserving its real handshake,
+        # admission and reply decoding instead of connecting to port 8765.
+        from mklink.runtime_memory_client import MemoryChannel
+        class TestConnection:
+            def __init__(self, info, session_id):
+                self.context = http.websocket_connect('/_runtime/memory', headers={
+                    'Host': f"127.0.0.1:{info['port']}",
+                    'Authorization': 'Bearer ' + info['token'],
+                    'X-MKLink-Session': session_id,
+                    'X-MKLink-Probe': info['probe_id'],
+                    'X-MKLink-Instance': info['instance_id']})
+                self.socket = self.context.__enter__()
+            def send(self, value): self.socket.send_bytes(value)
+            def recv(self, timeout): return self.socket.receive_bytes()
+            def close(self): self.context.__exit__(None, None, None)
+        def connect_memory(channel, info, session_id):
+            channel.connection = TestConnection(info, session_id)
+        monkeypatch.setattr(MemoryChannel, '__init__', connect_memory)
         yield http, control, device, app.state.site_agent
         app.state.mklink_state['device'] = None
 
@@ -62,7 +82,8 @@ def test_start_stop_uses_shared_admission_and_keeps_local_client(service):
                 return json.loads(await remote.recv())
             assert 'result' in await rpc('system.handshake', {'protocol_version': '1.0', 'token': 'remote-secret'})
             assert (await rpc('agent.reconnect'))['result']['connected']
-            assert (await rpc('memory.read', {'address': 0, 'size': 4}))['result'] == {'__bytes__':'AAAAAA=='}
+            memory = await rpc('memory.read', {'address': 0, 'size': 4})
+            assert memory.get('result') == {'__bytes__':'AAAAAA=='}, memory
             assert len(control.sessions) == 2
             response = await asyncio.to_thread(http.post, '/_runtime/remote-service/stop')
             assert response.status_code == 200, response.text

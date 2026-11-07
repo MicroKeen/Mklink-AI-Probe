@@ -276,7 +276,7 @@ def test_dump_cli_uses_shared_capture_and_saves_complete_sample_bytes(monkeypatc
     assert target.read_bytes()==b'\x01\x02\x03\x04'
     assert json.loads(capsys.readouterr().out)==result
     assert calls[0][1]['probe']=='chosen'
-    assert calls[1]==('capture_dump',{'regions':[{'address':0x20000000,'size':4}],'period':.01,'frames':1,'duration':2.0,'speed_profile':None})
+    assert calls[1]==('capture_dump',{'regions':[{'address':0x20000000,'size':4}],'period':.01,'frames':1,'duration':2.0,'speed_profile':None,'protocol':'mux'})
     assert calls[-1]==('detach',None)
 
 

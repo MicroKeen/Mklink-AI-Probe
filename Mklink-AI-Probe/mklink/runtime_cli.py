@@ -119,7 +119,7 @@ def run(args):
         try:
             dump_regions = [{'address': address, 'size': size} for address, size in map(_parse_dump_region, args.regions)]
             dump_arguments = dict(regions=dump_regions, period=args.period, frames=args.frames,
-                                  duration=args.duration, speed_profile=args.speed)
+                                  duration=args.duration, speed_profile=args.speed, protocol=getattr(args, 'protocol', 'mux'))
             validate_dump_stream(**dump_arguments)
         except ValueError as error:
             raise SystemExit(str(error)) from error
@@ -128,9 +128,10 @@ def run(args):
         from mklink.dump_benchmark import validate_measurement
         try:
             pairs = list(map(_parse_dump_region, args.regions))
-            validate_measurement(pairs, args.duration, args.period, args.speed)
+            validate_measurement(pairs, args.duration, args.period, args.speed, protocol=getattr(args, 'protocol', 'mux'))
             measure_arguments = {'regions': [{'address': a, 'size': n} for a, n in pairs],
-                                 'duration': args.duration, 'period': args.period, 'speed_profile': args.speed}
+                                 'duration': args.duration, 'period': args.period, 'speed_profile': args.speed,
+                                 'protocol': getattr(args, 'protocol', 'mux')}
         except ValueError as error:
             raise SystemExit(str(error)) from error
     if args.command == 'flush-memory':

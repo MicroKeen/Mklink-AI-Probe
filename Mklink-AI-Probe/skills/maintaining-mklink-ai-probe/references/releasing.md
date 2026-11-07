@@ -134,6 +134,14 @@ its full ID, normal shutdown, released port `8765`, and recomputed hashes.
 
 ## Publish
 
+For Tencent delivery, follow `docs/ai/tencent-updates.md`: the Shanghai
+Lighthouse server stores and serves only the latest formal asset set, with
+historical versions retained in COS/Git archives. Verify the new local set and
+fallbacks before advancing the update index, then retire the preceding managed
+local set after archive verification. Keep existing client update URLs and
+first-load/startup latest-version checks. This policy does not authorize a
+publication by itself.
+
 Publication is intentionally one maintainer command because ordering matters:
 
 ```powershell

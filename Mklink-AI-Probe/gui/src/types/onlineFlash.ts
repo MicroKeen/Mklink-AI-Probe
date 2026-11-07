@@ -1,4 +1,5 @@
 export interface ProbeRecord {
+  flash_clocks_hz?: import('../lib/flashClocks').FlashClocks
   unique_id: string
   vendor_name: string
   product_name: string

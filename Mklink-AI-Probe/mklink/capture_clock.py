@@ -11,6 +11,9 @@ V3_CLOCKS = (1000, 5000, 10000, 20000, 50000, 100000, 200000, 500000,
              1000000, 2000000, 5000000, 10000000, 20000000, 30000000)
 LEGACY_SWD_CLOCKS = (4000000, 10000000, 20000000, 30000000)
 HPM_CLOCKS = (4000000, 10000000, 20000000, 30000000)
+# Keep the original advertised list stable for already installed clients.
+# New firmware advertises the restored compatibility choice separately.
+CONFIGURATION_CLOCKS = tuple(sorted((*V3_CLOCKS, 4000000)))
 
 
 def firmware_lines(bridge):
@@ -71,8 +74,12 @@ def clock_options(bridge, *, hpm=False, interface=None):
     modern = not hpm and 'SWD_CLOCK_ACK=1' in lines and advertised in lines
     v3 = modern and any(re.fullmatch(r'V3\.\d+\.\d+', line) for line in lines)
     modern_jtag = hpm and jtag_multiclock(bridge)
+    choices = V3_CLOCKS if modern_jtag or modern else HPM_CLOCKS if hpm else LEGACY_SWD_CLOCKS
+    mode = 'JTAG' if hpm else 'SWD'
+    if (modern_jtag or modern) and f'{mode}_CLOCKS_EXTRA=4000000' in lines:
+        choices = CONFIGURATION_CLOCKS
     return {'interface': 'JTAG' if hpm else 'SWD',
-            'clocks_hz': list(V3_CLOCKS if modern_jtag or modern else HPM_CLOCKS if hpm else LEGACY_SWD_CLOCKS),
+            'clocks_hz': list(choices),
             'clock_source': 'jtag-advertised' if modern_jtag else 'v3-advertised' if v3 else 'swd-advertised' if modern else 'hpm-profiles' if hpm else 'legacy',
             'live_change_supported': False}
 
@@ -81,8 +88,26 @@ def configuration_clock_options(bridge, *, hpm=False, interface=None):
     """Offer the full offline catalog without asserting probe capabilities."""
     options = clock_options(bridge, hpm=hpm, interface=interface)
     if bridge is None:
-        options.update(clocks_hz=list(V3_CLOCKS), clock_source='configuration')
+        options.update(clocks_hz=list(CONFIGURATION_CLOCKS), clock_source='configuration')
     return options
+
+
+def cached_flash_clocks(device, port):
+    """Read only the capability cache belonging to the selected command port."""
+    if not port or not device or not device.connected or str(device.port).casefold() != port.casefold():
+        return {}
+    bridge = getattr(device, '_bridge', None)
+    if not firmware_lines(bridge):
+        return {}
+    jtag = clock_options(bridge, interface='JTAG')
+    swd = clock_options(bridge, interface='SWD')
+    choices = {}
+    if jtag['clock_source'] == 'jtag-advertised' or active_clock_interface(bridge) == 'JTAG':
+        choices['JTAG'] = jtag['clocks_hz']
+    # Legacy SWD flashing accepts rates outside the named acquisition profiles.
+    if swd['clock_source'].endswith('-advertised'):
+        choices['SWD'] = swd['clocks_hz']
+    return choices
 
 
 def invalidate_clock(bridge):
@@ -196,6 +221,19 @@ def save_interface_clock(config, interface, hz=None):
                 config.pop('debug_speed', None)
 
 
+def sleep_access_status(device):
+    """Report cached connection capabilities without probing or halting the target."""
+    from mklink.sleep_debug import advertised_atomic_sleep, control_clock, selected_clock
+    bridge = getattr(device, '_bridge', None)
+    connected = bool(device and device.connected and bridge is not None)
+    return {'sleep_access_supported': bool(connected and (control_clock(device) or (
+                active_clock_interface(bridge) == 'SWD' and
+                (advertised_atomic_sleep(bridge) or
+                 getattr(getattr(bridge, '_mux', None), 'supports_atomic_sleep', False) is True)))),
+            'sleep_access_enabled': bool(connected and selected_clock(bridge) is not None),
+            'sleep_access_atomic': bool(connected and getattr(bridge, '_sleep_debug_atomic', False) is True)}
+
+
 def clock_snapshot(device, config):
     connected = bool(device and device.connected)
     bridge = getattr(device, '_bridge', None) if connected else None
@@ -206,7 +244,8 @@ def clock_snapshot(device, config):
     state = getattr(context, 'clock_apply_state', 'unknown') if hz else 'unknown'
     requested = requested_clock(config, options['interface'])
     migration = None
-    if options['clock_source'] in ('v3-advertised', 'swd-advertised') and (requested == 4000000 or hz == 4000000):
+    if (options['clock_source'] in ('v3-advertised', 'swd-advertised')
+            and 4000000 not in options['clocks_hz'] and (requested == 4000000 or hz == 4000000)):
         migration = {'from_hz': 4000000, 'to_hz': 2000000, 'pending': True}
     interfaces = {mode: {**configuration_clock_options(bridge, interface=mode),
                          'requested_hz': requested_clock(config, mode)} for mode in ('SWD', 'JTAG')}
@@ -215,6 +254,7 @@ def clock_snapshot(device, config):
             'active_interface': active_clock_interface(bridge) if connected else 'unknown',
             'selected_interface': selected if selected in interfaces else options['interface'],
             'interfaces': interfaces,
+            **sleep_access_status(device),
             'clock_hz': hz, 'configured_hz': hz, 'apply_state': state,
             'applied_hz': hz if state == 'applied' else None, 'migration': migration,
             'warning': getattr(device, 'clock_warning', None)}

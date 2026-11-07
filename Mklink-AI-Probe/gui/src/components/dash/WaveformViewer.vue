@@ -86,7 +86,8 @@ function requestLatestVisibleRange(interactive = false): void {
   visibleRequestInFlight = ++visibleRequestId
   if (interactive) interactiveVisibleRequests.add(visibleRequestInFlight)
   const formulas = viewer.getFormulas?.()
-  if (formulas?.some(Boolean)) binary.requestVisibleRange(visibleRequestInFlight, start, end, pixelWidth, formulas)
+  if (props.mode === 'SuperWatch' && Number.isFinite(range.gapThresholdMs)) binary.requestVisibleRange(visibleRequestInFlight, start, end, pixelWidth, formulas?.some(Boolean) ? formulas : undefined, range.gapThresholdMs)
+  else if (formulas?.some(Boolean)) binary.requestVisibleRange(visibleRequestInFlight, start, end, pixelWidth, formulas)
   else binary.requestVisibleRange(visibleRequestInFlight, start, end, pixelWidth)
 }
 
@@ -466,7 +467,7 @@ function buildTemplate(mode: string): string {
   const minPoints = mode === 'SuperWatch' ? 50000 : 2
   const maxPoints = mode === 'SuperWatch' ? 50000 : 10000
   const intervalValue = mode === 'SuperWatch' ? '0.001' : '0'
-  const intervalMinimum = mode === 'SuperWatch' ? '0.000004' : '0'
+  const intervalMinimum = mode === 'SuperWatch' ? '0.000001' : '0'
   const intervalStep = mode === 'SuperWatch' ? '0.000001' : '0.001'
   return `
 <header>
@@ -506,12 +507,12 @@ function buildTemplate(mode: string): string {
   <div class="ctrl-sep"></div>
   <div id="interval-group">
     <label data-i18n="interval">Interval</label>
-    <input type="number" id="interval-input" value="${intervalValue}" step="${intervalStep}" min="${intervalMinimum}" max="60">
+    <input type="number" id="interval-input" value="${intervalValue}" step="${intervalStep}" min="${intervalMinimum}" max="60" aria-describedby="interval-error">
     <span class="interval-unit">s</span>
     <button id="btn-apply-interval" class="ctrl-btn" data-i18n="apply">Apply</button>
   </div>
 </div>
-
+<div id="interval-error" role="alert" hidden></div>
 <div id="trigger-toolbar">
   <button id="trigger-enable-btn" data-i18n="trigger">Trigger</button>
   <span id="trigger-state-badge" class="trigger-state-idle" data-i18n="idle">Idle</span>
@@ -672,9 +673,9 @@ function buildTemplate(mode: string): string {
     </div>
     <div id="help-modal-body">
       <div class="help-section"><h3 data-i18n="help_chart">图表交互</h3><ul id="help-chart-list"></ul></div>
-      <div class="help-section"><h3 data-i18n="help_var_selector">变量选择器</h3><ul id="help-var-list"></ul></div>
+      <div class="help-section"><h3 data-i18n="${mode === 'SuperWatch' ? 'help_sw_variables' : 'help_var_selector'}">变量选择器</h3><ul id="help-var-list"></ul></div>
       <div class="help-section"><h3 data-i18n="help_trigger_sys">触发系统</h3><ul id="help-trigger-list"></ul></div>
-      <div class="help-section"><h3 data-i18n="help_watch_panel">Watch 面板</h3><ul id="help-watch-list"></ul></div>
+      <div class="help-section"><h3 data-i18n="${mode === 'SuperWatch' ? 'help_sw_sampling' : 'help_watch_panel'}">Watch 面板</h3><ul id="help-watch-list"></ul></div>
       <div class="help-section"><h3 data-i18n="help_minimap">缩略图</h3><ul id="help-minimap-list"></ul></div>
       <div class="help-section"><h3 data-i18n="help_cursors">测量光标</h3><ul id="help-cursors-list"></ul></div>
       <div class="help-section"><h3 data-i18n="help_export">数据导出</h3><ul id="help-export-list"></ul></div>

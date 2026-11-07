@@ -20,13 +20,38 @@ class MuxError(ConnectionError):
     pass
 
 
+SLEEP_ACCESS_COMMAND = 0x17
+SLEEP_COMMAND_TIMEOUT = 12.0
+SLEEP_READ_MAX = 480
+# Keep a write in a single 512-byte wire frame (20 header/CRC + 8 nonce + 7 parameters).
+SLEEP_WRITE_MAX = 477
+
+
+def sleep_rpc_timeout(size, *, write=False, verify=False):
+    """Bound a bulk RPC by the number of acknowledged firmware commands it needs."""
+    if type(size) is not int or not 1 <= size <= 4096:
+        return 35
+    chunk = SLEEP_WRITE_MAX if write else SLEEP_READ_MAX
+    commands = (size + chunk - 1) // chunk
+    if write and verify:
+        commands += (size + SLEEP_READ_MAX - 1) // SLEEP_READ_MAX
+    return max(35, commands * SLEEP_COMMAND_TIMEOUT + 5)
+
+
 class MuxTargetError(RuntimeError):
-    def __init__(self, status):
+    def __init__(self, status, op=None):
         self.status = status
-        message = ('Multiplex target busy (status 6); debugger access is currently reserved. '
-                   'Retry explicitly when available; the request was not replayed'
-                   if status == 6 else
-                   f'Multiplex target status {status}; failed writes may have an unknown outcome')
+        if status == 6:
+            message = ('Multiplex target busy (status 6); debugger access is currently reserved. '
+                       'Retry explicitly when available; the request was not replayed')
+        elif status == 5 and op == SLEEP_ACCESS_COMMAND:
+            message = 'Sleep access or restoration of the original core state was not confirmed; submitted writes must not be replayed'
+        elif status == 5:
+            message = 'Multiplex target status 5; target access failed. Check target power and the debug connection.'
+            if op not in (0x11, 0x13, 0x16):
+                message += ' A submitted write or reset may have an unknown outcome.'
+        else:
+            message = f'Multiplex target status {status}; failed writes may have an unknown outcome'
         super().__init__(message)
 
 
@@ -35,11 +60,14 @@ class MuxWatchEvent(bytes):
     def __new__(cls, payload, reset_generation):
         value = super().__new__(cls, payload)
         value.reset_generation = reset_generation
+        # 1: confirmed discarded/read-failed records; 2: wire continuity unknown.
+        value.break_before = 0
         return value
 
 
 def packet(op, epoch, request, payload=b''):
-    limit = {0x12: 492, 0x24: 489}.get(op, 256)
+    limit = {0x12: 492, 0x24: 489, SLEEP_ACCESS_COMMAND: 15 + SLEEP_WRITE_MAX,
+             SLEEP_ACCESS_COMMAND | 0x80: 1 + SLEEP_READ_MAX}.get(op, 256)
     if len(payload) > limit:
         raise ValueError(f'Multiplex payload exceeds {limit} bytes')
     raw = struct.pack('<4sBBHII', b'MLX1', 1, op, len(payload), epoch, request) + payload
@@ -52,6 +80,8 @@ class MuxTransport:
     FAST_TRANSFER_BYTES = 480
     BLOCK_READ_CAPABILITY = 1 << 6
     BLOCK_READ_COMMAND = 0x16
+    BULK_WATCH_CAPABILITY = 1 << 11
+    ATOMIC_SLEEP_CAPABILITY = 1 << 12
     SOFTWARE_RESET_CAPABILITY = 1 << 5
     SOFTWARE_RESET_COMMAND = 0x15
     MAX_QUEUE_BYTES = 65536
@@ -75,6 +105,7 @@ class MuxTransport:
         self._commands = command_lock or threading.RLock()
         self._rx = bytearray()
         self._pending = None
+        self._request_waiting = False
         self._reply = None
         self._error = None
         self._next_id = 0
@@ -83,24 +114,28 @@ class MuxTransport:
         self.ready = False
         self.capabilities = 0
         self.transfer_quantum = 128
+        self.sleep_access = False
         self._pending_quantum = None
         self._reset_generation = 0
         self.rtt_mask = 0
         self._rtt_manager = None
         self.watch_running = False
+        self.bulk_running = False
         self._last_command = time.monotonic()
         self._queues = {}
         self._sizes = {}
         self.dropped_bytes = {}
         self.event_gaps = 0
         self._event_id = None
+        self._watch_wire_gap = False
+        self._bulk_wire_gap = False
         self._last_receive = None
         self._last_reply = None
         self._last_timeout = None
 
     @property
     def sampling(self):
-        return bool(self.rtt_mask or self.watch_running)
+        return bool(self.rtt_mask or self.watch_running or self.bulk_running)
 
     def fail(self, error):
         with self._condition:
@@ -124,6 +159,10 @@ class MuxTransport:
             raise self._error
 
     def _send(self, op, payload, heartbeat=False, *, background=False):
+        if op == SLEEP_ACCESS_COMMAND and not self.supports_atomic_sleep:
+            raise ValueError('Probe did not advertise atomic Cortex-M sleep access')
+        if self.sleep_access and self.supports_atomic_sleep and op in (0x20, 0x23, 0x32, 0x33, 0x34):
+            raise RuntimeError('Asynchronous sampling is unavailable in atomic sleep access mode; disable sleep access to start a stream')
         if op == 0x12 and len(payload) > 4 + self.transfer_quantum:
             raise ValueError('Memory write exceeds negotiated transfer size')
         if op == 0x24 and (self.transfer_quantum != self.FAST_TRANSFER_BYTES
@@ -135,7 +174,13 @@ class MuxTransport:
         req = self._next_id
         wire = packet(op, 0 if op == 1 else self.epoch, req,
                       (self.nonce if 0x10 <= op < 0x40 else b'') + payload)
-        deadline = time.monotonic()+self.command_timeout
+        timeout = self.command_timeout
+        if op in (SLEEP_ACCESS_COMMAND, self.SOFTWARE_RESET_COMMAND) and self.supports_atomic_sleep:
+            timeout = max(timeout, SLEEP_COMMAND_TIMEOUT)
+        elif self.sleep_access:
+            # A slow legacy WFI poll needs up to 4.8 s of the local 5 s lease.
+            timeout = max(timeout, 4.8)
+        deadline = time.monotonic() + timeout
         if background:
             self._heartbeats[req] = deadline
         else:
@@ -150,14 +195,20 @@ class MuxTransport:
             self.fail(exc)
             raise
 
-    def request(self, op, payload=b''):
+    def request(self, op, payload=b'', *, deadline=None):
         with self._commands, self._condition:
             self._check()
+            self._request_waiting = True
+            try:
+                while self._pending:
+                    self._wait(deadline)
+                if deadline is not None and time.monotonic() >= deadline:
+                    raise TimeoutError('Memory capture deadline expired before command delivery')
+                self._send(op, payload)
+            finally:
+                self._request_waiting = False
             while self._pending:
-                self._wait()
-            self._send(op, payload)
-            while self._pending:
-                self._wait()
+                self._wait(deadline)
             self._check()
             answer = self._reply
             self._reply = None
@@ -167,13 +218,17 @@ class MuxTransport:
                 self.fail('Claim expired or request duplicated; reconnect explicitly')
                 self._check()
             if answer[0]:
-                raise MuxTargetError(answer[0])
+                raise MuxTargetError(answer[0], op)
             return answer[1:]
 
-    def _wait(self):
+    def _wait(self, deadline=None):
         self._check()
-        remaining = self._pending[2]-time.monotonic()
+        limit = self._pending[2] if deadline is None else min(self._pending[2], deadline)
+        remaining = limit-time.monotonic()
         if remaining <= 0:
+            if limit < self._pending[2]:
+                op, req, _, heartbeat = self._pending
+                self._pending = (op, req, limit, heartbeat)
             self._expire_pending('command')
             self._check()
         self._condition.wait(min(remaining, .1))
@@ -186,7 +241,7 @@ class MuxTransport:
         self.capabilities = struct.unpack_from('<I', caps)[0]
         if self.request(4, self.nonce) != self.nonce:
             raise MuxError('Session claim mismatch')
-        if self.capabilities & self.FAST_TRANSFER_CAPABILITY:
+        if self.capabilities & self.FAST_TRANSFER_CAPABILITY and (not self.sleep_access or self.supports_atomic_sleep):
             self.set_transfer_quantum(self.FAST_TRANSFER_BYTES)
         self.ready = True
 
@@ -213,15 +268,14 @@ class MuxTransport:
                 return
             if self._pending and time.monotonic() >= self._pending[2]:
                 self._expire_pending('response')
-            elif self.background_heartbeats and self.ready and not self._closing and time.monotonic()-self._last_command >= 1:
-                if len(self._heartbeats) >= 64:
-                    self.fail('Multiplex heartbeat window full; outcome unknown, no replay')
-                    return
-                # A slow receive path must not expire the probe's live session.
-                # Keep one target command, with separately correlated bounded PINGs.
-                self._send(2, b'', heartbeat=True, background=True)
-            elif self.ready and not self._pending and self._reply is None and time.monotonic()-self._last_command >= 1:
-                if not self._closing:
+            elif self.ready and not self._closing and time.monotonic() - self._last_command >= 1:
+                if self.background_heartbeats:
+                    if len(self._heartbeats) >= 64:
+                        self.fail('Multiplex heartbeat window full; outcome unknown, no replay')
+                        return
+                    self._send(2, b'', heartbeat=True, background=True)
+                elif not self._pending and self._reply is None and not self._request_waiting:
+                    # A queued target command gets the shared slot before a new PING.
                     self._send(2, b'', heartbeat=True)
 
     def _expire_pending(self, source):
@@ -261,8 +315,16 @@ class MuxTransport:
                     return
                 _, version, op, n, epoch, req = struct.unpack_from('<4sBBHII', self._rx)
                 limit = 1024 if op == 0x41 and self.capabilities & 8 else 256
+                if op == 0x42:
+                    if not self.capabilities & self.BULK_WATCH_CAPABILITY:
+                        self.fail('Unnegotiated bulk sampling event')
+                        self._rx.clear()
+                        return
+                    limit = 492  # 40-byte header plus 452 bytes, CRC-v1 frame <=512.
                 if op == 0x96 and self.capabilities & self.BLOCK_READ_CAPABILITY:
                     limit = 4097  # Status plus one bounded block; CRC v1 only.
+                if op == (SLEEP_ACCESS_COMMAND | 0x80) and self.supports_atomic_sleep:
+                    limit = 1 + SLEEP_READ_MAX
                 if (self.capabilities & self.FAST_TRANSFER_CAPABILITY
                         and self.transfer_quantum == self.FAST_TRANSFER_BYTES):
                     if op == 0x40:
@@ -325,15 +387,18 @@ class MuxTransport:
                     if heartbeat:
                         self._reply = None
                     self._condition.notify_all()
-                elif op in (0x40, 0x41):
-                    if epoch != self.epoch or len(payload) < 6:
+                elif op in (0x40, 0x41, 0x42):
+                    if epoch != self.epoch or len(payload) < (40 if op == 0x42 else 6):
                         self.fail('Invalid stream event')
                         return
-                    if payload[0] >= (8 if op == 0x40 else 15):
+                    if op != 0x42 and payload[0] >= (8 if op == 0x40 else 15):
                         self.fail('Invalid event channel')
                         return
                     if self._event_id is not None:
-                        self.event_gaps += (req-self._event_id-1) & 0xffffffff
+                        missing = (req-self._event_id-1) & 0xffffffff
+                        self.event_gaps += missing
+                        self._watch_wire_gap |= bool(missing)
+                        self._bulk_wire_gap |= bool(missing)
                     self._event_id = req
                     if op == 0x40 and self._rtt_manager is not None:
                         self._rtt_manager.publish(payload)
@@ -342,13 +407,30 @@ class MuxTransport:
                     key = (op, payload[0] if op == 0x40 else 255)
                     if op == 0x41:
                         payload = MuxWatchEvent(payload, self._reset_generation)
+                        if self._watch_wire_gap:
+                            payload.break_before = 2
+                            self._watch_wire_gap = False
+                    elif op == 0x42:
+                        payload = MuxWatchEvent(payload, self._reset_generation)
+                        if self._bulk_wire_gap:
+                            payload.break_before = 2
+                            self._bulk_wire_gap = False
                     queue = self._queues.setdefault(key, deque())
                     size = self._sizes.get(key, 0)
-                    budget = self.WATCH_QUEUE_BYTES if op == 0x41 else self.MAX_QUEUE_BYTES
+                    budget = self.WATCH_QUEUE_BYTES if op in (0x41, 0x42) else self.MAX_QUEUE_BYTES
+                    lost = 0
                     while queue and size+len(payload) > budget:
                         removed = queue.popleft()
                         size -= len(removed)
-                        self.dropped_bytes[key] = self.dropped_bytes.get(key, 0)+len(removed)-6
+                        self.dropped_bytes[key] = self.dropped_bytes.get(key, 0)+len(removed)-(40 if op == 0x42 else 6)
+                        if op == 0x41:
+                            # Carry the boundary with the first retained event,
+                            # including when a previously marked event is evicted.
+                            lost |= removed.break_before | (1 if removed[1] in (0, 5, 9) else 2)
+                        elif op == 0x42:
+                            lost |= removed.break_before | 1
+                    if lost:
+                        (queue[0] if queue else payload).break_before |= lost
                     queue.append(payload)
                     self._sizes[key] = size+len(payload)
                     self._condition.notify_all()
@@ -359,7 +441,8 @@ class MuxTransport:
                     'transfer_quantum': self.transfer_quantum,
                     'last_timeout': dict(self._last_timeout) if self._last_timeout else None,
                     'rtt_dropped_bytes': {ch: self.dropped_bytes.get((0x40, ch), 0) for ch in range(8)},
-                    'watch_dropped_bytes': self.dropped_bytes.get((0x41, 255), 0)}
+                    'watch_dropped_bytes': self.dropped_bytes.get((0x41, 255), 0),
+                    'bulk_dropped_bytes': self.dropped_bytes.get((0x42, 255), 0)}
 
     def drain(self, op, channel, *, max_bytes=None):
         with self._condition:
@@ -385,16 +468,20 @@ class MuxTransport:
                 self._sizes.pop(key, None)
             return frames
 
-    def read_memory(self, address, size):
+    def read_memory(self, address, size, *, deadline=None):
+        if self.sleep_access and self.supports_atomic_sleep:
+            return self.read_atomic_memory(address, size, deadline=deadline)
         if not 0 <= address <= 0xffffffff or size < 0 or address+size > 0x100000000:
             raise ValueError('Invalid memory range')
         result = bytearray()
         block_read = bool(self.capabilities & self.BLOCK_READ_CAPABILITY)
-        chunk_size = 4096 if block_read else self.transfer_quantum
+        chunk_size = 32 if self.sleep_access else (4096 if block_read else self.transfer_quantum)
         command = self.BLOCK_READ_COMMAND if block_read else 0x11
         for offset in range(0, size, chunk_size):
             n = min(chunk_size, size-offset)
-            data = self.request(command, struct.pack('<IH', address+offset, n))
+            payload = struct.pack('<IH', address+offset, n)
+            data = (self.request(command, payload) if deadline is None
+                    else self.request(command, payload, deadline=deadline))
             if len(data) != n:
                 self.fail('Incomplete memory response')
                 raise self._error
@@ -402,11 +489,47 @@ class MuxTransport:
         return bytes(result)
 
     def write_memory(self, address, data):
+        if self.sleep_access and self.supports_atomic_sleep:
+            raise ValueError('Atomic sleep writes require a validated target RAM range')
         if not 0 <= address <= 0xffffffff or address+len(data) > 0x100000000:
             raise ValueError('Invalid memory range')
-        chunk_size = self.transfer_quantum
+        chunk_size = 32 if self.sleep_access else self.transfer_quantum
         for offset in range(0, len(data), chunk_size):
             self.request(0x12, struct.pack('<I', address+offset)+data[offset:offset+chunk_size])
+
+    @property
+    def supports_atomic_sleep(self):
+        return bool(self.capabilities & self.ATOMIC_SLEEP_CAPABILITY)
+
+    def _sleep_transfer(self, kind, address, size, expected, data=b'', *, deadline=None):
+        if not self.supports_atomic_sleep:
+            raise ValueError('Probe did not advertise atomic Cortex-M sleep access')
+        answer = self.request(SLEEP_ACCESS_COMMAND, struct.pack('<BIH', kind, address, size) + data,
+                              deadline=deadline)
+        if len(answer) != expected:
+            self.fail('Invalid sleep access response; operation or core state is unconfirmed, do not replay')
+            self._check()
+        return answer
+
+    def probe_sleep_core(self):
+        return int.from_bytes(self._sleep_transfer(2, 0, 0, 4), 'little')
+
+    def read_atomic_memory(self, address, size, *, deadline=None):
+        if not 0 <= address <= 0xffffffff or size < 0 or address + size > 0x100000000:
+            raise ValueError('Invalid sleep read range')
+        result = bytearray()
+        for offset in range(0, size, SLEEP_READ_MAX):
+            n = min(SLEEP_READ_MAX, size - offset)
+            result.extend(self._sleep_transfer(0, address + offset, n, n, deadline=deadline))
+        return bytes(result)
+
+    def write_atomic_ram(self, address, data):
+        # The device layer has validated the whole range before the first write.
+        if not 0 <= address <= 0xffffffff or address + len(data) > 0x100000000:
+            raise ValueError('Invalid sleep write range')
+        for offset in range(0, len(data), SLEEP_WRITE_MAX):
+            part = data[offset:offset + SLEEP_WRITE_MAX]
+            self._sleep_transfer(1, address + offset, len(part), 0, part)
 
     @property
     def supports_software_reset(self):
