@@ -53,18 +53,13 @@
         <ChevronRight v-if="collapsed.signals" :size="14" /><ChevronDown v-else :size="14" />
         <span>{{ tr('信号分组', 'Signal groups') }}</span><small>{{ tr(`已选 ${selected.size}`, `${selected.size} selected`) }}</small>
       </button>
-      <SelectedSignals v-show="!collapsed.signals" :paths="selectedPaths" :values="latestValues" :hidden="hiddenChannels" @visibility="(path, visible) => emit('visibility-change', path, visible)">
+      <SelectedSignals v-show="!collapsed.signals" :paths="selectedPaths" :values="latestValues" :hidden="hiddenChannels"
+        :expanded-path="actions?.section === 'selected' ? actions.path : undefined" @actions="path => toggleActions('selected', path)"
+        @visibility="(path, visible) => emit('visibility-change', path, visible)">
         <template #actions="{ path }">
-          <div class="selected-actions">
-            <button type="button" class="edit-button" :data-testid="`selected-write-${path}`"
-              :disabled="!canWrite(selectedDescriptors.get(path)) || writing.has(path)"
-              :title="writeTitle(selectedDescriptors.get(path))"
-              @click="beginEdit(selectedDescriptors.get(path), 'selected')">{{ tr('写入', 'Write') }}</button>
-            <button type="button" class="edit-button" :data-testid="`selected-remove-${path}`"
-              :disabled="catalog.stale.value || selectionBusy.has(path)"
-              :aria-label="tr(`移除 ${path}`, `Remove ${path}`)"
-              @click="changeSelection(path, null)">{{ tr('移除', 'Remove') }}</button>
-          </div>
+          <SymbolRowActions :path="path" selected-list removable
+            :write-disabled="!canWrite(selectedDescriptors.get(path)) || writing.has(path)" :write-title="writeTitle(selectedDescriptors.get(path))"
+            :remove-disabled="catalog.stale.value || selectionBusy.has(path)" @write="beginEdit(selectedDescriptors.get(path), 'selected')" @remove="changeSelection(path, null)" />
           <SymbolWriteEditor v-if="editing?.section === 'selected' && editing.symbol.path === path"
             v-model="draft" :symbol="editing.symbol" :busy="writing.has(path)" :disabled="!canWrite(selectedDescriptors.get(path))"
             @write="writeValue" @cancel="editing = null" />
@@ -237,21 +232,12 @@
                 <Eye v-else :size="15" aria-hidden="true" />
               </button>
             </span>
-            <VariablePath class="variable-name" :path="displayPrefs.style(row.node.descriptor.path).alias || row.node.descriptor.path" :alignment="pathAlignment" />
+            <VariablePath class="variable-name" :path="displayPrefs.style(row.node.descriptor.path).alias || row.node.descriptor.path"
+              :alignment="pathAlignment" :expanded="actionsOpen(group.key, row.node.descriptor.path)" @actions="toggleActions(group.key, row.node.descriptor.path)" />
             <span class="variable-type">{{ row.node.descriptor.type_name }}</span>
             <span :data-testid="`latest-${row.node.descriptor.path}`" class="variable-value" :title="formatValue(latestValues[row.node.descriptor.path])">
               {{ formatValue(latestValues[row.node.descriptor.path]) }}
             </span>
-            <button
-              class="edit-button"
-              type="button"
-              :data-testid="`edit-${row.node.descriptor.path}`"
-              :disabled="!canWrite(row.node.descriptor) || writing.has(row.node.descriptor.path)"
-              :title="writeTitle(row.node.descriptor)"
-              @click="beginEdit(row.node.descriptor, group.key)"
-            >
-              {{ tr('写入', 'Write') }}
-            </button>
             <span class="pin-controls">
               <button v-if="group.key === 'pinned'" type="button" class="pin-button"
                 :disabled="pinsBusy || pins[0] === row.node.key"
@@ -271,11 +257,15 @@
             </span>
           </div>
 
+          <SymbolRowActions v-if="actionsOpen(group.key, row.node.descriptor.path)" :path="row.node.descriptor.path"
+            :write-disabled="!canWrite(row.node.descriptor) || writing.has(row.node.descriptor.path)" :write-title="writeTitle(row.node.descriptor)"
+            :removable="selected.has(row.node.descriptor.path)" :remove-disabled="catalog.stale.value || selectionBusy.has(row.node.descriptor.path)"
+            @write="beginEdit(row.node.descriptor, group.key)" @remove="changeSelection(row.node.descriptor.path, null)" />
           <SymbolWriteEditor v-if="editing?.section === group.key && editing.symbol.path === row.node.descriptor.path"
             v-model="draft" :symbol="row.node.descriptor" :busy="writing.has(row.node.descriptor.path)" :disabled="!canWrite(row.node.descriptor)"
             @write="writeValue" @cancel="editing = null" />
           <div
-            v-if="writeSuccess[row.node.descriptor.path] !== undefined"
+            v-if="actionsOpen(group.key, row.node.descriptor.path) && writeSuccess[row.node.descriptor.path] !== undefined"
             class="write-success"
             :data-testid="`write-ok-${row.node.descriptor.path}`"
           >
@@ -393,6 +383,7 @@ import SetupHint from './SetupHint.vue'
 import VariablePath from './VariablePath.vue'
 import SelectedSignals from './SelectedSignals.vue'
 import SymbolWriteEditor from './SymbolWriteEditor.vue'
+import SymbolRowActions from './SymbolRowActions.vue'
 import { useWatchWorkspace } from '../../composables/useWatchWorkspace'
 import { API_BASE } from '../../lib/runtimeEndpoint'
 import { DESKTOP_SETTINGS_STORAGE_KEY } from '../../lib/desktopSettings'
@@ -457,6 +448,14 @@ const selectedPaths = computed(() => [...selected.value])
 const selectionBusy = shallowRef(new Set<string>())
 const writing = shallowRef(new Set<string>())
 type WriteSection = 'selected' | 'pinned' | 'all'
+const actions = shallowRef<{ section: WriteSection; path: string } | null>(null)
+function actionsOpen(section: WriteSection, path: string) {
+  return actions.value?.section === section && actions.value.path === path
+}
+function toggleActions(section: WriteSection, path: string) {
+  editing.value = null
+  actions.value = actionsOpen(section, path) ? null : { section, path }
+}
 const editing = shallowRef<{ symbol: SymbolDescriptor; section: WriteSection; generation: number } | null>(null)
 const draft = ref('')
 let selectionRevision = 0
@@ -742,7 +741,10 @@ async function changeSelection(path: string, symbol: SymbolDescriptor | null): P
 }
 
 function selectionRemoved(path: string): void {
-  if (editing.value?.section === 'selected' && editing.value.symbol.path === path) editing.value = null
+  if (actions.value?.path === path) {
+    actions.value = null
+    editing.value = null
+  }
   emit('selection-removed', path)
 }
 
@@ -973,6 +975,7 @@ watch(() => props.symbolLoaded, loaded => {
   if (loaded) void loadWorkspace()
 })
 watch(catalog.generation, () => {
+  actions.value = null
   editing.value = null
   selectedDescriptors.value = new Map()
   if (props.symbolLoaded && selected.value.size) void refreshSelectedDescriptors()
@@ -1124,7 +1127,7 @@ watch(tree, roots => {
 .branch-count { color: var(--muted); font: 11px Consolas, monospace; }
 .variable-row { border-bottom: 1px solid var(--border); }
 .variable-row.selected { background: color-mix(in srgb, var(--accent) 7%, transparent); }
-.variable-main { display: grid; grid-template-columns: 18px 24px minmax(100px, 1fr) 64px 66px 42px auto; align-items: center; gap: 5px; min-height: 36px; padding: 4px 8px; }
+.variable-main { display: grid; grid-template-columns: 18px 24px minmax(100px, 1fr) 64px 66px auto; align-items: center; gap: 5px; min-height: 36px; padding: 4px 8px; }
 .visibility-slot { display: grid; place-items: center; width: 24px; height: 24px; }
 .visibility-button { display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; background: transparent; color: var(--accent); cursor: pointer; }
 .visibility-button:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
@@ -1134,23 +1137,21 @@ watch(tree, roots => {
 .variable-type, .variable-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font: 11px Consolas, monospace; }
 .variable-value { color: var(--info); text-align: right; white-space: normal; overflow-wrap: anywhere; }
 @container (max-width: 720px) {
-  .variable-main { grid-template-columns: 18px 24px minmax(0, 1fr) 32px auto; row-gap: 0; }
+  .variable-main { grid-template-columns: 18px 24px minmax(0, 1fr) auto; row-gap: 0; }
   .variable-main > input { grid-column: 1; grid-row: 1 / 3; }
   .visibility-slot { grid-column: 2; grid-row: 1 / 3; }
-  .variable-name { grid-column: 3 / 6; grid-row: 1; }
+  .variable-name { grid-column: 3 / -1; grid-row: 1; }
   .variable-type { display: none; }
   .variable-value { grid-column: 3; grid-row: 2; text-align: left; }
-  .variable-main > .edit-button { grid-column: 4; grid-row: 2; }
-  .pin-controls { grid-column: 5; grid-row: 2; }
+  .pin-controls { grid-column: 4; grid-row: 2; }
 }
 @container (min-width: 440px) and (max-width: 720px) {
-  .variable-main { grid-template-columns: 18px 24px minmax(0, 1fr) 76px 32px auto; }
-  .variable-main > input, .visibility-slot, .variable-name, .variable-value, .variable-main > .edit-button, .pin-controls { grid-column: auto; grid-row: 1; }
+  .variable-main { grid-template-columns: 18px 24px minmax(0, 1fr) 76px auto; }
+  .variable-main > input, .visibility-slot, .variable-name, .variable-value, .pin-controls { grid-column: auto; grid-row: 1; }
   .variable-value { text-align: right; white-space: nowrap; }
 }
 .edit-button { border: 0; background: transparent; color: var(--accent); cursor: pointer; font-size: 11px; white-space: nowrap; }
 .edit-button:disabled { color: var(--muted); cursor: default; }
-.selected-actions { display: flex; gap: 12px; padding: 0 8px 3px 28px; }
 .write-success { padding: 0 8px 7px 60px; color: var(--success); font-size: 11px; }
 .empty-state { padding: 24px 12px; color: var(--muted); text-align: center; font-size: 12px; }
 .modal-overlay { position: fixed; z-index: 1000; inset: 0; display: grid; place-items: center; padding: 20px; background: rgb(0 0 0 / 45%); }

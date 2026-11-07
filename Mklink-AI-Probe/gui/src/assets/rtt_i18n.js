@@ -66,8 +66,8 @@ var I18N = {
     help_sw_variables: '程序变量与已选信号', help_sw_sampling: '采集与波形',
     help_sw_var_items: [
       '加载与目标固件匹配的 AXF / ELF。在<strong>搜索变量</strong>中勾选变量，它会出现在上方的<strong>已选信号</strong>中。图钉可将变量加入<strong>常用变量</strong>。',
-      '在已选信号、常用变量或搜索结果中点击<strong>写入</strong>，输入新值或选择选项，再点击<strong>确认写入</strong>。写入需要连接设备并选用可写的变量。位域只读。',
-      '点击已选信号的<strong>移除</strong>可取消该变量的采样。下方两处列表同步取消勾选，已置顶的变量仍在常用变量中。眼睛按钮只控制波形的显示。',
+      '在已选信号、常用变量或搜索结果中，点击变量名展开操作，再点一次收起。选择<strong>写入</strong>，输入新值后点击<strong>确认写入</strong>。写入需要连接设备并选用可写的变量。位域只读。',
+      '对已勾选的变量，展开后点击<strong>移除</strong>可取消采样。各列表同步取消勾选，置顶状态保留。眼睛按钮只控制波形的显示。',
       '用<strong>整理</strong>为信号分组，或将信号拖入另一组。双击名称可设置别名，ƒx 可设置显示公式和颜色。'
     ],
     help_sw_sampling_items: [
@@ -187,8 +187,8 @@ var I18N = {
     help_sw_variables: 'Program variables and selected signals', help_sw_sampling: 'Acquisition and waveforms',
     help_sw_var_items: [
       'Load the AXF / ELF that matches the target firmware. Check a variable in <strong>Find variables</strong> to add it to <strong>Selected signals</strong>. Use the pin to add it to <strong>Pinned variables</strong>.',
-      'Click <strong>Write</strong> in any of these three lists, enter or select the new value, then click <strong>Confirm write</strong>. Writing requires a connected device and a writable variable. Bit fields are read-only.',
-      'Click <strong>Remove</strong> in Selected signals to stop sampling that variable. Both lower lists uncheck it. Pinned variables stay pinned. The eye button controls waveform visibility only.',
+      'Click a variable name in any of these three lists to show its actions. Click it again to collapse them. Select <strong>Write</strong>, enter or select a value, then click <strong>Confirm write</strong>. Writing requires a connected device and a writable variable. Bit fields are read-only.',
+      'For a checked variable, expand its actions and click <strong>Remove</strong> to stop sampling it. The lists uncheck it together and keep its pin. The eye button controls waveform visibility only.',
       'Use <strong>Organize</strong> to group signals, or drag a signal into another group. Double-click a name to set an alias. Use ƒx to set a display formula or color.'
     ],
     help_sw_sampling_items: [

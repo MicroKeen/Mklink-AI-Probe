@@ -1,5 +1,5 @@
-vi.mock('./SelectedSignals.vue', () => ({ default: { props: ['paths'], template:
-  '<div><div v-for="path in paths" :key="path"><slot name="actions" :path="path" /></div></div>' } }))
+vi.mock('./SelectedSignals.vue', () => ({ default: { props: ['paths', 'expandedPath'], emits: ['actions'], template:
+  `<div><div v-for="path in paths" :key="path"><button :aria-label="'变量操作 '+path" :aria-expanded="expandedPath===path" @click="$emit('actions',path)">{{path}}</button><slot v-if="expandedPath===path" name="actions" :path="path" /></div></div>` } }))
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick, ref, shallowRef } from 'vue'
@@ -212,6 +212,7 @@ describe('SymbolVariablePanel', () => {
     await flushPromises()
     expect(mocks.searchSymbols).toHaveBeenLastCalledWith('controller')
     expect(wrapper.find('[data-testid="leaf-controller.bits"]').exists()).toBe(true)
+    await wrapper.get('[data-testid="leaf-controller.bits"] button.variable-name').trigger('click')
     expect(wrapper.get('[data-testid="edit-controller.bits"]').attributes('disabled')).toBeDefined()
     expect(wrapper.get('[data-testid="edit-controller.bits"]').attributes('title')).toContain('位域只读')
     expect(wrapper.find('[data-testid="leaf-controller.target"]').exists()).toBe(false)
@@ -530,6 +531,7 @@ describe('SymbolVariablePanel', () => {
       props: { deviceConnected: true, latestValues: { gain: 1.25 } },
     })
     await flushPromises()
+    await wrapper.get('[data-testid="leaf-gain"] button.variable-name').trigger('click')
     await wrapper.get('[data-testid="edit-gain"]').trigger('click')
     await wrapper.get('[data-testid="write-input-gain"]').setValue('1.3')
     await wrapper.get('[data-testid="write-gain"]').trigger('click')
@@ -547,7 +549,18 @@ describe('SymbolVariablePanel', () => {
     await flushPromises()
     const pinned = wrapper.get('[data-testid="pinned-variables"]')
     const search = wrapper.get('[data-testid="all-variables"]')
-    for (const open of [wrapper.get('[data-testid="selected-write-gain"]'), pinned.get('[data-testid="edit-gain"]')]) {
+    const selectedName = wrapper.get('button[aria-label="变量操作 gain"]')
+    const pinnedName = pinned.get('[data-testid="leaf-gain"] button.variable-name')
+    expect(wrapper.find('.row-actions').exists()).toBe(false)
+    await selectedName.trigger('click')
+    expect(selectedName.attributes('aria-expanded')).toBe('true')
+    await selectedName.trigger('click')
+    expect(wrapper.find('.row-actions').exists()).toBe(false)
+    expect(mocks.writeSymbol).not.toHaveBeenCalled()
+    for (const [name, selector] of [[selectedName, '[data-testid="selected-write-gain"]'], [pinnedName, '[data-testid="edit-gain"]']] as const) {
+      await name.trigger('click')
+      expect(wrapper.findAll('.row-actions')).toHaveLength(1)
+      const open = wrapper.get(selector)
       expect(open.text()).toBe('写入')
       await open.trigger('click')
       expect(wrapper.findAll('[data-testid="write-input-gain"]')).toHaveLength(1)
@@ -560,6 +573,7 @@ describe('SymbolVariablePanel', () => {
       expect(mocks.writeSymbol).toHaveBeenCalledWith('gain', 2)
     }
     expect(mocks.writeSymbol).toHaveBeenCalledTimes(2)
+    await selectedName.trigger('click')
     await wrapper.get('[data-testid="selected-remove-gain"]').trigger('click')
     await flushPromises()
     expect(wrapper.find('[data-testid="selected-remove-gain"]').exists()).toBe(false)
@@ -568,6 +582,8 @@ describe('SymbolVariablePanel', () => {
     }
     expect(server.pins()).toEqual(['gain'])
     expect(wrapper.emitted('selection-removed')).toEqual([['gain']])
+    await pinnedName.trigger('click')
+    expect(pinned.find('[data-testid="remove-gain"]').exists()).toBe(false)
     await pinned.get('[data-testid="edit-gain"]').trigger('click')
     expect(pinned.get('[data-testid="write-input-gain"]').exists()).toBe(true)
     wrapper.unmount()
@@ -578,6 +594,7 @@ describe('SymbolVariablePanel', () => {
     mocks.searchSymbols.mockResolvedValue([])
     const wrapper = mount(SymbolVariablePanel, { props: { deviceConnected: true, latestValues: {} } })
     await flushPromises()
+    await wrapper.get('button[aria-label="变量操作 gain"]').trigger('click')
     expect(wrapper.get('[data-testid="selected-write-gain"]').attributes('disabled')).toBeDefined()
     server.fetch.mockResolvedValueOnce(okJson({ error: 'busy' }))
     await wrapper.get('[data-testid="selected-remove-gain"]').trigger('click')
@@ -597,6 +614,7 @@ describe('SymbolVariablePanel', () => {
       props: { deviceConnected: true, latestValues: { gain: 1.25 } },
     })
     await flushPromises()
+    await wrapper.get('[data-testid="leaf-gain"] button.variable-name').trigger('click')
 
     expect(wrapper.get('[data-testid="edit-gain"]').attributes('disabled')).toBeDefined()
     expect(wrapper.text()).not.toContain('AXF 已变化')
@@ -609,6 +627,7 @@ describe('SymbolVariablePanel', () => {
       props: { deviceConnected: true, latestValues: { gain: 1.25 } },
     })
     await flushPromises()
+    await wrapper.get('[data-testid="leaf-gain"] button.variable-name').trigger('click')
     await wrapper.get('[data-testid="edit-gain"]').trigger('click')
     await wrapper.get('[data-testid="write-input-gain"]').setValue('1.3')
     await wrapper.get('[data-testid="write-gain"]').trigger('click')

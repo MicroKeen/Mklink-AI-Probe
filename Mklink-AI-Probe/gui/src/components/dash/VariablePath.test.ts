@@ -15,7 +15,7 @@ describe('VariablePath', () => {
   })
   it('drags overflowing text and releases capture without affecting adjacent controls', async () => {
     vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
-    const wrapper = mount(VariablePath, { props: { path: 'long.variable.member' } })
+    const wrapper = mount(VariablePath, { props: { path: 'long.variable.member', expanded: false } })
     const el = wrapper.element as HTMLElement
     Object.defineProperties(el, { scrollWidth: { value: 500 }, clientWidth: { value: 160 } })
     el.setPointerCapture = vi.fn()
@@ -26,6 +26,12 @@ describe('VariablePath', () => {
     expect(el.scrollLeft).toBe(100)
     await wrapper.trigger('pointerup', { pointerId: 1 })
     expect(el.releasePointerCapture).toHaveBeenCalledWith(1)
+    await wrapper.trigger('click', { detail: 1 })
+    expect(wrapper.emitted('actions')).toBeUndefined()
+    await wrapper.trigger('pointerdown', { button: 0, pointerId: 2, clientX: 50 })
+    await wrapper.trigger('pointerup', { pointerId: 2 })
+    await wrapper.trigger('click', { detail: 1 })
+    expect(wrapper.emitted('actions')).toHaveLength(1)
     await wrapper.trigger('pointermove', { pointerId: 1, clientX: 0 })
     expect(el.scrollLeft).toBe(100)
     await wrapper.setProps({ path: 'short' })
