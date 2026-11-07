@@ -6,7 +6,7 @@
 |---|---|
 | HPM5301 / hpm5301evklite / HPMLink | 实机在线与脱机界面均显示 JTAG。有效选项为 1、5、10、20、50、100、200、500 kHz，以及 1、2、4、5、10、20、30 MHz，共 15 档。两页均无 8 MHz。 |
 | 在线 BIN | 请求为 4 000 000 Hz。在线任务与共享 Runtime 最终回执均为 `succeeded`，RTT、SuperWatch 和 SystemView 均已恢复，恢复错误为空。重新读取完整 65 536 B 窗口所得 SHA-256 与烧录前一致。最初的测试脚本在 Runtime 仍为 `running` 时做了终态断言，最终回执和回读另行核实。 |
-| 脱机脚本 | 实际界面选 2 MHz，请求携带 `swd_clock_hz=2000000`。生成的 HPM JTAG 脚本含 `cmd.set_swd_clock(2000000)`，部署回执为 `succeeded`。 |
+| 脱机脚本和 BIN | 实际界面选 2 MHz，请求携带 `swd_clock_hz=2000000`。生成的 HPM JTAG 脚本含 `cmd.set_swd_clock(2000000)`，部署成功。BIN 的硬件触发回执为 `completed`，完整 65 536 B 回读哈希与烧录前一致。另一次 HEX 测试未取得所查作业的终态回执，仅核实了脚本、部署和事后回读。 |
 | MUX 状态 5 | 普通访问失败提示核对目标供电与调试连接。写入或复位仍提示结果可能未知，专用原子睡眠命令仍报告状态确认失败。 |
 
-515 项相关 Python 测试、227 项相关 GUI 测试及 1202 项全量 GUI 测试通过。独立 Edge 测试使用模拟探针，核对了生产页面的两组选择器。固件会话的实机记录为 `hpm5301-full-20261107` 下的 `clock-menus.json`、`web-bin-reconciled.json` 和 `web-offline.json`。本轮实板范围是 HPM JTAG；ARM/SWD 档位切换与探针身份隔离通过自动化测试。
+515 项相关 Python 测试、227 项相关 GUI 测试及 1202 项全量 GUI 测试通过。独立 Edge 测试使用模拟探针，核对了生产页面的两组选择器。固件会话的实机记录为 `hpm5301-full-20261107` 下的 `clock-menus.json`、`web-bin-reconciled.json`、`web-offline-reconciled.json` 和 `web-offline-bin.json`。本轮实板范围是 HPM JTAG；ARM/SWD 档位切换与探针身份隔离通过自动化测试。
