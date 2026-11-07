@@ -40,7 +40,7 @@
 
 专用 HPMLink 也从正式 V4.7.2 升级到 HPMLink V4.7.3。GUI 一次确认，返回 `updated`，回枚举后的构建时间为 `2026-11-07T13:43:21`，UF2 family 为 `0x0B4D5048`。在 HPM5301 上，专用版 RTT 实收 183 B，SuperWatch 周期从 353 增至 1759，读取错误为 0。普通 V4.7.3 在 HPM5301 上通过 JTAG 硬件断点、ROM 烧录及 64 KiB 窗口回读，RTT 收发分别为 96,256 B、286 B，四路 SuperWatch 共采到 3347 个样本。对应记录为 `hpmlink-gui/result.json`、`hp-jtag-after.json` 和 HPM5301 工程验收目录中的 `microlink-v473-hpm-release-20261107/hpm-acceptance.json`。
 
-## 最终普通 V4.7.3 再接 STM32F103
+## 普通 V4.7.3 构建 15:00:14 再接 STM32F103
 
 | 验收项 | 实机结果 |
 |---|---|
@@ -58,5 +58,6 @@
 
 - 本轮桌面实测使用解包后的候选。精确版本的 Windows 覆盖安装、全局 Skill 更新及用户数据保留仍须在最终发版流程核验。
 - 官方固件索引与候选通道独立。正式渠道一致性须在发布决策时复核。签名、标签、发布和公网索引更新尚未执行。
+- 固件组正在为 V3.6.9 和两款 V4.7.3 更新设备盘 README 及帮助链接。本文的实测绑定上文两款 V4 的 SHA 和构建时间，新生成的包须另核身份、升级回执和目标回读。[固件候选 PR #22](https://github.com/Aladdin-Wang/MicroLink_Plus/pull/22)
 - F103 每 100 ms 唤醒一次时，两项连续采集都未取得有效数据。涉及这个场景的功能说明和发布决定须保留上述限制。
 - 既有普通 V4/H7 性能参照为 4 B SuperWatch 约 26.53 万次/秒、独立 RTT 中位 849.64 KiB/s、4096 B 连续读取约 1053–1056 KiB/s。本轮 F103 读数未重测这三项吞吐。普通请求 P95 稳定低于 1 ms 和视情况将采样最大间隔降至 20 µs 内仍是开放目标。[性能基线](v043-host-baseline.md) [V4 独立与并行对照](v043-v4-iar-exit-context.md) [4096 B 连续采集](v043-bulk-capture.md)
