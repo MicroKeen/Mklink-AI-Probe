@@ -92,6 +92,24 @@ def configuration_clock_options(bridge, *, hpm=False, interface=None):
     return options
 
 
+def cached_flash_clocks(device, port):
+    """Read only the capability cache belonging to the selected command port."""
+    if not port or not device or not device.connected or str(device.port).casefold() != port.casefold():
+        return {}
+    bridge = getattr(device, '_bridge', None)
+    if not firmware_lines(bridge):
+        return {}
+    jtag = clock_options(bridge, interface='JTAG')
+    swd = clock_options(bridge, interface='SWD')
+    choices = {}
+    if jtag['clock_source'] == 'jtag-advertised' or active_clock_interface(bridge) == 'JTAG':
+        choices['JTAG'] = jtag['clocks_hz']
+    # Legacy SWD flashing accepts rates outside the named acquisition profiles.
+    if swd['clock_source'].endswith('-advertised'):
+        choices['SWD'] = swd['clocks_hz']
+    return choices
+
+
 def invalidate_clock(bridge):
     context = bridge._ctx
     context.swd_clock_hz = 0

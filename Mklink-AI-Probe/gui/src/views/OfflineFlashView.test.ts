@@ -1245,6 +1245,8 @@ describe('OfflineFlashView', () => {
   })
 
   it.each(['bin', 'hex'])('configures HPM %s download without Pack or FLM algorithms', async (format) => {
+    offlineMocks.getStatus.mockResolvedValue({ available: true, model: 'V4', disk_path: 'G:/',
+      flash_clocks_hz: { JTAG: [1000, 4000000, 10000000], SWD: [8000000, 10000000] } })
     onlineMocks.searchTargets.mockResolvedValue([{
       part_number: 'HPM5301xEGx', vendor: 'HPMicro', pack_id: null,
       pack_version: null, installed: true, source: 'builtin',
@@ -1255,6 +1257,10 @@ describe('OfflineFlashView', () => {
 
     await wrapper.get('.target-result').trigger('click')
     await flushPromises()
+    const clock = wrapper.get<HTMLSelectElement>('[data-testid="offline-clock"]')
+    expect([...clock.element.options].map(o => Number(o.value))).toEqual([1000, 4000000, 10000000])
+    const hz = format === 'bin' ? 1000 : 4000000
+    await clock.setValue(String(hz))
     const input = wrapper.get('input[type="file"][multiple]')
     Object.defineProperty(input.element, 'files', {
       configurable: true,
@@ -1269,6 +1275,7 @@ describe('OfflineFlashView', () => {
     expect(offlineMocks.deploy).toHaveBeenCalledOnce()
     const payload = offlineMocks.deploy.mock.calls[0][0]
     expect(payload.target_part).toBe('HPM5301xEGx')
+    expect(payload.swd_clock_hz).toBe(hz)
     expect(payload.board).toBe('hpm5301evklite')
     expect(payload.algorithms).toEqual([])
     expect(payload.firmwares[0].algorithm_id).toBe('')

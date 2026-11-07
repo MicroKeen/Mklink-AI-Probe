@@ -45,8 +45,7 @@ class MuxTargetError(RuntimeError):
         elif status == 5 and op == SLEEP_ACCESS_COMMAND:
             message = 'Sleep access or restoration of the original core state was not confirmed; submitted writes must not be replayed'
         elif status == 5:
-            message = ('Multiplex target status 5; target access failed. Check target power and debug access. '
-                       'For a periodically sleeping Cortex-M, enable sleep access before reading or starting RTT.')
+            message = 'Multiplex target status 5; target access failed. Check target power and the debug connection.'
             if op not in (0x11, 0x13, 0x16):
                 message += ' A submitted write or reset may have an unknown outcome.'
         else:

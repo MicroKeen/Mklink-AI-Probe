@@ -11,6 +11,7 @@ import HpmIspSettings from '../components/HpmIspSettings.vue'
 import HpmIspOtpPanel from '../components/HpmIspOtpPanel.vue'
 import type { HpmIspOtpChange, HpmIspOtpBatchPlan, HpmIspOtpSnapshot } from '../types/hpmOtp'
 import { API_BASE } from '../lib/runtimeEndpoint'
+import { flashClocks, formatFlashClock } from '../lib/flashClocks'
 import type { HpmOfflineOtp, HpmIspConfig, HpmIspOfflineOtp } from '../types/offlineFlash'
 import { HPM_ISP_BAUD_RATES } from '../types/offlineFlash'
 import { provideConfirmation } from '../composables/useConfirmation'
@@ -96,9 +97,8 @@ const scriptName = ref(saved.scriptName ?? 'factory-download.py')
 const automaticCount = ref(1)
 const idcodeTimeout = ref(saved.idcodeTimeout ?? 10000)
 const swdClock = ref(saved.swdClock ?? 10000000)
-const offlineClocks = computed(() => [1000, 5000, 10000, 20000, 50000, 100000,
-  200000, 500000, 1000000, 2000000, 4000000, 5000000,
-  ...(!hpmMode.value ? [8000000] : []), 10000000, 20000000, 30000000])
+const clockBus = computed(() => hpmMode.value ? 'JTAG' : 'SWD')
+const offlineClocks = computed(() => flashClocks(disk.value?.flash_clocks_hz, clockBus.value, true))
 
 const algorithms = ref<AlgorithmRow[]>([])
 const firmwares = ref<FirmwareRow[]>([])
@@ -226,6 +226,7 @@ const securityReady = computed(() => (
 ))
 const canBuild = computed(() => (
   !!effectiveModel.value
+  && (ispMode.value || offlineClocks.value.includes(swdClock.value))
   && !!disk.value?.available
   && securityReady.value
   && (!ispMode.value || !ispOtpPending.value || !!ispOfflineOtp.value)
@@ -808,6 +809,9 @@ function buildRequest(): {
   firmwareFiles: File[]
   flmFiles: File[]
 } {
+  if (!ispMode.value && !offlineClocks.value.includes(swdClock.value)) {
+    throw new Error(tr('请重新选择下载器支持的时钟档位。', 'Select a clock supported by the probe.'))
+  }
   const flmFiles: File[] = []
   const algorithmPayload: OfflineAlgorithmConfig[] = algorithms.value
     .filter(item => selectedAlgorithmIds.value.has(item.id))
@@ -1145,8 +1149,9 @@ onBeforeUnmount(() => {
         <label v-if="hpmMode && !ispMode" class="setting-row"><span>{{ tr('HPM 板卡', 'HPM Board') }}</span><select v-model="hpmBoard" class="form-select"><option v-for="item in hpmBoards" :key="item" :value="item">{{ item }}</option></select></label>
         <label class="setting-row"><span>{{ tr('自动烧录次数', 'Automatic Flash Count') }}</span><input v-model.number="automaticCount" data-testid="offline-automatic-count" type="number" min="1" max="9999" class="form-input" :disabled="effectiveModel === 'V2'"></label>
         <label v-if="!ispMode && automaticCount > 1" class="setting-row"><span>{{ tr('目标连接／换板等待时间（ms）', 'Connection / board replacement timeout (ms)') }}</span><input v-model.number="idcodeTimeout" data-testid="offline-connection-timeout" type="number" min="500" max="600000" step="500" class="form-input"></label>
-        <label v-if="!ispMode" class="setting-row"><span>{{ hpmMode ? 'JTAG' : 'SWD' }} {{ tr('时钟', 'clock') }}</span><select v-model.number="swdClock" class="form-select" data-testid="offline-clock"><option v-if="!offlineClocks.includes(swdClock)" :value="swdClock" disabled>{{ swdClock }} Hz — {{ tr('请重新选择', 'Choose again') }}</option><option v-for="hz in offlineClocks" :key="hz" :value="hz">{{ hz >= 1000000 ? `${hz / 1000000} MHz` : `${hz / 1000} kHz` }}</option></select></label>
+        <label v-if="!ispMode" class="setting-row"><span>{{ hpmMode ? 'JTAG' : 'SWD' }} {{ tr('时钟', 'clock') }}</span><select :value="offlineClocks.includes(swdClock) ? swdClock : ''" class="form-select" data-testid="offline-clock" @change="swdClock = Number(($event.target as HTMLSelectElement).value)"><option v-if="!offlineClocks.includes(swdClock)" value="" disabled>{{ formatFlashClock(swdClock) }} — {{ tr('请重新选择', 'Choose again') }}</option><option v-for="hz in offlineClocks" :key="hz" :value="hz">{{ formatFlashClock(hz) }}</option></select></label>
         <p v-if="!ispMode" class="muted">{{ tr('部署前核验固件支持的档位；旧固件不支持时会提示更新。', 'Firmware clock support is checked before deployment; update older firmware when prompted.') }}</p>
+        <p v-if="!ispMode && hpmMode && disk?.available && !disk.flash_clocks_hz?.JTAG" class="muted">{{ tr('配置候选；连接所选探针可核对支持的 JTAG 档位。', 'Configuration choices. Connect the selected probe to confirm supported JTAG rates.') }}</p>
         <p v-if="effectiveModel === 'V2' && swdClock > 10000000" class="muted">{{ tr('V2 的 20/30 MHz 需要支持高速时序的新版固件。', 'V2 20/30 MHz requires updated firmware with high-speed timing support.') }}</p>
         </fieldset>
       </aside>

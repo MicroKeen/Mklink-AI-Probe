@@ -1,6 +1,7 @@
 import type { TargetRecord } from './onlineFlash'
 
 export interface OfflineDiskStatus {
+  flash_clocks_hz?: import('../lib/flashClocks').FlashClocks
   probe_id?: string
   probes?: Array<{ probe_id: string; port: string; alias?: string; description?: string }>
   model?: 'V2' | 'V3' | 'V4' | null

@@ -10,6 +10,7 @@ import FlashMapPanel from '../components/online-flash/FlashMapPanel.vue'
 import MemoryReadPanel from '../components/online-flash/MemoryReadPanel.vue'
 import FirmwareWorkspace from '../components/online-flash/FirmwareWorkspace.vue'
 import ProbeSettingsPanel from '../components/online-flash/ProbeSettingsPanel.vue'
+import { flashClocks } from '../lib/flashClocks'
 import TargetPackPanel from '../components/online-flash/TargetPackPanel.vue'
 import { HexPreviewModel, type FormattedHexRow } from '../lib/hexPreview'
 import { OnlineFlashApiError, useOnlineFlashApi } from '../composables/useOnlineFlashApi'
@@ -28,7 +29,6 @@ const PROBE_DISCOVERY_ATTEMPTS = 6
 const PROBE_DISCOVERY_DELAY_MS = 500
 const AUTO_INSPECT_DELAY_MS = 150
 const SOURCE_POLL_INTERVAL_MS = 1000
-const ONLINE_FREQUENCIES = new Set([1_000_000, 2_000_000, 4_000_000, 8_000_000, 10_000_000, 20_000_000, 30_000_000])
 const TERMINAL = new Set<JobState>(['succeeded', 'failed', 'stopped'])
 const CANONICAL_ACTIONS: JobAction[] = ['connect', 'unlock', 'erase', 'program', 'verify', 'lock', 'reset', 'disconnect']
 const DEFAULT_ACTIONS: JobAction[] = ['connect', 'erase', 'program', 'verify', 'reset', 'disconnect']
@@ -45,7 +45,7 @@ function savedSettings(): SavedSettings {
 }
 const saved = savedSettings()
 function savedFrequency(value: number | undefined): number {
-  return value !== undefined && ONLINE_FREQUENCIES.has(value) ? value : 1_000_000
+  return value !== undefined && Number.isSafeInteger(value) && value > 0 ? value : 1_000_000
 }
 function savedResetVoltage(value: number | undefined): ResetVoltageMv {
   return value === 1800 || value === 5000 ? value : 3300
@@ -349,8 +349,8 @@ function setActions(values: JobAction[]): void {
   }
   actions.value = next
 }
-const canStart = computed(() => !!probeId.value && !!selectedTarget.value?.installed && !!inspection.value && !inspection.value.preview_only && !!firmwareName.value && !baseError.value && !active.value && !creatingJob.value && !recoveryBlocked.value && !packBusy.value && !inspectBusy.value && actionsAreValid(actions.value) && (!hpmMode.value || !!hpmBoard.value) && (!requiresSectorGeometry.value || geometryReliable.value || hpmMode.value) && (!actions.value.includes('erase') || !algorithmChoices.value.length || (!!selectedAlgorithmId.value || !!selectedAlgorithmIds.value.length)))
-const canErase = computed(() => !!probeId.value && !!selectedTarget.value?.installed && !hpmMode.value && !active.value && !creatingJob.value && !recoveryBlocked.value && (!algorithmChoices.value.length || (!!selectedAlgorithmId.value || !!selectedAlgorithmIds.value.length)))
+const canStart = computed(() => validFrequency.value && !!probeId.value && !!selectedTarget.value?.installed && !!inspection.value && !inspection.value.preview_only && !!firmwareName.value && !baseError.value && !active.value && !creatingJob.value && !recoveryBlocked.value && !packBusy.value && !inspectBusy.value && actionsAreValid(actions.value) && (!hpmMode.value || !!hpmBoard.value) && (!requiresSectorGeometry.value || geometryReliable.value || hpmMode.value) && (!actions.value.includes('erase') || !algorithmChoices.value.length || (!!selectedAlgorithmId.value || !!selectedAlgorithmIds.value.length)))
+const canErase = computed(() => validFrequency.value && !!probeId.value && !!selectedTarget.value?.installed && !hpmMode.value && !active.value && !creatingJob.value && !recoveryBlocked.value && (!algorithmChoices.value.length || (!!selectedAlgorithmId.value || !!selectedAlgorithmIds.value.length)))
 const hpmAlgorithmNotRequired = computed(() => (
   selectedTarget.value?.part_number.toLowerCase().startsWith('hpm') ?? false
 ))
@@ -372,7 +372,11 @@ function defaultBinAddress(partNumber: string): string {
   return isHpmPart(partNumber) ? '0x80000400' : ''
 }
 const hpmMode = computed(() => isHpmPart(selectedTarget.value?.part_number ?? ''))
-const memoryReadDisabled = computed(() => !probeId.value || !selectedTarget.value?.installed || active.value || packBusy.value || inspectBusy.value || targetMemoryMapBusy.value)
+const clockBus = computed(() => hpmMode.value ? 'JTAG' : 'SWD')
+const probeClocks = computed(() => probes.value.find(probe => probe.unique_id === probeId.value)?.flash_clocks_hz)
+const frequencies = computed(() => flashClocks(probeClocks.value, clockBus.value))
+const validFrequency = computed(() => frequencies.value.includes(frequency.value))
+const memoryReadDisabled = computed(() => !validFrequency.value || !probeId.value || !selectedTarget.value?.installed || active.value || packBusy.value || inspectBusy.value || targetMemoryMapBusy.value)
 const showingReadProgress = computed(() => progressOwner.value === 'read')
 const progressValue = computed(() => showingReadProgress.value ? memoryReadProgress.value : totalProgress.value)
 const progressLabel = computed(() => showingReadProgress.value ? tr('读取进度', 'Read progress') : tr('烧录总进度', 'Total Progress'))
@@ -419,21 +423,28 @@ function persist(): void {
 }
 watch([frequency, connectMode, resetMode, resetVoltageMv, desiredPart, hpmBoard, baseAddress], persist)
 
+let probeListRevision = 0
 async function refreshProbes(retryWhenEmpty = false): Promise<void> {
+  const revision = ++probeListRevision
   probeBusy.value = true; probeError.value = ''
   try {
     const attempts = retryWhenEmpty ? PROBE_DISCOVERY_ATTEMPTS : 1
     for (let attempt = 0; attempt < attempts; attempt += 1) {
       try {
-        probes.value = await api.listProbes()
+        const result = await api.listProbes()
+        if (revision !== probeListRevision) return
+        probes.value = result
         if (probes.value.length > 0 || attempt === attempts - 1) break
       } catch (error) {
+        if (revision !== probeListRevision) return
         if (attempt === attempts - 1) throw error
       }
       await new Promise(resolve => setTimeout(resolve, PROBE_DISCOVERY_DELAY_MS))
     }
     if (!probes.value.some(item => item.unique_id === probeId.value)) probeId.value = probes.value.length === 1 ? probes.value[0]!.unique_id : ''
-  } catch (error) { probeError.value = message(error) } finally { probeBusy.value = false }
+  } catch (error) { probeError.value = message(error) } finally {
+    if (revision === probeListRevision) probeBusy.value = false
+  }
 }
 
 async function searchTargets(query = '', commit = true): Promise<TargetRecord[]> {
@@ -1033,7 +1044,7 @@ function receiveEvent(event: JobStreamEvent): void {
 watch([probeId, () => selectedTarget.value?.part_number, () => inspection.value?.image_id, resetMode, resetVoltageMv, active], () => answerConfirmation(false))
 
 async function startJob(customActions = actions.value, sectorAddresses?: number[]): Promise<void> {
-  if (confirmationMessage.value !== null) return
+  if (confirmationMessage.value !== null || !validFrequency.value) return
   const orderedActions = canonicalActions(customActions)
   if (creatingJob.value || recoveryBlocked.value || active.value || !probeId.value || !selectedTarget.value?.installed || !actionsAreValid(orderedActions) || (orderedActions.some(action => action === 'program' || action === 'verify') && !inspection.value)) return
   const resolvedSectors = sectorAddresses ?? (
@@ -1119,16 +1130,21 @@ onMounted(() => {
   void Promise.all([refreshProbes(true), refreshPackStatus(), searchTargets(targetQuery.value), refreshDesiredTarget(), loadCustomFlms()])
     .catch(error => { if (!disposed) packError.value = message(error) })
 })
+let refreshProbesOnReturn = false
 onActivated(() => {
   disposed = false
+  if (refreshProbesOnReturn && !active.value && !creatingJob.value) void refreshProbes()
+  refreshProbesOnReturn = false
   startSourcePolling()
   void startNativeDropListener()
 })
 onDeactivated(() => {
+  refreshProbesOnReturn = true
   stopSourcePolling()
   stopNativeDrops()
 })
 onBeforeUnmount(() => {
+  probeListRevision++
   clearTimeout(recoveryTimer)
   disposed = true
   recoveryGeneration += 1
@@ -1149,7 +1165,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="online-flash-grid" :inert="confirmationMessage !== null">
     <aside class="workspace-zone settings-zone" data-zone="settings">
-      <ProbeSettingsPanel :probes="probes" :selected-id="probeId" :frequency="frequency" :connect-mode="connectMode" :reset-mode="resetMode" :reset-voltage-mv="resetVoltageMv" :busy="probeBusy || active || creatingJob || recoveryBusy" :error="probeError" @refresh="refreshProbes" @update:selected-id="probeId = $event" @update:frequency="frequency = $event" @update:connect-mode="connectMode = $event" @update:reset-mode="resetMode = $event" @update:reset-voltage-mv="resetVoltageMv = $event" />
+      <ProbeSettingsPanel :bus="clockBus" :clocks="frequencies" :capability-known="!!probeClocks?.[clockBus]" :probes="probes" :selected-id="probeId" :frequency="frequency" :connect-mode="connectMode" :reset-mode="resetMode" :reset-voltage-mv="resetVoltageMv" :busy="probeBusy || active || creatingJob || recoveryBusy" :error="probeError" @refresh="refreshProbes" @update:selected-id="probeId = $event" @update:frequency="frequency = $event" @update:connect-mode="connectMode = $event" @update:reset-mode="resetMode = $event" @update:reset-voltage-mv="resetVoltageMv = $event" />
       <TargetPackPanel :targets="targets" :query="targetQuery" :selected-part="selectedTarget?.part_number || ''" :selected-installed="!!selectedTarget?.installed" :selected-algorithm-ids="selectedAlgorithmIds" :algorithm-plan="inspection?.algorithm_plan || []" :selected-algorithm-id="selectedAlgorithmId" :algorithm-choices="algorithmChoices" :selection-locked="active || creatingJob || recoveryBlocked" :status="packStatus" :busy="packBusy" :cancel-pending="packCancelPending" :progress="packProgress" :phase="packPhase" :error="packError" :algorithms="customFlms" :flash-algorithms="flashAlgorithms" :algorithm-busy="customFlmBusy" :algorithm-error="customFlmError" :can-manage-algorithms="!active && !hpmAlgorithmNotRequired" :algorithm-not-required="hpmAlgorithmNotRequired" @search="searchTargets" @update:query="updateTargetQuery" @select="selectTarget" @select-algorithms="selectAlgorithms" @select-algorithm="selectAlgorithm" @update-index="updatePackIndex" @import-pack="importPack" @cancel="cancelPack" @add-algorithm="addCustomFlm" @remove-algorithm="removeCustomFlm" />
       <label v-if="hpmMode" class="hpm-setting"><span>{{ tr('HPM 板卡', 'HPM Board') }}</span><select v-model="hpmBoard" data-testid="hpm-board"><option v-for="item in hpmBoards" :key="item" :value="item">{{ item }}</option></select></label>
     </aside>

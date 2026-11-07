@@ -826,6 +826,10 @@ def create_offline_download_router(
                 selected = await asyncio.to_thread(select_probe, selector)
                 choices['probe_id'] = selected['probe_id']
                 disk = (await asyncio.to_thread(resolve_volume, selected['probe_id']))['root']
+                if selected['probe_id'] == runtime.info.get('probe_id'):
+                    from mklink.capture_clock import cached_flash_clocks
+                    choices['flash_clocks_hz'] = cached_flash_clocks(
+                        device_provider() if callable(device_provider) else None, selected.get('port'))
             else:
                 disk = await asyncio.to_thread(find_microkeen_disk)
         except (ConnectionError, RuntimeError) as error:
