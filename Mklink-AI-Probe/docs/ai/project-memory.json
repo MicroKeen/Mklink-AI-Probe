@@ -1,20 +1,20 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-07T09:09:14+08:00",
+  "updated_at": "2026-11-07T10:22:44+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.4.3-fixes",
-    "head": "产品等价已安装b8a1f658；本轮仅合并验收文档。最终HEAD/PR69合并SHA以Git为准。",
-    "remote_head": "PR69已合并main/186b6a0f；后续仅空间清理文档，精确HEAD查Git。正式资产不变。",
+    "head": "SuperWatch界面源码cfb1bae8，生产Web与验收见v043-superwatch-list-actions.md。精确HEAD与PR状态查Git。",
+    "remote_head": "PR69已合并main/186b6a0f。0.4.3继续共用修复分支和草稿PR71。",
     "working_tree": "复用E盘主工作区，保留旧v0.4.2分支和两个detached工作树；本轮及后续修复共用codex/v0.4.3-fixes。"
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "storage_cleanup_complete",
-    "current_task": "11/7历史空间清理完成：删除29.558GiB，F余30.758GiB；112含链接组清单已生成，见v043-space-cleanup-20261107.md。仅交接文档，产品不变。"
+    "current_task": "SuperWatch三处变量列表统一写入，已选行可移除并同步取消勾选；中英文帮助已校正。见v043-superwatch-list-actions.md。",
+    "status": "superwatch_list_actions_verified"
   },
   "milestones": [
     {
@@ -63,7 +63,7 @@
     },
     {
       "area": "AI Skill与共享GUI",
-      "result": "GUI/回收与UART检查及实装见v043-gui-open.md、v043-uart-baud-options.md、v043-gui-uart-local-install.md。3655/2655载荷全匹配、5339数据不变、57 MCP/原生/Web/退出通过。11/7全量6695过/2skip/4隔离FLM环境错；补路径后打包6过覆盖全部错误，GUI1198过/Web42一致，见v043-merge-cleanup.md。MCP强杀进程树边界保留。"
+      "result": "GUI/回收与UART检查及实装见v043-gui-open.md、v043-uart-baud-options.md、v043-gui-uart-local-install.md。3655/2655载荷全匹配、5339数据不变、57 MCP/原生/Web/退出通过。11/7全量6695过/2skip/4隔离FLM环境错；补路径后打包6过覆盖全部错误，GUI1198过/Web42一致，见v043-merge-cleanup.md。MCP强杀进程树边界保留。 11/7变量写入/移除/帮助174 GUI及Edge模拟接口通过，见v043-superwatch-list-actions.md。"
     },
     {
       "area": "RTT自动恢复与在线静默收尾",
