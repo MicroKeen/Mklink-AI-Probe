@@ -85,6 +85,30 @@ def test_channel_socket_idle_timeout_and_backend_binding(monkeypatch):
     assert connect.call_args.kwargs['sock'] is raw
     assert connect.call_args.kwargs['additional_headers'] == {
         'Authorization': 'Bearer test', 'X-MKLink-Session': 'session',
-        'X-MKLink-Probe': 'probe', 'X-MKLink-Instance': 'instance'}
+        'X-MKLink-Probe': 'probe', 'X-MKLink-Instance': 'instance',
+        'X-MKLink-Sleep-Budget': '1'}
     channel.close()
     connect.return_value.close.assert_called_once()
+
+
+def test_pending_atomic_read_waits_for_same_response_without_resending():
+    from mklink.runtime_memory_client import MemoryChannel
+    channel = object.__new__(MemoryChannel)
+    channel.connection = Mock()
+    channel.connection.recv.side_effect = [b'{"status":102,"sleep_timeout":113}',
+                                           b'{"status":200,"result":{"data_hex":"42"}}']
+    assert channel.read({'address': '0', 'size': 4096}) == {'data_hex': '42'}
+    channel.connection.send.assert_called_once()
+    assert [c.kwargs['timeout'] for c in channel.connection.recv.call_args_list] == [35, 113]
+
+
+@pytest.mark.parametrize('atomic,expected', [(False, 207), (True, 221)])
+def test_large_http_write_uses_current_shared_mode_only(client, atomic, expected):
+    sdk, http, _, _ = client
+    sdk._check_sleep_budget = True
+    http.side_effect = [{'sleep_access_atomic': atomic}, {'verified': True}]
+    assert sdk.call('write_memory', {'address': '0x20000000', 'data_hex': '00'*4096, 'verify': True})['verified']
+    query, write = http.call_args_list
+    assert query.args[3]['capability'] == 'debug_speed'
+    assert write.args[3]['arguments']['expected_atomic_sleep'] is atomic
+    assert write.kwargs['timeout'] == expected

@@ -37,12 +37,15 @@
             <button class="drag-handle" :aria-label="`移动 ${path} 到分组`" :disabled="!prefs.ready.value" :title="tr('按住拖入目标分组', 'Drag into a group')" @pointerdown="startDrag(path,$event)" @pointermove="dragMove" @pointerup="finishDrag" @pointercancel="cancelDrag" @lostpointercapture="cancelDrag" @dragstart.prevent>⠿</button>
             <input v-if="settings" type="checkbox" :value="path" v-model="checked" :aria-label="`选择 ${path}`" />
             <button class="signal-visibility" :aria-label="`${hidden?.has(path) ? tr('显示', 'Show') : tr('隐藏', 'Hide')} ${path}`" :aria-pressed="!hidden?.has(path)" :title="tr('显示或隐藏波形', 'Show or hide waveform')" @click="$emit('visibility', path, hidden?.has(path) ?? false)"><EyeOff v-if="hidden?.has(path)" :size="15" aria-hidden="true" /><Eye v-else :size="15" aria-hidden="true" /></button>
-            <InlineWatchName :value="prefs.style(path).alias" :fallback="path" :title="path" :label="`重命名变量 ${path}`" :commit="name => prefs.setStyle([path],{alias:name})" /><output>{{ formatValue(values[path]) }}</output>
+            <InlineWatchName :value="prefs.style(path).alias" :fallback="path" :title="path" :label="`重命名变量 ${path}`"
+              :expanded="$slots.actions ? expandedPath === path : undefined" @actions="$emit('actions', path)"
+              :commit="name => prefs.setStyle([path],{alias:name})" /><output>{{ formatValue(values[path]) }}</output>
             <button :aria-label="`强调 ${path}`" :aria-pressed="prefs.style(path).emphasis" @click="toggleStyle(path,'emphasis')"><b>B</b></button>
             <button :aria-label="`采样点 ${path}`" :title="tr('仅显示采样点，不连线', 'Sample points only, no lines')" :aria-pressed="prefs.style(path).renderMode === 'points'" @click="toggleStyle(path,'renderMode')">{{ tr('点','Dots') }}</button>
             <button :aria-label="`曲线设置 ${path}`" @click="configure(path)">ƒx</button>
           </div>
           <div v-if="prefs.style(path).formula" class="converted-value">{{ tr('计算值', 'Calculated') }}: {{ formatValue(signalFormula(prefs.style(path).formula)(Number(values[path]))) }} · {{ tr('原始值', 'Raw') }}: {{ formatValue(values[path]) }}</div>
+          <slot v-if="expandedPath === path" name="actions" :path="path" />
         </div>
       </section>
     </div>
@@ -59,15 +62,19 @@
 </template>
 <script setup lang="ts">
 import { Eye, EyeOff } from '@lucide/vue'
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useWatchWorkspace } from '../../composables/useWatchWorkspace'
 import InlineWatchName from './InlineWatchName.vue'
 import { tr } from '../../composables/useLanguage'
 import { compileSignalFormula, signalFormula } from '../../lib/signalFormula'
-const props = defineProps<{ paths: string[]; values: Record<string, number | boolean>; hidden?: ReadonlySet<string> }>()
-defineEmits<{ visibility: [path: string, visible: boolean] }>()
+const props = defineProps<{ paths: string[]; values: Record<string, number | boolean>; hidden?: ReadonlySet<string>; expandedPath?: string }>()
+defineEmits<{ visibility: [path: string, visible: boolean]; actions: [path: string] }>()
 const prefs = useWatchWorkspace(), settings = ref(false), newName = ref(''), checked = ref<string[]>([])
 const editing = ref(''), formula = ref(''), color = ref('#ef9878'), formulaError = ref('')
+watch(() => props.paths, paths => {
+  if (checked.value.length) checked.value = checked.value.filter(path => paths.includes(path))
+  if (editing.value && !paths.includes(editing.value)) editing.value = ''
+})
 function configure(path: string) {
   editing.value = path; formula.value = prefs.style(path).formula || ''; color.value = prefs.style(path).color || '#ef9878'; formulaError.value = ''
 }

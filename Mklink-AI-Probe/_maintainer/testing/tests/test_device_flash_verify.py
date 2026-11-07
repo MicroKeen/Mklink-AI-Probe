@@ -46,7 +46,7 @@ class _BridgeStub:
 
     def send_command(self, command: str, timeout: float):
         self.calls.append((command, timeout))
-        return "0"
+        return self.reply
 
 
 def _device(read_memory):
@@ -84,6 +84,91 @@ def test_device_flash_verify_reads_back_hex_before_reset(tmp_path: Path):
     assert result["verified"] is True
     assert calls[0][0] == "read"
     assert calls[-1] == ("reset",)
+
+
+def test_normal_swd_flash_never_probes_sleep_or_writes_core_controls(tmp_path):
+    from types import SimpleNamespace
+    from mklink.capture_clock import V3_CLOCKS
+
+    firmware = tmp_path / 'normal.hex'
+    _write_hex(firmware, b'data')
+    device = _device(lambda addr, n: b'data')
+    device._bridge = SimpleNamespace(
+        _ctx=SimpleNamespace(clock_interface='SWD', swd_clock_hz=10_000_000),
+        _firmware_capabilities={'MUX_TARGET=1', 'SWD_CLOCK_ACK=1',
+                                'SWD_CLOCKS=' + ','.join(map(str, V3_CLOCKS))},
+        enable_multiplex=lambda: pytest.fail('Normal flash must not negotiate sleep access'),
+    )
+    assert device.flash(str(firmware), reset_after=False)['verified']
+
+
+def test_normal_swd_reset_only_sends_one_checked_reset():
+    from types import SimpleNamespace
+    from mklink.capture_clock import V3_CLOCKS
+
+    bridge = _BridgeStub()
+    bridge._ctx = SimpleNamespace(clock_interface='SWD', swd_clock_hz=10_000_000)
+    bridge._firmware_capabilities = {'MUX_TARGET=1', 'SWD_CLOCK_ACK=1',
+                                     'SWD_CLOCKS=' + ','.join(map(str, V3_CLOCKS))}
+    bridge.reply = 'MKLINK_RESET_RC=0'
+    device = _device(None)
+    device._bridge = bridge
+    Device.reset(device)
+    assert bridge.calls == [("print('MKLINK_RESET_RC=' + str(cmd.reset_target(1)))", 10.0)]
+
+
+@pytest.mark.parametrize('mode,declared,timeout', [('SWD', True, 12), ('SWD', False, 10), ('JTAG', True, 10)])
+def test_fresh_text_reset_keeps_clock_and_uses_only_advertised_budget(mode, declared, timeout):
+    from types import SimpleNamespace
+    bridge = _BridgeStub()
+    bridge._ctx = SimpleNamespace(clock_interface=mode, swd_clock_hz=10_000_000,
+                                  applied_clock_hz=10_000_000, clock_apply_state='applied')
+    bridge._firmware_capabilities = {'MUX_ATOMIC_SLEEP=1'} if declared else set()
+    bridge.reply = 'MKLINK_RESET_RC=-5'
+    device = _device(None)
+    device._bridge = bridge
+    with pytest.raises(DeviceError, match='outcome unknown'):
+        Device.reset(device)
+    assert bridge.calls == [("print('MKLINK_RESET_RC=' + str(cmd.reset_target(1)))", timeout)]
+    assert device.clock_hz == bridge._ctx.applied_clock_hz == 10_000_000
+
+
+@pytest.mark.parametrize('cached,expected', [(0x1003, 12), (3, 10)])
+def test_text_reset_reuses_actual_hello_for_the_current_connection(cached, expected):
+    from types import SimpleNamespace
+    bridge = _BridgeStub()
+    bridge._ctx = SimpleNamespace(clock_interface='SWD', swd_clock_hz=10_000_000,
+                                  applied_clock_hz=10_000_000, clock_apply_state='applied')
+    bridge._firmware_capabilities = {'MUX_TARGET=1'}
+    bridge._mux_capabilities = cached
+    bridge.reply = 'MKLINK_RESET_RC=0'
+    device = _device(None)
+    device._bridge = bridge
+    Device.reset(device)
+    assert bridge.calls == [("print('MKLINK_RESET_RC=' + str(cmd.reset_target(1)))", expected)]
+
+
+def test_atomic_flash_verifies_separate_hex_regions_and_requires_capability(tmp_path):
+    from types import SimpleNamespace
+
+    firmware = tmp_path / 'split.hex'
+    image = IntelHex()
+    regions = {0x08000000: b'first', 0x08001000: b'second'}
+    for address, data in regions.items():
+        image.puts(address, data)
+    image.write_hex_file(str(firmware))
+    device = _device(lambda *args: pytest.fail('Unconfirmed ordinary readback'))
+    mux = SimpleNamespace(supports_atomic_sleep=True,
+                          read_atomic_memory=lambda address, size: regions[address][:size])
+    device._bridge = SimpleNamespace(
+        _ctx=SimpleNamespace(clock_interface='SWD', swd_clock_hz=10_000_000),
+        _sleep_debug_previous_clock=10_000_000, _sleep_debug_atomic=True,
+        _firmware_capabilities={'MUX_TARGET=1'}, enable_multiplex=lambda: mux,
+    )
+    assert device.flash(str(firmware), reset_after=False)['verified']
+    mux.supports_atomic_sleep = False
+    with pytest.raises(DeviceError, match='Flash programmed; readback verification failed'):
+        device.flash(str(firmware), reset_after=False)
 
 
 def test_device_flash_verify_rejects_mismatched_hex(tmp_path: Path):
@@ -552,12 +637,20 @@ def test_device_flash_verify_reads_bin_from_flash_base(tmp_path: Path):
     assert calls == [(0x08000000, 1024), (0x08000400, 76)]
 
 
-def test_device_reset_sends_target_reset_command_only():
+@pytest.mark.parametrize('reply,confirmed', [
+    ('MKLINK_RESET_RC=0\r\n>>>', True), ('>>>', False), ('0', False),
+    ('MKLINK_RESET_RC=-4\r\n>>>', False), ('MKLINK_RESET_RC=0\nMKLINK_RESET_RC=-5', False),
+])
+def test_device_reset_requires_checked_target_receipt(reply, confirmed):
     device = Device()
     bridge = _BridgeStub()
+    bridge.reply = reply
     device._connected = True
     device._bridge = bridge
 
-    device.reset()
-
-    assert bridge.calls == [("cmd.set_reset()", 10.0)]
+    if confirmed:
+        device.reset()
+    else:
+        with pytest.raises(DeviceError, match='outcome unknown'):
+            device.reset()
+    assert len(bridge.calls) == 1 and 'cmd.reset_target(1)' in bridge.calls[0][0]

@@ -81,3 +81,21 @@ def test_reconnect_drops_old_peripheral_watches_but_preserves_ram(tmp_path, monk
     assert manager._runtime.svd_registers == {}
     assert manager.peripheral_catalog()['restore_error']
     assert manager.peripheral_catalog()['selection'] is None
+
+def test_connection_defers_saved_svd_until_first_register_use(tmp_path, monkeypatch):
+    target = target_at(tmp_path)
+    scans = []
+    def discover(root):
+        scans.append(root)
+        return [target]
+
+    monkeypatch.setattr('mklink.peripheral_watch.discover_svd_targets', discover)
+    save_catalog_selection(tmp_path, load_catalog(tmp_path, target=target))
+    device = SimpleNamespace(_project_root=str(tmp_path), symbol_catalog=None)
+    manager = SuperWatchStreamManager()
+    manager.prepare(device)
+    assert scans == []
+    assert 'error' not in manager.add_watch('GPIOB.12')['item']
+    assert manager.peripheral_catalog()['selection']['id'] == target.key
+    assert any(r['name'] == 'GPIOB.12' for r in manager.search('GPIOB.12'))
+    assert scans == [str(tmp_path)]

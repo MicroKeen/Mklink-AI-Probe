@@ -546,6 +546,9 @@ async def _start_dashboard_manager_transaction(
         if manager.running:
             return "already_running", []
         raise DashboardStopPending(dashboard)
+    bridge = getattr(state.get('device'), '_bridge', None)
+    if dashboard in ('rtt', 'superwatch', 'systemview') and getattr(bridge, '_sleep_debug_atomic', False) is True:
+        raise HTTPException(409, 'Turn off atomic sleep access before starting live acquisition')
     loop = asyncio.get_running_loop()
     owner = f"user:dashboard:{dashboard}"
     release_lock = threading.Lock()
@@ -2328,6 +2331,20 @@ def create_app(
                 await run_in_threadpool(device.reset)
         return {"status": "ok", "stopped": []}
 
+    @app.post("/api/device/sleep-debug")
+    async def set_sleep_debug(enabled: bool = Body(..., embed=True, strict=True)):
+        from mklink.mux import MuxTargetError
+        from mklink.sleep_debug import configure
+        try:
+            async with _exclusive_probe_control('sleep-debug') as (device, _):
+                return await run_in_threadpool(configure, device, enabled)
+        except (ValueError, KeyError) as error:
+            raise HTTPException(400, str(error)) from error
+        except MuxTargetError as error:
+            raise HTTPException(409 if error.status == 6 else 502, str(error)) from error
+        except (ConnectionError, RuntimeError) as error:
+            raise HTTPException(502, str(error)) from error
+
     @app.post("/api/device/debug-speed")
     async def set_debug_speed(profile: str | None = Body(None), clock_hz: int | None = Body(None, strict=True), save: bool = Body(True, strict=True), interface: str | None = Body(None)):
         from mklink.debug_speed import profile_clock, validate_clock_hz, PROFILES
@@ -2379,7 +2396,7 @@ def create_app(
         from mklink.remote.dashboards import BRIDGE_DASHBOARD_TYPES, stop_bridge_dashboards
 
         async with _dashboard_start_lock(_state):
-            if _state.get("shared_runtime") or operation in ('debug-speed', 'config-clock'):
+            if _state.get("shared_runtime") or operation in ('debug-speed', 'config-clock', 'sleep-debug'):
                 active = [name for name in BRIDGE_DASHBOARD_TYPES
                           if _dashboard_worker_alive(get_managers().get(name))]
                 if active:
@@ -3772,14 +3789,21 @@ def create_app(
             except Exception as error:
                 raise HTTPException(400, str(error)) from error
 
-    @app.post("/api/device/read-memory")
-    async def read_memory(
-        address: str = Body(...),
-        size: int = Body(...),
-    ):
+    def check_memory_mode(expected):
+        actual = getattr(getattr(_state["device"], '_bridge', None), '_sleep_debug_atomic', False) is True
+        if expected is not None and expected is not actual:
+            raise HTTPException(409, 'Sleep access mode changed before memory access; request was not sent')
+        return actual
+
+    async def shared_memory_read(address, size, *, sleep_notice=None, expected_atomic_sleep=None):
         if not _state["device"] or not _state["device"].connected:
             raise HTTPException(status_code=400, detail="Device not connected")
         async with async_target_debug_lease(_state, "read-memory"):
+            if expected_atomic_sleep is not None:
+                check_memory_mode(expected_atomic_sleep)
+            if sleep_notice and check_memory_mode(None):
+                from mklink.mux import sleep_rpc_timeout
+                await sleep_notice(sleep_rpc_timeout(size))
             try:
                 loop = asyncio.get_event_loop()
                 addr = int(address, 0) if isinstance(address, str) else address
@@ -3797,17 +3821,25 @@ def create_app(
                 raise HTTPException(status_code=500, detail=str(e))
 
     # The shared runtime calls the same leased/executor-backed implementation.
-    app.state.shared_memory_read = read_memory
+    app.state.shared_memory_read = shared_memory_read
+
+    @app.post("/api/device/read-memory")
+    async def read_memory(address: str = Body(...), size: int = Body(...),
+                          expected_atomic_sleep: bool | None = Body(None)):
+        return await shared_memory_read(address, size, expected_atomic_sleep=expected_atomic_sleep)
 
     @app.post("/api/device/write-memory")
     async def write_memory(
         address: str = Body(...),
         data_hex: str = Body(...),
         verify: bool = Body(default=False),
+        expected_atomic_sleep: bool | None = Body(None),
     ):
         if not _state["device"] or not _state["device"].connected:
             raise HTTPException(status_code=400, detail="Device not connected")
         async with async_target_debug_lease(_state, "write-memory"):
+            if expected_atomic_sleep is not None:
+                check_memory_mode(expected_atomic_sleep)
             try:
                 loop = asyncio.get_event_loop()
                 addr = int(address, 0) if isinstance(address, str) else address

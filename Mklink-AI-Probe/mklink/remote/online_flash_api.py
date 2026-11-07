@@ -1605,14 +1605,22 @@ def create_online_flash_router(services: OnlineFlashServices) -> APIRouter:
     async def probes(request: Request) -> object:
         control = getattr(request.app.state, 'shared_runtime', None)
         serial = None
+        clocks = {}
         if control is not None:
             presence = control.presence()
             if presence['status'] == 'present':
+                from mklink.capture_clock import cached_flash_clocks
+                device = getattr(request.app.state, 'mklink_state', {}).get('device')
                 serial = presence['probe']['serial_number'].casefold()
+                clocks = cached_flash_clocks(device, presence['probe'].get('port'))
         records = await _blocking(_enumerate_probes, services.probe_provider)
         if serial is not None:
             records = [record for record in records if record.unique_id.casefold() == serial]
-        return _json_primitive(records)
+        rows = _json_primitive(records)
+        if clocks:
+            for row in rows:
+                row['flash_clocks_hz'] = clocks
+        return rows
 
     @router.get("/targets")
     async def targets(

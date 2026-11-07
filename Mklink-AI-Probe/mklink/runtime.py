@@ -392,6 +392,7 @@ class RuntimeClient:
         self._heartbeat = None
         self._lock = threading.Lock()
         self._memory_transport = False
+        self._check_sleep_budget = False
         self._memory_channel = None
         self.kind, self.name = kind, name
 
@@ -403,6 +404,7 @@ class RuntimeClient:
         with self._lock:
             self._close_memory_channel()
             self._memory_transport = False
+            self._check_sleep_budget = False
             existing = self.info is not None
             if self.info is None:
                 if existing_only:
@@ -452,6 +454,7 @@ class RuntimeClient:
             })
             self.session_id = result["session_id"]
             self._memory_transport = result.get('memory_transport') == 'websocket-v1'
+            self._check_sleep_budget = result.get('check_sleep_budget') is True
             if project_root is not None:
                 self.project_root = project_root
             self._stop_heartbeat()
@@ -510,6 +513,10 @@ class RuntimeClient:
                     raise RuntimeErrorResponse(
                         'Memory channel failed; command was not retried') from error
             transport_options = {}
+            bulk_sleep_timeout = 35
+            if self._check_sleep_budget and capability == 'read_memory' and isinstance(arguments, dict):
+                from mklink.mux import sleep_rpc_timeout
+                bulk_sleep_timeout = sleep_rpc_timeout(arguments.get('size'))
             if capability == 'offline_deploy':
                 transport_options['timeout'] = 650
             elif capability == 'isp_link_probe':
@@ -536,6 +543,19 @@ class RuntimeClient:
                     write_budget = max(10 * len(plan_flush_batches(parsed)), native_budget)
                     read_budget = max(10, native_budget) if args.get('verify') else 0
                     transport_options['timeout'] = max(35, write_budget + read_budget + 15)
+                    if self._check_sleep_budget:
+                        from mklink.mux import sleep_rpc_timeout
+                        bulk_sleep_timeout = sleep_rpc_timeout(len(parsed[0][1]), write=True,
+                                                              verify=args.get('verify') is True)
+            if bulk_sleep_timeout > transport_options.get('timeout', 35):
+                # Only large HTTP requests can outlast the existing budget. Mode belongs
+                # to the shared backend and may have been changed by another client.
+                state = request(self.info, 'POST', '/_runtime/call', {
+                    'session_id': self.session_id, 'capability': 'debug_speed', 'arguments': {}})
+                atomic = state.get('sleep_access_atomic') is True
+                arguments = {**arguments, 'expected_atomic_sleep': atomic}
+                if atomic:
+                    transport_options['timeout'] = bulk_sleep_timeout
             if capability == 'flush_memory':
                 from mklink.memory_write import validate_writes, plan_flush_batches
                 args = arguments or {}

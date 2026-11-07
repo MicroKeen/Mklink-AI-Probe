@@ -3,6 +3,7 @@ import { RefreshCw } from '@lucide/vue'
 import type { ProbeRecord } from '../../types/onlineFlash'
 import { tr } from '../../composables/useLanguage'
 import { useConfirmation } from '../../composables/useConfirmation'
+import { formatFlashClock, type FlashInterface } from '../../lib/flashClocks'
 const confirm = useConfirmation()
 
 const voltageChoices = [1800, 3300, 5000] as const
@@ -11,6 +12,9 @@ const props = defineProps<{
   probes: ProbeRecord[]
   selectedId: string
   frequency: number
+  bus: FlashInterface
+  clocks: number[]
+  capabilityKnown: boolean
   connectMode: string
   resetMode: string
   resetVoltageMv: 1800 | 3300 | 5000
@@ -57,16 +61,14 @@ async function updateResetVoltage(value: 1800 | 3300 | 5000, input: HTMLInputEle
     <p v-if="error" class="error">{{ error }}</p>
   </section>
   <details class="connection-details">
-    <summary><strong>{{ tr('连接设置', 'Connection settings') }}</strong><span>{{ frequency / 1000000 }} MHz · {{ connectMode === 'attach' ? tr('保持运行', 'Attach') : connectMode === 'halt' ? tr('连接后暂停', 'Halt') : tr('复位下连接', 'Under reset') }}<template v-if="resetMode !== 'default'"> · {{ resetMode === 'power-cycle' ? tr('断电复位', 'Power cycle') + ` ${resetVoltageMv / 1000}V` : resetMode === 'hardware' ? tr('硬件复位', 'Hardware reset') : tr('软件复位', 'Software reset') }}</template></span></summary>
+    <summary><strong>{{ tr('连接设置', 'Connection settings') }}</strong><span>{{ bus }} {{ formatFlashClock(frequency) }} · {{ connectMode === 'attach' ? tr('保持运行', 'Attach') : connectMode === 'halt' ? tr('连接后暂停', 'Halt') : tr('复位下连接', 'Under reset') }}<template v-if="resetMode !== 'default'"> · {{ resetMode === 'power-cycle' ? tr('断电复位', 'Power cycle') + ` ${resetVoltageMv / 1000}V` : resetMode === 'hardware' ? tr('硬件复位', 'Hardware reset') : tr('软件复位', 'Software reset') }}</template></span></summary>
   <section class="panel-block basic-settings">
-    <label>{{ tr('SWD 频率', 'SWD Frequency') }}
-      <select data-testid="frequency" :disabled="busy" :value="frequency" @change="$emit('update:frequency', Number(($event.target as HTMLSelectElement).value))">
-        <option :value="1000000">1 MHz</option><option :value="2000000">2 MHz</option>
-        <option :value="4000000">4 MHz</option><option :value="8000000">8 MHz</option>
-        <option :value="10000000">10 MHz</option>
-        <option :value="20000000">20 MHz</option>
-        <option :value="30000000">30 MHz</option>
+    <label>{{ bus }} {{ tr('频率', 'Frequency') }}
+      <select data-testid="frequency" :disabled="busy" :value="clocks.includes(frequency) ? frequency : ''" @change="$emit('update:frequency', Number(($event.target as HTMLSelectElement).value))">
+        <option v-if="!clocks.includes(frequency)" value="" disabled>{{ formatFlashClock(frequency) }} — {{ tr('请重新选择', 'Choose again') }}</option>
+        <option v-for="hz in clocks" :key="hz" :value="hz">{{ formatFlashClock(hz) }}</option>
       </select>
+      <small v-if="selectedId && !capabilityKnown && bus === 'JTAG'">{{ tr('配置候选；连接所选探针并刷新可核对支持的档位。', 'Configuration choices. Connect the selected probe and refresh to confirm supported rates.') }}</small>
     </label>
     <label>{{ tr('连接方式', 'Connection Mode') }}
       <select data-testid="connect-mode" :disabled="busy" :value="connectMode" @change="$emit('update:connectMode', ($event.target as HTMLSelectElement).value)">

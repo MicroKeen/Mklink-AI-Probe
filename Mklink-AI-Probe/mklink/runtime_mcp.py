@@ -394,6 +394,18 @@ def build_server():
         return client().call('set_debug_speed', {'profile': profile} if profile is not None else {'clock_hz': clock_hz})
 
     @server.tool()
+    def set_sleep_debug(enabled: bool) -> dict:
+        """Enable Cortex-M/SWD sleep access for this session, or restore its prior clock.
+
+        Stop active acquisition before changing modes. Uses only the probe's advertised
+        clocks and standard core identification. Probes advertising atomic sleep transfers
+        keep the current clock and restore the core within each request. Verified RAM writes
+        require a known RAM range. Asynchronous streams are unavailable in this atomic mode.
+        Older probes use a negotiated slow clock and the legacy bounded halt path.
+        """
+        return client().call('set_sleep_debug', {'enabled': enabled})
+
+    @server.tool()
     def hpm_debug(action: Literal['capabilities', 'status', 'halt', 'resume', 'step',
                                   'read-register', 'write-register', 'breakpoint-query',
                                   'breakpoint-set', 'breakpoint-clear'] = 'status',

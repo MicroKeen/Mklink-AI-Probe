@@ -63,6 +63,26 @@ var I18N = {
       '<strong>双击芯片</strong> — 重置该通道为自动缩放',
       '选中的通道可在图表区域使用滚轮调整 Y 轴范围'
     ],
+    help_sw_variables: '程序变量与已选信号', help_sw_sampling: '采集与波形',
+    help_sw_var_items: [
+      '加载与目标固件匹配的 AXF / ELF。在<strong>搜索变量</strong>中勾选变量，它会出现在上方的<strong>已选信号</strong>中。图钉可将变量加入<strong>常用变量</strong>。',
+      '在已选信号、常用变量或搜索结果中，点击变量名展开操作，再点一次收起。选择<strong>写入</strong>，输入新值后点击<strong>确认写入</strong>。写入需要连接设备并选用可写的变量。位域只读。',
+      '对已勾选的变量，展开后点击<strong>移除</strong>可取消采样。各列表同步取消勾选，置顶状态保留。眼睛按钮只控制波形的显示。',
+      '用<strong>整理</strong>为信号分组，或将信号拖入另一组。双击名称可设置别名，ƒx 可设置显示公式和颜色。'
+    ],
+    help_sw_sampling_items: [
+      '也可在<strong>芯片外设</strong>中勾选寄存器或字段。选好信号后点击<strong>开始</strong>采集，点击<strong>停止</strong>结束采集。',
+      '采样间隔以秒为单位，最小可设为 0.000001 秒（1 µs），输入后点击<strong>应用</strong>。Hz 按实际采样时间戳计算，实际速度取决于目标和下载器。',
+      '已确认缺样的区间显示为灰色并断开连线。连续性未知时只断线，单凭两点时间间隔较长无法判定丢样。'
+    ],
+    help_sw_export_items: [
+      '打开<strong>日志</strong>，点击<strong>开始记录</strong>并选择后台电脑上的目录。记录按段保存为 JSONL，可在日志菜单打开回放。',
+      '<strong>PNG</strong> 保存当前波形图。'
+    ],
+    help_sw_pause_items: [
+      '<strong>暂停</strong>或 <span class="help-kbd">P</span> 键会冻结实时显示，后台继续采集。点击<strong>恢复</strong>后跟随最新数据。',
+      '回放日志时，暂停、恢复和进度条控制当前日志。点击<strong>返回实时</strong>退出回放。'
+    ],
     help_trigger_items: [
       '<strong>Trigger</strong> — 启用 / 禁用触发功能',
       '<strong>Source</strong> — 选择触发源通道',
@@ -94,8 +114,8 @@ var I18N = {
     help_kbd_rows: [
       ['<span class="help-kbd">Space</span>+拖动', '平移时间轴；运行中保持相对时间差'],
       ['<span class="help-kbd">P</span>', '暂停 / 恢复前端显示'],
-      ['<span class="help-kbd">L</span>', '打开 / 关闭 Raw Log 面板'],
-      ['<span class="help-kbd">Ctrl</span>+<span class="help-kbd">E</span>', '导出 CSV 文件'],
+      ['<span class="help-kbd">L</span>', '打开 / 关闭 Raw Log 面板', 'raw-log-panel'],
+      ['<span class="help-kbd">Ctrl</span>+<span class="help-kbd">E</span>', '导出 CSV 文件', 'btn-export-csv'],
       ['<span class="help-kbd">C</span>', '切换 A/B 测量光标'],
       ['<span class="help-kbd">Esc</span>', '关闭此帮助窗口']
     ],
@@ -164,6 +184,26 @@ var I18N = {
       '<strong>Double click chip</strong> — Reset channel to auto-scale',
       'Selected channel Y-axis can be adjusted with scroll wheel in chart area'
     ],
+    help_sw_variables: 'Program variables and selected signals', help_sw_sampling: 'Acquisition and waveforms',
+    help_sw_var_items: [
+      'Load the AXF / ELF that matches the target firmware. Check a variable in <strong>Find variables</strong> to add it to <strong>Selected signals</strong>. Use the pin to add it to <strong>Pinned variables</strong>.',
+      'Click a variable name in any of these three lists to show its actions. Click it again to collapse them. Select <strong>Write</strong>, enter or select a value, then click <strong>Confirm write</strong>. Writing requires a connected device and a writable variable. Bit fields are read-only.',
+      'For a checked variable, expand its actions and click <strong>Remove</strong> to stop sampling it. The lists uncheck it together and keep its pin. The eye button controls waveform visibility only.',
+      'Use <strong>Organize</strong> to group signals, or drag a signal into another group. Double-click a name to set an alias. Use ƒx to set a display formula or color.'
+    ],
+    help_sw_sampling_items: [
+      'You can also select registers and fields under <strong>Peripherals</strong>. Click <strong>Start</strong> to collect the selected signals and <strong>Stop</strong> to end acquisition.',
+      'Enter the interval in seconds and click <strong>Apply</strong>. The minimum is 0.000001 s (1 µs). Hz uses measured sample timestamps. The target and probe determine the actual rate.',
+      'Confirmed missing samples break the line and shade the gap. Unknown continuity breaks the line without shading. A long interval alone does not establish sample loss.'
+    ],
+    help_sw_export_items: [
+      'Open <strong>Logs</strong>, click <strong>Start recording</strong> and choose a folder on the backend computer. Logs are saved as JSONL parts. Open a log from the same menu to replay it.',
+      '<strong>PNG</strong> saves the current waveform image.'
+    ],
+    help_sw_pause_items: [
+      '<strong>Pause</strong> or <span class="help-kbd">P</span> freezes the live display while acquisition continues. Click <strong>Resume</strong> to follow the latest data.',
+      'During log replay, Pause, Resume and the position slider control playback. Click <strong>Return to live</strong> to leave replay.'
+    ],
     help_trigger_items: [
       '<strong>Trigger</strong> — Enable / disable trigger',
       '<strong>Source</strong> — Select trigger source channel',
@@ -195,8 +235,8 @@ var I18N = {
     help_kbd_rows: [
       ['<span class="help-kbd">Space</span>+drag', 'Pan the timeline; keep relative lag while running'],
       ['<span class="help-kbd">P</span>', 'Pause / resume frontend rendering'],
-      ['<span class="help-kbd">L</span>', 'Open / close Raw Log panel'],
-      ['<span class="help-kbd">Ctrl</span>+<span class="help-kbd">E</span>', 'Export CSV file'],
+      ['<span class="help-kbd">L</span>', 'Open / close Raw Log panel', 'raw-log-panel'],
+      ['<span class="help-kbd">Ctrl</span>+<span class="help-kbd">E</span>', 'Export CSV file', 'btn-export-csv'],
       ['<span class="help-kbd">C</span>', 'Toggle A/B measurement cursors'],
       ['<span class="help-kbd">Esc</span>', 'Close this help window']
     ],
@@ -261,6 +301,12 @@ function populateHelpContent() {
     'help-rawlog-list': 'help_rawlog_items',
     'help-pause-list': 'help_pause_items'
   };
+  if (typeof CONFIG !== 'undefined' && CONFIG.mode === 'SuperWatch') {
+    listMap['help-var-list'] = 'help_sw_var_items';
+    listMap['help-watch-list'] = 'help_sw_sampling_items';
+    listMap['help-export-list'] = 'help_sw_export_items';
+    listMap['help-pause-list'] = 'help_sw_pause_items';
+  }
   for (var id in listMap) {
     var el = document.getElementById(id);
     if (!el) continue;
@@ -271,9 +317,7 @@ function populateHelpContent() {
   var kbdTable = document.getElementById('help-kbd-table');
   if (kbdTable) {
     var rows = I18N[currentLang].help_kbd_rows || I18N.zh.help_kbd_rows || [];
-    if (!document.getElementById('raw-log-panel')) rows = rows.filter(function(r) {
-      return r[0] !== '<span class="help-kbd">L</span>';
-    });
+    rows = rows.filter(function(r) { return !r[2] || document.getElementById(r[2]); });
     kbdTable.innerHTML = rows.map(function(r) {
       return '<tr><td>' + r[0] + '</td><td>' + r[1] + '</td></tr>';
     }).join('');

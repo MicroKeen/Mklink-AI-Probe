@@ -44,6 +44,10 @@ afterEach(() => {
 })
 
 describe('shared connection clock', () => {
+  it('keeps sleep access off the local connection page', async () => {
+    Object.assign(data, { sleep_access_supported: true })
+    expect((await setup()).find('[data-testid="sleep-access"]').exists()).toBe(false)
+  })
   it.each([['SWD', 'legacy'], ['JTAG', 'hpm-profiles']])('prompts to update connected legacy %s firmware without starting an upgrade', async (mode, source) => {
     Object.assign(data, { interface: mode, active_interface: mode, clock_source: source,
       clocks_hz: [4000000,10000000,20000000,30000000] })

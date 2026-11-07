@@ -673,9 +673,9 @@ function buildTemplate(mode: string): string {
     </div>
     <div id="help-modal-body">
       <div class="help-section"><h3 data-i18n="help_chart">图表交互</h3><ul id="help-chart-list"></ul></div>
-      <div class="help-section"><h3 data-i18n="help_var_selector">变量选择器</h3><ul id="help-var-list"></ul></div>
+      <div class="help-section"><h3 data-i18n="${mode === 'SuperWatch' ? 'help_sw_variables' : 'help_var_selector'}">变量选择器</h3><ul id="help-var-list"></ul></div>
       <div class="help-section"><h3 data-i18n="help_trigger_sys">触发系统</h3><ul id="help-trigger-list"></ul></div>
-      <div class="help-section"><h3 data-i18n="help_watch_panel">Watch 面板</h3><ul id="help-watch-list"></ul></div>
+      <div class="help-section"><h3 data-i18n="${mode === 'SuperWatch' ? 'help_sw_sampling' : 'help_watch_panel'}">Watch 面板</h3><ul id="help-watch-list"></ul></div>
       <div class="help-section"><h3 data-i18n="help_minimap">缩略图</h3><ul id="help-minimap-list"></ul></div>
       <div class="help-section"><h3 data-i18n="help_cursors">测量光标</h3><ul id="help-cursors-list"></ul></div>
       <div class="help-section"><h3 data-i18n="help_export">数据导出</h3><ul id="help-export-list"></ul></div>
