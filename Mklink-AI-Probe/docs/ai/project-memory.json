@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-07T19:07:57+08:00",
+  "updated_at": "2026-11-07T21:00:29+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.4.3-fixes",
-    "head": "0.4.3 产品 3c486786；S3/USB 及五项拷贝回归见 v043-s3-integration.md。",
-    "remote_head": "0.4.3继续共用修复分支，交付集为上位机PR71、V3 PR13、V4 PR22，保留分支。",
+    "head": "以已合并 #70 的 03f3dc8e 为基线，Windows 桌面启动首帧修复在 codex/v0.4.3-fixes。",
+    "remote_head": "上位机 #69、#70、#71 与固件 V3 #13、V4 #22 已合入，各修复分支保留。",
     "working_tree": "复用E盘主工作区，保留旧v0.4.2分支和两个detached工作树；本轮及后续修复共用codex/v0.4.3-fixes。"
   },
   "mission": {
@@ -14,7 +14,7 @@
   },
   "current_session": {
     "status": "v043_candidate_qualification",
-    "current_task": "0.4.3 已修复 USB 文件拷贝回归。V4/F103 实装采集与 A/B 性能见 v043-s3-integration.md。正式发布需独立指令。"
+    "current_task": "0.4.3 Windows 候选已复测启动空白窗口、进度条、后台就绪和隐藏后重载。正式发布时按 tencent-updates.md 分发最新正式版，历史版进入 COS/Git。"
   },
   "milestones": [
     {
@@ -63,7 +63,7 @@
     },
     {
       "area": "AI Skill与共享GUI",
-      "result": "2a3cbb77候选：6759 Python/2跳过、1202 GUI、23 Rust通过。F103续采与最终三款UF2见v043-f103-wake-data.md，首轮见v043-release-candidate-acceptance.md。历史实装见v043-gui-uart-local-install.md，Watch列表见v043-superwatch-list-actions.md。"
+      "result": "2a3cbb77候选：6759 Python/2跳过、1202 GUI、23 Rust通过。F103续采与最终三款UF2见v043-f103-wake-data.md，首轮见v043-release-candidate-acceptance.md。历史实装见v043-gui-uart-local-install.md，Watch列表见v043-superwatch-list-actions.md。 Windows 首帧三次 A/B：窗口至标志中位数 1387→312 ms，候选零观测空白帧，见 v043-desktop-startup.md。"
     },
     {
       "area": "RTT自动恢复与在线静默收尾",

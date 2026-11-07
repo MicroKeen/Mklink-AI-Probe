@@ -4,12 +4,12 @@
 
 ## 当前断点
 
-- 更新时间：`2026-11-07T19:07:57+08:00`
+- 更新时间：`2026-11-07T21:00:29+08:00`
 - 分支：`codex/v0.4.3-fixes`
-- HEAD：`0.4.3 产品 3c486786；S3/USB 及五项拷贝回归见 v043-s3-integration.md。`
-- 远端 HEAD：`0.4.3继续共用修复分支，交付集为上位机PR71、V3 PR13、V4 PR22，保留分支。`
+- HEAD：`以已合并 #70 的 03f3dc8e 为基线，Windows 桌面启动首帧修复在 codex/v0.4.3-fixes。`
+- 远端 HEAD：`上位机 #69、#70、#71 与固件 V3 #13、V4 #22 已合入，各修复分支保留。`
 - 工作树：复用E盘主工作区，保留旧v0.4.2分支和两个detached工作树；本轮及后续修复共用codex/v0.4.3-fixes。
-- 当前任务：0.4.3 已修复 USB 文件拷贝回归。V4/F103 实装采集与 A/B 性能见 v043-s3-integration.md。正式发布需独立指令。
+- 当前任务：0.4.3 Windows 候选已复测启动空白窗口、进度条、后台就绪和隐藏后重载。正式发布时按 tencent-updates.md 分发最新正式版，历史版进入 COS/Git。
 - 状态：`v043_candidate_qualification`
 
 ## 里程碑
@@ -26,7 +26,7 @@
 - **0.4.3接收、连续性与性能**：0.4.3基线/1µs见v043-host-baseline.md、v043-superwatch-1us.md。IAR退出后V3/V4混合RTT约355→420/354→416KiB/s，Watch约10→11.7万/s，四调试器共存通过。V4独立849.64KiB/s、26.53万/s，4096B约1053–1056KiB/s。见v043-mux-heartbeat-recording.md、v043-iar-exit-context.md、v043-v4-iar-exit-context.md。V3/F103 Cortex-M3 72MHz/100ms WFI，NRST未接，两种复位启动计数递增、双向烧录独立校验、RAM 12/12、持续RTT通过，DBGMCU_CR=0。见v043-cortex-m-sleep.md。 S3 台架及本次整合范围见 v043-s3-integration.md。
 - **0.4.2正式发布及腾讯云下载**：正式源0e82ba6f，Windows/完整Skill/SiteAgent和四固件发布、覆盖、签名及三渠道/回退通过，PR66/67/68已合并，资产不可变。详细资格见v042-release-handoff.md；安装元数据cb30b703/PR63见installer-metadata-cleanup-20261027.md。清理29目录6.587GiB、629保留哈希不变、135含链接组保留，见v042-postrelease-handoff.md。11/4轻量11文件341MiB哈希/HEAD/Range/回退、25保护/18GUI通过；更新32过/1开发版本不一致，Skill检查通过。99%及无日期截止部署回读通过，见tencent-download-cost-20261104.md（含误部署恢复/限制）。
 - **0.4.2正式候选最终资格**：90e676db与产品1ca9b8fd等价：6453Python/2skip、1182GUI、生产Web/冻结/Rust/NSIS/覆盖及真实界面交互通过。HPM时钟/镜像/RAM/XML/RTT/Watch/串口、Trace独立并行、烧录后三流恢复与原生退出通过。完整计数及限制见v042-formal-qualification.md、v042-traffic-replay.md，历史Trace溢出失败保留。
-- **AI Skill与共享GUI**：2a3cbb77候选：6759 Python/2跳过、1202 GUI、23 Rust通过。F103续采与最终三款UF2见v043-f103-wake-data.md，首轮见v043-release-candidate-acceptance.md。历史实装见v043-gui-uart-local-install.md，Watch列表见v043-superwatch-list-actions.md。
+- **AI Skill与共享GUI**：2a3cbb77候选：6759 Python/2跳过、1202 GUI、23 Rust通过。F103续采与最终三款UF2见v043-f103-wake-data.md，首轮见v043-release-candidate-acceptance.md。历史实装见v043-gui-uart-local-install.md，Watch列表见v043-superwatch-list-actions.md。 Windows 首帧三次 A/B：窗口至标志中位数 1387→312 ms，候选零观测空白帧，见 v043-desktop-startup.md。
 - **RTT自动恢复与在线静默收尾**：14417715：347相关+17发现测试通过。V4/HPM5301两次49700B烧录成功，RTT/Watch自动暂停恢复、零恢复错误及零Watch读错；覆盖/载荷/冻结MCP/Web/退出通过。当时为0.4.1测试包，修复后续纳入正式0.4.2。原始包/详细计数见rtt-auto-restore-20261030.md；静默面板d1cf16ec见online-flash-receipt-20261029.md。
 - **Linux/macOS 0.4.1测试包**：Linux a6bdacbc、Mac arm64 eefc6842：CI USB各58/1skip及冻结CLI/MCP/健康/Web/退出通过。DEB SHA7309f377、DMG SHA56dc8e0a，均旧0.4.1；Mac ad-hoc未公证，实机安装/UI/USB待测。见linux-deb-test-20261028.md、macos-arm64-test-20261028.md。
 - **H743正式固件与双核候选边界**：H743正式V4.7.1在线/四脱机/19采集调试通过。私有V4.7.2单核兼容、双核误选写前拒绝、2MiB不变及M7/M4 HEX在线通过；V4.7.2/V3.6.8/V2.9.3双核候选交付，46回归通过。无双核实板正向脱机，V3历史掉线未闭环，当时候选不公开替换；后来明确发布的四个build以v042-release-handoff.md为准，不外推双核验收。见known-limits-20261030.md。

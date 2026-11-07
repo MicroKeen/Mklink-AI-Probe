@@ -35,9 +35,10 @@ unchanged. The download host uses its own Let's Encrypt certificate and
 Private keys and ACME account material stay on their owning machines.
 
 Use the existing Tencent console/TAT access; do not provision SSH credentials.
-Fetch approved files into a non-served staging directory on the Shanghai host
-from same-region COS (verify internal DNS), or use the existing authorized
-publication transfer. Never print signed COS query strings.
+Stage the latest approved files directly on the Shanghai host in a non-served
+directory using the existing authorized publication transfer. COS is the
+historical archive. When restoring an existing archived file, use the same-region
+internal endpoint after verifying its DNS. Never print signed COS query strings.
 Check byte sizes, SHA-256 values, installer signature, and Skill payload before
 moving the complete directory into an unused immutable release path. Build
 the standard updater JSON using `build_latest_document`, with identical binary
