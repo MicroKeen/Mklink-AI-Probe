@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-11-07T00:45:10+08:00`
+- 更新时间：`2026-11-07T09:09:14+08:00`
 - 分支：`codex/v0.4.3-fixes`
 - HEAD：`产品等价已安装b8a1f658；本轮仅合并验收文档。最终HEAD/PR69合并SHA以Git为准。`
-- 远端 HEAD：`合并资格起点main为4f3be7a4；11/7授权PR69整合，实时状态查microkeen/main。正式资产不变。`
+- 远端 HEAD：`PR69已合并main/186b6a0f；后续仅空间清理文档，精确HEAD查Git。正式资产不变。`
 - 工作树：复用E盘主工作区，保留旧v0.4.2分支和两个detached工作树；本轮及后续修复共用codex/v0.4.3-fixes。
-- 当前任务：11/7用户授权PR69及固件依赖合并/垃圾清理。完整软件门禁与清理见v043-merge-cleanup.md；最终合并SHA核对Git/PR。本机b8a1f658不变，未发布。
-- 状态：`merge_authorized`
+- 当前任务：11/7历史空间清理完成：删除29.558GiB，F余30.758GiB；112含链接组清单已生成，见v043-space-cleanup-20261107.md。仅交接文档，产品不变。
+- 状态：`storage_cleanup_complete`
 
 ## 里程碑
 
@@ -49,13 +49,13 @@
 
 - **state**：11/7 V3最终UART r6在用、V4上次为普通r4；固件会话已释放硬件并合并V3 #9–11/V4 #18–20，详见v043-merge-cleanup.md。每次重核身份/占用；LA CH0/CH1为SWCLK/SWDIO。
 - **installer**：Windows/完整Skill为0.4.3/b8a1f658（产品等价4c890205），NSIS SHA08109b2d、Skill abb5797a，验证见v043-gui-uart-local-install.md。SiteAgent仍旧，正式资产不变；未发布。
-- **backups**：正式包/四固件、当前资格/恢复包、缓存及工作树保留。用户授权旧记录和脚本清理：F释放18.055GiB、E释放5.326GiB；32份旧raw已退役，不能重解码，保留分析。114含链接组未动；见v043-workspace-cleanup.md。
+- **backups**：最新b8a1f658应用/Skill、f9b1ae8a基准、正式包/固件、原始测试记录及公共缓存保留。11/7清理29.558GiB，4383保留哈希一致；112含链接组未删，见v043-space-cleanup-20261107.md。旧ELF/试包退役；11/4历史清理见v043-workspace-cleanup.md。
 
 ## 下一动作
 
-1. 本轮已授权PR69合并，状态/精确SHA核对Git；后续仍共用codex/v0.4.3-fixes并保留工作树。性能/数据基线不降，允许调试占带宽合理下降；P95<1ms/最大间隔<20us仍开放。发布须新授权。
+1. PR69已合并186b6a0f；后续共用codex/v0.4.3-fixes并保留工作树。性能/数据基线不降，允许调试占带宽合理下降；P95<1ms/最大间隔<20us仍开放。新合并/发布须授权。
 2. 固件V3 #9–11/V4 #18–20已合并，main为d46ccdf7/affba5d0；UART34档资格仅普通V3/V4。应用/完整Skill仍b8a1f658；RS485/其他硬件不外推。
-3. 11/7两会话清理344609578字节；保留正式包、当前唯一证据、缓存及含链接目录，见v043-merge-cleanup.md。历史清理见v043-workspace-cleanup.md，未闭环问题保持。
+3. 11/7历史清理完成，F余30.758GiB；含链接112组/10.910GiB保留，完整CSV在构建根reports/space-cleanup-20261107。公共缓存/正式原包/唯一证据不删，旧实验ELF与测试安装包已退役，见v043-space-cleanup-20261107.md。
 4. 按tencent-updates.md维护最新本地集；COS189GiB告警/207.9停止，已取消日期截止，关注实际扣量/到期后费用。不清零/扩大额度/恢复停止锁；监控断档超30天须账单重锚定。
 
 ## 已知限制
