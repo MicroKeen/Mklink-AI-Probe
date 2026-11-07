@@ -221,8 +221,11 @@ def test_active_mcp_and_sdk_can_attach_uart_without_target(runtime, monkeypatch)
         async with Client(runtime_mcp.build_server()) as mcp:
             result = await mcp.call_tool('connect', {'scope': 'uart'})
             assert result.data['scope'] == 'uart'
-            assert (await mcp.call_tool('gui_call', {'capability': 'uart_ports'})).data == [{'device': 'TEST_UART'}]
-            assert (await mcp.call_tool('gui_call', {'capability': 'modbus_status'})).data == {'running': False}
+            # Assert protocol payloads, not FastMCP's version-dependent union models.
+            ports = await mcp.call_tool_mcp('gui_call', {'capability': 'uart_ports'})
+            status = await mcp.call_tool_mcp('gui_call', {'capability': 'modbus_status'})
+            assert ports.structuredContent == {'result': [{'device': 'TEST_UART'}]}
+            assert status.structuredContent == {'result': {'running': False}}
             await mcp.call_tool('detach', {})
     asyncio.run(scenario())
     assert not control.sessions and calls == [] and app.state.mklink_state['device'] is None

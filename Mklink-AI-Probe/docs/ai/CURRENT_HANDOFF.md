@@ -4,12 +4,12 @@
 
 ## 当前断点
 
-- 更新时间：`2026-11-07T17:30:00+08:00`
+- 更新时间：`2026-11-07T19:07:57+08:00`
 - 分支：`codex/v0.4.3-fixes`
-- HEAD：`0.4.3产品33f3c36d；列表实装2d246431，睡后续采2a3cbb77。`
+- HEAD：`0.4.3 产品 3c486786；S3/USB 及五项拷贝回归见 v043-s3-integration.md。`
 - 远端 HEAD：`0.4.3继续共用修复分支，交付集为上位机PR71、V3 PR13、V4 PR22，保留分支。`
 - 工作树：复用E盘主工作区，保留旧v0.4.2分支和两个detached工作树；本轮及后续修复共用codex/v0.4.3-fixes。
-- 当前任务：普通连接延迟与后台管理入口见 v043-connect-sleep.md；V3 PR13、V4 PR22 已合并，仍未正式发布。
+- 当前任务：0.4.3 已修复 USB 文件拷贝回归。V4/F103 实装采集与 A/B 性能见 v043-s3-integration.md。正式发布需独立指令。
 - 状态：`v043_candidate_qualification`
 
 ## 里程碑
@@ -23,7 +23,7 @@
 
 ## 验证证据
 
-- **0.4.3接收、连续性与性能**：0.4.3基线/1µs见v043-host-baseline.md、v043-superwatch-1us.md。IAR退出后V3/V4混合RTT约355→420/354→416KiB/s，Watch约10→11.7万/s，四调试器共存通过。V4独立849.64KiB/s、26.53万/s，4096B约1053–1056KiB/s。见v043-mux-heartbeat-recording.md、v043-iar-exit-context.md、v043-v4-iar-exit-context.md。V3/F103 Cortex-M3 72MHz/100ms WFI，NRST未接，两种复位启动计数递增、双向烧录独立校验、RAM 12/12、持续RTT通过，DBGMCU_CR=0。见v043-cortex-m-sleep.md。
+- **0.4.3接收、连续性与性能**：0.4.3基线/1µs见v043-host-baseline.md、v043-superwatch-1us.md。IAR退出后V3/V4混合RTT约355→420/354→416KiB/s，Watch约10→11.7万/s，四调试器共存通过。V4独立849.64KiB/s、26.53万/s，4096B约1053–1056KiB/s。见v043-mux-heartbeat-recording.md、v043-iar-exit-context.md、v043-v4-iar-exit-context.md。V3/F103 Cortex-M3 72MHz/100ms WFI，NRST未接，两种复位启动计数递增、双向烧录独立校验、RAM 12/12、持续RTT通过，DBGMCU_CR=0。见v043-cortex-m-sleep.md。 S3 台架及本次整合范围见 v043-s3-integration.md。
 - **0.4.2正式发布及腾讯云下载**：正式源0e82ba6f，Windows/完整Skill/SiteAgent和四固件发布、覆盖、签名及三渠道/回退通过，PR66/67/68已合并，资产不可变。详细资格见v042-release-handoff.md；安装元数据cb30b703/PR63见installer-metadata-cleanup-20261027.md。清理29目录6.587GiB、629保留哈希不变、135含链接组保留，见v042-postrelease-handoff.md。11/4轻量11文件341MiB哈希/HEAD/Range/回退、25保护/18GUI通过；更新32过/1开发版本不一致，Skill检查通过。99%及无日期截止部署回读通过，见tencent-download-cost-20261104.md（含误部署恢复/限制）。
 - **0.4.2正式候选最终资格**：90e676db与产品1ca9b8fd等价：6453Python/2skip、1182GUI、生产Web/冻结/Rust/NSIS/覆盖及真实界面交互通过。HPM时钟/镜像/RAM/XML/RTT/Watch/串口、Trace独立并行、烧录后三流恢复与原生退出通过。完整计数及限制见v042-formal-qualification.md、v042-traffic-replay.md，历史Trace溢出失败保留。
 - **AI Skill与共享GUI**：2a3cbb77候选：6759 Python/2跳过、1202 GUI、23 Rust通过。F103续采与最终三款UF2见v043-f103-wake-data.md，首轮见v043-release-candidate-acceptance.md。历史实装见v043-gui-uart-local-install.md，Watch列表见v043-superwatch-list-actions.md。
@@ -48,7 +48,7 @@
 ## 真机环境
 
 - **state**：11/7普通V4已通过GUI从4.7.2升到普通4.7.3，F103镜像回读见v043-release-candidate-acceptance.md。V3.6.9与专用HPMLink资格见v043-cortex-m-sleep.md。每次重新核对设备和占用；LA CH0/CH1为SWCLK/SWDIO。
-- **installer**：本机0.4.3/2d246431桌面和Skill覆盖验收见v043-superwatch-list-actions.md。33f3c36d候选桌面测试见v043-connect-sleep.md。
+- **installer**：Windows/本地完整 Skill 已安装 0.4.3/3c486786，NSIS SHA e0e02850、Skill 9dbe4b0b，V4/F103 双端睡后采集通过，见 v043-s3-integration.md。
 - **backups**：最新b8a1f658应用/Skill、f9b1ae8a基准、正式包/固件、原始测试记录及公共缓存保留。11/7清理29.558GiB，4383保留哈希一致；112含链接组未删，见v043-space-cleanup-20261107.md。旧ELF/试包退役；11/4历史清理见v043-workspace-cleanup.md。
 
 ## 下一动作

@@ -536,6 +536,9 @@ def test_sidecar_collects_pyocd_plugins_metadata_and_hid_binary(builder, monkeyp
     assert ["--copy-metadata", "pyocd"] in pairs
     assert ["--collect-all", "cmsis_pack_manager"] in pairs
     assert ["--collect-all", "hid"] in pairs
+    if builder.IS_WINDOWS:
+        assert ["--hidden-import", "bleak.backends.winrt.client"] in pairs
+        assert ["--hidden-import", "bleak.backends.winrt.scanner"] in pairs
 
 
 def test_skill_defaults_axf_to_builtin_parser():

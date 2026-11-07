@@ -637,7 +637,9 @@ def _make_directory_redirect(kind: str, link: Path, target: Path) -> None:
                 f"{type(exc).__name__}"
             )
             if os.name == "nt":
-                pytest.fail(message)
+                pytest.fail(message + "; Windows security checks require real symlinks: "
+                            "enable Developer Mode or use a symlink-privileged test process. "
+                            "Junction coverage does not replace this check.")
             pytest.skip(message)
         assert link.is_symlink()
         return

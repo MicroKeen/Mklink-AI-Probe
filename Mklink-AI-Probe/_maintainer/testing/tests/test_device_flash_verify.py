@@ -286,9 +286,11 @@ def test_device_flash_uses_catalog_algorithm_for_external_flash(
     ]
 
 
+@pytest.mark.parametrize('allow_fallback', [True, False])
 def test_device_flash_uses_verified_profile_when_catalog_deploy_fails(
     tmp_path: Path,
     monkeypatch,
+    allow_fallback,
 ):
     from mklink.cmsis_dap.algorithm_catalog import FlashAlgorithm
 
@@ -324,6 +326,15 @@ def test_device_flash_uses_verified_profile_when_catalog_deploy_fails(
     monkeypatch.setattr("mklink.profiles.load_mcu_profiles", lambda: {"verified": profile})
     device = _device(lambda _address, size: b"fallback"[:size])
     device._mcu_hint = "verified"
+
+    device._bridge = _BridgeStub()
+    device._bridge.allow_algorithm_fallback = allow_fallback
+    device._bridge.auto_recovery = not allow_fallback
+    if not allow_fallback:
+        with pytest.raises(OSError, match='volume unavailable'):
+            device.flash(str(firmware), target_part="DEVICE_A", verify=False, reset_after=False)
+        assert device._flash.loaded == device._flash.burned == []
+        return
 
     result = device.flash(
         str(firmware), target_part="DEVICE_A", verify=False, reset_after=False

@@ -367,6 +367,16 @@ def test_link_journal_failure_retains_ownership_until_online_worker_finishes(sec
     assert len(s.calls) == 1
 
 
+def test_non_usb_transport_refuses_local_dap_job_before_execution(security):
+    s = security
+    s.inventory[0].update(local_usb=False, transport='another-relay')
+    response = s.client.post('/api/online-flash/jobs',
+                            json=dict(actions=['connect', 'disconnect'], probe_id='SERIAL', target_part='nrf54l15'),
+                            headers={'X-MKLink-Request-Id': 'remote-refused'})
+    assert response.status_code == 409 and 'local CMSIS-DAP' in response.text
+    assert not s.calls and not s.control.jobs.jobs
+
+
 def test_gui_online_start_is_journaled_and_duplicates_return_original_result(security):
     s = security
     body = dict(actions=['connect','disconnect'], probe_id='SERIAL', target_part='nrf54l15')

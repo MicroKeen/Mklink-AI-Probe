@@ -105,14 +105,18 @@ def check_node():
 
 
 def check_python_deps():
-    """Check Python mklink package with [gui] extras."""
+    """Verify GUI dependencies and the BLE backend shipped by the Windows desktop."""
+    imports = "import mklink, fastapi, uvicorn"
+    if IS_WINDOWS:
+        imports += "; import mklink.s3_ble, bleak.backends.winrt.client"
+    extras = ".[gui,s3]" if IS_WINDOWS else ".[gui]"
     rc = run(
-        [sys.executable, "-c", "import mklink, fastapi, uvicorn; print('Python deps OK')"],
+        [sys.executable, "-c", imports],
         check=False,
     )
     if rc != 0:
         print("[INFO] Installing Python dependencies...")
-        run([sys.executable, "-m", "pip", "install", "-e", ".[gui]"], cwd=str(SKILL_DIR))
+        run([sys.executable, "-m", "pip", "install", "-e", extras], cwd=str(SKILL_DIR))
     return True
 
 
@@ -295,7 +299,8 @@ def build_sidecar(force=False):
             "--copy-metadata", "pyocd",
             "--collect-all", "cmsis_pack_manager",
             "--collect-all", "hid",
-        ] + builtin_args + [
+        ] + (["--hidden-import", "bleak.backends.winrt.client",
+             "--hidden-import", "bleak.backends.winrt.scanner"] if IS_WINDOWS else []) + builtin_args + [
             "--add-data", "{}{}gui/dist".format(gui_dist, os.pathsep),
             "-p", str(SKILL_DIR),
             str(SKILL_DIR / "mklink" / "__main__.py"),

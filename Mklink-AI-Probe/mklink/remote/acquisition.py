@@ -26,6 +26,8 @@ async def suspend_acquisition(state, control=None):
     state['acquisition_transition'] = report
     device, dispatcher = state.get('device'), state.get('dispatcher')
     was_connected = bool(device is not None and device.connected)
+    original_bridge = getattr(device, '_bridge', None)
+    automatic_recovery = getattr(original_bridge, 'auto_recovery', True) is not False
     saved = []
     attempted = set()
     async with _dashboard_start_lock(state):
@@ -68,6 +70,8 @@ async def suspend_acquisition(state, control=None):
                 # HPM and power-cycle downloads close the shared command handle.
                 # Reopen only the same bound USB identity, preserving symbol state.
                 if was_connected and not device.connected:
+                    if not automatic_recovery:
+                        raise RuntimeError('Connection lost; transport requires explicit recovery, no automatic reconnect')
                     if any(_dashboard_worker_alive(manager) for _, manager, _, _ in saved):
                         raise RuntimeError('A capture worker still owns the connection')
                     if control is not None and control.info.get('probe_id'):
@@ -90,6 +94,8 @@ async def suspend_acquisition(state, control=None):
                         report['errors'].append(f'{name}: worker has not stopped')
                     continue
                 try:
+                    if getattr(original_bridge, 'transport_healthy', True) is False:
+                        raise RuntimeError('Transport outcome unknown; acquisition was not restarted')
                     if device is None or not device.connected:
                         raise RuntimeError('Device not connected')
                     def restart_ready(m=manager, start=restart, stream=name):

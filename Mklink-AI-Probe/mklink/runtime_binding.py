@@ -47,7 +47,13 @@ class RuntimeBinding:
             nonlocal committed
             from mklink.probes import rebind_runtime
             old_id, old_lock = self.info['probe_id'], self.lock
-            updated = {**self.info, 'probe_id': probe_id}
+            transport = 'cdc'
+            if probe_id.startswith('s3-'):
+                # Registration cannot change while this owner lock is held.
+                from mklink.s3_registry import load_nodes
+                node = load_nodes().get(probe_id)
+                transport = 's3-' + node['transport'] if node else 's3'
+            updated = {**self.info, 'probe_id': probe_id, 'transport': transport}
             # Publish while both ownership locks are held. Readers additionally
             # verify the live identity, so a partial publication cannot attach.
             write_endpoint(self.info['runtime_id'], updated)

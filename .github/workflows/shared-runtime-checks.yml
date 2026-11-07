@@ -24,7 +24,7 @@ jobs:
       - name: Install shared runtime dependencies
         shell: pwsh
         working-directory: Mklink-AI-Probe
-        run: ./scripts/build_workspace.ps1 -Action run -Executable python -ArgumentList @('-m', 'pip', 'install', '.[mcp]', 'pytest==8.4.2')
+        run: ./scripts/build_workspace.ps1 -Action run -Executable python -ArgumentList @('-m', 'pip', 'install', '.[mcp,s3]', 'pytest==8.4.2')
       - name: Check COS budget guard and fallback leases
         shell: pwsh
         working-directory: Mklink-AI-Probe
@@ -72,6 +72,7 @@ jobs:
           $tests += 'test_remote_upstream_integration'
           $tests += 'test_serial_protocol_buffer'
           $tests += @('test_sleep_access', 'test_device_flash_verify', 'test_capture_reset')
+          $tests += @('test_mux_remote_keepalive', 'test_s3_http', 'test_s3_adapter', 'test_transport_contracts', 'test_file_content')
           $tests += 'test_serial_exchange'
           $tests += 'test_remote_offline_identity'
           $tests += 'test_offline_deployment_jobs'
