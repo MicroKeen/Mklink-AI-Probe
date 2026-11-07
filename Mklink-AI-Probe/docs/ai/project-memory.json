@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-07T10:22:44+08:00",
+  "updated_at": "2026-11-07T10:55:01+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.4.3-fixes",
-    "head": "SuperWatch界面源码cfb1bae8，生产Web与验收见v043-superwatch-list-actions.md。精确HEAD与PR状态查Git。",
+    "head": "SuperWatch cfb1bae8、Cortex-M睡眠访问 f1107e1d、RTT菜单 bb2c8d27；生产Web a9d6e8ab。",
     "remote_head": "PR69已合并main/186b6a0f。0.4.3继续共用修复分支和草稿PR71。",
     "working_tree": "复用E盘主工作区，保留旧v0.4.2分支和两个detached工作树；本轮及后续修复共用codex/v0.4.3-fixes。"
   },
@@ -13,8 +13,8 @@
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "current_task": "SuperWatch三处变量列表统一写入，已选行可移除并同步取消勾选；中英文帮助已校正。见v043-superwatch-list-actions.md。",
-    "status": "superwatch_list_actions_verified"
+    "status": "host_fixes_verified",
+    "current_task": "RTT日志菜单已修复，48组Edge检查及80项组件测试通过。工作继续在0.4.3修复分支和PR71。"
   },
   "milestones": [
     {
@@ -51,7 +51,7 @@
   "verification": [
     {
       "area": "0.4.3接收、连续性与性能",
-      "result": "历史基线/1us/安装见v043-host-baseline.md、v043-superwatch-1us.md、v043-1us-local-install.md。92ca心跳/录制193定向/787相关（重叠）/性能1过。V3/V4各IAR GUI2轮、其余IDE各5轮；RTT 60668928/69770240B、样本4210495/3699185全正确，0超时/丢弃。退出混合RTT约355→420/354→416KiB/s、Watch约10→11.7万/s；V4独立849.64KiB/s(-0.0205%相邻E)、26.53万/s，4096B约1053–1056KiB/s。见v043-mux-heartbeat-recording.md和v043-iar-exit-context.md、v043-v4-iar-exit-context.md。"
+      "result": "0.4.3基线/1µs见v043-host-baseline.md、v043-superwatch-1us.md。IAR退出后V3/V4混合RTT约355→420/354→416KiB/s，Watch约10→11.7万/s，四调试器共存通过。V4独立849.64KiB/s、26.53万/s，4096B约1053–1056KiB/s。见v043-mux-heartbeat-recording.md、v043-iar-exit-context.md、v043-v4-iar-exit-context.md。V3/F103 Cortex-M3 72MHz/100ms WFI，NRST未接，两种复位启动计数递增、双向烧录独立校验、RAM 12/12、持续RTT通过，DBGMCU_CR=0。见v043-cortex-m-sleep.md。"
     },
     {
       "area": "0.4.2正式发布及腾讯云下载",
@@ -63,7 +63,7 @@
     },
     {
       "area": "AI Skill与共享GUI",
-      "result": "GUI/回收与UART检查及实装见v043-gui-open.md、v043-uart-baud-options.md、v043-gui-uart-local-install.md。3655/2655载荷全匹配、5339数据不变、57 MCP/原生/Web/退出通过。11/7全量6695过/2skip/4隔离FLM环境错；补路径后打包6过覆盖全部错误，GUI1198过/Web42一致，见v043-merge-cleanup.md。MCP强杀进程树边界保留。 11/7变量写入/移除/帮助174 GUI及Edge模拟接口通过，见v043-superwatch-list-actions.md。"
+      "result": "GUI/回收/UART及实装见v043-gui-open.md、v043-uart-baud-options.md、v043-gui-uart-local-install.md。3655/2655载荷匹配，5339数据不变。全量与打包补验见v043-merge-cleanup.md，MCP强杀进程树边界保留。SuperWatch三列表写入/移除/帮助174项与Edge通过，见v043-superwatch-list-actions.md。RTT日志菜单在8种宽度×2通道×3模式，裁剪20/48→0/48，记录/回放入口均可点击。验收在构建根artifacts/v043-rtt-log-menu-20261107。"
     },
     {
       "area": "RTT自动恢复与在线静默收尾",

@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-11-07T10:22:44+08:00`
+- 更新时间：`2026-11-07T10:55:01+08:00`
 - 分支：`codex/v0.4.3-fixes`
-- HEAD：`SuperWatch界面源码cfb1bae8，生产Web与验收见v043-superwatch-list-actions.md。精确HEAD与PR状态查Git。`
+- HEAD：`SuperWatch cfb1bae8、Cortex-M睡眠访问 f1107e1d、RTT菜单 bb2c8d27；生产Web a9d6e8ab。`
 - 远端 HEAD：`PR69已合并main/186b6a0f。0.4.3继续共用修复分支和草稿PR71。`
 - 工作树：复用E盘主工作区，保留旧v0.4.2分支和两个detached工作树；本轮及后续修复共用codex/v0.4.3-fixes。
-- 当前任务：SuperWatch三处变量列表统一写入，已选行可移除并同步取消勾选；中英文帮助已校正。见v043-superwatch-list-actions.md。
-- 状态：`superwatch_list_actions_verified`
+- 当前任务：RTT日志菜单已修复，48组Edge检查及80项组件测试通过。工作继续在0.4.3修复分支和PR71。
+- 状态：`host_fixes_verified`
 
 ## 里程碑
 
@@ -23,10 +23,10 @@
 
 ## 验证证据
 
-- **0.4.3接收、连续性与性能**：历史基线/1us/安装见v043-host-baseline.md、v043-superwatch-1us.md、v043-1us-local-install.md。92ca心跳/录制193定向/787相关（重叠）/性能1过。V3/V4各IAR GUI2轮、其余IDE各5轮；RTT 60668928/69770240B、样本4210495/3699185全正确，0超时/丢弃。退出混合RTT约355→420/354→416KiB/s、Watch约10→11.7万/s；V4独立849.64KiB/s(-0.0205%相邻E)、26.53万/s，4096B约1053–1056KiB/s。见v043-mux-heartbeat-recording.md和v043-iar-exit-context.md、v043-v4-iar-exit-context.md。
+- **0.4.3接收、连续性与性能**：0.4.3基线/1µs见v043-host-baseline.md、v043-superwatch-1us.md。IAR退出后V3/V4混合RTT约355→420/354→416KiB/s，Watch约10→11.7万/s，四调试器共存通过。V4独立849.64KiB/s、26.53万/s，4096B约1053–1056KiB/s。见v043-mux-heartbeat-recording.md、v043-iar-exit-context.md、v043-v4-iar-exit-context.md。V3/F103 Cortex-M3 72MHz/100ms WFI，NRST未接，两种复位启动计数递增、双向烧录独立校验、RAM 12/12、持续RTT通过，DBGMCU_CR=0。见v043-cortex-m-sleep.md。
 - **0.4.2正式发布及腾讯云下载**：正式源0e82ba6f，Windows/完整Skill/SiteAgent和四固件发布、覆盖、签名及三渠道/回退通过，PR66/67/68已合并，资产不可变。详细资格见v042-release-handoff.md；安装元数据cb30b703/PR63见installer-metadata-cleanup-20261027.md。清理29目录6.587GiB、629保留哈希不变、135含链接组保留，见v042-postrelease-handoff.md。11/4轻量11文件341MiB哈希/HEAD/Range/回退、25保护/18GUI通过；更新32过/1开发版本不一致，Skill检查通过。99%及无日期截止部署回读通过，见tencent-download-cost-20261104.md（含误部署恢复/限制）。
 - **0.4.2正式候选最终资格**：90e676db与产品1ca9b8fd等价：6453Python/2skip、1182GUI、生产Web/冻结/Rust/NSIS/覆盖及真实界面交互通过。HPM时钟/镜像/RAM/XML/RTT/Watch/串口、Trace独立并行、烧录后三流恢复与原生退出通过。完整计数及限制见v042-formal-qualification.md、v042-traffic-replay.md，历史Trace溢出失败保留。
-- **AI Skill与共享GUI**：GUI/回收与UART检查及实装见v043-gui-open.md、v043-uart-baud-options.md、v043-gui-uart-local-install.md。3655/2655载荷全匹配、5339数据不变、57 MCP/原生/Web/退出通过。11/7全量6695过/2skip/4隔离FLM环境错；补路径后打包6过覆盖全部错误，GUI1198过/Web42一致，见v043-merge-cleanup.md。MCP强杀进程树边界保留。 11/7变量写入/移除/帮助174 GUI及Edge模拟接口通过，见v043-superwatch-list-actions.md。
+- **AI Skill与共享GUI**：GUI/回收/UART及实装见v043-gui-open.md、v043-uart-baud-options.md、v043-gui-uart-local-install.md。3655/2655载荷匹配，5339数据不变。全量与打包补验见v043-merge-cleanup.md，MCP强杀进程树边界保留。SuperWatch三列表写入/移除/帮助174项与Edge通过，见v043-superwatch-list-actions.md。RTT日志菜单在8种宽度×2通道×3模式，裁剪20/48→0/48，记录/回放入口均可点击。验收在构建根artifacts/v043-rtt-log-menu-20261107。
 - **RTT自动恢复与在线静默收尾**：14417715：347相关+17发现测试通过。V4/HPM5301两次49700B烧录成功，RTT/Watch自动暂停恢复、零恢复错误及零Watch读错；覆盖/载荷/冻结MCP/Web/退出通过。当时为0.4.1测试包，修复后续纳入正式0.4.2。原始包/详细计数见rtt-auto-restore-20261030.md；静默面板d1cf16ec见online-flash-receipt-20261029.md。
 - **Linux/macOS 0.4.1测试包**：Linux a6bdacbc、Mac arm64 eefc6842：CI USB各58/1skip及冻结CLI/MCP/健康/Web/退出通过。DEB SHA7309f377、DMG SHA56dc8e0a，均旧0.4.1；Mac ad-hoc未公证，实机安装/UI/USB待测。见linux-deb-test-20261028.md、macos-arm64-test-20261028.md。
 - **H743正式固件与双核候选边界**：H743正式V4.7.1在线/四脱机/19采集调试通过。私有V4.7.2单核兼容、双核误选写前拒绝、2MiB不变及M7/M4 HEX在线通过；V4.7.2/V3.6.8/V2.9.3双核候选交付，46回归通过。无双核实板正向脱机，V3历史掉线未闭环，当时候选不公开替换；后来明确发布的四个build以v042-release-handoff.md为准，不外推双核验收。见known-limits-20261030.md。
