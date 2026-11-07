@@ -1,4 +1,5 @@
-vi.mock('./SelectedSignals.vue', () => ({ default: { template: '<div />' } }))
+vi.mock('./SelectedSignals.vue', () => ({ default: { props: ['paths'], template:
+  '<div><div v-for="path in paths" :key="path"><slot name="actions" :path="path" /></div></div>' } }))
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick, ref, shallowRef } from 'vue'
@@ -536,6 +537,58 @@ describe('SymbolVariablePanel', () => {
 
     expect(mocks.writeSymbol).toHaveBeenCalledWith('gain', 1.3)
     expect(wrapper.get('[data-testid="write-ok-gain"]').text()).toContain('1.3')
+  })
+
+  it('writes once from selected or pinned rows and removes the shared selection without unpinning', async () => {
+    const server = mockPinnedWorkspace(['gain'])
+    const wrapper = mount(SymbolVariablePanel, { props: { deviceConnected: true, latestValues: { gain: 1.25 } } })
+    await flushPromises()
+    await wrapper.get('[data-testid="variable-search"]').setValue('gain')
+    await flushPromises()
+    const pinned = wrapper.get('[data-testid="pinned-variables"]')
+    const search = wrapper.get('[data-testid="all-variables"]')
+    for (const open of [wrapper.get('[data-testid="selected-write-gain"]'), pinned.get('[data-testid="edit-gain"]')]) {
+      expect(open.text()).toBe('写入')
+      await open.trigger('click')
+      expect(wrapper.findAll('[data-testid="write-input-gain"]')).toHaveLength(1)
+      const input = wrapper.get('[data-testid="write-input-gain"]')
+      await input.setValue('')
+      expect(wrapper.get('[data-testid="write-gain"]').attributes('disabled')).toBeDefined()
+      await input.setValue('2')
+      await wrapper.get('[data-testid="write-gain"]').trigger('click')
+      await flushPromises()
+      expect(mocks.writeSymbol).toHaveBeenCalledWith('gain', 2)
+    }
+    expect(mocks.writeSymbol).toHaveBeenCalledTimes(2)
+    await wrapper.get('[data-testid="selected-remove-gain"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="selected-remove-gain"]').exists()).toBe(false)
+    for (const section of [pinned, search]) {
+      expect((section.get('[data-testid="toggle-gain"]').element as HTMLInputElement).checked).toBe(false)
+    }
+    expect(server.pins()).toEqual(['gain'])
+    expect(wrapper.emitted('selection-removed')).toEqual([['gain']])
+    await pinned.get('[data-testid="edit-gain"]').trigger('click')
+    expect(pinned.get('[data-testid="write-input-gain"]').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('preserves selection on a refused removal and allows removing an unresolved symbol by name', async () => {
+    const server = mockPinnedWorkspace(['gain'])
+    mocks.searchSymbols.mockResolvedValue([])
+    const wrapper = mount(SymbolVariablePanel, { props: { deviceConnected: true, latestValues: {} } })
+    await flushPromises()
+    expect(wrapper.get('[data-testid="selected-write-gain"]').attributes('disabled')).toBeDefined()
+    server.fetch.mockResolvedValueOnce(okJson({ error: 'busy' }))
+    await wrapper.get('[data-testid="selected-remove-gain"]').trigger('click')
+    await flushPromises()
+    expect(mocks.toastError).toHaveBeenCalledWith('busy')
+    expect((wrapper.get('[data-testid="toggle-gain"]').element as HTMLInputElement).checked).toBe(true)
+    expect(wrapper.emitted('selection-removed')).toBeUndefined()
+    await wrapper.get('[data-testid="selected-remove-gain"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.emitted('selection-removed')).toEqual([['gain']])
+    wrapper.unmount()
   })
 
   it('refuses writes while the AXF catalog is stale', async () => {

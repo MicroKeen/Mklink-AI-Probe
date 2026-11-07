@@ -43,6 +43,7 @@
             <button :aria-label="`曲线设置 ${path}`" @click="configure(path)">ƒx</button>
           </div>
           <div v-if="prefs.style(path).formula" class="converted-value">{{ tr('计算值', 'Calculated') }}: {{ formatValue(signalFormula(prefs.style(path).formula)(Number(values[path]))) }} · {{ tr('原始值', 'Raw') }}: {{ formatValue(values[path]) }}</div>
+          <slot name="actions" :path="path" />
         </div>
       </section>
     </div>
@@ -59,7 +60,7 @@
 </template>
 <script setup lang="ts">
 import { Eye, EyeOff } from '@lucide/vue'
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useWatchWorkspace } from '../../composables/useWatchWorkspace'
 import InlineWatchName from './InlineWatchName.vue'
 import { tr } from '../../composables/useLanguage'
@@ -68,6 +69,10 @@ const props = defineProps<{ paths: string[]; values: Record<string, number | boo
 defineEmits<{ visibility: [path: string, visible: boolean] }>()
 const prefs = useWatchWorkspace(), settings = ref(false), newName = ref(''), checked = ref<string[]>([])
 const editing = ref(''), formula = ref(''), color = ref('#ef9878'), formulaError = ref('')
+watch(() => props.paths, paths => {
+  if (checked.value.length) checked.value = checked.value.filter(path => paths.includes(path))
+  if (editing.value && !paths.includes(editing.value)) editing.value = ''
+})
 function configure(path: string) {
   editing.value = path; formula.value = prefs.style(path).formula || ''; color.value = prefs.style(path).color || '#ef9878'; formulaError.value = ''
 }

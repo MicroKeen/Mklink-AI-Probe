@@ -53,7 +53,26 @@
         <ChevronRight v-if="collapsed.signals" :size="14" /><ChevronDown v-else :size="14" />
         <span>{{ tr('信号分组', 'Signal groups') }}</span><small>{{ tr(`已选 ${selected.size}`, `${selected.size} selected`) }}</small>
       </button>
-      <SelectedSignals v-show="!collapsed.signals" :paths="[...selected]" :values="latestValues" :hidden="hiddenChannels" @visibility="(path, visible) => emit('visibility-change', path, visible)" />
+      <SelectedSignals v-show="!collapsed.signals" :paths="selectedPaths" :values="latestValues" :hidden="hiddenChannels" @visibility="(path, visible) => emit('visibility-change', path, visible)">
+        <template #actions="{ path }">
+          <div class="selected-actions">
+            <button type="button" class="edit-button" :data-testid="`selected-write-${path}`"
+              :disabled="!canWrite(selectedDescriptors.get(path)) || writing.has(path)"
+              :title="writeTitle(selectedDescriptors.get(path))"
+              @click="beginEdit(selectedDescriptors.get(path), 'selected')">{{ tr('写入', 'Write') }}</button>
+            <button type="button" class="edit-button" :data-testid="`selected-remove-${path}`"
+              :disabled="catalog.stale.value || selectionBusy.has(path)"
+              :aria-label="tr(`移除 ${path}`, `Remove ${path}`)"
+              @click="changeSelection(path, null)">{{ tr('移除', 'Remove') }}</button>
+          </div>
+          <SymbolWriteEditor v-if="editing?.section === 'selected' && editing.symbol.path === path"
+            v-model="draft" :symbol="editing.symbol" :busy="writing.has(path)" :disabled="!canWrite(selectedDescriptors.get(path))"
+            @write="writeValue" @cancel="editing = null" />
+          <div v-if="writeSuccess[path] !== undefined" class="write-success">
+            {{ tr('已写入:', 'Written:') }} {{ formatValue(writeSuccess[path]) }}
+          </div>
+        </template>
+      </SelectedSignals>
     </section>
     <div v-if="sectionSizes.canResize('signals')" class="section-resizer" role="separator" tabindex="0" aria-orientation="horizontal"
       data-testid="resize-signals-section" :aria-label="tr('调整信号分组高度', 'Resize signal groups')"
@@ -227,11 +246,11 @@
               class="edit-button"
               type="button"
               :data-testid="`edit-${row.node.descriptor.path}`"
-              :disabled="!deviceConnected || catalog.stale.value || !row.node.descriptor.writable"
-              :title="row.node.descriptor.bit_size != null ? tr('位域只读，避免改动相邻字段', 'Read-only bit field; protects adjacent fields') : tr('设置变量', 'Set variable')"
-              @click="beginEdit(row.node.descriptor)"
+              :disabled="!canWrite(row.node.descriptor) || writing.has(row.node.descriptor.path)"
+              :title="writeTitle(row.node.descriptor)"
+              @click="beginEdit(row.node.descriptor, group.key)"
             >
-              {{ tr('编辑', 'Edit') }}
+              {{ tr('写入', 'Write') }}
             </button>
             <span class="pin-controls">
               <button v-if="group.key === 'pinned'" type="button" class="pin-button"
@@ -252,42 +271,9 @@
             </span>
           </div>
 
-          <div v-if="editing === row.node.descriptor.path" class="write-editor">
-            <select
-              v-if="row.node.descriptor.scalar_kind === 'bool'"
-              v-model="editValues[row.node.descriptor.path]"
-              :data-testid="`write-input-${row.node.descriptor.path}`"
-            >
-              <option value="true">true</option>
-              <option value="false">false</option>
-            </select>
-            <select
-              v-else-if="row.node.descriptor.scalar_kind === 'enum'"
-              v-model="editValues[row.node.descriptor.path]"
-              :data-testid="`write-input-${row.node.descriptor.path}`"
-            >
-              <option v-for="(_value, label) in row.node.descriptor.enum_values" :key="label" :value="label">
-                {{ label }}
-              </option>
-            </select>
-            <input
-              v-else
-              v-model="editValues[row.node.descriptor.path]"
-              class="form-input"
-              :data-testid="`write-input-${row.node.descriptor.path}`"
-              inputmode="decimal"
-            />
-            <button
-              type="button"
-              class="btn btn-primary"
-              :data-testid="`write-${row.node.descriptor.path}`"
-              :disabled="writing.has(row.node.descriptor.path)"
-              @click="writeValue(row.node.descriptor)"
-            >
-              {{ writing.has(row.node.descriptor.path) ? tr('写入中', 'Writing') : tr('写入', 'Write') }}
-            </button>
-            <button type="button" class="btn btn-secondary" @click="editing = null">{{ tr('取消', 'Cancel') }}</button>
-          </div>
+          <SymbolWriteEditor v-if="editing?.section === group.key && editing.symbol.path === row.node.descriptor.path"
+            v-model="draft" :symbol="row.node.descriptor" :busy="writing.has(row.node.descriptor.path)" :disabled="!canWrite(row.node.descriptor)"
+            @write="writeValue" @cancel="editing = null" />
           <div
             v-if="writeSuccess[row.node.descriptor.path] !== undefined"
             class="write-success"
@@ -406,6 +392,7 @@ import { tr } from '../../composables/useLanguage'
 import SetupHint from './SetupHint.vue'
 import VariablePath from './VariablePath.vue'
 import SelectedSignals from './SelectedSignals.vue'
+import SymbolWriteEditor from './SymbolWriteEditor.vue'
 import { useWatchWorkspace } from '../../composables/useWatchWorkspace'
 import { API_BASE } from '../../lib/runtimeEndpoint'
 import { DESKTOP_SETTINGS_STORAGE_KEY } from '../../lib/desktopSettings'
@@ -466,10 +453,13 @@ const cLayoutDefinition = ref('')
 const cLayoutPack = ref('')
 const selectedOnly = ref(false)
 const selected = shallowRef(new Set<string>())
+const selectedPaths = computed(() => [...selected.value])
 const selectionBusy = shallowRef(new Set<string>())
 const writing = shallowRef(new Set<string>())
-const editing = ref<string | null>(null)
-const editValues = reactive<Record<string, string>>({})
+type WriteSection = 'selected' | 'pinned' | 'all'
+const editing = shallowRef<{ symbol: SymbolDescriptor; section: WriteSection; generation: number } | null>(null)
+const draft = ref('')
+let selectionRevision = 0
 const writeSuccess = reactive<Record<string, number | boolean | undefined>>({})
 const expanded = shallowRef(new Set<string>())
 const filteredCollapsed = shallowRef(new Set<string>())
@@ -606,11 +596,7 @@ async function loadWorkspace(): Promise<void> {
   if (!props.symbolLoaded) return
   try {
     await catalog.ensureLoaded()
-    const response = await request('/api/dash/superwatch/items')
-    selected.value = new Set(
-      Array.isArray(response.items) ? response.items.map((item: { name: string }) => item.name) : [],
-    )
-    await refreshSelectedDescriptors()
+    await refreshSelection(true)
     await loadPins()
   } catch (cause) {
     toast.error(cause instanceof Error ? cause.message : String(cause))
@@ -725,8 +711,14 @@ function rowIndent(depth: number): string {
 }
 
 async function toggleSelection(symbol: SymbolDescriptor, event: Event): Promise<void> {
-  const path = symbol.path
-  const checked = (event.target as HTMLInputElement).checked
+  const input = event.currentTarget as HTMLInputElement
+  await changeSelection(symbol.path, input.checked ? symbol : null)
+  input.checked = selected.value.has(symbol.path)
+}
+
+async function changeSelection(path: string, symbol: SymbolDescriptor | null): Promise<void> {
+  if (selectionBusy.value.has(path) || catalog.stale.value) return
+  const checked = symbol !== null
   selectionBusy.value = withSet(selectionBusy.value, path, true)
   try {
     const action = checked ? 'add' : 'remove'
@@ -737,23 +729,40 @@ async function toggleSelection(symbol: SymbolDescriptor, event: Event): Promise<
     if (result?.error || result?.item?.error) throw new Error(result.error || result.item.error)
     selected.value = withSet(selected.value, path, checked)
     const descriptors = new Map(selectedDescriptors.value)
-    if (checked) descriptors.set(path, symbol)
+    if (symbol) descriptors.set(path, symbol)
     else descriptors.delete(path)
     selectedDescriptors.value = descriptors
-    if (!checked) emit('selection-removed', path)
+    if (!checked) selectionRemoved(path)
   } catch (cause) {
-    ;(event.target as HTMLInputElement).checked = !checked
     toast.error(cause instanceof Error ? cause.message : String(cause))
   } finally {
+    selectionRevision++
     selectionBusy.value = withSet(selectionBusy.value, path, false)
   }
 }
 
+function selectionRemoved(path: string): void {
+  if (editing.value?.section === 'selected' && editing.value.symbol.path === path) editing.value = null
+  emit('selection-removed', path)
+}
+
+async function refreshSelection(resolveAll = false): Promise<void> {
+  const revision = selectionRevision
+  const list = await request('/api/dash/superwatch/items')
+  if (disposed || revision !== selectionRevision || selectionBusy.value.size || !Array.isArray(list.items)) return
+  const next = new Set<string>(list.items.map((item: { name: string }) => item.name))
+  if (!resolveAll && next.size === selected.value.size && [...next].every(path => selected.value.has(path))) return
+  for (const path of selected.value) if (!next.has(path)) selectionRemoved(path)
+  selected.value = next
+  await refreshSelectedDescriptors()
+}
+
 function applyRebindSummary(summary: { removed: string[] }): void {
+  selectionRevision++
   const next = new Set(selected.value)
   summary.removed.forEach(path => {
     next.delete(path)
-    emit('selection-removed', path)
+    selectionRemoved(path)
   })
   selected.value = next
   const descriptors = new Map(selectedDescriptors.value)
@@ -762,10 +771,14 @@ function applyRebindSummary(summary: { removed: string[] }): void {
 }
 
 async function refreshSelectedDescriptors(): Promise<void> {
+  const revision = selectionRevision
+  const generation = catalog.generation.value
+  const selection = selected.value
   const paths = [...selected.value]
   const resolved = await Promise.all(paths.map(async path => {
     return catalog.resolveSymbol(path).catch(() => undefined)
   }))
+  if (disposed || revision !== selectionRevision || selected.value !== selection || generation !== catalog.generation.value) return
   selectedDescriptors.value = new Map(
     resolved.filter((item): item is SymbolDescriptor => Boolean(item)).map(item => [item.path, item]),
   )
@@ -800,22 +813,33 @@ function toggleVisibility(path: string): void {
   emit('visibility-change', path, props.hiddenChannels?.has(path) ?? false)
 }
 
-function beginEdit(symbol: SymbolDescriptor): void {
-  if (catalog.stale.value || !symbol.writable) return
+function canWrite(symbol?: SymbolDescriptor): boolean {
+  return props.deviceConnected && props.symbolLoaded && !props.symbolError && !catalog.stale.value &&
+    Boolean(symbol?.writable && symbol.bit_size == null)
+}
+
+function writeTitle(symbol?: SymbolDescriptor): string {
+  if (!symbol) return tr('当前符号不可用', 'Symbol unavailable')
+  if (symbol.bit_size != null) return tr('位域只读，避免改动相邻字段', 'Read-only bit field; protects adjacent fields')
+  return symbol.writable ? tr('写入变量值', 'Write variable value') : tr('变量只读', 'Read-only variable')
+}
+
+function beginEdit(symbol: SymbolDescriptor | undefined, section: WriteSection): void {
+  if (!symbol || !canWrite(symbol) || writing.value.has(symbol.path)) return
   const current = props.latestValues[symbol.path]
   if (symbol.scalar_kind === 'bool') {
-    editValues[symbol.path] = String(current ?? false)
+    draft.value = String(Boolean(current))
   } else if (symbol.scalar_kind === 'enum') {
     const match = Object.entries(symbol.enum_values).find(([, value]) => value === current)
-    editValues[symbol.path] = match?.[0] ?? Object.keys(symbol.enum_values)[0] ?? ''
+    draft.value = match?.[0] ?? Object.keys(symbol.enum_values)[0] ?? ''
   } else {
-    editValues[symbol.path] = current === undefined ? '' : String(current)
+    draft.value = current === undefined ? '' : String(current)
   }
-  editing.value = symbol.path
+  editing.value = { symbol, section, generation: catalog.generation.value }
 }
 
 function typedValue(symbol: SymbolDescriptor): unknown {
-  const raw = editValues[symbol.path]
+  const raw = draft.value.trim()
   if (symbol.scalar_kind === 'bool') return raw === 'true'
   if (symbol.scalar_kind === 'enum') return raw
   if (symbol.scalar_kind === 'signed' || symbol.scalar_kind === 'unsigned') {
@@ -828,18 +852,23 @@ function typedValue(symbol: SymbolDescriptor): unknown {
   return value
 }
 
-async function writeValue(symbol: SymbolDescriptor): Promise<void> {
+async function writeValue(): Promise<void> {
+  const editor = editing.value
+  if (!editor || editor.generation !== catalog.generation.value || !canWrite(editor.symbol) || !draft.value.trim()) return
+  const symbol = editor.symbol
+  if (writing.value.has(symbol.path)) return
   writing.value = withSet(writing.value, symbol.path, true)
   delete writeSuccess[symbol.path]
   try {
     const requestedValue = typedValue(symbol)
     const result = await catalog.writeSymbol(symbol.path, requestedValue)
+    if (disposed || editor.generation !== catalog.generation.value || !props.deviceConnected) return
     writeSuccess[symbol.path] = result.value
     if (result.mode === 'legacy-gap') {
       toast.info(tr('已写入。当前固件或目标地址使用兼容写入，期间有采样空档，曲线历史已保留。',
         'Written. Compatibility writes for this firmware or target address have a sampling gap; curve history is preserved.'))
     }
-    editing.value = null
+    if (editing.value === editor) editing.value = null
   } catch (cause) {
     toast.error(cause instanceof Error ? cause.message : String(cause))
   } finally {
@@ -908,24 +937,13 @@ async function refreshSourceStatus(): Promise<void> {
       lastSourceError = change.sequence
       toast.error(tr('符号重载失败：', 'Symbol reload failed: ') + change.error)
     }
-    const watchList = await request('/api/dash/superwatch/items')
+    await refreshSelection()
     if (disposed) return
-    if (Array.isArray(watchList.items)) {
-      const next = new Set<string>(watchList.items.map((item: { name: string }) => item.name))
-      if (next.size !== selected.value.size || [...next].some(path => !selected.value.has(path))) {
-        for (const path of selected.value) {
-          if (!next.has(path)) emit('selection-removed', path)
-        }
-        selected.value = next
-        await refreshSelectedDescriptors()
-      }
-    }
     if (catalog.generation.value !== previousGeneration) {
       toast.success(tr('符号已重新加载', 'Symbols reloaded'), 2500)
       editing.value = null
       for (const path of Object.keys(writeSuccess)) delete writeSuccess[path]
       await loadWorkspace()
-      await refreshSelectedDescriptors()
       const search = query.value.trim()
       if (search) {
         const requestId = ++searchRequest
@@ -948,12 +966,16 @@ onUnmounted(() => {
   clearInterval(statusTimer)
 })
 watch(() => props.deviceConnected, connected => {
+  if (!connected) editing.value = null
   if (connected && props.symbolLoaded) void loadWorkspace()
 })
 watch(() => props.symbolLoaded, loaded => {
   if (loaded) void loadWorkspace()
 })
 watch(catalog.generation, () => {
+  editing.value = null
+  selectedDescriptors.value = new Map()
+  if (props.symbolLoaded && selected.value.size) void refreshSelectedDescriptors()
   pinnedDescriptors.value = new Map()
   if (props.symbolLoaded) void loadPins()
 })
@@ -1128,9 +1150,7 @@ watch(tree, roots => {
 }
 .edit-button { border: 0; background: transparent; color: var(--accent); cursor: pointer; font-size: 11px; white-space: nowrap; }
 .edit-button:disabled { color: var(--muted); cursor: default; }
-.write-editor { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px; padding: 0 8px 8px 60px; }
-.write-editor input, .write-editor select { min-width: 0; height: 28px; }
-.write-editor .btn { min-height: 28px; padding: 3px 8px; }
+.selected-actions { display: flex; gap: 12px; padding: 0 8px 3px 28px; }
 .write-success { padding: 0 8px 7px 60px; color: var(--success); font-size: 11px; }
 .empty-state { padding: 24px 12px; color: var(--muted); text-align: center; font-size: 12px; }
 .modal-overlay { position: fixed; z-index: 1000; inset: 0; display: grid; place-items: center; padding: 20px; background: rgb(0 0 0 / 45%); }
