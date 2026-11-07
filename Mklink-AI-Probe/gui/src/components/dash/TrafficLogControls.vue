@@ -77,9 +77,10 @@ onUnmounted(() => { disposed = true; generation++; clearInterval(timer) })
 <style scoped>
 .traffic-log-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 12px; margin: 4px 0; }
 .traffic-log-controls.compact { display: contents; }
-.compact > details { flex: 0 0 auto; }
+.compact > details { flex: 0 0 auto; position: static; }
 .compact summary { white-space: nowrap; }
-.compact .log-actions { left: auto; right: 0; }
+/* The RTT toolbar wraps. Anchor the menu to that toolbar, even when Logs starts a new row. */
+.compact .log-actions { left: 0; right: 0; min-width: 0; max-width: none; }
 .compact .replay-controls { flex: 1 0 100%; order: 1; }
 .compact > .warning, .compact > [role=alert] { flex-basis: 100%; order: 2; }
 details { position: relative; } summary { cursor: pointer; color: var(--accent); padding: 4px 8px; }
