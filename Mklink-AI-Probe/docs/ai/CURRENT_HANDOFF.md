@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-11-07T10:55:01+08:00`
+- 更新时间：`2026-11-07T11:57:00+08:00`
 - 分支：`codex/v0.4.3-fixes`
-- HEAD：`SuperWatch cfb1bae8、Cortex-M睡眠访问 f1107e1d、RTT菜单 bb2c8d27；生产Web a9d6e8ab。`
+- HEAD：`SuperWatch cfb1bae8、RTT菜单 bb2c8d27、显式睡眠访问/采集准入 98a4fa93；生产Web e83ecc12。`
 - 远端 HEAD：`PR69已合并main/186b6a0f。0.4.3继续共用修复分支和草稿PR71。`
 - 工作树：复用E盘主工作区，保留旧v0.4.2分支和两个detached工作树；本轮及后续修复共用codex/v0.4.3-fixes。
-- 当前任务：RTT日志菜单已修复，48组Edge检查及80项组件测试通过。工作继续在0.4.3修复分支和PR71。
-- 状态：`host_fixes_verified`
+- 当前任务：睡眠访问显式启用，按SWD/HELLO能力分流。普通模式保留原路径；H743/100ms WFI稳定性仍开放，实板由固件会话持有。见v043-cortex-m-sleep.md。
+- 状态：`host_verified_h743_hil_open`
 
 ## 里程碑
 
