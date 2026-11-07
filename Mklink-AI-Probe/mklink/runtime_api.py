@@ -216,6 +216,7 @@ class RuntimeControl:
             self._memory_identity_cache = (key, time.monotonic() + 0.25)
 
     async def snapshot(self):
+        from mklink.capture_clock import sleep_access_status
         from mklink.remote.dashboards import get_managers
         self.prune()
         now = time.monotonic()
@@ -237,6 +238,8 @@ class RuntimeControl:
                 'connection_recovery': self.app.state.mklink_state.get('connection_recovery'),
                 'uart_operations': list(self.uart_operations.values()),
                 'connected': bool(device and device.connected),
+                'device_generation': self.app.state.mklink_state.get('device_generation', 0),
+                **sleep_access_status(device),
                 'streams': [{'name': name, 'running': manager.running, 'owner': self.acquisition_owner(name),
                              'subscribers': sum(name in s.streams for s in self.sessions.values())}
                             for name, manager in get_managers().items()],

@@ -126,3 +126,29 @@ it('keeps diagnostic export available when backend status cannot be read', async
   expect(wrapper.get('[data-testid="export-diagnostics"]').attributes('disabled')).toBeUndefined()
   wrapper.unmount()
 })
+
+it.each([false, true])('uses the bound generation to toggle sleep access only on click (atomic=%s)', async atomic => {
+  const status = { probe_id: 'bound', device_generation: 7, status: 'present', connected: true,
+    busy: false, clients: [], streams: [], project_root: '.', sleep_access_supported: true,
+    sleep_access_enabled: false, sleep_access_atomic: false }
+  const fetch = vi.fn(async (url, init?: RequestInit) => {
+    if (String(url).endsWith('/sleep-debug')) {
+      expect(init?.headers).toMatchObject({ 'X-MKLink-Probe': 'bound', 'X-MKLink-Device-Generation': '7' })
+      status.sleep_access_enabled = JSON.parse(String(init?.body)).enabled
+      status.sleep_access_atomic = status.sleep_access_enabled && atomic
+      return { ok: true, json: async () => ({ enabled: status.sleep_access_enabled }) }
+    }
+    return { ok: true, json: async () => structuredClone(status) }
+  })
+  vi.stubGlobal('fetch', fetch)
+  const panel = mount(RuntimePanel)
+  await flushPromises()
+  const toggle = panel.get('[data-testid=sleep-access]')
+  expect(toggle.attributes('aria-pressed')).toBe('false')
+  expect(fetch.mock.calls.every(([, init]) => !init?.method)).toBe(true)
+  await toggle.trigger('click'); await flushPromises()
+  expect(toggle.attributes('aria-pressed')).toBe('true')
+  await toggle.trigger('click'); await flushPromises()
+  expect(toggle.attributes('aria-pressed')).toBe('false')
+  panel.unmount()
+})

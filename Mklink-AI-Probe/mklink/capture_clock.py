@@ -221,8 +221,20 @@ def save_interface_clock(config, interface, hz=None):
                 config.pop('debug_speed', None)
 
 
-def clock_snapshot(device, config):
+def sleep_access_status(device):
+    """Report cached connection capabilities without probing or halting the target."""
     from mklink.sleep_debug import advertised_atomic_sleep, control_clock, selected_clock
+    bridge = getattr(device, '_bridge', None)
+    connected = bool(device and device.connected and bridge is not None)
+    return {'sleep_access_supported': bool(connected and (control_clock(device) or (
+                active_clock_interface(bridge) == 'SWD' and
+                (advertised_atomic_sleep(bridge) or
+                 getattr(getattr(bridge, '_mux', None), 'supports_atomic_sleep', False) is True)))),
+            'sleep_access_enabled': bool(connected and selected_clock(bridge) is not None),
+            'sleep_access_atomic': bool(connected and getattr(bridge, '_sleep_debug_atomic', False) is True)}
+
+
+def clock_snapshot(device, config):
     connected = bool(device and device.connected)
     bridge = getattr(device, '_bridge', None) if connected else None
     options = configuration_clock_options(bridge, hpm=str(getattr(device, '_mcu_hint', '')).upper().startswith('HPM'))
@@ -242,12 +254,7 @@ def clock_snapshot(device, config):
             'active_interface': active_clock_interface(bridge) if connected else 'unknown',
             'selected_interface': selected if selected in interfaces else options['interface'],
             'interfaces': interfaces,
-            'sleep_access_supported': bool(connected and (control_clock(device) or (
-                active_clock_interface(bridge) == 'SWD' and
-                (advertised_atomic_sleep(bridge) or
-                 getattr(getattr(bridge, '_mux', None), 'supports_atomic_sleep', False) is True)))),
-            'sleep_access_enabled': bool(connected and selected_clock(bridge) is not None),
-            'sleep_access_atomic': bool(connected and getattr(bridge, '_sleep_debug_atomic', False) is True),
+            **sleep_access_status(device),
             'clock_hz': hz, 'configured_hz': hz, 'apply_state': state,
             'applied_hz': hz if state == 'applied' else None, 'migration': migration,
             'warning': getattr(device, 'clock_warning', None)}

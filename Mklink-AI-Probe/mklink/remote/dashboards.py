@@ -1895,6 +1895,8 @@ class SuperWatchStreamManager:
         self._interval = 0.001  # 1ms default
         self._device = None
         self._runtime = None
+        self._catalog_lock = threading.Lock()
+        self._catalog_pending = False
         # One re-entrant lock owns runtime layout snapshots, pending sample
         # rows, and metadata transitions. Hardware reads happen outside it.
         self._read_lock = threading.RLock()
@@ -1979,37 +1981,50 @@ class SuperWatchStreamManager:
     def running(self) -> bool:
         return self._running and not self._stop_event.is_set()
 
-    def _restore_peripheral_catalog(self, device):
+    def _ensure_peripheral_catalog(self):
         from zipfile import BadZipFile
         from mklink.peripheral_watch import load_catalog
 
-        self._peripheral_restore_error = None
-        try:
-            catalog = load_catalog(getattr(device, "_project_root", "."))
-        except (OSError, ValueError, KeyError, BadZipFile) as error:
-            # An optional, stale SVD preference must not prevent connecting the
-            # probe or using RAM symbols. Keep the saved file for explicit repair.
-            self._peripheral_restore_error = str(error)
-            catalog = None
-        self._peripheral_selection = (
-            {**catalog.selection, "skipped_registers": catalog.skipped}
-            if catalog else None
-        )
-        return catalog
+        from mklink.superwatch import catalog_registers
+
+        # Pack discovery and SVD parsing can take seconds. Keep them off the
+        # hardware connect path and outside the live sampling/layout lock.
+        with self._catalog_lock:
+            with self._read_lock:
+                if not self._catalog_pending:
+                    return
+                device = self._device
+            error = None
+            try:
+                catalog = load_catalog(getattr(device, "_project_root", "."))
+            except (OSError, ValueError, KeyError, BadZipFile) as exc:
+                error = str(exc)
+                catalog = None
+            registers = catalog_registers(catalog)
+            with self._read_lock:
+                if self._device is device and self._catalog_pending:
+                    self._runtime.peripheral_items = catalog.items if catalog else {}
+                    self._runtime.svd_registers = registers
+                    self._peripheral_selection = (
+                        {**catalog.selection, "skipped_registers": catalog.skipped} if catalog else None
+                    )
+                    self._peripheral_restore_error = error
+                    self._catalog_pending = False
 
     def prepare(self, device) -> None:
         """Build runtime from DWARF info so search/add work before collection starts."""
         with self._read_lock:
             device_changed = self._device is not device
-            if device_changed and self._runtime is not None:
-                from mklink.superwatch import catalog_registers
-
-                restored = self._restore_peripheral_catalog(device)
-                for item in list(self._runtime.items):
-                    if item.source == "peripheral":
-                        self._runtime.remove(item.name)
-                self._runtime.peripheral_items = restored.items if restored else {}
-                self._runtime.svd_registers = catalog_registers(restored)
+            if device_changed:
+                self._catalog_pending = True
+                self._peripheral_selection = None
+                self._peripheral_restore_error = None
+                if self._runtime is not None:
+                    for item in list(self._runtime.items):
+                        if item.source == "peripheral":
+                            self._runtime.remove(item.name)
+                    self._runtime.peripheral_items = {}
+                    self._runtime.svd_registers = {}
             if self._runtime is not None:
                 runtime = self._runtime
                 new_catalog = getattr(device, "symbol_catalog", None)
@@ -2050,20 +2065,11 @@ class SuperWatchStreamManager:
                 self._device = device
                 return
             dwarf_info = getattr(device, "_dwarf_info", None)
-            from mklink.superwatch import catalog_registers
-            catalog = self._restore_peripheral_catalog(device)
-            svd_registers = catalog_registers(catalog)
             from mklink.superwatch import SuperWatchRuntime
             self._runtime = SuperWatchRuntime(
                 items=[],
                 dwarf_info=dwarf_info,
                 symbol_catalog=getattr(device, "symbol_catalog", None),
-                svd_registers=svd_registers,
-                peripheral_items={
-                    n: r.watch_item
-                    for n, r in svd_registers.items()
-                    if r.watch_item is not None
-                },
                 port=getattr(device, "_port", None),
                 read_lock=self._read_lock,
             )
@@ -2664,6 +2670,7 @@ class SuperWatchStreamManager:
                 for item in list(self._runtime.items):
                     if item.source == "peripheral":
                         self._runtime.remove(item.name)
+                self._catalog_pending = False
                 self._runtime.peripheral_items = items
                 from mklink.superwatch import catalog_registers
 
@@ -2676,6 +2683,7 @@ class SuperWatchStreamManager:
     def peripheral_catalog(self, query: str = "") -> dict:
         from mklink.superwatch import make_channel_metadata
 
+        self._ensure_peripheral_catalog()
         with self._read_lock:
             items = [item for item in getattr(self._runtime, "peripheral_items", {}).values()
                      if query.casefold() in item.name.casefold()]
@@ -2685,6 +2693,9 @@ class SuperWatchStreamManager:
                     "items": [{"name": item.name, **metadata[item.name]} for item in items]}
 
     def add_watch(self, name: str) -> dict:
+        # Every SVD register/field path includes its peripheral prefix.
+        if "." in name:
+            self._ensure_peripheral_catalog()
         with self._read_lock:
             if self._runtime is None:
                 return {"error": "SuperWatch not started"}
@@ -3041,6 +3052,7 @@ class SuperWatchStreamManager:
     def search(self, query: str) -> list[dict]:
         if self._runtime is None:
             return []
+        self._ensure_peripheral_catalog()
         return self._runtime.search(query)
 
     def pause(self) -> None:

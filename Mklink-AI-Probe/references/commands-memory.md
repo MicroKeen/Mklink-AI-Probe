@@ -18,7 +18,7 @@ FPB 和 CPU 核心寄存器示例不适用于 HPM；地址须取自当前工程 
 
 ### 周期性 WFI 与睡眠访问
 
-普通连接默认关闭睡眠访问。需要观测周期性唤醒的 Cortex-M 时，在配置页的本地连接中点击“开启睡眠访问”，或在已连接的 MCP 会话调用 `set_sleep_debug(enabled=True)`。共享 SDK 可调用 `client.call('set_sleep_debug', {'enabled': True})`。停止采集后可传 `False` 关闭，恢复先前的 SWD 时钟。设置属于当前连接，工程默认值不变。
+普通连接默认关闭睡眠访问。需要观测周期性唤醒的 Cortex-M 时，在“配置 → 后台管理”中点击“开启睡眠访问”，或在已连接的 MCP 会话调用 `set_sleep_debug(enabled=True)`。共享 SDK 可调用 `client.call('set_sleep_debug', {'enabled': True})`。停止采集后可传 `False` 关闭，恢复先前的 SWD 时钟。设置属于当前连接，工程默认值不变。
 
 下载器声明支持原子睡眠访问时，上位机在当前 SWD 时钟下检查 Cortex-M 身份。一次传输由下载器暂停目标、访问内存并恢复原运行或暂停状态。写入限于工程或芯片配置中有依据的可写 RAM，下载器回读后才确认。此模式暂不支持 RTT、SystemView 和 SuperWatch 实时采集。关闭睡眠访问后可使用普通采集。
 
