@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-07T13:04:00+08:00",
+  "updated_at": "2026-11-07T13:15:00+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
@@ -14,7 +14,7 @@
   },
   "current_session": {
     "status": "host_and_h743_verified",
-    "current_task": "HPMLink/H743 100ms WFI，上位机87085550实板6轮96/96、整段Flash一致、复位2→8。777项回归及普通10MHz对照见v043-cortex-m-sleep.md。"
+    "current_task": "HPMLink cb982bb/H743 100ms WFI，上位机3beca4e8：96/96、Flash 6/6、复位2→8、Web 12/12。普通10MHz对照见v043-cortex-m-sleep.md。V3已移植待实板。"
   },
   "milestones": [
     {
