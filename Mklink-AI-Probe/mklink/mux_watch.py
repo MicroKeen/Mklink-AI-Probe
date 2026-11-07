@@ -16,14 +16,14 @@ class MuxWatchCapacityError(ValueError):
     """Configuration cannot fit the bounded multiplex sampler."""
 
 
-def create_mux_capture_session(transport, regions, period, *, fastest=False):
+def create_mux_capture_session(transport, regions, period, *, fastest=False, wait_after_sample=False):
     """Extend explicit dump capture without widening the live GUI layout gate."""
     from mklink.dump_memory import validate_dump_regions
     validate_dump_regions(regions)
     if sum((size + 127) // 128 for _, size in regions) > 15:
         from mklink.mux_bulk_watch import MuxBulkWatchSession
         return MuxBulkWatchSession(transport, regions, period, fastest=fastest)
-    return MuxWatchSession(transport, regions, period, fastest=fastest)
+    return MuxWatchSession(transport, regions, period, fastest=fastest, wait_after_sample=wait_after_sample)
 
 
 class MuxWatchSession:
@@ -32,7 +32,7 @@ class MuxWatchSession:
     NARROW_BATCH_CAPABILITY = 1 << 10
     NARROW_BATCH_START = 0x33
 
-    def __init__(self, transport, regions, period, *, fastest=False):
+    def __init__(self, transport, regions, period, *, fastest=False, wait_after_sample=False):
         from mklink.dump_memory import validate_dump_regions
         validate_dump_regions(regions)
         self.transport = transport
@@ -64,6 +64,8 @@ class MuxWatchSession:
         self._last_clock = None
         self._clock_high = 0
         self.samples = 0
+        self._generation_start_samples = 0
+        self._wait_after_sample = wait_after_sample
         self.gaps = 0
         self.read_errors = 0
         self._read_failure_since = None
@@ -131,6 +133,7 @@ class MuxWatchSession:
                 self._pending = []
                 self._read_failure_since = None
                 self._reset_generation = generation
+                self._generation_start_samples = self.samples
             if len(event) < 6:
                 raise RuntimeError('Invalid multiplex watch event')
             index, status = event[:2]
@@ -200,8 +203,11 @@ class MuxWatchSession:
             self._pending = []
             self._read_failure_since = None
             result.append(self._frame(timestamp, [(i, bytes(data)) for i, data in enumerate(regions)]))
+        # A live dashboard that already sampled this layout keeps its subscription
+        # across temporary target access failures. Reset generations qualify anew.
         if (self._read_failure_since is not None
                 and now - self._read_failure_since >= self._read_failure_timeout
+                and not (self._wait_after_sample and self.samples > self._generation_start_samples)
                 and not result):
             raise RuntimeError(
                 f'SuperWatch target read failed continuously (status 5); '

@@ -900,7 +900,8 @@ class DumpMemoryStreamSession:
 
     packed_frames = False
 
-    def __init__(self, bridge, region_pairs, period, *, write_ranges=ARM_WRITE_RANGES, fastest=False, protocol='mux'):
+    def __init__(self, bridge, region_pairs, period, *, write_ranges=ARM_WRITE_RANGES, fastest=False, protocol='mux',
+                 wait_after_sample=False):
         import math
         if not math.isfinite(period) or period < 0:
             raise ValueError('dump period must be nonnegative and finite')
@@ -908,6 +909,7 @@ class DumpMemoryStreamSession:
         self.region_pairs = list(region_pairs)
         self.period = float(period)
         self.write_ranges = tuple(write_ranges)
+        self._wait_after_sample = wait_after_sample
         self.fastest = fastest
         validate_sampling_protocol(protocol)
         self.protocol = protocol
@@ -935,7 +937,8 @@ class DumpMemoryStreamSession:
                 self.started = self._legacy.started
             return
         from mklink.mux_watch import create_mux_capture_session
-        watch = create_mux_capture_session(None, self.region_pairs, self.period, fastest=self.fastest)
+        watch = create_mux_capture_session(None, self.region_pairs, self.period, fastest=self.fastest,
+                                           wait_after_sample=self._wait_after_sample)
         supported = getattr(self.bridge, 'supports_multiplex', None)
         if not callable(supported) or supported() is not True:
             raise DumpMemoryUnsupported('SuperWatch requires MUX sampling firmware; update the probe firmware and host together')

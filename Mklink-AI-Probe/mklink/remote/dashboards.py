@@ -2260,6 +2260,7 @@ class SuperWatchStreamManager:
                         session = DumpMemoryStreamSession(
                             bridge, region_pairs, self._interval,
                             write_ranges=self._live_write_ranges,
+                            wait_after_sample=True,
                         )
                         session.packed_frames = True
                         completed_integrity = dict(self._stream_integrity)

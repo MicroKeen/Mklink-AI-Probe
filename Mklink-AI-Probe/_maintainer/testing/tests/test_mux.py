@@ -511,13 +511,14 @@ def test_watch_transient_read_error_preserves_valid_samples_and_subscription(pac
     assert watch._read_failure_since is None
 
 
-def test_watch_continuous_read_failure_times_out_even_if_firmware_goes_silent(monkeypatch):
+@pytest.mark.parametrize('wait_after_sample', [False, True])
+def test_watch_continuous_read_failure_times_out_even_if_firmware_goes_silent(monkeypatch, wait_after_sample):
     from types import SimpleNamespace
     clock = [10.0]
     monkeypatch.setattr('mklink.mux_watch.time', SimpleNamespace(monotonic=lambda: clock[0]))
     transport, calls = peer()
     transport.handshake()
-    watch = MuxWatchSession(transport, [(0x20000000, 4)], .001)
+    watch = MuxWatchSession(transport, [(0x20000000, 4)], .001, wait_after_sample=wait_after_sample)
     watch.start()
     transport.feed(packet(0x41, 17, 1, struct.pack('<BBI', 0, 5, 100)))
     assert watch.read_frames() == []
@@ -529,6 +530,27 @@ def test_watch_continuous_read_failure_times_out_even_if_firmware_goes_silent(mo
     with pytest.raises(RuntimeError, match='failed continuously.*status 5'):
         watch.read_frames()
     assert calls == commands and watch.read_errors == 2
+
+
+def test_live_watch_recovers_after_long_sleep_without_restarting_or_filling_gap(monkeypatch):
+    from types import SimpleNamespace
+    clock = [0.0]
+    monkeypatch.setattr('mklink.mux_watch.time', SimpleNamespace(monotonic=lambda: clock[0]))
+    transport, commands = peer()
+    transport.handshake()
+    watch = MuxWatchSession(transport, [(0x20000000, 4)], .01, wait_after_sample=True)
+    watch.start()
+    original_commands = list(commands)
+    transport.feed(packet(0x41, 17, 1, struct.pack('<BBBBII', 0, 9, 1, 4, 10, 123)))
+    assert watch.read_frames(packed=True)[0].timestamp_us == 10
+    transport.feed(packet(0x41, 17, 2, struct.pack('<BBI', 0, 5, 20)))
+    assert watch.read_frames(packed=True) == []
+    clock[0] = 12
+    assert watch.read_frames(packed=True) == []
+    transport.feed(packet(0x41, 17, 3, struct.pack('<BBBBII', 0, 9, 1, 4, 12000010, 456)))
+    frame, = watch.read_frames(packed=True)
+    assert (frame.timestamp_us, frame.break_before, struct.unpack_from('<I', frame.payload, frame.offset)) == (12000010, 1, (456,))
+    assert watch.samples == 2 and watch.read_errors == 1 and commands == original_commands
 
 
 def test_watch_valid_complete_sample_resets_failure_window(monkeypatch):
