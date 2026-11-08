@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-11-08T17:12:07+08:00`
-- 分支：`main`
-- HEAD：`6b0bfebe`
-- 远端 HEAD：`6b0bfebe`
-- 工作树：以上为发布后交接快照。0.4.2 和 0.4.3 修复分支已退役，现有 S3 工作树仍在使用。
-- 当前任务：0.4.3 发布与上位机工作区清理已完成，等待下一项开发任务。
-- 状态：`已正式发布`
+- 更新时间：`2026-11-08T20:31:00+08:00`
+- 分支：`codex/job-journal-access`
+- HEAD：`fc1c1e5b`
+- 远端 HEAD：`fc1c1e5b`
+- 工作树：该提交为任务记录权限修复的代码快照，基于 main 的 1c7cb69e。
+- 当前任务：修复普通 Windows 用户因 jobs.json 拒绝访问而无法连接探针的问题，见 [Issue #75](https://github.com/MicroKeen/Mklink-AI-Probe/issues/75)。
+- 状态：`分支待审`
 
 ## 里程碑
 
@@ -18,6 +18,7 @@
 
 ## 验证证据
 
+- **普通权限连接**：Windows 中等完整性进程使用 NTFS 读取拒绝和只读文件复现。独立后台可启动，连接接口使用模拟探针完成连接，任务记录恢复后原 request_id 仍指向原任务。运行时、连接和任务相关 1015 项测试通过。本机未检测到 USB 探针，用户现场真机待验。
 - **发布与验收**：正式包哈希、安装、Skill 更新、分发渠道及真机记录见[发布报告](../verification/v043-release-handoff.md)。
 - **工作区清理**：C/E/F 清理回执、人工检查清单和恢复资料位置见[清理报告](../verification/v043-postrelease-cleanup-20261108.md)。
 
@@ -33,7 +34,8 @@
 
 ## 下一动作
 
-1. 接手时核对 `git status --short --branch` 和 `git worktree list`，执行 `git fetch microkeen`。新任务从最新 `microkeen/main` 建 `codex/<task>` 分支。
+1. 审阅 Issue #75 的修复，并在受影响用户的普通账户下复测连接。
+2. 接手时核对 `git status --short --branch` 和 `git worktree list`，执行 `git fetch microkeen`。新任务从最新 `microkeen/main` 建 `codex/<task>` 分支。
 
 ## 已知限制
 

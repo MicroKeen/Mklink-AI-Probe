@@ -1,20 +1,20 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-08T17:12:07+08:00",
+  "updated_at": "2026-11-08T20:31:00+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
-    "branch": "main",
-    "head": "6b0bfebe",
-    "remote_head": "6b0bfebe",
-    "working_tree": "以上为发布后交接快照。0.4.2 和 0.4.3 修复分支已退役，现有 S3 工作树仍在使用。"
+    "branch": "codex/job-journal-access",
+    "head": "fc1c1e5b",
+    "remote_head": "fc1c1e5b",
+    "working_tree": "该提交为任务记录权限修复的代码快照，基于 main 的 1c7cb69e。"
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "已正式发布",
-    "current_task": "0.4.3 发布与上位机工作区清理已完成，等待下一项开发任务。"
+    "status": "分支待审",
+    "current_task": "修复普通 Windows 用户因 jobs.json 拒绝访问而无法连接探针的问题，见 [Issue #75](https://github.com/MicroKeen/Mklink-AI-Probe/issues/75)。"
   },
   "milestones": [
     {
@@ -24,6 +24,10 @@
     }
   ],
   "verification": [
+    {
+      "area": "普通权限连接",
+      "result": "Windows 中等完整性进程使用 NTFS 读取拒绝和只读文件复现。独立后台可启动，连接接口使用模拟探针完成连接，任务记录恢复后原 request_id 仍指向原任务。运行时、连接和任务相关 1015 项测试通过。本机未检测到 USB 探针，用户现场真机待验。"
+    },
     {
       "area": "发布与验收",
       "result": "正式包哈希、安装、Skill 更新、分发渠道及真机记录见[发布报告](../verification/v043-release-handoff.md)。"
@@ -46,6 +50,7 @@
     "公网远程中继继续延期。独立 [S3 PR #65](https://github.com/MicroKeen/Mklink-AI-Probe/pull/65) 仍开放。其他硬件的[历史未验范围](known-limits-20261030.md)按需查阅。"
   ],
   "next_actions": [
+    "审阅 Issue #75 的修复，并在受影响用户的普通账户下复测连接。",
     "接手时核对 `git status --short --branch` 和 `git worktree list`，执行 `git fetch microkeen`。新任务从最新 `microkeen/main` 建 `codex/<task>` 分支。"
   ],
   "continuation_protocol": [
