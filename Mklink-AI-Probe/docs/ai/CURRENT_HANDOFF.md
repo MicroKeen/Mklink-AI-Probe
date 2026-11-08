@@ -4,22 +4,22 @@
 
 ## 当前断点
 
-- 更新时间：`2026-11-07T21:00:29+08:00`
-- 分支：`codex/v0.4.3-fixes`
-- HEAD：`以已合并 #70 的 03f3dc8e 为基线，Windows 桌面启动首帧修复在 codex/v0.4.3-fixes。`
-- 远端 HEAD：`上位机 #69、#70、#71 与固件 V3 #13、V4 #22 已合入，各修复分支保留。`
-- 工作树：复用E盘主工作区，保留旧v0.4.2分支和两个detached工作树；本轮及后续修复共用codex/v0.4.3-fixes。
-- 当前任务：0.4.3 Windows 候选已复测启动空白窗口、进度条、后台就绪和隐藏后重载。正式发布时按 tencent-updates.md 分发最新正式版，历史版进入 COS/Git。
-- 状态：`v043_candidate_qualification`
+- 更新时间：`2026-11-08T16:22:49+08:00`
+- 分支：`main`
+- HEAD：`正式标签 v0.4.3 固定于 3905a68b。交接并入 main 的 PR 为 #73。`
+- 远端 HEAD：`上位机 #69–72 和固件 V3 #13、V4 #22 已合并。发布收尾由 #73 交接。`
+- 工作树：E 盘主工作区交接到 main。已合并的 0.4.2、0.4.3 修复分支退役，保留其他工作树和仍在使用的 S3 分支。
+- 当前任务：0.4.3 已正式发布，三渠道与旧版升级通过；发布交接和 C/E/F 清理见 v043-release-handoff.md、v043-postrelease-cleanup-20261108.md。下一任务从最新 microkeen/main 建新分支。
+- 状态：`v043_released_handoff`
 
 ## 里程碑
 
+- **0.4.3正式版** — `complete`。PR72 合并源 3905a68b。三款固件保留实刷原件；V2 仍为 V2.9.3。上海直供最新，十个历史文件留在 COS/Git。见 v043-release-handoff.md。
 - **0.4.2正式版** — `complete`。PR66源0e82ba6f，Windows/完整Skill/SiteAgent、四固件正式签名与发布、覆盖安装、渠道及故障回退已完成，PR67/68已合并。资产不可覆盖；完整SHA/计数见v042-release-handoff.md。
 - **0.4.1正式版** — `complete`。PR61源514efb86已发布，签名/索引/实装资格见v041-release-handoff.md。
 - **0.4.0正式版** — `complete`。PR58源0c9c2d97已发布，签名/实装/渠道备用资格见v040-release-handoff.md。
 - **0.3.6正式版** — `complete`。PR50/51源d000370b已发布，preview撤下、临时SSH撤销；资格见v036-release-handoff.md。
-- **0.3.5正式版** — `complete`。PR43源2f474f60372e已发布，V3.6.5/V4.6.9独立发布；资格见v035-release-handoff.md和v035-probe-firmware.md。
-- **0.3.4正式版** — `complete`。源a8fd3fab0403/PR40已发布、PR41交接完成；资格见v034-release-handoff.md、v034-workspace-cleanup.md。更早发布见各版交接。
+- **0.3.5正式版** — `complete`。PR43源2f474f60372e已发布，V3.6.5/V4.6.9独立发布；资格见v035-release-handoff.md和v035-probe-firmware.md。 0.3.4 与更早版本见 v034-release-handoff.md。
 
 ## 验证证据
 
@@ -34,11 +34,11 @@
 
 ## 架构决策
 
-- 0.4.2正式源0e82ba6f/PR66与0.4.1正式源514efb86及所有已发布资产不可变。2026-11-02明确发布授权已完成Windows/完整Skill/SiteAgent、V2.9.3/V3.6.8/普通V4.7.2/HPMLinkV4.7.2的腾讯云/Git发布。用户2026-11-03覆盖旧分支约定：后续多个修复共用codex/v0.4.3-fixes，不直接修改main，不逐任务建分支；后续正式发布须另有明确指令。公网中继延期。
+- 0.4.2正式源0e82ba6f/PR66与0.4.1正式源514efb86及所有已发布资产不可变。2026-11-02明确发布授权已完成Windows/完整Skill/SiteAgent、V2.9.3/V3.6.8/普通V4.7.2/HPMLinkV4.7.2的腾讯云/Git发布。用户2026-11-08更新分支约定：0.4.3 修复分支随发布交接退役，后续任务从最新 microkeen/main 新建分支，不直接修改 main；后续正式发布须另有明确指令。公网中继延期。
 - 后台协议 53：一个 GUI 客户端持有一个固定后台，同窗口切换只改下载器，RTT/Watch/Trace 跟随当前设备并清空旧目标状态；另开客户端才建独立后台。已有 URL 的额外页面共享该后台。工程上下文固定，换工程须停止原后台后重开。
 - 物理探针唯一 OS 所有权、USB 身份核对和 epoch 隔离保留。GUI/AI 明确断开或切换自动停止采集、排空在途操作并释放端口；旧会话不得跨设备，未知结果不得自动重放，不偷取其他后台占用。MCP disconnect 物理断开，detach 仅退出自身；独立 UART 保留。
 - SuperWatch写入只认写应答、不自动回读；显式校验保留，未知写不重放。外设ID按Pack/芯片/SVD，失效选择不阻断连接；厂家原字节/许可证/SHA保留，HPM九系列CMSIS-SVD支持，SES CPU XML不能冒充SVD。在线型号提供默认，脱机/外设页可独立修改；Pack刷新与下载身份预留保留。默认MUX小Watch0x618；11/5恢复显式DMPM，须能力声明和空闲连接，不自动回退或SW01写。capture/benchmark用0x800扩至4096B，GUI/VOFA容量保持；时间/DAP元数据不保证原子快照。离线旧记录可读；有限dump/HPM Flash经MUX完整校验，取消/deadline不返回部分结果。
-- 腾讯云：2026-11-04授权上海无限流量轻量服务器仅存/直出最新正式应用、Skill、SiteAgent及各型号固件；历史COS/Git，已有旧文件未清理。上位机启动/Skill首次加载默认查stable，当前0.4.2。COS210GiB，189告警/207.9(99%)锁停；用户明确取消套餐日期截止，保留累计账本、180秒短链和持久监控，不自动清零或扩大额度。套餐到期可按量计费，非账单硬上限。仅现有控制台/TAT，无新SSH。后续发布核验新集及归档后退役旧本地副本，不自动发布。旧桶及Git迁移边界见v040-release-handoff.md；新策略见tencent-download-cost-20261104.md、tencent-updates.md。
+- 腾讯云：2026-11-04授权上海无限流量轻量服务器仅存/直出最新正式应用、Skill、SiteAgent及各型号固件；历史COS/Git；本轮退役十份已核验的旧本地副本。上位机启动/Skill首次加载默认查stable，当前0.4.3。COS210GiB，189告警/207.9(99%)锁停；用户明确取消套餐日期截止，保留累计账本、180秒短链和持久监控，不自动清零或扩大额度。套餐到期可按量计费，非账单硬上限。仅现有控制台/TAT，无新SSH。后续发布核验新集及归档后退役旧本地副本，不自动发布。旧桶及Git迁移边界见v040-release-handoff.md；新策略见tencent-download-cost-20261104.md、tencent-updates.md。
 - 测试直接使用用户原工程及 build/keil/Obj ELF，允许修改且无需备份还原，不复制工程；硬件路径只留本地。HPM 使用 ROM API，不使用 FLM/第二次通用 SWD reset；VCC 每次改动需确认具体电压，固件修改另开会话。 HPM AI可选固件声明的JTAG档位；旧4/10/20/30、新能力14档，默认10MHz。SWD/JTAG配置独立，不声称切换接口或物理测量。固件修复由用户指定会话01a186cd-c52a-7ea0-af29-8de6775d143b负责，用户后续允许提供本会话ID、通知和更新固件；指定会话已协作完成固件测试；明确授权的四个build已发布，见v042-release-handoff.md。后续仍双向核对占用，不自动升级或降级。
 - 默认只构建Windows；仅明确要求Linux/macOS时才构建或触发对应原生CI。完整Skill仍须FLM/Pack资格检查。构建使用scripts/build_workspace.ps1和F:/MKLink-Build，保留正式包、唯一证据、依赖与缓存。历史获授权本地Unix清理不影响线上正式附件；过时可再生产物仅依清理授权处理，链接/不可访问目录不强删。 通用请求延迟：每线程HTTP keep-alive按后台instance/port/probe/token隔离，空闲2秒或EOF前置退役，失败绝不重放。路径完全一致时不重复resolve；准入只读活动AXF路径，继续核验目录generation/fingerprint。无批量替代独立请求，无客户专用快照协议，无固件修改。
 - 工程上下文固定；物理唯一OS锁/身份/epoch保留。被动枚举不遍历占用设备；普通内存身份检查同活跃CDC最多复用250ms，错误/恢复即失效，生命周期仍全枚举。共享RTT/SV同CB掩码合并、独立有界队列；bit7增量，bit8协商480，短帧含CRC≤512；bit6独立4096读不变，旧量子128。未知操作不重放，失败不自动raw回退，worker退出才关串口，背压/丢失不隐瞒。指定固件会话负责实机，双方协调占用，宿主只导出不可变源码/离线验收；清除临时日志代码，保留移植说明。
@@ -49,13 +49,13 @@
 
 - **state**：11/7普通V4已通过GUI从4.7.2升到普通4.7.3，F103镜像回读见v043-release-candidate-acceptance.md。V3.6.9与专用HPMLink资格见v043-cortex-m-sleep.md。每次重新核对设备和占用；LA CH0/CH1为SWCLK/SWDIO。
 - **installer**：Windows/本地完整 Skill 已安装 0.4.3/3c486786，NSIS SHA e0e02850、Skill 9dbe4b0b，V4/F103 双端睡后采集通过，见 v043-s3-integration.md。
-- **backups**：最新b8a1f658应用/Skill、f9b1ae8a基准、正式包/固件、原始测试记录及公共缓存保留。11/7清理29.558GiB，4383保留哈希一致；112含链接组未删，见v043-space-cleanup-20261107.md。旧ELF/试包退役；11/4历史清理见v043-workspace-cleanup.md。
+- **backups**：正式3905a68b应用/Skill、b8a1f658历史候选、f9b1ae8a基准、正式包/固件、原始测试记录及公共缓存保留。11/7清理29.558GiB，4383保留哈希一致；112含链接组未删，见v043-space-cleanup-20261107.md。旧ELF/试包退役；11/4历史清理见v043-workspace-cleanup.md。
 
 ## 下一动作
 
-1. PR69已合并186b6a0f；后续共用codex/v0.4.3-fixes并保留工作树。性能/数据基线不降，允许调试占带宽合理下降；P95<1ms/最大间隔<20us仍开放。新合并/发布须授权。
-2. 固件V3 #9–11/V4 #18–20已合并，main为d46ccdf7/affba5d0；UART34档资格仅普通V3/V4。应用/完整Skill仍b8a1f658；RS485/其他硬件不外推。
-3. 11/7历史清理完成，F余30.758GiB；含链接112组/10.910GiB保留，完整CSV在构建根reports/space-cleanup-20261107。公共缓存/正式原包/唯一证据不删，旧实验ELF与测试安装包已退役，见v043-space-cleanup-20261107.md。
+1. PR69已合并186b6a0f；后续从最新 microkeen/main 新建任务分支，并保留现有工作树。性能/数据基线不降，允许调试占带宽合理下降；P95<1ms/最大间隔<20us仍开放。新合并/发布须授权。
+2. 固件V3 #9–11/V4 #18–20已合并，main为d46ccdf7/affba5d0；UART34档资格仅普通V3/V4。应用/完整Skill为正式3905a68b；RS485/其他硬件不外推。
+3. 11/8 自动清理 270 项约 5.45 GiB；144 个含链接的测试临时目录保留，完整清单在构建根 reports/postrelease-cleanup-20261108。11/7 的历史清单单独保留，见 v043-postrelease-cleanup-20261108.md。
 4. 按tencent-updates.md维护最新本地集；COS189GiB告警/207.9停止，已取消日期截止，关注实际扣量/到期后费用。不清零/扩大额度/恢复停止锁；监控断档超30天须账单重锚定。
 
 ## 已知限制
@@ -71,8 +71,8 @@
 
 ## 延续协议
 
-- 后续多个修复共用codex/v0.4.3-fixes，先fetch核对实际状态；不直接修改main，不逐任务另建分支，不自动切回main。旧v0.4.2分支及两个detached工作树保留。0.4.2正式源0e82ba6f和全部已发布资产不可覆盖。
-- 正式资格/渠道仍见v042-formal-qualification.md与v042-release-handoff.md；本机0.4.3应用/完整Skill已覆盖b8a1f658，见v043-gui-uart-local-install.md。测试页/原生窗口已正常关闭；AI/MCP重启后加载新Skill。固件会话已释放硬件，下次使用前重新核对占用。
+- 新任务先 fetch、核对工作树和实际状态，从最新 microkeen/main 创建新的 codex/ 任务分支。已发布 v0.4.3、v0.4.2 标签和原件保持不可变。保留独立 S3 工作树与开放 PR #65。
+- 0.4.3 正式包与三个固件的 SHA、发布渠道及资格见 v043-release-handoff.md。本机已覆盖正式 3905a68b 应用和完整 Skill，下一次会话重新加载 Skill。保留历史证据及已签名原件，操作硬件前重新核对占用。
 - V2 RBL更新见v035-v2-rbl-update.md，用户回退2.8后真实升级2.9已经通过；最终应用2f474f60与Skill已同步。V3.6.5/V4.6.9本轮仅发布原始UF2并验证公开文件，未再次刷入实体探针，不重复升级或回退。
 - CDC995和SDK10048根因保留待排查。恢复仅同身份CDC故障5秒内；超时不自动接回/新建AI会话，主动断开立即生效，未知写入不重放。历史实例释放记录见v035-transport-recovery.md；当前硬件占用以本交接真机状态及指定固件会话为准。
 - 客户启动故障仅确认PyInstaller解压ucrtbase.dll时Permission denied，重启后恢复；未定位权限/杀软/占用的具体来源，按用户意见暂不做推测性修复。若再现，结合新startup/runtime日志复查。
