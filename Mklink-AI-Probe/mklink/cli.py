@@ -2293,6 +2293,14 @@ def main():
     symbols_parser.add_argument("--project-root", default=".", help="项目根目录")
     _add_elf_backend_arg(symbols_parser)
 
+    reload_symbols = subparsers.add_parser(
+        "reload-symbols", help="重新加载指定探针后台的 AXF/ELF 符号",
+        description="确认目标固件与符号文件匹配后，重新解析共享后台的符号。进行中的探针采集会停止。",
+    )
+    reload_symbols.add_argument("--probe", help="已运行后台的探针 ID、别名或命令串口")
+    reload_symbols.add_argument("--source", required=True, help="AXF/ELF 文件路径")
+    _add_elf_backend_arg(reload_symbols)
+
     # hardfault 子命令
     hardfault_parser = subparsers.add_parser("hardfault", help="读取并解码 Cortex-M HardFault 寄存器/栈帧")
     hardfault_parser.add_argument("--port", help="COM 端口（默认自动检测）")
@@ -2326,7 +2334,7 @@ def main():
     watch_parser.add_argument("--project-root", default=None, help="项目根目录")
     watch_parser.add_argument("variables", nargs="*", help="变量名，支持逗号分隔和 struct.field")
     watch_parser.add_argument("--port", help="COM 端口（默认自动检测）")
-    watch_parser.add_argument("--source", help="ELF/AXF 文件路径")
+    watch_parser.add_argument("--source", help="ELF/AXF 文件路径；同路径重编后使用 reload-symbols")
     watch_parser.add_argument("--period", type=float, default=0.0, help="周期刷新秒数；0 表示单次读取")
     watch_parser.add_argument("--profile", help="watch profile JSON，格式: {\"variables\": [...]}")
     watch_parser.add_argument("--json", action="store_true", help="JSON 输出")

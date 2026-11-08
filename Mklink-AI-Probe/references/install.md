@@ -102,6 +102,7 @@ MKLink 默认使用内置 `pyelftools`，以下功能不需要用户安装 Keil�
 
 ```powershell
 python -m mklink symbols --source path/to/firmware.axf
+python -m mklink reload-symbols --probe <设备ID或别名> --source path/to/firmware.axf
 python -m mklink hardfault --source path/to/firmware.axf --sp 0x20001FF0
 ```
 

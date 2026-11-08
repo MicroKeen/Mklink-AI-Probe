@@ -9,10 +9,18 @@ import webbrowser
 import uuid
 from mklink.runtime import RuntimeClient, RuntimeErrorResponse, browser_url
 
-COMMANDS = {'systemview-analyze', 'systemview-report', 'vofa', 'watch', 'dump-benchmark', 'flush-memory', 'read-ram', 'write-ram', 'read-variable', 'write-variable', 'device-status', 'rtt', 'superwatch', 'systemview', 'flash', 'erase', 'reset', 'halt', 'resume', 'step', 'read-flash', 'read-reg', 'hardfault', 'break', 'debug-speed', 'power-read', 'version', 'configuration', 'peripherals', 'dump-memory', 'dump'}
+COMMANDS = {'systemview-analyze', 'systemview-report', 'vofa', 'watch', 'reload-symbols', 'dump-benchmark', 'flush-memory', 'read-ram', 'write-ram', 'read-variable', 'write-variable', 'device-status', 'rtt', 'superwatch', 'systemview', 'flash', 'erase', 'reset', 'halt', 'resume', 'step', 'read-flash', 'read-reg', 'hardfault', 'break', 'debug-speed', 'power-read', 'version', 'configuration', 'peripherals', 'dump-memory', 'dump'}
 
 
 def run(args):
+    if args.command == 'reload-symbols':
+        from mklink.runtime import reload_symbols
+        try:
+            result = reload_symbols(args.source, probe=args.probe, elf_backend=args.elf_backend)
+        except (RuntimeErrorResponse, OSError, ValueError) as exc:
+            raise SystemExit(str(exc)) from exc
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return
     if args.command in {"systemview-analyze", "systemview-report"}:
         from mklink.systemview_cli import run as run_systemview
         return run_systemview(args)
