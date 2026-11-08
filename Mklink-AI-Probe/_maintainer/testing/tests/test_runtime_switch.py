@@ -1,5 +1,12 @@
 """A probe switch must retain the backend and never move another client's work."""
+import csv
+from contextlib import contextmanager
+import hashlib
 import json
+import os
+from pathlib import Path
+import subprocess
+import time
 from unittest.mock import Mock
 
 import pytest
@@ -20,7 +27,8 @@ def window(tmp_path, monkeypatch):
     monkeypatch.setenv('MKLINK_RUNTIME_DIR', str(tmp_path / 'runtime'))
     monkeypatch.setattr(probes, '_bound_probe', A)
     monkeypatch.setattr(dashboards, '_managers', {})
-    rows = [{'probe_id': A, 'port': 'COM1', 'alias': ''}, {'probe_id': B, 'port': 'COM2', 'alias': ''}]
+    rows = [{'probe_id': A, 'port': 'COM1', 'alias': '', 'serial_number': 'probe-a'},
+            {'probe_id': B, 'port': 'COM2', 'alias': '', 'serial_number': 'probe-b'}]
     monkeypatch.setattr(probes, 'inventory', lambda: rows)
     monkeypatch.setattr(runtime, 'ensure_runtime', Mock(side_effect=AssertionError('Switch spawned a backend')))
     app = create_app(project_root=str(tmp_path), auth_token=None)
@@ -202,6 +210,129 @@ def test_unknown_job_request_is_retained_without_replay_on_new_probe(window):
     assert control.jobs._previous('uncertain-request', 'same') == job
     stored = json.loads(control.jobs.path.read_text(encoding='utf-8'))
     assert stored[0]['state'] == 'unknown' and stored[0]['probe_id'] == A
+
+
+@contextmanager
+def deny_journal_read(path, monkeypatch):
+    if os.name == 'nt':
+        account = subprocess.check_output(['whoami', '/user', '/fo', 'csv', '/nh'])
+        sid = next(csv.reader([account.decode('ascii', errors='replace').strip()]))[1]
+        subprocess.run(['icacls', str(path), '/deny', f'*{sid}:(RD)'], check=True)
+        try:
+            yield
+        finally:
+            subprocess.run(['icacls', str(path), '/remove:d', f'*{sid}'], check=True)
+    else:
+        original = Path.read_text
+        def restricted(file, *args, **kwargs):
+            if file == path:
+                raise PermissionError('journal read denied')
+            return original(file, *args, **kwargs)
+        with monkeypatch.context() as patch:
+            patch.setattr(Path, 'read_text', restricted)
+            yield
+
+
+def test_connect_with_unreadable_journal_and_recover_without_replay(window, tmp_path, monkeypatch):
+    client, control, _, state = window
+    path = runtime._private_dir(B) / 'jobs.json'
+    fingerprint = hashlib.sha256(json.dumps(['erase', {}], sort_keys=True).encode()).hexdigest()
+    old = dict(job_id='original', request_id='same-request', fingerprint=fingerprint,
+               probe_id=B, action='erase', state='running', started=1)
+    path.write_text(json.dumps([old]), encoding='utf-8')
+    device, _ = _connected_symbol_device(tmp_path)
+    device.port = 'COM2'
+    connect = Mock(return_value=device)
+    monkeypatch.setattr('mklink.connect', connect)
+    submit = dict(action='erase', request_id='same-request', confirm=True)
+
+    with deny_journal_read(path, monkeypatch):
+        with pytest.raises(PermissionError):
+            path.read_text(encoding='utf-8')
+        response = client.post('/api/runtime/select', json={'port': 'COM2', 'connect': {}})
+        assert response.status_code == 200, response.text
+        assert response.json()['connection']['port'] == 'COM2' and state['device'] is device
+        connect.assert_called_once()
+        assert client.get('/api/runtime/control/status').json()['job_history_available'] is False
+        assert client.get('/api/runtime/jobs/original').status_code == 503
+        assert client.get('/api/runtime/jobs/').status_code == 503
+        response = client.post('/api/runtime/jobs/', json=submit)
+        assert response.status_code == 503 and 'jobs.json' in response.text
+        assert not control.jobs.tasks and not control.jobs.jobs
+        response = client.post('/api/online-flash/jobs', headers={'X-MKLink-Request-Id': 'same-request'}, json={})
+        assert response.status_code == 409 and 'X-MKLink-Submission' not in response.headers
+
+    assert json.loads(path.read_text(encoding='utf-8')) == [old]
+    result = client.post('/api/runtime/jobs/', json=submit)
+    assert result.status_code == 202, result.text
+    assert result.json()['job_id'] == 'original' and result.json()['state'] == 'unknown'
+    assert client.get('/api/runtime/jobs/original').json() == result.json()
+    assert client.get('/api/runtime/control/status').json()['job_history_available'] is True
+    assert not control.jobs.tasks
+    assert json.loads(path.read_text(encoding='utf-8')) == [result.json()]
+
+
+def test_switch_keeps_unread_history_until_affected_probe_is_reselected(window, monkeypatch):
+    client, control, _, _ = window
+    path = runtime._private_dir(B) / 'jobs.json'
+    path.write_text('[]', encoding='utf-8')
+    with deny_journal_read(path, monkeypatch):
+        for port in ('COM2', 'COM1'):
+            assert client.post('/api/runtime/select', json={'port': port}).status_code == 200
+        assert client.get('/api/runtime/jobs/').status_code == 503
+    assert client.post('/api/runtime/select', json={'port': 'COM2'}).status_code == 200
+    assert client.get('/api/runtime/jobs/').json() == {'jobs': []}
+
+
+@pytest.mark.skipif(os.name != 'nt', reason='Validates Windows ACLs across separate processes')
+def test_bound_backend_starts_with_denied_journal_and_recovers_in_place(tmp_path, monkeypatch):
+    monkeypatch.setenv('MKLINK_RUNTIME_DIR', str(tmp_path / 'registry'))
+    monkeypatch.setattr(probes, 'select_probe', lambda *a, **kw: {'probe_id': B})
+    path = runtime._private_dir(B) / 'jobs.json'
+    path.write_text('[ ]', encoding='utf-8')
+    info = None
+    try:
+        with deny_journal_read(path, monkeypatch):
+            info = runtime.ensure_runtime(project_root=str(tmp_path), probe=B, port=0)
+            assert runtime.request(info, 'GET', '/api/runtime/control/status')['job_history_available'] is False
+            with pytest.raises(runtime.RuntimeErrorResponse) as error:
+                runtime.request(info, 'GET', '/api/runtime/jobs/')
+            assert error.value.status_code == 503
+        assert runtime.request(info, 'GET', '/api/runtime/jobs/') == {'jobs': []}
+        assert path.read_text(encoding='utf-8') == '[ ]'
+    finally:
+        if info:
+            runtime.request(info, 'POST', '/_runtime/stop', {'confirm': True})
+            deadline = time.monotonic() + 10
+            while (path.parent / 'endpoint.json').exists() and time.monotonic() < deadline:
+                time.sleep(.05)
+            assert not (path.parent / 'endpoint.json').exists()
+
+
+def test_released_probe_does_not_restore_another_owners_journal(window, monkeypatch):
+    client, _, _, _ = window
+    path = runtime._private_dir(B) / 'jobs.json'
+    old = dict(job_id='running', request_id='original', state='running', started=1)
+    path.write_text(json.dumps([old]), encoding='utf-8')
+    with deny_journal_read(path, monkeypatch):
+        assert client.post('/api/runtime/select', json={'port': 'COM2'}).status_code == 200
+        assert client.post('/api/device/disconnect').status_code == 200
+    with runtime.runtime_lock('owner.lock', B):
+        assert client.get('/api/runtime/jobs/').status_code == 503
+        assert json.loads(path.read_text(encoding='utf-8')) == [old]
+
+
+def test_select_only_writes_when_history_changes(window, monkeypatch):
+    client, _, _, _ = window
+    path = runtime._private_dir(B) / 'jobs.json'
+    monkeypatch.setattr('mklink.runtime_jobs.RuntimeJobs.save',
+                        Mock(side_effect=AssertionError('no journal write expected')))
+    assert client.post('/api/runtime/select', json={'port': 'COM2'}).status_code == 200
+    assert not path.exists()
+    assert client.post('/api/runtime/select', json={'port': 'COM1'}).status_code == 200
+    path.write_text('[ ]', encoding='utf-8')
+    assert client.post('/api/runtime/select', json={'port': 'COM2'}).status_code == 200
+    assert path.read_text(encoding='utf-8') == '[ ]'
 
 
 def test_disconnect_releases_physical_ownership_but_not_backend(window):

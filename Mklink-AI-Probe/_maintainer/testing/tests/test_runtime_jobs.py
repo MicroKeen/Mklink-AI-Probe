@@ -1,5 +1,8 @@
 import asyncio
 import json
+import os
+from pathlib import Path
+import stat
 import time
 from types import SimpleNamespace
 
@@ -207,3 +210,41 @@ def test_loading_terminal_journal_does_not_rewrite_it(fixture):
     restored = RuntimeJobs(control)
     assert restored.jobs[job['job_id']]['state'] == 'succeeded'
     assert (path.read_bytes(), path.stat().st_mtime_ns) == previous
+
+
+def test_readonly_journal_recovers_interrupted_job_before_accepting_new_work(fixture, monkeypatch):
+    import hashlib
+    client, control, calls, _, release = fixture
+    path = control.jobs.path
+    old = dict(job_id='interrupted', request_id='old-reset', started=1, state='running',
+               fingerprint=hashlib.sha256(json.dumps(['reset', {}], sort_keys=True).encode()).hexdigest())
+    path.write_text(json.dumps([old]), encoding='utf-8')
+    original_bytes = path.read_bytes()
+    if os.name == 'nt':
+        path.chmod(stat.S_IREAD)
+    else:
+        original_replace = Path.replace
+        def restricted(file, target):
+            if target == path:
+                raise PermissionError('read-only journal')
+            return original_replace(file, target)
+        monkeypatch.setattr(Path, 'replace', restricted)
+    try:
+        control.jobs = RuntimeJobs(control)
+        duplicate = client.post('/api/runtime/jobs/', json=body(request_id='old-reset'))
+        assert duplicate.status_code == 202 and duplicate.json()['state'] == 'unknown'
+        assert client.post('/api/runtime/jobs/', json=body()).status_code == 503
+        assert path.read_bytes() == original_bytes and not list(path.parent.glob('jobs-*.tmp'))
+        assert not calls and not control.jobs.tasks
+    finally:
+        if os.name == 'nt':
+            path.chmod(stat.S_IREAD | stat.S_IWRITE)
+        else:
+            monkeypatch.setattr(Path, 'replace', original_replace)
+
+    client.portal.call(release.set)
+    response = client.post('/api/runtime/jobs/', json=body())
+    assert response.status_code == 202, response.text
+    assert terminal(client, response.json()['job_id'])['state'] == 'succeeded'
+    assert calls == ['reset']
+    assert json.loads(path.read_text(encoding='utf-8'))[0] == duplicate.json()

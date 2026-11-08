@@ -233,6 +233,7 @@ class RuntimeControl:
                 'project_root': self.app.state.mklink_state['project_root'], 'transport': self.info.get('transport', 'cdc'),
                 'uptime_seconds': now-self.started, 'clients': clients, 'busy': bool(self.lifecycle_pending) or self.operation_lock.locked() or self.job_busy(),
                 'connection_changes_pending': self.lifecycle_pending,
+                'job_history_available': not (self.jobs and self.jobs.unread_paths),
                 'jobs': list(reversed(list(self.jobs.jobs.values())))[:8] if self.jobs else [], 'online_job': self.online_job(),
                 'operation': self.current_operation, 'last_operation': self.last_operation,
                 'acquisition_transition': self.app.state.mklink_state.get('acquisition_transition'),
@@ -456,6 +457,8 @@ class RuntimeGate:
             if not request_id:
                 return {}
             accepted = c.jobs and any(j['request_id'] == request_id for j in c.jobs.jobs.values())
+            if not accepted and c.jobs and c.jobs.unread_paths:
+                return {}  # An unread journal cannot prove a request never started.
             return {'X-MKLink-Submission': 'accepted' if accepted else 'not-started'}
 
         async def reject(code, detail):

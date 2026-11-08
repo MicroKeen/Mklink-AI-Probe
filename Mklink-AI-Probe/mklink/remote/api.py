@@ -1769,8 +1769,8 @@ def create_app(
                     _retire_target_connection(runtime)
                     commit()
                     _state['shared_probe_id'] = selected['probe_id']
-                    runtime.jobs.path, runtime.jobs.jobs = journal
-                    runtime.info['jobs_path'] = str(journal[0])
+                    runtime.jobs = journal
+                    runtime.info['jobs_path'] = str(journal.path)
                     # Host symbols may be reused when explicitly requested;
                     # target-specific MCU guesses must not cross devices.
                     previous = _state.get('last_device_connection') or {}

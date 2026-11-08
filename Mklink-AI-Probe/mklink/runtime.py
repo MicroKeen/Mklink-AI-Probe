@@ -665,23 +665,25 @@ def _serve_runtime(*, project_root, port, probe_id, runtime_id):
         info['jobs_path'] = str(_private_dir(probe_id if probe_id != 'lobby' else runtime_id) / 'jobs.json')
         app = create_app(project_root=str(Path(project_root).resolve()), backend_port=info["port"])
         mark("runtime_routes")
-        control = install_runtime(app, info)
-        mark("runtime_control")
-        from mklink.observe_bridge import configure_stream_observation
-        configure_stream_observation(app, host="127.0.0.1", port=info["port"],
-                                     auth_token=info["token"], private_correlation=info["instance_id"])
         # Admission has drained hardware work before shutdown. Bound the network
         # drain too: a Windows Proactor reset can leave Server.wait_closed stuck
         # even after ASGI handlers have exited. Lifespan cleanup must still run.
         server = uvicorn.Server(uvicorn.Config(app, log_level="info", access_log=False,
                                               timeout_graceful_shutdown=2,
                                               ws="websockets-sansio", ws_per_message_deflate=False))
-        control.shutdown = lambda: setattr(server, "should_exit", True)
         from mklink.runtime_binding import RuntimeBinding
         binding = RuntimeBinding(info)
-        control.binding = binding
         try:
             with binding.reserve(probe_id) as commit:
+                # Restoring jobs may mark an interrupted operation unknown. Only
+                # this probe's owner may inspect and update that journal.
+                control = install_runtime(app, info)
+                mark("runtime_control")
+                from mklink.observe_bridge import configure_stream_observation
+                configure_stream_observation(app, host="127.0.0.1", port=info["port"],
+                                             auth_token=info["token"], private_correlation=info["instance_id"])
+                control.shutdown = lambda: setattr(server, "should_exit", True)
+                control.binding = binding
                 commit()
             server.run(sockets=[listener])
         finally:
