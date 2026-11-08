@@ -15,6 +15,8 @@ Paths below are relative to the source root containing this file and
   --branch`, recent commits, and `git worktree list`. Read the underlying JSON
   only when updating memory or investigating inconsistencies. During the same
   task, check changed state instead of rereading unchanged instructions.
+- Keep the handoff focused on the current baseline, open limits and next task.
+  Link to verification reports for completed work and detailed measurements.
 - An explicit request to fix/build/change authorizes in-scope edits and
   non-destructive validation without another planning approval. A review or
   diagnosis alone does not authorize implementation. Ask when a choice changes
