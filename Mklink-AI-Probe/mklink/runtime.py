@@ -343,6 +343,18 @@ def probe_firmware(action='check', *, probe=None, confirm=False):
     return request(info, 'POST', '/api/probe/firmware-upgrade', True, timeout=180)
 
 
+def reload_symbols(source, *, probe=None, elf_backend=None):
+    """Explicitly replace the active probe backend's catalog using the desktop transaction."""
+    path = Path(source).expanduser().resolve()
+    if not path.is_file():
+        raise ValueError(f'Symbol file not found: {path}')
+    info = selected_runtime(probe)
+    if not info or info.get('probe_id') == 'lobby':
+        raise RuntimeErrorResponse('No running backend bound to the selected probe; connect with device-status --source first')
+    return request(info, 'POST', '/api/device/parse-axf',
+                   {'axf': str(path), 'elf_backend': elf_backend}, timeout=120)
+
+
 def job_status(info, job_id=None):
     """Query a retained result without attaching or reconnecting hardware."""
     if info is None:
