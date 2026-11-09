@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-11-08T17:12:07+08:00`
-- 分支：`main`
-- HEAD：`6b0bfebe`
-- 远端 HEAD：`6b0bfebe`
-- 工作树：以上为发布后交接快照。0.4.2 和 0.4.3 修复分支已退役，现有 S3 工作树仍在使用。
-- 当前任务：0.4.3 发布与上位机工作区清理已完成，等待下一项开发任务。
-- 状态：`已正式发布`
+- 更新时间：`2026-11-08T20:55:00+08:00`
+- 分支：`codex/cli-symbol-reload`
+- HEAD：`497f55e9`
+- 远端 HEAD：`497f55e9`
+- 工作树：记录 CLI 符号重载的代码提交，基于主线 1c7cb69e。
+- 当前任务：为同路径重编后的 AXF/ELF 提供显式 CLI 重载命令，见 [Issue #77](https://github.com/MicroKeen/Mklink-AI-Probe/issues/77)。
+- 状态：`分支待审`
 
 ## 里程碑
 
@@ -20,6 +20,7 @@
 
 - **发布与验收**：正式包哈希、安装、Skill 更新、分发渠道及真机记录见[发布报告](../verification/v043-release-handoff.md)。
 - **工作区清理**：C/E/F 清理回执、人工检查清单和恢复资料位置见[清理报告](../verification/v043-postrelease-cleanup-20261108.md)。
+- **CLI 符号重载**：238 项回归通过。V4.7.3 与 STM32F103 真机读回 116736 字节，与 Keil 工程映像一致。同路径重链后 watch 返回 409，显式重载使目录从 1 升到 2，新变量名与系统 tick 读取成功。另以 GCC ELF 和模拟内存验证了变量换址。
 
 ## 架构决策
 
@@ -33,7 +34,8 @@
 
 ## 下一动作
 
-1. 接手时核对 `git status --short --branch` 和 `git worktree list`，执行 `git fetch microkeen`。新任务从最新 `microkeen/main` 建 `codex/<task>` 分支。
+1. 审阅 Issue #77 的 CLI 修复和 V4 真机验证结果。
+2. 接手时核对 `git status --short --branch` 和 `git worktree list`，执行 `git fetch microkeen`。新任务从最新 `microkeen/main` 建 `codex/<task>` 分支。
 
 ## 已知限制
 

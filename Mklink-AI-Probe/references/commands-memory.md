@@ -318,7 +318,21 @@ python -m mklink symbols --source path/to/firmware.axf
 python -m mklink symbols --source path/to/firmware.axf --filter "counter|sensor"
 ```
 
+#### `python -m mklink reload-symbols --probe <设备ID或别名> --source <AXF/ELF>`
+
+同一路径重新编译后，`watch --source` 会拒绝使用已过期的符号。确认板上运行的是与新
+AXF/ELF 对应的固件后，在已连接的后台执行以下命令。相对路径按当前命令行目录解析。
+
+```powershell
+python -m mklink reload-symbols --probe <设备ID或别名> --source ./build/Debug/app.elf
+python -m mklink watch g_tick --probe <设备ID或别名> --period 0 --json
+```
+
+成功时返回 `catalog_generation`、`catalog_stale` 和解析后的文件路径。重载会停止正在运行的探针采集，
+需要继续采集时再显式启动。已附着的 SDK 客户端需重新附着，后续新开的 CLI 命令会使用新符号。
+
 #### `python -m mklink watch <变量1,变量2> --probe <设备ID或别名> [--source <firmware.axf>] [--period 秒]`
+
 通过共享后台批量读取 1..16 个标量，支持 typedef、`struct.field`、数组元素和当前 C 布局。
 未指定工程和符号文件时使用后台当前配置；多下载器必须明确选择。周期模式用 Ctrl+C
 停止并只解除自己的会话。采集冲突或读取失败会退出报错，不抢停 GUI、不重试或转为直连。

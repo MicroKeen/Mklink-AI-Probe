@@ -1,4 +1,6 @@
 """File configuration survives connection lifetime; reload drains real managers."""
+import json
+import sys
 from unittest.mock import Mock
 import pytest
 from fastapi.testclient import TestClient
@@ -35,6 +37,46 @@ def test_offline_load_browse_select_reload_without_probe(offline, monkeypatch):
     assert [row['name'] for row in client.get('/api/dash/superwatch/items').json()['items']] == ['gain']
     monkeypatch.setattr('mklink.probes.inventory', lambda: [])
     assert client.post('/api/dash/superwatch/write', json={'path': 'gain', 'generation': 2, 'value': 1}).status_code >= 400
+
+
+def test_cli_reload_replaces_stale_catalog_on_selected_backend(offline, monkeypatch, capsys):
+    from mklink import cli, runtime
+    app, client, axf, control = offline
+    probe = 'usb-' + 'a' * 24
+    control.info['probe_id'] = app.state.mklink_state['shared_probe_id'] = probe
+    initial = client.post('/api/device/parse-axf', json={'axf': str(axf)}).json()
+    axf.write_bytes(b'rebuilt axf')
+    assert client.get('/api/device/status').json()['axf']['catalog_stale']
+    monkeypatch.chdir(axf.parent)
+    select = Mock(return_value=control.info)
+    monkeypatch.setattr(runtime, 'selected_runtime', select)
+    def dispatch(info, method, path, payload, **kwargs):
+        assert info is control.info and payload['elf_backend'] == 'builtin'
+        response = client.request(method, path, json=payload, headers={'X-MKLink-Probe': info['probe_id']})
+        assert response.status_code == 200, response.text
+        return response.json()
+    monkeypatch.setattr(runtime, 'request', dispatch)
+    monkeypatch.setattr(sys, 'argv', ['mklink', 'reload-symbols', '--source', axf.name,
+                                     '--probe', 'board', '--elf-backend', 'builtin'])
+    cli.main()
+    select.assert_called_once_with('board')
+    result = json.loads(capsys.readouterr().out)
+    assert result['axf_path'] == str(axf)
+    assert result['catalog_generation'] > initial['catalog_generation']
+    assert result['loaded'] and not result['catalog_stale']
+    assert client.get('/api/device/status').json()['axf']['catalog_generation'] == result['catalog_generation']
+
+
+@pytest.mark.parametrize('info', [None, {'probe_id': 'lobby'}])
+def test_cli_reload_requires_a_bound_backend(tmp_path, monkeypatch, info):
+    from mklink import cli, runtime
+    axf = tmp_path / 'app.elf'
+    axf.touch()
+    monkeypatch.setattr(runtime, 'selected_runtime', lambda selector: info)
+    monkeypatch.setattr(runtime, 'request', Mock(side_effect=AssertionError('Unexpected HTTP request')))
+    monkeypatch.setattr(sys, 'argv', ['mklink', 'reload-symbols', '--source', str(axf)])
+    with pytest.raises(SystemExit, match='No running backend bound'):
+        cli.main()
 
 
 @pytest.mark.parametrize('route', ['/api/device/parse-axf', '/api/symbols/reparse', '/api/symbols/reload-sources'])
