@@ -1,22 +1,27 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-09T11:59:26+08:00",
+  "updated_at": "2026-11-09T13:23:57+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
-    "branch": "main",
-    "head": "2861d7a6",
-    "remote_head": "2861d7a6",
-    "working_tree": "此处记录 PR #78 合并后的主线快照，PR #76 在该提交上完成集成验证。接手时请重新获取远端状态。"
+    "branch": "codex/v0.5.0-fixes",
+    "head": "cf034fe1",
+    "remote_head": "cf034fe1",
+    "working_tree": "以上为本次记忆更新前的代码快照。开发分支已从包含两项修复的 microkeen/main 建立并推送，独立工作树跟踪 microkeen/codex/v0.5.0-fixes。"
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
     "status": "0.5.0 开发准备",
-    "current_task": "普通权限连接和 CLI 符号重载的集成见 [PR #76](https://github.com/MicroKeen/Mklink-AI-Probe/pull/76) 和 [PR #78](https://github.com/MicroKeen/Mklink-AI-Probe/pull/78)。"
+    "current_task": "两项修复已合入 main，后续上位机开发从 codex/v0.5.0-fixes 继续。"
   },
   "milestones": [
+    {
+      "name": "0.5.0 上位机开发基线",
+      "status": "已合入 main",
+      "notes": "2026-11-09，[PR #78](https://github.com/MicroKeen/Mklink-AI-Probe/pull/78) 以 `2861d7a6` 合入，新增 CLI 显式重载 AXF/ELF 符号，[Issue #77](https://github.com/MicroKeen/Mklink-AI-Probe/issues/77) 已关闭（Completed）。随后 [PR #76](https://github.com/MicroKeen/Mklink-AI-Probe/pull/76) 以 `cf034fe1` 合入，修复 Windows 普通用户因 jobs.json 访问受限而无法连接探针的问题，[Issue #75](https://github.com/MicroKeen/Mklink-AI-Probe/issues/75) 已关闭（Completed）。"
+    },
     {
       "name": "MKLink 0.4.3",
       "status": "正式",
@@ -24,6 +29,10 @@
     }
   ],
   "verification": [
+    {
+      "area": "合并回归",
+      "result": "集成提交 `0b80e790` 与主线合并提交 `cf034fe1` 的文件树一致。Python 全量 6846 项通过，2 项因缺少 `hil_core.observe` 跳过。GUI 全量 1203 项通过，生产 Web 构建通过。"
+    },
     {
       "area": "普通权限连接",
       "result": "原分支 1015 项回归覆盖只读日志、权限恢复和不重放。与 PR #78 集成后，在 Windows 普通权限进程中拒绝读取临时 jobs.json，GUI 使用的选择并连接接口成功连接 V4.7.3 真机。任务查询返回 503；恢复权限后，同一后台找回原 request_id，日志字节未变。"
@@ -54,7 +63,7 @@
     "公网远程中继继续延期。独立 [S3 PR #65](https://github.com/MicroKeen/Mklink-AI-Probe/pull/65) 仍开放。其他硬件的[历史未验范围](known-limits-20261030.md)按需查阅。"
   ],
   "next_actions": [
-    "接手时核对 git 状态和工作树并执行 `git fetch microkeen`。0.5.0 后续开发使用从合入两项修复的最新 `microkeen/main` 建立的 `codex/v0.5.0-fixes`。"
+    "下一项上位机任务沿用现有 `codex/v0.5.0-fixes` 工作树。接手时执行 `git fetch microkeen`，核对本地分支、远端跟踪分支和工作树状态。"
   ],
   "continuation_protocol": [
     "后续合并、签名或正式发布须有新的明确指令。"

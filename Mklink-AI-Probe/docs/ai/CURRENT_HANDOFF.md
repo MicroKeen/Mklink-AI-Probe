@@ -4,20 +4,22 @@
 
 ## 当前断点
 
-- 更新时间：`2026-11-09T11:59:26+08:00`
-- 分支：`main`
-- HEAD：`2861d7a6`
-- 远端 HEAD：`2861d7a6`
-- 工作树：此处记录 PR #78 合并后的主线快照，PR #76 在该提交上完成集成验证。接手时请重新获取远端状态。
-- 当前任务：普通权限连接和 CLI 符号重载的集成见 [PR #76](https://github.com/MicroKeen/Mklink-AI-Probe/pull/76) 和 [PR #78](https://github.com/MicroKeen/Mklink-AI-Probe/pull/78)。
+- 更新时间：`2026-11-09T13:23:57+08:00`
+- 分支：`codex/v0.5.0-fixes`
+- HEAD：`cf034fe1`
+- 远端 HEAD：`cf034fe1`
+- 工作树：以上为本次记忆更新前的代码快照。开发分支已从包含两项修复的 microkeen/main 建立并推送，独立工作树跟踪 microkeen/codex/v0.5.0-fixes。
+- 当前任务：两项修复已合入 main，后续上位机开发从 codex/v0.5.0-fixes 继续。
 - 状态：`0.5.0 开发准备`
 
 ## 里程碑
 
+- **0.5.0 上位机开发基线** — `已合入 main`。2026-11-09，[PR #78](https://github.com/MicroKeen/Mklink-AI-Probe/pull/78) 以 `2861d7a6` 合入，新增 CLI 显式重载 AXF/ELF 符号，[Issue #77](https://github.com/MicroKeen/Mklink-AI-Probe/issues/77) 已关闭（Completed）。随后 [PR #76](https://github.com/MicroKeen/Mklink-AI-Probe/pull/76) 以 `cf034fe1` 合入，修复 Windows 普通用户因 jobs.json 访问受限而无法连接探针的问题，[Issue #75](https://github.com/MicroKeen/Mklink-AI-Probe/issues/75) 已关闭（Completed）。
 - **MKLink 0.4.3** — `正式`。`v0.4.3` 指向 `3905a68b`。Windows 上位机、完整 Skill、Site Agent、MicroLink V3.6.9、MicroLink V4.7.3 和 HPMLink V4.7.3 已发布。MicroLink V2 沿用 V2.9.3。
 
 ## 验证证据
 
+- **合并回归**：集成提交 `0b80e790` 与主线合并提交 `cf034fe1` 的文件树一致。Python 全量 6846 项通过，2 项因缺少 `hil_core.observe` 跳过。GUI 全量 1203 项通过，生产 Web 构建通过。
 - **普通权限连接**：原分支 1015 项回归覆盖只读日志、权限恢复和不重放。与 PR #78 集成后，在 Windows 普通权限进程中拒绝读取临时 jobs.json，GUI 使用的选择并连接接口成功连接 V4.7.3 真机。任务查询返回 503；恢复权限后，同一后台找回原 request_id，日志字节未变。
 - **发布与验收**：正式包哈希、安装、Skill 更新、分发渠道及真机记录见[发布报告](../verification/v043-release-handoff.md)。
 - **工作区清理**：C/E/F 清理回执、人工检查清单和恢复资料位置见[清理报告](../verification/v043-postrelease-cleanup-20261108.md)。
@@ -35,7 +37,7 @@
 
 ## 下一动作
 
-1. 接手时核对 git 状态和工作树并执行 `git fetch microkeen`。0.5.0 后续开发使用从合入两项修复的最新 `microkeen/main` 建立的 `codex/v0.5.0-fixes`。
+1. 下一项上位机任务沿用现有 `codex/v0.5.0-fixes` 工作树。接手时执行 `git fetch microkeen`，核对本地分支、远端跟踪分支和工作树状态。
 
 ## 已知限制
 
