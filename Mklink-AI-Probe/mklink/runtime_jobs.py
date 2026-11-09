@@ -5,12 +5,16 @@ import asyncio
 from contextvars import ContextVar
 import hashlib
 import json
+import os
 from pathlib import Path
 import secrets
+import tempfile
 import time
 
 from fastapi import FastAPI, HTTPException
 from starlette.routing import Mount
+
+from mklink.connection_diagnostics import error_detail, event
 
 executing_job = ContextVar('mklink_executing_job', default=None)
 PATHS = {'flash': '/api/device/flash', 'erase': '/api/device/erase',
@@ -23,35 +27,79 @@ DEPLOYMENT_PATHS = {'offline_deploy': '/api/offline-download/deploy',
 
 def prepare_probe_journal(control, probe_id):
     """Retain uncertainty and request IDs across switches, before hardware moves."""
-    from types import SimpleNamespace
     from mklink.runtime import _private_dir
     path = _private_dir(probe_id) / 'jobs.json'
-    restored = RuntimeJobs(SimpleNamespace(info={'jobs_path': str(path)}))
-    restored.jobs.update(control.jobs.jobs)
-    restored.jobs = dict(sorted(restored.jobs.items(), key=lambda pair: pair[1]['started'])[-64:])
-    restored.save()
-    return path, restored.jobs
+    return RuntimeJobs(control, path=path, previous=control.jobs)
 
 
 class RuntimeJobs:
-    def __init__(self, control):
+    def __init__(self, control, *, path=None, previous=None):
         self.control = control
-        self.jobs = {}
+        self.jobs = previous.jobs.copy() if previous else {}
+        # An unread journal may contain a request already sent to hardware.
+        # Carry that uncertainty across switches just like known request IDs.
+        self.unread_paths = previous.unread_paths.copy() if previous else set()
         self.tasks = set()
-        self.path = Path(control.info['jobs_path']) if control.info.get('jobs_path') else None
-        if self.path and self.path.exists():
+        path = path or control.info.get('jobs_path')
+        self.path = Path(path) if path else None
+        if self.path:
+            self._restore(self.path)
+
+    def _restore(self, path):
+        try:
+            stored = path.read_text(encoding='utf-8')
+        except FileNotFoundError:
+            if path in self.unread_paths:
+                return  # Losing sight of old records does not resolve their outcome.
+            stored = '[]'
+        except PermissionError as exc:
+            if path not in self.unread_paths:
+                event('journal.read_denied', error=error_detail(exc))
+            self.unread_paths.add(path)
+            return
+        except UnicodeError as exc:
+            raise RuntimeError('Cannot read job journal; preserve it for inspection') from exc
+
+        try:
+            rows = json.loads(stored)
+            restored = {}
+            changed = len(rows) > 64
+            for row in rows[-64:]:
+                if row['state'] not in TERMINAL:
+                    changed = True
+                    row.update(state='unknown', error='Backend interrupted; inspect target before any new operation', finished=time.time())
+                restored[row['job_id']] = row
+            if self.jobs:
+                restored.update(self.jobs)
+                restored = dict(sorted(restored.items(), key=lambda pair: pair[1]['started'])[-64:])
+            self.jobs = restored
+        except (ValueError, KeyError, TypeError) as exc:
+            raise RuntimeError('Cannot read job journal; preserve it for inspection') from exc
+
+        self.unread_paths.discard(path)
+        if path == self.path and (changed or list(restored.values()) != rows):
             try:
-                rows = json.loads(self.path.read_text(encoding='utf-8'))
-                changed = len(rows) > 64
-                for row in rows[-64:]:
-                    if row['state'] not in TERMINAL:
-                        changed = True
-                        row.update(state='unknown', error='Backend interrupted; inspect target before any new operation', finished=time.time())
-                    self.jobs[row['job_id']] = row
-                if changed:
-                    self.save()
-            except (ValueError, KeyError, TypeError) as exc:
-                raise RuntimeError('Cannot read job journal; preserve it for inspection') from exc
+                self.save()
+            except PermissionError as exc:
+                # Reads and duplicate lookups still work. New jobs must save
+                # the full merged history before starting their operation.
+                event('journal.write_denied', error=error_detail(exc))
+
+    def require_history(self):
+        if not self.unread_paths:
+            return
+        # The backend owns its private journal for life. A physical journal
+        # may only be recovered while its probe is bound, never after release.
+        window_id = self.control.info.get('runtime_id')
+        owned_ids = {window_id, self.control.info.get('probe_id')}
+        for path in self.unread_paths.copy():
+            if path != self.path and path.parent.name == window_id:
+                self._restore(path)
+        if self.path and (not window_id or self.path.parent.name in owned_ids):
+            self._restore(self.path)
+        if self.unread_paths:
+            raise HTTPException(503, 'Cannot read jobs.json; check file access and reconnect the affected probe '
+                                     'to recover its job history before submitting or retrying a job')
 
     @property
     def active(self):
@@ -59,10 +107,18 @@ class RuntimeJobs:
 
     def save(self):
         if self.path:
+            if self.path in self.unread_paths:
+                raise PermissionError('Cannot overwrite an unread job journal')
             self.path.parent.mkdir(parents=True, exist_ok=True)
-            temporary = self.path.with_suffix('.tmp')
-            temporary.write_text(json.dumps(list(self.jobs.values()), ensure_ascii=False), encoding='utf-8')
-            temporary.replace(self.path)
+            fd, name = tempfile.mkstemp(dir=self.path.parent, prefix='jobs-', suffix='.tmp')
+            temporary = Path(name)
+            try:
+                with os.fdopen(fd, 'w', encoding='utf-8') as output:
+                    json.dump(list(self.jobs.values()), output, ensure_ascii=False)
+                temporary.replace(self.path)
+            except BaseException:
+                temporary.unlink(missing_ok=True)
+                raise
 
     def submit(self, body):
         action, request_id = body.get('action'), body.get('request_id')
@@ -141,6 +197,7 @@ class RuntimeJobs:
     def _previous(self, request_id, fingerprint):
         if not isinstance(request_id, str) or not 1 <= len(request_id) <= 128:
             raise HTTPException(422, 'A stable request_id is required; reuse it to query an uncertain submission')
+        self.require_history()
         previous = next((j for j in self.jobs.values() if j['request_id'] == request_id), None)
         if previous and previous['fingerprint'] != fingerprint:
             raise HTTPException(409, 'request_id already belongs to a different operation')
@@ -304,19 +361,23 @@ class RuntimeJobs:
 
 
 def install_jobs(app, control):
-    jobs = control.jobs = RuntimeJobs(control)
+    control.jobs = RuntimeJobs(control)
     api = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
     @api.get('/')
     async def listing():
+        jobs = control.jobs
+        jobs.require_history()
         return {'jobs': list(reversed(jobs.jobs.values()))}
 
     @api.post('/', status_code=202)
     async def submit(body: dict):
-        return jobs.submit(body)
+        return control.jobs.submit(body)
 
     @api.get('/{job_id}')
     async def get(job_id: str):
+        jobs = control.jobs
+        jobs.require_history()
         if job_id not in jobs.jobs:
             raise HTTPException(404, 'Job not retained; never infer failure or retry from this response')
         return jobs.jobs[job_id]
