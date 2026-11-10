@@ -1,20 +1,20 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-09T13:23:57+08:00",
+  "updated_at": "2026-11-10T10:20:56+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.5.0-fixes",
-    "head": "cf034fe1",
-    "remote_head": "cf034fe1",
-    "working_tree": "以上为本次记忆更新前的代码快照。开发分支已从包含两项修复的 microkeen/main 建立并推送，独立工作树跟踪 microkeen/codex/v0.5.0-fixes。"
+    "head": "8d895328",
+    "remote_head": "8d895328",
+    "working_tree": "以上为此次记录前已推送的源码与生产 Web 快照。开发基线为 cf034fe1。"
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "0.5.0 开发准备",
-    "current_task": "两项修复已合入 main，后续上位机开发从 codex/v0.5.0-fixes 继续。"
+    "status": "上位机已验证，待固件联测",
+    "current_task": "SuperWatch 拔插 SWCLK 后的状态提示已提交 [PR #79](https://github.com/MicroKeen/Mklink-AI-Probe/pull/79)。MicroLink V4 的 SWD 重连由固件项目跟进。"
   },
   "milestones": [
     {
@@ -29,6 +29,10 @@
     }
   ],
   "verification": [
+    {
+      "area": "SuperWatch 读取中断",
+      "result": "现场旧版错误计数、普通采样恢复、Edge 双语提示和待验的固件联测见[验证记录](../verification/v050-superwatch-swclk.md)。"
+    },
     {
       "area": "合并回归",
       "result": "集成提交 `0b80e790` 与主线合并提交 `cf034fe1` 的文件树一致。Python 全量 6846 项通过，2 项因缺少 `hil_core.observe` 跳过。GUI 全量 1203 项通过，生产 Web 构建通过。"
@@ -63,6 +67,7 @@
     "公网远程中继继续延期。独立 [S3 PR #65](https://github.com/MicroKeen/Mklink-AI-Probe/pull/65) 仍开放。其他硬件的[历史未验范围](known-limits-20261030.md)按需查阅。"
   ],
   "next_actions": [
+    "使用固件候选和本分支上位机在同一板卡上完成 SWCLK 拔插与基线复测，记录自动续采、原始数据和性能。",
     "下一项上位机任务沿用现有 `codex/v0.5.0-fixes` 工作树。接手时执行 `git fetch microkeen`，核对本地分支、远端跟踪分支和工作树状态。"
   ],
   "continuation_protocol": [
