@@ -1,20 +1,20 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-10T10:34:23+08:00",
+  "updated_at": "2026-11-10T13:49:42+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.5.0-fixes",
-    "head": "788c9ae4",
-    "remote_head": "788c9ae4",
-    "working_tree": "以上为实物验收记录提交前的分支快照。上位机产品代码为 2f605c8c，生产 Web 为 8d895328。"
+    "head": "61d46690",
+    "remote_head": "61d46690",
+    "working_tree": "以上为普通用户安装验收文档提交前的分支快照。安装包产品代码为 8f8709a4，生产 Web 同步为 61d46690。"
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "普通 V4 与 F103 拔插联测通过",
-    "current_task": "SuperWatch 状态提示见 [PR #79](https://github.com/MicroKeen/Mklink-AI-Probe/pull/79)。本分支与普通 V4 候选固件已在原 F103 上验证 SWCLK 接回后自动续采。"
+    "status": "普通用户安装与覆盖验收通过",
+    "current_task": "Windows 安装包已改为 currentUser，安装时不修改端口名称；手动操作使用应用内确认和独立 UAC 助手。最终候选已覆盖安装，相关修复与 SuperWatch 状态提示同在 [PR #79](https://github.com/MicroKeen/Mklink-AI-Probe/pull/79)。"
   },
   "milestones": [
     {
@@ -29,6 +29,10 @@
     }
   ],
   "verification": [
+    {
+      "area": "Windows 普通用户安装",
+      "result": "安装与卸载均以 RID 8192 运行。最终候选覆盖后 3,672 个文件匹配、6 份用户配置及端口名称保持不变，桌面/Web/CLI/MCP、内置资源和正常退出通过。安装相关 66 项、配置页 47 项通过。候选哈希、旧 HKLM 登记及遗留文件边界见[安装验证记录](../verification/v050-user-installer.md)。"
+    },
     {
       "area": "SuperWatch 读取中断",
       "result": "用户实物拔插后，原订阅跨过 12.637 秒缺口自动续采，恢复后每秒 43,458 组四通道数据。固件候选、前后对照、Edge 双语提示和共存范围见[验证记录](../verification/v050-superwatch-swclk.md)。"
@@ -57,6 +61,7 @@
   "decisions": [
     "采集或调试改动须按[上位机基线](../verification/v043-host-baseline.md)同条件复测 SuperWatch、RTT 和调试共存，核对数据完整性。",
     "默认仅构建 Windows。用 PowerShell 7、UTF-8 和 `scripts/build_workspace.ps1`，构建根为 `F:/MKLink-Build`。",
+    "Windows NSIS 默认 currentUser；安装不自动命名 USB 端口。只有用户确认修改或恢复端口显示名称时，才调用独立 UAC 助手。旧机器级登记与受保护目录不自动迁移。",
     "上海轻量服务器直供最新版，历史文件由 COS 和 Git 保存。COS 累计 189 GiB 告警、207.9 GiB 停止，已取消日期截止。账本和停止锁按[下载策略](tencent-updates.md)维护。"
   ],
   "hardware": {
@@ -67,7 +72,7 @@
     "公网远程中继继续延期。独立 [S3 PR #65](https://github.com/MicroKeen/Mklink-AI-Probe/pull/65) 仍开放。其他硬件的[历史未验范围](known-limits-20261030.md)按需查阅。"
   ],
   "next_actions": [
-    "审阅上位机 PR #79。普通 V4 的候选固件及其他目标的验证范围由固件项目维护。",
+    "审阅上位机 PR #79，包含 SuperWatch 中断提示与普通用户安装修复。普通 V4 候选固件及其他目标的验证范围由固件项目维护。",
     "下一项上位机任务沿用现有 `codex/v0.5.0-fixes` 工作树。接手时执行 `git fetch microkeen`，核对本地分支、远端跟踪分支和工作树状态。"
   ],
   "continuation_protocol": [
