@@ -254,19 +254,40 @@ describe('ConfigView', () => {
     expect(wrapper.find('[data-testid="device-status"]').exists()).toBe(false)
   })
 
-  it('runs elevated USB port rename and restore actions from the local panel', async () => {
+  it('runs elevated USB port actions only after the in-app confirmation', async () => {
     const wrapper = await mountView()
 
     await wrapper.get('[data-testid="rename-usb-ports"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[role="alertdialog"]').text()).toContain('管理员权限')
+    expect(mocks.invoke).not.toHaveBeenCalledWith('rename_usb_ports', { action: 'apply' })
+    await wrapper.get('[data-testid="confirmation-accept"]').trigger('click')
     await flushPromises()
     expect(mocks.invoke).toHaveBeenCalledWith('rename_usb_ports', { action: 'apply' })
     expect(mocks.toastSuccess).toHaveBeenCalledWith(expect.stringContaining('端口名称处理完成'))
 
     await wrapper.get('[data-testid="restore-usb-ports"]').trigger('click')
     await flushPromises()
+    expect(wrapper.get('[role="alertdialog"]').text()).toContain('管理员权限')
+    expect(mocks.invoke).not.toHaveBeenCalledWith('rename_usb_ports', { action: 'restore' })
+    await wrapper.get('[data-testid="confirmation-accept"]').trigger('click')
+    await flushPromises()
     expect(mocks.invoke).toHaveBeenCalledWith('rename_usb_ports', { action: 'restore' })
     expect(mocks.toastSuccess).toHaveBeenCalledWith(expect.stringContaining('端口名称已恢复'))
     expect(wrapper.get('[data-testid="usb-port-naming"]').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it.each(['rename-usb-ports', 'restore-usb-ports'])('does not elevate %s when confirmation is cancelled or the view closes', async button => {
+    const wrapper = await mountView()
+    await wrapper.get(`[data-testid="${button}"]`).trigger('click')
+    await wrapper.get('[data-testid="confirmation-cancel"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[role="alertdialog"]').exists()).toBe(false)
+    await wrapper.get(`[data-testid="${button}"]`).trigger('click')
+    wrapper.unmount()
+    await flushPromises()
+    expect(mocks.invoke.mock.calls.filter(([command]) => command === 'rename_usb_ports')).toEqual([])
   })
 
   it('distinguishes readable variables from DWARF type definitions', async () => {

@@ -4,6 +4,8 @@ import { Download, RefreshCw, RotateCcw, Tag, Unplug, Usb } from '@lucide/vue'
 import { invoke } from '@tauri-apps/api/core'
 import { useMklinkApi } from '../composables/useMklinkApi'
 import { useToast } from '../composables/useToast'
+import { provideConfirmation } from '../composables/useConfirmation'
+import ConfirmationDialog from '../components/ConfirmationDialog.vue'
 import { useSymbolCatalog } from '../composables/useSymbolCatalog'
 import { tr } from '../composables/useLanguage'
 import {
@@ -41,6 +43,7 @@ const {
   downloadProbeFirmware,
 } = useMklinkApi()
 const toast = useToast()
+const { message: confirmationMessage, confirm: confirmPortNaming, answer: answerConfirmation } = provideConfirmation()
 const symbolCatalog = useSymbolCatalog()
 
 const activeSection = ref<ConfigSection>('local')
@@ -220,7 +223,7 @@ async function renameUsbPorts(action: 'apply' | 'restore') {
   const prompt = restoring
     ? tr('将恢复已由 MKLink 修改的端口显示名称，并请求管理员权限。继续吗？', 'This restores MKLink port display names and requests administrator permission. Continue?')
     : tr('将严格识别当前在线的 MKLink V2/V3/V4 端口并修改显示名称，需要管理员权限。继续吗？', 'This verifies connected MKLink V2/V3/V4 ports and changes their display names. Administrator permission is required. Continue?')
-  if (!window.confirm(prompt)) return
+  if (!await confirmPortNaming(prompt) || disposed) return
 
   usbNamingAction.value = action
   try {
@@ -461,6 +464,7 @@ onUnmounted(() => {
 
 <template>
   <div class="config-workspace">
+    <ConfirmationDialog v-if="confirmationMessage !== null" :message="confirmationMessage" @answer="answerConfirmation" />
     <ConfigSectionNav v-model="activeSection" />
 
     <main class="section-content">
