@@ -44,7 +44,7 @@
 - [x] Document direct flash and optional generic configuration; remove mandatory-init guidance.
 - [x] Exercise the actual CLI offline with a CMake-shaped fixture through the build wrapper.
 - [x] Review the scoped change with a fresh reviewer, address substantive findings, and run required checks.
-- [ ] Record evidence and unverified hardware scope, render/validate memory, `git diff --check`, commit and push the existing branch; update its existing PR.
+- [x] Record evidence and unverified hardware scope, render/validate memory, `git diff --check`, commit and push the existing branch; update its existing PR.
 
 ## Evidence and decisions
 
@@ -53,3 +53,5 @@
 - Explicit target migration is rejected for different stored targets or legacy profiles; this avoids inheriting incompatible target state. Users must verify existing configuration before changing chips.
 - Scratch/evidence stays under the configured F: build root. Existing worktree and PR #79 are reused under standing repository authorization.
 
+
+- Final affected regression: 424 passed. Product commit: 740d809c. Memory and PR metadata are updated in the final documentation commit.

@@ -1,20 +1,20 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-10T14:26:23+08:00",
+  "updated_at": "2026-11-10T17:20:56+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.5.0-fixes",
-    "head": "1888fd10",
-    "remote_head": "1888fd10",
-    "working_tree": "以上为 V3.6.10 固件验收同步前的分支快照。已安装上位机产品代码为 8f8709a4，生产 Web 同步为 61d46690。"
+    "head": "740d809c",
+    "remote_head": "740d809c",
+    "working_tree": "以上为通用工程初始化修复的产品代码提交。当前安装包仍为 8f8709a4，生产 Web 为 61d46690；本轮未重建或覆盖安装。"
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "普通用户安装完成，V3/V4 本地修复固件已升级",
-    "current_task": "普通用户安装和 SuperWatch 状态提示见 [PR #79](https://github.com/MicroKeen/Mklink-AI-Probe/pull/79)。上位机本地包已覆盖安装；固件会话完成 V4.7.4 升级和 V3.6.10 实物拔插恢复，验证范围见[记录](../verification/v050-superwatch-swclk.md)。"
+    "status": "通用工程初始化已修复并推送，等待 PR 审阅",
+    "current_task": "CMake/CLion 可显式保存型号和固件/符号路径，project-init 为可选步骤；直接烧录和配置复用已验证。该修复与此前普通用户安装、SuperWatch 状态改动共同保留在 [PR #79](https://github.com/MicroKeen/Mklink-AI-Probe/pull/79)。见[验证记录](../verification/v050-project-init.md)。"
   },
   "milestones": [
     {
@@ -29,6 +29,10 @@
     }
   ],
   "verification": [
+    {
+      "area": "通用工程配置与直接烧录",
+      "result": "424 项相关回归通过，覆盖通用/IDE 导入、配置保留、共享烧录、目标提示、HPM/API 和 Skill 边界。真实 CLI 子进程完成离线 CMake 初始化、重复初始化及错误退出校验。显式目标冲突或旧 profile 阻止覆盖，多个固件候选要求显式选择。本轮未操作硬件、未更新安装包，详见[验证记录](../verification/v050-project-init.md)。"
+    },
     {
       "area": "Windows 普通用户安装",
       "result": "安装与卸载均以 RID 8192 运行。最终候选覆盖后 3,672 个文件匹配、6 份用户配置及端口名称保持不变，桌面/Web/CLI/MCP、内置资源和正常退出通过。安装相关 66 项、配置页 47 项通过。候选哈希、旧 HKLM 登记及遗留文件边界见[安装验证记录](../verification/v050-user-installer.md)。"
@@ -50,12 +54,8 @@
       "result": "原分支 1015 项回归覆盖只读日志、权限恢复和不重放。与 PR #78 集成后，在 Windows 普通权限进程中拒绝读取临时 jobs.json，GUI 使用的选择并连接接口成功连接 V4.7.3 真机。任务查询返回 503；恢复权限后，同一后台找回原 request_id，日志字节未变。"
     },
     {
-      "area": "发布与验收",
-      "result": "正式包哈希、安装、Skill 更新、分发渠道及真机记录见[发布报告](../verification/v043-release-handoff.md)。"
-    },
-    {
-      "area": "工作区清理",
-      "result": "C/E/F 清理回执、人工检查清单和恢复资料位置见[清理报告](../verification/v043-postrelease-cleanup-20261108.md)。"
+      "area": "发布、验收与清理",
+      "result": "正式包哈希、安装、Skill 更新、分发渠道及真机记录见[发布报告](../verification/v043-release-handoff.md)。 C/E/F 清理回执、人工检查清单和恢复资料位置见[清理报告](../verification/v043-postrelease-cleanup-20261108.md)。"
     },
     {
       "area": "CLI 符号重载",
@@ -67,7 +67,8 @@
     "默认仅构建 Windows。用 PowerShell 7、UTF-8 和 `scripts/build_workspace.ps1`，构建根为 `F:/MKLink-Build`。",
     "Windows NSIS 默认 currentUser；安装不自动命名 USB 端口。只有用户确认修改或恢复端口显示名称时，才调用独立 UAC 助手。旧机器级登记与受保护目录不自动迁移。",
     "上海轻量服务器直供最新版，历史文件由 COS 和 Git 保存。COS 累计 189 GiB 告警、207.9 GiB 停止，已取消日期截止。账本和停止锁按[下载策略](tencent-updates.md)维护。",
-    "跨会话固件联测固定上位机提交并核对 mklink/runtime 模块导入路径；主工作区和全局 editable 入口不自动代表当前任务版本。"
+    "跨会话固件联测固定上位机提交并核对 mklink/runtime 模块导入路径；主工作区和全局 editable 入口不自动代表当前任务版本。",
+    "project-init 是可选离线配置工具；通用工程可显式传型号和文件，直接烧录不依赖初始化。型号或镜像不明确时要求补充输入，不猜测，也不自动迁移已有芯片配置。"
   ],
   "hardware": {
     "操作前": "重新核对下载器型号、目标和占用。固件变更由指定会话协调，升降级按本次授权执行。VCC、OTP 操作分别确认。",
@@ -79,8 +80,9 @@
     "公网远程中继继续延期。独立 [S3 PR #65](https://github.com/MicroKeen/Mklink-AI-Probe/pull/65) 仍开放。其他硬件的[历史未验范围](known-limits-20261030.md)按需查阅。"
   ],
   "next_actions": [
-    "审阅上位机 PR #79。V4.7.4 与 V3.6.10 均为本地已验包，正式发布及其他目标的验证由固件项目维护。",
-    "下一项上位机任务沿用现有 `codex/v0.5.0-fixes` 工作树。接手时执行 `git fetch microkeen`，核对本地分支、远端跟踪分支和工作树状态。"
+    "审阅 PR #79 的普通用户安装、SuperWatch 状态提示及通用工程配置修复；合并和发布仍需明确指令。",
+    "本次 CLI 修复已在源码分支，可从该源码运行；当前已安装候选不含本次改动，后续需要使用安装版时再构建并验收。V3.6.10/V4.7.4 固件验证继续由固件项目维护。",
+    "后续沿用 codex/v0.5.0-fixes 工作树；接手时 fetch microkeen 并核对实际分支、远端和已有改动。"
   ],
   "continuation_protocol": [
     "后续合并、签名或正式发布须有新的明确指令。"
