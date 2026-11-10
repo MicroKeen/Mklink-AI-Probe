@@ -7,7 +7,7 @@
 
 ### 新项目首次烧录
 
-1. 运行 `python -m mklink project-init` 解析工程与目标配置。
+1. 确认精确目标型号和本次固件路径。`project-init` 是可选的配置保存/导入工具；Keil/IAR/HPM 可自动导入，CMake/CLion 等工程可显式传入 `--target-part`、`--firmware` 和 `--elf`，不因无法导入工程而阻塞直接烧录。
 2. 工程 IDE 可用时，优先通过 IDE 原生命令行编译并下载。Keil 默认依次执行 `UV4.exe -b` 和 `UV4.exe -f`。
 3. IDE 不可用、不适用或只有预编译镜像时，使用 pyOCD 在线烧录。
 4. 前两种能力都不可用或用户要求脱机部署时，使用 MKLink 脱机下载 API。
@@ -61,14 +61,15 @@ python -m mklink rtt
 | GUI/AI 争用、退出 GUI 后仍占用、MCP 超时 | 先按[控制权与恢复](runtime-recovery.md)查询后台会话、采集和任务；不先杀进程或重启电脑 |
 | COM 口不存在 | `python -m mklink probes list` 查找端口 |
 | IDCODE 无效 | 检查 SWD 接线和目标板供电 |
-| 新 MCU 未知 / profile 缺失 | 先按内置 Pack、内置 DAPLink FLM、已安装 Pack、自定义 FLM 顺序解析；仍无匹配时运行 `python -m mklink mcu-detect`，多候选按算法 ID 查看，不生成 profile |
+| 缺少目标型号 | 从工程配置或用户确认的信息取得精确型号，烧录传 `--target-part <型号>`；需要复用时可选运行 `project-init --target-part <型号>`，无需创建 profile |
+| 型号已知但算法缺失 | 先按内置 Pack、内置 DAPLink FLM、已安装 Pack、自定义 FLM 顺序解析；仍无匹配时运行 `python -m mklink mcu-detect --device <型号>`，多候选按算法 ID 查看，不生成 profile |
 | 找不到 H723/H7 等 FLM | 先确认发布包内置 Pack/DAPLink 算法；再检查已安装 Keil/Arm Pack；最后才使用显式自定义 `--flm` |
 | FLM 加载失败 | 先 `python -m mklink mcu-detect` 只读核对算法来源；必要时用 `copy-flm --probe <ID> --flm <本地文件>` 显式复制 |
 | RTT 搜索失败 | 检查固件是否已集成 RTT 并重新编译 |
 | RTT 集成验证失败 | 确认 `main()` 在合适位置调用了 `SEGGER_RTT_Init()`（通常在系统初始化之后） |
 | 头文件目录不存在 | 检查项目的 Include Path 配置，使用 --inc-dir 指定正确路径 |
-| HEX 文件未找到 | 先编译项目，再运行 `python -m mklink project-init` 更新路径 |
-| 项目未配置 | `python -m mklink project-init` |
+| HEX/BIN 文件未找到 | 先编译项目，再用 `--firmware <文件>` 指定实际产物；可选用 `project-init --firmware <文件>` 更新已配置工程的路径 |
+| 项目未配置 / CMake 工程无法导入 | 直接传固件路径和精确型号；若需保存默认值，使用 `project-init --target-part <型号> --firmware <文件> --elf <符号文件>` |
 | 远程 listener 不可达 | 先检查受管 VPN/局域网可达性、现场 Agent 进程和 host/port；不要打印 token，也不要把 `remote reconnect` 当成网络修复 |
 | 远程认证失败 | 确认工程师侧 `--token-env` 与现场 Agent 的环境变量或 owner-only token file 指向同一密钥；不要把密钥复制到 URL、日志或聊天 |
 | `health` 成功但探针未连接 | 用 `status`/`ports` 检查现场探针，再运行 `remote reconnect`；该操作只重连探针 |

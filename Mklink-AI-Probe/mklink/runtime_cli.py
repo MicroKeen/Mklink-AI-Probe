@@ -41,6 +41,8 @@ def run(args):
         return (_print_power_read(result, args.json) if args.command == 'power-read'
                 else _print_probe_version(result['raw'], args.all, args.raw))
     project = getattr(args, 'project_root', None)
+    if project in (None, '.'):
+        project = getattr(args, 'project_root_positional', None)
     flash_arguments = None
     erase_arguments = None
     job_action = args.command
@@ -57,9 +59,29 @@ def run(args):
     if args.command == 'flash':
         from pathlib import Path
         from mklink.flash_request import validate_flash_request
-        if not args.hex:
-            raise SystemExit('Shared flash requires an explicit --firmware or --hex path')
-        flash_arguments = {'firmware': str(Path(args.hex).resolve()),
+        firmware = args.hex
+        if not firmware:
+            from mklink.project_config import get_mklink_dir, lint_json_file, load_project_info
+            root = Path(project or '.').resolve()
+            if (get_mklink_dir(str(root)) / 'project_info.json').exists():
+                error = lint_json_file(str(root), 'project_info.json')
+                if error:
+                    raise SystemExit(error)
+            info = load_project_info(str(root)) or {}
+            candidates = set()
+            for key in ('hex_path', 'bin_path'):
+                value = info.get(key)
+                if isinstance(value, str) and value.strip():
+                    path = Path(value).expanduser()
+                    candidates.add(str((path if path.is_absolute() else root / path).resolve()))
+            if len(candidates) != 1:
+                reason = 'Multiple configured firmware files' if candidates else 'No firmware file specified'
+                raise SystemExit(f'{reason}; pass --firmware <HEX/BIN> (initialization is optional)')
+            firmware = candidates.pop()
+            # Bind the same project whose saved image we selected, even when
+            # a shared GUI backend is currently attached to another project.
+            project = str(root)
+        flash_arguments = {'firmware': str(Path(firmware).resolve()),
                            'verify': not getattr(args, 'no_verify', False),
                            'reset_after': not getattr(args, 'no_reset', False)}
         for key in ('target_part', 'base_address', 'board', 'hpm_flash_cfg', 'swd_clock'):
@@ -69,8 +91,6 @@ def run(args):
             flash_arguments = validate_flash_request(flash_arguments)
         except ValueError as error:
             raise SystemExit(str(error)) from error
-    if project in (None, '.'):
-        project = getattr(args, 'project_root_positional', None)
     duration = getattr(args, 'duration', 0)
     if not math.isfinite(duration) or duration < 0:
         raise SystemExit('duration must be finite and nonnegative')

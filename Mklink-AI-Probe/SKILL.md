@@ -11,8 +11,8 @@ description: 使用 MKLink/MicroLink 操作目标 MCU：固件烧录、内存与
   缺 MCP/参数时在 Skill 根目录运行 `python scripts/skill_update.py check --force --json`。
   本会话只查一次。离线可继续；新版安装须用户同意，见
   [安装与更新](references/install.md)。
-- **下载后端**：除 HPM ROM 或用户指定方式外，依次选工程现有 IDE、pyOCD、脱机。
-  先读[下载优先级](references/firmware-download-priority.md)，复用已确认的 Keil 配置。
+- **下载后端**：除 HPM ROM 或用户指定方式外，依次选 IDE、pyOCD、脱机。
+  先读[下载优先级](references/firmware-download-priority.md)，复用 Keil 配置；工程初始化可选。
 - 优先使用共享 MCP；先读[共享后台](references/shared-runtime.md)，参数以 schema/`--help` 为准。
   **GUI 已打开也可连接**：`connect(probe=...)` 复用工程和符号；`gui_call` 调用已声明的共享能力。
   RTT 已运行时无参数 `rtt_start()` 订阅，用 `rtt_read_channel` 读取。

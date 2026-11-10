@@ -1603,7 +1603,7 @@ def create_app(
         try:
             with contextlib.redirect_stdout(buf):
                 loop = asyncio.get_event_loop()
-                await loop.run_in_executor(None, lambda: _cli_project_init(project_root))
+                exit_code = await loop.run_in_executor(None, lambda: _cli_project_init(project_root))
             output = buf.getvalue()
 
             # Reload updated config and project info
@@ -1614,7 +1614,7 @@ def create_app(
             firmware_check_result = {"status": "skipped", "reason": "offline-project-init"}
 
             return {
-                "success": True,
+                "success": exit_code == 0,
                 "output": output,
                 "config": config,
                 "project_info": project_info,

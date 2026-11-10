@@ -141,3 +141,55 @@ def test_invalid_cli_flash_does_not_attach(monkeypatch):
     monkeypatch.setattr(sys, 'argv', ['mklink', 'flash', '--firmware', 'demo.bin', '--base-address', '-1'])
     with pytest.raises(SystemExit, match='address'):
         cli.main()
+
+
+@pytest.mark.parametrize('explicit_image', [False, True])
+def test_cli_flash_selects_saved_image_or_explicit_override(monkeypatch, tmp_path, explicit_image):
+    from mklink import cli, runtime_cli
+    from mklink.project_config import save_project_info
+    root = tmp_path / 'project'
+    root.mkdir()
+    save_project_info(str(root), {'device': 'STM32G071GBU6', 'hex_path': 'build/demo.hex'})
+    calls = []
+    class Client:
+        def __init__(self, **kwargs): pass
+        def connect(self, **kwargs): calls.append(('connect', kwargs))
+        def start_job(self, action, **kwargs):
+            calls.append((action, kwargs))
+            return {'job_id': 'test', 'state': 'succeeded'}
+        def close(self): calls.append(('close', {}))
+    monkeypatch.setattr(runtime_cli, 'RuntimeClient', Client)
+    monkeypatch.chdir(tmp_path)
+    options = ['--firmware', 'override.bin', '--target-part', 'OTHER_PART'] if explicit_image else []
+    monkeypatch.setattr(sys, 'argv', ['mklink', 'flash', '--project-root', str(root), '--probe', 'chosen', *options])
+    cli.main()
+    assert calls[0][1]['project_root'] == str(root)
+    assert calls[1][0] == 'flash'
+    image = tmp_path / 'override.bin' if explicit_image else root / 'build' / 'demo.hex'
+    assert calls[1][1]['arguments']['firmware'] == str(image)
+    if explicit_image:
+        assert calls[1][1]['arguments']['target_part'] == 'OTHER_PART'
+    assert calls[-1][0] == 'close'
+
+
+@pytest.mark.parametrize('project_info', [{}, {'hex_path': 'demo.hex', 'bin_path': 'demo.bin'}])
+def test_cli_flash_missing_or_ambiguous_saved_image_fails_before_connect(monkeypatch, tmp_path, project_info):
+    from mklink import cli, runtime_cli
+    from mklink.project_config import save_project_info
+    save_project_info(str(tmp_path), project_info)
+    monkeypatch.setattr(runtime_cli, 'RuntimeClient', lambda **_: pytest.fail('Missing image attached'))
+    monkeypatch.setattr(sys, 'argv', ['mklink', 'flash', '--project-root', str(tmp_path)])
+    with pytest.raises(SystemExit, match='--firmware'):
+        cli.main()
+
+
+@pytest.mark.parametrize('contents', ['["not-an-object"]', '{broken'])
+def test_cli_flash_invalid_saved_config_fails_before_connect(monkeypatch, tmp_path, contents):
+    from mklink import cli, runtime_cli
+    folder = tmp_path / '.mklink'
+    folder.mkdir()
+    (folder / 'project_info.json').write_text(contents, encoding='utf-8')
+    monkeypatch.setattr(runtime_cli, 'RuntimeClient', lambda **_: pytest.fail('Invalid config attached'))
+    monkeypatch.setattr(sys, 'argv', ['mklink', 'flash', '--project-root', str(tmp_path)])
+    with pytest.raises(SystemExit, match='project_info.json'):
+        cli.main()

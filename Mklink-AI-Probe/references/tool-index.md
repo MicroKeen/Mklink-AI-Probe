@@ -44,7 +44,7 @@
 | `web-entry` | 安装跨平台 URL Handler、自动生成 U 盘/桌面快速启动页、启动/停止其自有 Web 服务 |
 | `mcp` | 启动 MCP server（stdio，供 Claude Code / 其他 MCP client 调用；本 plugin 自动拉起） |
 | `remote` | 工程师侧直连 VPN/局域网站点：注册/选择、状态、能力、重连、原子上传与高风险操作 |
-| `project-init` | 离线解析 IAR/Keil 工程并初始化配置；不枚举或连接下载器 |
+| `project-init` | 可选的离线配置工具：导入 Keil/IAR/HPM，或显式保存通用工程型号和固件/符号路径；不枚举或连接下载器 |
 | `mcu-detect` | 只读检查统一算法目录（多候选按算法 ID 选择） |
 | `project-info` | 显示项目配置状态 |
 | `flash` | 用户显式要求原生 MKLink 串口/FLM 路径时使用；自动下载先走 IDE，再走 pyOCD，最后脱机 API |

@@ -156,6 +156,10 @@ def _detect_hpm_segger_project(project_root: str) -> dict | None:
         board = target.get("board") or cache.get("BOARD") or build_dir.name.split("_", 1)[0]
         soc = target.get("soc", "")
         device = target.get("target_device_name") or (f"{soc}x" if soc else board)
+        if not (str(board).lower() in HPM_BOARD_FLASH_CFG
+                or str(device).upper().startswith("HPM")
+                or cache.get("HPM_BUILD_TYPE")):
+            continue
         cmake_candidates.append((
             bin_file.stat().st_mtime,
             {
@@ -225,15 +229,48 @@ def _detect_hpm_segger_project(project_root: str) -> dict | None:
     return None
 
 
-def _cli_project_init(project_root: str):
+def _cli_project_init(
+    project_root: str, *, target_part: str | None = None,
+    firmware: str | None = None, elf: str | None = None,
+) -> int:
     """离线解析工程；连接、算法和 RTT 在使用时解析，不固化猜测的硬件信息。"""
     from pathlib import Path
     from mklink.keil_parser import find_uvprojx, parse_uvprojx
     from mklink.iar_parser import find_ewp, parse_ewp
     from mklink.project_config import (
-        get_mklink_dir, lint_json_file, load_project_info,
+        get_mklink_dir, lint_json_file, load_config, load_project_info,
         save_config, save_project_info,
     )
+
+    root = Path(project_root).expanduser().resolve()
+    if not root.is_dir():
+        print(f"[FAIL] 项目目录不存在: {root}")
+        return 1
+    project_root = str(root)
+
+    explicit = {}
+    if target_part is not None:
+        if not target_part.strip() or len(target_part) > 128:
+            print("[FAIL] --target-part 需要非空的精确器件型号（最多 128 字符）")
+            return 1
+        explicit["device"] = target_part.strip()
+    for option, value, suffixes in (
+        ("--firmware", firmware, {".hex", ".bin"}),
+        ("--elf", elf, {".elf", ".axf", ".out"}),
+    ):
+        if value is None:
+            continue
+        path = Path(value).expanduser()
+        if not path.is_absolute():
+            path = root / path
+        if not value.strip() or path.suffix.lower() not in suffixes or path.is_dir():
+            print(f"[FAIL] {option} 需要文件路径，支持 {', '.join(sorted(suffixes))}")
+            return 1
+        path = str(path.resolve())
+        if option == "--firmware":
+            explicit["bin_path" if Path(path).suffix.lower() == ".bin" else "hex_path"] = path
+        else:
+            explicit.update(axf_path=path, elf_path=path, out_path=path)
 
     # Reinitialization must not overwrite malformed or user-maintained settings.
     for name in ("config.json", "project_info.json", "keil_project.json",
@@ -242,12 +279,26 @@ def _cli_project_init(project_root: str):
             error = lint_json_file(project_root, name)
             if error:
                 print(f"[FAIL] {error}；原配置未修改")
-                return
+                return 1
 
-    hpm = _detect_hpm_segger_project(project_root)
-    uvp = find_uvprojx(project_root)
-    ewp = find_ewp(project_root)
-    if hpm:
+    saved = load_project_info(project_root) or {}
+    if target_part is not None:
+        previous_target = str(saved.get("device") or saved.get("target_part") or "").strip()
+        legacy_profile = (load_config(project_root) or {}).get("mcu_key")
+        if (previous_target and previous_target.casefold() != explicit["device"].casefold()) or legacy_profile:
+            print(f"[FAIL] 已有目标配置 {previous_target or legacy_profile!r} 与显式配置 "
+                  f"{explicit['device']!r} 需要核对；原配置未修改。请确认项目目录并核对旧目标/profile，"
+                  "避免沿用其他目标的内存布局、算法或 RTT 地址。")
+            return 1
+    # Explicit target input is sufficient for any build system; do not guess
+    # an IDE or its generated outputs in this mode.
+    generic = target_part is not None or saved.get("ide_type") == "Generic"
+    hpm = None if generic else _detect_hpm_segger_project(project_root)
+    uvp = None if generic else find_uvprojx(project_root)
+    ewp = None if generic else find_ewp(project_root)
+    if generic:
+        info = {"ide_type": saved.get("ide_type") or "Generic"}
+    elif hpm:
         info = hpm
     elif uvp:
         info = parse_uvprojx(uvp)
@@ -259,12 +310,16 @@ def _cli_project_init(project_root: str):
         info = parse_ewp(ewp)
         if info:
             info["ide_type"] = "IAR"
+    elif saved.get("device") or saved.get("target_part"):
+        info = {}
     else:
-        print("[FAIL] 未找到 Keil、IAR 或 HPM SDK 工程")
-        return
-    if not info:
+        print("[FAIL] 未识别到可导入的工程或目标型号；通用工程可用 "
+              "project-init --target-part <型号> [--firmware <HEX/BIN>] [--elf <ELF/AXF>] 保存配置。")
+        print("[INFO] 也可直接 flash --firmware <HEX/BIN> --target-part <型号>，无需初始化。")
+        return 1
+    if info is None or (not info and (uvp or ewp)):
         print("[FAIL] 工程解析失败；原配置未修改")
-        return
+        return 1
 
     # Keep only inputs needed by build/download/symbol tools. Do not infer a
     # profile key from a shared SW-DP ID, scan serial ports or copy an FLM here.
@@ -275,17 +330,18 @@ def _cli_project_init(project_root: str):
         "ram_size", "scatter_file", "bin_base", "download_base", "board",
         "hpm_flash_cfg",
     }
-    saved = load_project_info(project_root) or {}
     saved.update({key: value for key, value in info.items()
                   if key in fields and value not in (None, "", 0)})
+    saved.update(explicit)
     save_project_info(project_root, saved)
     if not (get_mklink_dir(project_root) / "config.json").exists():
         save_config(project_root, {"swd_clock": 1000000})
 
-    print(f"[OK] {info.get('ide_type', 'HPM SDK')} · {info.get('device', '未指定器件')}")
-    print(f"  固件: {info.get('bin_path') or info.get('hex_path') or '未配置'}")
+    print(f"[OK] {saved.get('ide_type', 'Generic')} · {saved.get('device') or saved.get('target_part') or '未指定器件'}")
+    print(f"  固件: {saved.get('bin_path') or saved.get('hex_path') or '未配置'}")
     print("[OK] 已保存精简工程配置；已有连接、RTT 和工具链设置保持不变")
     print("[INFO] 连接时自动发现端口；烧录时按精确器件/地址选择算法，缺失或不明确时停止")
+    return 0
 
 
 def _cli_copy_flm(project_root: str, *, probe=None, flm=None, request_id=None):
@@ -301,7 +357,7 @@ def _cli_copy_flm(project_root: str, *, probe=None, flm=None, request_id=None):
     if not source:
         project = load_project_info(project_root)
         if project is None:
-            print("[FAIL] 项目未配置，先运行 project-init 或用 --flm 指定本地算法")
+            print("[FAIL] 未指定本地算法；用 --flm <本地 FLM 文件> 指定，复制算法无需初始化工程")
             return 1
         flm_name = project.get("flm_name", "")
         if not flm_name:
@@ -339,7 +395,7 @@ def _cli_project_info(project_root: str):
     from mklink.discovery import check_flm_on_microkeen
 
     if not is_configured(project_root):
-        print("[*] 项目未配置，运行 `python -m mklink project-init` 初始化")
+        print("[*] 尚未保存工程配置。可选用 project-init 导入工程或 --target-part 显式配置；直接烧录可指定 --firmware 和 --target-part。")
         return
 
     config = load_config(project_root)
@@ -2054,8 +2110,11 @@ def main():
     _add_project_root_arg(iar_parser_cmd)
 
     # project-init 子命令
-    init_parser = subparsers.add_parser("project-init", help="离线初始化精简工程配置（Keil/IAR/HPM；不探测硬件）")
+    init_parser = subparsers.add_parser("project-init", help="可选的离线工程配置（显式通用配置或 Keil/IAR/HPM 导入；不探测硬件）")
     _add_project_root_arg(init_parser)
+    init_parser.add_argument("--target-part", help="精确器件型号；适用于 CMake/CLion 等任意工程")
+    init_parser.add_argument("--firmware", "--hex", dest="firmware", help="保存 HEX/BIN 路径（相对项目根目录，可尚未生成）")
+    init_parser.add_argument("--elf", "--axf", dest="elf", help="保存 ELF/AXF/OUT 符号路径（相对项目根目录，可尚未生成）")
 
     # mcu-detect 子命令
     mcu_detect_parser = subparsers.add_parser("mcu-detect", help="只读检查 MCU 或模糊搜索统一算法目录")
@@ -2104,7 +2163,7 @@ def main():
     flash_parser = subparsers.add_parser("flash", help="通过共享后台烧录 HEX/BIN")
     _add_project_root_arg(flash_parser)
     flash_parser.add_argument("--port", help="COM 端口（默认自动检测）")
-    flash_parser.add_argument("--hex", "--firmware", dest="hex", help="显式 HEX/BIN 文件路径")
+    flash_parser.add_argument("--hex", "--firmware", dest="hex", help="HEX/BIN 文件路径；省略时使用工程中唯一的固件路径")
     flash_parser.add_argument("--target-part", help="精确器件型号")
     flash_parser.add_argument("--base-address", type=lambda value: int(value, 0), help="BIN 起始地址")
     flash_parser.add_argument("--board", help="HPM 开发板型号")
@@ -2855,7 +2914,8 @@ def main():
     elif args.command == "iar-parse":
         _cli_iar_parse(_resolve_project_root(args))
     elif args.command == "project-init":
-        _cli_project_init(_resolve_project_root(args))
+        return _cli_project_init(_resolve_project_root(args), target_part=args.target_part,
+                                 firmware=args.firmware, elf=args.elf)
     elif args.command == "mcu-detect":
         return _cli_mcu_detect(
             _resolve_project_root(args),

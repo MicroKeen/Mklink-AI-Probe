@@ -922,8 +922,9 @@ class Device:
         )
         if not mcu_profile and not explicit_custom and not requested_target and not project_hpm:
             raise DeviceError(
-                "Unknown MCU profile; run `python -m mklink mcu-detect` "
-                "or `python -m mklink project-init` before flashing"
+                "Target MCU is not specified; pass --target-part <exact-part> "
+                "(SDK: target_part=...) with the firmware. Initialization is optional; "
+                "use `mklink project-init --target-part <exact-part>` to save a project default."
             )
 
         flash_base = "0x08000000"

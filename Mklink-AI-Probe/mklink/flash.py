@@ -630,7 +630,7 @@ def burn_hex_file(
             mcu_key = "custom"
             catalog_required = True
         else:
-            raise FlashError("mcu_key 未配置，请先运行 `python -m mklink project-init`")
+            raise FlashError("缺少目标型号；可用 `mklink flash --firmware <HEX/BIN> --target-part <型号>` 直接烧录，或在 project_info.json 保存 device。")
 
     flash = MKLinkFlash.connect(port)
     try:
