@@ -21,6 +21,7 @@ var I18N = {
     // Control toolbar
     start: '开始', pause: '暂停', resume: '恢复', stop: '停止',
     running: '运行中', buffer: '缓冲区', interval: '间隔', apply: '应用',
+    target_read_interrupted: '目标读取中断，等待恢复',
     superwatch_interval_invalid: '采样间隔不能小于 1 µs（0.000001 s），且不能大于 60 s。',
     buffer_memory_tip: 'Worker 历史缓存预计内存',
     // Trigger toolbar
@@ -150,6 +151,7 @@ var I18N = {
     y_axis_tip: 'Y axis: scroll to zoom; hold the left mouse button and drag; double-click for auto range',
     start: 'Start', pause: 'Pause', resume: 'Resume', stop: 'Stop',
     running: 'Running', buffer: 'Buffer', interval: 'Interval', apply: 'Apply',
+    target_read_interrupted: 'Target read interrupted, waiting for data',
     superwatch_interval_invalid: 'Sampling interval must be at least 1 µs (0.000001 s) and at most 60 s.',
     buffer_memory_tip: 'Estimated Worker history memory',
     trigger: 'Trigger', idle: 'Idle', armed: 'Armed', triggered: 'Triggered', done: 'Done',

@@ -1015,8 +1015,11 @@ function updateCollectionUI(state) {
   btnPause.disabled = (state === 'stopped');
   btnStop.disabled = (state === 'stopped');
 
-  badge.textContent = t(state) || (state.charAt(0).toUpperCase() + state.slice(1));
-  badge.className = 'status-' + state;
+  var interrupted = IS_SUPERWATCH_MODE && state === 'running' && replayLiveStatus?.target_read_interrupted === true;
+  var label = interrupted ? 'target_read_interrupted' : state;
+  badge.setAttribute('data-i18n', label);
+  badge.textContent = t(label) || (state.charAt(0).toUpperCase() + state.slice(1));
+  badge.className = interrupted ? 'status-waiting' : 'status-' + state;
 
   if (state === 'running') {
     if (IS_SUPERWATCH_MODE && previousState !== 'running') {
@@ -3651,6 +3654,7 @@ function updateReplayControls() {
   document.getElementById('btn-start').classList.toggle('active', playing);
   document.getElementById('btn-pause').classList.toggle('active', !playing);
   var badge = document.getElementById('collection-status-badge');
+  badge.removeAttribute('data-i18n');
   badge.textContent = (CONFIG.lang === 'en' ? 'Replay · ' : '回放 · ') + t(playing ? 'running' : 'paused');
   badge.className = playing ? 'status-running' : 'status-paused';
 }

@@ -1937,6 +1937,7 @@ class SuperWatchStreamManager:
         self._completed_read_cycles = 0
         self._dropped_read_cycles = 0
         self._read_errors = 0
+        self._active_mux_watch = None
         self._rate_timestamps = deque()
         self._actual_rate = 0.0
         self._binary_dropped_batches = 0
@@ -2272,7 +2273,8 @@ class SuperWatchStreamManager:
                         completed_integrity = dict(self._stream_integrity)
                         try:
                             session.start()
-                            if getattr(session, '_mux_watch', None) is not None:
+                            self._active_mux_watch = getattr(session, '_mux_watch', None)
+                            if self._active_mux_watch is not None:
                                 self._acquisition_mode = "cdc-mux"
                             while (
                                 not stop_event.is_set()
@@ -2371,6 +2373,7 @@ class SuperWatchStreamManager:
                             raise
                         finally:
                             failure = sys.exc_info()[1]
+                            self._active_mux_watch = None
                             try:
                                 session.stop()
                             except Exception as stop_error:
@@ -3090,8 +3093,11 @@ class SuperWatchStreamManager:
         with self._read_lock:
             _payload, snapshot_json, metadata_version = self._metadata_cache
             write_events = list(self._write_events)
+        watch = self._active_mux_watch
+        interrupted = state == "running" and watch is not None and watch.target_read_interrupted
         return {
             "state": state,
+            "target_read_interrupted": interrupted,
             "interval": self._interval,
             "error": self._error,
             "items": json.loads(snapshot_json),
@@ -3102,7 +3108,7 @@ class SuperWatchStreamManager:
             "read_cycles": self._completed_read_cycles,
             "read_drops": self._dropped_read_cycles,
             "read_errors": self._read_errors + self._stream_integrity.get('firmware_read_errors', 0),
-            "actual_rate": round(self._actual_rate, 6),
+            "actual_rate": 0.0 if interrupted else round(self._actual_rate, 6),
             "binary_drops": {
                 "batches": self._binary_dropped_batches,
                 "items": self._binary_dropped_items,

@@ -838,6 +838,26 @@ describe('WaveformViewer VOFA binary transport', () => {
     } finally { allocation?.mockRestore(); runtime.cleanup() }
   })
 
+  it('shows an interrupted target read without stopping collection and clears it on recovery', async () => {
+    const runtime = await loadRttViewerRuntime('SuperWatch')
+    try {
+      const badge = document.getElementById('collection-status-badge')!
+      const start = document.getElementById('btn-start') as HTMLButtonElement
+      const stop = document.getElementById('btn-stop') as HTMLButtonElement
+      runtime.probe.syncStatus({ state: 'running', target_read_interrupted: true, actual_rate: 0 })
+      expect(badge.dataset.i18n).toBe('target_read_interrupted')
+      expect(badge.className).toBe('status-waiting')
+      expect(document.getElementById('sample-rate-badge')?.textContent).toBe('0.00 Hz')
+      expect(start.disabled).toBe(true)
+      expect(stop.disabled).toBe(false)
+      runtime.probe.syncStatus({ state: 'running', target_read_interrupted: false, actual_rate: 100 })
+      expect(badge.dataset.i18n).toBe('running')
+      expect(document.getElementById('sample-rate-badge')?.textContent).toBe('100.00 Hz')
+      runtime.probe.syncStatus({ state: 'stopped' })
+      expect(badge.dataset.i18n).toBe('stopped')
+    } finally { runtime.cleanup() }
+  })
+
   it('keeps the transport failure reason visible while backend status remains running', async () => {
     const runtime = await loadRttViewerRuntime()
     try {

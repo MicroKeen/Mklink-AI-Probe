@@ -73,6 +73,10 @@ class MuxWatchSession:
         # samples to recover, including slow configurations and batched delivery.
         self._read_failure_timeout = max(3.0, self.period / 1000000 * 3 + 0.5)
 
+    @property
+    def target_read_interrupted(self):
+        return self._read_failure_since is not None
+
     def start(self):
         # DumpMemoryStreamSession validates capacity before opening transport.
         # Negotiate units only after the real firmware capabilities are known.
