@@ -1,20 +1,20 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-12T17:00:35+08:00",
+  "updated_at": "2026-11-12T19:39:12+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.5.0-fixes",
-    "head": "c66523b8",
-    "remote_head": "c66523b8",
-    "working_tree": "以上为已推送的产品提交，已构建并以普通用户覆盖安装；安装包及 Web 均为本提交，含通用工程配置、符号旁配置和手动日志转换。验证报告与记忆另行提交。未合并或发布。"
+    "head": "1aa0b671",
+    "remote_head": "1aa0b671",
+    "working_tree": "以上为已推送的修复及测试提交，产品运行文件与 e1e8e24f 相同；Mac ARM/Intel 候选已原生构建并通过最终 DMG 包内自检，完整 Skill 已生成。报告与记忆另行提交。Windows 已安装版本仍为 c66523b8，未合并或发布。"
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "手动 Excel/TXT 转换及普通用户覆盖安装已验收，等待 PR 审阅",
-    "current_task": "SuperWatch 停止后手动转 Excel，RTT 停止后手动转带时间戳 TXT；停止记录均不自动转换。Web、Skill/CLI 与 MCP 共用能力。实物记录、跨 Excel 行数上限分页、原始文件一致性及普通用户覆盖安装通过，见[手动转换报告](../verification/v050-manual-recording-export.md)。继续在 [PR #79](https://github.com/MicroKeen/Mklink-AI-Probe/pull/79) 审阅。"
+    "status": "macOS 兼容性修复与 ARM/Intel 测试安装包已交付，待 Mac 实物验收",
+    "current_task": "修复 macOS onefile 后端启动、USB 接口/卷身份及查询范围；改善慢枚举时的共享会话续约和缺少平台更新提示，纠正旧固件 status 6 的过度归因。Windows 回归已处理所有已知失败。STOP 审计已同步固件会话，独立补丁尚未刷写。见[Mac 修复及包验证](../verification/v050-macos-compatibility.md)，继续在 [PR #79](https://github.com/MicroKeen/Mklink-AI-Probe/pull/79) 审阅。"
   },
   "milestones": [
     {
@@ -29,6 +29,10 @@
     }
   ],
   "verification": [
+    {
+      "area": "macOS 兼容性与跨平台回归",
+      "result": "Windows Python 全量 6929 通过、2 个 hil_core.observe 跳过；唯一剩余的 DLL 路径审计夹具修正后，独立包完整 6 项复测通过。GUI 全量 1219 项、最终相关 280 项及生产构建通过。两种 Mac 原生 USB 各 73 项通过、1 项 Windows 专属跳过；最终 DMG 的签名、冻结 CLI/MCP、内置算法、Web 健康与正常退出通过，ARM/Intel 启动约 5.593/11.6 秒。DMG 和配套 Skill 已下载/生成并校验，见[报告及哈希](../verification/v050-macos-compatibility.md)。浏览器验证中英文更新提示与重试；Mac 原生 GUI、Gatekeeper 和实物 USB 未验。"
+    },
     {
       "area": "SuperWatch 配置与手动日志转换",
       "result": "手动转换 56 项、共享后台/流/边界 296 项、GUI 152 项通过，生产构建通过。冻结安装版实物记录 1,114,032 组，Excel 两页 1,048,575 / 65,457 行、4,456,128 个值与 JSONL 对应；RTT 505 行 TXT 对应，7 个原始文件哈希不变。GUI 手动触发、实际 CLI/MCP 重复请求复用任务且不停止采集。见[转换报告](../verification/v050-manual-recording-export.md)。符号旁配置原有软件/浏览器证据见[配置报告](../verification/v050-superwatch-profile.md)；前一安装候选已验证真实 AXF 重启恢复，本候选解析 6,718 个变量并保存四变量、500000 缓存与 1 µs 间隔。"
@@ -46,12 +50,8 @@
       "result": "普通 V4 修复候选实物拔插跨 12.637 秒缺口原订阅恢复，V4.7.4 健康检查通过，223,728 组、零读错及队列丢弃，中位 43,486.6 组/秒。V3.6.10 实刷及拔插恢复通过，1,484,544 组，零队列丢弃、序号异常和时间倒退，恢复后中位 43,056.7 组/秒。旧 V3.6.8 缺采样能力，无同条件旧版基线。版本及未验范围见[恢复验证记录](../verification/v050-superwatch-swclk.md)。"
     },
     {
-      "area": "合并回归",
-      "result": "集成提交 `0b80e790` 与主线合并提交 `cf034fe1` 的文件树一致。Python 全量 6846 项通过，2 项因缺少 `hil_core.observe` 跳过。GUI 全量 1203 项通过，生产 Web 构建通过。"
-    },
-    {
       "area": "普通权限连接",
-      "result": "原分支 1015 项回归覆盖只读日志、权限恢复和不重放。与 PR #78 集成后，在 Windows 普通权限进程中拒绝读取临时 jobs.json，GUI 使用的选择并连接接口成功连接 V4.7.3 真机。任务查询返回 503；恢复权限后，同一后台找回原 request_id，日志字节未变。"
+      "result": "原分支 1015 项回归覆盖只读日志、权限恢复和不重放。与 PR #78 集成后，在 Windows 普通权限进程中拒绝读取临时 jobs.json，GUI 使用的选择并连接接口成功连接 V4.7.3 真机。任务查询返回 503；恢复权限后，同一后台找回原 request_id，日志字节未变。 集成提交 `0b80e790` 与主线合并提交 `cf034fe1` 的文件树一致。Python 全量 6846 项通过，2 项因缺少 `hil_core.observe` 跳过。GUI 全量 1203 项通过，生产 Web 构建通过。"
     },
     {
       "area": "发布、验收与清理",
@@ -70,7 +70,8 @@
     "跨会话固件联测固定上位机提交并核对 mklink/runtime 模块导入路径；主工作区和全局 editable 入口不自动代表当前任务版本。",
     "project-init 是可选离线配置工具；通用工程可显式传型号和文件，直接烧录不依赖初始化。型号或镜像不明确时要求补充输入，不猜测，也不自动迁移已有芯片配置。",
     "RTT / SuperWatch 实时记录 JSONL；停止记录不自动转换。用户手动将 SuperWatch 转为 Excel、RTT 转为带主机时间戳的 UTF-8 TXT，三端共用低优先级后台转换；Excel 保留采样相对时间，开始日期写在 Info 页。JSONL 保留作无损回放源。",
-    "SuperWatch 配置由共享后台保存在 AXF/ELF 旁，名称为原文件名加 .superwatch.json；三端共用名称与修订协议，不存变量地址、不自动开始采集。显示修改防抖，样本接收不写配置；浏览器上传只能保存到后台副本旁。"
+    "SuperWatch 配置由共享后台保存在 AXF/ELF 旁，名称为原文件名加 .superwatch.json；三端共用名称与修订协议，不存变量地址、不自动开始采集。显示修改防抖，样本接收不写配置；浏览器上传只能保存到后台副本旁。",
+    "macOS 候选仅 ad-hoc 签名且不启用 Hardened Runtime；正式 Developer ID 构建必须在 PyInstaller 冻结阶段正确签内嵌库。候选不发布到正式更新索引。慢 USB 枚举移出事件循环，心跳有界等待；实际操作仍检查身份、代际和占用，不重放未知结果。"
   ],
   "hardware": {
     "操作前": "重新核对下载器型号、目标和占用。固件变更由指定会话协调，升降级按本次授权执行。VCC、OTP 操作分别确认。",
@@ -80,12 +81,14 @@
   "known_limits": [
     "普通读取 P95 和间隔读取稳定低于 1 ms、最大采样间隔 20 µs、40 µs 翻转零漏采仍是未达目标。",
     "公网远程中继继续延期。独立 [S3 PR #65](https://github.com/MicroKeen/Mklink-AI-Probe/pull/65) 仍开放。其他硬件的[历史未验范围](known-limits-20261030.md)按需查阅。",
-    "转换入口针对后台最近一次记录，应在开启下一次记录前触发；没有历史文件选择器或全局转换并发上限。Excel 约 15 位有效数字，原始 JSONL 不变。转换仍消耗 CPU/磁盘，本轮未做完整真机性能 A/B；冻结 Excel 父进程退出后仍运行的时间窗口未直接观测，详见报告。"
+    "转换入口针对后台最近一次记录，应在开启下一次记录前触发；没有历史文件选择器或全局转换并发上限。Excel 约 15 位有效数字，原始 JSONL 不变。转换仍消耗 CPU/磁盘，本轮未做完整真机性能 A/B；冻结 Excel 父进程退出后仍运行的时间窗口未直接观测，详见报告。",
+    "Mac ARM/Intel DMG 是 0.4.3 标记的未公证候选，未做 Finder 覆盖安装、Gatekeeper、原生窗口及 macOS 27 真机 USB 验收。Windows 本轮未覆盖安装，也未做新的硬件吞吐/P95/调试共存 A/B；客户 ioreg 3.7→0.15 秒未独立复现。",
+    "STOP 案例中，V4 源码确认 0x17 重连失败会误报 6；固件会话提供修正为 5 的独立补丁和离线证据，尚未应用或刷写。客户固件版本、完整芯片型号与电气条件未齐备；持续 STOP 的调试访问不保证可唤醒，status 5 可能包含恢复未确认。"
   ],
   "next_actions": [
-    "审阅 PR #79 的普通用户安装、SuperWatch 恢复提示、通用工程配置、手动 Excel/TXT 转换及符号旁配置；合并和发布仍需明确指令，并执行全量及受影响实际环境门禁。",
-    "当前已覆盖安装 c66523b8 本地未签名候选，测试结束应用/后台已退出并释放端口。继续按 0.4.3 基线核对后续采集改动；V3.6.10/V4.7.4 固件由固件项目维护。",
-    "后续沿用 codex/v0.5.0-fixes 工作树；接手时 fetch microkeen 并核对实际分支、远端和已有改动。"
+    "在用户 Mac 上验收对应 ARM/Intel 候选的首次启动、覆盖安装、探针接口/卷身份和真实查询耗时，再核对共享会话及 MCP 重载。当前软件与包内自检不替代真实环境门禁。",
+    "固件会话继续维护 STOP 状态码补丁；客户信息齐备并获得明确实物安排后再做同条件 STOP/唤醒验证，不自动抢占调试器或刷写设备。",
+    "审阅 PR #79 的本轮 Mac 修复及既有普通用户安装、SuperWatch 恢复、通用工程、符号旁配置和手动 Excel/TXT 转换。合并、签名和正式发布仍需明确指令；继续 codex/v0.5.0-fixes，接手时 fetch 并核对实际状态。"
   ],
   "continuation_protocol": [
     "后续合并、签名或正式发布须有新的明确指令。"
