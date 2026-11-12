@@ -4,6 +4,13 @@ import pytest
 
 from mklink.device import Device, DeviceError
 from mklink.mux import MuxError, MuxTargetError, MuxTransport, SLEEP_ACCESS_COMMAND, packet
+
+
+def test_busy_status_does_not_claim_debugger_ownership_and_keeps_opcode():
+    error = MuxTargetError(6, SLEEP_ACCESS_COMMAND)
+    assert error.status == 6 and error.op == SLEEP_ACCESS_COMMAND
+    assert 'access preparation incomplete' in str(error)
+    assert 'not confirmed' in str(error) and 'opcode 0x17' in str(error)
 from mklink.sleep_debug import DHCSR, configure, halted, halted_snapshot
 from mklink.capture_clock import V3_CLOCKS
 

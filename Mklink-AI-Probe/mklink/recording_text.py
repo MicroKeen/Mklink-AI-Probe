@@ -11,6 +11,7 @@ import re
 import subprocess
 import sys
 import threading
+import time
 import uuid
 
 if __package__ in (None, ''):
@@ -110,7 +111,16 @@ def _save_status(path, value):
     try:
         with temporary.open('x', encoding='utf-8') as stream:
             json.dump(value, stream, ensure_ascii=False)
-        os.replace(temporary, path)
+        # Windows readers briefly hold handles without delete sharing. Keep
+        # the completed output and retry only this atomic status publication.
+        for attempt in range(11):
+            try:
+                os.replace(temporary, path)
+                break
+            except PermissionError as exc:
+                if getattr(exc, 'winerror', None) not in (5, 32, 33) or attempt == 10:
+                    raise
+                time.sleep(.02)
     finally:
         temporary.unlink(missing_ok=True)
 

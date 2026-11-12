@@ -143,7 +143,8 @@ def get_clean_package(tmp_path_factory):
             "MKLINK_TEST_ENDPOINT": BUILD_ENDPOINT_SENTINEL,
             "MKLINK_TEST_HARDWARE_ID": BUILD_HARDWARE_SENTINEL,
             "MKLINK_STCP_LIBRARY": str(
-                ROOT / "native" / "stcp_bridge" / "build" / "mklink-stcp.dll"
+                os.environ.get("MKLINK_STCP_LIBRARY")
+                or ROOT / "native" / "stcp_bridge" / "build" / "mklink-stcp.dll"
             ),
             "PIP_DISABLE_PIP_VERSION_CHECK": "1",
         }

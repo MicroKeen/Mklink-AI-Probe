@@ -33,6 +33,48 @@ def workbook_rows(path):
                 for name in archive.namelist() if name.startswith('xl/worksheets/sheet') and name.endswith('.xml')}
 
 
+@pytest.mark.parametrize('winerror', [5, 32, 33])
+def test_export_status_survives_transient_windows_reader(tmp_path, monkeypatch, winerror):
+    from mklink import recording_text as module
+    path = tmp_path / 'status.json'
+    path.write_text('{"export_state":"generating"}')
+    original = module.os.replace
+    attempts, waits = [], []
+    def replace(source, target):
+        attempts.append(True)
+        if len(attempts) < 3:
+            error = PermissionError('reader still holds manifest')
+            error.winerror = winerror
+            raise error
+        original(source, target)
+    monkeypatch.setattr(module.os, 'replace', replace)
+    monkeypatch.setattr(module.time, 'sleep', waits.append)
+    module._save_status(path, {'export_state': 'completed'})
+    assert json.loads(path.read_text())['export_state'] == 'completed'
+    assert len(attempts) == 3 and waits == [.02, .02]
+    assert not list(tmp_path.glob('*.tmp'))
+
+
+@pytest.mark.parametrize('winerror,attempts_expected', [(5, 11), (None, 1)])
+def test_export_status_permanent_denial_preserves_previous_manifest(tmp_path, monkeypatch, winerror, attempts_expected):
+    from mklink import recording_text as module
+    path = tmp_path / 'status.json'
+    previous = '{"export_state":"generating"}'
+    path.write_text(previous)
+    attempts = []
+    def replace(*args):
+        attempts.append(True)
+        error = PermissionError('persistent access failure')
+        error.winerror = winerror
+        raise error
+    monkeypatch.setattr(module.os, 'replace', replace)
+    monkeypatch.setattr(module.time, 'sleep', lambda _: None)
+    with pytest.raises(PermissionError):
+        module._save_status(path, {'export_state': 'completed'})
+    assert len(attempts) == attempts_expected and path.read_text() == previous
+    assert not list(tmp_path.glob('*.tmp'))
+
+
 def test_superwatch_manual_excel_preserves_columns_time_and_boundaries(tmp_path):
     recorder = SuperWatchRecorder(tmp_path, max_values=2)
     recorder.append(array('f', [1.25, -2.5, 3.75]), array('d', [.001, .002, 1234.567]),

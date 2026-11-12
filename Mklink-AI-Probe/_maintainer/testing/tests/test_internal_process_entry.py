@@ -89,19 +89,20 @@ def test_recording_worker_filename_launch_without_pythonpath(tmp_path):
 
 
 @pytest.mark.parametrize('entry', ['cli', 'remote'])
-def test_text_export_internal_entry_writes_companion_without_hardware(entry, tmp_path):
+@pytest.mark.parametrize('flag', ['--internal-recording-text', '--internal-recording-export'])
+def test_text_export_internal_entry_writes_companion_without_hardware(entry, flag, tmp_path):
     base = tmp_path / 'superwatch-test'
     base.with_name(base.name + '-0001.jsonl').write_text('{"v":42,"_t":0.000001}\n', encoding='utf-8')
     manifest = tmp_path / 'text-export.json'
     manifest.write_text(json.dumps(dict(kind='superwatch', base=str(base), parts=1,
-        started_at=1700000000, complete=True, source_error='', text_state='generating',
-        text_path='', text_parts=0, text_error='')), encoding='utf-8')
+        started_at=1700000000, complete=True, source_error='', export_state='generating',
+        export_format='txt', export_path='', export_parts=0, export_error='')), encoding='utf-8')
     command = ([sys.executable, '-m', 'mklink'] if entry == 'cli' else
                [sys.executable, str(ROOT/'packaging/site_agent/entry.py')])
-    result = subprocess.run(command + ['--internal-recording-text', str(manifest)],
+    result = subprocess.run(command + [flag, str(manifest)],
                             capture_output=True, env=dict(os.environ, PYTHONPATH=str(ROOT)),
                             cwd=tmp_path, timeout=10)
     assert result.returncode == 0, result.stderr
     status = json.loads(manifest.read_text(encoding='utf-8'))
-    assert status['text_state'] == 'completed'
-    assert '[t=0.000001000 s] v=42' in Path(status['text_path']).read_text(encoding='utf-8')
+    assert status['export_state'] == 'completed'
+    assert '[t=0.000001000 s] v=42' in Path(status['export_path']).read_text(encoding='utf-8')

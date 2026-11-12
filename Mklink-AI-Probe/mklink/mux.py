@@ -41,8 +41,10 @@ def sleep_rpc_timeout(size, *, write=False, verify=False):
 class MuxTargetError(RuntimeError):
     def __init__(self, status, op=None):
         self.status = status
+        self.op = op
         if status == 6:
-            message = ('Multiplex target busy (status 6); debugger access is currently reserved. '
+            message = ('Multiplex target busy or access preparation incomplete (status 6); '
+                       'debugger ownership is one possible cause, not confirmed by this status. '
                        'Retry explicitly when available; the request was not replayed')
         elif status == 5 and op == SLEEP_ACCESS_COMMAND:
             message = 'Sleep access or restoration of the original core state was not confirmed; submitted writes must not be replayed'
@@ -52,6 +54,8 @@ class MuxTargetError(RuntimeError):
                 message += ' A submitted write or reset may have an unknown outcome.'
         else:
             message = f'Multiplex target status {status}; failed writes may have an unknown outcome'
+        if op is not None:
+            message += f' (opcode 0x{op:02X})'
         super().__init__(message)
 
 

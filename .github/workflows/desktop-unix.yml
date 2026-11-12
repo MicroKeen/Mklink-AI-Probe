@@ -1,4 +1,5 @@
 name: macOS and Linux desktop packages
+run-name: Native ${{ inputs.target }} package (${{ github.ref_name }})
 on:
   # Only dispatch after an explicit maintainer request for these platforms.
   workflow_dispatch:
@@ -17,7 +18,7 @@ permissions:
   contents: read
 concurrency:
   group: desktop-unix-${{ github.ref }}-${{ inputs.target }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 jobs:
   package:
     strategy:
