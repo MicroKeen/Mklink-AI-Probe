@@ -871,10 +871,6 @@ async function writeValue(): Promise<void> {
     const result = await catalog.writeSymbol(symbol.path, requestedValue)
     if (disposed || editor.generation !== catalog.generation.value || !props.deviceConnected) return
     writeSuccess[symbol.path] = result.value
-    if (result.mode === 'legacy-gap') {
-      toast.info(tr('已写入。当前固件或目标地址使用兼容写入，期间有采样空档，曲线历史已保留。',
-        'Written. Compatibility writes for this firmware or target address have a sampling gap; curve history is preserved.'))
-    }
     if (editing.value === editor) editing.value = null
   } catch (cause) {
     toast.error(cause instanceof Error ? cause.message : String(cause))

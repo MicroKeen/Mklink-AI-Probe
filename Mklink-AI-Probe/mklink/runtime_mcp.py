@@ -310,6 +310,9 @@ def build_server():
         Other target sessions are retired and must explicitly reconnect; GUI pages follow.
         Conflicting project/symbol settings still require explicit reconfiguration.
         The default scope connects the USB probe without requiring a target MCU.
+        Relay firmware_compatibility.warnings and operation firmware_warning to the user.
+        Missing capabilities require matching probe firmware; never stop capture or
+        upgrade automatically. Version strings alone do not establish support.
         scope='uart' attaches without MCU/CDC initialization, including the unselected lobby.
         Use gui_call for uart_ports, serial/modbus start/status/stop, serial_send, modbus_transaction
         and modbus_probe (one read-only address probe through the existing worker).

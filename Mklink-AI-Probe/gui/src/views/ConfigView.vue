@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { Download, RefreshCw, RotateCcw, Tag, Unplug, Usb } from '@lucide/vue'
 import { invoke } from '@tauri-apps/api/core'
 import { useMklinkApi } from '../composables/useMklinkApi'
@@ -47,6 +48,16 @@ const { message: confirmationMessage, confirm: confirmPortNaming, answer: answer
 const symbolCatalog = useSymbolCatalog()
 
 const activeSection = ref<ConfigSection>('local')
+const route = useRoute()
+const router = useRouter()
+watch(() => route?.query.section, section => {
+  if (section === 'firmware') activeSection.value = 'firmware'
+}, { immediate: true })
+watch(activeSection, section => {
+  if (route?.query.section === 'firmware' && section !== 'firmware') {
+    void router.replace({ query: { ...route.query, section: undefined } })
+  }
+})
 const config = ref<ProjectConfig>({})
 const localPort = ref('')
 const portOptions = ref<{ label: string; value: string }[]>([])

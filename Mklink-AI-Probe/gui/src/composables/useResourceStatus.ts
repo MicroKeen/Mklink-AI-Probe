@@ -1,5 +1,6 @@
 import { ref, readonly } from 'vue'
 import { API_BASE } from '../lib/runtimeEndpoint'
+import { useToast } from './useToast'
 
 export interface ResourceLeaseStatus {
   owner: string
@@ -32,6 +33,7 @@ export function useResourceStatus() {
       const resp = await fetch(`${API_BASE}/api/dash/conflict-check?type=${type}`)
       if (resp.ok) {
         const data = await resp.json()
+        if (data.firmware_warning) useToast().info(data.firmware_warning)
         return data.conflicts || []
       }
     } catch {

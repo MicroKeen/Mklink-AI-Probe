@@ -1867,6 +1867,9 @@ class SuperWatchTransactionError(RuntimeError):
         super().__init__(str(cause))
 
     def to_detail(self) -> dict:
+        from mklink.firmware_compatibility import FirmwareUpgradeRequired
+        if isinstance(self.cause, FirmwareUpgradeRequired):
+            return {**self.cause.to_detail(), 'phase': self.phase}
         return {
             "code": self.code,
             "phase": self.phase,
@@ -2294,26 +2297,8 @@ class SuperWatchStreamManager:
                                                     future.set_exception(exc)
                                                 raise
                                         else:
-                                            # Legacy firmware needs command mode, but the logical
-                                            # capture, metadata epoch and device clock stay intact.
-                                            try:
-                                                session.stop()
-                                                write_error = None
-                                                try:
-                                                    device.write_memory(address, payload)
-                                                except Exception as exc:
-                                                    write_error = exc
-                                                finally:
-                                                    session.start()
-                                                if write_error is not None:
-                                                    future.set_exception(write_error)
-                                                else:
-                                                    future.set_result({"data": payload, "acknowledged": True, "verified": False,
-                                                                       "mode": "legacy-gap", "timestamp_us": None})
-                                            except Exception as exc:
-                                                if not future.done():
-                                                    future.set_exception(exc)
-                                                raise
+                                            # Recheck at consumption, without interrupting capture.
+                                            future.set_exception(self._live_write_error(address, payload))
                                 frames = session.read_frames(max_bytes=1024 * 1024)
                                 self._stream_integrity = _sum_counter_snapshots(
                                     completed_integrity, session.stats,
@@ -2467,6 +2452,13 @@ class SuperWatchStreamManager:
                     recorder.request_stop()
             return recorder.stop() if recorder else self.recording_status()
 
+    def _live_write_error(self, address, payload):
+        from mklink.firmware_compatibility import FirmwareUpgradeRequired
+        if not self._live_write_supported:
+            return FirmwareUpgradeRequired('SuperWatch 采集中写入 / live writes', 'MUX target commands (0x12)')
+        return RuntimeError('该地址不在采集中可写 RAM 范围内；采集保持运行，请先手动停止采集。 '
+                            'Address is outside live-write RAM ranges; stop acquisition explicitly before writing.')
+
     def write_symbol(self, path: str, *, generation: int, value: object) -> dict:
         from mklink.symbol_catalog import decode_descriptor, encode_descriptor
 
@@ -2486,6 +2478,11 @@ class SuperWatchStreamManager:
                 raise RuntimeError("SuperWatch stream is stopping")
 
             if was_running:
+                if not self._live_write_supported or not any(
+                    a <= descriptor.address and descriptor.address + len(payload) <= b
+                    for a, b in self._live_write_ranges
+                ):
+                    raise SuperWatchTransactionError('write', self._live_write_error(descriptor.address, payload))
                 from concurrent.futures import Future, TimeoutError as WriteTimeout
                 future = Future()
                 with self._read_lock:

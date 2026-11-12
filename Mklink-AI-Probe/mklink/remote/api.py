@@ -2114,6 +2114,7 @@ def create_app(
 
     @app.get("/api/device/status")
     async def device_status():
+        from mklink.firmware_compatibility import compatibility_snapshot
         if not _state["device"]:
             symbols = _state.get('symbol_device')
             return {"connected": False, "probe_product": "MKLink", "state": "disconnected", "axf": symbols.axf_status if symbols else {"loaded": False},
@@ -2131,6 +2132,7 @@ def create_app(
             "axf": dev.axf_status,
             "clock_warning": getattr(dev, "clock_warning", None),
             "clock_hz": getattr(dev, "clock_hz", None),
+            "firmware_compatibility": compatibility_snapshot(getattr(dev, '_bridge', None)) if dev.connected else None,
         }
 
     @app.get("/api/probe/firmware-check")
@@ -2330,7 +2332,7 @@ def create_app(
     @app.post("/api/device/reset")
     async def reset_device():
         from mklink.remote.dashboards import active_bridge_dashboards
-        from mklink.runtime_capabilities import capture_reset_supported
+        from mklink.runtime_capabilities import capture_reset_supported, capture_reset_hint
         async with _dashboard_start_lock(_state):
             device = _state.get('device')
             if device is None or not device.connected:
@@ -2339,7 +2341,7 @@ def create_app(
             if active and not capture_reset_supported(_state, active):
                 raise HTTPException(409, {
                     'busy': active,
-                    'hint': 'This firmware or capture transport does not support in-stream software reset; acquisition was left running',
+                    'hint': capture_reset_hint(_state, active),
                 })
             operation = 'capture-reset' if active else 'reset'
             async with async_target_debug_lease(_state, operation):
@@ -2622,9 +2624,13 @@ def create_app(
             n for n in BRIDGE_DASHBOARD_TYPES
             if n != type and managers.get(n) and managers[n].running
         ]
-        from mklink.runtime_capabilities import multiplex_captures
+        from mklink.runtime_capabilities import multiplex_captures, capture_firmware_warning
         conflicts = [name for name in running if not multiplex_captures(_state, {type, name})]
-        return {"conflicts": conflicts, "running": running}
+        result = {"conflicts": conflicts, "running": running}
+        warning = capture_firmware_warning(_state, [type, *running]) if conflicts else None
+        if warning:
+            result['firmware_warning'] = warning
+        return result
 
     @app.get("/api/dash/rtt/stream")
     async def rtt_sse_stream():

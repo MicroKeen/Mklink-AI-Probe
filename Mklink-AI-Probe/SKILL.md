@@ -37,7 +37,7 @@ description: 使用 MKLink/MicroLink 操作目标 MCU：固件烧录、内存与
   128 B 分片；MUX 大块采集最多 4096 B，须协商能力。兼容 DMPM 须显式选择、
   固件支持且连接空闲，命令最多 **511 UTF-8 字节**；不自动回退。
   详见[内存与符号](references/commands-memory.md)。
-- **内存通道**：共享读写自动优先 MUX，无需先启动采集；失败不改道重发。
+- **内存通道**：读写优先 MUX；失败不改道重发。缺固件能力须提示升级。
 - **flush**：单批总数据最多 **12 KiB**、最多 **8 个地址项**。超额时按批串行，
   每批等待提示符；不得与 dump、VOFA、RTT 或 SystemView 并发。
 - **RTT/SystemView**：地址只允许省略或传目标已知可写 RAM 内的 4 字节对齐地址，

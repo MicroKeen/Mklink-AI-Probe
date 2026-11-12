@@ -480,7 +480,7 @@ async function readBaudrates(): Promise<void> {
     if (result.device !== requested) throw new Error(tr('串口身份已变化，请刷新', 'Port identity changed; refresh ports'))
     ports.value = ports.value.map(port => port.device === requested ? result : port)
     if (result.uart_baud?.source !== 'firmware') {
-      toast.info(tr('固件未提供已适配档位，保留常用档位', 'Firmware has no adapted-rate list; keeping common rates'))
+      toast.info(result.uart_baud?.firmware_warning || tr('固件未提供已适配档位，保留常用档位', 'Firmware has no adapted-rate list; keeping common rates'))
     }
   } catch (caught) {
     if (!disposed) toast.error(caught instanceof Error ? caught.message : String(caught))

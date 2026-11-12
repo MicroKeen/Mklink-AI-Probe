@@ -35,7 +35,9 @@ def read_snapshot(bridge, part_number):
     profile = family(part_number)
     if not _supported(bridge):
         if part_number in ('HPM5301', 'HPM5301XEGX'):
-            return dict(legacy.read_snapshot(bridge, part_number), profile=profile, capability='legacy_user')
+            return dict(legacy.read_snapshot(bridge, part_number), profile=profile, capability='legacy_user',
+                        firmware_warning='当前固件仅支持 HPM5301 用户区 Word 69–79；其他区域请升级匹配的下载器固件。 '
+                        'Upgrade matching probe firmware for UART OTP regions beyond HPM5301 user words 69–79.')
         raise ValueError('请升级 V4 下载器固件以读取此系列的 UART OTP')
     rows, identity = [], None
     # Bounded replies fit the probe's fixed output buffer. A denied word remains

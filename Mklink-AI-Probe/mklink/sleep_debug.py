@@ -227,4 +227,8 @@ def configure(device, enabled):
             set_mode(bridge)
             device.set_debug_clock(previous, interface='SWD')
             raise
-    return {'enabled': True, 'clock_hz': device.clock_hz, 'previous_clock_hz': previous}
+    result = {'enabled': True, 'clock_hz': device.clock_hz, 'previous_clock_hz': previous}
+    if not getattr(bridge, '_sleep_debug_atomic', False):
+        from mklink.firmware_compatibility import upgrade_message
+        result['firmware_warning'] = upgrade_message('Atomic sleep access (currently using slow compatibility access)', 'MUX HELLO 0x1000')
+    return result

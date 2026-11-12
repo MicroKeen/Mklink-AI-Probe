@@ -422,7 +422,7 @@ class MKLinkFlash:
             if not lines or lines[-1] != "-1" or any(
                 word in capability.lower() for word in ("error", "traceback")
             ):
-                raise FlashError("HPM HEX requires downloader firmware with hpm.program_hex support")
+                raise FlashError("HPM HEX requires downloader firmware with hpm.program_hex support; 请升级匹配的下载器固件 / upgrade the matching probe firmware")
         filename = self._copy_to_microkeen(bin_path, microkeen_filename)
         if not filename:
             raise FlashError("无法将文件拷贝到 MICROKEEN 磁盘")

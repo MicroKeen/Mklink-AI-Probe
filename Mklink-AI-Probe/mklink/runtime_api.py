@@ -698,17 +698,18 @@ class RuntimeGate:
         # Download operations temporarily yield captures inside shared admission.
         from mklink.remote.dashboards import BRIDGE_DASHBOARD_TYPES, active_bridge_dashboards
         active = active_bridge_dashboards()
-        from mklink.runtime_capabilities import multiplex_captures, MUX_MEMORY_PATHS, capture_reset_supported
+        from mklink.runtime_capabilities import multiplex_captures, MUX_MEMORY_PATHS, capture_reset_supported, capture_reset_hint, capture_firmware_warning
         mux_active = multiplex_captures(c.app.state.mklink_state, active)
         if path in {f"/api/dash/{name}/start" for name in BRIDGE_DASHBOARD_TYPES}:
             requested = path.split('/')[-2]
             if active and not multiplex_captures(c.app.state.mklink_state, [*active, requested]):
-                return await reject(409, "A CDC acquisition is already running; subscribe to its cached data or stop it explicitly")
+                return await reject(409, capture_firmware_warning(c.app.state.mklink_state, [*active, requested])
+                                    or "A CDC acquisition is already running; subscribe to its cached data or stop it explicitly")
         if (path.startswith(("/api/device/", "/api/probe/")) and path not in {"/api/device/connect", "/api/device/flash", "/api/device/parse-axf"}) or path in {'/api/dash/superwatch/inspect', '/api/mcu-detect'}:
             sharing_reset = path == '/api/device/reset' and capture_reset_supported(c.app.state.mklink_state, active)
             if active and not ((mux_active and path in MUX_MEMORY_PATHS) or sharing_reset):
                 if path == '/api/device/reset':
-                    return await reject(409, 'In-stream software reset is unavailable for this firmware or capture transport; acquisition was left running')
+                    return await reject(409, capture_reset_hint(c.app.state.mklink_state, active))
                 return await reject(409, {"busy": active, "hint": "Read a shared dashboard snapshot or explicitly stop acquisition first"})
         async def observe(message):
             if message['type'] == 'http.response.start':

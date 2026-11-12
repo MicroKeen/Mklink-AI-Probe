@@ -14,6 +14,11 @@ def baud_options(lines=()):
     common = {'profile': None, 'rates': list(COMMON_RATES), 'source': 'common'}
     lines = [line.strip() for line in lines if isinstance(line, str)]
     profiles = [line for line in lines if line.startswith('UART_BAUD_PROFILE=')]
+    if not profiles:
+        import re
+        if any(re.fullmatch(r'V[34]\.\d+\.\d+', line) for line in lines):
+            from mklink.firmware_compatibility import upgrade_message
+            common['firmware_warning'] = upgrade_message('Extended UART baud rates', 'UART_BAUD_PROFILE=1')
     lists = [line.removeprefix('UART_BAUDS=') for line in lines if line.startswith('UART_BAUDS=')]
     if profiles != ['UART_BAUD_PROFILE=1'] or len(lists) != 1 or len(lists[0]) > 512:
         return common

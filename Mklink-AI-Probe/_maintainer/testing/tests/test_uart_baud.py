@@ -22,7 +22,12 @@ def test_profile_one_uses_only_explicitly_advertised_rates():
     lines(('4000000', '4000000')), lines(('3000001',)), lines(('-1',)),
     lines(('1.5',)), lines(('４００００００',)), lines(())])
 def test_missing_or_invalid_profile_never_claims_old_high_rates(response):
-    assert uart_baud.baud_options(response) == {
+    result = uart_baud.baud_options(response)
+    warning = result.pop('firmware_warning', None)
+    assert bool(warning) == (response == ['V4.7.2'])
+    if warning:
+        assert 'upgrade' in warning and '升级' in warning
+    assert result == {
         'profile': None, 'rates': list(uart_baud.COMMON_RATES), 'source': 'common'}
 
 

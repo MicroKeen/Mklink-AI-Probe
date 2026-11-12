@@ -108,6 +108,32 @@ def capture_reset_supported(state, active):
             and mux.supports_software_reset)
 
 
+def capture_reset_hint(state, active):
+    from mklink.firmware_compatibility import upgrade_message
+    from mklink.mux import MuxTransport
+    mux = getattr(getattr(state.get('device'), '_bridge', None), '_mux', None)
+    if (multiplex_captures(state, active) and isinstance(mux, MuxTransport)
+            and mux.ready and not mux.supports_software_reset):
+        return upgrade_message('In-stream software reset', 'MUX HELLO 0x20') + ' Acquisition was left running.'
+    return 'In-stream software reset requires shared MUX capture; acquisition was left running. Check the active capture transport.'
+
+
+def capture_firmware_warning(state, active):
+    """Only proven firmware omissions explain otherwise compatible streams."""
+    from mklink.firmware_compatibility import upgrade_message
+    from mklink.mux import MuxTransport
+    bridge = getattr(state.get('device'), '_bridge', None)
+    if not set(active) <= {'rtt', 'superwatch', 'systemview'}:
+        return None
+    if getattr(bridge, '_mux_supported', None) is False:
+        return upgrade_message('Concurrent capture', 'MUX_TARGET=1')
+    mux = getattr(bridge, '_mux', None)
+    if ('systemview' in active and isinstance(mux, MuxTransport) and mux.ready
+            and not mux.capabilities & MuxTransport.RTT_UPDATE_CAPABILITY):
+        return upgrade_message('Concurrent RTT / SystemView', 'MUX HELLO 0x80')
+    return None
+
+
 for stream in STREAMS:
     for action in ('status', 'start', 'stop', 'pause', 'resume'):
         CAPABILITIES[f'{stream}_{action}'] = ('GET' if action == 'status' else 'POST', f'/api/dash/{stream}/{action}')

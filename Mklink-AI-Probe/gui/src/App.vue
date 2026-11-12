@@ -78,6 +78,9 @@
       </div>
       <button class="btn" data-testid="backend-recheck" @click="refreshHealth">{{ tr('重新检查', 'Check Again') }}</button>
     </div>
+    <FirmwareCompatibilityBanner v-if="backendState === 'alive' && deviceStatus.connected"
+      :compatibility="deviceStatus.firmware_compatibility" :remote="IS_REMOTE"
+      @open-firmware="router.push({ name: 'config', query: { section: 'firmware' } })" />
     <div class="app-main" :inert="IS_REMOTE && backendState !== 'alive'">
       <DashboardView v-if="initialBackendReady && dashboardVisited" v-show="currentTab === 'dashboard'" />
       <router-view v-if="initialBackendReady" v-slot="{ Component, route: viewRoute }">
@@ -123,6 +126,7 @@ import RemoteSessionBar from './components/RemoteSessionBar.vue'
 import StatusBar from './components/StatusBar.vue'
 import ToastContainer from './components/ToastContainer.vue'
 import AppUpdateBanner from './components/AppUpdateBanner.vue'
+import FirmwareCompatibilityBanner from './components/FirmwareCompatibilityBanner.vue'
 import VersionHistoryPopover from './components/VersionHistoryPopover.vue'
 import { useMklinkApi } from './composables/useMklinkApi'
 import { useBackendHealth } from './composables/useBackendHealth'

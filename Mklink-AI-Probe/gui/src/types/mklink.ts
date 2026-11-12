@@ -1,7 +1,7 @@
 export interface PortInfo {
   uart_kind?: 'mklink_uart' | 'mklink_rs485' | 'mklink_unknown' | 'generic'
   command_port?: string | null
-  uart_baud?: { profile: number | null; rates: number[]; source: 'firmware' | 'common' }
+  uart_baud?: { profile: number | null; rates: number[]; source: 'firmware' | 'common'; firmware_warning?: string }
   probe_id?: string
   alias?: string
   identity_stable?: boolean
@@ -72,7 +72,14 @@ export interface AxlStatus {
   error?: string
 }
 
+export interface FirmwareCompatibility {
+  checked: boolean
+  version: string | null
+  warnings: readonly { code: string; feature: string; feature_zh: string; required: string; message: string; action: string }[]
+}
+
 export interface DeviceStatus {
+  firmware_compatibility?: FirmwareCompatibility | null
   probe_product?: 'MKLink' | 'HPMLINK'
   connection_recovery?: { state: string; attempts: number; error?: string; errors?: string[]; restored_at?: number }
   device_generation?: number

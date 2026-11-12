@@ -104,41 +104,34 @@ def manager_peer(tmp_path, live=True, write_error=None, hpm=False):
     return manager, peer, operations
 
 
-@pytest.mark.parametrize('live', [True, False])
 @pytest.mark.parametrize('paused', [True, False])
-def test_write_preserves_worker_epoch_origin_and_paused_state(tmp_path, live, paused):
-    manager, peer, operations = manager_peer(tmp_path, live)
+def test_write_preserves_worker_epoch_origin_and_paused_state(tmp_path, paused):
+    manager, peer, operations = manager_peer(tmp_path)
     try:
         if paused: manager.pause()
         before = (manager._thread, manager._origin_us, manager._metadata_version)
         result = manager.write_symbol('gain', generation=1, value=1.5)
         assert result['acknowledged'] and not result['verified'] and result['value'] == 1.5
-        assert result['mode'] == ('cdc-mux' if live else 'legacy-gap')
+        assert result['mode'] == 'cdc-mux'
         assert (manager._thread, manager._origin_us, manager._metadata_version) == before
         assert manager.get_status()['state'] == ('paused' if paused else 'running')
         assert len(manager.get_status()['write_events']) == 1
-        if live:
-            assert not operations
-            assert not any(b[5] == 0x31 for b in peer.writes)
-        else:
-            assert len(operations) == 1
-            assert any(b[5] == 0x31 for b in peer.writes)
+        assert not operations
+        assert not any(b[5] == 0x31 for b in peer.writes)
     finally:
         manager.stop()
 
 
-@pytest.mark.parametrize('live', [True, False])
-def test_rejected_write_does_not_reset_or_stop_capture(tmp_path, live):
-    manager, peer, _ = manager_peer(tmp_path, live, RuntimeError('flush failed') if not live else None)
+def test_rejected_write_does_not_reset_or_stop_capture(tmp_path):
+    manager, peer, _ = manager_peer(tmp_path)
     peer.ack_status = 2
     try:
         before = manager._metadata_version
         manager.pause()
         with pytest.raises(RuntimeError, match='failed|unsupported'):
             manager.write_symbol('gain', generation=1, value=2.0)
-        if live:
-            manager._thread.join(timeout=1)
-        assert manager.get_status()['state'] == ('stopped' if live else 'paused')
+        manager._thread.join(timeout=1)
+        assert manager.get_status()['state'] == 'stopped'
         assert manager._metadata_version == before
         assert manager.get_status()['write_events'] == []
     finally: manager.stop()
@@ -157,16 +150,15 @@ def test_stopping_worker_rejects_idle_write(tmp_path):
     assert operations == []
 
 
-@pytest.mark.parametrize('live', [True, False])
-def test_hpm_capability_and_target_ram_intersection(tmp_path, live):
-    manager, peer, operations = manager_peer(tmp_path, live, hpm=True)
+def test_hpm_capability_and_target_ram_intersection(tmp_path):
+    manager, peer, operations = manager_peer(tmp_path, hpm=True)
     try:
         epoch = (manager._thread, manager._origin_us, manager._metadata_version)
         result = manager.write_symbol('gain', generation=1, value=3.125)
-        assert result['mode'] == ('cdc-mux' if live else 'legacy-gap')
+        assert result['mode'] == 'cdc-mux'
         assert result['acknowledged'] and not result['verified'] and result['value'] == 3.125
         assert manager._live_write_ranges == ((0x01200020, 0x01200024),)
-        assert manager.get_status()['live_write_supported'] is live
+        assert manager.get_status()['live_write_supported'] is True
         assert epoch == (manager._thread, manager._origin_us, manager._metadata_version)
     finally:
         manager.stop()
@@ -196,7 +188,7 @@ def test_hpm_session_rejects_unsupported_ranges_before_transmit(address, size, a
     session.stop()
 
 
-@pytest.mark.parametrize('mode', ['cdc-mux', 'legacy-gap'])
+@pytest.mark.parametrize('mode', ['cdc-mux'])
 def test_write_without_readback_preserves_worker_and_next_write(tmp_path, monkeypatch, mode):
     from mklink.mux_watch import MuxWatchSession
     manager, peer, operations = manager_peer(tmp_path, live=mode == 'cdc-mux')
@@ -257,3 +249,41 @@ def test_idle_write_acknowledges_without_readback(tmp_path):
     result = manager.write_symbol('gain', generation=1, value=1.5)
     assert result['acknowledged'] and result['verified'] is False and result['value'] == 1.5
     assert len(operations) == 1
+
+
+@pytest.mark.parametrize('paused', [False, True])
+@pytest.mark.parametrize('hpm', [False, True])
+def test_missing_live_write_capability_preserves_stream_and_requests_upgrade(tmp_path, paused, hpm):
+    from mklink.remote.dashboards import SuperWatchTransactionError
+    manager, peer, operations = manager_peer(tmp_path, live=False, hpm=hpm)
+    try:
+        if paused:
+            manager.pause()
+        before = (manager._thread, manager._origin_us, manager._metadata_version)
+        sent = len(peer.writes)
+        with pytest.raises(SuperWatchTransactionError) as error:
+            manager.write_symbol('gain', generation=1, value=1.5)
+        detail = error.value.to_detail()
+        assert detail['code'] == 'firmware_upgrade_required'
+        assert '升级' in detail['message'] and 'upgrade' in detail['message']
+        assert peer.writes[sent:] == [] and operations == []
+        assert (manager._thread, manager._origin_us, manager._metadata_version) == before
+        assert manager.get_status()['state'] == ('paused' if paused else 'running')
+        assert not manager._write_requests and manager.get_status()['write_events'] == []
+    finally:
+        manager.stop()
+
+
+def test_live_write_invalid_range_is_not_misreported_as_old_firmware(tmp_path):
+    from mklink.remote.dashboards import SuperWatchTransactionError
+    manager, peer, operations = manager_peer(tmp_path)
+    try:
+        manager._live_write_ranges = ()
+        sent = len(peer.writes)
+        with pytest.raises(SuperWatchTransactionError) as error:
+            manager.write_symbol('gain', generation=1, value=1.5)
+        assert error.value.to_detail()['code'] == 'superwatch_transaction_failed'
+        assert 'RAM' in str(error.value) and 'upgrade' not in str(error.value)
+        assert peer.writes[sent:] == [] and operations == [] and manager.running
+    finally:
+        manager.stop()
