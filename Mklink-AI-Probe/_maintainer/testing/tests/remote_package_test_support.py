@@ -213,6 +213,7 @@ def get_clean_package(tmp_path_factory):
         "build_log": log,
         "artifact": artifact,
         "manifest": manifest,
+        "stcp_library": Path(environment["MKLINK_STCP_LIBRARY"]),
         "elapsed_seconds": round(time.monotonic() - started, 2),
         "source_worktree": ROOT.parent,
         "source_product": ROOT,
