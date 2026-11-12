@@ -88,6 +88,11 @@ SHA-256。桌面应用与本地服务须先关闭，不打断正在进行的设�
 `--skill-only` / `--app-only` 限定更新范围；更新 Skill 后重启 AI 客户端或开新会话。
 Git checkout 不会被覆盖。旧复制式安装没有更新脚本时，重新安装完整官方 Skill 包。
 
+桌面提示“当前平台暂无可用更新”表示更新索引尚未提供本机平台的安装包，可以
+继续使用现有版本；它与“无法连接本地服务”是独立状态。若 macOS 后台日志包含
+Python 库的 `different Team IDs`，请保留版本、安装包来源与日志，获取修正后的
+Mac 安装包；完整 Skill 的 Python 环境与桌面内置后台是两个独立安装入口。
+
 ## ELF/AXF 解析后端
 
 MKLink 默认使用内置 `pyelftools`，以下功能不需要用户安装 Keil、GNU Arm 或系统 binutils：

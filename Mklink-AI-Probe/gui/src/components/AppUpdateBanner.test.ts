@@ -3,6 +3,16 @@ import { describe, expect, it } from 'vitest'
 import AppUpdateBanner from './AppUpdateBanner.vue'
 
 describe('AppUpdateBanner', () => {
+  it('presents an unavailable platform as information with no install action', async () => {
+    const wrapper = mount(AppUpdateBanner, {
+      props: { state: 'unavailable', version: '', progress: null, error: '' },
+    })
+    expect(wrapper.text()).toContain('当前平台暂无可用更新')
+    expect(wrapper.get('[data-testid="update-banner"]').attributes('role')).toBe('status')
+    expect(wrapper.find('[data-testid="install-update"]').exists()).toBe(false)
+    await wrapper.get('[data-testid="retry-update"]').trigger('click')
+    expect(wrapper.emitted('retry')).toHaveLength(1)
+  })
   it('shows background download progress without blocking the application', () => {
     const wrapper = mount(AppUpdateBanner, {
       props: { state: 'downloading', version: '0.2.0', progress: 0.42, error: '' },

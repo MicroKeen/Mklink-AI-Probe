@@ -16,7 +16,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: desktop-unix-${{ github.ref }}
+  group: desktop-unix-${{ github.ref }}-${{ inputs.target }}
   cancel-in-progress: true
 jobs:
   package:

@@ -41,18 +41,25 @@ def validate_mount(row):
 
 def macos_media_identities(tree, *, require_serial=True):
     """Associate IOMedia BSD names with the nearest USB device, not a label."""
+    from mklink.usb_platform import macos_usb_device, macos_identity_conflicts
     found = {}
-    def visit(node, identity=None):
+    def visit(node, device=None):
         if not isinstance(node, dict):
             return
-        if 'idVendor' in node and 'idProduct' in node:
-            serial = str(node.get('USB Serial Number') or '').strip().casefold()
-            identity = (node['idVendor'], node['idProduct'], serial) if serial or not require_serial else None
+        if macos_usb_device(node, device):
+            device = node
+        elif device is not None and macos_identity_conflicts(device, node):
+            return
+        identity = None
+        if device is not None:
+            serial = str(device.get('USB Serial Number') or '').strip().casefold()
+            if serial or not require_serial:
+                identity = (device['idVendor'], device['idProduct'], serial)
         name = node.get('BSD Name')
         if isinstance(name, str) and re.fullmatch(r'disk\d+(?:s\d+)*', name):
             found.setdefault(name, set()).add(identity)
         for child in node.get('IORegistryEntryChildren', []):
-            visit(child, identity)
+            visit(child, device)
     for node in tree if isinstance(tree, list) else [tree]:
         visit(node)
     return {name: next(iter(ids)) for name, ids in found.items()

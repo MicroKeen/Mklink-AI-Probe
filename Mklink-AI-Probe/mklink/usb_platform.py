@@ -6,6 +6,32 @@ import subprocess
 from pathlib import Path
 
 
+def macos_usb_device(node, parent=None):
+    """Identify device boundaries, not properties copied onto interface drivers."""
+    if 'idVendor' not in node or 'idProduct' not in node:
+        return False
+    kind = node.get('IOObjectClass') or node.get('IOClass') or ''
+    if kind in ('IOUSBHostDevice', 'IOUSBDevice'):
+        return True
+    if 'bDeviceClass' in node and 'bInterfaceNumber' not in node:
+        return True  # Device subclasses can have a vendor-specific IOObjectClass.
+    if kind or any(key in node for key in ('bInterfaceNumber', 'bInterfaceClass',
+                                           'IOCalloutDevice', 'IODialinDevice', 'BSD Name')):
+        return False
+    # Older registry snapshots may omit class metadata. Identical inherited
+    # properties do not create a new device; a distinct identity is a boundary.
+    return parent is None or macos_identity_conflicts(parent, node)
+
+
+def macos_identity_conflicts(device, node):
+    for key in ('idVendor', 'idProduct'):
+        if key in node and node[key] != device.get(key):
+            return True
+    serial = str(node.get('USB Serial Number') or '').strip().casefold()
+    expected = str(device.get('USB Serial Number') or '').strip().casefold()
+    return bool(serial and serial != expected)
+
+
 def _same_device(info, properties):
     if (properties.get("idVendor"), properties.get("idProduct")) != (getattr(info, "vid", None), getattr(info, "pid", None)):
         return False
@@ -18,7 +44,7 @@ def _interface_nodes(device):
     """Do not cross into another USB device while collecting interfaces."""
     result = []
     def visit(node):
-        if node is not device and "idVendor" in node and "idProduct" in node:
+        if node is not device and (macos_usb_device(node, device) or macos_identity_conflicts(device, node)):
             return
         number = node.get("bInterfaceNumber")
         if type(number) is int and 0 <= number <= 255:
@@ -42,8 +68,10 @@ def macos_interface_from_registry(info, tree):
     def visit(node, device=None, interface=None):
         if not isinstance(node, dict):
             return
-        if "idVendor" in node and "idProduct" in node:
+        if macos_usb_device(node, device):
             device, interface = node, None
+        elif device is not None and macos_identity_conflicts(device, node):
+            return
         if "bInterfaceNumber" in node:
             interface = node
         if device_path in (node.get("IOCalloutDevice"), node.get("IODialinDevice")):
@@ -74,12 +102,19 @@ def macos_interface_from_registry(info, tree):
 
 
 def macos_registry():
-    try:
-        result = subprocess.run(["/usr/sbin/ioreg", "-a", "-l", "-p", "IOService"],
-                                capture_output=True, check=True, timeout=5)
-        return plistlib.loads(result.stdout)
-    except (OSError, ValueError, plistlib.InvalidFileException, subprocess.SubprocessError):
-        return []
+    # IOService contains unrelated GPU/storage/network trees. -r keeps complete
+    # descendants (serial clients and IOMedia) of the selected USB device roots.
+    # Keep a fresh snapshot per enumeration and the legacy full-plane fallback.
+    for selection, timeout in ((['-r', '-c', 'IOUSBHostDevice'], 2), ([], 5)):
+        try:
+            result = subprocess.run(['/usr/sbin/ioreg', '-a', '-l', '-p', 'IOService', *selection],
+                                    capture_output=True, check=True, timeout=timeout)
+            tree = plistlib.loads(result.stdout)
+            if isinstance(tree, list) and tree and all(isinstance(node, dict) for node in tree):
+                return tree
+        except (OSError, ValueError, plistlib.InvalidFileException, subprocess.SubprocessError):
+            pass
+    return []
 
 
 def macos_interface_number(info):

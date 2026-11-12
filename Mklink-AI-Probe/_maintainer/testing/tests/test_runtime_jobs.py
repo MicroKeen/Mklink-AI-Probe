@@ -43,6 +43,29 @@ def fixture(monkeypatch, tmp_path):
         client.portal.call(asyncio.sleep, .03)
 
 
+def test_duplicate_submissions_across_async_discovery_execute_once(fixture, monkeypatch):
+    client, control, calls, _, release = fixture
+    async def scenario():
+        gate = asyncio.Event()
+        entered = asyncio.Event()
+        count = 0
+        async def identity(**kwargs):
+            nonlocal count
+            count += 1
+            if count == 2: entered.set()
+            await gate.wait()
+        monkeypatch.setattr(control, 'require_identity_async', identity)
+        first = asyncio.create_task(control.jobs.submit(body()))
+        second = asyncio.create_task(control.jobs.submit(body()))
+        await asyncio.wait_for(entered.wait(), 2)
+        gate.set()
+        results = await asyncio.gather(first, second)
+        assert results[0]['job_id'] == results[1]['job_id']
+        await asyncio.sleep(.02)
+    client.portal.call(scenario)
+    assert calls == ['reset']
+
+
 def body(action='reset', request_id='test-operation'):
     return {'action': action, 'request_id': request_id, 'confirm': True}
 
@@ -109,16 +132,17 @@ from mklink.runtime_jobs import RuntimeJobs
 import mklink.remote.dashboards as dashboards
 dashboards.active_bridge_dashboards = lambda: []
 async def main():
+    async def identity(): pass
     async def invoke(*args):
         Path(sys.argv[2]).write_text('one simulated operation', encoding='utf-8')
         await asyncio.Event().wait()
     control = SimpleNamespace(info={'jobs_path': sys.argv[1]},
         operation_lock=asyncio.Lock(), attach_lock=asyncio.Lock(), lifecycle_pending=0,
-        require_identity=lambda: None, online_job=lambda: None, invoke=invoke,
+        require_identity_async=identity, online_job=lambda: None, invoke=invoke,
         app=SimpleNamespace(state=SimpleNamespace(mklink_state={
             'device': SimpleNamespace(connected=True)})))
     jobs = RuntimeJobs(control)
-    jobs.submit({'action':'reset','request_id':'killed-request','confirm':True})
+    await jobs.submit({'action':'reset','request_id':'killed-request','confirm':True})
     await asyncio.Event().wait()
 asyncio.run(main())
 """, encoding='utf-8')
@@ -135,7 +159,7 @@ asyncio.run(main())
         process.kill()
         process.wait(timeout=10)
         restored = RuntimeJobs(control)
-        job = restored.submit({'action':'reset','request_id':'killed-request','confirm':True})
+        job = asyncio.run(restored.submit({'action':'reset','request_id':'killed-request','confirm':True}))
         assert job['job_id'] == accepted['job_id'] and job['state'] == 'unknown'
         assert not restored.tasks and not calls
         assert marker.read_text(encoding='utf-8') == 'one simulated operation'

@@ -97,3 +97,65 @@ def test_linux_sysfs_reads_hex_interface_and_checks_identity(tmp_path):
 def test_registry_failure_returns_unidentified(monkeypatch):
     monkeypatch.setattr(usb_platform.subprocess, 'run', lambda *a, **kw: (_ for _ in ()).throw(OSError('no ioreg')))
     assert usb_platform.macos_interface_number(port()) is None
+
+
+@pytest.mark.parametrize('data_parent', [False, True])
+@pytest.mark.parametrize('with_class', [False, True])
+def test_macos_inherited_properties_preserve_device_and_interface(data_parent, with_class):
+    tree = registry(data_parent)
+    tree[0]['IOObjectClass'] = 'IOUSBHostDevice'
+    for interface in tree[0]['IORegistryEntryChildren']:
+        interface.update(idVendor=0x0D28, idProduct=0x0202)
+        if with_class:
+            interface['IOObjectClass'] = 'IOUSBHostInterface'
+        for child in interface['IORegistryEntryChildren']:
+            child.update(idVendor=0x0D28, idProduct=0x0202)
+            if with_class:
+                child['IOObjectClass'] = 'IOSerialBSDClient'
+    assert usb_platform.macos_interface_from_registry(port('/dev/cu.usbmodem-fixture-4'), tree) == 4
+
+
+@pytest.mark.parametrize('conflict', [{'idVendor': 1}, {'idProduct': 1}, {'USB Serial Number': 'other'}])
+def test_macos_conflicting_interface_identity_is_rejected(conflict):
+    tree = registry()
+    tree[0]['IORegistryEntryChildren'][2].update(conflict)
+    assert usb_platform.macos_interface_from_registry(port('/dev/cu.usbmodem-fixture-4'), tree) is None
+
+
+def test_macos_interfaces_do_not_cross_a_real_nested_device():
+    tree = registry(True)
+    controls = tree[0]['IORegistryEntryChildren'][2]
+    tree[0]['IORegistryEntryChildren'].remove(controls)
+    tree[0]['IORegistryEntryChildren'].append({'IOObjectClass': 'IOUSBHostDevice',
+        'idVendor': 0x0D28, 'idProduct': 0x0202, 'USB Serial Number': 'fixture',
+        'IORegistryEntryChildren': [controls]})
+    assert usb_platform.macos_interface_from_registry(port('/dev/cu.usbmodem-fixture-4'), tree) is None
+
+
+def test_macos_device_subclasses_with_device_descriptors():
+    tree = registry()
+    tree[0].update(IOObjectClass='VendorUSBDevice', bDeviceClass=0)
+    assert usb_platform.macos_interface_from_registry(port('/dev/cu.usbmodem-fixture-4'), tree) == 4
+
+
+@pytest.mark.parametrize('first', ['ok', 'empty', 'invalid', 'error'])
+def test_macos_registry_prefers_device_subtrees_and_falls_back(monkeypatch, first):
+    import plistlib
+    calls = []
+    tree = registry()
+    def run(args, **kwargs):
+        calls.append((args, kwargs['timeout']))
+        if len(calls) == 1:
+            if first == 'error':
+                raise usb_platform.subprocess.TimeoutExpired(args, 2)
+            if first == 'invalid':
+                return SimpleNamespace(stdout=b'not a plist')
+            if first == 'empty':
+                return SimpleNamespace(stdout=plistlib.dumps([]))
+        return SimpleNamespace(stdout=plistlib.dumps(tree))
+    monkeypatch.setattr(usb_platform.subprocess, 'run', run)
+    assert usb_platform.macos_registry() == tree
+    assert calls[0][0][-3:] == ['-r', '-c', 'IOUSBHostDevice']
+    assert len(calls) == (1 if first == 'ok' else 2)
+    if first != 'ok':
+        assert calls[1][0][-2:] == ['-p', 'IOService']

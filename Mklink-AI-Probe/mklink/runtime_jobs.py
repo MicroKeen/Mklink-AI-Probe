@@ -120,7 +120,7 @@ class RuntimeJobs:
                 temporary.unlink(missing_ok=True)
                 raise
 
-    def submit(self, body):
+    async def submit(self, body):
         action, request_id = body.get('action'), body.get('request_id')
         arguments = body.get('arguments', {})
         if body.get('session_id') is not None:
@@ -168,7 +168,14 @@ class RuntimeJobs:
         if previous:
             return previous
         c = self.control
-        c.require_identity()
+        await c.require_identity_async()
+        # Discovery yields: another request may have accepted this request_id.
+        # Recheck the journal and session before the atomic acceptance below.
+        previous = self._previous(request_id, fingerprint)
+        if previous:
+            return previous
+        if body.get('session_id') is not None:
+            c.validate_session(body['session_id'])
         if c.lifecycle_pending or self.active or c.operation_lock.locked() or c.attach_lock.locked() or c.online_job():
             raise HTTPException(409, 'Another operation is active; no job was queued')
         from mklink.remote.dashboards import active_bridge_dashboards
@@ -372,7 +379,7 @@ def install_jobs(app, control):
 
     @api.post('/', status_code=202)
     async def submit(body: dict):
-        return control.jobs.submit(body)
+        return await control.jobs.submit(body)
 
     @api.get('/{job_id}')
     async def get(job_id: str):

@@ -96,6 +96,12 @@ the same rules as a separate file for the user's system administrator.
 CLI/MCP, Web assets, health and shutdown. This is package-content qualification,
 not interactive installation, native WebView or USB hardware acceptance.
 Mac candidate bundles use ad-hoc signing only and are not Developer ID notarized.
+The candidate configuration explicitly disables Hardened Runtime: ad-hoc binaries
+have no Team ID, so enabling its library validation on the onefile launcher can
+reject the embedded Python library. Verify signatures and execute the sidecar
+from the final DMG, after Tauri has signed it. A future Developer ID build must
+sign embedded libraries during PyInstaller freezing with the same identity;
+re-signing only the outer executable cannot repair a onefile payload.
 Candidate building does not authorize signing an update, merging or publishing.
 
 Native candidates also contain updater payloads: macOS `.app.tar.gz`, Linux

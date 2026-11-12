@@ -51,6 +51,13 @@ def main():
         finally:
             subprocess.run(["hdiutil", "detach", str(mount)], check=True)
         binary_root = destination / "Contents" / "MacOS"
+        # Validate the final Tauri-re-signed payload, not the pre-bundle sidecar.
+        subprocess.run(['codesign', '--verify', '--deep', '--strict', str(destination)], check=True)
+        for name in ('mklink-ai-probe', 'mklink-sidecar'):
+            signature = subprocess.run(['codesign', '-d', '--verbose=4', str(binary_root / name)],
+                                       check=True, capture_output=True, text=True).stderr
+            assert 'Signature=adhoc' in signature, 'Candidate unexpectedly uses a distribution identity'
+            assert not re.search(r'flags=.*\bruntime\b', signature), 'Ad-hoc candidate must not enforce Team ID library validation'
         updater_root = work / "updater-root"
         updater_root.mkdir()
         subprocess.run(["tar", "-xzf", str(next(output.glob("*.app.tar.gz"))), "-C", str(updater_root)], check=True)
@@ -119,6 +126,7 @@ def main():
               "package_contents": "DMG mounted/copied" if platform.system() == "Darwin" else "DEB and AppImage extracted",
               "updater_payload": "app.tar.gz matches DMG executables and preserves executable permissions" if platform.system() == "Darwin" else "DEB and AppImage payloads use installer-specific updater keys",
               "signed_update_installation": "not tested; unsigned candidate",
+              "macos_signatures": "final app verified; ad-hoc without hardened runtime" if platform.system() == 'Darwin' else None,
               "native_gui_interaction": "not tested", "system_installer_interaction": "not tested", "usb_hardware": "not tested"}
     (output / "qualification.json").write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))

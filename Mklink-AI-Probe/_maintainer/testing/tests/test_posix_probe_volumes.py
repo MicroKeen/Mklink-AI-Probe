@@ -25,6 +25,18 @@ def test_macos_media_binds_partition_to_physical_device_and_rejects_collision():
     assert posix.macos_media_identities([usb('', {'BSD Name': 'disk6'})]) == {}
 
 
+@pytest.mark.parametrize('serial', [None, 'FIRST'])
+def test_macos_media_inherits_identity_through_usb_interfaces(serial):
+    child = {'IOObjectClass': 'IOUSBHostInterface', 'idVendor': 0xd28, 'idProduct': 0x202,
+             'bInterfaceNumber': 0, 'IORegistryEntryChildren': [
+                 {'IOObjectClass': 'IOMedia', 'idVendor': 0xd28, 'idProduct': 0x202, 'BSD Name': 'disk4s1'}]}
+    if serial:
+        child['USB Serial Number'] = serial
+    assert posix.macos_media_identities([usb('FIRST', child)]) == {'disk4s1': (0xd28, 0x202, 'first')}
+    child['USB Serial Number'] = 'OTHER'
+    assert posix.macos_media_identities([usb('FIRST', child)]) == {}
+
+
 def test_macos_firmware_disk_without_serial_uses_real_volume_label(monkeypatch):
     tree = [usb('', {'BSD Name': 'disk4s1'}), {'BSD Name': 'disk0'}]
     monkeypatch.setattr('mklink.usb_platform.macos_registry', lambda: tree)

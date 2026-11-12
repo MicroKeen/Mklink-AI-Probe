@@ -3,7 +3,7 @@ import { relaunch } from '@tauri-apps/plugin-process'
 import { check, type Update } from '@tauri-apps/plugin-updater'
 import { ref } from 'vue'
 
-export type AppUpdateState = 'idle' | 'checking' | 'downloading' | 'ready' | 'installing' | 'error'
+export type AppUpdateState = 'idle' | 'checking' | 'downloading' | 'ready' | 'installing' | 'unavailable' | 'error'
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
@@ -50,8 +50,12 @@ export function useAppUpdater() {
       })
       state.value = 'ready'
     } catch (value) {
-      error.value = message(value)
-      state.value = 'error'
+      const detail = message(value)
+      // Only the updater's missing-platform response is informational. Network,
+      // signature and download failures must remain visible errors.
+      const missingPlatform = availableUpdate === null && /^None of the fallback platforms .+ were found in the response .platforms. object$/.test(detail)
+      error.value = missingPlatform ? '' : detail
+      state.value = missingPlatform ? 'unavailable' : 'error'
     }
   }
 
