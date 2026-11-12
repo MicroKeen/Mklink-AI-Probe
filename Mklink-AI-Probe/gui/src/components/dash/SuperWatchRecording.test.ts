@@ -13,6 +13,24 @@ beforeEach(() => {
   HTMLDialogElement.prototype.close = vi.fn()
 })
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); document.body.innerHTML = '' })
+it.each([
+  ['generating', 'TXT 生成中', 'Generating TXT'],
+  ['completed', 'TXT 已生成', 'TXT ready'],
+  ['failed', 'TXT 生成失败', 'TXT export failed'],
+])('shows separate TXT %s status after JSONL stops', async (state, zh, en) => {
+  vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({
+    active: false, state: 'completed', path: 'F:/logs/demo.jsonl', samples: 3,
+    text_state: state, text_path: 'F:/logs/demo.txt', text_error: state === 'failed' ? 'disk full' : '',
+  }) })))
+  const wrapper = mount(SuperWatchRecording)
+  try {
+    await flushPromises()
+    expect([zh, en]).toContain(wrapper.get('[data-testid="record-text-status"]').text())
+    expect(wrapper.get('[data-testid="sw-record-toggle"]').attributes('disabled')).toBeUndefined()
+    if (state === 'failed') expect(wrapper.text()).toContain('disk full')
+    if (state === 'completed') expect(wrapper.get('[data-testid="record-text-status"]').attributes('title')).toBe('F:/logs/demo.txt')
+  } finally { wrapper.unmount() }
+})
 it('uses one toggle, never starts recording on mount, and stops an existing recording', async () => {
   vi.stubGlobal('localStorage', { getItem: () => null, setItem: vi.fn() })
   const request = vi.fn(async (url: string) => ({ ok: true, json: async () => ({

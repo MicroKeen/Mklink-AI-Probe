@@ -1,6 +1,8 @@
 <template>
   <button class="panel-btn" data-testid="sw-record-toggle" :class="{ active: status.active }" :disabled="busy || (disabled && !status.active)" @click="status.active ? stop() : showPicker()">{{ status.active ? tr('停止记录', 'Stop recording') : tr('开始记录', 'Start recording') }}</button>
   <span v-if="status.path" class="record-result" :title="status.path">{{ status.active ? (status.samples ? tr('记录中', 'Recording') : tr('等待数据', 'Waiting for data')) : tr('已保存', 'Saved') }} · {{ status.samples || 0 }} {{ tr('条', 'samples') }}</span>
+  <span v-if="status.text_state && status.text_state !== 'pending'" class="record-result" data-testid="record-text-status" :title="status.text_path">{{ status.text_state === 'completed' ? tr('TXT 已生成', 'TXT ready') : status.text_state === 'failed' ? tr('TXT 生成失败', 'TXT export failed') : tr('TXT 生成中', 'Generating TXT') }}</span>
+  <span v-if="status.text_error" role="alert" class="record-error">{{ status.text_error }}</span>
   <span v-if="error || status.error" role="alert" class="record-error">{{ error || status.error }}</span>
   <Teleport to="body">
     <dialog ref="dialog" class="record-dialog" @keydown.stop>
@@ -11,6 +13,7 @@
         <div class="record-drives"><button v-for="drive in drives" :key="drive" type="button" @click="browse(drive)">{{ drive }}</button><button type="button" @click="browse(parent)">↑ {{ tr('上一级', 'Parent') }}</button></div>
         <div class="record-folders"><button v-for="dir in dirs" :key="dir.path" type="button" @click="browse(dir.path)">▸ {{ dir.name }}</button></div>
         <p>{{ tr('自动分段保存 JSONL，可在“日志回放”中按编号加载查看。', 'JSONL parts are saved automatically; open numbered parts in Log replay.') }}</p>
+        <p v-if="name !== 'Serial'">{{ tr('停止记录后会在同一目录后台生成带时间戳的 TXT，便于直接阅读。', 'After recording stops, timestamped TXT copies are generated in the same folder for reading.') }}</p>
         <p v-if="error" role="alert" class="record-error">{{ error }}</p>
         <footer><button type="button" @click="dialog?.close()">{{ tr('取消', 'Cancel') }}</button><button data-testid="sw-record-confirm" :disabled="busy || !directory.trim()">{{ tr('开始记录', 'Start recording') }}</button></footer>
       </form>
@@ -31,7 +34,7 @@ const storageKey = `mklink.${props.name.toLowerCase()}.recordDirectory`
 const route = (action: string) => `${props.endpoint}/${action}${props.name === 'SuperWatch' ? '' : '?channel=' + props.channel}`
 const emit = defineEmits<{ state: [state: string] }>()
 const tr = (zh: string, en: string) => language.value === 'en' ? en : zh
-type Recording = { active: boolean; state: string; samples?: number; path?: string; error?: string }
+type Recording = { active: boolean; state: string; samples?: number; path?: string; error?: string; text_state?: string; text_path?: string; text_error?: string }
 const status = ref<Recording>({ active: false, state: 'idle' })
 const directory = ref(localStorage.getItem(storageKey) || '')
 const dialog = ref<HTMLDialogElement>()

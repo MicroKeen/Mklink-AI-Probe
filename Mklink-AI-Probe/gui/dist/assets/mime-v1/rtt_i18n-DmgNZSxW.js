@@ -77,7 +77,7 @@ var I18N = {
       '已确认缺样的区间显示为灰色并断开连线。连续性未知时只断线，单凭两点时间间隔较长无法判定丢样。'
     ],
     help_sw_export_items: [
-      '打开<strong>日志</strong>，点击<strong>开始记录</strong>并选择后台电脑上的目录。记录按段保存为 JSONL，可在日志菜单打开回放。',
+      '打开<strong>日志</strong>，点击<strong>开始记录</strong>并选择后台电脑上的目录。记录按段保存为 JSONL，可在日志菜单打开回放；停止记录后自动生成带时间戳的 TXT 供直接阅读。',
       '<strong>PNG</strong> 保存当前波形图。'
     ],
     help_sw_pause_items: [
@@ -199,7 +199,7 @@ var I18N = {
       'Confirmed missing samples break the line and shade the gap. Unknown continuity breaks the line without shading. A long interval alone does not establish sample loss.'
     ],
     help_sw_export_items: [
-      'Open <strong>Logs</strong>, click <strong>Start recording</strong> and choose a folder on the backend computer. Logs are saved as JSONL parts. Open a log from the same menu to replay it.',
+      'Open <strong>Logs</strong>, click <strong>Start recording</strong> and choose a folder on the backend computer. JSONL parts support replay; timestamped TXT copies are generated automatically after recording stops.',
       '<strong>PNG</strong> saves the current waveform image.'
     ],
     help_sw_pause_items: [
