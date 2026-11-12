@@ -15,4 +15,4 @@ User choice: keep real-time JSONL recording; automatically create timestamped TX
 - [x] Failing behavior tests, converter and worker.
 - [x] Recorder integration and UI status.
 - [x] Correctness/performance/browser verification and review.
-- [ ] Memory/handoff, commit/push and PR update.
+- [x] Memory/handoff, commit/push and PR update.

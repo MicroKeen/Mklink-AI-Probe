@@ -1,20 +1,20 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-10T17:20:56+08:00",
+  "updated_at": "2026-11-12T13:57:47+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.5.0-fixes",
-    "head": "740d809c",
-    "remote_head": "740d809c",
-    "working_tree": "以上为通用工程初始化修复的产品代码提交。当前安装包仍为 8f8709a4，生产 Web 为 61d46690；本轮未重建或覆盖安装。"
+    "head": "997e38b9",
+    "remote_head": "997e38b9",
+    "working_tree": "以上为停止记录后生成 TXT 的产品代码提交，已推送。当前安装包仍为 8f8709a4、安装 Web 为 61d46690；不含通用工程初始化和本次日志改动，本轮未重建或覆盖安装。"
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "通用工程初始化已修复并推送，等待 PR 审阅",
-    "current_task": "CMake/CLion 可显式保存型号和固件/符号路径，project-init 为可选步骤；直接烧录和配置复用已验证。该修复与此前普通用户安装、SuperWatch 状态改动共同保留在 [PR #79](https://github.com/MicroKeen/Mklink-AI-Probe/pull/79)。见[验证记录](../verification/v050-project-init.md)。"
+    "status": "RTT / SuperWatch 可读 TXT 已完成并推送，等待 PR 审阅",
+    "current_task": "按用户选择保留实时 JSONL，停止后由独立低优先级进程生成同名带时间戳 TXT。界面显示转换状态，失败不影响 JSONL。代码与此前安装、SuperWatch 恢复提示、通用工程配置共同保留在 [PR #79](https://github.com/MicroKeen/Mklink-AI-Probe/pull/79)。见[日志验证记录](../verification/v050-recording-text.md)。"
   },
   "milestones": [
     {
@@ -30,6 +30,10 @@
   ],
   "verification": [
     {
+      "area": "停止记录后生成可读 TXT",
+      "result": "Python 43 项、GUI 103 项、记忆/用户内容边界 69 项通过，TypeScript 与生产构建通过；真实浏览器核验停止、转换中及已生成。五组同负载软件对照 JSONL 哈希一致，全部 SuperWatch TXT 数值/时间逐行一致；旧日志转换与新记录并行完整。未做新真机测试或打包，冻结包退出续转待验。见[验证记录](../verification/v050-recording-text.md)。"
+    },
+    {
       "area": "通用工程配置与直接烧录",
       "result": "424 项相关回归通过，覆盖通用/IDE 导入、配置保留、共享烧录、目标提示、HPM/API 和 Skill 边界。真实 CLI 子进程完成离线 CMake 初始化、重复初始化及错误退出校验。显式目标冲突或旧 profile 阻止覆盖，多个固件候选要求显式选择。本轮未操作硬件、未更新安装包，详见[验证记录](../verification/v050-project-init.md)。"
     },
@@ -38,12 +42,8 @@
       "result": "安装与卸载均以 RID 8192 运行。最终候选覆盖后 3,672 个文件匹配、6 份用户配置及端口名称保持不变，桌面/Web/CLI/MCP、内置资源和正常退出通过。安装相关 66 项、配置页 47 项通过。候选哈希、旧 HKLM 登记及遗留文件边界见[安装验证记录](../verification/v050-user-installer.md)。"
     },
     {
-      "area": "V4 SuperWatch 恢复",
-      "result": "V4.7.3 修复候选在用户实物拔插后，原订阅跨过 12.637 秒缺口自动续采。普通 V4 随后升至 V4.7.4，健康检查收到 223,728 组、零读错及队列丢弃，中位 43,486.6 组/秒。本轮未重做拔插，沿用相同恢复代码的上午证据。版本、哈希和验收边界见[验证记录](../verification/v050-superwatch-swclk.md)。"
-    },
-    {
-      "area": "V3 SuperWatch 恢复",
-      "result": "V3.6.10 实刷回读通过，用户拔插 SWCLK 后同一订阅自动恢复，中断期间样本计数冻结。最终 1,484,544 组，零队列丢弃、序号异常和时间倒退，恢复后中位 43,056.7 组/秒。旧 V3.6.8 缺采样能力，无同条件旧版基线；有日志负载的 RTT 拔插、Keil/IAR 实机并行仍未验，详见[记录](../verification/v050-superwatch-swclk.md)。"
+      "area": "V3 / V4 SuperWatch 恢复",
+      "result": "普通 V4 修复候选实物拔插跨 12.637 秒缺口原订阅恢复，V4.7.4 健康检查通过，223,728 组、零读错及队列丢弃，中位 43,486.6 组/秒。V3.6.10 实刷及拔插恢复通过，1,484,544 组，零队列丢弃、序号异常和时间倒退，恢复后中位 43,056.7 组/秒。旧 V3.6.8 缺采样能力，无同条件旧版基线。版本及未验范围见[恢复验证记录](../verification/v050-superwatch-swclk.md)。"
     },
     {
       "area": "合并回归",
@@ -68,7 +68,8 @@
     "Windows NSIS 默认 currentUser；安装不自动命名 USB 端口。只有用户确认修改或恢复端口显示名称时，才调用独立 UAC 助手。旧机器级登记与受保护目录不自动迁移。",
     "上海轻量服务器直供最新版，历史文件由 COS 和 Git 保存。COS 累计 189 GiB 告警、207.9 GiB 停止，已取消日期截止。账本和停止锁按[下载策略](tencent-updates.md)维护。",
     "跨会话固件联测固定上位机提交并核对 mklink/runtime 模块导入路径；主工作区和全局 editable 入口不自动代表当前任务版本。",
-    "project-init 是可选离线配置工具；通用工程可显式传型号和文件，直接烧录不依赖初始化。型号或镜像不明确时要求补充输入，不猜测，也不自动迁移已有芯片配置。"
+    "project-init 是可选离线配置工具；通用工程可显式传型号和文件，直接烧录不依赖初始化。型号或镜像不明确时要求补充输入，不猜测，也不自动迁移已有芯片配置。",
+    "RTT / SuperWatch 继续实时记录 JSONL，停止后自动后台生成同名 UTF-8 TXT。RTT 使用主机收发时间，SuperWatch 保留采样相对时间并在头部记录开始日期；TXT 供阅读，JSONL 供回放。"
   ],
   "hardware": {
     "操作前": "重新核对下载器型号、目标和占用。固件变更由指定会话协调，升降级按本次授权执行。VCC、OTP 操作分别确认。",
@@ -77,11 +78,12 @@
   },
   "known_limits": [
     "普通读取 P95 和间隔读取稳定低于 1 ms、最大采样间隔 20 µs、40 µs 翻转零漏采仍是未达目标。",
-    "公网远程中继继续延期。独立 [S3 PR #65](https://github.com/MicroKeen/Mklink-AI-Probe/pull/65) 仍开放。其他硬件的[历史未验范围](known-limits-20261030.md)按需查阅。"
+    "公网远程中继继续延期。独立 [S3 PR #65](https://github.com/MicroKeen/Mklink-AI-Probe/pull/65) 仍开放。其他硬件的[历史未验范围](known-limits-20261030.md)按需查阅。",
+    "TXT 转换的源码退出续转已测，实际冻结安装包退出续转待验；转换仍使用 CPU/磁盘且没有全局并发上限，软件对照不代表真机性能结论。"
   ],
   "next_actions": [
-    "审阅 PR #79 的普通用户安装、SuperWatch 状态提示及通用工程配置修复；合并和发布仍需明确指令。",
-    "本次 CLI 修复已在源码分支，可从该源码运行；当前已安装候选不含本次改动，后续需要使用安装版时再构建并验收。V3.6.10/V4.7.4 固件验证继续由固件项目维护。",
+    "审阅 PR #79 的普通用户安装、SuperWatch 状态提示、通用工程配置及可读日志；合并和发布仍需明确指令。",
+    "当前安装版不含通用工程配置和 TXT 日志改动。后续构建安装包时补测真实冻结进程退出后 TXT 续转，并按受影响范围执行真机/发布门禁。V3.6.10/V4.7.4 固件继续由固件项目维护。",
     "后续沿用 codex/v0.5.0-fixes 工作树；接手时 fetch microkeen 并核对实际分支、远端和已有改动。"
   ],
   "continuation_protocol": [
