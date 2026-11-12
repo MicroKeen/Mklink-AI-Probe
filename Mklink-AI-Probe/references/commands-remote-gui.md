@@ -1,5 +1,8 @@
 # 本地 Web 服务与 GUI
 
+SuperWatch 会随后台 AXF/ELF 自动创建、保存和恢复同名配置，Web、Skill/CLI、MCP
+共用读写规则；路径、错误处理及接口见[配置说明](superwatch-profile.md)。
+
 > 触发词：serve、gui、FastAPI、uvicorn、Tauri、桌面应用、本地 Web GUI/API
 > 返回索引：[SKILL.md](../SKILL.md)
 

@@ -561,6 +561,11 @@ START、不复位目标。等待也适用于首个事件到达前，不代表目
 
 ## 多通道 RTT 与 SuperWatch
 
+SuperWatch 的 AXF/ELF 相邻配置由共享后台统一保存和恢复，Web、Skill/CLI、MCP 共用。
+`superwatch_profile/profile_save`、`superwatch_workspace/workspace_save`、
+`superwatch_pins/pins_save` 的参数和使用顺序见[SuperWatch 配置](superwatch-profile.md)。
+变量增删、数组范围和间隔的既有共享操作自动保存；加载配置不自动启动采集。
+
 配套固件检测到 CMSIS-DAP 调试改变目标后，会停止原 RTT/SuperWatch 采集，
 丢弃旧的 RTT 游标写入并报告失效原因。调试结束后需要显式重新启动采集，
 不能把旧地址和待发送数据自动重放到新固件。STM32/HPM 的 OpenOCD 下载、

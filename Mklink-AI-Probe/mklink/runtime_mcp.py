@@ -556,11 +556,15 @@ def build_server():
         snapshot_clear removes that shared array view. Neither starts acquisition.
         recording_start accepts directory (existing absolute path on the backend computer).
         recording_status/recording_stop inspect or drain the same continuous JSONL recorder as GUI.
+        profile/profile_save, workspace/workspace_save and pins/pins_save share the AXF/ELF-adjacent
+        configuration with Web/CLI. Read first; save with the returned section revision.
+        profile_save accepts section (viewer/layout), value, revision; it saves display settings.
+        Use interval to apply/save the acquisition interval. Loading never starts capture.
 
         write requires path, generation from gui_call('symbol_status'), and value. It uses the existing typed
         live-write transaction. Start with empty arguments subscribes to an existing capture.
         """
-        if action not in {'status', 'items', 'values', 'snapshot', 'snapshot_select', 'snapshot_clear', 'add', 'remove', 'start', 'stop', 'pause', 'resume', 'interval', 'write', 'recording_start', 'recording_stop', 'recording_status'}:
+        if action not in {'status', 'items', 'values', 'snapshot', 'snapshot_select', 'snapshot_clear', 'add', 'remove', 'start', 'stop', 'pause', 'resume', 'interval', 'write', 'recording_start', 'recording_stop', 'recording_status', 'profile', 'profile_save', 'workspace', 'workspace_save', 'pins', 'pins_save'}:
             raise ValueError('Unsupported SuperWatch action')
         return client().call('superwatch_'+action, arguments)
 

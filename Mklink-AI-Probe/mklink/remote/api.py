@@ -947,6 +947,13 @@ def create_app(
 
     from starlette.concurrency import run_in_threadpool
     from mklink.remote import online_flash_api
+    from mklink.watch_profile import WatchProfile
+    watch_profile = WatchProfile()
+    app.state.watch_profile = watch_profile
+
+    async def activate_watch_profile(device):
+        path = (getattr(device, 'axf_status', {}) or {}).get('axf_path') or getattr(device, '_axf', None)
+        await run_in_threadpool(watch_profile.activate, path, get_managers()['superwatch'])
 
     async def _reparse_active_symbols(
         axf: str | None = None,
@@ -1006,6 +1013,7 @@ def create_app(
                     "active_axf": active_axf,
                 },
             )
+        await activate_watch_profile(device)
         return result
 
     async def _load_symbol_file(axf=None, elf_backend=None, *, error_status=500):
@@ -2003,6 +2011,7 @@ def create_app(
                 await _reparse_active_symbols(axf, elf_backend)
             elif manager._device is not dev:
                 await run_in_threadpool(manager.prepare, dev)
+                await activate_watch_profile(dev)
             remember_device_connection(_state, dev, mcu=mcu)
             return {
                 "status": "already_connected",
@@ -2037,6 +2046,7 @@ def create_app(
             try:
                 device = await loop.run_in_executor(None, _connect)
                 await run_in_threadpool(get_managers()["superwatch"].prepare, device)
+                await activate_watch_profile(device)
                 dispatcher = DeviceDispatcher(device)
             except Exception as exc:
                 detail = str(exc)
@@ -2975,6 +2985,7 @@ def create_app(
     @app.post("/api/dash/superwatch/start")
     async def superwatch_start(
         interval: float | None = Body(None, embed=True, ge=SUPERWATCH_MIN_INTERVAL, le=60),
+        profile: str | None = Body(None),
     ):
         if not _state["device"] or not _state["device"].connected:
             raise HTTPException(status_code=400, detail="Device not connected")
@@ -2985,13 +2996,24 @@ def create_app(
         # This callback is also retained for exclusive-operation resume, so the
         # initial preference must be applied only once, not on later resumes.
         pending_interval = interval
+        profile_error = None
+        if pending_interval is None and watch_profile.path and watch_profile.raw is not None:
+            pending_interval = watch_profile.section('viewer')['viewer']['interval']
 
         def start_requested():
-            nonlocal pending_interval
+            nonlocal pending_interval, profile_error
+            if isinstance(profile, str) and profile != str(watch_profile.path or ''):
+                raise HTTPException(409, 'The active AXF/ELF changed; reload settings')
+            save_requested_interval = interval is not None and pending_interval is not None
             if pending_interval is not None:
                 sw.set_interval(pending_interval)
                 pending_interval = None
             sw.start(_state["device"])
+            if save_requested_interval and watch_profile.path:
+                try:
+                    watch_profile.save_interval(sw.get_status()['interval'])
+                except (OSError, ValueError):
+                    profile_error = watch_profile.error
 
         status, stopped = await start_dashboard_manager(
             _state, "superwatch", sw, start_requested,
@@ -2999,6 +3021,8 @@ def create_app(
         response = {"status": status, "stopped": stopped}
         if interval is not None:
             response["interval"] = sw.get_status()["interval"]
+        if profile_error:
+            response['profile_error'] = profile_error
         return response
 
     @app.post("/api/dash/superwatch/stop")
@@ -3030,26 +3054,44 @@ def create_app(
             raise HTTPException(409, detail=str(exc)) from exc
 
     @app.post("/api/dash/superwatch/add")
-    async def superwatch_add(name: str = Body(..., embed=True)):
+    async def superwatch_add(name: str = Body(..., embed=True), profile: str | None = Body(None)):
         managers = get_managers()
         sw = managers["superwatch"]
         def prepare_and_add():
+            if profile is not None and profile != str(watch_profile.path or ''):
+                raise HTTPException(409, 'The active AXF/ELF changed; reload settings')
             if sw._runtime is None and _state["device"] and _state["device"].connected:
                 sw.prepare(_state["device"])
-            return sw.add_watch(name)
+            result = sw.add_watch(name)
+            if not result.get('error') and not result.get('item', {}).get('error'):
+                try:
+                    watch_profile.remember_selection(name, True, sw)
+                except (OSError, ValueError) as exc:
+                    result['profile_error'] = str(exc)
+            return result
 
-        return await run_in_threadpool(prepare_and_add)
+        async with _dashboard_start_lock(_state):
+            return await run_in_threadpool(prepare_and_add)
 
     @app.post("/api/dash/superwatch/remove")
-    async def superwatch_remove(name: str = Body(..., embed=True)):
+    async def superwatch_remove(name: str = Body(..., embed=True), profile: str | None = Body(None)):
         managers = get_managers()
         sw = managers["superwatch"]
         def prepare_and_remove():
+            if profile is not None and profile != str(watch_profile.path or ''):
+                raise HTTPException(409, 'The active AXF/ELF changed; reload settings')
             if sw._runtime is None and _state["device"] and _state["device"].connected:
                 sw.prepare(_state["device"])
-            return sw.remove_watch(name)
+            result = sw.remove_watch(name)
+            if not result.get('error') and not result.get('item', {}).get('error'):
+                try:
+                    watch_profile.remember_selection(name, False, sw)
+                except (OSError, ValueError) as exc:
+                    result['profile_error'] = str(exc)
+            return result
 
-        return await run_in_threadpool(prepare_and_remove)
+        async with _dashboard_start_lock(_state):
+            return await run_in_threadpool(prepare_and_remove)
 
     @app.post("/api/dash/superwatch/write")
     async def superwatch_write(
@@ -3123,7 +3165,7 @@ def create_app(
         return {"items": items}
 
     def pinned_variable_payload(preferences):
-        device = _state.get("device")
+        device = _state.get("device") or _state.get("symbol_device")
         catalog = getattr(device, "symbol_catalog", None) if device else None
         usable = catalog is not None and not catalog.is_stale()
         entries = []
@@ -3141,7 +3183,8 @@ def create_app(
     async def superwatch_pins():
         from mklink.watch_preferences import load_pins
         try:
-            preferences = await run_in_threadpool(load_pins, _state["project_root"])
+            preferences = (watch_profile.section('pins') if watch_profile.path else
+                           await run_in_threadpool(load_pins, _state["project_root"]))
             return await run_in_threadpool(pinned_variable_payload, preferences)
         except (OSError, ValueError) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -3152,7 +3195,9 @@ def create_app(
     ):
         from mklink.watch_preferences import PreferencesConflict, save_pins
         try:
-            preferences = await run_in_threadpool(save_pins, _state["project_root"], pins, revision)
+            preferences = (await run_in_threadpool(watch_profile.save, 'pins', pins, revision)
+                           if watch_profile.path else
+                           await run_in_threadpool(save_pins, _state["project_root"], pins, revision))
             return await run_in_threadpool(pinned_variable_payload, preferences)
         except PreferencesConflict as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
@@ -3163,6 +3208,8 @@ def create_app(
     async def superwatch_workspace():
         from mklink.watch_workspace import load_workspace
         try:
+            if watch_profile.path:
+                return watch_profile.section('workspace')
             return await run_in_threadpool(load_workspace, _state["project_root"])
         except (OSError, ValueError) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -3172,11 +3219,35 @@ def create_app(
         from mklink.watch_workspace import save_workspace
         from mklink.watch_preferences import PreferencesConflict
         try:
+            if watch_profile.path:
+                return await run_in_threadpool(watch_profile.save, 'workspace', workspace, revision)
             return await run_in_threadpool(save_workspace, _state["project_root"], workspace, revision)
         except PreferencesConflict as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         except (OSError, ValueError, TypeError) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @app.get("/api/dash/superwatch/profile")
+    async def superwatch_profile():
+        if watch_profile.path is None:
+            device = _state.get('device') or _state.get('symbol_device')
+            if device is not None:
+                async with _dashboard_start_lock(_state):
+                    await activate_watch_profile(device)
+        return watch_profile.status()
+
+    @app.put("/api/dash/superwatch/profile")
+    async def superwatch_save_profile(section: str = Body(...), value: dict = Body(...),
+                                      revision: str = Body(...)):
+        from mklink.watch_preferences import PreferencesConflict
+        if section not in ('viewer', 'layout'):
+            raise HTTPException(422, 'Unsupported profile section')
+        try:
+            return await run_in_threadpool(watch_profile.save_display, section, value, revision)
+        except PreferencesConflict as exc:
+            raise HTTPException(409, str(exc)) from exc
+        except (OSError, ValueError) as exc:
+            raise HTTPException(422, str(exc)) from exc
 
     @app.get("/api/dash/superwatch/array-snapshot")
     async def superwatch_array_snapshot():
@@ -3190,23 +3261,33 @@ def create_app(
         name: str = Body(..., embed=True),
         start_index: int = Body(..., embed=True),
         count: int = Body(..., embed=True),
+        profile: str | None = Body(None),
     ):
         managers = get_managers()
         manager = managers["superwatch"]
 
         def prepare_and_select():
+            if isinstance(profile, str) and profile != str(watch_profile.path or ''):
+                raise HTTPException(409, 'The active AXF/ELF changed; reload settings')
             if manager._runtime is None and _state["device"] and _state["device"].connected:
                 manager.prepare(_state["device"])
-            return manager.select_array_snapshot(
+            result = manager.select_array_snapshot(
                 name,
                 start_index=start_index,
                 count=count,
             )
+            if watch_profile.path and not result.get('error'):
+                try:
+                    watch_profile.save('snapshot', dict(name=name, start_index=start_index, count=count))
+                except (OSError, ValueError):
+                    result['profile_error'] = watch_profile.error
+            return result
 
         from mklink.symbol_catalog import SymbolCatalogError
 
         try:
-            result = await run_in_threadpool(prepare_and_select)
+            async with _dashboard_start_lock(_state):
+                result = await run_in_threadpool(prepare_and_select)
         except SymbolCatalogError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         if result.get("error"):
@@ -3214,11 +3295,18 @@ def create_app(
         return result
 
     @app.post("/api/dash/superwatch/array-snapshot/clear")
-    async def superwatch_array_snapshot_clear():
+    async def superwatch_array_snapshot_clear(profile: str | None = Body(None, embed=True)):
         managers = get_managers()
-        return await run_in_threadpool(
-            managers["superwatch"].clear_array_snapshot,
-        )
+        async with _dashboard_start_lock(_state):
+            if isinstance(profile, str) and profile != str(watch_profile.path or ''):
+                raise HTTPException(409, 'The active AXF/ELF changed; reload settings')
+            result = await run_in_threadpool(managers["superwatch"].clear_array_snapshot)
+            if watch_profile.path:
+                try:
+                    await run_in_threadpool(watch_profile.save, 'snapshot', None)
+                except (OSError, ValueError):
+                    result['profile_error'] = watch_profile.error
+        return result
 
     @app.get("/api/dash/superwatch/inspect")
     async def superwatch_inspect(name: str):
@@ -3247,12 +3335,20 @@ def create_app(
         return {"status": "running"}
 
     @app.post("/api/dash/superwatch/interval")
-    async def superwatch_interval(interval: float = Body(..., embed=True)):
+    async def superwatch_interval(interval: float = Body(..., embed=True), profile: str | None = Body(None)):
         managers = get_managers()
-        try:
-            actual = managers["superwatch"].set_interval(interval)
-        except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        async with _dashboard_start_lock(_state):
+            if isinstance(profile, str) and profile != str(watch_profile.path or ''):
+                raise HTTPException(409, 'The active AXF/ELF changed; reload settings')
+            try:
+                actual = managers["superwatch"].set_interval(interval)
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+            if watch_profile.path:
+                try:
+                    await run_in_threadpool(watch_profile.save_interval, actual)
+                except (OSError, ValueError):
+                    pass  # Profile status reports the failure; the interval was applied.
         return {"interval": actual}
 
     @app.get("/api/dash/superwatch/status")

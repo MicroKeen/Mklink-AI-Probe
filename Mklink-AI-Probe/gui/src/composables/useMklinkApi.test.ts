@@ -130,7 +130,7 @@ describe('RTT API contracts', () => {
       method: 'POST',
       body: JSON.stringify({ axf: 'C:\\firmware\\app.axf' }),
     }))
-    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/device/parse-axf', expect.objectContaining({
+    expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/device/parse-axf', expect.objectContaining({
       method: 'POST',
       body: JSON.stringify({ axf: 'C:\\firmware\\app.axf', elf_backend: 'external' }),
     }))

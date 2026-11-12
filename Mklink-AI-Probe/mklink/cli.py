@@ -2413,8 +2413,8 @@ def main():
     superwatch_parser.add_argument(
         "--target-id", help="Unambiguous installed peripheral target ID"
     )
-    superwatch_parser.add_argument("--period", type=float, default=0.001,
-        help="sampling period in seconds (default: 0.001)")
+    superwatch_parser.add_argument("--period", type=float, default=None,
+        help="sampling period in seconds (default: saved AXF/ELF preference, otherwise 0.001)")
     superwatch_parser.add_argument("--visualize", action="store_true", help="start Web visualizer")
     superwatch_parser.add_argument("--host", default="127.0.0.1", help="HTTP bind host")
     superwatch_parser.add_argument("--port-http", type=int, default=0, help="HTTP port, 0=random")

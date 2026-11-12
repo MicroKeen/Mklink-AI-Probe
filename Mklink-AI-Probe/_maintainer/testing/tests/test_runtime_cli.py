@@ -57,11 +57,20 @@ def adapter(monkeypatch):
 
 
 def test_cli_capture_subscribes_and_does_not_stop_gui(adapter):
-    runtime_cli.run(SimpleNamespace(command='superwatch', variables=[], period=.001, duration=.001))
+    runtime_cli.run(SimpleNamespace(command='superwatch', variables=[], period=None, duration=.001))
     assert ('superwatch_start',{}) in adapter
     assert ('superwatch_values',None) in adapter
     assert not any(name=='superwatch_stop' for name,_ in adapter)
     assert adapter[-1][0]=='detach'
+
+
+def test_cli_default_superwatch_period_preserves_saved_backend_setting(adapter, monkeypatch):
+    import sys
+    from mklink import cli
+    monkeypatch.setattr(sys, 'argv', ['mklink', 'superwatch', '--duration', '0.001'])
+    cli.main()
+    assert ('superwatch_start', {}) in adapter
+    assert not any(name == 'superwatch_interval' for name, _ in adapter)
 
 
 def test_cli_read_routes_to_shared_backend(adapter):

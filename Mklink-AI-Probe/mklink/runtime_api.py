@@ -400,6 +400,8 @@ class RuntimeControl:
         self.validate_session(session_id, target=capability not in UART_CAPABILITIES)
         arguments = body.get('arguments', {})
         argument_limit = 48 * 1024 if capability == 'flush_memory' else 16 * 1024
+        if capability in {'superwatch_profile_save', 'superwatch_workspace_save', 'superwatch_pins_save'}:
+            argument_limit = 1024 * 1024
         if not isinstance(arguments, dict) or len(json.dumps(arguments)) > argument_limit:
             raise HTTPException(422, f'Arguments must be an object of at most {argument_limit // 1024} KiB')
         return session_id, capability, validate_arguments(capability, arguments)
@@ -543,7 +545,7 @@ class RuntimeGate:
             return await reject(409, 'An exclusive job is active; inspect its result before further hardware operations')
         from mklink.probes import select_probe
         from mklink.runtime import RuntimeErrorResponse
-        local_symbols = path in {'/api/device/parse-axf', '/api/dash/superwatch/add', '/api/dash/superwatch/remove', '/api/dash/superwatch/workspace'}
+        local_symbols = path in {'/api/device/parse-axf', '/api/dash/superwatch/add', '/api/dash/superwatch/remove', '/api/dash/superwatch/workspace', '/api/dash/superwatch/pins', '/api/dash/superwatch/profile'}
         if (path.startswith(('/api/device/', '/api/dash/', '/api/probe/')) or path == '/api/mcu-detect') and not path.endswith(('/stop', '/disconnect')) and path != '/api/probe/firmware-upgrade' and not local_symbols:
             try:
                 from mklink.runtime_capabilities import MUX_MEMORY_PATHS

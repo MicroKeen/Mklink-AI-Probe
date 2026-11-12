@@ -1,5 +1,6 @@
 import { ref, readonly } from 'vue'
 import { tr } from './useLanguage'
+import { flushWatchProfile, useWatchProfile } from './useWatchProfile'
 import { recordStatusFailure, recordStatusRestored } from '../lib/connectionDiagnostics'
 import type {
   PortInfo,
@@ -123,7 +124,12 @@ export function useMklinkApi() {
         data.append('file', next)
         return api<UploadedFileSource>('/api/files/symbol', { method: 'POST', body: data })
       },
-      reload: (path, expectedPath) => api(`/api/symbols/reload-sources?${new URLSearchParams({ source_path: path, expected_axf: expectedPath })}`, { method: 'POST' }),
+      reload: async (path, expectedPath) => {
+        await flushWatchProfile()
+        const result = await api<{ state?: string; rtt_addr?: string }>(`/api/symbols/reload-sources?${new URLSearchParams({ source_path: path, expected_axf: expectedPath })}`, { method: 'POST' })
+        await useWatchProfile().load()
+        return result
+      },
     })
     return uploaded
   }
@@ -286,6 +292,7 @@ export function useMklinkApi() {
   }
 
   async function parseAxf(axf?: string, elfBackend?: 'builtin' | 'external') {
+    await flushWatchProfile()
     const result = await api('/api/device/parse-axf', {
       method: 'POST',
       body: JSON.stringify({
@@ -294,6 +301,7 @@ export function useMklinkApi() {
       }),
     })
     await refreshStatus()
+    await useWatchProfile().load()
     return result
   }
 

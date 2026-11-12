@@ -332,12 +332,13 @@ def run(args):
                     if vofa_channels is not None:
                         options['channels'] = vofa_channels
             if stream == 'superwatch':
-                if running and (args.variables or args.period != .001):
+                if running and (args.variables or args.period is not None):
                     raise RuntimeErrorResponse('Capture already running; omit variable/period changes to subscribe')
                 if not running:
                     for name in args.variables:
                         client.call('superwatch_add', {'name': name})
-                    client.call('superwatch_interval', {'interval': args.period})
+                    if args.period is not None:
+                        client.call('superwatch_interval', {'interval': args.period})
             if stream == 'systemview' and not running:
                 options = {'channel': args.channel}
                 if args.addr:
