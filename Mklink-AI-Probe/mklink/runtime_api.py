@@ -26,6 +26,12 @@ LOCAL_IMAGE_INSPECTION_PATHS = frozenset({
     '/api/online-flash/images/inspect',
     '/api/online-flash/images/inspect-path',
 })
+# Closed recording conversion only reads host files. It must not reserve or
+# stop a probe when the next acquisition is already running.
+LOCAL_RECORDING_EXPORT_PATHS = frozenset({
+    '/api/dash/superwatch/recording/export',
+    '/api/dash/rtt/traffic-recording/export',
+})
 active_operation = ContextVar('mklink_runtime_operation', default=None)
 
 
@@ -509,7 +515,7 @@ class RuntimeGate:
             or path in {"/api/device/core-registers", "/api/device/hardfault", "/api/device/hardfault-detail",
                         "/api/dash/superwatch/inspect", "/api/probe/firmware-check"}
         ) and not path.startswith(("/api/browser-session/", "/api/runtime/"))
-        if not hardware or (method == 'POST' and path in LOCAL_IMAGE_INSPECTION_PATHS):
+        if not hardware or (method == 'POST' and path in LOCAL_IMAGE_INSPECTION_PATHS | LOCAL_RECORDING_EXPORT_PATHS):
             return await self.app(scope, receive, send)
         session_id = headers.get(b"x-mklink-session", b"").decode()
         expected_probe = headers.get(b'x-mklink-probe', b'').decode()

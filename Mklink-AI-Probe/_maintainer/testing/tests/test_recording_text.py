@@ -1,4 +1,4 @@
-"""TXT is a deferred readable companion; JSONL stays the authoritative capture."""
+"""Conversion is manual; JSONL stays the authoritative capture."""
 from array import array
 import json
 from pathlib import Path
@@ -11,35 +11,46 @@ from mklink.traffic_recording import TrafficRecorder
 
 
 def exported(recorder):
+    if hasattr(recorder, 'export'):
+        assert recorder.status()['export_state'] == 'pending'
+        recorder.export()
     deadline = time.monotonic() + 10
     while time.monotonic() < deadline:
         status = recorder.status()
-        if status.get('text_state') in {'completed', 'failed'}:
+        if status.get('export_state') in {'completed', 'failed'}:
             return status
         time.sleep(.01)
     pytest.fail(f'TXT did not finish: {recorder.status()}')
 
 
-def test_superwatch_defers_text_and_keeps_samples_precision_and_boundaries(tmp_path):
+def workbook_rows(path):
+    import zipfile
+    import xml.etree.ElementTree as ET
+    ns = {'s': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
+    with zipfile.ZipFile(path) as archive:
+        return {name: [[(cell.attrib.get('t'), ''.join(cell.itertext())) for cell in row]
+                       for row in ET.fromstring(archive.read(name)).findall('s:sheetData/s:row', ns)]
+                for name in archive.namelist() if name.startswith('xl/worksheets/sheet') and name.endswith('.xml')}
+
+
+def test_superwatch_manual_excel_preserves_columns_time_and_boundaries(tmp_path):
     recorder = SuperWatchRecorder(tmp_path, max_values=2)
-    try:
-        recorder.append(array('f', [1.25, -2.5, 3.75]), array('d', [.001, .002, 1234.567]),
-                        [{'name': '温度'}], boundaries=((2, 2),))
-        assert recorder.status().get('text_state') == 'pending'
-        assert not list(tmp_path.glob('*.txt'))
-    finally:
-        recorder.stop()
+    recorder.append(array('f', [1.25, -2.5, 3.75]), array('d', [.001, .002, 1234.567]),
+                    [{'name': '=温度'}], boundaries=((2, 2),))
+    with pytest.raises(RuntimeError, match='Stop recording'):
+        recorder.export()
+    recorder.stop()
+    assert not list(tmp_path.glob('*.txt')) and not list(tmp_path.glob('*.xlsx'))
     status = exported(recorder)
-    assert status['state'] == 'completed' and status['text_state'] == 'completed'
-    text_parts = sorted(tmp_path.glob('*.txt'))
-    assert len(text_parts) == status['parts'] == 2
-    text = ''.join(p.read_text(encoding='utf-8') for p in text_parts)
-    assert '[t=0.000001000 s] 温度=1.25' in text
-    assert '[t=0.000002000 s] 温度=-2.5' in text
-    assert '[t=1.234567000 s] 温度=3.75' in text
-    assert 'DISCONTINUITY reason=2' in text
-    assert 'acquisition-relative' in text and 'Recording started:' in text
-    assert status['text_parts'] == 2 and Path(status['text_path']) == text_parts[-1]
+    assert status['state'] == 'completed' and status['export_state'] == 'completed'
+    assert status['export_format'] == 'xlsx' and status['export_rows'] == 3
+    rows = workbook_rows(status['export_path'])['xl/worksheets/sheet2.xml']
+    assert rows[0] == [('inlineStr', 'Time (s)'), ('inlineStr', '=温度'), ('inlineStr', 'Event')]
+    assert [float(rows[i][0][1]) for i in (1, 2, 4)] == [1e-6, 2e-6, 1.234567]
+    assert [float(rows[i][1][1]) for i in (1, 2, 4)] == [1.25, -2.5, 3.75]
+    assert rows[3] == [('inlineStr', 'DISCONTINUITY reason=2')]
+    assert status['export_parts'] == status['parts'] == 2
+    assert not list(tmp_path.glob('*.txt'))
 
 
 def test_rtt_joins_unicode_lines_across_chunks_and_parts_with_rx_tx_and_loss(tmp_path):
@@ -49,12 +60,12 @@ def test_rtt_joins_unicode_lines_across_chunks_and_parts_with_rx_tx_and_loss(tmp
         recorder.append(2, b'\xad\r', 'RX', 's1', 1700000000.25)
         recorder.append(2, b'\nnext\n\x00\xff', 'RX', 's1', 1700000000.5)
         recorder.append(2, b'command\n', 'TX', 's1', 1700000001)
-        assert recorder.status().get('text_state') == 'pending'
+        assert recorder.status().get('export_state') == 'pending'
         assert not list(tmp_path.glob('*.txt'))
     finally:
         recorder.stop()
     status = exported(recorder)
-    assert status['text_state'] == 'completed' and status['parts'] == 2
+    assert status['export_state'] == 'completed' and status['parts'] == 2
     text = ''.join(p.read_text(encoding='utf-8') for p in sorted(tmp_path.glob('*.txt')))
     assert 'first 中' in text and '�' not in text
     assert 'channel=2 RX' in text and 'channel=2 TX' in text
@@ -72,7 +83,7 @@ def test_text_failure_does_not_change_successful_json_recording_or_overwrite(tmp
     recorder.stop()
     status = exported(recorder)
     assert status['state'] == 'completed'
-    assert status['text_state'] == 'failed' and status['text_error']
+    assert status['export_state'] == 'failed' and status['export_error']
     assert path.read_text(encoding='utf-8') == 'user data'
     rows = [json.loads(line) for line in path.with_suffix('.jsonl').read_text().splitlines()]
     assert rows[-1]['complete'] is True
@@ -84,17 +95,18 @@ def test_failed_recording_exports_valid_prefix_with_incomplete_warning(tmp_path)
     recorder.append(array('f', [42, 43]), array('d', [1, float('nan')]), [{'name': 'v'}])
     assert recorder.stop()['state'] == 'failed'
     status = exported(recorder)
-    assert status['text_state'] == 'completed'
-    text = Path(status['text_path']).read_text(encoding='utf-8')
-    assert 'INCOMPLETE' in text and 'v=42.0' in text
-    assert 'v=43.0' not in text
+    assert status['export_state'] == 'completed'
+    sheets = workbook_rows(status['export_path'])
+    assert 'INCOMPLETE' in str(sheets['xl/worksheets/sheet1.xml'])
+    assert sheets['xl/worksheets/sheet2.xml'][1][1] == (None, '42')
+    assert len(sheets['xl/worksheets/sheet2.xml']) == 2
 
 
 def test_serial_recording_does_not_gain_unrequested_export(tmp_path):
     recorder = TrafficRecorder(tmp_path, 'serial')
     recorder.append('COM1', b'data', 'RX', 's')
     recorder.stop()
-    assert 'text_state' not in recorder.status()
+    assert 'export_state' not in recorder.status()
     assert not list(tmp_path.glob('*.txt'))
 
 
@@ -104,7 +116,7 @@ def test_rtt_loss_does_not_join_fragments_across_missing_bytes(tmp_path):
     recorder.append(0, b'after gap\n', 'RX', 'session', 1700000001, lost_bytes=3)
     recorder.stop()
     status = exported(recorder)
-    text = Path(status['text_path']).read_text(encoding='utf-8')
+    text = Path(status['export_path']).read_text(encoding='utf-8')
     assert 'lost_bytes=3' in text
     lines = [line for line in text.splitlines() if not line.startswith('#')]
     assert len(lines) == 2
@@ -118,8 +130,8 @@ def test_rtt_long_lines_and_session_restart_are_bounded(tmp_path):
     recorder.append(0, b'new session\n', 'RX', 's2', 1700000001)
     recorder.stop()
     status = exported(recorder)
-    assert status['text_state'] == 'completed'
-    lines = [line for line in Path(status['text_path']).read_text().splitlines() if not line.startswith('#')]
+    assert status['export_state'] == 'completed'
+    lines = [line for line in Path(status['export_path']).read_text().splitlines() if not line.startswith('#')]
     assert max(map(len, lines)) < 17000
     assert 'new session' in lines[-1] and 'session=s2' in lines[-1]
     assert sum(line.split('session=s1 ', 1)[1].split(' [', 1)[0].count('a')
@@ -136,32 +148,33 @@ import sys
 r = TrafficRecorder(sys.argv[1], 'rtt')
 r.append(0, b'parent exit\\n', 'RX', 'session', 1700000000)
 r.stop()
+r.export()
 """
     subprocess.run([sys.executable, '-c', script, str(tmp_path)], cwd=tmp_path,
                    env=dict(os.environ, PYTHONPATH=str(root)), timeout=10, check=True)
-    manifest, = tmp_path.glob('*-text-export.json')
+    manifest, = tmp_path.glob('*-export.json')
     deadline = time.monotonic() + 10
     while time.monotonic() < deadline:
         result = json.loads(manifest.read_text(encoding='utf-8'))
-        if result['text_state'] != 'generating':
+        if result['export_state'] != 'generating':
             break
         time.sleep(.01)
-    assert result['text_state'] == 'completed'
-    assert 'parent exit' in Path(result['text_path']).read_text(encoding='utf-8')
+    assert result['export_state'] == 'completed'
+    assert 'parent exit' in Path(result['export_path']).read_text(encoding='utf-8')
 
 
 def test_worker_launch_failure_persists_failure_without_changing_source(tmp_path, monkeypatch):
-    from mklink.recording_text import TextExport
+    from mklink.recording_text import ManualExport
     source = tmp_path / 'rtt-test-0001.jsonl'
     source.write_bytes(b'original')
     def fail(*args, **kwargs):
         raise OSError('worker launch denied')
     monkeypatch.setattr('mklink.recording_text.subprocess.Popen', fail)
-    export = TextExport('rtt')
+    export = ManualExport('rtt')
     export.start(dict(path=str(source), parts=1, started_at=1700000000, state='completed'))
-    assert export.status()['text_state'] == 'failed'
-    manifest, = tmp_path.glob('*-text-export.json')
-    assert json.loads(manifest.read_text())['text_state'] == 'failed'
+    assert export.status()['export_state'] == 'failed'
+    manifest, = tmp_path.glob('*-export.json')
+    assert json.loads(manifest.read_text())['export_state'] == 'failed'
     assert source.read_bytes() == b'original'
 
 
@@ -179,13 +192,43 @@ def test_frozen_export_launch_owns_environment_and_does_not_inherit_pipes(tmp_pa
     monkeypatch.setattr(sys, 'frozen', True, raising=False)
     monkeypatch.setattr(recording_text.subprocess, 'Popen', source_launch)
     monkeypatch.setenv('MKLINK_PARENT_JOB_BREAKAWAY_OK', '1')
-    export = recording_text.TextExport('superwatch')
+    export = recording_text.ManualExport('superwatch')
     export.start(dict(path=str(source), parts=1, started_at=1700000000, state='completed'))
-    assert exported(export)['text_state'] == 'completed'
+    assert exported(export)['export_state'] == 'completed'
     command, options = calls[0]
-    assert command[1] == '--internal-recording-text'
+    assert command[1] == '--internal-recording-export'
     assert options['env']['PYINSTALLER_RESET_ENVIRONMENT'] == '1'
     assert options['env']['TEMP'] == str(tmp_path)
     assert options['cwd'] == str(tmp_path)
     if os.name == 'nt':
         assert options['creationflags'] & recording_text.subprocess.CREATE_BREAKAWAY_FROM_JOB
+
+
+def test_excel_splits_at_row_limit_and_preserves_changed_columns(tmp_path, monkeypatch):
+    from mklink import recording_excel
+    monkeypatch.setattr(recording_excel, 'MAX_ROWS', 4)
+    source = tmp_path / 'superwatch-test-0001.jsonl'
+    points = [{'_t': i / 1000, 'a': i + .25} for i in range(7)] + [{'_t': .007, 'b': 99}]
+    source.write_text(''.join(json.dumps(p) + '\n' for p in points))
+    manifest = tmp_path / 'job.json'
+    job = dict(base=str(source)[:-11], parts=1, started_at=1700000000, complete=True,
+               export_state='generating', export_error='')
+    manifest.write_text(json.dumps(job))
+    assert recording_excel.export_excel(manifest) == 0
+    result = json.loads(manifest.read_text())
+    sheets = workbook_rows(result['export_path'])
+    assert [len(rows) for name, rows in sheets.items() if name != 'xl/worksheets/sheet1.xml'] == [4, 4, 2, 2]
+    assert result['export_rows'] == 8 and result['export_sheets'] == 4
+    assert len(source.read_text().splitlines()) == 8
+
+
+def test_excel_existing_file_is_preserved_and_manual_request_is_idempotent(tmp_path):
+    recorder = SuperWatchRecorder(tmp_path)
+    recorder.append(array('f', [1]), array('d', [0]), [{'name': 'a'}])
+    status = recorder.stop()
+    path = Path(status['path'][:-11] + '.xlsx')
+    path.write_bytes(b'user workbook')
+    result = exported(recorder)
+    assert result['export_state'] == 'failed' and path.read_bytes() == b'user workbook'
+    assert recorder.export()['export_state'] == 'failed'
+    assert len(list(tmp_path.glob('*-export.json'))) == 1

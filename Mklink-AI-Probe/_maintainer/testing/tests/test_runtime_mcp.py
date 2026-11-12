@@ -512,7 +512,7 @@ def test_superwatch_profile_mcp_uses_gui_capabilities(monkeypatch):
             calls.append((name, body))
             return {'shared': True}
     monkeypatch.setattr(runtime_mcp, 'RuntimeClient', Adapter)
-    actions = ['profile', 'profile_save', 'workspace', 'workspace_save', 'pins', 'pins_save']
+    actions = ['profile', 'profile_save', 'workspace', 'workspace_save', 'pins', 'pins_save', 'recording_export']
     async def scenario():
         async with Client(runtime_mcp.build_server()) as mcp:
             await mcp.call_tool('connect', {})

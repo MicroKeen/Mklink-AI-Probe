@@ -2427,6 +2427,13 @@ class SuperWatchStreamManager:
         recorder = self._recorder
         return recorder.status() if recorder else {"state": "idle", "active": False}
 
+    def export_recording(self, path: str) -> dict:
+        with self._recording_lock:
+            recorder = self._recorder
+            if recorder is None or recorder.status()['path'] != path:
+                raise RuntimeError('Recording changed; refresh its status before converting')
+            return recorder.export()
+
     def start_recording(self, directory: str) -> dict:
         from mklink.superwatch_recording import SuperWatchRecorder
 

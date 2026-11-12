@@ -2787,10 +2787,22 @@ def create_app(
             raise HTTPException(409, str(exc)) from exc
 
     @app.post('/api/dash/{kind}/traffic-recording/stop')
-    async def traffic_recording_stop(kind: str, channel: int = Query(0, ge=0, le=7)):
+    async def traffic_recording_stop(kind: str, channel: int = Query(0, ge=0, le=7),
+                                     channel_body: int | None = Body(None, alias='channel', embed=True, ge=0, le=7)):
         try:
-            return await run_in_threadpool(traffic_recorder(kind).stop, channel)
+            return await run_in_threadpool(traffic_recorder(kind).stop, channel if channel_body is None else channel_body)
         except TimeoutError as exc:
+            raise HTTPException(409, str(exc)) from exc
+
+    # Conversion is a separate, explicit operation; it never starts on stop.
+    @app.post('/api/dash/rtt/traffic-recording/export')
+    async def rtt_recording_export(path: str = Body(..., min_length=1, max_length=4096),
+                                   channel: int = Body(0, ge=0, le=7)):
+        try:
+            return await run_in_threadpool(traffic_recorder('rtt').export, path, channel)
+        except (ValueError, OSError) as exc:
+            raise HTTPException(400, str(exc)) from exc
+        except RuntimeError as exc:
             raise HTTPException(409, str(exc)) from exc
 
     @app.get("/api/dash/rtt/status")
@@ -3052,6 +3064,15 @@ def create_app(
             return await run_in_threadpool(get_managers()["superwatch"].stop_recording)
         except TimeoutError as exc:
             raise HTTPException(409, detail=str(exc)) from exc
+
+    @app.post('/api/dash/superwatch/recording/export')
+    async def superwatch_recording_export(path: str = Body(..., embed=True, min_length=1, max_length=4096)):
+        try:
+            return await run_in_threadpool(get_managers()['superwatch'].export_recording, path)
+        except (ValueError, OSError) as exc:
+            raise HTTPException(400, str(exc)) from exc
+        except RuntimeError as exc:
+            raise HTTPException(409, str(exc)) from exc
 
     @app.post("/api/dash/superwatch/add")
     async def superwatch_add(name: str = Body(..., embed=True), profile: str | None = Body(None)):

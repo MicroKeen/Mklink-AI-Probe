@@ -1,4 +1,4 @@
-"""Deferred human-readable companions for closed recordings; never opens hardware."""
+"""Manual human-readable companions for closed recordings; never opens hardware."""
 from __future__ import annotations
 
 import codecs
@@ -147,48 +147,60 @@ def export_text(manifest_path):
                 if traffic and index == job['parts']:
                     traffic.finish(output)
                 output.write('# TXT part complete; use JSONL for lossless replay.\n')
-            job.update(text_parts=index, text_path=str(target))
+            job.update(export_parts=index, export_path=str(target))
             _save_status(manifest_path, job)
-        job.update(text_state='completed')
+        job.update(export_state='completed')
     except Exception as exc:
-        job.update(text_state='failed', text_error=str(exc) or type(exc).__name__)
+        job.update(export_state='failed', export_error=str(exc) or type(exc).__name__)
     _save_status(manifest_path, job)
-    return 0 if job['text_state'] == 'completed' else 1
+    return 0 if job['export_state'] == 'completed' else 1
 
 
-class TextExport:
-    """Only construction/status access occur during capture; start runs after close."""
+class ManualExport:
+    """Only an explicit user request launches conversion after the source closes."""
     def __init__(self, kind):
         self.kind = kind
         self._lock = threading.Lock()
-        self._status = dict(text_state='pending', text_path='', text_parts=0, text_error='')
+        self._status = dict(export_state='pending', export_path='', export_parts=0, export_error='',
+                            export_format='xlsx' if kind == 'superwatch' else 'txt')
         self._started = False
+        self._manifest = None
 
     def status(self):
         with self._lock:
+            if self._manifest is not None and self._status['export_state'] == 'generating':
+                try:
+                    job = json.loads(self._manifest.read_text(encoding='utf-8'))
+                    self._status.update({key: value for key, value in job.items() if key.startswith('export_')})
+                except (OSError, ValueError):
+                    pass
             return dict(self._status)
 
     def start(self, recording):
+        if recording.get('active') or recording.get('state') not in ('completed', 'failed'):
+            raise RuntimeError('Stop recording and wait for it to finish before converting')
         with self._lock:
             if self._started:
                 return
             self._started = True
-            self._status['text_state'] = 'generating'
+            self._status['export_state'] = 'generating'
         manifest = job = None
         created = False
         try:
             path = Path(recording['path'])
             base = re.sub(r'-\d{4,}\.jsonl$', '', str(path))
             if base == str(path) or not recording['parts']:
-                raise ValueError('No closed recording parts available for TXT export')
-            manifest = Path(base + '-text-export.json')
+                raise ValueError('No closed recording parts available for conversion')
+            manifest = Path(base + '-export.json')
             job = dict(self._status, kind=self.kind, base=base, parts=recording['parts'],
                        started_at=recording['started_at'], complete=recording['state'] == 'completed',
                        source_error=recording.get('error', ''))
             with manifest.open('x', encoding='utf-8') as stream:
                 json.dump(job, stream, ensure_ascii=False)
             created = True
-            command = ([sys.executable, '--internal-recording-text'] if getattr(sys, 'frozen', False)
+            with self._lock:
+                self._manifest = manifest
+            command = ([sys.executable, '--internal-recording-export'] if getattr(sys, 'frozen', False)
                        else [sys.executable, str(Path(__file__).resolve())])
             environment = dict(os.environ)
             options = dict(cwd=str(path.parent), env=environment)
@@ -208,7 +220,7 @@ class TextExport:
                                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                        **options)
             threading.Thread(target=self._wait, args=(process, manifest, job),
-                             name='recording-text-result', daemon=True).start()
+                             name='recording-export-result', daemon=True).start()
         except Exception as exc:
             self._failed(exc, manifest if created else None, job)
 
@@ -216,7 +228,7 @@ class TextExport:
         with self._lock:
             if job:
                 self._status.update({key: job[key] for key in self._status if key in job})
-            self._status.update(text_state='failed', text_error=str(exc) or type(exc).__name__)
+            self._status.update(export_state='failed', export_error=str(exc) or type(exc).__name__)
             result = dict(self._status)
         if manifest is not None and job:
             try:
@@ -229,10 +241,10 @@ class TextExport:
         try:
             code = process.wait()
             job = json.loads(manifest.read_text(encoding='utf-8'))
-            if code != 0 or job['text_state'] != 'completed':
-                raise RuntimeError(job.get('text_error') or f'TXT export worker exited ({code})')
+            if code != 0 or job['export_state'] != 'completed':
+                raise RuntimeError(job.get('export_error') or f'Recording export worker exited ({code})')
             with self._lock:
-                self._status.update({key: job[key] for key in self._status})
+                self._status.update({key: value for key, value in job.items() if key.startswith('export_')})
         except Exception as exc:
             self._failed(exc, manifest, job)
 
@@ -243,6 +255,10 @@ def main(arguments=None):
         return 2
     if os.name != 'nt':
         os.nice(10)
+    job = json.loads(Path(args[0]).read_text(encoding='utf-8'))
+    if job.get('export_format') == 'xlsx':
+        from mklink.recording_excel import export_excel
+        return export_excel(args[0])
     return export_text(args[0])
 
 

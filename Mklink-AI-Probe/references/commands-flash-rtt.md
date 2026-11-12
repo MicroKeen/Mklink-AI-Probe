@@ -184,13 +184,20 @@ python -m mklink rtt --visualize
 Web RTT 终端模式只订阅终端文本，不运行收发视图的行/曲线解析；切换到收发模式后才按需解析。各通道及共享窗口按订阅独立处理，切换视图不重启设备采集。无法解析的数值行不影响原始 RTT 文本或后续采集，CLI、MCP 与 Web 共用数值解析规则。
 
 桌面/Web 的 RTT View 通道中，打开 **日志 → 开始记录** 可保存原始 RX/TX JSONL。
-停止记录后，后台以较低进程优先级在同一目录生成同名 UTF-8 TXT，界面显示生成状态。
+停止记录只保存 JSONL，不自动转换。点击该通道日志区域的 **转换为 TXT** 后，
+后台以较低进程优先级在同一目录生成同名 UTF-8 TXT，界面显示转换状态。
 每行带主机收发日期、时区、通道、RX/TX 和会话，例如：
 `[2026-11-12 10:20:30.123456+08:00] channel=0 RX session=... temperature=25`。
 跨数据块的 UTF-8 字符和文本行会拼接，时间取该行首块接收时间；分段间未完行会出现在后续分段。
 缺失字节和会话切换会保留标记，二进制、控制字节或无法按 UTF-8 解码的字节以转义形式保留。
 TXT 供直接阅读，JSONL 保留原始字节供回放；TXT 转换失败不改变 JSONL 的保存结果。
-采集期间不转换 TXT；若立即开始下一轮采集，上一轮转换仍会占用少量 CPU 和磁盘资源。
+转换仅在明确点击后运行，仍会占用 CPU 和磁盘资源。按钮针对最近一次记录，
+请在开始下一次记录前触发所需转换。已有 TXT 不会被覆盖。
+
+Skill/CLI 使用 `runtime call rtt_recording_status`、`rtt_recording_start`、
+`rtt_recording_stop`、`rtt_recording_export`；MCP 使用同名 `gui_call` 能力。
+开始传 `directory` 和 `channel`，停止传 `channel`；转换传状态返回的 `path` 和同一 `channel`。
+状态中的 `export_state`、`export_path`、`export_parts` 表示独立转换任务，与 SuperWatch 一致。
 
 **仪表盘功能：**
 - 实时折线图，每个变量独立曲线

@@ -13,22 +13,45 @@ beforeEach(() => {
   HTMLDialogElement.prototype.close = vi.fn()
 })
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); document.body.innerHTML = '' })
+it.each(['SuperWatch', 'RTT'])('only converts %s after an explicit click and keeps the channel/path', async name => {
+  let active = true
+  const request = vi.fn(async (url: string) => {
+    if (url.includes('/stop')) active = false
+    return { ok: true, json: async () => ({ active, state: active ? 'recording' : 'completed',
+      path: 'F:/logs/test-0001.jsonl', export_state: url.includes('/export') ? 'generating' : 'pending' }) }
+  })
+  vi.stubGlobal('fetch', request)
+  const wrapper = mount(SuperWatchRecording, { props: { name, channel: 2,
+    endpoint: name === 'RTT' ? '/api/dash/rtt/traffic-recording' : '/api/dash/superwatch/recording' } })
+  try {
+    await flushPromises()
+    expect(wrapper.get('[data-testid=record-convert]').attributes('disabled')).toBeDefined()
+    await wrapper.get('[data-testid=sw-record-toggle]').trigger('click'); await flushPromises()
+    expect(request.mock.calls.some(([url]) => url.includes('/export'))).toBe(false)
+    expect(wrapper.get('[data-testid=record-convert]').text()).toContain(name === 'SuperWatch' ? 'Excel' : 'TXT')
+    await wrapper.get('[data-testid=record-convert]').trigger('click'); await flushPromises()
+    expect(request).toHaveBeenLastCalledWith(expect.stringContaining('/export'), expect.objectContaining({
+      body: JSON.stringify({ path: 'F:/logs/test-0001.jsonl', ...(name === 'RTT' ? { channel: 2 } : {}) }),
+    }))
+    expect(wrapper.get('[data-testid=record-convert]').attributes('disabled')).toBeDefined()
+  } finally { wrapper.unmount() }
+})
 it.each([
-  ['generating', 'TXT 生成中', 'Generating TXT'],
-  ['completed', 'TXT 已生成', 'TXT ready'],
-  ['failed', 'TXT 生成失败', 'TXT export failed'],
+  ['generating', '转换中', 'Converting'],
+  ['completed', '转换完成', 'Export ready'],
+  ['failed', '转换失败', 'Export failed'],
 ])('shows separate TXT %s status after JSONL stops', async (state, zh, en) => {
   vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({
     active: false, state: 'completed', path: 'F:/logs/demo.jsonl', samples: 3,
-    text_state: state, text_path: 'F:/logs/demo.txt', text_error: state === 'failed' ? 'disk full' : '',
+    export_state: state, export_path: 'F:/logs/demo.txt', export_error: state === 'failed' ? 'disk full' : '',
   }) })))
   const wrapper = mount(SuperWatchRecording)
   try {
     await flushPromises()
-    expect([zh, en]).toContain(wrapper.get('[data-testid="record-text-status"]').text())
+    expect([zh, en]).toContain(wrapper.get('[data-testid="record-export-status"]').text())
     expect(wrapper.get('[data-testid="sw-record-toggle"]').attributes('disabled')).toBeUndefined()
     if (state === 'failed') expect(wrapper.text()).toContain('disk full')
-    if (state === 'completed') expect(wrapper.get('[data-testid="record-text-status"]').attributes('title')).toBe('F:/logs/demo.txt')
+    if (state === 'completed') expect(wrapper.get('[data-testid="record-export-status"]').attributes('title')).toBe('F:/logs/demo.txt')
   } finally { wrapper.unmount() }
 })
 it('uses one toggle, never starts recording on mount, and stops an existing recording', async () => {

@@ -556,6 +556,8 @@ def build_server():
         snapshot_clear removes that shared array view. Neither starts acquisition.
         recording_start accepts directory (existing absolute path on the backend computer).
         recording_status/recording_stop inspect or drain the same continuous JSONL recorder as GUI.
+        recording_export explicitly converts the closed recording to Excel; pass path from recording_status.
+        Stopping never converts automatically. Read export_state/export_path for the separate job result.
         profile/profile_save, workspace/workspace_save and pins/pins_save share the AXF/ELF-adjacent
         configuration with Web/CLI. Read first; save with the returned section revision.
         profile_save accepts section (viewer/layout), value, revision; it saves display settings.
@@ -564,7 +566,7 @@ def build_server():
         write requires path, generation from gui_call('symbol_status'), and value. It uses the existing typed
         live-write transaction. Start with empty arguments subscribes to an existing capture.
         """
-        if action not in {'status', 'items', 'values', 'snapshot', 'snapshot_select', 'snapshot_clear', 'add', 'remove', 'start', 'stop', 'pause', 'resume', 'interval', 'write', 'recording_start', 'recording_stop', 'recording_status', 'profile', 'profile_save', 'workspace', 'workspace_save', 'pins', 'pins_save'}:
+        if action not in {'status', 'items', 'values', 'snapshot', 'snapshot_select', 'snapshot_clear', 'add', 'remove', 'start', 'stop', 'pause', 'resume', 'interval', 'write', 'recording_start', 'recording_stop', 'recording_status', 'recording_export', 'profile', 'profile_save', 'workspace', 'workspace_save', 'pins', 'pins_save'}:
             raise ValueError('Unsupported SuperWatch action')
         return client().call('superwatch_'+action, arguments)
 
@@ -583,6 +585,8 @@ def build_server():
         switches an existing window only when showing results is useful. Routine collection
         stays in the background. Only displayed confirms navigation; never auto-replay.
         ping lists names. rtt_history/status and superwatch_snapshot/status reuse GUI acquisition.
+        rtt_recording_export takes path from rtt_recording_status and channel (0..7) to manually
+        convert closed RTT JSONL parts to TXT. Read export_state/export_path for progress/result.
         Acquisition start with {} subscribes if already running; new settings require an idle manager.
         Stop requires ownership and no other subscriber. A sole subscriber may recover
         control after the original owner detaches/expires or all GUI owners leave.

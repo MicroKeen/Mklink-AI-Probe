@@ -5,7 +5,7 @@ import sys
 def dispatch_internal_process(arguments):
     """Return an exit code for an internal command, otherwise None."""
     values = list(arguments)
-    if values[:1] == ['--internal-recording-text']:
+    if values[:1] in (['--internal-recording-text'], ['--internal-recording-export']):
         from mklink.recording_text import main
         return main(values[1:])
     if values[:1] == ['--internal-recording-worker']:

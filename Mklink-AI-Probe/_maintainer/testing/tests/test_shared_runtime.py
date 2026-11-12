@@ -91,6 +91,20 @@ def test_detach_never_closes_gui_device(runtime):
     assert len(control.sessions) == 1
 
 
+@pytest.mark.parametrize('path', ['/api/dash/superwatch/recording/export', '/api/dash/rtt/traffic-recording/export'])
+def test_manual_recording_conversion_does_not_reserve_hardware(runtime, path):
+    client, control, calls, managers, app = runtime
+    @app.post(path)
+    async def convert(body: dict):
+        return {'path': body['path'], 'export_state': 'generating'}
+    managers['superwatch'].running = True
+    control.info['probe_id'] = 'lobby'
+    response = client.post(path, json={'path': 'closed.jsonl'})
+    assert response.status_code == 200, response.text
+    assert response.json()['export_state'] == 'generating'
+    assert managers['superwatch'].running and calls == []
+
+
 @pytest.mark.parametrize('change', ['generation', 'fingerprint', 'path'])
 def test_session_rejects_same_path_symbol_revision_until_explicit_reattach(runtime, change):
     client, control, calls, _, app = runtime
