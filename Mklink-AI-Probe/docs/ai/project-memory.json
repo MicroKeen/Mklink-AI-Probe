@@ -1,20 +1,20 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-12T13:57:47+08:00",
+  "updated_at": "2026-11-12T15:10:04+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.5.0-fixes",
-    "head": "997e38b9",
-    "remote_head": "997e38b9",
-    "working_tree": "以上为停止记录后生成 TXT 的产品代码提交，已推送。当前安装包仍为 8f8709a4、安装 Web 为 61d46690；不含通用工程初始化和本次日志改动，本轮未重建或覆盖安装。"
+    "head": "c60af890",
+    "remote_head": "c60af890",
+    "working_tree": "以上为随 AXF/ELF 保存 SuperWatch 配置的产品代码提交，已推送。当前安装包仍为 8f8709a4、安装 Web 为 61d46690；不含通用工程初始化、TXT 日志和符号旁配置，本轮未重建或覆盖安装。"
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "RTT / SuperWatch 可读 TXT 已完成并推送，等待 PR 审阅",
-    "current_task": "按用户选择保留实时 JSONL，停止后由独立低优先级进程生成同名带时间戳 TXT。界面显示转换状态，失败不影响 JSONL。代码与此前安装、SuperWatch 恢复提示、通用工程配置共同保留在 [PR #79](https://github.com/MicroKeen/Mklink-AI-Probe/pull/79)。见[日志验证记录](../verification/v050-recording-text.md)。"
+    "status": "SuperWatch 符号旁配置已完成并推送，等待 PR 审阅",
+    "current_task": "首次加载 AXF/ELF 创建同目录追加 .superwatch.json 的配置，自动保存并恢复变量、数组范围、间隔和显示设置。Web GUI、Skill/CLI、MCP 共用后台；按当前符号解析地址，恢复不自动采集。见[配置验证记录](../verification/v050-superwatch-profile.md)。继续在 [PR #79](https://github.com/MicroKeen/Mklink-AI-Probe/pull/79) 审阅，未合并或发布。"
   },
   "milestones": [
     {
@@ -30,8 +30,8 @@
   ],
   "verification": [
     {
-      "area": "停止记录后生成可读 TXT",
-      "result": "Python 43 项、GUI 103 项、记忆/用户内容边界 69 项通过，TypeScript 与生产构建通过；真实浏览器核验停止、转换中及已生成。五组同负载软件对照 JSONL 哈希一致，全部 SuperWatch TXT 数值/时间逐行一致；旧日志转换与新记录并行完整。未做新真机测试或打包，冻结包退出续转待验。见[验证记录](../verification/v050-recording-text.md)。"
+      "area": "SuperWatch 配置与可读日志",
+      "result": "配置最终 Python 207 项、GUI 266 项、流与文档边界 218 项通过，TypeScript/生产构建通过。真实浏览器验证创建、修改、后台重启、两文件隔离和恢复；使用离线符号夹具，未做新真机或安装验收。见[配置报告](../verification/v050-superwatch-profile.md)。此前 TXT 的 43 项 Python、103 项 GUI、69 项边界及软件对照/真实浏览器记录保留在[日志报告](../verification/v050-recording-text.md)，冻结包退出续转待验。"
     },
     {
       "area": "通用工程配置与直接烧录",
@@ -69,7 +69,8 @@
     "上海轻量服务器直供最新版，历史文件由 COS 和 Git 保存。COS 累计 189 GiB 告警、207.9 GiB 停止，已取消日期截止。账本和停止锁按[下载策略](tencent-updates.md)维护。",
     "跨会话固件联测固定上位机提交并核对 mklink/runtime 模块导入路径；主工作区和全局 editable 入口不自动代表当前任务版本。",
     "project-init 是可选离线配置工具；通用工程可显式传型号和文件，直接烧录不依赖初始化。型号或镜像不明确时要求补充输入，不猜测，也不自动迁移已有芯片配置。",
-    "RTT / SuperWatch 继续实时记录 JSONL，停止后自动后台生成同名 UTF-8 TXT。RTT 使用主机收发时间，SuperWatch 保留采样相对时间并在头部记录开始日期；TXT 供阅读，JSONL 供回放。"
+    "RTT / SuperWatch 继续实时记录 JSONL，停止后自动后台生成同名 UTF-8 TXT。RTT 使用主机收发时间，SuperWatch 保留采样相对时间并在头部记录开始日期；TXT 供阅读，JSONL 供回放。",
+    "SuperWatch 配置由共享后台保存在 AXF/ELF 旁，名称为原文件名加 .superwatch.json；三端共用名称与修订协议，不存变量地址、不自动开始采集。显示修改防抖，样本接收不写配置；浏览器上传只能保存到后台副本旁。"
   ],
   "hardware": {
     "操作前": "重新核对下载器型号、目标和占用。固件变更由指定会话协调，升降级按本次授权执行。VCC、OTP 操作分别确认。",
@@ -82,8 +83,8 @@
     "TXT 转换的源码退出续转已测，实际冻结安装包退出续转待验；转换仍使用 CPU/磁盘且没有全局并发上限，软件对照不代表真机性能结论。"
   ],
   "next_actions": [
-    "审阅 PR #79 的普通用户安装、SuperWatch 状态提示、通用工程配置及可读日志；合并和发布仍需明确指令。",
-    "当前安装版不含通用工程配置和 TXT 日志改动。后续构建安装包时补测真实冻结进程退出后 TXT 续转，并按受影响范围执行真机/发布门禁。V3.6.10/V4.7.4 固件继续由固件项目维护。",
+    "审阅 PR #79 的普通用户安装、SuperWatch 状态提示、通用工程配置、可读日志及符号旁配置；合并和发布仍需明确指令，执行全量及受影响实际环境门禁。",
+    "当前安装版不含通用工程配置、TXT 日志和 SuperWatch 符号旁配置。下次构建安装包时补测冻结包退出后 TXT 续转及真实符号配置恢复，按受影响范围执行真机/发布门禁。V3.6.10/V4.7.4 固件继续由固件项目维护。",
     "后续沿用 codex/v0.5.0-fixes 工作树；接手时 fetch microkeen 并核对实际分支、远端和已有改动。"
   ],
   "continuation_protocol": [
