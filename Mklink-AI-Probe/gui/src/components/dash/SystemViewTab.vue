@@ -31,6 +31,12 @@
           <Search :size="15" />
           <span>{{ searching ? tr('搜索中', 'Searching') : tr('自动搜索', 'Auto Search') }}</span>
         </button>
+        <label for="systemview-channel">{{ tr('通道', 'Channel') }}</label>
+        <select id="systemview-channel" v-model.number="systemviewChannel" data-testid="systemview-channel"
+          :disabled="starting || dash.state.value === 'running' || dash.state.value === 'paused'"
+          @change="persistSystemviewChannel">
+          <option v-for="channel in 8" :key="channel - 1" :value="channel - 1">CH {{ channel - 1 }}</option>
+        </select>
         <span v-if="addressError" class="address-error" role="alert">{{ addressError }}</span>
         <span v-else-if="addressSource" class="address-source">{{ tr('来源:', 'Source:') }} {{ addressSource }}</span>
       </div>
@@ -197,10 +203,14 @@
         <div class="sv-section-title">
           <span>Timeline</span>
           <span class="sv-section-subtitle">{{ tr('微秒标尺与任务运行区间', 'Microsecond scale and execution intervals') }}</span>
-          <button class="btn-clear" @click="tlReset">{{ tr('全览', 'Fit All') }}</button>
+          <div class="sv-section-actions">
+            <button class="btn-clear" data-testid="systemview-zoom-in" :disabled="!intervals.length" @click="tlZoom(0.5)">{{ tr('放大', 'Zoom In') }}</button>
+            <button class="btn-clear" data-testid="systemview-zoom-out" :disabled="!intervals.length" @click="tlZoom(2)">{{ tr('缩小', 'Zoom Out') }}</button>
+            <button class="btn-clear" @click="tlReset">{{ tr('全览', 'Fit All') }}</button>
+          </div>
         </div>
         <div class="sv-legend" ref="tlLegend"></div>
-        <div class="sv-canvas-wrap"><canvas ref="tlCanvas" :title="tr('滚轮缩放，按住鼠标左键拖动，双击恢复全览', 'Wheel to zoom, drag with the left mouse button, double-click to fit all')"></canvas></div>
+        <div class="sv-canvas-wrap"><canvas ref="tlCanvas" :title="tr('Ctrl/⌘ + 滚轮缩放，左键拖动，双击恢复全览；暂停后仍可缩放', 'Ctrl/⌘ + wheel to zoom, drag to pan, double-click to fit; zoom also works while paused')"></canvas></div>
         <div class="sv-tip" ref="tlTip"></div>
       </div>
 
@@ -337,6 +347,7 @@ const desktopStorage = localStorage
 const settings = ref<DesktopSettings>(loadDesktopSettings(desktopStorage))
 const hasAddressFileSource = computed(() => isSymbolFilePath(settings.value.symbolPath))
 const rttAddress = ref(settings.value.rttAddress)
+const systemviewChannel = ref(settings.value.systemviewChannel ?? 1)
 const addressError = ref('')
 const addressSource = ref('')
 const searching = ref(false)
@@ -430,12 +441,15 @@ let connectTimer: ReturnType<typeof setTimeout> | null = null
 let mounted = false
 let operationGeneration = 0
 let searchGeneration = 0
-const SYSTEMVIEW_CHANNEL = 1
 // Zero lets the host bound the default scan to the actual RAM map.
 const RTT_SEARCH_SIZE = 0
 
 function persistSettings(next: DesktopSettings): void {
   settings.value = saveDesktopSettings(desktopStorage, next)
+}
+
+function persistSystemviewChannel(): void {
+  persistSettings({ ...loadDesktopSettings(desktopStorage), systemviewChannel: systemviewChannel.value })
 }
 
 function isRttAddress(value: string): boolean {
@@ -527,13 +541,18 @@ let timelineVisibleItemCount = 0
 let visibleRequestId = 0
 let visibleRequestInFlight = false
 let visibleRequestPending = false
+let pendingTimelineInspection = false
+let timelineInspectionRequestId = 0
 let latestBinaryTime: number | null = null
 let binaryTickOrigin = 0n
 let lastTableUpdate = Number.NEGATIVE_INFINITY
 const TABLE_UPDATE_INTERVAL_MS = 200
 
 function tlGetIntervals() {
-  const visible = meta.cpuFreq
+  const manualRange = tlInstance && !tlInstance.follow ? tlInstance.getViewRange() : null
+  const visible = manualRange
+    ? intervals.value.filter(it => it.end >= manualRange.start && it.start <= manualRange.end)
+    : meta.cpuFreq
     ? filterRangesByWindow(intervals.value, lastT, windowUs.value)
     : intervals.value
   return visible.map(it => ({
@@ -550,11 +569,29 @@ function tlGetContexts() {
     .map(context => ({ tid: context.id, name: context.name, type: context.type || 'Task' }))
 }
 function tlReset() { tlInstance?.reset() }
+function tlZoom(factor: number) { tlInstance?.zoom(factor) }
+
+function onTimelineViewChange() {
+  if (offlineMode.value) return
+  if (!renderPaused.value) {
+    renderScheduler?.invalidate('zoom')
+    return
+  }
+  pendingTimelineInspection = true
+  if (visibleRequestInFlight) return
+  const range = tlInstance?.getViewRange()
+  if (!range) return
+  pendingTimelineInspection = false
+  const scale = meta.cpuFreq ? 1_000_000 / meta.cpuFreq : 1
+  requestTimelineVisibleRange(Math.max(0, Math.floor(range.start / scale)),
+    Math.ceil(range.end / scale), tlCanvas.value?.clientWidth || 800, true)
+}
 
 function requestTimelineVisibleRange(
   start: number,
   end: number,
   pixelWidth: number,
+  inspection = false,
 ): void {
   // HPM traces can make Worker range extraction slower than one frame. Keep
   // only the newest request so the Worker queue cannot grow into bursty UI.
@@ -562,6 +599,7 @@ function requestTimelineVisibleRange(
   if (visibleRequestInFlight) return
   visibleRequestInFlight = true
   visibleRequestPending = false
+  timelineInspectionRequestId = inspection ? visibleRequestId + 1 : 0
   binaryStream.requestVisibleRange(++visibleRequestId, start, end, pixelWidth)
 }
 
@@ -626,7 +664,7 @@ onMounted(() => {
   refreshLogList()
   if (tlCanvas.value && tlTip.value && tlLegend.value) {
     tlInstance = new SvTimeline(
-      { canvas: tlCanvas.value, tooltip: tlTip.value, legend: tlLegend.value },
+      { canvas: tlCanvas.value, tooltip: tlTip.value, legend: tlLegend.value, onViewChange: onTimelineViewChange },
       {
         intervals: tlGetIntervals(),
         unit: meta.cpuFreq ? 'us' : 'tk',
@@ -722,7 +760,7 @@ watch(() => meta.cpuFreq, () => {
   if (tlCanvas.value && tlTip.value && tlLegend.value) {
     tlInstance?.destroy()
     tlInstance = new SvTimeline(
-      { canvas: tlCanvas.value, tooltip: tlTip.value, legend: tlLegend.value },
+      { canvas: tlCanvas.value, tooltip: tlTip.value, legend: tlLegend.value, onViewChange: onTimelineViewChange },
       {
         intervals: tlGetIntervals(),
         unit: meta.cpuFreq ? 'us' : 'tk',
@@ -997,9 +1035,14 @@ watch(binaryStream.error, error => {
 
 watch(binaryStream.systemViewVisible, visible => {
   if (!visible) return
-  if (renderPaused.value || offlineMode.value || visible.requestId !== visibleRequestId) return
+  if (offlineMode.value || visible.requestId !== visibleRequestId) return
   visibleRequestInFlight = false
-  latestBinaryTime = visible.latestTime
+  if (renderPaused.value && visible.requestId !== timelineInspectionRequestId) {
+    if (pendingTimelineInspection) onTimelineViewChange()
+    return
+  }
+  const inspectingPaused = renderPaused.value
+  if (!inspectingPaused) latestBinaryTime = visible.latestTime
   // candidateIntervalCount is the Worker scan cost, not the amount painted.
   // HPM traces contain many 1 ms ISR intervals; using the scan count here
   // incorrectly forces the live canvas to 20/30 FPS even when painting is
@@ -1027,6 +1070,18 @@ watch(binaryStream.systemViewVisible, visible => {
       taskId: context.id, start, end,
       startTk: startTicks[index], endTk: endTicks[index],
     })
+  }
+
+  if (inspectingPaused) {
+    tlInstance?.setTickOrigin(binaryTickOrigin)
+    tlInstance?.setPrefilteredIntervals(nextIntervals.map(it => ({
+      tid: it.taskId, name: taskStats[it.taskId]?.name || hexId(it.taskId),
+      type: taskStats[it.taskId]?.type || 'Task', start: it.start, end: it.end,
+      startTk: it.startTk, endTk: it.endTk,
+    })))
+    tlInstance?.renderInspection()
+    if (pendingTimelineInspection) onTimelineViewChange()
+    return
   }
 
   for (const context of Object.values(taskStats)) {
@@ -1114,6 +1169,12 @@ function applyTargetOverflowStatus(status: Record<string, unknown>): void {
 }
 
 function applySessionStatus(status: Record<string, unknown>): void {
+  const channel = status.channel
+  if (typeof channel === 'number' && Number.isInteger(channel) && channel >= 0 && channel < 8
+    && channel !== systemviewChannel.value) {
+    systemviewChannel.value = channel
+    persistSystemviewChannel()
+  }
   const connectionGeneration = Number(status.connection_generation)
   const sessionGeneration = Number(status.session_generation)
   const autoRetryCount = Number(status.auto_retry_count)
@@ -1170,6 +1231,8 @@ function evtColor(k: string) {
 }
 function clearAll() {
   binaryStream.reset()
+  pendingTimelineInspection = false
+  timelineInspectionRequestId = 0
   visibleRequestId++
   visibleRequestInFlight = false
   visibleRequestPending = false
@@ -1517,7 +1580,7 @@ async function onStart() {
   try {
     const started = await dash.start({
       addr: address,
-      channel: SYSTEMVIEW_CHANNEL,
+      channel: systemviewChannel.value,
       mode: 0,
       search_size: RTT_SEARCH_SIZE,
     })
@@ -1569,9 +1632,10 @@ async function onStop() {
 .sv-health-card.sv-waiting b { white-space: normal; overflow: visible; }
 .alert-warn { color: var(--warn); padding: 8px; border: 1px solid var(--warn); border-radius: 4px; }
 .sv-toolbar { display: flex; align-items: center; gap: 12px; padding: 6px 0; flex-wrap: wrap; }
-.sv-address-row { display: grid; grid-template-columns: auto minmax(180px, 320px) auto minmax(0, 1fr); align-items: center; gap: 8px; padding: 4px 0; }
+.sv-address-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 4px 0; }
 .sv-address-row label { font-size: 12px; color: var(--muted); }
 .sv-address-row input { min-width: 0; height: 30px; padding: 0 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: inherit; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+.sv-address-row select { height: 30px; padding: 0 6px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: inherit; }
 .btn-search { height: 30px; display: inline-flex; align-items: center; gap: 5px; padding: 0 9px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: inherit; cursor: pointer; }
 .btn-search:disabled { opacity: .45; cursor: not-allowed; }
 .address-error { min-width: 0; color: var(--danger, #dc2626); font-size: 12px; overflow-wrap: anywhere; }

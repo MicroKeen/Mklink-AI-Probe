@@ -7,7 +7,7 @@ SEGGER SystemView 是 RTOS 实时跟踪的事实标准：捕获**任务切换、
 饥饿、ISR 延迟、调度抖动。传统上依赖正版 J-Link。
 
 mklink 把 SystemView 做成**原生功能**：RTOS 的 `SEGGER_SYSVIEW` 集成把跟踪包写进
-**RTT 上行通道 1**，探针固件的共享 MUX RTT 引擎负责读取并转发这个通道，PC 端
+**目标配置的 RTT 上行通道**（通常为 CH1，也可能为 CH2），探针固件的共享 MUX RTT 引擎负责读取并转发这个通道，PC 端
 用自带解码器（`SystemViewParser`）解出 SEGGER 事件。整条链路**不依赖 J-Link，
 也不依赖 SEGGER PC 工具**。
 
@@ -37,6 +37,9 @@ RT-Thread (SEGGER_SYSVIEW 钩子) ──事件包──▶ RTT 上行通道 1 ("
   MUX RTT 下行发送 START、STOP 和任务列表命令，原始上行字节进入现有解析器。
   不进行 UART Recorder `SV` 握手，不发送 Pika `SystemView.start/stop`。
   目标工程**必须先集成 RTT**，所选通道的 UpBuffer/DownBuffer 都须已初始化。
+- **通道选择**：Web GUI 的 RTOS Trace 通道选择器与 CLI/SDK/MCP 的 `channel` 参数一致，
+  必须匹配目标的 SystemView 配置。GUI 重新附着时采用后台报告的通道，并保存最近选择，
+  停止后再次开始不会固定切回 CH1。配置默认值仍为 CH1，不根据收到的乱码猜通道。
 - **并行**：需探针协商增量 RTT 能力（bit 7）。RTT/SystemView 共用同一个控制块，
   不同控制块会被拒绝；同通道只读一次再分别送给各消费者。停止一方不停止其他
   RTT/SuperWatch；同通道仍有观察者时，目标 STOP 延迟到最后一个消费者退出。
@@ -138,12 +141,20 @@ MCP（Agent）等价：`systemview_start` / `capture_systemview` / `systemview_a
 
 ### 任务名 / µs / 秒率（不依赖开机 INIT 包）
 
-`SEGGER_SYSVIEW` 的 `INIT` 包（带 `cpu_freq`/`ram_base`/`id_shift`）+ `TASK_INFO`（任务名）
-只在开机发一次，在高事件率下很快被环形缓冲覆盖。mklink 用三种独立手段绕开：
-- **任务名**：`task_id` 已还原成真实 `rt_thread*` 指针，直接读目标的 `rt_thread.name`
-  字段（扫描候选偏移 + 严格 C 标识符匹配，版本无关）。
+`SEGGER_SYSVIEW` 的 `INIT`（含时钟、`ram_base`、`id_shift`）和 `TASK_INFO`（任务名）
+可能在启动突发中被覆盖；已有 RTT 观察者保留录制时，再次 START 也不会重发描述。
+每次开始跟踪，mklink 在排空上行数据后分开发送系统描述与任务列表查询，刷新本次解析器，
+不停止其他采集、不复位目标、不复用上次会话的任务名称。Web、CLI/Skill、MCP 共用此流程。
+- **任务名**：优先使用目标 TASK_INFO；RT-Thread 名称缺失时，通过共享 MUX 有界读取
+  线程对象，严格核对对象类型、名称和布局，不因已知部分名称而跳过剩余任务。
+  FreeRTOS 等目标依赖其 SystemView 任务列表回调，不猜测 RT-Thread 内存布局。
 - **µs / 秒率**：读目标 `SystemCoreClock` 变量（与 `SYSVIEW_CPU_FREQ` 同源）做换算（需 axf）。
 - **ID 还原**：SEGGER 配置默认 `ram_base=0x20000000` / `id_shift=2`。
+  INIT 提供的零值同样有效，不能把 HPM 的 `0/0` 替换为 Cortex-M 默认值。
+
+时间轴提供“放大 / 缩小 / 全览”按钮，也可用 Ctrl/⌘ + 滚轮缩放、左键拖动。
+普通滚轮继续滚动页面。暂停显示后仍可缩放查看细节；暂停显示不停止后台采集，
+历史仍受缓冲大小限制。手动查看历史时缩放不会跳回最新数据。
 
 ## 分析方法论（供 interpretation）
 

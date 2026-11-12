@@ -1,3 +1,5 @@
+import pytest
+
 from mklink._types import DeviceState
 from mklink.device import Device
 from mklink.profiles import load_mcu_profiles
@@ -184,6 +186,32 @@ def test_dashboard_parser_uses_hpm_project_id_base(tmp_path):
 
     assert parser._ram_base == 0x10000000
     assert parser._id_shift == 2
+
+
+@pytest.mark.parametrize('location', ['profile', 'project'])
+@pytest.mark.parametrize('value', [0, '0x0'])
+def test_systemview_explicit_zero_encoding_survives_device_defaults(tmp_path, monkeypatch, location, value):
+    config = dict(systemview_ram_base=value, systemview_id_shift=value,
+                  sysview_ram_base=0x20000000, sysview_id_shift=2,
+                  vendor='hpmicro', board='hpm5301evklite')
+    dev = Device(project_root=str(tmp_path))
+    monkeypatch.setattr(dev, '_get_mcu_profile', lambda: config if location == 'profile' else {})
+    monkeypatch.setattr('mklink.project_config.load_project_info',
+                        lambda *_: config if location == 'project' else {})
+    parser = SystemViewStreamManager()._create_parser(dev)
+    assert parser._ram_base == 0
+    assert parser._id_shift == 0
+
+
+def test_systemview_invalid_encoding_keeps_cortex_defaults(tmp_path, monkeypatch):
+    dev = Device(project_root=str(tmp_path))
+    monkeypatch.setattr(dev, '_get_mcu_profile', lambda: {
+        'systemview_ram_base': -1, 'systemview_id_shift': 32,
+        'sysview_ram_base': True, 'sysview_id_shift': 0.5,
+    })
+    defaults = dev._systemview_defaults()
+    assert defaults['ram_base'] == 0x20000000
+    assert defaults['id_shift'] == 2
 
 
 def test_dashboard_preserves_cpu_clock_source_from_start_result():

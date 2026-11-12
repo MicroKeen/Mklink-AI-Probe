@@ -202,6 +202,25 @@ describe('SvTimeline continuous filtering', () => {
     expect(timeline._shouldZoomWheel(140, { ctrlKey: true })).toBe(true)
   })
 
+  it('zooms a paused historical viewport without jumping to now or resuming live paint', () => {
+    const timeline = Object.create(SvTimeline.prototype)
+    Object.assign(timeline, {
+      roots: { onViewChange: vi.fn() }, unit: 'us', tickHz: 72_000_000,
+      tMin: 0, tMax: 60_000_000, viewStart: 1000, viewEnd: 1100,
+      windowSize: 5_000_000, follow: false, _renderPaused: true,
+      _draw: vi.fn(), _updateStatus: vi.fn(),
+    })
+    timeline.zoom(0.5)
+    expect(timeline.getViewRange()).toEqual({ start: 1025, end: 1075 })
+    expect(timeline._draw).toHaveBeenCalledWith(true)
+    expect(timeline._renderPaused).toBe(true)
+    expect(timeline.follow).toBe(false)
+    // A long recording must not impose a 600 us minimum zoom span.
+    for (let i = 0; i < 12; i++) timeline.zoom(0.5)
+    expect(timeline.viewEnd - timeline.viewStart).toBeCloseTo(1e6 / 72_000_000)
+    expect(timeline.roots.onViewChange).toHaveBeenCalledTimes(13)
+  })
+
   it('leaves an ordinary wheel event available for page scrolling', () => {
     const timeline = Object.create(SvTimeline.prototype)
     const canvas = document.createElement('canvas')

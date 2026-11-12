@@ -897,7 +897,7 @@ class RttStreamManager(RttChannelDecoder):
 
 
 class SystemViewStreamManager:
-    """Manages SEGGER SystemView RTOS-trace streaming via RTT channel 1.
+    """Manages SEGGER SystemView RTOS-trace on the selected RTT channel.
 
     Reads raw bytes from the target's RTT "SysView" up-buffer, decodes them
     with a persistent SystemViewParser (accumulating timestamps + name maps),
@@ -1335,8 +1335,9 @@ class SystemViewStreamManager:
                 defaults = getter()
             except Exception:
                 defaults = {}
-        parser._ram_base = _positive_int(defaults.get("ram_base")) or 0x20000000
-        parser._id_shift = _positive_int(defaults.get("id_shift")) or 2
+        ram_base, id_shift = defaults.get("ram_base"), defaults.get("id_shift")
+        parser._ram_base = ram_base if type(ram_base) is int and 0 <= ram_base <= 0xffffffff else 0x20000000
+        parser._id_shift = id_shift if type(id_shift) is int and 0 <= id_shift <= 31 else 2
         freq = _positive_int(defaults.get("cpu_freq"))
         if freq:
             parser._cpu_freq = freq
@@ -1563,6 +1564,7 @@ class SystemViewStreamManager:
     def _status_meta(self) -> dict:
         p = self._parser
         session_status = {
+            "channel": getattr(self, "_start_options", {}).get("channel"),
             "transport_stats": self._mux_transport_stats,
             "connection_generation": self._connection_generation,
             "session_generation": self._session_generation,
@@ -1615,7 +1617,7 @@ class SystemViewStreamManager:
             "recording_error": self._recording_error,
         }
 
-    def _unknown_task_ids(self, events: list[dict]) -> set[int]:
+    def _unknown_task_ids(self, events: list[dict], *, allow_partial=False) -> set[int]:
         p = self._parser
         if not p:
             return set()
@@ -1623,7 +1625,7 @@ class SystemViewStreamManager:
         # restart a live high-rate trace for later unknown IDs; those may be
         # false-alignment candidates and are safer to display as hex values.
         # RAM resolution remains a fallback only when startup names were lost.
-        if p._task_names:
+        if p._task_names and not allow_partial:
             return set()
         ram_base = int(getattr(p, "_ram_base", 0x20000000))
         ids: set[int] = set()
@@ -1686,7 +1688,15 @@ class SystemViewStreamManager:
         # 执行过 stop/start(调用方需重置空闲看门狗基准)。
         if getattr(self, "_name_resolution_disabled", False):
             return False
-        ids = self._unknown_task_ids(events)
+        session = getattr(device, '_systemview_session', None)
+        from mklink.systemview import SystemViewSession
+        shared_mux = isinstance(session, SystemViewSession)
+        if shared_mux and time.monotonic() - getattr(session, '_started_at', 0) < .5:
+            return False  # Give fresh INIT and TASKLIST responses time to arrive.
+        ids = self._unknown_task_ids(events, allow_partial=shared_mux)
+        # Bound optional RAM fallback work even if an incomplete packet produces
+        # many candidate IDs. Other names still come from target TASK_INFO.
+        ids = set(sorted(ids)[:16])
         if not ids:
             return False
         now = time.time()
@@ -1695,9 +1705,7 @@ class SystemViewStreamManager:
         self._last_name_resolution = now
         self._name_resolution_attempted.update(ids)
 
-        session = getattr(device, '_systemview_session', None)
-        from mklink.systemview import SystemViewSession
-        if isinstance(session, SystemViewSession):
+        if shared_mux:
             # MUX memory requests share the transport; do not stop or restart
             # a recorder merely to fill missing RT-Thread metadata.
             resolved = self._resolve_task_names(device, ids)

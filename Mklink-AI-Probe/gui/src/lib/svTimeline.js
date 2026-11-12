@@ -225,6 +225,34 @@ export class SvTimeline {
     return this.followSpan > 0 ? this.followSpan : this.windowSize;
   }
 
+  zoom(factor, anchor = 0.5) {
+    const range = this.getViewRange();
+    const fullSpan = this.tMax - this.tMin;
+    if (!range || !Number.isFinite(factor) || factor <= 0 || !(fullSpan > 0)) return;
+    anchor = Math.min(1, Math.max(0, anchor));
+    const currentSpan = range.end - range.start;
+    const minimum = this.unit === 'us' ? (this.tickHz > 0 ? 1e6 / this.tickHz : 0.001) : 1;
+    const nextSpan = Math.min(fullSpan, Math.max(minimum, currentSpan * factor));
+    const time = range.start + currentSpan * anchor;
+    // Paused/history inspection must stay at the selected time. Live zoom
+    // continues following, keeping its new span across subsequent batches.
+    if (this._renderPaused) this.setFollowMode(false);
+    if (this.follow) this.followSpan = nextSpan;
+    if (this.follow && this.windowSize > 0) {
+      this._snapFollowRange();
+    } else {
+      this.viewStart = Math.max(this.tMin, Math.min(this.tMax - nextSpan, time - nextSpan * anchor));
+      this.viewEnd = this.viewStart + nextSpan;
+    }
+    this.renderInspection();
+    this.roots.onViewChange?.();
+  }
+
+  renderInspection() {
+    this._draw(true);
+    this._updateStatus();
+  }
+
   _mergeTasks(run, names, types = new Map()) {
     if (!this._taskOrder) this._taskOrder = [];
     if (!this._taskMeta) this._taskMeta = new Map();
@@ -557,8 +585,8 @@ export class SvTimeline {
     return this.canvas?.ownerDocument?.documentElement?.dataset?.theme === 'dark' ? dark : light;
   }
 
-  _draw() {
-    if (this._renderPaused) return;
+  _draw(force = false) {
+    if (this._renderPaused && !force) return;
     const ctx = this.ctx;
     ctx.clearRect(0, 0, this.W, this.H);
     ctx.font = '11px -apple-system,Segoe UI,Roboto,sans-serif';
@@ -738,24 +766,7 @@ export class SvTimeline {
       const mx = e.clientX - rect.left;
       if (!this._shouldZoomWheel(mx, e) || e.deltaY === 0) return;
       e.preventDefault();
-      const t = this._x2t(mx);
-      const factor = e.deltaY < 0 ? 0.8 : 1.25; // 缩放因子
-      const fullSpan = Math.max(this.tMax - this.tMin, Number.EPSILON);
-      const currentSpan = Math.max(this.viewEnd - this.viewStart, Number.EPSILON);
-      const minSpan = Math.max(fullSpan * 1e-5, this.unit === 'us' ? 0.001 : 1);
-      const nextSpan = Math.min(fullSpan, Math.max(minSpan, currentSpan * factor));
-      this.followSpan = nextSpan;
-      const anchor = Math.min(1, Math.max(0, (mx - this.plotX0) / this.plotW));
-      let ns = t - nextSpan * anchor;
-      let ne = ns + nextSpan;
-      if (ns < this.tMin) { ne += this.tMin - ns; ns = this.tMin; }
-      if (ne > this.tMax) { ns -= ne - this.tMax; ne = this.tMax; }
-      this.viewStart = Math.max(this.tMin, ns);
-      this.viewEnd = Math.min(this.tMax, ne);
-      // Zoom keeps the live cursor at the newest data while preserving the
-      // zoom level. Dragging is still the explicit way to inspect history.
-      this.setFollowMode(true);
-      this._draw(); this._updateStatus();
+      this.zoom(e.deltaY < 0 ? 0.8 : 1.25, (mx - this.plotX0) / this.plotW);
     };
 
     this._onMouseDown = (e) => {
@@ -787,7 +798,7 @@ export class SvTimeline {
         if (ns < this.tMin) { ne += this.tMin - ns; ns = this.tMin; }
         if (ne > this.tMax) { ns -= ne - this.tMax; ne = this.tMax; }
         this.viewStart = ns; this.viewEnd = ne;
-        this._draw(); this._updateStatus();
+        this.renderInspection();
       } else if (mx >= 0 && mx <= this.W && my >= 0 && my <= this.H) {
         const hit = this._hitTest(mx, my);
         this.hover = hit;
@@ -796,7 +807,7 @@ export class SvTimeline {
         }
         this.canvas.style.cursor = hit ? 'pointer' : 'grab';
         if (hit) this._showTip(e.clientX, e.clientY, hit); else this._hideTip();
-        this._draw();
+        this._draw(true);
       }
     };
 
@@ -809,13 +820,14 @@ export class SvTimeline {
       }
       this.dragging = false;
       this.canvas.style.cursor = 'grab';
-      this._draw();
+      this._draw(true);
+      if (this.dragMoved) this.roots.onViewChange?.();
     };
     this._onMouseLeave = () => {
       this.hover = null;
       if (!this.markerPinned) this.markerTime = null;
       this._hideTip();
-      this._draw();
+      this._draw(true);
     };
     this._onDoubleClick = () => {
       this.markerPinned = false;
@@ -876,7 +888,7 @@ export class SvTimeline {
 
   toggleTask(tid) {
     if (this.hidden.has(tid)) this.hidden.delete(tid); else this.hidden.add(tid);
-    this._layout(); this._draw(); this._updateStatus();
+    this._layout(); this.renderInspection();
   }
 
   reset() {
@@ -888,9 +900,11 @@ export class SvTimeline {
     this._followTransitionAt = null;
     if (this.windowSize > 0) {
       this.setFollowMode(true);
-      return;
+    } else {
+      this.viewStart = this.tMin; this.viewEnd = this.tMax;
     }
-    this.viewStart = this.tMin; this.viewEnd = this.tMax; this._draw(); this._updateStatus();
+    this.renderInspection();
+    this.roots.onViewChange?.();
   }
 
   destroy() {

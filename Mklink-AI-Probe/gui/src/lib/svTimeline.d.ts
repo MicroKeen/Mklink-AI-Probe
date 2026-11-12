@@ -4,6 +4,7 @@ export interface SvTimelineRoots {
   legend?: HTMLElement
   resetBtn?: HTMLElement
   hint?: HTMLElement
+  onViewChange?: () => void
 }
 export interface SvTimelineData {
   intervals: { tid: number; name: string; type?: string; start: number; end: number; startTk?: number | bigint; endTk?: number | bigint }[]
@@ -28,6 +29,8 @@ export class SvTimeline {
   setFollowMode(enabled: boolean): void
   getViewRange(): { start: number; end: number } | null
   getFollowSpan(): number
+  zoom(factor: number, anchor?: number): void
+  renderInspection(): void
   renderFrame(timestamp?: number): boolean
   setLabels(labels: { emptyText?: string }): void
   pauseRendering(): void

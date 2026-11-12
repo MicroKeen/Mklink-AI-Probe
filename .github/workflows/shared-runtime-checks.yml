@@ -63,6 +63,7 @@ jobs:
           $tests += 'test_rtt_hex_regression'
           $tests += 'test_superwatch_recording'
           $tests += 'test_systemview_session'
+          $tests += @('test_mux_rtt_shared', 'test_systemview_stream_manager', 'test_systemview_task_names', 'test_systemview_cpu_clock')
           $tests += 'test_internal_process_entry'
           $tests += 'test_remote_service'
           $tests += 'test_remote_gui_sessions'
@@ -154,6 +155,10 @@ jobs:
         shell: pwsh
         working-directory: Mklink-AI-Probe
         run: ./scripts/build_workspace.ps1 -Action run -WorkingDirectory ./gui -Executable npm -ArgumentList @('test', '--', 'src/components/FirmwareCompatibilityBanner.test.ts')
+      - name: Check RTOS trace metadata and timeline interaction
+        shell: pwsh
+        working-directory: Mklink-AI-Probe
+        run: ./scripts/build_workspace.ps1 -Action run -WorkingDirectory ./gui -Executable npm -ArgumentList @('test', '--', 'src/components/dash/SystemViewTab.test.ts', 'src/lib/svTimeline.test.js', 'src/lib/svTimeline.test.ts')
       - name: Check binary stream proxy negotiation
         shell: pwsh
         working-directory: Mklink-AI-Probe

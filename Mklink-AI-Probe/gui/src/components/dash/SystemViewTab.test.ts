@@ -44,6 +44,9 @@ const mocks = vi.hoisted(() => ({
   },
   timeline: {
     construct: vi.fn(),
+    getViewRange: vi.fn(() => null as { start: number; end: number } | null),
+    zoom: vi.fn(), renderInspection: vi.fn(),
+    onViewChange: null as (() => void) | null,
     pauseRendering: vi.fn(), resumeRendering: vi.fn(), renderFrame: vi.fn(),
     setPrefilteredIntervals: vi.fn(),
   },
@@ -62,7 +65,14 @@ vi.mock('../../composables/useResourceStatus', () => ({
 vi.mock('../../composables/useMklinkApi', () => ({ useMklinkApi: () => mocks.api }))
 vi.mock('../../lib/svTimeline', () => ({
   SvTimeline: class {
-    constructor(_roots: unknown, data: unknown) { mocks.timeline.construct(data) }
+    follow = true
+    constructor(roots: { onViewChange?: () => void }, data: unknown) {
+      mocks.timeline.construct(data)
+      mocks.timeline.onViewChange = roots.onViewChange || null
+    }
+    getViewRange = mocks.timeline.getViewRange
+    zoom = mocks.timeline.zoom
+    renderInspection = mocks.timeline.renderInspection
     setData() {}
     setTickOrigin() {}
     setPrefilteredIntervals = mocks.timeline.setPrefilteredIntervals
@@ -124,6 +134,8 @@ function desktopSettings(overrides: Partial<DesktopSettings> = {}): DesktopSetti
 describe('SystemViewTab asynchronous lifecycle', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.timeline.getViewRange.mockReturnValue(null)
+    mocks.timeline.zoom.mockImplementation(() => mocks.timeline.onViewChange?.())
     mocks.dash.state = ref('idle') as typeof mocks.dash.state
     mocks.dash.error = ref(null) as typeof mocks.dash.error
     mocks.status.data = shallowRef([]) as typeof mocks.status.data
@@ -277,6 +289,32 @@ describe('SystemViewTab asynchronous lifecycle', () => {
       mode: 0,
       search_size: 0,
     })
+    wrapper.unmount()
+  })
+
+  it('keeps the shared channel across restart and remount instead of switching to CH1', async () => {
+    mocks.dash.getStatus.mockResolvedValue({ running: true, channel: 2, cpu_freq: 72000000 })
+    let wrapper = mount(SystemViewTab, { props: { deviceConnected: true } })
+    await flushPromises()
+    expect((wrapper.get('[data-testid="systemview-channel"]').element as HTMLSelectElement).value).toBe('2')
+    expect(JSON.parse(localStorage.getItem(DESKTOP_SETTINGS_STORAGE_KEY) ?? '{}').systemviewChannel).toBe(2)
+    wrapper.unmount()
+    mocks.dash.state.value = 'idle'
+    mocks.dash.getStatus.mockResolvedValueOnce({ running: false })
+      .mockResolvedValue({ running: true, channel: 2, progress_state: 'streaming', stats: { bytes: 64 } })
+    wrapper = mount(SystemViewTab, { props: { deviceConnected: true } })
+    await flushPromises()
+    await wrapper.get('.control-toolbar .btn-primary').trigger('click')
+    await flushPromises()
+    expect(mocks.dash.start).toHaveBeenCalledWith(expect.objectContaining({ channel: 2 }))
+    wrapper.unmount()
+  })
+
+  it('allows explicitly selecting a SystemView channel before starting', async () => {
+    const wrapper = mount(SystemViewTab, { props: { deviceConnected: true } })
+    await flushPromises()
+    await wrapper.get('[data-testid="systemview-channel"]').setValue('0')
+    expect(JSON.parse(localStorage.getItem(DESKTOP_SETTINGS_STORAGE_KEY) ?? '{}').systemviewChannel).toBe(0)
     wrapper.unmount()
   })
 
@@ -604,6 +642,30 @@ describe('SystemViewTab asynchronous lifecycle', () => {
     expect(mocks.timeline.construct).toHaveBeenLastCalledWith(
       expect.objectContaining({ renderPaused: true }),
     )
+    wrapper.unmount()
+  })
+
+  it('coalesces paused zoom inspection and repaints detail without resuming acquisition display', async () => {
+    const wrapper = mount(SystemViewTab, { props: { deviceConnected: true } })
+    await flushPromises()
+    publishVisibleIntervals(1_000_000, 0, 1000, 0, 1000)
+    await nextTick()
+    mocks.dash.state.value = 'running'
+    await nextTick()
+    await wrapper.get('.control-toolbar .btn:not(.btn-danger)').trigger('click')
+    mocks.timeline.getViewRange.mockReturnValue({ start: 200, end: 400 })
+    await wrapper.get('[data-testid="systemview-zoom-in"]').trigger('click')
+    await wrapper.get('[data-testid="systemview-zoom-in"]').trigger('click')
+    expect(mocks.timeline.zoom).toHaveBeenCalledWith(0.5)
+    expect(mocks.binary.requestVisibleRange).toHaveBeenCalledTimes(1)
+    const request = mocks.binary.requestVisibleRange.mock.calls[0][0] as number
+    publishVisibleIntervals(1_000_000, request, 5000, 200, 400)
+    await nextTick()
+    expect(mocks.timeline.renderInspection).toHaveBeenCalledTimes(1)
+    expect(mocks.binary.requestVisibleRange).toHaveBeenCalledTimes(2)
+    expect(mocks.timeline.resumeRendering).not.toHaveBeenCalled()
+    expect(mocks.dash.pause).not.toHaveBeenCalled()
+    expect(mocks.binary.stop).not.toHaveBeenCalled()
     wrapper.unmount()
   })
 
