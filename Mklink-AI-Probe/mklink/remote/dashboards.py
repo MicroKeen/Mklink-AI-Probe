@@ -3888,7 +3888,8 @@ class ModbusStreamManager:
         settings['port'] = canonical_serial_port(settings['port'])
         settings['parity'] = str(settings.get('parity', 'N')).upper()
         validate_slave(slave)
-        limits = {'baudrate': (9600, 300, 4000000), 'retries': (0, 0, 5)}
+        from mklink.uart_baud import MAX_BAUD
+        limits = {'baudrate': (9600, 300, MAX_BAUD), 'retries': (0, 0, 5)}
         for key, (default, low, high) in limits.items():
             value = settings.get(key, default)
             if isinstance(value, bool) or not isinstance(value, int) or not low <= value <= high:

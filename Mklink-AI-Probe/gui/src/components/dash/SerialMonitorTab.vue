@@ -28,7 +28,7 @@
           </option>
         </select>
       </label>
-      <button v-if="selectedPort?.uart_kind === 'mklink_uart' && selectedPort.command_port"
+      <button v-if="canReadBaudrates"
         type="button" class="btn" data-testid="serial-read-baudrates"
         :disabled="running || starting || stopping || readingBaudrates || refreshingPorts || ymodemActive || ymodemStarting"
         @click="readBaudrates"
@@ -183,6 +183,7 @@ import { trafficBytes, TrafficTextDecoder, type TrafficFrame } from '../../lib/t
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ChevronDown, RefreshCw, ScrollText, SlidersHorizontal, SquareTerminal, Trash2 } from '@lucide/vue'
 import { useBinaryStream } from '../../composables/useBinaryStream'
+import { useUartBaudrates } from '../../composables/useUartBaudrates'
 import { useMklinkApi } from '../../composables/useMklinkApi'
 import { useToast } from '../../composables/useToast'
 import { tr } from '../../composables/useLanguage'
@@ -258,7 +259,6 @@ const idleYmodemStatus = (): YmodemStatus => ({
   sent_bytes: 0, total_bytes: 0, percent: 0, block: 0, retries: 0, error: '',
 })
 
-const commonBaudrates = [9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600]
 const toast = useToast()
 const { listUartPorts: fetchPorts } = useMklinkApi()
 const logBinary = useBinaryStream('serial', {
@@ -269,21 +269,9 @@ const terminalBinary = useBinaryStream('serial', {
 })
 const ports = ref<PortInfo[]>([])
 const portName = ref('')
-const readingBaudrates = ref(false)
-const selectedPort = computed(() => ports.value.find(port => port.device === portName.value))
-const hasFirmwareBaudrates = computed(() => {
-  const port = selectedPort.value
-  const options = port?.uart_baud
-  return port?.uart_kind === 'mklink_uart' && options?.profile === 1 && options.source === 'firmware'
-    && Array.isArray(options.rates) && options.rates.length > 0 && options.rates.length <= 64
-    && new Set(options.rates).size === options.rates.length
-    && options.rates.every(rate => Number.isSafeInteger(rate) && rate >= 300 && rate <= 10_000_000)
-})
-const baudrates = computed(() => hasFirmwareBaudrates.value
-  ? [...selectedPort.value!.uart_baud!.rates].sort((a, b) => a - b) : commonBaudrates)
-const baudrateSourceLabel = computed(() => hasFirmwareBaudrates.value
-  ? tr('下载器固件声明的普通 UART 档位', 'Ordinary UART rates advertised by the probe firmware')
-  : tr('常用档位，实际支持以设备为准', 'Common rates; actual support depends on the device'))
+const { baudrates, baudrateSourceLabel, canReadBaudrates, readingBaudrates, readBaudrates } = useUartBaudrates(
+  ports, portName, () => running.value || starting.value || stopping.value || refreshingPorts.value || ymodemActive.value || ymodemStarting.value,
+)
 const activeConfigs = ref<Array<Record<string, unknown>>>([])
 const selectablePorts = computed(() => running.value
   ? activeConfigs.value.map(item => ({ device: String(item.port), description: '' })) : ports.value)
@@ -464,28 +452,6 @@ async function refreshPorts(): Promise<void> {
   } finally {
     refreshingPorts.value = false
     portsLoaded.value = true
-  }
-}
-
-async function readBaudrates(): Promise<void> {
-  if (readingBaudrates.value || running.value || starting.value || stopping.value) return
-  const requested = portName.value
-  readingBaudrates.value = true
-  try {
-    const result = await requestJson('/api/runtime/uart-baudrates', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ port: requested }),
-    }) as PortInfo
-    if (disposed || portName.value !== requested) return
-    if (result.device !== requested) throw new Error(tr('串口身份已变化，请刷新', 'Port identity changed; refresh ports'))
-    ports.value = ports.value.map(port => port.device === requested ? result : port)
-    if (result.uart_baud?.source !== 'firmware') {
-      toast.info(result.uart_baud?.firmware_warning || tr('固件未提供已适配档位，保留常用档位', 'Firmware has no adapted-rate list; keeping common rates'))
-    }
-  } catch (caught) {
-    if (!disposed) toast.error(caught instanceof Error ? caught.message : String(caught))
-  } finally {
-    readingBaudrates.value = false
   }
 }
 

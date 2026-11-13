@@ -40,6 +40,7 @@ jobs:
           $tests += 'test_remote_cli'
           $tests += 'test_uart_session'
           $tests += 'test_uart_baud'
+          $tests += 'test_uart_high_baud'
           $tests += 'test_mux'
           $tests += 'test_remote_shared_modbus'
           $tests += 'test_remote_shared_serial'

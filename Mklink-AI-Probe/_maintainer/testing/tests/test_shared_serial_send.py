@@ -41,7 +41,7 @@ def test_send_creates_or_borrows_matching_port_without_changing_other_ports(scan
 @pytest.mark.parametrize('params', [
     {'count': 0}, {'count': -1}, {'count': True}, {'count': 1.5},
     {'delay': -1}, {'delay': float('nan')}, {'delay': float('inf')}, {'delay': True}, {'delay': 3601},
-    {'baud': 0}, {'baud': True}, {'baud': 4000001}, {'baud': 9600.5},
+    {'baud': 0}, {'baud': True}, {'baud': 10000001}, {'baud': 9600.5},
     {'databits': 4}, {'databits': True}, {'stop': 3}, {'stop': True}, {'parity': 'X'},
     {'send_data': 'invalid'}, {'send_data': ''}, {'send_data': '', 'hex': False},
 ])

@@ -1544,8 +1544,9 @@ def _parse_bool(s: str) -> bool:
 
 def _serial_connection(args, *, port=None):
     from mklink.usb_interfaces import canonical_serial_port
-    if type(args.baud) is not int or not 1 <= args.baud <= 4000000:
-        raise ValueError('Baud rate must be an integer in 1..4000000')
+    from mklink.uart_baud import MAX_BAUD
+    if type(args.baud) is not int or not 1 <= args.baud <= MAX_BAUD:
+        raise ValueError(f'Baud rate must be an integer in 1..{MAX_BAUD}')
     if type(args.databits) is not int or args.databits not in (5, 6, 7, 8):
         raise ValueError('Data bits must be 5, 6, 7 or 8')
     if type(args.stop) is not int or args.stop not in (1, 2) or args.parity not in ('N', 'E', 'O'):

@@ -318,7 +318,8 @@ def _dispatch_serial(operation, params, context, *, project_root, probe):
     if not port:
         raise RequestValidationError('Invalid operation parameters', data={'field': 'port'})
     baud = _integer(params.get('baudrate', 115200), 'baudrate', minimum=1)
-    if baud > 4000000:
+    from mklink.uart_baud import MAX_BAUD
+    if baud > MAX_BAUD:
         raise RequestValidationError('Invalid operation parameters', data={'field': 'baudrate'})
     connection = {'port': canonical_serial_port(port), 'baudrate': baud,
                   'databits': 8, 'stopbits': 1, 'parity': 'N'}
