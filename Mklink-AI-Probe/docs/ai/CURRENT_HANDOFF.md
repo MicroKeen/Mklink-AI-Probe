@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-11-13T20:17:13+08:00`
+- 更新时间：`2026-11-13T22:09:11+08:00`
 - 分支：`codex/v0.5.0-fixes`
-- HEAD：`b3ef9ef4`
-- 远端 HEAD：`b3ef9ef4`
-- 工作树：冻结源码 b3ef9ef4 已推送；本轮仅补充覆盖安装报告和记忆，另行提交。安装包未签名、未发布，PR #79 未合并。
-- 当前任务：本机已覆盖为 V0.5.0 / b3ef9ef4，包含 03fe2cfa 的异常任务记录和多下载器修复。安装版验证损坏 jobs.json 不阻止连接且保留任务保护、第二窗口不影响第一窗口、占用拒绝、单窗口往返切换及缺失身份不回退；原生/Web/冻结 CLI/MCP 和完整 Skill 一致性通过。测试后台已退出，6 份原配置不变；本地安装包及哈希见[覆盖报告](../verification/v050-connection-overwrite.md)。可交客户复测，但原始 WinError 995 触发原因未确认；仍未发布。
-- 状态：`V0.5.0 / b3ef9ef4 连接修复候选已打包并普通用户覆盖，安装版双 V4 验收通过`
+- HEAD：`270ae176`
+- 远端 HEAD：`270ae176`
+- 工作树：270ae176 已推送；本轮单独提交报告收尾和记忆。未重打安装包、未合并或发布。
+- 当前任务：270ae176 修复指定串口后时钟禁用，移除 HPM 重复板卡选择，并重做脱机 JTAG OTP 读写配置界面。HPMLink V4.7.3 / HPM5301 的 hello_world 在线校验、脱机部署触发及 52988 字节回读一致；OTP 只读与未确认草稿验证通过，未烧熔丝或改供电。测试后台已释放，临时 U 盘文件归档清理。见[报告](../verification/v050-hpm-interface-otp.md)。Windows 安装版仍为 V0.5.0 / b3ef9ef4，本轮未重打包。
+- 状态：`HPM5301 连接前时钟、器件选择与脱机 OTP 界面已修复并真机验收`
 
 ## 里程碑
 
@@ -19,13 +19,13 @@
 
 ## 验证证据
 
-- **ELF 可写加载段与结构体成员**：真实 ELF 复现 AX .data 被旧节权限范围遗漏；STO_PLL_M1 本身仍为 STT_OBJECT。默认解析器修复后 API 返回 1184 个变量，成员 hAvrMecSpeedUnit 为 int16_t / 2 字节 / 0x200004C4，Runtime 和生产浏览器均能加入；配置落在测试副本旁。ELF/DWARF/目录/共享 watch/RTT 等 400 项通过；原 ELF 哈希不变，未连接或操作客户板。清理 445 个测试链接、3 个临时目录，零失败。见[报告](../verification/v050-elf-load-segments.md)。 ad00c962 冻结 CLI、API 和安装版生产 Web 再次通过，重解析保留已选成员；见[覆盖验收](../verification/v050-elf-baud-overwrite.md)。
-- **UART / RS485 完整波特率档位**：后端关联 870 项、GUI 定向 25 项、Skill 边界 69 项及生产构建通过。两只 V4 的 UART、RS485 共四个接口均实际返回 34 档，最高 10M；生产浏览器验证 UART / RS485 独立查询、两页选择 10M、第三方预设和中英文提示。该轮未发送串口数据；固件会话双 V4 互测属于独立证据。见[报告](../verification/v050-uart-baud.md)。 后续 ad00c962 覆盖安装后，两接口 34 档查询、两页选择 10M 再次通过，仍未发送载荷；见[覆盖验收](../verification/v050-elf-baud-overwrite.md)。
+- **HPM 连接设置、烧录选择与脱机 OTP**：GUI 全量 1261 项、最后相关 201 项（重叠）、后端 500 项及生产构建通过。真实浏览器验证指定串口连接前 JTAG/时钟、重复板卡移除、OTP 中英文读写视图和只读字段；HPM5301 hello_world 在线、脱机实际烧录通过，52988 字节回读 SHA-256 与 BIN 相同。未映射器件明确提示、不沿用隐藏板卡。498 测试链接及 2 个临时目录清理成功，见[报告](../verification/v050-hpm-interface-otp.md)。本轮未更新安装包。
+- **ELF 解析与完整 UART 波特率**：ELF 可写范围合并 PT_LOAD，客户 ELF 的结构体成员恢复，400 项解析/共享关联及真实浏览器通过，未操作客户板，见[ELF 报告](../verification/v050-elf-load-segments.md)。串口助手/Modbus 按 UART、RS485 独立声明使用 34 档至 10M，870 后端/25 GUI/69 Skill 及双 V4 实读通过，未发高速载荷，见[波特率报告](../verification/v050-uart-baud.md)。两项已随 ad00c962 普通用户覆盖并复验，见[覆盖报告](../verification/v050-elf-baud-overwrite.md)。
 - **SystemView 重启与时序图缩放**：关联后端 651 项、最终状态/编码 30 项（重叠）通过，GUI 全量 1226 项及生产构建通过。V4.7.4 / STM32F103RC 源代码 5 轮 RTT 共存和安装版 3 轮启停均恢复 9 个任务名，Flash 117760 字节匹配 AXF。真实浏览器验证 CH2 重启及重载保留、约 19 µs 视窗缩放、暂停平移；安装版亦通过。目标/MUX 丢弃计数为零，但解析器仍有对齐丢字节及偶发异常区间，不宣称无损。见[完整报告](../verification/v050-systemview-restart-zoom.md)。
 - **固件能力提醒与采集中写入**：同一 V4 / STM32F103RC：V4.7.3、V4.7.4 修改前/后最大采样间隔分别 0.195/0.208/0.192 ms；RTT 并行为 1.562 ms，各轮 10 次写入均成功且原始值对应，无序号断裂或读错。真实 Web 写 123 后保持约 15.9 kHz，结束恢复原值 0，后台已释放。后端广泛关联 1711 项通过，修正新增入口断言后相关 271 项通过，Skill 边界 69 项、GUI 全量 1222 项及生产构建通过；数量有重叠。真实 HTTP/RuntimeClient/FastMCP 警告一致，状态检查无设备 I/O；中英文横幅及跳转通过浏览器验收。见[完整结果与限制](../verification/v050-firmware-capabilities.md)。 后台提醒追加：最终后端 396 项及桥接 10 项、GUI 1241 项、生产构建及真实浏览器通过。V2.9.4 与云端 V2.9.3 比较不误报降级；保留原文修复历史版本集合歧义。清理 547 链接/5 目录，零失败。见[提醒报告](../verification/v050-firmware-update-notice.md)。 更新顺序追加：共享关联 1570 项通过，文档预算/位置修正后最终相关 149 项通过；GUI 全量 1248 项及最终相关 93 项、生产构建、浏览器互斥/重启失败恢复通过，数量重叠。原生安装和刷写均隔离，见[报告](../verification/v050-update-order.md)。
 - **macOS 兼容性与跨平台回归**：Windows Python 全量 6929 通过、2 个 hil_core.observe 跳过；唯一剩余的 DLL 路径审计夹具修正后，独立包完整 6 项复测通过。GUI 全量 1219 项、最终相关 280 项及生产构建通过。两种 Mac 原生 USB 各 73 项通过、1 项 Windows 专属跳过；最终 DMG 的签名、冻结 CLI/MCP、内置算法、Web 健康与正常退出通过，ARM/Intel 启动约 5.593/11.6 秒。DMG 和配套 Skill 已下载/生成并校验，见[报告及哈希](../verification/v050-macos-compatibility.md)。浏览器验证中英文更新提示与重试；Mac 原生 GUI、Gatekeeper 和实物 USB 未验。
 - **SuperWatch 配置与手动日志转换**：手动转换 56 项、共享后台/流/边界 296 项、GUI 152 项通过，生产构建通过。冻结安装版实物记录 1,114,032 组，Excel 两页 1,048,575 / 65,457 行、4,456,128 个值与 JSONL 对应；RTT 505 行 TXT 对应，7 个原始文件哈希不变。GUI 手动触发、实际 CLI/MCP 重复请求复用任务且不停止采集。见[转换报告](../verification/v050-manual-recording-export.md)。符号旁配置原有软件/浏览器证据见[配置报告](../verification/v050-superwatch-profile.md)；前一安装候选已验证真实 AXF 重启恢复，本候选解析 6,718 个变量并保存四变量、500000 缓存与 1 µs 间隔。 TXT 精简追加：转换/记录器 37 项、Skill 69 项通过；既有 505 行时间和正文等价，63,996→40,304 字节，原始文件哈希不变。见[TXT 报告](../verification/v050-rtt-txt-readable.md)。
-- **Windows 安装与工程初始化**：V0.5.0 / b3ef9ef4 已普通用户覆盖 3a3fb298，安装器/桌面 RID 8192，3680 文件一致、6 份配置与 USB 名称/机器级登记不变。安装版双 V4 独立后台、占用保护、单窗口切换、缺失身份不回退及非 UTF-8 任务记录连接/保护通过；正常释放设备。Windows-only PATH 下冻结 CLI、58 个 MCP 工具、完整 FLM/Pack、原生/真实浏览器通过；Skill 2344 个资源文件匹配。见[覆盖及哈希](../verification/v050-connection-overwrite.md)。此前软件 831/227 后端、1254/87 GUI（重叠）及两轮实物 USB 拔插见[连接修复报告](../verification/v050-probe-selection-recovery.md)。早期普通用户权限诊断见[报告](../verification/v050-customer-journal-diagnosis.md)，版本/下载策略验收见[报告](../verification/v050-candidate-overwrite.md)，通用工程初始化 424 项及真实/冻结 CLI 见[报告](../verification/v050-project-init.md)。
+- **Windows 安装与工程初始化**：V0.5.0 / b3ef9ef4 普通用户覆盖通过：安装器/桌面 RID 8192、3680 文件一致、6 份配置及 USB/机器级登记不变。安装版双 V4 独立后台、占用保护、切换、缺失身份不回退及损坏任务记录保护通过，设备已释放；Windows-only PATH、冻结 CLI/58 个 MCP 工具/完整资源、原生和生产 Web 通过，见[覆盖及哈希](../verification/v050-connection-overwrite.md)。软件与两轮 USB 拔插见[连接修复](../verification/v050-probe-selection-recovery.md)，客户旧报错见[诊断](../verification/v050-customer-journal-diagnosis.md)，版本/下载策略见[候选](../verification/v050-candidate-overwrite.md)，通用工程初始化见[报告](../verification/v050-project-init.md)。
 - **V3 / V4 SuperWatch 恢复**：普通 V4 修复候选实物拔插跨 12.637 秒缺口原订阅恢复，V4.7.4 健康检查通过，223,728 组、零读错及队列丢弃，中位 43,486.6 组/秒。V3.6.10 实刷及拔插恢复通过，1,484,544 组，零队列丢弃、序号异常和时间倒退，恢复后中位 43,056.7 组/秒。旧 V3.6.8 缺采样能力，无同条件旧版基线。版本及未验范围见[恢复验证记录](../verification/v050-superwatch-swclk.md)。
 
 ## 架构决策
@@ -35,7 +35,7 @@
 - Windows NSIS 默认 currentUser；安装不自动命名 USB 端口。只有用户确认修改或恢复端口显示名称时，才调用独立 UAC 助手。旧机器级登记与受保护目录不自动迁移。
 - 后续发布只到腾讯云和 MicroKeen/Mklink-AI-Probe GitHub，Gitee 与旧 GitHub 保留历史，不上传新附件/标签/索引。AI / Skill / 固件按腾讯云、GitHub 顺序回退，不并发查询；备用 Skill 文件须匹配所选版本、大小、SHA-256。上海服务器直供最新版，COS/Git 存历史；COS 189 GiB 告警、207.9 GiB 停止，无日期截止。见[下载策略](tencent-updates.md)。
 - 跨会话固件联测固定上位机提交并核对 mklink/runtime 模块导入路径；主工作区和全局 editable 入口不自动代表当前任务版本。
-- project-init 是可选离线配置工具；通用工程可显式传型号和文件，直接烧录不依赖初始化。型号或镜像不明确时要求补充输入，不猜测，也不自动迁移已有芯片配置。 ELF 可写范围合并 SHF_WRITE/ALLOC 节及 PF_W 的 PT_LOAD 段，使用 p_vaddr/p_memsz；不凭 AX 或 RAM 地址放宽，不把 Flash 装载镜像当 RAM。已知只读映射不走通用回退。
+- project-init 是可选离线配置工具；通用工程可显式传型号和文件，直接烧录不依赖初始化。型号或镜像不明确时要求补充输入，不猜测，也不自动迁移已有芯片配置。 ELF 可写范围合并 SHF_WRITE/ALLOC 节及 PF_W 的 PT_LOAD 段，使用 p_vaddr/p_memsz；不凭 AX 或 RAM 地址放宽，不把 Flash 装载镜像当 RAM。已知只读映射不走通用回退。 HPM GUI 按器件推导已有默认 Flash 配置，不再重复选择板卡；未映射器件拒绝沿用旧配置，CLI/MCP 显式 board/hpm_flash_cfg 保留。JTAG 脱机 OTP 只生成已确认的 hpm_user_otp 配方，读取绑定身份与代次；修改、断开或换设备后重新确认，系统字段只读。
 - RTT / SuperWatch 实时记录 JSONL；停止记录不自动转换。用户手动将 SuperWatch 转为 Excel、RTT 转为带主机时间戳的 UTF-8 TXT，三端共用低优先级后台转换；Excel 保留采样相对时间，开始日期写在 Info 页。JSONL 保留作无损回放源。 RTT TXT 普通行仅含时间、CH 通道、RX/TX 和正文；session 在每个分段首次输出或切换时单列注释，JSONL 保留完整字段。
 - SuperWatch 配置由共享后台保存在 AXF/ELF 旁，名称为原文件名加 .superwatch.json；三端共用名称与修订协议，不存变量地址、不自动开始采集。显示修改防抖，样本接收不写配置；浏览器上传只能保存到后台副本旁。
 - macOS 候选仅 ad-hoc 签名且不启用 Hardened Runtime；正式 Developer ID 构建必须在 PyInstaller 冻结阶段正确签内嵌库。候选不发布到正式更新索引。慢 USB 枚举移出事件循环，心跳有界等待；实际操作仍检查身份、代际和占用，不重放未知结果。
@@ -47,15 +47,15 @@
 - **普通 V4**：本轮 MicroLink V4 实读 V4.7.4，用户确认目标 STM32F103。与 HPMLink 双窗口连接、单窗口往返切换和两轮 USB 拔插通过；另一设备连接未受影响。仅连接/状态验证，未刷写、复位、改电源或采集；两后台和页面已关闭。之前 RS485 34 档、SystemView/采集中写入证据见对应报告，下次重新核对占用。 b3ef9ef4 冻结安装版再次通过独立连接、占用保护和往返切换；仅连接/状态检查，测试后台已正常退出。
 - **普通 V3**：固件会话已回读 V3.6.10 / 2026-11-10T14:14:14，原 STM32F103 的一次 SWCLK 拔插恢复通过；测试结束时后台退出、设备释放。下次仍需重新核对占用。
 - **普通 V2**：2026-11-13 提醒验证时实际仅接入一只 V2.9.4，无产品标识。当前版本取首行而非历史版本，真实云端返回 V2.9.3，未提示降级；正常分离后后台退出释放设备。未刷写、改电源或目标程序，未启动采集；下次操作重新核对占用。
-- **HPMLink V4**：本轮实读 HPMLink V4.7.2，用户确认 HPM5301；界面 JTAG 10 MHz。MicroLink 两轮拔插时该窗口保持连接，最终轮 PID/实例/连接代次不变；升级提示选择稍后，未刷写。无 RAM/吞吐或精确型号探测证明，后台已释放。 b3ef9ef4 冻结安装版再次通过独立连接、占用保护和往返切换；仅连接/状态检查，测试后台已正常退出。
+- **HPMLink V4**：本轮实际查询 HPMLINK / V4.7.3，用户确认 HPM5301；JTAG 10 MHz。hello_world 在线逐字节校验、脱机部署触发及完整 52988 字节 Flash 回读一致。用户 OTP/影子值和锁状态烧录前后相同；未写 OTP、升级下载器或改供电。目标保留 hello_world，测试后台释放，独立 U 盘测试文件已校验归档并清理。见[报告](../verification/v050-hpm-interface-otp.md)。此前 b3ef9ef4 双下载器安装验收见覆盖报告。
 
 ## 下一动作
 
-1. 请客户使用 V0.5.0 / b3ef9ef4 本地候选复测，退出旧 GUI/空闲后台并重载更新后的 Skill/MCP。若再报 WinError 995，结合新增匹配计数、故障时枚举和系统事件排查原始触发原因，不直接归因固件。异常任务记录必须保留，不自动清空历史。
-2. 取得客户目标芯片、RTOS 和原始 SystemView 流后，确认其丢名是否命中元数据/通道修复，并单独排查解析对齐及异常运行片段；不把现有板测试扩大为所有平台保证。
-3. 在用户 Mac 上验收对应 ARM/Intel 候选的首次启动、覆盖安装、探针接口/卷身份和真实查询耗时，再核对共享会话及 MCP 重载。当前软件与包内自检不替代真实环境门禁。
-4. 固件会话继续维护 STOP 状态码补丁；客户信息齐备并获得明确实物安排后再做同条件 STOP/唤醒验证，不自动抢占调试器或刷写设备。
-5. 继续审阅 codex/v0.5.0-fixes / PR #79；当前 Windows 已安装 V0.5.0 / b3ef9ef4，配套完整 Skill 已生成，线上正式索引未变。后续获授权再验收签名自动更新链路、准备对应平台与 Site Agent 资产，最后仅发布到腾讯云及 MicroKeen GitHub；不默认同步 Gitee。Mac 候选仍不含最新几轮修复。
+1. 需要交付本轮 HPM 界面改动时，从 270ae176 或后继冻结源码重新生成 Windows currentUser 安装包并覆盖验收；当前本机及可交付候选仍为 b3ef9ef4。OTP 永久编程/锁定须另行确认具体内容，不能以普通烧录验收替代。 继续审阅 PR #79，后续签名/发布仍需明确授权，仅腾讯云和 MicroKeen GitHub；Mac 候选不含最新修复。
+2. 请客户使用 V0.5.0 / b3ef9ef4 本地候选复测，退出旧 GUI/空闲后台并重载更新后的 Skill/MCP。若再报 WinError 995，结合新增匹配计数、故障时枚举和系统事件排查原始触发原因，不直接归因固件。异常任务记录必须保留，不自动清空历史。
+3. 取得客户目标芯片、RTOS 和原始 SystemView 流后，确认其丢名是否命中元数据/通道修复，并单独排查解析对齐及异常运行片段；不把现有板测试扩大为所有平台保证。
+4. 在用户 Mac 上验收对应 ARM/Intel 候选的首次启动、覆盖安装、探针接口/卷身份和真实查询耗时，再核对共享会话及 MCP 重载。当前软件与包内自检不替代真实环境门禁。
+5. 固件会话继续维护 STOP 状态码补丁；客户信息齐备并获得明确实物安排后再做同条件 STOP/唤醒验证，不自动抢占调试器或刷写设备。
 
 ## 已知限制
 
