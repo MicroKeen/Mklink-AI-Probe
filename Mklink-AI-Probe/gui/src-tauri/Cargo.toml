@@ -1,6 +1,6 @@
 [package]
 name = "mklink-ai-probe"
-version = "0.4.3"
+version = "0.5.0"
 description = "Mklink AI Probe"
 authors = ["MicroKeen"]
 edition = "2021"

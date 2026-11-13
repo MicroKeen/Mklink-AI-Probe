@@ -70,7 +70,7 @@ def test_publisher_defaults_to_official_repositories(publisher, tmp_path):
     ])
 
     assert args.github_repo == "MicroKeen/Mklink-AI-Probe"
-    assert args.gitee_repo == "Aladdin-Wang/Mklink-AI-Probe"
+    assert not hasattr(args, "gitee_repo")
 
 
 def test_gitee_request_uses_official_token_parameter_and_redacts_errors(
@@ -376,7 +376,7 @@ def test_gitee_git_push_uses_token_only_in_askpass_environment(
     assert command[-1] == "master:master"
 
 
-def test_updates_branch_is_published_only_after_both_releases_and_verification(
+def test_updates_branch_is_published_only_after_canonical_release_and_verification(
     publisher, monkeypatch, tmp_path,
 ):
     events = []
@@ -391,7 +391,7 @@ def test_updates_branch_is_published_only_after_both_releases_and_verification(
     monkeypatch.setattr(
         publisher,
         "validate_release_preflight",
-        lambda **_kwargs: events.append("preflight") or [installer, signature],
+        lambda **_kwargs: events.append("preflight") or [installer, signature, skill],
     )
     monkeypatch.setattr(publisher, "push_version_tag", lambda **_kwargs: events.append("tag"))
     monkeypatch.setattr(publisher, "publish_github_release", lambda **_kwargs: events.append("github"))
@@ -431,7 +431,7 @@ def test_updates_branch_is_published_only_after_both_releases_and_verification(
     )
 
     assert events == [
-        "preflight", "tag", "github", "verify", "verify", "gitee", "verify", "verify", "updates"
+        "preflight", "tag", "github", "verify", "verify", "verify", "updates"
     ]
 
 
@@ -445,7 +445,6 @@ def test_publisher_uses_canonical_github_index_and_preserves_gitee(publisher, mo
     )
     pushes = [c for c in calls if c[0] == "gitee" or "push" in c]
     assert pushes == [
-        ["gitee", "updates:updates"],
         ["git", "push", "--force", "https://github.com/MicroKeen/Mklink-AI-Probe.git", "updates:release"],
     ]
 
@@ -458,7 +457,6 @@ def test_installed_updaters_share_new_primary_and_unchanged_fallback(publisher):
     assert DEFAULT_MANIFEST_URLS == (
         "https://download.microkeenai.com/mklink/stable/latest.json",
         "https://raw.githubusercontent.com/MicroKeen/Mklink-AI-Probe/release/latest.json",
-        "https://gitee.com/Aladdin-Wang/Mklink-AI-Probe/raw/updates/latest.json",
     )
 
 

@@ -152,7 +152,7 @@ def test_v2_retired_repository_rejected_before_any_repository_access(tmp_path):
         publish(tmp_path / "missing.rbl", ["MicroKeen/Mklink-AI-Probe", "Aladdin-Wang/Mklink-AI-Probe"], apply=True)
 
 
-def test_channel_update_preserves_v2_and_recovers_partial_publication(publisher, tmp_path, monkeypatch):
+def test_channel_update_preserves_v2_and_leaves_retired_gitee_unchanged(publisher, tmp_path, monkeypatch):
     import json
     import subprocess
 
@@ -193,28 +193,17 @@ def test_channel_update_preserves_v2_and_recovers_partial_publication(publisher,
             command = [str(bare) if arg == f'https://{provider}.com/test/repo.git' else arg for arg in command]
         return original_run(command, **kwargs)
 
-    fail_gitee = True
-
-    def gitee_push(*, repository, repo, refspec, token, force):
-        nonlocal fail_gitee
-        assert force is False and repo == 'test/repo'
-        if fail_gitee:
-            fail_gitee = False
-            raise RuntimeError('simulated Gitee outage')
-        git('push', remotes['gitee'], refspec, cwd=repository)
-
     monkeypatch.setattr(publisher, '_run', local_run)
-    monkeypatch.setattr(publisher, '_gitee_push', gitee_push)
-    args = dict(document=document, github_repo='test/repo', gitee_repo='test/repo', gitee_token='unused')
-    with pytest.raises(RuntimeError, match='simulated Gitee outage'):
-        publisher.publish_manifest_branch(**args)
+    monkeypatch.setattr(publisher, '_gitee_push', lambda **kw: pytest.fail('Gitee is retired'))
+    args = dict(document=document, github_repo='test/repo')
+    publisher.publish_manifest_branch(**args)
     github_head = git('--git-dir', remotes['github'], 'rev-parse', 'firmware').stdout
     publisher.publish_manifest_branch(**args)
     assert git('--git-dir', remotes['github'], 'rev-parse', 'firmware').stdout == github_head
     for provider, bare in remotes.items():
         assert git('--git-dir', bare, 'rev-parse', 'firmware:latest-v2.json').stdout.strip() == before[provider]
         assert git('--git-dir', bare, 'show', 'firmware:other.txt').stdout.strip() == 'preserve me'
-        assert json.loads(git('--git-dir', bare, 'show', 'firmware:latest.json').stdout) == document
+        assert json.loads(git('--git-dir', bare, 'show', 'firmware:latest.json').stdout) == (document if provider == 'github' else previous)
     heads = {p:git('--git-dir', r, 'rev-parse', 'firmware').stdout for p,r in remotes.items()}
     publisher.publish_manifest_branch(**args)
     assert heads == {p:git('--git-dir', r, 'rev-parse', 'firmware').stdout for p,r in remotes.items()}

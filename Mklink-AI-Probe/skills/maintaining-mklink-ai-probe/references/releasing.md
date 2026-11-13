@@ -1,5 +1,7 @@
 # Maintainer Release Procedure
 
+默认下载/发布策略（2026-11-13）：仅腾讯云与 MicroKeen/Mklink-AI-Probe GitHub。AI 与 Skill 先取 `https://download.microkeenai.com/mklink/stable/latest.json`，不可用时再取官方 GitHub `release/latest.json`；按索引获取完整 Skill，不能用源码 ZIP 代替。Gitee 只保留历史文件，不再上传新资产或更新索引。Skill 文件回退须校验相同版本、大小及 SHA-256。
+
 The active GitHub repository is MicroKeen/Mklink-AI-Probe. Only Aladdin-Wang may
 publish. Use reviewed, clean `main` equal to the remote MicroKeen `main` tip.
 The maintainer's latest 2026-09-15 policy removes mandatory second-person

@@ -1,10 +1,12 @@
 # 安装与更新（使用者）
 
+默认下载/发布策略（2026-11-13）：仅腾讯云与 MicroKeen/Mklink-AI-Probe GitHub。AI 与 Skill 先取 `https://download.microkeenai.com/mklink/stable/latest.json`，不可用时再取官方 GitHub `release/latest.json`；按索引获取完整 Skill，不能用源码 ZIP 代替。Gitee 只保留历史文件，不再上传新资产或更新索引。Skill 文件回退须校验相同版本、大小及 SHA-256。
+
 按用户选择安装桌面应用或 AI Skill，不需要维护仓库或编译 MKLink。
 
 ## 选择安装方式
 
-- **桌面应用**：使用[官方发布页](https://github.com/MicroKeen/Mklink-AI-Probe/releases)
+- **桌面应用**：使用[腾讯云下载中心](https://download.microkeenai.com/)
   的安装包。Python 后端与 Web 资源已经打包，不要求另装 Python、Node、Rust 或 MSVC。
 - **AI Skill / Python CLI / Web GUI**：使用官方发布的完整 Skill ZIP 和对应摘要，
   校验来源与 SHA-256，解压到当前 AI 客户端支持的用户 Skill 目录。不要仅复制
@@ -30,7 +32,7 @@ python -m mklink web-entry install --quick-launch
 
 FLM 自检无需连接硬件，也不依赖 Keil、下载器 U 盘或用户 Pack 缓存。完整发布
 包包含 `mklink/builtin_flm/manifest.json` 及其全部算法文件，并带有
-`mklink/builtin_packs`。GitHub Releases 中选择 `*-Skill.zip`；自动生成的
+`mklink/builtin_packs`。优先按腾讯云索引选择 `*-Skill.zip`，不可用时回退官方 GitHub；自动生成的
 `Source code` 压缩包和 Git checkout 不包含这些随发布打包的资源。自检失败时
 核对当前解释器导入的目录并重新安装完整 Skill 包，保留用户工程和配置。
 
@@ -89,7 +91,7 @@ python scripts/skill_update.py check --force --json
 python scripts/skill_update.py install --yes --json
 ```
 
-更新器从公开 `updates/latest.json` 获取版本化桌面安装包和 Skill ZIP，校验大小与
+更新器按上述顺序从公开索引获取版本化桌面安装包和 Skill ZIP，校验大小与
 SHA-256。桌面应用与本地服务须先关闭，不打断正在进行的设备操作。可选
 `--skill-only` / `--app-only` 限定更新范围；更新 Skill 后重启 AI 客户端或开新会话。
 Git checkout 不会被覆盖。旧复制式安装没有更新脚本时，重新安装完整官方 Skill 包。
