@@ -4,6 +4,7 @@ from elftools.dwarf.structs import DWARFStructs
 from mklink.elf_backend import (
     ElfParseError,
     ElfSection,
+    ElfSegment,
     list_writable_object_symbols,
     writable_memory_ranges,
 )
@@ -58,16 +59,20 @@ class FakeSection:
 
 
 class FakeElf:
-    def __init__(self, symbols=(), sections=(), dwarf=None):
+    def __init__(self, symbols=(), sections=(), dwarf=None, segments=()):
         self._symtab = FakeSymbolTable(symbols)
         self._sections = list(sections)
         self._dwarf = dwarf
+        self._segments = list(segments)
 
     def get_section_by_name(self, name):
         return self._symtab if name == ".symtab" else None
 
     def iter_sections(self):
         return iter(self._sections)
+
+    def iter_segments(self):
+        return iter(self._segments)
 
     def has_dwarf_info(self):
         return self._dwarf is not None
@@ -211,6 +216,40 @@ def test_builtin_sections_preserve_header_fields(tmp_path):
         ElfSection(".text", 0x08000000, 0x120, 0x6, "SHT_PROGBITS"),
         ElfSection(".bss", 0x20000000, 0x40, 0x3, "SHT_NOBITS"),
     ]
+
+
+def test_ax_data_object_in_writable_load_segment_is_watchable(tmp_path, monkeypatch):
+    from mklink.dwarf_parser import DwarfInfo, DwarfVariable
+    from mklink.symbol_catalog import SymbolCatalog
+    from mklink.superwatch import SuperWatchRuntime
+    elf = FakeElf(
+        symbols=[FakeSymbol('ram_value', kind='STT_OBJECT', address=0x200004B8, size=4, section=1),
+                 FakeSymbol('flash_value', kind='STT_OBJECT', address=0x08000010, size=4, section=0),
+                 FakeSymbol('ram_function', kind='STT_FUNC', address=0x20000001, size=16, section=1)],
+        sections=[FakeSection('.text', address=0x08000000, size=0x100, flags=6, section_type='SHT_PROGBITS'),
+                  FakeSection('.data', address=0x20000000, size=0x500, flags=6, section_type='SHT_PROGBITS'),
+                  FakeSection('.bss', address=0x20000500, size=0x100, flags=3, section_type='SHT_NOBITS')],
+        segments=[dict(p_type='PT_LOAD', p_vaddr=0x08000000, p_paddr=0x08000000, p_memsz=0x100, p_filesz=0x100, p_flags=5),
+                  dict(p_type='PT_LOAD', p_vaddr=0x20000000, p_paddr=0x08000100, p_memsz=0x600, p_filesz=0x500, p_flags=7)],
+    )
+    backend, source = make_backend(tmp_path, elf)
+    monkeypatch.setattr('mklink.elf_backend.get_elf_backend', lambda *a, **kw: backend)
+    assert backend.sections(source)[1].flags == 6  # Preserve the original evidence.
+    assert backend.segments(source)[1] == ElfSegment('PT_LOAD', 0x20000000, 0x600, 7)
+    ranges = writable_memory_ranges(source)
+    assert ranges == ((0x20000000, 0x20000600),)
+    assert [s.name for s in list_writable_object_symbols(source)] == ['ram_value']
+    info = DwarfInfo(base_types={1: ('uint32_t', 4)}, base_type_encodings={1: 7}, variables={
+        name: DwarfVariable(name, offset, 1, address, 4, 'uint32_t')
+        for name, offset, address in [('ram_value', 10, 0x200004B8), ('flash_value', 20, 0x08000010)]})
+    catalog = SymbolCatalog.from_dwarf(info, axf_path=source, generation=1, ram_ranges=ranges)
+    assert catalog.by_path('ram_value').writable
+    assert catalog.by_path('flash_value') is None
+    runtime = SuperWatchRuntime(items=[], dwarf_info=info, symbol_catalog=catalog)
+    result = runtime.add('ram_value')
+    assert result['address'] == '0x200004B8' and result['size'] == 4
+    assert runtime.items[0].address == 0x200004B8
+    assert 'error' in runtime.add('flash_value')
 
 
 def test_builtin_sections_cover_uncompressed_symbol_execution_range(
