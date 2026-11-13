@@ -1,20 +1,20 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-13T11:59:44+08:00",
+  "updated_at": "2026-11-13T13:55:52+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.5.0-fixes",
-    "head": "ef59cfb7",
-    "remote_head": "ef59cfb7",
-    "working_tree": "波特率修复 ef59cfb7 已推送；本轮验收报告、记忆和交接另行提交。已安装 Windows 仍为 54e03336，尚未重打包本轮改动，未合并或发布。"
+    "head": "8ed8b8d5",
+    "remote_head": "8ed8b8d5",
+    "working_tree": "ELF 修复 8ed8b8d5 已推送；本轮验收报告、记忆和交接另行提交。已安装 Windows 仍为 54e03336，不含 ELF 和前轮波特率改动；未合并或发布。"
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "UART / RS485 完整 34 档与 Modbus 10M 修复通过，PR #79 待审阅",
-    "current_task": "串口助手和 Modbus 共用 300～10000000 的完整 34 档预设，分别读取 UART_BAUD_PROFILE 和 RS485_BAUD_PROFILE；有效固件子集优先，第三方预设不当作支持保证。CLI、远程交换和共享 Modbus 的 4M 上限统一到 10M。两只 V4 的四个接口实际声明和生产浏览器通过。见[波特率验收](../verification/v050-uart-baud.md)。继续 codex/v0.5.0-fixes / [PR #79](https://github.com/MicroKeen/Mklink-AI-Probe/pull/79)。"
+    "status": "ELF AX 数据节变量遗漏已修复，400 项与离线生产浏览器通过，PR #79 待审阅",
+    "current_task": "用户 ELF 的 STO_PLL_M1 是 STT_OBJECT；旧可写范围遗漏 AX .data。现合并带 PF_W 的 PT_LOAD 执行范围，成员正确进入符号目录和 SuperWatch，保留只读边界。原文件不变，未连接客户板。见[ELF 验收](../verification/v050-elf-load-segments.md)。前轮[完整波特率](../verification/v050-uart-baud.md)已完成；继续 codex/v0.5.0-fixes / [PR #79](https://github.com/MicroKeen/Mklink-AI-Probe/pull/79)。"
   },
   "milestones": [
     {
@@ -29,6 +29,10 @@
     }
   ],
   "verification": [
+    {
+      "area": "ELF 可写加载段与结构体成员",
+      "result": "真实 ELF 复现 AX .data 被旧节权限范围遗漏；STO_PLL_M1 本身仍为 STT_OBJECT。默认解析器修复后 API 返回 1184 个变量，成员 hAvrMecSpeedUnit 为 int16_t / 2 字节 / 0x200004C4，Runtime 和生产浏览器均能加入；配置落在测试副本旁。ELF/DWARF/目录/共享 watch/RTT 等 400 项通过；原 ELF 哈希不变，未连接或操作客户板。清理 445 个测试链接、3 个临时目录，零失败。见[报告](../verification/v050-elf-load-segments.md)。"
+    },
     {
       "area": "UART / RS485 完整波特率档位",
       "result": "后端关联 870 项、GUI 定向 25 项、Skill 边界 69 项及生产构建通过。两只 V4 的 UART、RS485 共四个接口均实际返回 34 档，最高 10M；生产浏览器验证 UART / RS485 独立查询、两页选择 10M、第三方预设和中英文提示。本轮未发送串口数据、未安装新包；固件会话双 V4 互测属于独立证据。见[报告](../verification/v050-uart-baud.md)。"
@@ -50,12 +54,8 @@
       "result": "手动转换 56 项、共享后台/流/边界 296 项、GUI 152 项通过，生产构建通过。冻结安装版实物记录 1,114,032 组，Excel 两页 1,048,575 / 65,457 行、4,456,128 个值与 JSONL 对应；RTT 505 行 TXT 对应，7 个原始文件哈希不变。GUI 手动触发、实际 CLI/MCP 重复请求复用任务且不停止采集。见[转换报告](../verification/v050-manual-recording-export.md)。符号旁配置原有软件/浏览器证据见[配置报告](../verification/v050-superwatch-profile.md)；前一安装候选已验证真实 AXF 重启恢复，本候选解析 6,718 个变量并保存四变量、500000 缓存与 1 µs 间隔。"
     },
     {
-      "area": "通用工程配置与直接烧录",
-      "result": "424 项相关回归通过，覆盖通用/IDE 导入、配置保留、共享烧录、目标提示、HPM/API 和 Skill 边界。真实 CLI 完成离线 CMake 初始化、重复初始化及错误退出校验；本次冻结包在仅 Windows PATH 下再次通过通用 CMake 初始化。型号冲突或旧 profile 阻止覆盖，多个固件候选要求显式选择。见[工程报告](../verification/v050-project-init.md)与[安装记录](../verification/v050-manual-recording-export.md)。"
-    },
-    {
-      "area": "Windows 普通用户安装",
-      "result": "54e03336 本地候选已覆盖 c66523b8，NSIS/桌面均 RID 8192，安装退出 0，3676 个文件匹配，6 份配置、USB 端口名和机器级登记不变。仅 Windows PATH 下冻结 CLI/58 个 MCP 工具、FLM/Pack、真实生产 Web 与正常退出通过，配套 Skill 资源一致。哈希见[本轮安装验收](../verification/v050-systemview-restart-zoom.md)。旧安装/卸载边界见[安装报告](../verification/v050-user-installer.md)。 正式包与历史清理见[发布报告](../verification/v043-release-handoff.md)和[清理记录](../verification/v043-postrelease-cleanup-20261108.md)。2026-11-12 C/E 清理回执保留；本轮另清理 399 个测试链接、3 个临时目录，无失败。"
+      "area": "Windows 安装与工程初始化",
+      "result": "54e03336 本地候选已覆盖 c66523b8，NSIS/桌面均 RID 8192，安装退出 0，3676 个文件匹配，6 份配置、USB 端口名和机器级登记不变。仅 Windows PATH 下冻结 CLI/58 个 MCP 工具、FLM/Pack、真实生产 Web 与正常退出通过，配套 Skill 资源一致。哈希见[本轮安装验收](../verification/v050-systemview-restart-zoom.md)。旧安装/卸载边界见[安装报告](../verification/v050-user-installer.md)。 正式包与历史清理见[发布报告](../verification/v043-release-handoff.md)和[清理记录](../verification/v043-postrelease-cleanup-20261108.md)。2026-11-12 C/E 清理回执保留；本轮另清理 399 个测试链接、3 个临时目录，无失败。 通用工程初始化 424 项回归、真实 CLI CMake 初始化与冻结包仅 Windows PATH 验证通过；配置冲突不覆盖。见[工程报告](../verification/v050-project-init.md)。"
     },
     {
       "area": "V3 / V4 SuperWatch 恢复",
@@ -68,7 +68,7 @@
     "Windows NSIS 默认 currentUser；安装不自动命名 USB 端口。只有用户确认修改或恢复端口显示名称时，才调用独立 UAC 助手。旧机器级登记与受保护目录不自动迁移。",
     "上海轻量服务器直供最新版，历史文件由 COS 和 Git 保存。COS 累计 189 GiB 告警、207.9 GiB 停止，已取消日期截止。账本和停止锁按[下载策略](tencent-updates.md)维护。",
     "跨会话固件联测固定上位机提交并核对 mklink/runtime 模块导入路径；主工作区和全局 editable 入口不自动代表当前任务版本。",
-    "project-init 是可选离线配置工具；通用工程可显式传型号和文件，直接烧录不依赖初始化。型号或镜像不明确时要求补充输入，不猜测，也不自动迁移已有芯片配置。",
+    "project-init 是可选离线配置工具；通用工程可显式传型号和文件，直接烧录不依赖初始化。型号或镜像不明确时要求补充输入，不猜测，也不自动迁移已有芯片配置。 ELF 可写范围合并 SHF_WRITE/ALLOC 节及 PF_W 的 PT_LOAD 段，使用 p_vaddr/p_memsz；不凭 AX 或 RAM 地址放宽，不把 Flash 装载镜像当 RAM。已知只读映射不走通用回退。",
     "RTT / SuperWatch 实时记录 JSONL；停止记录不自动转换。用户手动将 SuperWatch 转为 Excel、RTT 转为带主机时间戳的 UTF-8 TXT，三端共用低优先级后台转换；Excel 保留采样相对时间，开始日期写在 Info 页。JSONL 保留作无损回放源。",
     "SuperWatch 配置由共享后台保存在 AXF/ELF 旁，名称为原文件名加 .superwatch.json；三端共用名称与修订协议，不存变量地址、不自动开始采集。显示修改防抖，样本接收不写配置；浏览器上传只能保存到后台副本旁。",
     "macOS 候选仅 ad-hoc 签名且不启用 Hardened Runtime；正式 Developer ID 构建必须在 PyInstaller 冻结阶段正确签内嵌库。候选不发布到正式更新索引。慢 USB 枚举移出事件循环，心跳有界等待；实际操作仍检查身份、代际和占用，不重放未知结果。",
@@ -87,13 +87,13 @@
     "客户旧上位机/固件组合导致的长停流未复现；本轮 V4 写入短测不证明所有负载零退化。未重测 HPM/V2/V3 实物能力矩阵、RTT 原始字节全量比对或独立吞吐 A/B，也未完成 CMSIS-DAP 共存及全部性能门禁。54e03336 Windows 安装包已包含能力修复。",
     "STOP 案例中，V4 源码确认 0x17 重连失败会误报 6；固件会话提供修正为 5 的独立补丁和离线证据，尚未应用或刷写。客户固件版本、完整芯片型号与电气条件未齐备；持续 STOP 的调试访问不保证可唤醒，status 5 可能包含恢复未确认。",
     "客户 SystemView 完全丢名未在 STM32F103RC 基线复现，客户芯片/RTOS 尚未确认，HPM/FreeRTOS 实物未验。短测解析器仍有对齐丢字节，长 GUI 采集偶见不合理 ISR/运行片段；需要原始流另查，当前修复不证明所有时序统计正确。",
-    "本轮波特率变更尚未生成或覆盖安装新 Windows/macOS 包；本机 Windows 仍为 54e03336。未做上位机新候选的高速物理收发、持续吞吐或 SWD/RTT 共存性能 A/B。固件会话双 V4 测试不等同于客户 1.5 µs 快速应答验证，第三方驱动可拒绝预设高档位。"
+    "ELF 与波特率修复尚未生成或覆盖安装新 Windows/macOS 包；本机 Windows 仍为 54e03336。ELF 仅完成离线解析和变量配置验证，未做客户板采集或写入。未做上位机新候选的高速物理收发、持续吞吐或 SWD/RTT 共存性能 A/B；固件会话双 V4 测试不等同于客户 1.5 µs 快速应答验证，第三方驱动可拒绝预设高档位。"
   ],
   "next_actions": [
     "取得客户目标芯片、RTOS 和原始 SystemView 流后，确认其丢名是否命中元数据/通道修复，并单独排查解析对齐及异常运行片段；不把现有板测试扩大为所有平台保证。",
     "在用户 Mac 上验收对应 ARM/Intel 候选的首次启动、覆盖安装、探针接口/卷身份和真实查询耗时，再核对共享会话及 MCP 重载。当前软件与包内自检不替代真实环境门禁。",
     "固件会话继续维护 STOP 状态码补丁；客户信息齐备并获得明确实物安排后再做同条件 STOP/唤醒验证，不自动抢占调试器或刷写设备。",
-    "审阅 PR #79 的完整波特率、SystemView、能力提示及既有修复。Windows 54e03336 已安装但不包含本轮波特率变更，下一次打包需纳入；Mac 候选仍不含最新几轮修复。继续 codex/v0.5.0-fixes；合并、签名和正式发布须明确指令。"
+    "审阅 PR #79 的 ELF 可写段、完整波特率、SystemView、能力提示及既有修复。Windows 54e03336 已安装但不包含 ELF/波特率变更，下一次打包需纳入；Mac 候选仍不含最新几轮修复。继续 codex/v0.5.0-fixes；合并、签名和正式发布须明确指令。"
   ],
   "continuation_protocol": [
     "后续合并、签名或正式发布须有新的明确指令。"
