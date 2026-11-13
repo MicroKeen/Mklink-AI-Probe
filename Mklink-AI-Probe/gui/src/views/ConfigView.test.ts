@@ -1,5 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { nextTick, readonly, ref } from 'vue'
+import { nextTick, reactive, readonly, ref } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { sharedRuntime } from '../composables/useBackendHealth'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -11,6 +11,8 @@ const mocks = vi.hoisted(() => {
     mcu: null,
     idcode: null,
     port: null,
+    probe_id: null as string | null,
+    connection_recovery: undefined as { state: string; attempts: number } | undefined,
     clock_hz: null as number | null,
     clock_warning: null as string | null,
     axf: { loaded: false },
@@ -104,6 +106,100 @@ async function mountView() {
 }
 
 describe('ConfigView', () => {
+  function identifiedPorts() {
+    return [
+      { device: 'TEST_PORT_A', probe_id: 'usb-a', description: 'Probe A', manufacturer: 'MicroKeen' },
+      { device: 'TEST_PORT_B', probe_id: 'usb-b', description: 'Probe B', manufacturer: 'MicroKeen' },
+    ]
+  }
+
+  it('pins the lost connected device instead of searching for the remaining other probe', async () => {
+    sharedRuntime.value = true
+    Object.assign(mocks.deviceStatus, { connected: true, port: 'TEST_PORT_B', probe_id: 'usb-b' })
+    mocks.api.listPorts.mockResolvedValue(identifiedPorts())
+    const wrapper = await mountView()
+    mocks.api.listPorts.mockResolvedValue([identifiedPorts()[0]])
+    reactive(mocks.deviceStatus).connected = false
+    await flushPromises()
+    expect(wrapper.get('[data-testid="missing-probe"]').exists()).toBe(true)
+    await wrapper.get('[data-testid="connect-local"]').trigger('click')
+    await flushPromises()
+    expect(mocks.api.connectDevice).not.toHaveBeenCalled()
+    expect(mocks.toastError).toHaveBeenCalledWith(expect.stringContaining('不会自动连接其他下载器'))
+    wrapper.unmount()
+  })
+
+  it('retains a missing bound identity when opening settings after recovery expired', async () => {
+    sharedRuntime.value = true
+    Object.assign(mocks.deviceStatus, { connected: false, probe_id: 'usb-b',
+      connection_recovery: { state: 'expired', attempts: 0 } })
+    mocks.api.listPorts.mockResolvedValue([identifiedPorts()[0]])
+    const wrapper = await mountView()
+    expect(wrapper.get('[data-testid="missing-probe"]').exists()).toBe(true)
+    await wrapper.get('[data-testid="connect-local"]').trigger('click')
+    await flushPromises()
+    expect(mocks.api.connectDevice).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('refreshes a lost selection without following a COM port reused by another probe', async () => {
+    sharedRuntime.value = true
+    mocks.api.listPorts.mockResolvedValue(identifiedPorts())
+    mocks.api.connectDevice.mockRejectedValueOnce(Object.assign(new Error('missing'), {
+      detail: { reason: 'probe_missing' },
+    }))
+    const wrapper = await mountView()
+    await wrapper.get('[data-testid="local-port"]').setValue('TEST_PORT_B')
+    mocks.api.listPorts.mockResolvedValue([{ ...identifiedPorts()[0], device: 'TEST_PORT_B' }])
+    await wrapper.get('[data-testid="connect-local"]').trigger('click')
+    await flushPromises()
+    expect(mocks.api.connectDevice).toHaveBeenCalledWith(expect.objectContaining({ probe: 'usb-b', port: 'TEST_PORT_B' }))
+    expect(wrapper.get('[data-testid="missing-probe"]').text()).toContain('原下载器已不可用')
+    expect(wrapper.get<HTMLSelectElement>('[data-testid="local-port"]').element.value).toBe('')
+    await wrapper.get('[data-testid="connect-local"]').trigger('click')
+    await flushPromises()
+    expect(mocks.api.connectDevice).toHaveBeenCalledTimes(1)
+    // An intentional new selection may use the same port, with the new identity.
+    await wrapper.get('[data-testid="local-port"]').setValue('TEST_PORT_B')
+    await wrapper.get('[data-testid="connect-local"]').trigger('click')
+    await flushPromises()
+    expect(mocks.api.connectDevice).toHaveBeenLastCalledWith(expect.objectContaining({ probe: 'usb-a' }))
+    wrapper.unmount()
+  })
+
+  it('follows the same explicitly selected probe when its COM number changes', async () => {
+    sharedRuntime.value = true
+    mocks.api.listPorts.mockResolvedValue(identifiedPorts())
+    const wrapper = await mountView()
+    await wrapper.get('[data-testid="local-port"]').setValue('TEST_PORT_B')
+    mocks.api.listPorts.mockResolvedValue([{ ...identifiedPorts()[1], device: 'TEST_PORT_NEW' }])
+    await wrapper.get('[data-testid="refresh-ports"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get<HTMLSelectElement>('[data-testid="local-port"]').element.value).toBe('TEST_PORT_NEW')
+    await wrapper.get('[data-testid="connect-local"]').trigger('click')
+    await flushPromises()
+    expect(mocks.api.connectDevice).toHaveBeenCalledWith(expect.objectContaining({ probe: 'usb-b', port: 'TEST_PORT_NEW' }))
+    wrapper.unmount()
+  })
+
+  it('keeps the current connection when another window owns the selected probe', async () => {
+    sharedRuntime.value = true
+    Object.assign(mocks.deviceStatus, { connected: true, port: 'TEST_PORT_A' })
+    mocks.api.listPorts.mockResolvedValue(identifiedPorts())
+    mocks.api.connectDevice.mockRejectedValueOnce(Object.assign(new Error('occupied'), {
+      detail: { reason: 'probe_in_use' },
+    }))
+    const wrapper = await mountView()
+    await wrapper.get('[data-testid="local-port"]').setValue('TEST_PORT_B')
+    await wrapper.get('[data-testid="connect-local"]').trigger('click')
+    await flushPromises()
+    expect(mocks.api.disconnectDevice).not.toHaveBeenCalled()
+    expect(wrapper.get('[data-testid="connected-port"]').text()).toContain('TEST_PORT_A')
+    expect(mocks.toastError).toHaveBeenCalledWith(expect.stringContaining('另一客户端'))
+    expect(mocks.deviceStatus.connected).toBe(true)
+    wrapper.unmount()
+  })
+
   it('opens firmware settings from the clock prompt without starting an upgrade', async () => {
     const wrapper = await mountView()
     wrapper.findComponent({ name: 'ConnectionClockControl' }).vm.$emit('firmwareUpdate')
@@ -194,6 +290,8 @@ describe('ConfigView', () => {
     mocks.api.findRtt.mockReset()
     Object.assign(mocks.deviceStatus, {
       connected: false,
+      probe_id: null,
+      connection_recovery: undefined,
       state: 'disconnected',
       mcu: null,
       idcode: null,

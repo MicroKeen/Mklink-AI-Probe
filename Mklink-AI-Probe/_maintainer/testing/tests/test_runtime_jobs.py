@@ -116,6 +116,27 @@ def test_failed_transport_is_unknown_and_never_replayed(fixture):
     assert calls == ['erase']
 
 
+def test_invalid_record_does_not_partially_restore_or_rewrite_history(fixture):
+    _, control, calls, _, _ = fixture
+    path = control.jobs.path
+    good = dict(job_id='old', request_id='old-request', fingerprint='old-hash', state='running', started=1)
+    content = json.dumps([good, {'job_id': 'broken'}]).encode('utf-8')
+    path.write_bytes(content)
+    restored = RuntimeJobs(control)
+    assert not restored.jobs and path.read_bytes() == content
+    with pytest.raises(HTTPException) as caught:
+        restored.require_history()
+    assert caught.value.status_code == 503 and not calls
+    path.unlink()
+    with pytest.raises(HTTPException):
+        restored.require_history()  # Removing the file cannot resolve uncertainty.
+    assert not path.exists()
+    path.write_text(json.dumps([good]), encoding='utf-8')
+    restored.require_history()
+    assert restored.jobs['old']['state'] == 'unknown'
+    assert not restored.unread_paths and not restored.invalid_paths and not calls
+
+
 def test_killed_process_journal_is_unknown_without_replay(fixture, tmp_path):
     import os
     import subprocess

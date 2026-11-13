@@ -33,8 +33,24 @@ def test_two_probes_require_explicit_selection_and_unique_aliases(monkeypatch, t
     with pytest.raises(RuntimeErrorResponse, match='already assigned'):
         set_alias('COM20', 'LEFT')
     assert select_probe(first['probe_id'])['port'] == 'COM10'
-    with pytest.raises(RuntimeErrorResponse, match='missing or ambiguous'):
+    with pytest.raises(RuntimeErrorResponse, match='Selected probe is unavailable'):
         select_probe('unknown')
+
+
+def test_selection_errors_distinguish_missing_ambiguous_and_required(monkeypatch):
+    rows = [dict(probe_id='one', port='COM1', alias='shared'),
+            dict(probe_id='two', port='COM2', alias='shared')]
+    monkeypatch.setattr('mklink.probes.inventory', lambda: rows)
+    for selector, reason, matches in [('gone', 'probe_missing', 0),
+                                      ('shared', 'probe_ambiguous', 2),
+                                      (None, 'probe_selection_required', 2)]:
+        with pytest.raises(RuntimeErrorResponse) as caught:
+            select_probe(selector)
+        assert caught.value.status_code == 409
+        assert caught.value.detail['reason'] == reason
+        assert caught.value.detail['match_count'] == matches
+        assert caught.value.detail['available_count'] == 2
+        assert 'COM1' not in str(caught.value.detail)
 
 
 def test_duplicate_serials_are_separate_but_cannot_get_persistent_alias(monkeypatch, tmp_path):

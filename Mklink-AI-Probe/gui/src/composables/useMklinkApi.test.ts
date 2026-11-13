@@ -41,6 +41,16 @@ describe('RTT API contracts', () => {
     navigate.mockRestore()
   })
 
+  it('pins an explicit identity and does not reuse its old COM after selection', async () => {
+    sharedRuntime.value = true
+    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ same_runtime: true }) })
+    await useMklinkApi().connectDevice({ probe: 'usb-selected', port: 'COM9' })
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      probe: 'usb-selected', port: 'COM9', connect: { port: 'COM9' },
+    })
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({})
+  })
+
   it('switches in place and refreshes target generation without navigation or duplicate connect', async () => {
     sharedRuntime.value = true
     const navigate = vi.spyOn(window.location, 'replace').mockImplementation(() => {})

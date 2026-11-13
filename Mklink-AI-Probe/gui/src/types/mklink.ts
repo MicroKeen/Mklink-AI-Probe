@@ -80,6 +80,7 @@ export interface FirmwareCompatibility {
 }
 
 export interface DeviceStatus {
+  probe_id?: string | null
   firmware_update?: FirmwareUpdateNotice | null
   firmware_compatibility?: FirmwareCompatibility | null
   probe_product?: 'MKLink' | 'HPMLINK'
@@ -113,6 +114,7 @@ export interface MicrokeenInfo {
 }
 
 export interface ConnectRequest {
+  probe?: string
   port?: string
   axf?: string
   mcu?: string

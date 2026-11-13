@@ -231,11 +231,12 @@ export function useMklinkApi() {
   }
 
   async function connectDevice(req: ConnectRequest): Promise<DeviceStatus> {
+    const { probe, ...connection } = req
     if (sharedRuntime.value) {
       let selection: { switched?: boolean; connection?: DeviceStatus }
       try {
         selection = await api('/api/runtime/select', {
-          method: 'POST', body: JSON.stringify({ port: req.port, connect: req }),
+          method: 'POST', body: JSON.stringify({ probe, port: req.port, connect: connection }),
         })
       } catch (error) {
         // Also clear the old target after a switch whose new connection failed.
@@ -249,7 +250,9 @@ export function useMklinkApi() {
     }
     const result = await api<DeviceStatus>('/api/device/connect', {
       method: 'POST',
-      body: JSON.stringify(req),
+      // Selection has resolved the identity to its current command port. Do
+      // not send a stale COM number back after a USB re-enumeration.
+      body: JSON.stringify(sharedRuntime.value && probe ? { ...connection, port: undefined } : connection),
     })
     await refreshStatus()
     return result

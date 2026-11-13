@@ -15,6 +15,21 @@
   保证释放 IDE 或固件持有的目标调试状态。USB 身份枚举不需要访问目标 MCU，不能把
   `target busy` 当成 USB 设备身份错误。
 
+## 0.5.0 连接错误与任务历史
+
+设备选择错误的 `detail.reason` 区分 `probe_missing`（原设备不可用）、
+`probe_ambiguous` / `probe_selection_required`（需明确选择）和 `probe_in_use`
+（另一后台占用）。Web 会刷新列表并显示对应提示；CLI/MCP 应转述原因，让用户
+选择明确身份，不自动换连其他下载器。GUI 明确选择后按设备身份匹配，COM 号
+变化不会改连复用该端口的另一设备；缺失设备返回后可刷新重连。
+
+`jobs.json` 拒绝读取或内容无效时，普通连接仍可继续，原记录保持不变。
+`runtime_status.job_history_available=false` 表示历史未知；任务查询及依赖历史的
+烧录、擦除、复位等提交返回 503，无效内容带 `reason=job_history_invalid`。
+先保留原文件并恢复可验证的任务历史，再重新选择受影响设备。不要删除整个
+runtime 目录、自动重放未知结果，或将历史恢复成功当作目标已执行成功。
+一个窗口切换设备后仍保留未读历史约束；另一独立窗口的正常历史不受影响。
+
 ## 查明现状，不先连接硬件
 
 1. `ping` 核对当前 MCP 为 `mode="shared-cdc"`，检查可用工具；`discover_probes`

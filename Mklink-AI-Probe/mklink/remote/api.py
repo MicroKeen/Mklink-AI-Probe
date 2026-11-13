@@ -1761,7 +1761,15 @@ def create_app(
                     if 'connect' not in body or runtime.presence()['status'] != 'missing':
                         return {'same_runtime': True}
                 elif not current_selector and (body.get('connect') or {}).get('restore_last'):
-                    current_selector = (_state.get('last_device_connection') or {}).get('port')
+                    saved_port = (_state.get('last_device_connection') or {}).get('port')
+                    if saved_port:
+                        try:
+                            current_selector = select_probe(saved_port)['probe_id']
+                        except RuntimeErrorResponse as error:
+                            if not isinstance(error.detail, dict) or error.detail.get('reason') != 'probe_missing':
+                                raise
+                            # A saved COM port is a preference, not an explicit
+                            # selection. Auto search still requires one probe.
                 # Resolve after lifecycle admission: queued requests must use
                 # the current inventory, and auto search requires one candidate.
                 selected = select_probe(current_selector)
@@ -1801,7 +1809,10 @@ def create_app(
                         'probe_id': selected['probe_id'], 'device_generation': _state['device_generation']}
             return await runtime.run_lifecycle('/api/runtime/select', switch, session_id=body.get('session_id'))
         except RuntimeErrorResponse as exc:
-            raise HTTPException(409, str(exc)) from exc
+            if isinstance(exc.detail, dict):
+                from mklink.connection_diagnostics import event
+                event('probe.selection_failed', **exc.detail)
+            raise HTTPException(409, exc.detail) from exc
 
     @app.get("/api/ports/discover")
     async def discover_mklink_port():
@@ -1969,7 +1980,7 @@ def create_app(
                 port = selected["port"]
                 # The resolved port stays authoritative; only non-port settings may be restored.
             except RuntimeErrorResponse as exc:
-                raise HTTPException(409, str(exc)) from exc
+                raise HTTPException(409, exc.detail) from exc
             runtime.prune()
             current = _state.get("device")
             port_changed = bool(current and current.port and current.port.casefold() != port.casefold())
@@ -2124,10 +2135,12 @@ def create_app(
         if not _state["device"]:
             symbols = _state.get('symbol_device')
             return {"connected": False, "probe_product": "MKLink", "state": "disconnected", "axf": symbols.axf_status if symbols else {"loaded": False},
+                    "probe_id": _state.get('shared_probe_id'),
                     "device_generation": _state.get('device_generation', 0)}
         dev = _state["device"]
         return {
             "connected": dev.connected,
+            "probe_id": _state.get('shared_probe_id'),
             "probe_product": getattr(dev, 'probe_product', 'MKLink') if dev.connected else 'MKLink',
             "connection_recovery": _state.get('connection_recovery'),
             "device_generation": _state.get('device_generation', 0),

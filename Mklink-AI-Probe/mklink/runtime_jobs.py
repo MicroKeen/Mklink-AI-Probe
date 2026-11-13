@@ -5,6 +5,7 @@ import asyncio
 from contextvars import ContextVar
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import secrets
@@ -39,6 +40,7 @@ class RuntimeJobs:
         # An unread journal may contain a request already sent to hardware.
         # Carry that uncertainty across switches just like known request IDs.
         self.unread_paths = previous.unread_paths.copy() if previous else set()
+        self.invalid_paths = previous.invalid_paths.copy() if previous else set()
         self.tasks = set()
         path = path or control.info.get('jobs_path')
         self.path = Path(path) if path else None
@@ -58,13 +60,26 @@ class RuntimeJobs:
             self.unread_paths.add(path)
             return
         except UnicodeError as exc:
-            raise RuntimeError('Cannot read job journal; preserve it for inspection') from exc
+            self._invalid(path, exc)
+            return
 
         try:
             rows = json.loads(stored)
+            if not isinstance(rows, list):
+                raise ValueError('Job history must be an array')
             restored = {}
             changed = len(rows) > 64
-            for row in rows[-64:]:
+            # Validate before changing memory or writing back interrupted jobs.
+            # A malformed older record still makes replay history uncertain.
+            for row in rows:
+                if (not isinstance(row, dict)
+                        or any(not isinstance(row.get(key), str) or not row[key]
+                               for key in ('job_id', 'request_id', 'fingerprint', 'state'))
+                        or type(row.get('started')) not in (int, float)
+                        or isinstance(row['started'], float) and not math.isfinite(row['started'])):
+                    raise ValueError('Invalid job history record')
+            for original in rows[-64:]:
+                row = dict(original)
                 if row['state'] not in TERMINAL:
                     changed = True
                     row.update(state='unknown', error='Backend interrupted; inspect target before any new operation', finished=time.time())
@@ -74,9 +89,11 @@ class RuntimeJobs:
                 restored = dict(sorted(restored.items(), key=lambda pair: pair[1]['started'])[-64:])
             self.jobs = restored
         except (ValueError, KeyError, TypeError) as exc:
-            raise RuntimeError('Cannot read job journal; preserve it for inspection') from exc
+            self._invalid(path, exc)
+            return
 
         self.unread_paths.discard(path)
+        self.invalid_paths.discard(path)
         if path == self.path and (changed or list(restored.values()) != rows):
             try:
                 self.save()
@@ -84,6 +101,12 @@ class RuntimeJobs:
                 # Reads and duplicate lookups still work. New jobs must save
                 # the full merged history before starting their operation.
                 event('journal.write_denied', error=error_detail(exc))
+
+    def _invalid(self, path, error):
+        if path not in self.invalid_paths:
+            event('journal.invalid', error=error_detail(error))
+        self.invalid_paths.add(path)
+        self.unread_paths.add(path)
 
     def require_history(self):
         if not self.unread_paths:
@@ -98,6 +121,14 @@ class RuntimeJobs:
         if self.path and (not window_id or self.path.parent.name in owned_ids):
             self._restore(self.path)
         if self.unread_paths:
+            if self.invalid_paths:
+                raise HTTPException(503, {
+                    'reason': 'job_history_invalid',
+                    'message': 'jobs.json contains invalid UTF-8, JSON or job records. '
+                               'The original file is preserved and connection remains available. '
+                               'Restore valid history and reconnect the affected probe before '
+                               'submitting or retrying a job; do not delete unknown task results.',
+                })
             raise HTTPException(503, 'Cannot read jobs.json; check file access and reconnect the affected probe '
                                      'to recover its job history before submitting or retrying a job')
 

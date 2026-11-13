@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { probeSelectionError } from '../lib/probeSelectionError'
 import { computed, inject, ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Download, RefreshCw, RotateCcw, Tag, Unplug, Usb } from '@lucide/vue'
@@ -66,6 +67,9 @@ const config = ref<ProjectConfig>({})
 const localPort = ref('')
 const portOptions = ref<{ label: string; value: string }[]>([])
 const localPortExplicit = ref(false)
+const selectedProbeId = ref('')
+const selectedProbeMissing = computed(() => sharedRuntime.value && localPortExplicit.value
+  && !!selectedProbeId.value && !probePorts.value.some(port => port.probe_id === selectedProbeId.value))
 let localPortTouched = false
 const probePorts = ref<PortInfo[]>([])
 const selectedProbe = computed(() => probePorts.value.find(port => port.device === localPort.value))
@@ -74,6 +78,7 @@ const switchingProbe = computed(() => sharedRuntime.value && localPortExplicit.v
 const settings = ref<DesktopSettings>(loadDesktopSettings(window.localStorage))
 
 const portsLoading = ref(false)
+let portRefreshGeneration = 0
 const savingLocal = ref(false)
 const savingClock = ref(false)
 const connecting = ref(false)
@@ -112,18 +117,27 @@ const firmwareDownloadTarget = computed(() => {
 })
 
 async function refreshPorts() {
+  const generation = ++portRefreshGeneration
   portsLoading.value = true
   try {
     const ports: PortInfo[] = await listPorts()
+    if (disposed || generation !== portRefreshGeneration) return
     probePorts.value = ports
+    if (sharedRuntime.value && localPortExplicit.value && selectedProbeId.value) {
+      // Follow the selected identity through COM renumbering, never a reused
+      // port belonging to a different device. Preserve the missing identity
+      // until the user explicitly chooses another device or Auto Search.
+      localPort.value = ports.find(port => port.probe_id === selectedProbeId.value)?.device || ''
+    }
     portOptions.value = ports.map(port => ({
       label: `${port.alias ? port.alias + ' · ' : ''}${port.device} — ${port.description} (${port.manufacturer})`,
       value: port.device,
     }))
   } catch (error: any) {
+    if (disposed || generation !== portRefreshGeneration) return
     toast.error(tr('读取串口失败: ', 'Failed to read serial ports: ') + error.message)
   } finally {
-    portsLoading.value = false
+    if (generation === portRefreshGeneration) portsLoading.value = false
   }
 }
 
@@ -165,6 +179,7 @@ async function saveLocalConfig() {
 async function selectLocalPort() {
   localPortTouched = true
   localPortExplicit.value = Boolean(localPort.value.trim())
+  selectedProbeId.value = selectedProbe.value?.probe_id || ''
   if (sharedRuntime.value) return
   await saveLocalConfig()
 }
@@ -175,10 +190,16 @@ async function connectLocal() {
   localPortTouched = true
   connecting.value = true
   try {
+    if (selectedProbeMissing.value) {
+      await refreshPorts()
+      if (selectedProbeMissing.value) {
+        throw { detail: { reason: 'probe_missing' } }
+      }
+    }
     const selectedPort = localPort.value.trim()
     const result = await connectDevice({
       ...(localPortExplicit.value && selectedPort
-        ? { port: selectedPort }
+        ? { port: selectedPort, ...(sharedRuntime.value && selectedProbeId.value ? { probe: selectedProbeId.value } : {}) }
         : { restore_last: true }),
       axf: isSymbolFilePath(settings.value.symbolPath)
         ? settings.value.symbolPath.trim()
@@ -188,6 +209,7 @@ async function connectLocal() {
     if (connectedPort) {
       localPort.value = connectedPort
       localPortExplicit.value = false
+      selectedProbeId.value = deviceStatus.value.probe_id || selectedProbe.value?.probe_id || ''
       config.value = { ...config.value, com_port: connectedPort }
     }
     const symbolPath = settings.value.symbolPath.trim()
@@ -204,11 +226,27 @@ async function connectLocal() {
       localPort.value = ''
       config.value = { ...config.value, com_port: '' }
     }
-    toast.error(tr('连接失败: ', 'Connection failed: ') + error.message)
+    const reason = String(error.detail?.reason || '')
+    if (sharedRuntime.value && (reason.startsWith('probe_') || ['missing', 'port_changed'].includes(reason))) {
+      await refreshPorts()
+    }
+    toast.error(tr('连接失败: ', 'Connection failed: ') + probeSelectionError(error))
   } finally {
     connecting.value = false
   }
 }
+
+watch(() => deviceStatus.value.connected, (connected, previous) => {
+  if (previous && !connected && sharedRuntime.value && !connecting.value && !disconnecting.value) {
+    // Unexpected loss is a reconnect of the same device, not Auto Search.
+    // Keep a different explicit selection if the user was already switching.
+    if (!localPortExplicit.value) {
+      selectedProbeId.value = deviceStatus.value.probe_id || selectedProbeId.value
+      localPortExplicit.value = !!selectedProbeId.value && selectedProbeId.value !== 'lobby'
+    }
+    void refreshPorts()
+  }
+})
 
 async function disconnectLocal() {
   if (disconnecting.value || connecting.value) return
@@ -464,6 +502,13 @@ onMounted(async () => {
   // network manifest lookup during login so the local connection controls are
   // immediately responsive.
   await Promise.all([refreshPorts(), loadConfig()])
+  const bound = deviceStatus.value.probe_id
+  if (!localPortTouched && sharedRuntime.value && bound && bound !== 'lobby'
+      && !deviceStatus.value.connected && deviceStatus.value.connection_recovery?.state === 'expired') {
+    selectedProbeId.value = bound
+    localPortExplicit.value = true
+    localPort.value = probePorts.value.find(port => port.probe_id === bound)?.device || ''
+  }
   const restoredPort = localPort.value.trim()
   if (!localPortTouched && restoredPort && !portOptions.value.some(option => option.value === restoredPort)) {
     localPort.value = ''
@@ -521,6 +566,9 @@ onUnmounted(() => {
         <div v-if="sharedRuntime && selectedProbe?.probe_id" class="connection-detail" data-testid="selected-probe-id">
           {{ selectedProbe.probe_id }}
         </div>
+        <p v-if="selectedProbeMissing" class="connection-detail" data-testid="missing-probe">
+          {{ tr('原下载器已不可用。请刷新列表或明确选择其他下载器，当前未改连其他设备。', 'The selected probe is unavailable. Refresh or explicitly select another probe; no other device has been connected.') }}
+        </p>
 
         <ConnectionClockControl :device-connected="deviceStatus.connected" :device-generation="deviceStatus.device_generation"
           :disabled="savingLocal || connecting || disconnecting || switchingProbe" @busy="savingClock = $event" @firmware-update="activeSection = 'firmware'" />

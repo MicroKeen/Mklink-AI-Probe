@@ -133,7 +133,8 @@ class TransportRecovery:
         except Exception as error:
             reason = str(error)
             if reason != self.presence_error:
-                event('recovery.probe_unavailable', error=error_detail(error))
+                event('recovery.probe_unavailable', error=error_detail(error),
+                      selection=getattr(error, 'detail', None))
                 self.presence_error = reason
             return  # Enumeration only while absent; no repeated open attempts.
         self.presence_error = None
