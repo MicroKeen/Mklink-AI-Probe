@@ -1,20 +1,20 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-13T00:01:52+08:00",
+  "updated_at": "2026-11-13T11:59:44+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.5.0-fixes",
-    "head": "54e03336",
-    "remote_head": "54e03336",
-    "working_tree": "SystemView 修复提交 54e03336 已推送，Windows 普通用户候选已覆盖安装并验收；本轮报告、记忆和交接另行提交。Mac 候选未重建，未合并或正式发布。"
+    "head": "ef59cfb7",
+    "remote_head": "ef59cfb7",
+    "working_tree": "波特率修复 ef59cfb7 已推送；本轮验收报告、记忆和交接另行提交。已安装 Windows 仍为 54e03336，尚未重打包本轮改动，未合并或发布。"
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "SystemView 重启名称、通道保留与暂停缩放修复及 Windows 覆盖安装完成，PR #79 待审阅",
-    "current_task": "修复共享采集重启时元数据未刷新、部分名称补全被跳过、零值 ID 编码丢失；真实 GUI 发现并修复 CH2 再次开始被固定切回 CH1。增加缩放按钮、暂停后的细节查询及历史平移。V4 / STM32F103RC 的源代码和安装版重复启停均有 9 个任务名；客户完全丢名的具体目标仍待确认。见[SystemView 验收](../verification/v050-systemview-restart-zoom.md)。安装包已包含此前固件能力提示修复，继续 [PR #79](https://github.com/MicroKeen/Mklink-AI-Probe/pull/79)。"
+    "status": "UART / RS485 完整 34 档与 Modbus 10M 修复通过，PR #79 待审阅",
+    "current_task": "串口助手和 Modbus 共用 300～10000000 的完整 34 档预设，分别读取 UART_BAUD_PROFILE 和 RS485_BAUD_PROFILE；有效固件子集优先，第三方预设不当作支持保证。CLI、远程交换和共享 Modbus 的 4M 上限统一到 10M。两只 V4 的四个接口实际声明和生产浏览器通过。见[波特率验收](../verification/v050-uart-baud.md)。继续 codex/v0.5.0-fixes / [PR #79](https://github.com/MicroKeen/Mklink-AI-Probe/pull/79)。"
   },
   "milestones": [
     {
@@ -29,6 +29,10 @@
     }
   ],
   "verification": [
+    {
+      "area": "UART / RS485 完整波特率档位",
+      "result": "后端关联 870 项、GUI 定向 25 项、Skill 边界 69 项及生产构建通过。两只 V4 的 UART、RS485 共四个接口均实际返回 34 档，最高 10M；生产浏览器验证 UART / RS485 独立查询、两页选择 10M、第三方预设和中英文提示。本轮未发送串口数据、未安装新包；固件会话双 V4 互测属于独立证据。见[报告](../verification/v050-uart-baud.md)。"
+    },
     {
       "area": "SystemView 重启与时序图缩放",
       "result": "关联后端 651 项、最终状态/编码 30 项（重叠）通过，GUI 全量 1226 项及生产构建通过。V4.7.4 / STM32F103RC 源代码 5 轮 RTT 共存和安装版 3 轮启停均恢复 9 个任务名，Flash 117760 字节匹配 AXF。真实浏览器验证 CH2 重启及重载保留、约 19 µs 视窗缩放、暂停平移；安装版亦通过。目标/MUX 丢弃计数为零，但解析器仍有对齐丢字节及偶发异常区间，不宣称无损。见[完整报告](../verification/v050-systemview-restart-zoom.md)。"
@@ -51,15 +55,11 @@
     },
     {
       "area": "Windows 普通用户安装",
-      "result": "54e03336 本地候选已覆盖 c66523b8，NSIS/桌面均 RID 8192，安装退出 0，3676 个文件匹配，6 份配置、USB 端口名和机器级登记不变。仅 Windows PATH 下冻结 CLI/58 个 MCP 工具、FLM/Pack、真实生产 Web 与正常退出通过，配套 Skill 资源一致。哈希见[本轮安装验收](../verification/v050-systemview-restart-zoom.md)。旧安装/卸载边界见[安装报告](../verification/v050-user-installer.md)。"
+      "result": "54e03336 本地候选已覆盖 c66523b8，NSIS/桌面均 RID 8192，安装退出 0，3676 个文件匹配，6 份配置、USB 端口名和机器级登记不变。仅 Windows PATH 下冻结 CLI/58 个 MCP 工具、FLM/Pack、真实生产 Web 与正常退出通过，配套 Skill 资源一致。哈希见[本轮安装验收](../verification/v050-systemview-restart-zoom.md)。旧安装/卸载边界见[安装报告](../verification/v050-user-installer.md)。 正式包与历史清理见[发布报告](../verification/v043-release-handoff.md)和[清理记录](../verification/v043-postrelease-cleanup-20261108.md)。2026-11-12 C/E 清理回执保留；本轮另清理 399 个测试链接、3 个临时目录，无失败。"
     },
     {
       "area": "V3 / V4 SuperWatch 恢复",
       "result": "普通 V4 修复候选实物拔插跨 12.637 秒缺口原订阅恢复，V4.7.4 健康检查通过，223,728 组、零读错及队列丢弃，中位 43,486.6 组/秒。V3.6.10 实刷及拔插恢复通过，1,484,544 组，零队列丢弃、序号异常和时间倒退，恢复后中位 43,056.7 组/秒。旧 V3.6.8 缺采样能力，无同条件旧版基线。版本及未验范围见[恢复验证记录](../verification/v050-superwatch-swclk.md)。"
-    },
-    {
-      "area": "发布、验收与清理",
-      "result": "正式包哈希、安装、Skill 更新、分发渠道及真机记录见[发布报告](../verification/v043-release-handoff.md)。 C/E/F 清理回执、人工检查清单和恢复资料位置见[清理报告](../verification/v043-postrelease-cleanup-20261108.md)。 2026-11-12 C/E 清理另保留本地回执：C 约 4.08 MiB、E 净约 0.92 GiB，18 个测试链接移除，E 依赖缓存校验迁往 F，冲突版本保留；本轮新增测试临时目录按限定清单清理。"
     }
   ],
   "decisions": [
@@ -72,11 +72,11 @@
     "RTT / SuperWatch 实时记录 JSONL；停止记录不自动转换。用户手动将 SuperWatch 转为 Excel、RTT 转为带主机时间戳的 UTF-8 TXT，三端共用低优先级后台转换；Excel 保留采样相对时间，开始日期写在 Info 页。JSONL 保留作无损回放源。",
     "SuperWatch 配置由共享后台保存在 AXF/ELF 旁，名称为原文件名加 .superwatch.json；三端共用名称与修订协议，不存变量地址、不自动开始采集。显示修改防抖，样本接收不写配置；浏览器上传只能保存到后台副本旁。",
     "macOS 候选仅 ad-hoc 签名且不启用 Hardened Runtime；正式 Developer ID 构建必须在 PyInstaller 冻结阶段正确签内嵌库。候选不发布到正式更新索引。慢 USB 枚举移出事件循环，心跳有界等待；实际操作仍检查身份、代际和占用，不重放未知结果。",
-    "缺固件能力按已有文本/HELLO 缓存判断，版本号不替代协商；Web/CLI/SDK/MCP 共用 firmware_compatibility 和 firmware_warning。未知型号或未协商状态不猜测；status 5/6、超时、目标及硬件限制不误报升级可解决。SuperWatch 运行或暂停时缺 MUX 写能力则提示升级并保留采集，不自动停流写入；地址限制提示显式停止。未知写结果不重放，不自动升级固件。"
+    "缺固件能力按已有文本/HELLO 缓存判断，版本号不替代协商；Web/CLI/SDK/MCP 共用 firmware_compatibility 和 firmware_warning。未知型号或未协商状态不猜测；status 5/6、超时、目标及硬件限制不误报升级可解决。SuperWatch 运行或暂停时缺 MUX 写能力则提示升级并保留采集，不自动停流写入；地址限制提示显式停止。未知写结果不重放，不自动升级固件。 串口助手与 Modbus 共用完整 34 档预设（300～10M）；已识别 UART / RS485 分别按自身固件声明限制选择。列表刷新只用缓存，显式查询走物理探针共享所有者且不停止采集；缺声明提示升级，第三方预设不保证支持。已有连接的自定义速率只读保留。"
   ],
   "hardware": {
     "操作前": "重新核对下载器型号、目标和占用。固件变更由指定会话协调，升降级按本次授权执行。VCC、OTP 操作分别确认。",
-    "普通 V4": "当前普通 V4 / STM32F103RC 为 V4.7.4 / 2026-11-10T13:55:55，之前 V4.7.3 的运行中写入也已验证支持。SystemView 源代码 5 轮共享 RTT、安装版 3 轮及真实 GUI 重启均解析 9 个名称；Flash 117760 字节与 AXF 一致。测试结束正常关闭桌面，相关进程和端口已释放。未刷写、改电源或复位目标；下次仍须重新核对占用。",
+    "普通 V4": "固件会话于 2026-11-13 将两只普通 V4 更新为 V4.7.4 RS485 修正版并完成 34 档双向测试；本轮上位机独立读取四个 UART/RS485 接口均返回完整 34 档，未再次刷写、复位或改电源。生产浏览器未连接目标或发送数据，测试后台已全部退出。先前 STM32F103RC / SystemView 证据见对应报告；后续操作重新核对版本、接线和占用。",
     "普通 V3": "固件会话已回读 V3.6.10 / 2026-11-10T14:14:14，原 STM32F103 的一次 SWCLK 拔插恢复通过；测试结束时后台退出、设备释放。下次仍需重新核对占用。"
   },
   "known_limits": [
@@ -86,13 +86,14 @@
     "Mac ARM/Intel DMG 是 0.4.3 标记的未公证候选，未做 Finder 覆盖安装、Gatekeeper、原生窗口及 macOS 27 真机 USB 验收。Mac 修复轮未覆盖安装 Windows，也未做新的硬件吞吐/P95/调试共存 A/B；客户 ioreg 3.7→0.15 秒未独立复现。",
     "客户旧上位机/固件组合导致的长停流未复现；本轮 V4 写入短测不证明所有负载零退化。未重测 HPM/V2/V3 实物能力矩阵、RTT 原始字节全量比对或独立吞吐 A/B，也未完成 CMSIS-DAP 共存及全部性能门禁。54e03336 Windows 安装包已包含能力修复。",
     "STOP 案例中，V4 源码确认 0x17 重连失败会误报 6；固件会话提供修正为 5 的独立补丁和离线证据，尚未应用或刷写。客户固件版本、完整芯片型号与电气条件未齐备；持续 STOP 的调试访问不保证可唤醒，status 5 可能包含恢复未确认。",
-    "客户 SystemView 完全丢名未在 STM32F103RC 基线复现，客户芯片/RTOS 尚未确认，HPM/FreeRTOS 实物未验。短测解析器仍有对齐丢字节，长 GUI 采集偶见不合理 ISR/运行片段；需要原始流另查，当前修复不证明所有时序统计正确。"
+    "客户 SystemView 完全丢名未在 STM32F103RC 基线复现，客户芯片/RTOS 尚未确认，HPM/FreeRTOS 实物未验。短测解析器仍有对齐丢字节，长 GUI 采集偶见不合理 ISR/运行片段；需要原始流另查，当前修复不证明所有时序统计正确。",
+    "本轮波特率变更尚未生成或覆盖安装新 Windows/macOS 包；本机 Windows 仍为 54e03336。未做上位机新候选的高速物理收发、持续吞吐或 SWD/RTT 共存性能 A/B。固件会话双 V4 测试不等同于客户 1.5 µs 快速应答验证，第三方驱动可拒绝预设高档位。"
   ],
   "next_actions": [
     "取得客户目标芯片、RTOS 和原始 SystemView 流后，确认其丢名是否命中元数据/通道修复，并单独排查解析对齐及异常运行片段；不把现有板测试扩大为所有平台保证。",
     "在用户 Mac 上验收对应 ARM/Intel 候选的首次启动、覆盖安装、探针接口/卷身份和真实查询耗时，再核对共享会话及 MCP 重载。当前软件与包内自检不替代真实环境门禁。",
     "固件会话继续维护 STOP 状态码补丁；客户信息齐备并获得明确实物安排后再做同条件 STOP/唤醒验证，不自动抢占调试器或刷写设备。",
-    "审阅 PR #79 的 SystemView 修复及既有能力提示、Mac 兼容、普通用户安装、SuperWatch、工程和日志转换改动。Windows 54e03336 已覆盖安装，Mac 候选仍不含本轮修复。继续 codex/v0.5.0-fixes；合并、签名和正式发布仍需明确指令。"
+    "审阅 PR #79 的完整波特率、SystemView、能力提示及既有修复。Windows 54e03336 已安装但不包含本轮波特率变更，下一次打包需纳入；Mac 候选仍不含最新几轮修复。继续 codex/v0.5.0-fixes；合并、签名和正式发布须明确指令。"
   ],
   "continuation_protocol": [
     "后续合并、签名或正式发布须有新的明确指令。"
