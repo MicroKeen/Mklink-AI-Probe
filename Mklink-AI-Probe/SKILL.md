@@ -7,10 +7,10 @@ description: 使用 MKLink/MicroLink 操作目标 MCU：固件烧录、内存与
 
 ## 开始前
 
-- 首次加载立即检查版本：MCP `ping(force_update_check=True)` 读取 `update`；
-  缺 MCP/参数时在 Skill 根目录运行 `python scripts/skill_update.py check --force --json`。
-  本会话只查一次。离线可继续；新版安装须用户同意，见
-  [安装与更新](references/install.md)。
+- 首次加载先读[安装与更新](references/install.md)，发起
+  `ping(force_update_check=True, background_update_check=True)`，本会话一次。
+  **主动提醒 Skill 和固件更新**；先更新客户端、重载 MCP/空闲后台，再重连查固件。
+  检查不阻塞任务，离线继续；不为查版本额外连接，不自动安装或中断设备任务。
 - **下载后端**：除 HPM ROM 或用户指定方式外，依次选 IDE、pyOCD、脱机。
   先读[下载优先级](references/firmware-download-priority.md)，复用 Keil 配置；工程初始化可选。
 - 优先使用共享 MCP；先读[共享后台](references/shared-runtime.md)，参数以 schema/`--help` 为准。

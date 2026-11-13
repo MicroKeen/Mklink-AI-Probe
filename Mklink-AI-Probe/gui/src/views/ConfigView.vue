@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
+import { computed, inject, ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Download, RefreshCw, RotateCcw, Tag, Unplug, Usb } from '@lucide/vue'
 import { invoke } from '@tauri-apps/api/core'
@@ -27,6 +27,8 @@ import ConfigSectionNav, { type ConfigSection } from '../components/config/Confi
 import FileSourcesPanel from '../components/config/FileSourcesPanel.vue'
 import RuntimePanel from '../components/config/RuntimePanel.vue'
 import ConnectionClockControl from '../components/config/ConnectionClockControl.vue'
+import { idleUpdateCoordination, updateCoordinationKey } from '../lib/updateCoordination'
+const { clientPending, clientInstalling, firmwareBusy: firmwareUpgrading } = inject(updateCoordinationKey, idleUpdateCoordination, true)
 
 const {
   deviceStatus,
@@ -86,7 +88,6 @@ const localSaveState = ref<'idle' | 'saving' | 'saved' | 'unconfirmed'>('idle')
 const firmwareCheck = ref<ProbeFirmwareCheck | null>(null)
 const firmwareChecking = ref(false)
 const firmwareCheckStatus = ref('')
-const firmwareUpgrading = ref(false)
 const firmwareUpgradeStatus = ref('')
 const firmwareUpgradeResult = ref<ProbeFirmwareUpgrade | null>(null)
 const firmwareDownloading = ref(false)
@@ -385,7 +386,7 @@ async function recheckFirmware() {
 }
 
 async function upgradeFirmware() {
-  if (firmwareUpgrading.value || firmwareChecking.value) return
+  if (firmwareUpgrading.value || firmwareChecking.value || clientInstalling.value) return
   if (!window.confirm(tr(
     '将检查并安装所选下载器的最新修复固件；版本号相同但修订未确认时也会重新安装。V2 写入 RBL，V3/V4 进入 UF2 模式。升级会断开连接，请先停止采集，期间不要拔掉 USB。继续吗？',
     'Install the latest repair firmware for the selected probe, including reinstalling the same version when its build cannot be confirmed. V2 uses RBL; V3/V4 use UF2. Stop acquisition first and keep USB connected. Continue?',
@@ -614,7 +615,9 @@ onUnmounted(() => {
           <p v-if="firmwareCheck?.status === 'revision_unknown'" data-testid="firmware-revision-unknown">{{ tr('版本号相同，但尚未确认已安装的修订。可以重新安装最新修复包。', 'The version matches, but the installed build is unconfirmed. You can reinstall the latest repair package.') }}</p>
           <p v-if="firmwareCheck?.current_build_id" data-testid="firmware-build-id">{{ tr('当前构建：', 'Installed build: ') }}{{ firmwareCheck.current_build_id }}</p>
           <p v-if="firmwareCheck?.recommended_uf2?.build_id" data-testid="firmware-recommended-build">{{ tr('可用构建：', 'Available build: ') }}{{ firmwareCheck.recommended_uf2.build_id }}</p>
-          <button class="btn" type="button" data-testid="upgrade-firmware" :disabled="firmwareUpgrading || firmwareChecking" @click="upgradeFirmware">
+          <p v-if="clientPending" data-testid="firmware-update-order">{{ tr('上位机正在检查或已有更新，建议先完成上位机更新并重启，再检查固件。暂不更新上位机时仍可手动升级固件。', 'The app is checking for updates or has an update available. Update and restart the app before rechecking firmware. If postponing the app update, you can still update firmware manually.') }}</p>
+          <p v-if="clientInstalling">{{ tr('上位机正在安装更新，请重启后再升级固件。', 'The app update is installing. Update firmware after restarting.') }}</p>
+          <button class="btn" type="button" data-testid="upgrade-firmware" :disabled="firmwareUpgrading || firmwareChecking || clientInstalling" @click="upgradeFirmware">
             {{ firmwareUpgrading ? tr('升级中...', 'Updating...') : tr('升级到最新固件', 'Update to Latest Firmware') }}
           </button>
           <div v-if="manualFirmwareUpgrade" class="manual-firmware-download" data-testid="manual-firmware-download">

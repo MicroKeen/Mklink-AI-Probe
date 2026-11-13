@@ -139,12 +139,15 @@ def update_result(
     *, root: Path, manifest: Mapping[str, object], manifest_url: str, cached: bool,
 ) -> dict[str, object]:
     local = current_version(root)
-    latest = str(manifest.get("version", ""))
+    skill = manifest.get('skill')
+    latest = str(skill.get('version') or manifest.get('version', '')) if isinstance(skill, dict) else str(manifest.get('version', ''))
     available = version_key(latest) > version_key(local)
     return {
         "status": "ok",
         "current_version": local,
         "latest_version": latest,
+        "component": "skill",
+        "desktop_latest_version": str(manifest.get('version', '')),
         "update_available": available,
         "notes": str(manifest.get("notes", "")),
         "manifest_url": manifest_url,
@@ -166,7 +169,10 @@ def check_for_update(
             return update_result(root=root, manifest=manifest, manifest_url=url, cached=True)
     try:
         manifest, url = fetch_manifest(urls)
-        _write_cache(cache, manifest, url, urls)
+        try:
+            _write_cache(cache, manifest, url, urls)
+        except OSError:
+            pass  # Version advice remains useful when this account cannot cache it.
         return update_result(root=root, manifest=manifest, manifest_url=url, cached=False)
     except (RuntimeError, ValueError) as error:
         return {
@@ -397,7 +403,9 @@ def install_update(
     install_app: bool,
 ) -> dict[str, object]:
     latest = str(manifest.get("version", ""))
-    skill_needed = install_skill and version_key(latest) > version_key(current_version(root))
+    skill_metadata = manifest.get('skill')
+    skill_version = str(skill_metadata.get('version') or latest) if isinstance(skill_metadata, dict) else latest
+    skill_needed = install_skill and version_key(skill_version) > version_key(current_version(root))
     _app_location, app_version = _installed_app() if install_app else (None, None)
     app_needed = install_app and (
         app_version is None or version_key(latest) > version_key(app_version)
@@ -427,7 +435,7 @@ def install_update(
             result["skill"] = install_skill_archive(
                 root=root,
                 archive_path=archive,
-                expected_version=str(skill.get("version", latest)),
+                expected_version=skill_version,
                 source_commit=str(skill.get("source_commit", "")),
             )
     return result

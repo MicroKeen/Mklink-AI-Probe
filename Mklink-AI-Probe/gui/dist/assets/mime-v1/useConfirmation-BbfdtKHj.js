@@ -1,0 +1,1 @@
+import{B as e,G as t,W as n,Y as r,ot as i}from"./index-DrjZ_wTY.js";var a=Symbol(`confirmation`);function o(){return e(a,async()=>!1)}function s(){let e=i(null),o;function s(t){let n=o;o=void 0,e.value=null,n?.(t)}let c=t=>o?Promise.resolve(!1):(e.value=t,new Promise(e=>{o=e}));return r(a,c),n(()=>s(!1)),t(()=>s(!1)),{message:e,confirm:c,answer:s}}export{o as n,s as t};

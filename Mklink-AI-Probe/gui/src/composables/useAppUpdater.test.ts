@@ -4,11 +4,14 @@ const updaterMocks = vi.hoisted(() => ({
   check: vi.fn(),
   isTauri: vi.fn(),
   relaunch: vi.fn(),
+  reserve: vi.fn(),
+  release: vi.fn(),
 }))
 
 vi.mock('@tauri-apps/api/core', () => ({ isTauri: updaterMocks.isTauri }))
 vi.mock('@tauri-apps/plugin-updater', () => ({ check: updaterMocks.check }))
 vi.mock('@tauri-apps/plugin-process', () => ({ relaunch: updaterMocks.relaunch }))
+vi.mock('../lib/updateCoordination', () => ({ reserveHostUpdate: updaterMocks.reserve }))
 
 import { useAppUpdater } from './useAppUpdater'
 
@@ -30,6 +33,8 @@ describe('useAppUpdater', () => {
     updaterMocks.check.mockReset()
     updaterMocks.isTauri.mockReset()
     updaterMocks.relaunch.mockReset()
+    updaterMocks.reserve.mockReset().mockResolvedValue(updaterMocks.release)
+    updaterMocks.release.mockReset().mockResolvedValue(undefined)
   })
 
   it('does nothing outside the Tauri desktop runtime', async () => {
@@ -99,6 +104,57 @@ describe('useAppUpdater', () => {
     updaterMocks.check.mockResolvedValueOnce(update())
     await updater.retry()
     expect(updater.state.value).toBe('ready')
+  })
+
+  it('requires restart after install succeeded, without downloading or installing twice', async () => {
+    updaterMocks.isTauri.mockReturnValue(true)
+    const available = update()
+    updaterMocks.check.mockResolvedValue(available)
+    updaterMocks.relaunch.mockRejectedValueOnce(new Error('restart denied'))
+    const updater = useAppUpdater()
+    await updater.checkForUpdates()
+    await updater.installAndRelaunch()
+    expect(updater.state.value).toBe('restart-required')
+    await updater.retry()
+    expect(updaterMocks.check).toHaveBeenCalledOnce()
+    await updater.installAndRelaunch()
+    expect(available.install).toHaveBeenCalledOnce()
+    expect(updaterMocks.relaunch).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps the downloaded update when the backend is busy and retries without redownloading', async () => {
+    updaterMocks.isTauri.mockReturnValue(true)
+    const available = update()
+    updaterMocks.check.mockResolvedValue(available)
+    updaterMocks.reserve.mockRejectedValueOnce(new Error('firmware upgrade is busy'))
+    const updater = useAppUpdater()
+    await updater.checkForUpdates()
+    await updater.installAndRelaunch()
+    expect(updater.state.value).toBe('ready')
+    expect(updater.blocked.value).toContain('busy')
+    expect(available.install).not.toHaveBeenCalled()
+    expect(updaterMocks.relaunch).not.toHaveBeenCalled()
+    await updater.installAndRelaunch()
+    expect(available.install).toHaveBeenCalledOnce()
+    expect(available.download).toHaveBeenCalledOnce()
+    expect(updaterMocks.release).toHaveBeenCalledOnce()
+  })
+
+  it('never installs while local firmware work is active and releases admission on install failure', async () => {
+    updaterMocks.isTauri.mockReturnValue(true)
+    const available = update()
+    available.install.mockRejectedValueOnce(new Error('installer failed'))
+    updaterMocks.check.mockResolvedValue(available)
+    let idle = false
+    const updater = useAppUpdater(() => idle)
+    await updater.checkForUpdates()
+    await updater.installAndRelaunch()
+    expect(updaterMocks.reserve).not.toHaveBeenCalled()
+    idle = true
+    await updater.installAndRelaunch()
+    expect(updater.state.value).toBe('error')
+    expect(updaterMocks.release).toHaveBeenCalledOnce()
+    expect(updaterMocks.relaunch).not.toHaveBeenCalled()
   })
 
   it('keeps signature and download failures as errors', async () => {

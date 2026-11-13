@@ -41,6 +41,8 @@ jobs:
           $tests += 'test_uart_session'
           $tests += 'test_uart_baud'
           $tests += 'test_firmware_notice'
+          $tests += 'test_host_update'
+          $tests += 'test_update_check'
           $tests += 'test_uart_high_baud'
           $tests += 'test_mux'
           $tests += 'test_remote_shared_modbus'

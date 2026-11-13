@@ -2,31 +2,37 @@ import { isTauri } from '@tauri-apps/api/core'
 import { relaunch } from '@tauri-apps/plugin-process'
 import { check, type Update } from '@tauri-apps/plugin-updater'
 import { ref } from 'vue'
+import { reserveHostUpdate } from '../lib/updateCoordination'
+import { tr } from './useLanguage'
 
-export type AppUpdateState = 'idle' | 'checking' | 'downloading' | 'ready' | 'installing' | 'unavailable' | 'error'
+export type AppUpdateState = 'idle' | 'checking' | 'downloading' | 'ready' | 'installing' | 'restart-required' | 'unavailable' | 'error'
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-export function useAppUpdater() {
+export function useAppUpdater(canInstall: () => boolean = () => true) {
   const state = ref<AppUpdateState>('idle')
   const version = ref('')
   const progress = ref<number | null>(null)
   const error = ref('')
+  const blocked = ref('')
   let availableUpdate: Update | null = null
+  let installed = false
 
   async function checkForUpdates() {
     if (!isTauri()) return
+    if (['checking', 'downloading', 'installing', 'restart-required'].includes(state.value)) return
 
     state.value = 'checking'
     version.value = ''
     progress.value = null
     error.value = ''
+    blocked.value = ''
     availableUpdate = null
 
     try {
-      const update = await check()
+      const update = await check({ timeout: 8000 })
       if (!update) {
         state.value = 'idle'
         return
@@ -60,15 +66,29 @@ export function useAppUpdater() {
   }
 
   async function installAndRelaunch() {
-    if (!availableUpdate || state.value !== 'ready') return
+    if (!availableUpdate || !['ready', 'restart-required'].includes(state.value) || !canInstall()) return
     state.value = 'installing'
     error.value = ''
+    blocked.value = ''
+    let release: (() => Promise<void>) | undefined
     try {
-      await availableUpdate.install()
+      release = await reserveHostUpdate()
+    } catch (value) {
+      blocked.value = message(value)
+      state.value = installed ? 'restart-required' : 'ready'
+      return
+    }
+    try {
+      if (!installed) {
+        await availableUpdate.install()
+        installed = true
+      }
       await relaunch()
     } catch (value) {
-      error.value = message(value)
-      state.value = 'error'
+      error.value = installed ? tr('更新已安装，请重新启动上位机后再升级固件。', 'The update is installed. Restart the app before updating firmware.') : message(value)
+      state.value = installed ? 'restart-required' : 'error'
+    } finally {
+      await release()
     }
   }
 
@@ -77,6 +97,7 @@ export function useAppUpdater() {
     version,
     progress,
     error,
+    blocked,
     checkForUpdates,
     retry: checkForUpdates,
     installAndRelaunch,

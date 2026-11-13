@@ -4,7 +4,7 @@ import type { FirmwareUpdateNotice } from '../types/mklink'
 import { tr } from '../composables/useLanguage'
 import ConfirmationDialog from './ConfirmationDialog.vue'
 
-const props = defineProps<{ notice?: FirmwareUpdateNotice | null; onFirmwarePage?: boolean }>()
+const props = defineProps<{ notice?: FirmwareUpdateNotice | null; onFirmwarePage?: boolean; deferred?: boolean }>()
 const emit = defineEmits<{ openFirmware: [] }>()
 const dismissed = new Set<string>()
 const visible = ref(false)
@@ -19,9 +19,9 @@ function remember(value: string) {
   dismissed.add(value)
   try { sessionStorage.setItem('mklink.firmware-notice.' + value, '1') } catch { /* Private storage may be unavailable. */ }
 }
-watch([key, () => props.onFirmwarePage], ([value, onPage]) => {
+watch([key, () => props.onFirmwarePage, () => props.deferred], ([value, onPage, deferred]) => {
   visible.value = false
-  if (!value) return
+  if (!value || deferred) return
   if (onPage) { remember(value); return }
   let seen = dismissed.has(value)
   try { seen ||= sessionStorage.getItem('mklink.firmware-notice.' + value) === '1' } catch { /* Use in-memory deduplication. */ }

@@ -66,6 +66,9 @@
       :version="updateVersion"
       :progress="updateProgress"
       :error="updateError"
+      :blocked="updateBlocked"
+      :firmware-busy="firmwareBusy"
+      :firmware-pending="['available', 'unrecognized'].includes(deviceStatus.firmware_update?.status || '')"
       @install="installAndRelaunch"
       @retry="retryUpdate"
       @dismiss="updateDismissed = true"
@@ -82,6 +85,7 @@
       :compatibility="deviceStatus.firmware_compatibility" :remote="IS_REMOTE"
       @open-firmware="router.push({ name: 'config', query: { section: 'firmware' } })" />
     <FirmwareUpdatePrompt v-if="!IS_REMOTE"
+      :deferred="clientPending || clientInstalling || firmwareBusy"
       :notice="backendState === 'alive' && deviceStatus.connected ? deviceStatus.firmware_update : null"
       :on-firmware-page="currentTab === 'config' && route.query?.section === 'firmware'"
       @open-firmware="router.push({ name: 'config', query: { section: 'firmware' } })" />
@@ -121,7 +125,7 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
+import { nextTick, computed, defineAsyncComponent, onMounted, onUnmounted, provide, ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { Languages } from '@lucide/vue'
 import { IS_REMOTE } from './lib/runtimeEndpoint'
@@ -140,6 +144,7 @@ import { language, toggleLanguage, tr } from './composables/useLanguage'
 import { themePreference, setTheme, type ThemePreference } from './composables/useTheme'
 import { startBrowserSessionLease } from './lib/browserSessionLease'
 import { startSharedRuntimeView } from './lib/sharedRuntimeView'
+import { updateCoordinationKey } from './lib/updateCoordination'
 
 const router = useRouter()
 // Stream viewers use persistent DOM references while sampling in the background.
@@ -157,17 +162,22 @@ const recoveryTitle = computed(() => authenticationRequired.value
 const recoveryHint = computed(() => authenticationRequired.value
   ? tr('请重新运行 mklink gui --probe <下载器 ID 或别名>，使用新链接打开对应下载器。', 'Run mklink gui --probe <probe ID or alias> again and open the new link for that probe.')
   : tr('连接恢复后会自动更新；若后台已退出，请重新运行 mklink gui --probe <下载器 ID 或别名>。', 'Updates resume when the connection returns. If the backend has exited, run mklink gui --probe <probe ID or alias> again.'))
+const firmwareBusy = ref(false)
 const {
   state: updateState,
   version: updateVersion,
   progress: updateProgress,
   error: updateError,
+  blocked: updateBlocked,
   checkForUpdates,
   installAndRelaunch,
   retry: retryUpdate,
-} = useAppUpdater()
+} = useAppUpdater(() => !firmwareBusy.value)
 const initialBackendReady = ref(false)
 const updateDismissed = ref(false)
+const clientInstalling = computed(() => ['installing', 'restart-required'].includes(updateState.value))
+const clientPending = computed(() => !updateDismissed.value && ['checking', 'downloading', 'ready'].includes(updateState.value))
+provide(updateCoordinationKey, { clientPending, clientInstalling, firmwareBusy })
 let statusPollingStarted = false
 let stopWindowLease: () => void = () => undefined
 let windowLeaseMode: boolean | undefined

@@ -205,8 +205,10 @@ def _idcode(dev: Any) -> str | None:
 # Tool groups
 # ==========================================================================
 def _register_health_tools(mcp: Any) -> None:
+    from mklink.update_check import BackgroundUpdateCheck
+    update_check = BackgroundUpdateCheck()
     @mcp.tool()
-    def ping(force_update_check: bool = False) -> dict:
+    def ping(force_update_check: bool = False, background_update_check: bool = False) -> dict:
         """Health check for the mklink MCP server.
 
         Call this first to confirm the server is alive before invoking any
@@ -216,6 +218,9 @@ def _register_health_tools(mcp: Any) -> None:
         Set force_update_check=True when first loading the MKLink Skill in a
         conversation to fetch the latest release instead of reusing the cache.
         Subsequent health calls can use the default; this never installs updates.
+        Set background_update_check=True to return immediately while checking;
+        read it again later without force, and proactively relay available updates.
+        Update app/Skill, reload clients and the idle backend, then recheck firmware.
         """
         from mklink.toolchain import status as toolchain_status
         from mklink.update_check import check_for_update, current_version
@@ -225,7 +230,8 @@ def _register_health_tools(mcp: Any) -> None:
             "server": "mklink-ai-probe",
             "transport": "stdio",
             "sdk_version": ver,
-            "update": check_for_update(force=force_update_check),
+            "update": update_check.snapshot(force=force_update_check) if background_update_check else check_for_update(force=force_update_check),
+            "update_order": ['app_and_skill', 'reload_clients_and_idle_runtime', 'probe_firmware'],
             "limits": _capabilities(),
             **toolchain_status(),
         }

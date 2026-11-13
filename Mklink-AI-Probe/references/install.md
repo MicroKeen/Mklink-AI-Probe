@@ -66,7 +66,10 @@ Skill 文件更新自动替换。占用与版本冲突按[控制权与恢复](ru
 ## 更新
 
 每个会话首次加载 MKLink Skill 时立即检查版本，不等待设备操作或固定时间。
-调用 MCP `ping(force_update_check=True)` 读取 `update`，或在 Skill 根目录执行：
+调用 MCP `ping(force_update_check=True, background_update_check=True)` 发起后台检查并读取
+`update`。`checking` 不是“已是最新”，继续当前任务，稍后用
+`ping(background_update_check=True)` 取结果，不连续轮询。旧 MCP 不支持新参数时，
+可用 `ping(force_update_check=True)`，或在 Skill 根目录执行：
 
 ```powershell
 python scripts/skill_update.py check --force --json
@@ -77,7 +80,10 @@ python scripts/skill_update.py check --force --json
 检查不占用探针，离线继续当前任务。此行为由 AI 加载 Skill 后执行，单独在编辑器
 打开 Markdown 文件不会运行脚本。
 
-发现新版本先说明当前版本、最新版本与发布说明；只有用户明确同意后才执行：
+发现新版本须主动用文字说明 Skill 当前版本、最新版本与发布说明，并询问是否更新，
+不能只调用检查工具后忽略结果。`desktop_latest_version` 是桌面发布版本，不代表本机
+桌面已安装的版本；Skill、桌面和探针固件分别比较，不能交叉比较版本号。
+只有用户明确同意后才执行：
 
 ```powershell
 python scripts/skill_update.py install --yes --json
@@ -87,6 +93,24 @@ python scripts/skill_update.py install --yes --json
 SHA-256。桌面应用与本地服务须先关闭，不打断正在进行的设备操作。可选
 `--skill-only` / `--app-only` 限定更新范围；更新 Skill 后重启 AI 客户端或开新会话。
 Git checkout 不会被覆盖。旧复制式安装没有更新脚本时，重新安装完整官方 Skill 包。
+
+### 客户端与固件的顺序
+
+- 上位机或 Skill 有新版时，建议先更新正在使用的客户端。桌面与完整 Skill 是独立安装入口，
+  更新一个不会自动更新另一个。Skill 更新器默认先安装桌面再安装 Skill；仅使用 Skill
+  或非 Windows 时选 `--skill-only`，不要求安装不使用的桌面程序。
+- 安装前先完成设备任务、停止采集并断开，等待在途烧录/固件升级结束。重载 MCP 进程，
+  退出已空闲的旧共享后台，再重新连接；不可为更新强杀其他客户端的任务。核对 `ping`
+  和后台报告的版本，文件已更新不代表旧进程已加载新版。
+- 授权连接后读取 `connect` / `device_status` 的 `firmware_update`。`checking` 时继续任务，
+  在后续正常状态检查中取结果；若任务很短，可隔几秒补查一次，仍未完成则说明待检查。
+  `available` 主动告知当前/最新固件，`unrecognized` 提醒旧固件升级，不猜型号。
+  未连接/离线/查询失败不能说“已是最新”，不为版本检查另开 CDC 或暂停采集。
+- 两类新版同时出现时，先提醒客户端更新，再重连重新判断固件。桌面自动固件弹窗暂缓到
+  客户端更新处理完或选择“稍后”；固件页面仍可手动进入。这是推荐顺序，不凭版本号虚构
+  不存在的兼容门槛；明确缺少能力时仍按协商结果提示升级。
+- 固件升级必须另获同意，进入升级页不代表授权刷写。升级进行中不安装或重启客户端；
+  桌面安装前会检查本后台是否空闲并暂时禁止新设备操作，失败可重试，绝不自动停采集。
 
 桌面提示“当前平台暂无可用更新”表示更新索引尚未提供本机平台的安装包，可以
 继续使用现有版本；它与“无法连接本地服务”是独立状态。若 macOS 后台日志包含

@@ -8,6 +8,12 @@ ESP32-S3 无线工作台通过传输适配复用本后台，接入步骤见
 
 ## 连接与选择
 
+Skill 首次加载以 `ping(force_update_check=True, background_update_check=True)` 发起客户端
+版本检查，继续任务，后续用 `ping(background_update_check=True)` 取结果。发现 Skill 新版
+主动告知用户当前/最新版本；`checking` 或离线不能当作最新。授权连接后对下述固件状态也
+主动提醒。两类更新都需要时先更新所用上位机/Skill、重载 MCP 与空闲旧后台，再重连检查
+固件，详见[更新顺序](install.md#客户端与固件的顺序)。查询不自动安装或重启。
+
 连接结果和 `gui_call('device_status')` 共用 `firmware_compatibility`：`checked` 表示已读取
 可识别型号的文本能力，`warnings` 列出已确认缺少的能力；未进行 HELLO 的能力不据此判缺失。
 Web GUI 显示同一清单，AI/CLI 客户端应转述升级提醒。操作返回 `firmware_warning` 或

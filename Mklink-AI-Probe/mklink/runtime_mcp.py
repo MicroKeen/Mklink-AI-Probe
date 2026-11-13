@@ -59,13 +59,25 @@ def build_server():
 
     from mklink.mcp_workflows import register_workflow_tools
     register_workflow_tools(server, client)
+    from mklink.update_check import BackgroundUpdateCheck
+    update_check = BackgroundUpdateCheck()
 
     @server.tool()
-    def ping(force_update_check: bool = False) -> dict:
-        """Shared-runtime health and supported GUI capabilities; does not open CDC."""
+    def ping(force_update_check: bool = False, background_update_check: bool = False) -> dict:
+        """Shared-runtime health; does not open CDC.
+
+        On Skill activation use force_update_check=True, background_update_check=True.
+        Continue the task while update.status is checking; later read with only
+        background_update_check=True, without polling tightly. Actively tell the user
+        about newer Skill versions. After authorized connect, also relay device_status
+        firmware_update advice. Update app/Skill first, reload MCP and the idle backend,
+        reconnect and recheck firmware; never install/restart during a firmware update.
+        No device connected means firmware is unchecked, not current. Never auto-install.
+        """
         from mklink.update_check import check_for_update
         return {"ok": True, "version": VERSION, "mode": "shared-cdc", "capabilities": sorted(CAPABILITIES),
-                "update": check_for_update(force=force_update_check),
+                "update": update_check.snapshot(force=force_update_check) if background_update_check else check_for_update(force=force_update_check),
+                "update_order": ['app_and_skill', 'reload_clients_and_idle_runtime', 'probe_firmware'],
                 "limits": {"direct_read_max_bytes": 4096, "batch_read_max_regions": BATCH_READ_MAX_REGIONS,
                            "batch_read_max_total_bytes": BATCH_READ_MAX_TOTAL_BYTES,
                            "rtt_mux_channels": 8, "rtt_channel_cache_bytes": 65536,

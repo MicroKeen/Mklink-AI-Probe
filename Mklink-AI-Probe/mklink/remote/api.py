@@ -843,6 +843,8 @@ def create_app(
     # The runtime installs lifecycle and admission hooks on this shared state.
     # Route handlers keep using the same ``_state`` dict directly.
     app.state.mklink_state = _state
+    from mklink.host_update import install_host_update_gate
+    install_host_update_gate(app)
     from mklink.firmware_notice import FirmwareNotice
     firmware_notice = FirmwareNotice()
     app.state.firmware_notice = firmware_notice

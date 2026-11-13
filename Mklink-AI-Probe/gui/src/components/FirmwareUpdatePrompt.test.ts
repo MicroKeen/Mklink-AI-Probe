@@ -35,6 +35,22 @@ describe('deferred firmware prompt', () => {
     wrapper.unmount()
   })
 
+  it('defers to a client update without consuming the firmware reminder', async () => {
+    const wrapper = mount(FirmwareUpdatePrompt, { props: { notice, deferred: true } })
+    expect(wrapper.find('[role="alertdialog"]').exists()).toBe(false)
+    expect(sessionStorage.length).toBe(0)
+    await wrapper.setProps({ deferred: false })
+    expect(wrapper.find('[role="alertdialog"]').exists()).toBe(true)
+    await wrapper.setProps({ deferred: true })
+    expect(wrapper.find('[role="alertdialog"]').exists()).toBe(false)
+    await wrapper.setProps({ deferred: false })
+    await wrapper.get('[data-testid="confirmation-cancel"]').trigger('click')
+    await wrapper.setProps({ deferred: true })
+    await wrapper.setProps({ deferred: false })
+    expect(wrapper.find('[role="alertdialog"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
   it('recommends upgrade for unrecognized legacy replies without inventing a cloud version', async () => {
     const wrapper = mount(FirmwareUpdatePrompt, { props: { notice: { status: 'unrecognized', probe_id: 'legacy' } } })
     expect(wrapper.text()).toContain('建议升级固件')

@@ -46,6 +46,16 @@ def test_version_comparison_handles_stable_and_prerelease(updater):
         updater.version_key("latest")
 
 
+def test_independent_skill_version_does_not_install_an_older_payload(updater, monkeypatch, tmp_path):
+    root = make_root(tmp_path / 'installed', '1.2.3')
+    manifest = {'version': '9.0.0', 'skill': {'version': '1.2.2'}}
+    result = updater.update_result(root=root, manifest=manifest, manifest_url='fixture', cached=False)
+    assert result['update_available'] is False
+    assert result['desktop_latest_version'] == '9.0.0'
+    monkeypatch.setattr(updater, 'download_verified', lambda *args: pytest.fail('must not downgrade Skill'))
+    assert updater.install_update(root=root, manifest=manifest, install_skill=True, install_app=False)['status'] == 'current'
+
+
 def test_skill_update_cache_uses_explicit_task_cache(updater, monkeypatch, tmp_path):
     cache_root = tmp_path / "task-cache"
     monkeypatch.setenv("MKLINK_CACHE_DIR", str(cache_root))
@@ -445,8 +455,9 @@ def test_skill_instructions_require_proactive_check_and_user_approval():
     install = (SCRIPT_PATH.parents[1] / "references" / "install.md").read_text(
         encoding="utf-8"
     )
-    assert "skill_update.py check --force --json" in text
-    assert any(wording in text for wording in ("安装须用户同意", "安装仍须用户同意"))
+    assert "background_update_check=True" in text
+    assert "skill_update.py check --force --json" in install
+    assert "不自动安装" in text
     assert "(references/install.md)" in text
     assert "install --yes --json" in install
     assert install.index("只有用户明确同意后") < install.index("install --yes --json")
