@@ -81,6 +81,10 @@
     <FirmwareCompatibilityBanner v-if="backendState === 'alive' && deviceStatus.connected"
       :compatibility="deviceStatus.firmware_compatibility" :remote="IS_REMOTE"
       @open-firmware="router.push({ name: 'config', query: { section: 'firmware' } })" />
+    <FirmwareUpdatePrompt v-if="!IS_REMOTE"
+      :notice="backendState === 'alive' && deviceStatus.connected ? deviceStatus.firmware_update : null"
+      :on-firmware-page="currentTab === 'config' && route.query?.section === 'firmware'"
+      @open-firmware="router.push({ name: 'config', query: { section: 'firmware' } })" />
     <div class="app-main" :inert="IS_REMOTE && backendState !== 'alive'">
       <DashboardView v-if="initialBackendReady && dashboardVisited" v-show="currentTab === 'dashboard'" />
       <router-view v-if="initialBackendReady" v-slot="{ Component, route: viewRoute }">
@@ -127,6 +131,7 @@ import StatusBar from './components/StatusBar.vue'
 import ToastContainer from './components/ToastContainer.vue'
 import AppUpdateBanner from './components/AppUpdateBanner.vue'
 import FirmwareCompatibilityBanner from './components/FirmwareCompatibilityBanner.vue'
+import FirmwareUpdatePrompt from './components/FirmwareUpdatePrompt.vue'
 import VersionHistoryPopover from './components/VersionHistoryPopover.vue'
 import { useMklinkApi } from './composables/useMklinkApi'
 import { useBackendHealth } from './composables/useBackendHealth'

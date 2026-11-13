@@ -54,7 +54,9 @@ watch(() => route?.query.section, section => {
   if (section === 'firmware') activeSection.value = 'firmware'
 }, { immediate: true })
 watch(activeSection, section => {
-  if (route?.query.section === 'firmware' && section !== 'firmware') {
+  if (section === 'firmware' && route?.query.section !== 'firmware') {
+    void router.replace({ query: { ...route?.query, section: 'firmware' } })
+  } else if (route?.query.section === 'firmware' && section !== 'firmware') {
     void router.replace({ query: { ...route.query, section: undefined } })
   }
 })
@@ -600,6 +602,13 @@ onUnmounted(() => {
         </header>
         <div class="firmware-upgrade-content">
           <p>{{ tr('检查并升级所选下载器。V2 使用 RBL，V3/V4 使用 UF2；升级期间请勿拔掉 USB。', 'Check and update the selected probe. V2 uses RBL; V3/V4 use UF2. Keep USB connected during the update.') }}</p>
+          <p v-if="deviceStatus.connected && deviceStatus.firmware_update?.status === 'available' && (!localPortExplicit || localPort === deviceStatus.port)" data-testid="firmware-cloud-version" role="status">
+            {{ tr('当前固件：', 'Installed firmware: ') }}{{ deviceStatus.firmware_update.current_version }} ·
+            {{ tr('云端新版本：', 'New cloud version: ') }}{{ deviceStatus.firmware_update.latest_version }}
+          </p>
+          <p v-if="deviceStatus.connected && deviceStatus.firmware_update?.status === 'unrecognized' && (!localPortExplicit || localPort === deviceStatus.port)" data-testid="firmware-unrecognized" role="status">
+            {{ tr('当前固件信息无法识别，建议升级与下载器型号匹配的固件。', 'The installed firmware could not be identified. Upgrade to firmware matching your probe model.') }}
+          </p>
           <button class="btn" type="button" data-testid="check-firmware" :disabled="firmwareUpgrading || firmwareChecking" @click="recheckFirmware">{{ firmwareChecking ? tr('检查中...', 'Checking...') : tr('检查固件', 'Check Firmware') }}</button>
           <p v-if="firmwareCheckStatus" role="status" data-testid="firmware-check-status">{{ firmwareCheckStatus }}</p>
           <p v-if="firmwareCheck?.status === 'revision_unknown'" data-testid="firmware-revision-unknown">{{ tr('版本号相同，但尚未确认已安装的修订。可以重新安装最新修复包。', 'The version matches, but the installed build is unconfirmed. You can reinstall the latest repair package.') }}</p>

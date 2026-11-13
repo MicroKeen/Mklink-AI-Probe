@@ -80,6 +80,7 @@ export interface FirmwareCompatibility {
 }
 
 export interface DeviceStatus {
+  firmware_update?: FirmwareUpdateNotice | null
   firmware_compatibility?: FirmwareCompatibility | null
   probe_product?: 'MKLink' | 'HPMLINK'
   connection_recovery?: { state: string; attempts: number; error?: string; errors?: string[]; restored_at?: number }
@@ -92,6 +93,17 @@ export interface DeviceStatus {
   idcode: string | null
   port: string | null
   axf: AxlStatus
+}
+
+export interface FirmwareUpdateNotice {
+  status: 'unknown' | 'unrecognized' | 'checking' | 'available' | 'current' | 'unavailable' | 'no_firmware'
+  family?: 'microlink' | 'hpmlink'
+  model?: 'V2' | 'V3' | 'V4'
+  current_version?: string
+  latest_version?: string | null
+  probe_id?: string
+  device_generation?: number
+  action?: 'upgrade_probe_firmware'
 }
 
 export interface MicrokeenInfo {

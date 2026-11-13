@@ -381,7 +381,8 @@ def _remote_firmware(
     return None
 
 
-def _remote_firmwares(*, timeout: float = 8.0, v2: bool = False) -> list[FirmwareInfo] | None:
+def _remote_firmwares(*, timeout: float = 8.0, v2: bool = False,
+                      include_bundled: bool = True) -> list[FirmwareInfo] | None:
     """Compare both trusted mirrors so a lagging successful mirror cannot pin updates."""
     sources = ("tencent", "github", "gitee")
     with ThreadPoolExecutor(max_workers=len(sources)) as executor:
@@ -389,7 +390,8 @@ def _remote_firmwares(*, timeout: float = 8.0, v2: bool = False) -> list[Firmwar
             lambda source: (_remote_firmwares_from_source(source, timeout=timeout, v2=True)
                             if v2 else _remote_firmwares_from_source(source, timeout=timeout)), sources,
         ))
-    pinned = [item for item in bundled_firmwares() if (item.model == 'V2') == v2]
+    pinned = ([item for item in bundled_firmwares() if (item.model == 'V2') == v2]
+              if include_bundled else [])
     if all(entries is None for entries in results) and not pinned:
         return None
     latest = {}
@@ -811,6 +813,18 @@ def parse_probe_version(resp: str) -> Version | None:
         int(m.group("minor")),
         int(m.group("patch")),
     )
+
+
+def cached_probe_version(bridge) -> Version | None:
+    """Read the ordered handshake response, without issuing another command."""
+    from mklink.capture_clock import firmware_lines
+    response = getattr(bridge, '_firmware_version_response', None)
+    if isinstance(response, str):
+        return parse_probe_version(response)
+    # Older transport adapters may expose only a set of capabilities. A set
+    # loses changelog order, so never choose its min/max version as installed.
+    versions = [line for line in firmware_lines(bridge) if re.fullmatch(r'V\d+\.\d+\.\d+', line)]
+    return parse_probe_version(versions[0]) if len(versions) == 1 else None
 
 
 def read_device_version(port: str, *, timeout: float = DEFAULT_VERSION_TIMEOUT) -> Version | None:

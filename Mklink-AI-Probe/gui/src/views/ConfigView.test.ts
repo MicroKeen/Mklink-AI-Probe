@@ -2,6 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { nextTick, readonly, ref } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { sharedRuntime } from '../composables/useBackendHealth'
+import { createMemoryHistory, createRouter } from 'vue-router'
 
 const mocks = vi.hoisted(() => {
   const deviceStatus = {
@@ -83,8 +84,14 @@ function deferred<T>() {
 
 async function mountView() {
   const { default: ConfigView } = await import('./ConfigView.vue')
+  const router = createRouter({ history: createMemoryHistory(), routes: [
+    { path: '/config', name: 'config', component: { template: '<div />' } },
+  ] })
+  await router.push('/config')
+  await router.isReady()
   const wrapper = mount(ConfigView, {
     global: {
+      plugins: [router],
       stubs: {
         FirmwareUpdateModal: true,
         RuntimePanel: true,
@@ -102,6 +109,7 @@ describe('ConfigView', () => {
     wrapper.findComponent({ name: 'ConnectionClockControl' }).vm.$emit('firmwareUpdate')
     await flushPromises()
     expect(wrapper.get('[data-testid="firmware-upgrade-panel"]').exists()).toBe(true)
+    expect(wrapper.vm.$route.query.section).toBe('firmware')
     expect(mocks.api.upgradeProbeFirmware).not.toHaveBeenCalled()
     expect(mocks.api.downloadProbeFirmware).not.toHaveBeenCalled()
     wrapper.unmount()
@@ -752,6 +760,8 @@ describe('ConfigView', () => {
     expect(wrapper.find('[data-testid="firmware-upgrade-panel"]').exists()).toBe(false)
 
     await wrapper.get('[data-testid="config-section-firmware"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.vm.$route.query.section).toBe('firmware')
     expect(wrapper.get('[data-testid="config-section-firmware"]').attributes('aria-current')).toBe('page')
     expect(wrapper.get('[data-testid="firmware-upgrade-panel"]').text()).toContain('固件升级')
     expect(wrapper.find('[data-testid="launch-server"]').exists()).toBe(false)

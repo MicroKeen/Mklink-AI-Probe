@@ -4,7 +4,6 @@ Version text identifies the model only; it is never a feature threshold.
 Missing/failed queries, target errors and unsupported hardware are not evidence
 that a firmware upgrade will help.
 """
-import re
 
 
 def upgrade_message(feature, required):
@@ -32,9 +31,11 @@ are excluded: upgrading those models is not known to supply these capabilities.
 """
     from mklink.capture_clock import firmware_lines, active_clock_interface, clock_options
     from mklink.uart_baud import baud_options
+    from mklink.firmware_check import cached_probe_version
     lines = firmware_lines(bridge)
-    versions = sorted(line for line in lines if re.fullmatch(r'V[34]\.\d+\.\d+', line))
-    result = dict(checked=len(versions) == 1, version=versions[0] if len(versions) == 1 else None,
+    version = cached_probe_version(bridge)
+    checked = version is not None and version.major in (3, 4)
+    result = dict(checked=checked, version=str(version) if checked else None,
                   warnings=[])
     if not result['checked']:
         return result

@@ -311,6 +311,12 @@ def build_server():
         Conflicting project/symbol settings still require explicit reconfiguration.
         The default scope connects the USB probe without requiring a target MCU.
         Relay firmware_compatibility.warnings and operation firmware_warning to the user.
+        device_status also returns firmware_update from a delayed cloud check of the
+        cached handshake version. If status is available, relay current_version and
+        latest_version and offer the GUI Config > Firmware page; never auto-upgrade.
+        If status is unrecognized, recommend upgrading matching firmware without
+        claiming a known installed/cloud version or selecting an unknown model.
+        Do not wait for the check before normal work or poll it in a tight loop.
         Missing capabilities require matching probe firmware; never stop capture or
         upgrade automatically. Version strings alone do not establish support.
         scope='uart' attaches without MCU/CDC initialization, including the unselected lobby.

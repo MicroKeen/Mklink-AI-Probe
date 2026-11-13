@@ -843,6 +843,10 @@ def create_app(
     # The runtime installs lifecycle and admission hooks on this shared state.
     # Route handlers keep using the same ``_state`` dict directly.
     app.state.mklink_state = _state
+    from mklink.firmware_notice import FirmwareNotice
+    firmware_notice = FirmwareNotice()
+    app.state.firmware_notice = firmware_notice
+    app.add_event_handler('shutdown', firmware_notice.close)
 
     browser_sessions = (
         BrowserSessionLease(browser_session_timeout)
@@ -2133,6 +2137,7 @@ def create_app(
             "clock_warning": getattr(dev, "clock_warning", None),
             "clock_hz": getattr(dev, "clock_hz", None),
             "firmware_compatibility": compatibility_snapshot(getattr(dev, '_bridge', None)) if dev.connected else None,
+            "firmware_update": firmware_notice.snapshot(_state),
         }
 
     @app.get("/api/probe/firmware-check")
