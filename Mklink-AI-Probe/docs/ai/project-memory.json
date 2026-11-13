@@ -1,20 +1,20 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-13T19:18:19+08:00",
+  "updated_at": "2026-11-13T19:24:17+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.5.0-fixes",
-    "head": "80168b5c",
-    "remote_head": "80168b5c",
-    "working_tree": "V0.5.0 本地覆盖验收及记忆已推送至 80168b5c；本轮客户日志只读诊断，产品源码未改。诊断记录另行提交；未合并、签名或发布。"
+    "head": "0b60cda0",
+    "remote_head": "0b60cda0",
+    "working_tree": "V0.5.0 候选及上一份权限诊断已推送至 0b60cda0；本轮追加另一份客户日志诊断，产品源码未改。报告和交接另行提交；未合并、签名或发布。"
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "客户 0.4.3 连接 500 已定位为 jobs.json 拒绝访问；V0.5.0 已含修复，51 项回归通过",
-    "current_task": "客户诊断包记录 59 次 jobs.json PermissionError，均在 runtime/select、打开设备串口前发生，符合已修复的 Issue #75。V0.5.0 / 3a3fb298 已包含 PR #76；建议客户覆盖后退出旧后台并重载 MCP。未知客户 ACL/占用原因，不宣称新包自动修复文件权限。51 项任务日志/切换回归含真实 NTFS 场景通过，产品源码未改。见[诊断报告](../verification/v050-customer-journal-diagnosis.md)。当前 V0.5.0 安装及配套 Skill 见[候选验收](../verification/v050-candidate-overwrite.md)，仍未发布。"
+    "status": "客户 0.3.6：两次 COM16 传输中止后身份匹配失败，另有 44 次任务记录 UTF-8 解码失败；尚未修复",
+    "current_task": "新诊断包 manifest 为 0.3.6：两轮 COM16 已连接后报告 WinError 995，约 5 秒内无法唯一匹配原下载器、未进入重新打开；随后 19 次选择错误。另有 44 次 jobs.json 非 UTF-8 解码失败，与上一份 PermissionError 不同。当前 V0.5.0 仍阻止非法编码/JSON 的任务记录加载，不能宣称已有候选解决。见[本轮诊断](../verification/v050-customer-selector-diagnosis.md)。仅分析和记录，未改产品源码或操作设备；候选仍未发布。"
   },
   "milestones": [
     {
@@ -55,7 +55,7 @@
     },
     {
       "area": "Windows 安装与工程初始化",
-      "result": "V0.5.0 / 3a3fb298 已覆盖 ad00c962；NSIS/桌面均 RID 8192，3680 文件匹配，6 份配置、USB 名称和机器级登记不变。仅 Windows PATH 下冻结 CLI、58 个 MCP 工具、FLM 7059/2224、SVD 4800、原生健康与正常退出通过；真实原生/浏览器显示中英文 0.5.0 说明，Skill 2344 个资源文件一致。238 项后端、76 项 GUI 及生产构建通过；清理 232 链接/2 目录，零失败。哈希及边界见[候选验收](../verification/v050-candidate-overwrite.md)。此前 ELF/波特率实物安装证据见[报告](../verification/v050-elf-baud-overwrite.md)；SystemView 安装实物见[报告](../verification/v050-systemview-restart-zoom.md)。通用工程 424 项与真实/冻结 CLI 初始化见[报告](../verification/v050-project-init.md)。 客户 0.4.3 连接 500 日志命中 jobs.json 拒绝读取，51 项含真实 NTFS 回归通过；V0.5.0 已包含原修复，未改源码，见[诊断报告](../verification/v050-customer-journal-diagnosis.md)。"
+      "result": "V0.5.0 / 3a3fb298 已覆盖 ad00c962；NSIS/桌面均 RID 8192，3680 文件匹配，6 份配置、USB 名称和机器级登记不变。仅 Windows PATH 下冻结 CLI、58 个 MCP 工具、FLM 7059/2224、SVD 4800、原生健康与正常退出通过；真实原生/浏览器显示中英文 0.5.0 说明，Skill 2344 个资源文件一致。238 项后端、76 项 GUI 及生产构建通过；清理 232 链接/2 目录，零失败。哈希及边界见[候选验收](../verification/v050-candidate-overwrite.md)。此前 ELF/波特率实物安装证据见[报告](../verification/v050-elf-baud-overwrite.md)；SystemView 安装实物见[报告](../verification/v050-systemview-restart-zoom.md)。通用工程 424 项与真实/冻结 CLI 初始化见[报告](../verification/v050-project-init.md)。 客户 0.4.3 连接 500 日志命中 jobs.json 拒绝读取，51 项含真实 NTFS 回归通过；V0.5.0 已包含原修复，未改源码，见[诊断报告](../verification/v050-customer-journal-diagnosis.md)。 后续另一份 0.3.6 包确认非 UTF-8 任务记录及两次串口中止/身份匹配失败；仅日志与源码分析，无新增回归，见[诊断](../verification/v050-customer-selector-diagnosis.md)。"
     },
     {
       "area": "V3 / V4 SuperWatch 恢复",
@@ -91,6 +91,7 @@
     "ELF 与波特率修复已在 ad00c962 Windows 普通用户包覆盖验收；macOS 候选尚不含这两项。ELF 仅完成离线解析和变量配置验证，未做客户板采集或写入。本轮未做高速物理收发、持续吞吐或 SWD/RTT 共存性能 A/B；固件会话双 V4 测试不等同于客户 1.5 µs 快速应答验证，第三方驱动可拒绝预设高档位。"
   ],
   "next_actions": [
+    "客户 0.3.6 连接问题待后续修复：非法编码/JSON 的任务记录保留原件并隔离依赖历史的操作；区分设备零匹配与多匹配，刷新失效列表并补充脱敏枚举诊断。先前已修复的权限问题不覆盖此情形。USB 传输中止根因仍需故障时枚举及系统事件，不能直接归因固件。",
     "取得客户目标芯片、RTOS 和原始 SystemView 流后，确认其丢名是否命中元数据/通道修复，并单独排查解析对齐及异常运行片段；不把现有板测试扩大为所有平台保证。",
     "在用户 Mac 上验收对应 ARM/Intel 候选的首次启动、覆盖安装、探针接口/卷身份和真实查询耗时，再核对共享会话及 MCP 重载。当前软件与包内自检不替代真实环境门禁。",
     "固件会话继续维护 STOP 状态码补丁；客户信息齐备并获得明确实物安排后再做同条件 STOP/唤醒验证，不自动抢占调试器或刷写设备。",
