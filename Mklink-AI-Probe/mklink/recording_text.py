@@ -46,6 +46,17 @@ def _rows(path):
 class _RttText:
     def __init__(self):
         self.streams = {}
+        self.begin_part()
+
+    def begin_part(self):
+        # Each numbered TXT remains understandable on its own. Decoders and
+        # partial lines still continue across parts.
+        self._output_session = object()
+
+    def _session(self, output, session):
+        if self._output_session != session:
+            output.write(f"# session={_safe(session)}\n")
+            self._output_session = session
 
     def _flush(self, output, state, *, final=False):
         if final:
@@ -55,8 +66,9 @@ class _RttText:
             state['text'] = ''
 
     def _line(self, output, state, text, suffix=''):
-        output.write(f"[{_date(state['time'])}] channel={_safe(state['source'])} "
-                     f"{_safe(state['direction'])} session={_safe(state['session'])} "
+        self._session(output, state['session'])
+        output.write(f"[{_date(state['time'])}] CH{_safe(state['source'])} "
+                     f"{_safe(state['direction'])} "
                      f"{_safe(text)}{suffix}\n")
 
     def row(self, output, row):
@@ -85,7 +97,8 @@ class _RttText:
             self._flush(output, state, final=True)
             state['decoder'] = codecs.getincrementaldecoder('utf-8')('surrogateescape')
             state['time'] = row['time']
-            output.write(f"# [{_date(row['time'])}] channel={_safe(key[0])} "
+            self._session(output, state['session'])
+            output.write(f"# [{_date(row['time'])}] CH{_safe(key[0])} "
                          f"{_safe(key[1])} lost_bytes={lost}\n")
             state['lost_bytes'] = lost
         state['text'] += state['decoder'].decode(bytes.fromhex(row['hex']))
@@ -139,6 +152,7 @@ def export_text(manifest_path):
                              f"# Recording started: {_date(job['started_at'])}\n"
                              f"# Source: {'complete' if job['complete'] else 'INCOMPLETE: ' + _safe(job['source_error'])}\n")
                 if traffic:
+                    traffic.begin_part()
                     output.write('# Timestamps: host RX/TX time, local timezone; fragmented lines use first chunk time.\n'
                                  '# A line spanning parts appears where it finishes; read numbered parts in order.\n')
                 else:

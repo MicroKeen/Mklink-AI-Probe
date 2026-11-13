@@ -63,6 +63,8 @@ jobs:
           $tests += 'test_rtt_session'
           $tests += 'test_rtt_hex_regression'
           $tests += 'test_superwatch_recording'
+          $tests += 'test_recording_text'
+          $tests += 'test_traffic_recording'
           $tests += 'test_systemview_session'
           $tests += @('test_mux_rtt_shared', 'test_systemview_stream_manager', 'test_systemview_task_names', 'test_systemview_cpu_clock')
           $tests += 'test_internal_process_entry'

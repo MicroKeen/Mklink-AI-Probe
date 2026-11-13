@@ -110,9 +110,10 @@ def test_rtt_joins_unicode_lines_across_chunks_and_parts_with_rx_tx_and_loss(tmp
     assert status['export_state'] == 'completed' and status['parts'] == 2
     text = ''.join(p.read_text(encoding='utf-8') for p in sorted(tmp_path.glob('*.txt')))
     assert 'first 中' in text and '�' not in text
-    assert 'channel=2 RX' in text and 'channel=2 TX' in text
+    assert 'CH2 RX' in text and 'CH2 TX' in text
     assert '\\x00\\xff' in text and 'command' in text
-    assert 'session=s1' in text
+    assert text.count('# session=s1\n') == 1
+    assert all('session=' not in line for line in text.splitlines() if not line.startswith('#'))
     assert '.125000' in text
     assert all(p.with_suffix('.jsonl').is_file() for p in tmp_path.glob('*.txt'))
 
@@ -173,11 +174,34 @@ def test_rtt_long_lines_and_session_restart_are_bounded(tmp_path):
     recorder.stop()
     status = exported(recorder)
     assert status['export_state'] == 'completed'
-    lines = [line for line in Path(status['export_path']).read_text().splitlines() if not line.startswith('#')]
+    text = Path(status['export_path']).read_text()
+    lines = [line for line in text.splitlines() if not line.startswith('#')]
     assert max(map(len, lines)) < 17000
-    assert 'new session' in lines[-1] and 'session=s2' in lines[-1]
-    assert sum(line.split('session=s1 ', 1)[1].split(' [', 1)[0].count('a')
-               for line in lines if 'session=s1 ' in line) == 100_000
+    assert 'CH0 RX new session' in lines[-1]
+    assert text.count('# session=s1\n') == text.count('# session=s2\n') == 1
+    assert text.index('[partial line]') < text.index('# session=s2\n') < text.index('CH0 RX new session')
+    assert sum(line.split(' RX ', 1)[1].split(' [', 1)[0].count('a')
+               for line in lines[:-1]) == 100_000
+
+
+def test_rtt_part_headers_keep_session_for_interleaved_streams_and_pending_utf8(tmp_path):
+    recorder = TrafficRecorder(tmp_path, 'rtt', part_events=3)
+    recorder.append(0, b'first\n', 'RX', 's1', 1700000000)
+    recorder.append(1, b'other channel\n', 'RX', 's1', 1700000001)
+    recorder.append(0, b'\xe4\xb8', 'RX', 's1', 1700000002)
+    recorder.append(0, b'\xad\n', 'RX', 's1', 1700000003)
+    recorder.append(0, b'command\n', 'TX', 's1', 1700000004)
+    recorder.append(0, b'restarted\n', 'RX', 's2', 1700000005)
+    recorder.stop()
+    raw = {p: p.read_bytes() for p in tmp_path.glob('*.jsonl')}
+    assert exported(recorder)['export_state'] == 'completed'
+    first, second = [p.read_text(encoding='utf-8') for p in sorted(tmp_path.glob('*.txt'))]
+    assert first.count('# session=s1\n') == second.count('# session=s1\n') == 1
+    assert 'CH0 RX first' in first and 'CH1 RX other channel' in first
+    assert 'CH0 RX 中' in second and 'CH0 TX command' in second
+    assert second.index('# session=s1\n') < second.index('CH0 RX 中')
+    assert second.index('CH0 TX command') < second.index('# session=s2\n') < second.index('CH0 RX restarted')
+    assert all(p.read_bytes() == data for p, data in raw.items())
 
 
 def test_export_continues_after_owning_python_process_exits(tmp_path):
