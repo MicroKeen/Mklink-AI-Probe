@@ -1,20 +1,20 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-13T19:57:55+08:00",
+  "updated_at": "2026-11-13T20:17:13+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.5.0-fixes",
-    "head": "03fe2cfa",
-    "remote_head": "03fe2cfa",
-    "working_tree": "03fe2cfa 已推送开发分支，含连接修复和生产 Web 资源；本轮验收报告与记忆另行提交。未合并、重打安装包、覆盖安装或发布。"
+    "head": "b3ef9ef4",
+    "remote_head": "b3ef9ef4",
+    "working_tree": "冻结源码 b3ef9ef4 已推送；本轮仅补充覆盖安装报告和记忆，另行提交。安装包未签名、未发布，PR #79 未合并。"
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "异常任务记录及多下载器选择已修复，双 V4 实物/浏览器验收通过，设备已释放",
-    "current_task": "03fe2cfa 保留损坏 jobs.json，允许连接并保护未知任务；区分下载器缺失/多匹配/占用，GUI 按身份选择并在丢失后禁止自动改连其他设备。MicroLink V4.7.4 + STM32F103、HPMLink V4.7.2 + HPM5301 双窗口独立连接、占用拒绝、单窗口往返切换、两轮 USB 拔插和中英文提示通过，测试后台已退出。后端 831 项及最终 227 项、GUI 1254 项及最终 87 项通过，数量重叠；见[验收报告](../verification/v050-probe-selection-recovery.md)。已安装的 V0.5.0 / 3a3fb298 尚不含本轮修复，仍未发布；客户原始 WinError 995 根因未确认。"
+    "status": "V0.5.0 / b3ef9ef4 连接修复候选已打包并普通用户覆盖，安装版双 V4 验收通过",
+    "current_task": "本机已覆盖为 V0.5.0 / b3ef9ef4，包含 03fe2cfa 的异常任务记录和多下载器修复。安装版验证损坏 jobs.json 不阻止连接且保留任务保护、第二窗口不影响第一窗口、占用拒绝、单窗口往返切换及缺失身份不回退；原生/Web/冻结 CLI/MCP 和完整 Skill 一致性通过。测试后台已退出，6 份原配置不变；本地安装包及哈希见[覆盖报告](../verification/v050-connection-overwrite.md)。可交客户复测，但原始 WinError 995 触发原因未确认；仍未发布。"
   },
   "milestones": [
     {
@@ -55,7 +55,7 @@
     },
     {
       "area": "Windows 安装与工程初始化",
-      "result": "V0.5.0 / 3a3fb298 已覆盖 ad00c962；NSIS/桌面均 RID 8192，3680 文件匹配，6 份配置、USB 名称和机器级登记不变。仅 Windows PATH 下冻结 CLI、58 个 MCP 工具、FLM 7059/2224、SVD 4800、原生健康与正常退出通过；真实原生/浏览器显示中英文 0.5.0 说明，Skill 2344 个资源文件一致。238 项后端、76 项 GUI 及生产构建通过；清理 232 链接/2 目录，零失败。哈希及边界见[候选验收](../verification/v050-candidate-overwrite.md)。此前 ELF/波特率实物安装证据见[报告](../verification/v050-elf-baud-overwrite.md)；SystemView 安装实物见[报告](../verification/v050-systemview-restart-zoom.md)。通用工程 424 项与真实/冻结 CLI 初始化见[报告](../verification/v050-project-init.md)。 客户 0.4.3 连接 500 日志命中 jobs.json 拒绝读取，51 项含真实 NTFS 回归通过；V0.5.0 已包含原修复，未改源码，见[诊断报告](../verification/v050-customer-journal-diagnosis.md)。 03fe2cfa 修复另一份 0.3.6 包的非 UTF-8 任务记录和设备选择：831 项及最终 227 项后端、1254 项及最终 87 项 GUI 通过，含重叠；双 V4 实物独立窗口、占用保护、单窗口切换及两轮 USB 拔插/中英文浏览器通过。573 链接/3 目录清理零失败；本轮未重打安装包，见[报告](../verification/v050-probe-selection-recovery.md)。"
+      "result": "V0.5.0 / b3ef9ef4 已普通用户覆盖 3a3fb298，安装器/桌面 RID 8192，3680 文件一致、6 份配置与 USB 名称/机器级登记不变。安装版双 V4 独立后台、占用保护、单窗口切换、缺失身份不回退及非 UTF-8 任务记录连接/保护通过；正常释放设备。Windows-only PATH 下冻结 CLI、58 个 MCP 工具、完整 FLM/Pack、原生/真实浏览器通过；Skill 2344 个资源文件匹配。见[覆盖及哈希](../verification/v050-connection-overwrite.md)。此前软件 831/227 后端、1254/87 GUI（重叠）及两轮实物 USB 拔插见[连接修复报告](../verification/v050-probe-selection-recovery.md)。早期普通用户权限诊断见[报告](../verification/v050-customer-journal-diagnosis.md)，版本/下载策略验收见[报告](../verification/v050-candidate-overwrite.md)，通用工程初始化 424 项及真实/冻结 CLI 见[报告](../verification/v050-project-init.md)。"
     },
     {
       "area": "V3 / V4 SuperWatch 恢复",
@@ -76,10 +76,10 @@
   ],
   "hardware": {
     "操作前": "重新核对下载器型号、目标和占用。固件变更由指定会话协调，升降级按本次授权执行。VCC、OTP 操作分别确认。",
-    "普通 V4": "本轮 MicroLink V4 实读 V4.7.4，用户确认目标 STM32F103。与 HPMLink 双窗口连接、单窗口往返切换和两轮 USB 拔插通过；另一设备连接未受影响。仅连接/状态验证，未刷写、复位、改电源或采集；两后台和页面已关闭。之前 RS485 34 档、SystemView/采集中写入证据见对应报告，下次重新核对占用。",
+    "普通 V4": "本轮 MicroLink V4 实读 V4.7.4，用户确认目标 STM32F103。与 HPMLink 双窗口连接、单窗口往返切换和两轮 USB 拔插通过；另一设备连接未受影响。仅连接/状态验证，未刷写、复位、改电源或采集；两后台和页面已关闭。之前 RS485 34 档、SystemView/采集中写入证据见对应报告，下次重新核对占用。 b3ef9ef4 冻结安装版再次通过独立连接、占用保护和往返切换；仅连接/状态检查，测试后台已正常退出。",
     "普通 V3": "固件会话已回读 V3.6.10 / 2026-11-10T14:14:14，原 STM32F103 的一次 SWCLK 拔插恢复通过；测试结束时后台退出、设备释放。下次仍需重新核对占用。",
     "普通 V2": "2026-11-13 提醒验证时实际仅接入一只 V2.9.4，无产品标识。当前版本取首行而非历史版本，真实云端返回 V2.9.3，未提示降级；正常分离后后台退出释放设备。未刷写、改电源或目标程序，未启动采集；下次操作重新核对占用。",
-    "HPMLink V4": "本轮实读 HPMLink V4.7.2，用户确认 HPM5301；界面 JTAG 10 MHz。MicroLink 两轮拔插时该窗口保持连接，最终轮 PID/实例/连接代次不变；升级提示选择稍后，未刷写。无 RAM/吞吐或精确型号探测证明，后台已释放。"
+    "HPMLink V4": "本轮实读 HPMLink V4.7.2，用户确认 HPM5301；界面 JTAG 10 MHz。MicroLink 两轮拔插时该窗口保持连接，最终轮 PID/实例/连接代次不变；升级提示选择稍后，未刷写。无 RAM/吞吐或精确型号探测证明，后台已释放。 b3ef9ef4 冻结安装版再次通过独立连接、占用保护和往返切换；仅连接/状态检查，测试后台已正常退出。"
   },
   "known_limits": [
     "普通读取 P95 和间隔读取稳定低于 1 ms、最大采样间隔 20 µs、40 µs 翻转零漏采仍是未达目标。",
@@ -92,11 +92,11 @@
     "ELF 与波特率修复已在 ad00c962 Windows 普通用户包覆盖验收；macOS 候选尚不含这两项。ELF 仅完成离线解析和变量配置验证，未做客户板采集或写入。本轮未做高速物理收发、持续吞吐或 SWD/RTT 共存性能 A/B；固件会话双 V4 测试不等同于客户 1.5 µs 快速应答验证，第三方驱动可拒绝预设高档位。"
   ],
   "next_actions": [
-    "后续授权打包时纳入 03fe2cfa 连接修复，按两窗口独立/单窗口切换验收冻结安装版；客户使用新候选复查。若再报 WinError 995，结合新增匹配计数、故障时枚举和系统事件排查原始触发原因，不直接归因固件。异常任务记录必须保留，不自动清空历史。",
+    "请客户使用 V0.5.0 / b3ef9ef4 本地候选复测，退出旧 GUI/空闲后台并重载更新后的 Skill/MCP。若再报 WinError 995，结合新增匹配计数、故障时枚举和系统事件排查原始触发原因，不直接归因固件。异常任务记录必须保留，不自动清空历史。",
     "取得客户目标芯片、RTOS 和原始 SystemView 流后，确认其丢名是否命中元数据/通道修复，并单独排查解析对齐及异常运行片段；不把现有板测试扩大为所有平台保证。",
     "在用户 Mac 上验收对应 ARM/Intel 候选的首次启动、覆盖安装、探针接口/卷身份和真实查询耗时，再核对共享会话及 MCP 重载。当前软件与包内自检不替代真实环境门禁。",
     "固件会话继续维护 STOP 状态码补丁；客户信息齐备并获得明确实物安排后再做同条件 STOP/唤醒验证，不自动抢占调试器或刷写设备。",
-    "继续审阅 codex/v0.5.0-fixes / PR #79；当前 Windows 已安装 V0.5.0 / 3a3fb298，完整 Skill 在本地，线上正式索引未变。后续获授权再验收签名自动更新链路、准备对应平台与 Site Agent 资产，最后仅发布到腾讯云及 MicroKeen GitHub；不默认同步 Gitee。Mac 候选仍不含最新几轮修复。 客户连接 500 先验证 V0.5.0 和旧后台退出；如仍受限，再取文件 ACL/占用证据。"
+    "继续审阅 codex/v0.5.0-fixes / PR #79；当前 Windows 已安装 V0.5.0 / b3ef9ef4，配套完整 Skill 已生成，线上正式索引未变。后续获授权再验收签名自动更新链路、准备对应平台与 Site Agent 资产，最后仅发布到腾讯云及 MicroKeen GitHub；不默认同步 Gitee。Mac 候选仍不含最新几轮修复。"
   ],
   "continuation_protocol": [
     "后续合并、签名或正式发布须有新的明确指令。"
