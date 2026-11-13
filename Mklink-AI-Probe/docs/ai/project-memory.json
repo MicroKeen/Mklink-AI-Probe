@@ -1,20 +1,20 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-13T22:09:11+08:00",
+  "updated_at": "2026-11-13T23:28:47+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.5.0-fixes",
-    "head": "270ae176",
-    "remote_head": "270ae176",
-    "working_tree": "270ae176 已推送；本轮单独提交报告收尾和记忆。未重打安装包、未合并或发布。"
+    "head": "39c1b0e5",
+    "remote_head": "39c1b0e5",
+    "working_tree": "39c1b0e5 已推送；本次单独提交项目记忆。未重打安装包、未合并或发布。"
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "HPM5301 连接前时钟、器件选择与脱机 OTP 界面已修复并真机验收",
-    "current_task": "270ae176 修复指定串口后时钟禁用，移除 HPM 重复板卡选择，并重做脱机 JTAG OTP 读写配置界面。HPMLink V4.7.3 / HPM5301 的 hello_world 在线校验、脱机部署触发及 52988 字节回读一致；OTP 只读与未确认草稿验证通过，未烧熔丝或改供电。测试后台已释放，临时 U 盘文件归档清理。见[报告](../verification/v050-hpm-interface-otp.md)。Windows 安装版仍为 V0.5.0 / b3ef9ef4，本轮未重打包。"
+    "status": "HPM 自定义 NOR Flash 配置已完成，源码/Web 与 HPM5301 实物验收通过",
+    "current_task": "39c1b0e5 为在线/脱机增加可编辑、按器件保存和 JSON 导入导出的四字 Flash 参数；显式参数优先，已知默认值统一走 hpm.flash_cfg，Skill/CLI/MCP 同步。HPMLink 实读 V4.7.4，HPM5301 hello_world 在线校验、脱机及 52988 字节独立回读一致。测试连接/后台释放，U 盘临时文件及 447 测试链接已清理。见[Flash 配置报告](../verification/v050-hpm-flash-config.md)。前轮接口/OTP 见[报告](../verification/v050-hpm-interface-otp.md)。安装版仍为 V0.5.0 / b3ef9ef4。"
   },
   "milestones": [
     {
@@ -30,8 +30,8 @@
   ],
   "verification": [
     {
-      "area": "HPM 连接设置、烧录选择与脱机 OTP",
-      "result": "GUI 全量 1261 项、最后相关 201 项（重叠）、后端 500 项及生产构建通过。真实浏览器验证指定串口连接前 JTAG/时钟、重复板卡移除、OTP 中英文读写视图和只读字段；HPM5301 hello_world 在线、脱机实际烧录通过，52988 字节回读 SHA-256 与 BIN 相同。未映射器件明确提示、不沿用隐藏板卡。498 测试链接及 2 个临时目录清理成功，见[报告](../verification/v050-hpm-interface-otp.md)。本轮未更新安装包。"
+      "area": "HPM Flash 配置、连接设置与脱机 OTP",
+      "result": "39c1b0e5：GUI 全量 1266、最后相关 213（重叠）、后端 502、Skill 69 及生产构建通过。真实浏览器验证四字编辑/保存/导入、越界禁用及旧部署失效；HPMLink V4.7.4 / HPM5301 在线、脱机与 52988 字节回读一致，见[Flash 配置报告](../verification/v050-hpm-flash-config.md)。先前接口预设、重复板卡移除及 OTP 读写视图见[前轮报告](../verification/v050-hpm-interface-otp.md)。未重打安装包，未验证其他外接 NOR 或 OTP 永久编程。"
     },
     {
       "area": "ELF 解析与完整 UART 波特率",
@@ -68,7 +68,7 @@
     "Windows NSIS 默认 currentUser；安装不自动命名 USB 端口。只有用户确认修改或恢复端口显示名称时，才调用独立 UAC 助手。旧机器级登记与受保护目录不自动迁移。",
     "后续发布只到腾讯云和 MicroKeen/Mklink-AI-Probe GitHub，Gitee 与旧 GitHub 保留历史，不上传新附件/标签/索引。AI / Skill / 固件按腾讯云、GitHub 顺序回退，不并发查询；备用 Skill 文件须匹配所选版本、大小、SHA-256。上海服务器直供最新版，COS/Git 存历史；COS 189 GiB 告警、207.9 GiB 停止，无日期截止。见[下载策略](tencent-updates.md)。",
     "跨会话固件联测固定上位机提交并核对 mklink/runtime 模块导入路径；主工作区和全局 editable 入口不自动代表当前任务版本。",
-    "project-init 是可选离线配置工具；通用工程可显式传型号和文件，直接烧录不依赖初始化。型号或镜像不明确时要求补充输入，不猜测，也不自动迁移已有芯片配置。 ELF 可写范围合并 SHF_WRITE/ALLOC 节及 PF_W 的 PT_LOAD 段，使用 p_vaddr/p_memsz；不凭 AX 或 RAM 地址放宽，不把 Flash 装载镜像当 RAM。已知只读映射不走通用回退。 HPM GUI 按器件推导已有默认 Flash 配置，不再重复选择板卡；未映射器件拒绝沿用旧配置，CLI/MCP 显式 board/hpm_flash_cfg 保留。JTAG 脱机 OTP 只生成已确认的 hpm_user_otp 配方，读取绑定身份与代次；修改、断开或换设备后重新确认，系统字段只读。",
+    "project-init 是可选离线配置工具；通用工程可显式传型号和文件，直接烧录不依赖初始化。型号或镜像不明确时要求补充输入，不猜测，也不自动迁移已有芯片配置。 ELF 可写范围合并 SHF_WRITE/ALLOC 节及 PF_W 的 PT_LOAD 段，使用 p_vaddr/p_memsz；不凭 AX 或 RAM 地址放宽，不把 Flash 装载镜像当 RAM。已知只读映射不走通用回退。 HPM 四字 Flash 配置按实际 NOR 设置，GUI 可编辑/按器件保存/JSON 导入导出；无默认值时手填，不沿用旧型号。GUI/Python 共用参考表，显式 hpm_flash_cfg 优先于 board，已知默认值也走 flash_cfg；未知显式板名保留旧入口。XPI 控制器基址不等于 BIN 地址，USART ISP 配置独立。JTAG 脱机 OTP 只生成已确认的 hpm_user_otp 配方，读取绑定身份与代次；修改、断开或换设备后重新确认，系统字段只读。",
     "RTT / SuperWatch 实时记录 JSONL；停止记录不自动转换。用户手动将 SuperWatch 转为 Excel、RTT 转为带主机时间戳的 UTF-8 TXT，三端共用低优先级后台转换；Excel 保留采样相对时间，开始日期写在 Info 页。JSONL 保留作无损回放源。 RTT TXT 普通行仅含时间、CH 通道、RX/TX 和正文；session 在每个分段首次输出或切换时单列注释，JSONL 保留完整字段。",
     "SuperWatch 配置由共享后台保存在 AXF/ELF 旁，名称为原文件名加 .superwatch.json；三端共用名称与修订协议，不存变量地址、不自动开始采集。显示修改防抖，样本接收不写配置；浏览器上传只能保存到后台副本旁。",
     "macOS 候选仅 ad-hoc 签名且不启用 Hardened Runtime；正式 Developer ID 构建必须在 PyInstaller 冻结阶段正确签内嵌库。候选不发布到正式更新索引。慢 USB 枚举移出事件循环，心跳有界等待；实际操作仍检查身份、代际和占用，不重放未知结果。",
@@ -79,7 +79,7 @@
     "普通 V4": "本轮 MicroLink V4 实读 V4.7.4，用户确认目标 STM32F103。与 HPMLink 双窗口连接、单窗口往返切换和两轮 USB 拔插通过；另一设备连接未受影响。仅连接/状态验证，未刷写、复位、改电源或采集；两后台和页面已关闭。之前 RS485 34 档、SystemView/采集中写入证据见对应报告，下次重新核对占用。 b3ef9ef4 冻结安装版再次通过独立连接、占用保护和往返切换；仅连接/状态检查，测试后台已正常退出。",
     "普通 V3": "固件会话已回读 V3.6.10 / 2026-11-10T14:14:14，原 STM32F103 的一次 SWCLK 拔插恢复通过；测试结束时后台退出、设备释放。下次仍需重新核对占用。",
     "普通 V2": "2026-11-13 提醒验证时实际仅接入一只 V2.9.4，无产品标识。当前版本取首行而非历史版本，真实云端返回 V2.9.3，未提示降级；正常分离后后台退出释放设备。未刷写、改电源或目标程序，未启动采集；下次操作重新核对占用。",
-    "HPMLink V4": "本轮实际查询 HPMLINK / V4.7.3，用户确认 HPM5301；JTAG 10 MHz。hello_world 在线逐字节校验、脱机部署触发及完整 52988 字节 Flash 回读一致。用户 OTP/影子值和锁状态烧录前后相同；未写 OTP、升级下载器或改供电。目标保留 hello_world，测试后台释放，独立 U 盘测试文件已校验归档并清理。见[报告](../verification/v050-hpm-interface-otp.md)。此前 b3ef9ef4 双下载器安装验收见覆盖报告。"
+    "HPMLink V4": "本轮实际查询 HPMLINK / V4.7.4，用户确认 HPM5301，JTAG 10 MHz。四字 flash_cfg 配置下 hello_world 在线逐字节校验、脱机部署触发及完整 52988 字节回读一致。未写 OTP、升级下载器或改供电；目标保留 hello_world。后台释放，独立 U 盘测试文件已校验归档并清理，见[报告](../verification/v050-hpm-flash-config.md)。此前接口/OTP 只读见[前轮报告](../verification/v050-hpm-interface-otp.md)，安装验收仍为 b3ef9ef4。"
   },
   "known_limits": [
     "普通读取 P95 和间隔读取稳定低于 1 ms、最大采样间隔 20 µs、40 µs 翻转零漏采仍是未达目标。",
@@ -92,7 +92,7 @@
     "ELF 与波特率修复已在 ad00c962 Windows 普通用户包覆盖验收；macOS 候选尚不含这两项。ELF 仅完成离线解析和变量配置验证，未做客户板采集或写入。本轮未做高速物理收发、持续吞吐或 SWD/RTT 共存性能 A/B；固件会话双 V4 测试不等同于客户 1.5 µs 快速应答验证，第三方驱动可拒绝预设高档位。"
   ],
   "next_actions": [
-    "需要交付本轮 HPM 界面改动时，从 270ae176 或后继冻结源码重新生成 Windows currentUser 安装包并覆盖验收；当前本机及可交付候选仍为 b3ef9ef4。OTP 永久编程/锁定须另行确认具体内容，不能以普通烧录验收替代。 继续审阅 PR #79，后续签名/发布仍需明确授权，仅腾讯云和 MicroKeen GitHub；Mac 候选不含最新修复。",
+    "需要交付HPM Flash 配置及接口/OTP 改动时，从 39c1b0e5 或后继冻结源码重新生成 Windows currentUser 安装包并覆盖验收；当前本机及可交付候选仍为 b3ef9ef4。OTP 永久编程/锁定须另行确认具体内容，不能以普通烧录验收替代。 继续审阅 PR #79，后续签名/发布仍需明确授权，仅腾讯云和 MicroKeen GitHub；Mac 候选不含最新修复。",
     "请客户使用 V0.5.0 / b3ef9ef4 本地候选复测，退出旧 GUI/空闲后台并重载更新后的 Skill/MCP。若再报 WinError 995，结合新增匹配计数、故障时枚举和系统事件排查原始触发原因，不直接归因固件。异常任务记录必须保留，不自动清空历史。",
     "取得客户目标芯片、RTOS 和原始 SystemView 流后，确认其丢名是否命中元数据/通道修复，并单独排查解析对齐及异常运行片段；不把现有板测试扩大为所有平台保证。",
     "在用户 Mac 上验收对应 ARM/Intel 候选的首次启动、覆盖安装、探针接口/卷身份和真实查询耗时，再核对共享会话及 MCP 重载。当前软件与包内自检不替代真实环境门禁。",
