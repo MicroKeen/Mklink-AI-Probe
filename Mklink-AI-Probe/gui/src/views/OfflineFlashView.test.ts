@@ -260,7 +260,8 @@ describe('OfflineFlashView', () => {
     await wrapper.get('[data-testid="offline-deploy"]').trigger('click'); await flushPromises()
     expect(offlineMocks.deploy).toHaveBeenCalledOnce()
     const payload = offlineMocks.deploy.mock.calls[0][0]
-    expect(payload.board).toBe('hpm5301evklite')
+    expect(payload.board).toBeNull()
+    expect(payload.hpm_flash_cfg).toEqual(['0xfcf90002U', '0x00000005U', '0x00001000U', '0xf3000000U'])
     expect(payload.firmwares).toHaveLength(1)
     expect(payload.hpm_user_otp).toEqual({ words: [{ word: 69, expected: '0x00000005', desired: '0x00000007' }],
       locks: [], expected_hard_lock: '', confirm_irreversible: true })
@@ -1310,7 +1311,8 @@ describe('OfflineFlashView', () => {
     const payload = offlineMocks.deploy.mock.calls[0][0]
     expect(payload.target_part).toBe('HPM5301xEGx')
     expect(payload.swd_clock_hz).toBe(hz)
-    expect(payload.board).toBe('hpm5301evklite')
+    expect(payload.board).toBeNull()
+    expect(payload.hpm_flash_cfg).toEqual(['0xfcf90002U', '0x00000005U', '0x00001000U', '0xf3000000U'])
     expect(payload.algorithms).toEqual([])
     expect(payload.firmwares[0].algorithm_id).toBe('')
     expect(payload.firmwares[0].base_address).toBe(format === 'bin' ? '0x80000400' : null)

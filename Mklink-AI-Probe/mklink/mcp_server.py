@@ -432,8 +432,9 @@ def _register_flash_tools(mcp: Any) -> None:
             base_address: Required BIN load address when unavailable from
                 project configuration. HPM SDK images commonly use 0x80000400.
             board: Optional HPM board name such as hpm5301evklite.
-            hpm_flash_cfg: Optional four-word HPM flash configuration used
-                when no board name is supplied.
+            hpm_flash_cfg: Optional four-word HPM NOR configuration, overriding
+                board: header, opt0, opt1, XPI controller base (not BIN address).
+                Known board defaults also use hpm.flash_cfg.
             verify: Read back and compare after programming (default True).
             reset_after: Reset the target to entry point after flash (default
                 True). Set False to keep the CPU halted for inspection.

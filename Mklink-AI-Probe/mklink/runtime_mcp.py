@@ -700,7 +700,10 @@ def build_server():
         flash arguments: firmware (explicit local path), verify and reset_after (booleans).
         Optional target_part, base_address (32-bit integer or integer string), board,
         hpm_flash_cfg (four 32-bit hexadecimal strings) and swd_clock (integer Hz)
-        are passed to the existing flash backend. HPM uses ROM API, never FLM.
+        are passed to the existing flash backend. Explicit hpm_flash_cfg overrides board;
+        known board defaults also use hpm.flash_cfg(header,opt0,opt1,xpi_base_addr).
+        Configure for the actual NOR Flash. xpi_base_addr is the controller base, not the BIN address.
+        HPM uses ROM API, never FLM.
         For HPM swd_clock is a legacy parameter name: use advertised JTAG clocks
         from debug_speed (modern 14 clocks, legacy 4/10/20/30 MHz), not 8000000.
         reset_after=false does not prevent the HPM ROM routine's own reset/resume.

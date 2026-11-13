@@ -10,7 +10,10 @@
 在线烧录的“连接设置”和脱机烧录的时钟列表按目标接口切换。HPM 使用 JTAG，ARM 使用 SWD。选择下载器后优先显示该探针的已知档位；若 HPM 页面标为“配置候选”，连接该探针后刷新可核对其能力。当前值需要重新选择时，先选择有效档位再提交。
 
 未连接时选择命令串口后，仍可预设连接接口与时钟。在线和脱机 HPM 下载只选择器件，
-界面按该器件推导 ROM 下载配置，不再重复选择板卡；CLI/MCP 的显式 `board` / `hpm_flash_cfg` 参数仍保留。
+界面提供可编辑的四字 Flash 配置，按器件保存并供在线/脱机共用，支持 JSON 导入导出。
+已知器件预填参考板参数；外接 NOR 必须核对实际 Flash，不能只凭芯片型号确定配置。
+未映射器件可手动填齐四字参数。自定义 `hpm_flash_cfg` 优先于 `board`；已知板卡默认值也通过
+`hpm.flash_cfg` 应用。CLI/MCP 保留未知显式板名的旧接口兼容路径。
 
 ### RTT 通道预览与窗口适配
 
@@ -260,7 +263,11 @@ HPM5301 也可以在脱机界面显式选择 [USART ISP](hpm-usart-isp.md)，由
 "hpm_flash_cfg": ["0xfcf90002U", "0x00000005U", "0x00001000U", "0xf3000000U"]
 ```
 
-这 4 个参数依次对应 `hpm.flash_cfg(header,opt0,opt1,xpi_base_addr)`。不要再使用旧的 3 参数写法，因为下载算法里的 XPI 基址不应固定。
+这 4 个参数依次对应 `hpm.flash_cfg(header,opt0,opt1,xpi_base_addr)`。每项为 32 位十六进制字符串，可带 U 后缀。
+XPI 基址是控制器地址，不是 BIN 烧录地址。不要使用旧的 3 参数写法。
+GUI 导出的 JSON 包含 `schema_version`、`target_part`、`hpm_flash_cfg`；共享 MCP 将后两项放入
+`start_job(action="flash").arguments`，CLI 使用 `flash --hpm-flash-cfg <header> <opt0> <opt1> <xpi_base_addr>`，
+也可将配置加入工程 `project_info.json`。GUI 本地保存不会自动写入工程配置或同步其他电脑。
 
 MCP/AI 调用示例：
 

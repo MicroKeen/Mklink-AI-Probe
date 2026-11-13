@@ -2,36 +2,21 @@
 
 from __future__ import annotations
 
+import json
 import re
+from pathlib import Path
 from typing import Sequence
 
 
 _HPM_BOARD = re.compile(r"^[A-Za-z0-9._-]+$")
 _HPM_CFG_WORD = re.compile(r"^0[xX][0-9A-Fa-f]+[uU]?$")
 
+_DEFAULTS = json.loads(Path(__file__).with_name("hpm_flash_defaults.json").read_text(encoding="utf-8"))
 HPM_BOARD_FLASH_CFG: dict[str, tuple[str, str, str, str]] = {
-    "hpm5e00evk": ("0xfcf90002U", "0x00000005U", "0x00001000U", "0xf3000000U"),
-    "hpm6e00evk": ("0xfcf90001U", "0x00000007U", "0x00000000U", "0xf3000000U"),
-    "hpm6p00evk": ("0xfcf90002U", "0x00000005U", "0x00001000U", "0xf3000000U"),
-    "hpm5300evk": ("0xfcf90002U", "0x00000005U", "0x00001000U", "0xf3000000U"),
-    "hpm5301evklite": ("0xfcf90002U", "0x00000005U", "0x00001000U", "0xf3000000U"),
-    "hpm6200evk": ("0xfcf90001U", "0x00000007U", "0x00000000U", "0xf3040000U"),
-    "hpm6300evk": ("0xfcf90001U", "0x00000007U", "0x00000000U", "0xf3040000U"),
-    "hpm6750evk2": ("0xfcf90002U", "0x00000007U", "0x0000000EU", "0xf3040000U"),
-    "hpm6750evkmini": ("0xfcf90002U", "0x00000007U", "0x0000000EU", "0xf3040000U"),
-    "hpm6800evk": ("0xfcf90001U", "0x00000007U", "0x00000000U", "0xf3000000U"),
+    board: tuple(words) for board, words in _DEFAULTS["boards"].items()
 }
-
-HPM_TARGET_DEFAULT_BOARD: tuple[tuple[str, str], ...] = (
-    ("hpm5301", "hpm5301evklite"),
-    ("hpm5300", "hpm5300evk"),
-    ("hpm5e", "hpm5e00evk"),
-    ("hpm6e", "hpm6e00evk"),
-    ("hpm6p", "hpm6p00evk"),
-    ("hpm6200", "hpm6200evk"),
-    ("hpm6300", "hpm6300evk"),
-    ("hpm6750", "hpm6750evk2"),
-    ("hpm6800", "hpm6800evk"),
+HPM_TARGET_DEFAULT_BOARD: tuple[tuple[str, str], ...] = tuple(
+    tuple(entry) for entry in _DEFAULTS["targets"]
 )
 
 HPM_ROM_TARGETS: tuple[str, ...] = (
@@ -75,8 +60,10 @@ def normalize_hpm_flash_cfg(
         return None
     if not isinstance(value, Sequence) or isinstance(value, (str, bytes)) or len(value) != 4:
         raise ValueError("HPM flash config must contain four words")
-    words = tuple(str(word).strip() for word in value)
-    if not all(_HPM_CFG_WORD.fullmatch(word) for word in words):
+    if not all(isinstance(word, str) for word in value):
+        raise ValueError("HPM flash config words must be hexadecimal strings")
+    words = tuple(word.strip() for word in value)
+    if not all(_HPM_CFG_WORD.fullmatch(word) and int(word.rstrip("uU"), 16) <= 0xFFFFFFFF for word in words):
         raise ValueError("HPM flash config word is invalid")
     return words  # type: ignore[return-value]
 
@@ -107,4 +94,6 @@ def normalize_hpm_configuration(
         normalized_board = normalize_hpm_board(default_board) if default_board else None
     if normalized_board is None and normalized_cfg is None:
         raise ValueError("HPM target requires a board or flash configuration")
+    if normalized_cfg is None and normalized_board in HPM_BOARD_FLASH_CFG:
+        normalized_cfg = HPM_BOARD_FLASH_CFG[normalized_board]
     return normalized_board, normalized_cfg

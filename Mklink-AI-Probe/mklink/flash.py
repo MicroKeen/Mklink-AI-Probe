@@ -428,10 +428,10 @@ class MKLinkFlash:
             raise FlashError("无法将文件拷贝到 MICROKEEN 磁盘")
 
         commands: list[str] = []
-        if normalized_board:
+        if normalized_cfg:
+            commands.append("hpm.flash_cfg({})".format(",".join(word.rstrip("uU") for word in normalized_cfg)))
+        elif normalized_board:
             commands.append(f'hpm.board("{normalized_board}")')
-        elif normalized_cfg:
-            commands.append(f"hpm.flash_cfg({','.join(normalized_cfg)})")
 
         quoted_filename = quote_probe_string(filename)
         commands.append(

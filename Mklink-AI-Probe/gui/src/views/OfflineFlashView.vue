@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import HpmFlashConfigPanel from "../components/HpmFlashConfigPanel.vue"
+import { useHpmFlashConfig } from "../composables/useHpmFlashConfig"
 import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
 import { consumerTarget, saveConsumerTarget, TARGET_SELECTION_CHANGED, PACKS_CHANGED } from '../lib/targetSelection'
 import { selectDownloadProbe } from '../lib/downloadProbe'
@@ -63,17 +65,7 @@ let savedIspBaud = validIspBaud(saved.ispBaudRate) ? saved.ispBaudRate : 2000000
 function isHpmPart(partNumber: string): boolean {
   return partNumber.trim().toLowerCase().startsWith('hpm')
 }
-function defaultHpmBoard(partNumber: string): string {
-  const part = partNumber.trim().toLowerCase()
-  const match = [
-    ['hpm5301', 'hpm5301evklite'], ['hpm5300', 'hpm5300evk'],
-    ['hpm5e', 'hpm5e00evk'], ['hpm6e', 'hpm6e00evk'],
-    ['hpm6p', 'hpm6p00evk'], ['hpm6200', 'hpm6200evk'],
-    ['hpm6300', 'hpm6300evk'], ['hpm6750', 'hpm6750evk2'],
-    ['hpm6800', 'hpm6800evk'],
-  ].find(([prefix]) => part.startsWith(prefix))
-  return match?.[1] || ''
-}
+
 
 const offline = useOfflineFlashApi()
 const online = useOnlineFlashApi()
@@ -99,7 +91,7 @@ const algorithms = ref<AlgorithmRow[]>([])
 const firmwares = ref<FirmwareRow[]>([])
 const targetQuery = ref(consumerTarget('offline') || 'STM32F103RC')
 const targetPart = ref('')
-const hpmBoard = ref('')
+const { words: hpmWords, flashCfg: hpmFlashCfg, referenceBoard: hpmReferenceBoard, storageError: hpmStorageError, setWords: setHpmWords } = useHpmFlashConfig(targetPart)
 const programmingProtocol = ref<'debug' | 'hpm_rom_isp_uart'>('debug')
 const beepOnCompletion = ref(true)
 const beepDurationMs = ref(1000)
@@ -236,7 +228,7 @@ const canBuild = computed(() => (
     ? (ispMode.value ? effectiveModel.value === 'V4' && validIspBaud(ispConfig.value.baud_rate)
         && firmwares.value.length <= 8 && firmwares.value.every(item => item.format === 'bin')
         && (ispConfig.value.completion.reset !== 'power_cycle' || !!ispConfig.value.completion.restore_voltage_mv)
-      : !!hpmBoard.value) && firmwares.value.every(item => (item.file || item.source_path) && (item.format === 'hex' || !!item.base_address))
+      : !!hpmFlashCfg.value) && firmwares.value.every(item => (item.file || item.source_path) && (item.format === 'hex' || !!item.base_address))
     : selectedAlgorithms.value.length > 0
       && unavailableSelectedAlgorithms.value.length === 0
       && firmwares.value.every(item => (item.file || item.source_path) && item.algorithm_id && algorithms.value.some(algorithm => algorithm.id === item.algorithm_id)))))
@@ -251,7 +243,7 @@ const canTrigger = computed(() => (
 ))
 
 watch(
-  [model, scriptName, automaticCount, idcodeTimeout, swdClock, targetPart, hpmBoard, algorithms, firmwares, eraseAllBeforeDownload, unlockBeforeDownload, lockAfterDownload, securityVoltageMv, optionByteChanges, hpmOfflineOtp, hpmOtpPending, programmingProtocol, ispConfig, beepOnCompletion, beepDurationMs, resetAfterDownload, resetMode, resetVoltageMv, verifyAfterDownload],
+  [model, scriptName, automaticCount, idcodeTimeout, swdClock, targetPart, hpmWords, algorithms, firmwares, eraseAllBeforeDownload, unlockBeforeDownload, lockAfterDownload, securityVoltageMv, optionByteChanges, hpmOfflineOtp, hpmOtpPending, programmingProtocol, ispConfig, beepOnCompletion, beepDurationMs, resetAfterDownload, resetMode, resetVoltageMv, verifyAfterDownload],
   () => {
     preview.value = null
     deployedScriptName.value = ''
@@ -607,11 +599,9 @@ async function addTargetAlgorithms(target: TargetRecord): Promise<void> {
     activeTargetSuggestion.value = -1
     if (isHpmPart(target.part_number)) {
       algorithms.value = []
-      hpmBoard.value = defaultHpmBoard(target.part_number)
       firmwares.value.forEach(item => { item.algorithm_id = '' })
       return
     }
-    hpmBoard.value = ''
     if (!target.installed) await online.installPack(target.part_number)
     const items = await offline.listAlgorithms(target.part_number)
     if (!items.length) throw new Error(tr(`未找到 ${target.part_number} 的 FLM 算法`, `No FLM algorithm found for ${target.part_number}`))
@@ -866,7 +856,8 @@ function buildRequest(): {
       wait_idcode_timeout_ms: Number(idcodeTimeout.value),
       swd_clock_hz: Number(swdClock.value),
       target_part: targetPart.value || null,
-      board: hpmMode.value && !ispMode.value ? hpmBoard.value || null : null,
+      board: null,
+      hpm_flash_cfg: hpmMode.value && !ispMode.value ? hpmFlashCfg.value : null,
       erase_all_before_download: eraseAllBeforeDownload.value,
       unlock_before_download: unlockBeforeDownload.value,
       lock_after_download: lockAfterDownload.value,
@@ -1127,7 +1118,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
         <p v-if="targetPart" class="selected-target"><span>{{ tr('已选器件', 'Selected target') }}</span><b>{{ targetPart }}</b></p>
-        <p v-if="hpmMode && !ispMode && !hpmBoard" class="empty-state" role="status">{{ tr('暂未提供该器件的默认 Flash 配置，无法生成烧录脚本。', 'No default Flash configuration is available for this target; a programming script cannot be generated.') }}</p>
+        <HpmFlashConfigPanel v-if="hpmMode && !ispMode" :model-value="hpmWords" :target-part="targetPart" :reference-board="hpmReferenceBoard" :storage-error="hpmStorageError" :disabled="operationBusy || targetBusy" @update:model-value="setHpmWords" />
         <label class="setting-row"><span>{{ tr('下载类型', 'Programming type') }}</span>
           <select v-model="programmingProtocol" class="form-select" data-testid="offline-protocol">
             <option value="debug">{{ hpmMode ? 'JTAG · ROM API' : 'SWD' }}</option>
