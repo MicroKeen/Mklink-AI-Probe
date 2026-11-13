@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-11-13T18:55:48+08:00`
+- 更新时间：`2026-11-13T19:18:19+08:00`
 - 分支：`codex/v0.5.0-fixes`
-- HEAD：`ff55e68a`
-- 远端 HEAD：`ff55e68a`
-- 工作树：V0.5.0 源码 3a3fb298、生产资源 ff55e68a 已推送；Windows 普通用户候选已覆盖安装，配套完整 Skill 已生成。报告/记忆另行提交，未合并、签名或发布。
-- 当前任务：V0.5.0 源码 3a3fb298 已打包覆盖既有安装。AI / Skill / 固件默认腾讯云，失败再回退官方 GitHub；后续仅向腾讯云及 MicroKeen GitHub 发布，Gitee 保留历史文件。238 项后端与 76 项 GUI 检查通过，冻结 CLI/MCP、普通用户覆盖、资源和中英文实际界面通过。见[候选验收](../verification/v050-candidate-overwrite.md)。继续 codex/v0.5.0-fixes / PR #79；本轮不发布。
-- 状态：`V0.5.0 版本、简要说明、腾讯云优先策略及 Windows 覆盖验收完成；未发布`
+- HEAD：`80168b5c`
+- 远端 HEAD：`80168b5c`
+- 工作树：V0.5.0 本地覆盖验收及记忆已推送至 80168b5c；本轮客户日志只读诊断，产品源码未改。诊断记录另行提交；未合并、签名或发布。
+- 当前任务：客户诊断包记录 59 次 jobs.json PermissionError，均在 runtime/select、打开设备串口前发生，符合已修复的 Issue #75。V0.5.0 / 3a3fb298 已包含 PR #76；建议客户覆盖后退出旧后台并重载 MCP。未知客户 ACL/占用原因，不宣称新包自动修复文件权限。51 项任务日志/切换回归含真实 NTFS 场景通过，产品源码未改。见[诊断报告](../verification/v050-customer-journal-diagnosis.md)。当前 V0.5.0 安装及配套 Skill 见[候选验收](../verification/v050-candidate-overwrite.md)，仍未发布。
+- 状态：`客户 0.4.3 连接 500 已定位为 jobs.json 拒绝访问；V0.5.0 已含修复，51 项回归通过`
 
 ## 里程碑
 
@@ -25,7 +25,7 @@
 - **固件能力提醒与采集中写入**：同一 V4 / STM32F103RC：V4.7.3、V4.7.4 修改前/后最大采样间隔分别 0.195/0.208/0.192 ms；RTT 并行为 1.562 ms，各轮 10 次写入均成功且原始值对应，无序号断裂或读错。真实 Web 写 123 后保持约 15.9 kHz，结束恢复原值 0，后台已释放。后端广泛关联 1711 项通过，修正新增入口断言后相关 271 项通过，Skill 边界 69 项、GUI 全量 1222 项及生产构建通过；数量有重叠。真实 HTTP/RuntimeClient/FastMCP 警告一致，状态检查无设备 I/O；中英文横幅及跳转通过浏览器验收。见[完整结果与限制](../verification/v050-firmware-capabilities.md)。 后台提醒追加：最终后端 396 项及桥接 10 项、GUI 1241 项、生产构建及真实浏览器通过。V2.9.4 与云端 V2.9.3 比较不误报降级；保留原文修复历史版本集合歧义。清理 547 链接/5 目录，零失败。见[提醒报告](../verification/v050-firmware-update-notice.md)。 更新顺序追加：共享关联 1570 项通过，文档预算/位置修正后最终相关 149 项通过；GUI 全量 1248 项及最终相关 93 项、生产构建、浏览器互斥/重启失败恢复通过，数量重叠。原生安装和刷写均隔离，见[报告](../verification/v050-update-order.md)。
 - **macOS 兼容性与跨平台回归**：Windows Python 全量 6929 通过、2 个 hil_core.observe 跳过；唯一剩余的 DLL 路径审计夹具修正后，独立包完整 6 项复测通过。GUI 全量 1219 项、最终相关 280 项及生产构建通过。两种 Mac 原生 USB 各 73 项通过、1 项 Windows 专属跳过；最终 DMG 的签名、冻结 CLI/MCP、内置算法、Web 健康与正常退出通过，ARM/Intel 启动约 5.593/11.6 秒。DMG 和配套 Skill 已下载/生成并校验，见[报告及哈希](../verification/v050-macos-compatibility.md)。浏览器验证中英文更新提示与重试；Mac 原生 GUI、Gatekeeper 和实物 USB 未验。
 - **SuperWatch 配置与手动日志转换**：手动转换 56 项、共享后台/流/边界 296 项、GUI 152 项通过，生产构建通过。冻结安装版实物记录 1,114,032 组，Excel 两页 1,048,575 / 65,457 行、4,456,128 个值与 JSONL 对应；RTT 505 行 TXT 对应，7 个原始文件哈希不变。GUI 手动触发、实际 CLI/MCP 重复请求复用任务且不停止采集。见[转换报告](../verification/v050-manual-recording-export.md)。符号旁配置原有软件/浏览器证据见[配置报告](../verification/v050-superwatch-profile.md)；前一安装候选已验证真实 AXF 重启恢复，本候选解析 6,718 个变量并保存四变量、500000 缓存与 1 µs 间隔。 TXT 精简追加：转换/记录器 37 项、Skill 69 项通过；既有 505 行时间和正文等价，63,996→40,304 字节，原始文件哈希不变。见[TXT 报告](../verification/v050-rtt-txt-readable.md)。
-- **Windows 安装与工程初始化**：V0.5.0 / 3a3fb298 已覆盖 ad00c962；NSIS/桌面均 RID 8192，3680 文件匹配，6 份配置、USB 名称和机器级登记不变。仅 Windows PATH 下冻结 CLI、58 个 MCP 工具、FLM 7059/2224、SVD 4800、原生健康与正常退出通过；真实原生/浏览器显示中英文 0.5.0 说明，Skill 2344 个资源文件一致。238 项后端、76 项 GUI 及生产构建通过；清理 232 链接/2 目录，零失败。哈希及边界见[候选验收](../verification/v050-candidate-overwrite.md)。此前 ELF/波特率实物安装证据见[报告](../verification/v050-elf-baud-overwrite.md)；SystemView 安装实物见[报告](../verification/v050-systemview-restart-zoom.md)。通用工程 424 项与真实/冻结 CLI 初始化见[报告](../verification/v050-project-init.md)。
+- **Windows 安装与工程初始化**：V0.5.0 / 3a3fb298 已覆盖 ad00c962；NSIS/桌面均 RID 8192，3680 文件匹配，6 份配置、USB 名称和机器级登记不变。仅 Windows PATH 下冻结 CLI、58 个 MCP 工具、FLM 7059/2224、SVD 4800、原生健康与正常退出通过；真实原生/浏览器显示中英文 0.5.0 说明，Skill 2344 个资源文件一致。238 项后端、76 项 GUI 及生产构建通过；清理 232 链接/2 目录，零失败。哈希及边界见[候选验收](../verification/v050-candidate-overwrite.md)。此前 ELF/波特率实物安装证据见[报告](../verification/v050-elf-baud-overwrite.md)；SystemView 安装实物见[报告](../verification/v050-systemview-restart-zoom.md)。通用工程 424 项与真实/冻结 CLI 初始化见[报告](../verification/v050-project-init.md)。 客户 0.4.3 连接 500 日志命中 jobs.json 拒绝读取，51 项含真实 NTFS 回归通过；V0.5.0 已包含原修复，未改源码，见[诊断报告](../verification/v050-customer-journal-diagnosis.md)。
 - **V3 / V4 SuperWatch 恢复**：普通 V4 修复候选实物拔插跨 12.637 秒缺口原订阅恢复，V4.7.4 健康检查通过，223,728 组、零读错及队列丢弃，中位 43,486.6 组/秒。V3.6.10 实刷及拔插恢复通过，1,484,544 组，零队列丢弃、序号异常和时间倒退，恢复后中位 43,056.7 组/秒。旧 V3.6.8 缺采样能力，无同条件旧版基线。版本及未验范围见[恢复验证记录](../verification/v050-superwatch-swclk.md)。
 
 ## 架构决策
@@ -53,7 +53,7 @@
 1. 取得客户目标芯片、RTOS 和原始 SystemView 流后，确认其丢名是否命中元数据/通道修复，并单独排查解析对齐及异常运行片段；不把现有板测试扩大为所有平台保证。
 2. 在用户 Mac 上验收对应 ARM/Intel 候选的首次启动、覆盖安装、探针接口/卷身份和真实查询耗时，再核对共享会话及 MCP 重载。当前软件与包内自检不替代真实环境门禁。
 3. 固件会话继续维护 STOP 状态码补丁；客户信息齐备并获得明确实物安排后再做同条件 STOP/唤醒验证，不自动抢占调试器或刷写设备。
-4. 继续审阅 codex/v0.5.0-fixes / PR #79；当前 Windows 已安装 V0.5.0 / 3a3fb298，完整 Skill 在本地，全球正式索引未变。后续获授权再验收签名自动更新链路、准备对应平台与 Site Agent 资产，最后仅发布到腾讯云及 MicroKeen GitHub；不默认同步 Gitee。Mac 候选仍不含最新几轮修复。
+4. 继续审阅 codex/v0.5.0-fixes / PR #79；当前 Windows 已安装 V0.5.0 / 3a3fb298，完整 Skill 在本地，线上正式索引未变。后续获授权再验收签名自动更新链路、准备对应平台与 Site Agent 资产，最后仅发布到腾讯云及 MicroKeen GitHub；不默认同步 Gitee。Mac 候选仍不含最新几轮修复。 客户连接 500 先验证 V0.5.0 和旧后台退出；如仍受限，再取文件 ACL/占用证据。
 
 ## 已知限制
 

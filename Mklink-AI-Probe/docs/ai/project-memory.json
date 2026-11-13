@@ -1,20 +1,20 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-13T18:55:48+08:00",
+  "updated_at": "2026-11-13T19:18:19+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.5.0-fixes",
-    "head": "ff55e68a",
-    "remote_head": "ff55e68a",
-    "working_tree": "V0.5.0 源码 3a3fb298、生产资源 ff55e68a 已推送；Windows 普通用户候选已覆盖安装，配套完整 Skill 已生成。报告/记忆另行提交，未合并、签名或发布。"
+    "head": "80168b5c",
+    "remote_head": "80168b5c",
+    "working_tree": "V0.5.0 本地覆盖验收及记忆已推送至 80168b5c；本轮客户日志只读诊断，产品源码未改。诊断记录另行提交；未合并、签名或发布。"
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "V0.5.0 版本、简要说明、腾讯云优先策略及 Windows 覆盖验收完成；未发布",
-    "current_task": "V0.5.0 源码 3a3fb298 已打包覆盖既有安装。AI / Skill / 固件默认腾讯云，失败再回退官方 GitHub；后续仅向腾讯云及 MicroKeen GitHub 发布，Gitee 保留历史文件。238 项后端与 76 项 GUI 检查通过，冻结 CLI/MCP、普通用户覆盖、资源和中英文实际界面通过。见[候选验收](../verification/v050-candidate-overwrite.md)。继续 codex/v0.5.0-fixes / PR #79；本轮不发布。"
+    "status": "客户 0.4.3 连接 500 已定位为 jobs.json 拒绝访问；V0.5.0 已含修复，51 项回归通过",
+    "current_task": "客户诊断包记录 59 次 jobs.json PermissionError，均在 runtime/select、打开设备串口前发生，符合已修复的 Issue #75。V0.5.0 / 3a3fb298 已包含 PR #76；建议客户覆盖后退出旧后台并重载 MCP。未知客户 ACL/占用原因，不宣称新包自动修复文件权限。51 项任务日志/切换回归含真实 NTFS 场景通过，产品源码未改。见[诊断报告](../verification/v050-customer-journal-diagnosis.md)。当前 V0.5.0 安装及配套 Skill 见[候选验收](../verification/v050-candidate-overwrite.md)，仍未发布。"
   },
   "milestones": [
     {
@@ -55,7 +55,7 @@
     },
     {
       "area": "Windows 安装与工程初始化",
-      "result": "V0.5.0 / 3a3fb298 已覆盖 ad00c962；NSIS/桌面均 RID 8192，3680 文件匹配，6 份配置、USB 名称和机器级登记不变。仅 Windows PATH 下冻结 CLI、58 个 MCP 工具、FLM 7059/2224、SVD 4800、原生健康与正常退出通过；真实原生/浏览器显示中英文 0.5.0 说明，Skill 2344 个资源文件一致。238 项后端、76 项 GUI 及生产构建通过；清理 232 链接/2 目录，零失败。哈希及边界见[候选验收](../verification/v050-candidate-overwrite.md)。此前 ELF/波特率实物安装证据见[报告](../verification/v050-elf-baud-overwrite.md)；SystemView 安装实物见[报告](../verification/v050-systemview-restart-zoom.md)。通用工程 424 项与真实/冻结 CLI 初始化见[报告](../verification/v050-project-init.md)。"
+      "result": "V0.5.0 / 3a3fb298 已覆盖 ad00c962；NSIS/桌面均 RID 8192，3680 文件匹配，6 份配置、USB 名称和机器级登记不变。仅 Windows PATH 下冻结 CLI、58 个 MCP 工具、FLM 7059/2224、SVD 4800、原生健康与正常退出通过；真实原生/浏览器显示中英文 0.5.0 说明，Skill 2344 个资源文件一致。238 项后端、76 项 GUI 及生产构建通过；清理 232 链接/2 目录，零失败。哈希及边界见[候选验收](../verification/v050-candidate-overwrite.md)。此前 ELF/波特率实物安装证据见[报告](../verification/v050-elf-baud-overwrite.md)；SystemView 安装实物见[报告](../verification/v050-systemview-restart-zoom.md)。通用工程 424 项与真实/冻结 CLI 初始化见[报告](../verification/v050-project-init.md)。 客户 0.4.3 连接 500 日志命中 jobs.json 拒绝读取，51 项含真实 NTFS 回归通过；V0.5.0 已包含原修复，未改源码，见[诊断报告](../verification/v050-customer-journal-diagnosis.md)。"
     },
     {
       "area": "V3 / V4 SuperWatch 恢复",
@@ -94,7 +94,7 @@
     "取得客户目标芯片、RTOS 和原始 SystemView 流后，确认其丢名是否命中元数据/通道修复，并单独排查解析对齐及异常运行片段；不把现有板测试扩大为所有平台保证。",
     "在用户 Mac 上验收对应 ARM/Intel 候选的首次启动、覆盖安装、探针接口/卷身份和真实查询耗时，再核对共享会话及 MCP 重载。当前软件与包内自检不替代真实环境门禁。",
     "固件会话继续维护 STOP 状态码补丁；客户信息齐备并获得明确实物安排后再做同条件 STOP/唤醒验证，不自动抢占调试器或刷写设备。",
-    "继续审阅 codex/v0.5.0-fixes / PR #79；当前 Windows 已安装 V0.5.0 / 3a3fb298，完整 Skill 在本地，全球正式索引未变。后续获授权再验收签名自动更新链路、准备对应平台与 Site Agent 资产，最后仅发布到腾讯云及 MicroKeen GitHub；不默认同步 Gitee。Mac 候选仍不含最新几轮修复。"
+    "继续审阅 codex/v0.5.0-fixes / PR #79；当前 Windows 已安装 V0.5.0 / 3a3fb298，完整 Skill 在本地，线上正式索引未变。后续获授权再验收签名自动更新链路、准备对应平台与 Site Agent 资产，最后仅发布到腾讯云及 MicroKeen GitHub；不默认同步 Gitee。Mac 候选仍不含最新几轮修复。 客户连接 500 先验证 V0.5.0 和旧后台退出；如仍受限，再取文件 ACL/占用证据。"
   ],
   "continuation_protocol": [
     "后续合并、签名或正式发布须有新的明确指令。"
