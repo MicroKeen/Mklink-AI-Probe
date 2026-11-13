@@ -71,6 +71,10 @@ VCC、OTP、保护等配置中的操作仍需单独批准，普通烧录授权�
 
 JTAG 支持 HPM5301 用户字 69..79、锁定组 18/19：
 
+脱机页的 JTAG OTP 采用读/写视图，可刷新所选已连接下载器的用户区、导入/导出 CSV，
+编辑预期旧值并确认随镜像部署。配置仍走 `offline_download` 的 `hpm_user_otp`，
+不立即写熔丝；编辑、换设备或连接代次变化后确认失效。系统字段只读，范围不因界面统一而扩大。
+
 - `read`：`part_number="HPM5301"`，可选 `model="V4"`。
 - `plan`：再加明确的 `word`、`expected`、`desired`；值可为整数/十六进制字符串。
 - `program`：使用确认过的同一组值，加 `confirm_irreversible=true`，后端执行前重新核对原值。

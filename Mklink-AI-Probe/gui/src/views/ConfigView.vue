@@ -73,7 +73,7 @@ const selectedProbeMissing = computed(() => sharedRuntime.value && localPortExpl
 let localPortTouched = false
 const probePorts = ref<PortInfo[]>([])
 const selectedProbe = computed(() => probePorts.value.find(port => port.device === localPort.value))
-const switchingProbe = computed(() => sharedRuntime.value && localPortExplicit.value
+const switchingProbe = computed(() => sharedRuntime.value && deviceStatus.value.connected && localPortExplicit.value
   && !!selectedProbe.value && localPort.value !== deviceStatus.value.port)
 const settings = ref<DesktopSettings>(loadDesktopSettings(window.localStorage))
 

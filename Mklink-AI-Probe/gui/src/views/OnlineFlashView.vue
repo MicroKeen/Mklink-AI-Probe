@@ -59,12 +59,7 @@ const frequency = ref(savedFrequency(saved.frequency))
 const connectMode = ref(saved.connectMode ?? 'halt')
 const resetMode = ref(saved.resetMode ?? 'default')
 const resetVoltageMv = ref<ResetVoltageMv>(savedResetVoltage(saved.resetVoltageMv))
-const hpmBoards = [
-  'hpm5300evk', 'hpm5301evklite', 'hpm5e00evk', 'hpm6e00evk',
-  'hpm6p00evk', 'hpm6200evk', 'hpm6300evk', 'hpm6750evk2',
-  'hpm6750evkmini', 'hpm6800evk',
-]
-const hpmBoard = ref(saved.hpmBoard ?? '')
+const hpmBoard = ref('')
 const targets = ref<TargetRecord[]>([])
 const selectedTarget = ref<TargetRecord | null>(null)
 const targetMemoryRegions = ref<TargetMemoryRegion[]>([])
@@ -532,7 +527,7 @@ async function selectTarget(target: TargetRecord): Promise<void> {
   const targetChanged = selectedTarget.value?.part_number !== target.part_number
   desiredPart.value = target.part_number
   hpmBoard.value = isHpmPart(target.part_number)
-    ? (defaultHpmBoard(target.part_number) || hpmBoard.value)
+    ? defaultHpmBoard(target.part_number)
     : ''
   resetInspection()
   clearMemoryWindow()
@@ -1167,7 +1162,7 @@ onBeforeUnmount(() => {
     <aside class="workspace-zone settings-zone" data-zone="settings">
       <ProbeSettingsPanel :bus="clockBus" :clocks="frequencies" :capability-known="!!probeClocks?.[clockBus]" :probes="probes" :selected-id="probeId" :frequency="frequency" :connect-mode="connectMode" :reset-mode="resetMode" :reset-voltage-mv="resetVoltageMv" :busy="probeBusy || active || creatingJob || recoveryBusy" :error="probeError" @refresh="refreshProbes" @update:selected-id="probeId = $event" @update:frequency="frequency = $event" @update:connect-mode="connectMode = $event" @update:reset-mode="resetMode = $event" @update:reset-voltage-mv="resetVoltageMv = $event" />
       <TargetPackPanel :targets="targets" :query="targetQuery" :selected-part="selectedTarget?.part_number || ''" :selected-installed="!!selectedTarget?.installed" :selected-algorithm-ids="selectedAlgorithmIds" :algorithm-plan="inspection?.algorithm_plan || []" :selected-algorithm-id="selectedAlgorithmId" :algorithm-choices="algorithmChoices" :selection-locked="active || creatingJob || recoveryBlocked" :status="packStatus" :busy="packBusy" :cancel-pending="packCancelPending" :progress="packProgress" :phase="packPhase" :error="packError" :algorithms="customFlms" :flash-algorithms="flashAlgorithms" :algorithm-busy="customFlmBusy" :algorithm-error="customFlmError" :can-manage-algorithms="!active && !hpmAlgorithmNotRequired" :algorithm-not-required="hpmAlgorithmNotRequired" @search="searchTargets" @update:query="updateTargetQuery" @select="selectTarget" @select-algorithms="selectAlgorithms" @select-algorithm="selectAlgorithm" @update-index="updatePackIndex" @import-pack="importPack" @cancel="cancelPack" @add-algorithm="addCustomFlm" @remove-algorithm="removeCustomFlm" />
-      <label v-if="hpmMode" class="hpm-setting"><span>{{ tr('HPM 板卡', 'HPM Board') }}</span><select v-model="hpmBoard" data-testid="hpm-board"><option v-for="item in hpmBoards" :key="item" :value="item">{{ item }}</option></select></label>
+      <p v-if="hpmMode && !hpmBoard" class="hpm-setting" role="status">{{ tr('暂未提供该器件的默认 Flash 配置，无法开始烧录。', 'No default Flash configuration is available for this target; programming is unavailable.') }}</p>
     </aside>
     <main class="workspace-zone firmware-zone" data-zone="firmware">
       <MemoryReadPanel ref="memoryReadRef" embedded :probe-id="probeId" :target-part="selectedTarget?.part_number || ''" :hpm="hpmMode" :board="hpmBoard || undefined" :frequency="frequency" :connect-mode="connectMode" :reset-mode="resetMode" :memory-regions="targetMemoryRegions" :memory-map-busy="targetMemoryMapBusy" :disabled="memoryReadDisabled" @progress="onMemoryReadProgress" @log="onMemoryReadLog" @data="onMemoryReadData" />

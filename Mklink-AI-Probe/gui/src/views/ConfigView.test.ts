@@ -274,12 +274,23 @@ describe('ConfigView', () => {
     const wrapper = await mountView()
     expect(wrapper.get('[data-testid="connect-local"]').attributes('disabled')).toBeDefined()
     await wrapper.get('[data-testid="local-port"]').setValue('TEST_PORT_B')
+    expect(wrapper.findComponent({ name: 'ConnectionClockControl' }).props('disabled')).toBe(true)
     expect(wrapper.get('[data-testid="connect-local"]').text()).toContain('切换下载器')
     expect(wrapper.get('[data-testid="connect-local"]').attributes('disabled')).toBeUndefined()
     await wrapper.get('[data-testid="connect-local"]').trigger('click')
     await flushPromises()
     expect(mocks.api.connectDevice).toHaveBeenCalledWith(expect.objectContaining({ port: 'TEST_PORT_B' }))
     expect(mocks.api.disconnectDevice).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('allows clock configuration after selecting a port before connecting', async () => {
+    sharedRuntime.value = true
+    Object.assign(mocks.deviceStatus, { connected: false, port: null })
+    const wrapper = await mountView()
+    await wrapper.get('[data-testid="local-port"]').setValue('TEST_PORT_B')
+    expect(wrapper.findComponent({ name: 'ConnectionClockControl' }).props('disabled')).toBe(false)
+    expect(wrapper.text()).not.toContain('请先切换下载器')
     wrapper.unmount()
   })
 
