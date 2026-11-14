@@ -5,7 +5,6 @@ import asyncio
 from contextvars import ContextVar
 import hashlib
 import json
-import math
 import os
 from pathlib import Path
 import secrets
@@ -64,20 +63,12 @@ class RuntimeJobs:
             return
 
         try:
-            rows = json.loads(stored)
-            if not isinstance(rows, list):
-                raise ValueError('Job history must be an array')
+            from mklink.job_history import parse_history
+            rows = parse_history(stored)
             restored = {}
             changed = len(rows) > 64
             # Validate before changing memory or writing back interrupted jobs.
             # A malformed older record still makes replay history uncertain.
-            for row in rows:
-                if (not isinstance(row, dict)
-                        or any(not isinstance(row.get(key), str) or not row[key]
-                               for key in ('job_id', 'request_id', 'fingerprint', 'state'))
-                        or type(row.get('started')) not in (int, float)
-                        or isinstance(row['started'], float) and not math.isfinite(row['started'])):
-                    raise ValueError('Invalid job history record')
             for original in rows[-64:]:
                 row = dict(original)
                 if row['state'] not in TERMINAL:

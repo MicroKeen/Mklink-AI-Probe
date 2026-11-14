@@ -48,6 +48,18 @@ Var MklinkLegacyInstallDir
 !macroend
 
 !macro NSIS_HOOK_POSTINSTALL
+  ; The new frozen helper uses ordinary user permissions, never opens hardware,
+  ; and archives invalid job journals only after acquiring runtime owner locks.
+  ; Valid history and all project/user settings are retained.
+  nsExec::ExecToStack '"$INSTDIR\mklink-sidecar.exe" --internal-install-history-maintenance'
+  Pop $0
+  Pop $1
+  ${If} $0 != 0
+    DetailPrint "MKLink: task history maintenance was skipped or incomplete. Close all MKLink/Skill backends and rerun setup. Original records were retained; see installation-history-report.json in the runtime directory."
+  ${Else}
+    DetailPrint "MKLink: task history checked; invalid records were backed up before initialization."
+  ${EndIf}
+
   ; Preserve existing current-user shortcuts when /UPDATE changes the location.
   ; Only retarget shortcuts which still point to this product's previous path.
   ${If} $UpdateMode = 1

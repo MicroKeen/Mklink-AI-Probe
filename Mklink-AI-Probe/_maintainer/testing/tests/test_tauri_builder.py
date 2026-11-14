@@ -446,7 +446,9 @@ def test_tauri_bundle_installs_per_user_without_automatic_port_naming():
     assert 'IsShortcutTarget "${SHORTCUT}" "$MklinkLegacyInstallDir\\${MAINBINARYNAME}.exe"' in hook
     assert "NSIS_HOOK_POSTINSTALL" in hook
     assert "--manage-usb-port-names" not in hook
-    assert "nsExec::Exec" not in hook
+    assert hook.count('nsExec::ExecToStack') == 1
+    assert '--internal-install-history-maintenance' in hook
+    assert '"$INSTDIR\\mklink-sidecar.exe" --internal-install-history-maintenance' in hook
     assert "WriteRegStr HKLM" not in hook
     lib_rs = (tauri_dir / "src" / "lib.rs").read_text(encoding="utf-8")
     assert 'format!("--manage-usb-port-names {}", operation)' in lib_rs
@@ -499,7 +501,6 @@ def test_product_version_and_signed_updater_are_configured():
     assert config["plugins"]["updater"]["endpoints"] == [
         "https://download.microkeenai.com/mklink/stable/latest.json",
         "https://raw.githubusercontent.com/MicroKeen/Mklink-AI-Probe/release/latest.json",
-        GITEE_UPDATER_ENDPOINT,
     ]
     assert config["plugins"]["updater"]["pubkey"].strip()
 

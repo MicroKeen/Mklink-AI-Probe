@@ -40,7 +40,8 @@ class RuntimeBinding:
         if probe_id != 'lobby':
             lock = runtime_lock('owner.lock', probe_id)
             try:
-                lock.__enter__()
+                with runtime_lock('history-maintenance.lock'):
+                    lock.__enter__()
             except RuntimeErrorResponse as error:
                 message = 'This probe is in use by another backend; select a different probe or disconnect it there before switching'
                 raise RuntimeErrorResponse(message, status_code=409,
