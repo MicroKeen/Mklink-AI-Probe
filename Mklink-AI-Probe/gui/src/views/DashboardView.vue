@@ -87,7 +87,7 @@
       <HardFaultTab :key="'HardFaultTab-' + (deviceStatus.device_generation || 0)" v-if="tab === 'hardfault'" :device-connected="deviceStatus.connected" :symbol-loaded="deviceStatus.axf?.loaded === true" />
       <MemoryTab :key="'MemoryTab-' + (deviceStatus.device_generation || 0)" v-if="tab === 'memory'" :device-connected="deviceStatus.connected" />
       <SuperWatchTab ref="superwatchSurface" :key="'SuperWatchTab-' + (deviceStatus.device_generation || 0)" v-show="tab === 'superwatch'" :device-connected="deviceStatus.connected" :symbol-loaded="deviceStatus.axf?.loaded === true" :symbol-error="deviceStatus.axf?.error" />
-      <WorkbenchTab v-if="workbenchOpened" v-show="tab === 'workbench'" ref="workbenchSurface" :key="'workbench-' + frontend.sessionEpoch.value" :device-connected="deviceStatus.connected" :symbol-loaded="deviceStatus.axf?.loaded === true" :symbol-error="deviceStatus.axf?.error" @intent="askAgent" />
+      <WorkbenchTab v-if="workbenchOpened" v-show="tab === 'workbench'" ref="workbenchSurface" :key="'workbench-' + frontend.sessionEpoch.value" :active="tab === 'workbench'" :device-connected="deviceStatus.connected" :symbol-loaded="deviceStatus.axf?.loaded === true" :symbol-error="deviceStatus.axf?.error" @intent="askAgent" />
       <SerialMonitorTab v-if="!IS_REMOTE" v-show="tab === 'serial'" />
       <ModbusTab v-if="!IS_REMOTE" v-show="tab === 'modbus'" />
       <SystemViewTab :key="'SystemViewTab-' + (deviceStatus.device_generation || 0)" v-show="tab === 'systemview'" :device-connected="deviceStatus.connected" />

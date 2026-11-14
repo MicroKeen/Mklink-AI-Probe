@@ -6,7 +6,9 @@
 
 ## 用户入口与共享边界
 
-在 Dashboard 打开“组合工作台”，添加 SuperWatch 波形、变量、RTT 或串口面板。每张卡片有稳定 ID，可拖动位置、拖动右下角改变尺寸，也可在配置中用数字输入位置和宽高。网格为 12 列，窄屏按顺序排列。信号路径留空表示跟随所有已选采集项；RTT 绑定通道，串口绑定已有端口。原 SuperWatch、RTT View 和串口助手入口继续保留。
+在 Dashboard 打开“组合工作台”，添加 SuperWatch 波形、变量、RTT、串口或控制组件面板。每张卡片有稳定 ID，可拖动位置、拖动右下角改变尺寸，也可在配置中用数字输入位置和宽高。网格为 12 列，窄屏按顺序排列。信号路径留空表示跟随所有已选采集项；RTT 绑定通道，串口绑定已有端口。原 SuperWatch、RTT View 和串口助手入口继续保留。
+
+面板可以停靠为同一个窗口的标签组，并切换或分离标签；控制组件面板内可添加动作按钮、参数表单、状态数值和状态灯，绑定已有面板的语义动作或公开状态。组件可在窗口内移动，也可拖到另一个控制窗口。Agent 具有对应的新增、删除、配置、绑定、填写参数、执行、移动、停靠和保存动作。完整调用示例与新类型开发方法见[动态组件与接口绑定](frontend-components.md)。当前“窗口”是页面内网格窗口和标签停靠，不是独立操作系统窗口。
 
 “保存布局”保存当前项目的面板、来源、几何位置及受支持的视图设置；“恢复已保存布局”替换当前未保存配置。面板恢复、增加和关闭都不连接设备、不开始采集、不打开新的硬件 reader、不发送数据，也不自动开始录制或回放。关闭最后一个视图也不等于停止后台采集。
 
@@ -15,6 +17,8 @@
 | 面板显示 | 单个 `panel_id` | 信号子集、显示暂停、图例、坐标范围、游标、触发、回放、RTT/串口显示模式 |
 | 共享显示配置 | 当前项目 | 常用变量、信号分组、默认别名/颜色/公式；`signals.*` 会影响使用共享配置的面板 |
 | 面板样式覆盖 | 单个波形面板 | `waveform.style`、`waveform.plot`；区别于共享 `signals.style.set` 和 `signals.group.*` |
+| 控制组件配置 | 单个 `component_id` | 类型、标题、几何位置及绑定；固定参数随布局保存 |
+| 控制组件临时状态 | 当前页面内稳定 `component_id` | 本次表单草稿、执行状态、错误与结果；跨控制窗口移动保留，草稿不进入布局文件或公共 read |
 | 采集与设备 | 既有共享后台/目标 | 采集项增删、启停、间隔、变量写入、连接时钟、RTT 发送和解码设置 |
 | 记录 | 既有共享记录器 | 任一面板的开始/停止记录都会作用于同一个后台记录器 |
 
@@ -110,7 +114,9 @@ RTT 子面板另外提供 `rtt.view.set/pause/clear/chart.reset/chart.range/enco
 
 ## 布局与协作请求
 
-布局保存在项目 `.mklink/frontend_layout.json`，具有独立 `version: 1`、递增 revision、最多 32 张面板、受限网格尺寸和受限 view 对象。保存使用原子写和乐观并发检查；版本错误、损坏数据、重定向存储路径、旧 revision 都拒绝。旧 `.mklink/superwatch_workspace.json` 和常用变量文件继续保留，不被新布局替代。
+布局保存在项目 `.mklink/frontend_layout.json`。后端兼容读取版本 1 和 2；前端将版本 1 适配为版本 2 的最小尺寸和无重叠布局，在用户或 Agent 显式保存前不改写文件。版本 2 增加 `docks` 标签组和控制面板 `widgets`，保留递增 revision、最多 32 张面板、受限网格尺寸及 view 对象；最多 16 个标签组、每个控制窗口 32 个组件、整套布局 128 个组件。数量是校验上限，不是持续负载承诺。
+
+保存使用原子写和乐观并发检查；未知版本/类型、损坏数据、无效引用、重叠、不可读尺寸、重定向存储路径、旧 revision 都拒绝，不静默丢弃组件。旧 `.mklink/superwatch_workspace.json` 和常用变量文件继续保留，不被新布局替代。保存为版本 2 后不能假定旧版客户端能够读取；没有自动降级写回。
 
 首次读取 revision 为 0 且没有面板的布局时，用旧共享分组/信号建立一个变量面板及各非空分组的波形面板；没有分组信号时建立默认波形面板。原 group ID、样式和常用变量不被改写，卡片 ID 由原分组 ID 派生。初始卡片明确标为“尚未保存”，只有用户或 Agent 显式保存才写新布局文件。超过 31 个非空波形组或单卡片 500 个信号时显示未生成卡片的数量，原配置仍保留。已保存的空布局（revision ≥ 1）不会被自动填回。初始迁移不自动猜选 RTT 通道或串口端口。
 
@@ -120,7 +126,8 @@ RTT 子面板另外提供 `rtt.view.set/pause/clear/chart.reset/chart.range/enco
 
 - 32 是协议/布局数量上限，不是已验证的持续采集性能承诺。每个视图有独立 worker/有界缓冲，客户端资源随面板数增加；后台生产者不重复创建。
 - `gui_frontend_call` 的整个命令最多 64 KiB；短日志 text 最多 8192 字符。完整日志使用 `waveform.replay.load({path})`，要求后台可访问的本地绝对路径、支持的 UTF-8 日志头、普通文件，拒绝网络路径/符号链接/junction，文件上限为既有回放器的 256 MiB。原 GUI 文件加载继续可用。
-- 保存布局不保存待发送串口草稿、设备写入值、登录令牌或自动执行命令，也不自动恢复录制/回放任务。恢复完成需分别核对布局已载入与各面板就绪状态。
+- 控制组件的固定参数属于保存配置，配置时不要放入凭据或私密待发送内容；本次表单输入、令牌和在途操作不持久化。保存或恢复布局不会执行绑定动作，也不自动恢复录制/回放任务。恢复完成需分别核对布局已载入、各面板就绪和绑定仍有效。
+- 新组件类型通过共享 manifest 与受构建管理的可选渲染器开发、注册；当前不接受布局携带 JavaScript、任意 URL 或 HTML。页面内采用网格和标签停靠，没有实现跨屏系统窗口或任意嵌套分割树。
 - 语义状态为配置摘要；最新采样值、计数、播放时钟通过显式读取取得，避免每批数据都改变操作 revision。
 - 历史内部 Raw Log、CSV 导出、旧工程保存入口已被当前 GUI 隐藏，本次不恢复它们；没有新增 FFT。
 - `unknown` 回执、断线后的设备写结果和发送结果需要查原回执及实际状态；不得通过新命令 ID 自动重放。
@@ -132,8 +139,8 @@ RTT 子面板另外提供 `rtt.view.set/pause/clear/chart.reset/chart.range/enco
 | 编号 | 实现映射 | 尚需核对的证据/明确缺口 |
 | --- | --- | --- |
 | A01 发现/目录 | pages/read，真实 action schema、panel ID、target、revision | 实际认证后台 catalog，检查无令牌/草稿 |
-| A02 多类组合 | panel.add/configure，watch/variables/rtt/serial 卡片 | 双波形、双 RTT、双串口浏览器同屏及来源绑定 |
-| A03 布局交互 | 拖动、右下角缩放、数字配置、panel.move | 鼠标/键盘数字编辑/小屏截图；未增加专门方向键移动卡片 |
+| A02 多类组合 | panel.add/configure，watch/variables/rtt/serial/controls 卡片及注册组件 | 多类型浏览器组合、真实绑定和新增类型保存往返 |
+| A03 布局交互 | 拖动、右下角缩放、数字配置、panel.move/dock/focus/undock、component.move/transfer | 鼠标/键盘数字编辑/小屏截图；未增加专门方向键移动卡片 |
 | A04 同源独立视图 | waveform.style/viewport/y/cursor/trigger/pause | 两实例互不串扰，区分共享 signals.* |
 | A05 生命周期 | 每实例根节点、注册键、订阅和 dispose | 反复关闭/增加，监听器/worker/绘图资源回收 |
 | A06 并发保存 | frontend layout revision、原 workspace revision | 两页面旧 revision 不覆盖，恢复冲突可见 |
@@ -152,6 +159,6 @@ RTT 子面板另外提供 `rtt.view.set/pause/clear/chart.reset/chart.range/enco
 | A19 协议异常 | 幂等记录、deadline、revision、target、unknown | 断线、错页、重复/冲突 ID、鉴权与设备切换 |
 | A20 持续负载 | 有界流、局部暂停、独立 dispose；32 面板报告体积回归 | 持续采集资源与丢失统计实测；不得将数量上限当性能验收 |
 
-相关测试包括 `frontendControl.test.ts`、`workbenchLayout.test.ts`、`WorkbenchTab.test.ts`、领域组件测试、波形/回放测试以及 `test_runtime_frontend.py`。构建与测试仍按仓库规定通过 `scripts/build_workspace.ps1` 运行；硬件测试与普通无设备回归分开记录。
+相关测试包括 `frontendControl.test.ts`、`workbenchLayout.test.ts`、`WorkbenchTab.test.ts`、`workbenchControls.test.ts`、`workbenchBindings.test.ts`、`ControlPanel.test.ts`、领域组件测试、波形/回放测试以及 `test_runtime_frontend.py`、`test_frontend_storage.py`。构建与测试仍按仓库规定通过 `scripts/build_workspace.ps1` 运行；硬件测试与普通无设备回归分开记录。
 
 本轮已在真实浏览器观察到 7 个面板同屏、独立回放/图例控制，通过后台路径加载 12,000 行约 313 KiB CSV，执行 seek、游标、Y 轴设置及约 48 KiB PNG 导出，保存布局到 revision 1，并完成页面请求→真实 broker 冻结上下文→Agent 答复→页面显示的往返。最终重建后的自动回归和浏览器复查以验证报告为准；这些结果不代表持续真机采集、多物理端口和变量写入已通过验收。

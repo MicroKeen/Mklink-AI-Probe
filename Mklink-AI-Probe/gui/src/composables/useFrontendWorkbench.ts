@@ -1,5 +1,6 @@
-import { ref, onMounted, onUnmounted, nextTick, type Ref } from 'vue'
-import { connectFrontend, frontendRequest, objectSchema, type FrontendRuntime, type FrontendTarget, type SemanticSurface, type JsonObject } from '../lib/frontendControl'
+import { ref, onMounted, onUnmounted, nextTick, provide, type Ref } from 'vue'
+import { connectFrontend, frontendRequest, objectSchema, interaction, withFrontendTarget, type FrontendRuntime, type FrontendTarget, type SemanticSurface, type JsonObject } from '../lib/frontendControl'
+import { bindingHostKey } from '../lib/workbenchBindings'
 import { applyConnectionClock, readConnectionClock } from '../lib/connectionClock'
 import { IS_REMOTE } from '../lib/runtimeEndpoint'
 
@@ -66,15 +67,34 @@ export function useFrontendWorkbench(tab: Ref<string>, superwatch: Ref<SemanticS
     }
     return mapped
   }
+  function resolveAction(panelId: string, name: string, args: JsonObject) {
+    const panel = entries().find(panel => panel.id === panelId)
+    const action = panel?.surface?.catalog().find(action => action.name === name)
+    if (!panel?.surface || !action) throw new Error('Bound capability is unavailable; rebind this control')
+    interaction.validateArgs(args, action.args)
+    panel.surface.validate?.(name, args)
+    return panel.surface
+  }
+  provide(bindingHostKey, {
+    targets: () => entries().map(entry => ({ ...entry, surface: entry.surface! })),
+    invoke: async (panelId, name, args, context) => {
+      const surface = resolveAction(panelId, name, args)
+      if (!connected.value || !runtime.value || !target.value) throw new Error('Frontend control is not connected')
+      if (!context?.frontendGuarded && busy.value) throw new Error('An operation is already running')
+      if (!context?.frontendGuarded) busy.value = true
+      try { return await withFrontendTarget(runtime.value.report().session_id, target.value, () => surface.execute(name, args), context?.frontendGuarded) }
+      finally { if (!context?.frontendGuarded) busy.value = false }
+    },
+  })
   const adapter = {
     title: 'MKLink Web Workbench',
     catalog: () => ({ panels: entries().map(({ surface, ...panel }) => ({ ...panel, actions: Object.entries(actions()).filter(([, entry]) => entry.panel.id === panel.id).map(([id, entry]) => ({ id, name: entry.name })) })), intents: ['explain', 'inspect', 'plan'] }),
     get actions() { return Object.fromEntries(Object.entries(actions()).map(([id, entry]) => [id, entry.descriptor])) },
     read: () => ({ tab: tab.value, panels: entries().map(panel => ({ id: panel.id, state: panel.surface!.read() })) }),
-    execute: (id: string, args: JsonObject) => {
+    execute: async (id: string, args: JsonObject) => {
       const entry = actions()[id]
       if (!entry) throw new Error('Panel or action no longer exists')
-      return entry.panel.surface!.execute(entry.name, args)
+      return entry.panel.surface!.execute(entry.name, args, { frontendGuarded: true })
     },
   }
   onMounted(() => {

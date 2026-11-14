@@ -3,10 +3,11 @@ import { API_BASE } from './runtimeEndpoint'
 
 export type JsonObject = Record<string, any>
 export interface SemanticAction { name: string; description: string; args: JsonObject; effect?: string }
+export interface SemanticExecutionContext { frontendGuarded: true }
 export interface SemanticSurface {
   catalog(): SemanticAction[]
   read(): JsonObject
-  execute(action: string, args: JsonObject): unknown | Promise<unknown>
+  execute(action: string, args: JsonObject, context?: SemanticExecutionContext): unknown | Promise<unknown>
   validate?(action: string, args: JsonObject): void
   restore?(view: JsonObject): unknown | Promise<unknown>
 }
@@ -66,19 +67,24 @@ function installTargetGuard() {
   }
 }
 
-export async function withFrontendTarget<T>(session: string, target: FrontendTarget, execute: () => T | Promise<T>): Promise<T> {
-  if (activeTarget) throw new Error('A frontend operation is still running')
-  installTargetGuard()
-  activeTarget = { session, target }
-  const context = activeTarget
+export async function withFrontendTarget<T>(session: string, target: FrontendTarget, execute: () => T | Promise<T>, inherited = false): Promise<T> {
+  if (inherited) {
+    if (!activeTarget || activeTarget.session !== session || Object.keys(target).some(key => activeTarget!.target[key as keyof FrontendTarget] !== target[key as keyof FrontendTarget])) throw new Error('The original frontend operation target is no longer active')
+  } else {
+    if (activeTarget) throw new Error('A frontend operation is still running')
+    installTargetGuard()
+    activeTarget = { session, target }
+  }
+  const context = activeTarget!
   try {
+    if (context.uncertain) throw new Error(context.uncertain)
     const result = await execute()
     if (context.uncertain) throw new Error(context.uncertain)
     return result
   } catch (error) {
     if (context.uncertain) throw Object.assign(new Error(context.uncertain), { unknown: true, cause: error })
     throw error
-  } finally { activeTarget = null }
+  } finally { if (!inherited) activeTarget = null }
 }
 
 export function connectFrontend(options: {

@@ -49,10 +49,22 @@ describe('frontend semantic receipts', () => {
       const options = (transport.mock.calls as unknown as [unknown, RequestInit][])[0]![1]
       expect(new Headers(options.headers).get('X-MKLink-Frontend-Session')).toBe('session')
       expect(new Headers(options.headers).get('X-MKLink-Device-Generation')).toBe('4')
+      await withFrontendTarget('session', target, async () => {
+        expect(await withFrontendTarget('session', target, async () => 'nested', true)).toBe('nested')
+        await expect(withFrontendTarget('session', target, async () => 'unrelated')).rejects.toThrow('still running')
+        await expect(withFrontendTarget('session', { ...target, device_generation: 5 }, async () => 'wrong target', true)).rejects.toThrow('no longer active')
+      })
       transport.mockRejectedValueOnce(new TypeError('Connection lost'))
       await expect(withFrontendTarget('session', target, () => window.fetch('/api/symbols/write', { method: 'POST' }))).rejects.toMatchObject({ unknown: true })
       transport.mockResolvedValueOnce(new Response('{', { headers: { 'Content-Type': 'application/json' } }))
       await expect(withFrontendTarget('session', target, async () => { await window.fetch('/api/symbols/write', { method: 'POST' }); return { ok: true } })).rejects.toMatchObject({ unknown: true })
+      const retry = vi.fn()
+      transport.mockRejectedValueOnce(new TypeError('Response lost'))
+      await expect(withFrontendTarget('session', target, async () => {
+        await expect(withFrontendTarget('session', target, () => window.fetch('/api/symbols/write', { method: 'POST' }), true)).rejects.toMatchObject({ unknown: true })
+        await expect(withFrontendTarget('session', target, retry, true)).rejects.toMatchObject({ unknown: true })
+      })).rejects.toMatchObject({ unknown: true })
+      expect(retry).not.toHaveBeenCalled()
     } finally { window.fetch = original }
   })
 })

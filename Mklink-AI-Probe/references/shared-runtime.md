@@ -50,7 +50,7 @@ python -m mklink runtime call device_status --probe "电机板"
 已支持语义工作台的后台还会声明 `gui_frontend_*` 能力。需要操作前端时，先用
 `gui_call("gui_frontend_pages")` 发现在线页面，再用 `gui_frontend_read({page_id})`
 读取实际动作目录和参数 schema；不要从显示名猜动作 ID。`gui_present` 的
-`tab="workbench"` 打开可组合的波形、变量、RTT 和串口面板，显示完成不等于业务动作完成。
+`tab="workbench"` 打开可组合的波形、变量、RTT、串口和控制面板，显示完成不等于业务动作完成。
 `gui_frontend_call` 接收 `agent-frontend/1` 命令，包含 `session_id`、`page_id`、
 唯一 `command_id`、当前 `expect_revision`、未来 30 秒内的 Unix 毫秒 `deadline`、
 目录中的 `action` 和 `args`。随后用 `gui_frontend_receipt({command_id})` 查询原回执；
@@ -58,6 +58,14 @@ python -m mklink runtime call device_status --probe "电机板"
 页面“Agent”入口的请求由 `gui_frontend_intents`/`gui_frontend_intent` 读取；核对
 `current_target` 和冻结的 `context` 后，通过 `gui_frontend_reply({request_id,revision,reply})`
 回复。回复不会自动执行动作。布局恢复只恢复视图，不启动采集或连接设备。
+
+支持动态组件的版本可通过 `panel.add` 创建 `controls` 窗口，再从其真实目录调用
+`component.types/add/bind/input/invoke/read`，分别发现类型、创建、绑定、填写、执行和读回。
+按钮/表单绑定目标面板的既有动作，数值/状态灯绑定公开状态路径；先配置或填写不会执行。
+`component.configure/move/remove` 调整组件，工作台的 `component.transfer` 跨控制窗口移动，
+`panel.move/dock/undock/focus` 调整窗口与标签组，`layout.save/restore` 保存和恢复组合。
+动作参数和 action ID 必须从当前页面目录读取；目标失效或契约改变需显式重绑。
+临时表单输入不保存，跨窗口移动保留本页面中的输入及执行状态；未知结果仍查询原命令，不能自动重发。
 
 AI 默认使用共享接口，无论用户是否已打开桌面或 Web GUI。不要先关闭上位机，
 也不要发送固件 `RTTView.start/stop` 或自行打开命令串口。外部串口助手的旧映射
