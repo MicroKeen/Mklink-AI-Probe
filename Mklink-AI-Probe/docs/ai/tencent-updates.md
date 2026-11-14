@@ -54,9 +54,9 @@ no-store`; immutable files use long-lived caching. Directory listing is off.
 The owner requires the Shanghai server to keep the latest formal application,
 complete Skill, Site Agent and latest firmware per supported model. Historical
 versions stay in COS and the verified GitHub/Gitee archives. The existing
-Lighthouse package has unlimited traffic and a 200 Mbps peak. The original 0.4.2 set occupied 357,916,269 bytes (341.34 MiB). The current 0.4.3 set,
-including the retained MicroLink V2 firmware, occupies 359,536,472 bytes.
-See [the 0.4.3 release handoff](../verification/v043-release-handoff.md) for
+Lighthouse package has unlimited traffic and a 200 Mbps peak. The original 0.4.2 set occupied 357,916,269 bytes (341.34 MiB). The 0.4.3 set occupied 359,536,472 bytes and is now archived in COS/Git.
+The current 0.5.0 set, including all four new firmware files, occupies
+359,994,885 bytes. See [the 0.5.0 release handoff](../verification/v050-release-handoff.md) for
 the public readback and historical archive checks.
 
 Exact latest-file Nginx locations serve the verified local file with `try_files`
