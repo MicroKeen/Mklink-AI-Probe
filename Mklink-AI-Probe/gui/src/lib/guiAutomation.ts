@@ -15,7 +15,10 @@ export function useGuiPanel(name: string, panel: Panel) {
 }
 
 export function createGuiAutomation(router: Router, status: () => Record<string, unknown>) {
-  const context = () => JSON.stringify([router.currentRoute.value.fullPath, status().device_generation])
+  const context = () => {
+    const target = status()
+    return JSON.stringify([router.currentRoute.value.fullPath, target.probe_id, target.device_generation])
+  }
   const snapshot = () => ({
     ...status(), page: String(router.currentRoute.value.name || ''),
     tab: router.currentRoute.value.query.tab || null, section: router.currentRoute.value.query.section || null,

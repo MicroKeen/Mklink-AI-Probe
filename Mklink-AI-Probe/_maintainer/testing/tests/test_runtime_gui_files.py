@@ -31,3 +31,24 @@ def test_file_validation_and_expiry(tmp_path):
     entry['expires'] = 0
     files.prune()
     assert entry['file'].closed and not files.files
+
+
+def test_unused_files_expire_without_another_request_and_release_by_window(tmp_path, monkeypatch):
+    callbacks = []
+    class Loop:
+        def call_later(self, seconds, callback, token): callbacks.append((seconds, callback, token))
+    monkeypatch.setattr(asyncio, 'get_running_loop', lambda: Loop())
+    path = tmp_path / 'file'
+    path.write_bytes(b'one')
+    files = GuiFiles()
+    files.prepare(str(path), 'a')
+    first = next(iter(files.files.values()))['file']
+    seconds, callback, token = callbacks[0]
+    assert seconds == 60
+    callback(token)
+    assert first.closed and not files.files
+    files.prepare(str(path), 'a')
+    files.prepare(str(path), 'b')
+    files.release_window('a')
+    assert len(files.files) == 1 and next(iter(files.files.values()))['window_id'] == 'b'
+    files.release_window('b')

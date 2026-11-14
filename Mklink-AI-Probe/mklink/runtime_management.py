@@ -117,6 +117,8 @@ def install_management(app, control):
         except WebSocketDisconnect:
             pass
         finally:
+            if getattr(control, 'gui_files', None) is not None:
+                control.gui_files.release_window(key)
             if record.get('pending') and not record['pending'][1].done():
                 record['pending'][1].set_result('disconnected')
             if control.views.get(key) is record:

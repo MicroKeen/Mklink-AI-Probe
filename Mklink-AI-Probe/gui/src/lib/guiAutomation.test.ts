@@ -4,6 +4,14 @@ import { mount } from '@vue/test-utils'
 import { createGuiAutomation, useGuiPanel } from './guiAutomation'
 
 describe('semantic GUI control', () => {
+  it('rejects old controls after switching probes even when their generation numbers match', async () => {
+    const router = createRouter({ history: createMemoryHistory(), routes: [] })
+    let probe = 'first'
+    const gui = createGuiAutomation(router, () => ({ probe_id: probe, device_generation: 2 }))
+    const previous = gui.snapshot().context
+    probe = 'second'
+    await expect(gui.execute({ action: 'control.click', control_id: 'old', expected_context: previous })).rejects.toThrow('target changed')
+  })
   it('navigates all local pages and reads actual state without starting hardware', async () => {
     const router = createRouter({ history: createMemoryHistory(), routes: ['config', 'dashboard', 'online-flash', 'offline-flash', 'remote-service'].map(name => ({ name, path: '/' + name, component: { template: '<div/>' } })) })
     const gui = createGuiAutomation(router, () => ({ backend: 'alive' }))
