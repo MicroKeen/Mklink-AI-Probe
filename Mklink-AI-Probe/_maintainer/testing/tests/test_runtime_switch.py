@@ -92,6 +92,22 @@ def test_occupied_destination_keeps_current_device_and_data(window):
     device.close.assert_not_called()
 
 
+def test_explicit_switch_during_usb_grace_does_not_wait_or_replay_old_connection(window):
+    from types import SimpleNamespace
+    client, control, device, state = window
+    device.connected = False
+    device._bridge = SimpleNamespace(_transport_error=OSError('USB unplugged'))
+    recovery = control.recovery
+    recovery.device, recovery.identity = device, A
+    recovery.pending, recovery.lost_at = True, time.monotonic()
+    recovery.plan = [('old-capture',)]
+    response = client.post('/api/runtime/select', json={'probe': B})
+    assert response.status_code == 200, response.text
+    assert control.info['probe_id'] == B and state['device'] is None
+    assert not recovery.retains_session()
+    device.close.assert_called_once()
+
+
 def test_explicit_identity_never_follows_reused_port_and_can_follow_renumbering(window, monkeypatch):
     client, control, device, state = window
     monkeypatch.setattr(probes, 'inventory', lambda: [
