@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-14T21:07:02+08:00",
+  "updated_at": "2026-11-14",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
@@ -13,8 +13,8 @@
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "V0.5.0 / ba3a334b 桌面/Web GUI完整控制及多窗口假离线修复，安装版复验完成",
-    "current_task": "MCP/Skill/CLI共用窗口导航、状态、控件、文件与回放接口；已用冻结MCP操作真实原生窗口和Web，无Computer Use。六窗口健康72/72正常，645064事件/9任务，解析、目标和主机丢弃0；SystemView/RTT/SuperWatch/串口回放及窗口隔离通过。普通用户覆盖与本机Skill更新通过，测试连接释放；见[报告与哈希](../verification/v050-gui-control.md)。"
+    "status": "V0.5.0 与四款固件正式发布已授权，正在完成发布门禁",
+    "current_task": "PR #79 发布准备：应用索引保留历史并拒绝并发覆盖，修正 CI 受限 Job Object 导出测试；四个固件原件哈希和发布计划已核验。完整回归、合并、签名包、双渠道发布尚在进行，见[发布交接](../verification/v050-release-handoff.md)。"
   },
   "milestones": [
     {
@@ -92,13 +92,13 @@
     "ELF与34档波特率已在Windows候选包含；客户ELF仅离线解析/配置，未操作客户板。Mac旧候选不含后续修复。本轮没有高速串口/Modbus物理验收；固件会话RS485双V4测试不等同本轮/客户快速应答验证，10Mbps大帧丢包边界仍保留，第三方驱动可拒绝高档位。"
   ],
   "next_actions": [
-    "继续审阅PR #79；最新Windows与完整Skill候选V0.5.0 / ba3a334b，本机已覆盖，见[报告与哈希](../verification/v050-gui-control.md)。GUI操作不再依赖Computer Use。UART/RS485/Modbus实物、外部调试器、VOFA专用流与长期性能等未验，不宣称全发布门禁；未发布，签名/发布仍需授权。",
+    "按本轮明确授权完成 PR #79 精确提交审核与 CI、干净 main 重建签名包、安装及升级验收，再发布 Tencent 与 MicroKeen GitHub。四款固件为 V2.9.4、V3.7.0、MicroLink V4.7.4、HPMLink V4.7.4；客户端索引先于固件。见[发布交接](../verification/v050-release-handoff.md)。",
     "客户可直接运行新版覆盖安装器，自动结束当前用户旧MKLink与Skill/MCP，不要求手动先关旧版；活动任务会结束。安装后AI宿主需重新加载被结束的MCP。损坏历史备份保留，仍失败时收集installation-history-report.json、history-backups和诊断包，区分权限/占用/格式；不手工删除有效未知结果，不重放烧录。",
     "客户SystemView先核对实际CH、目标IRQ锁及元数据。1µs三路溢出先采集0x40 CH2设备时间戳/长度/序号与主机单调到达时间，低频读0x10错误和0x14批次耗时；诊断开销保持一致，再判断背压、重试或调度，不直接假定80ms停读或给CH2固定优先级。多视图假离线已完成修复与安装版六窗口复验。保留目标构建快照供AXF源码路径使用，原工程重编后再清理；见[静态补充](../verification/v050-systemview-loss-reboot.md)。",
     "在用户 Mac 上验收对应 ARM/Intel 候选的首次启动、覆盖安装、探针接口/卷身份和真实查询耗时，再核对共享会话及 MCP 重载。当前软件与包内自检不替代真实环境门禁。",
     "固件会话继续维护 STOP 状态码补丁；客户信息齐备并获得明确实物安排后再做同条件 STOP/唤醒验证，不自动抢占调试器或刷写设备。"
   ],
   "continuation_protocol": [
-    "后续合并、签名或正式发布须有新的明确指令。"
+    "2026-11-14 已明确授权 V0.5.0 和四款已验收固件正式发布，仅腾讯云与 MicroKeen GitHub；尚未发布的步骤继续完成，不重复请求授权。后续其他版本仍需明确指令。"
   ]
 }
