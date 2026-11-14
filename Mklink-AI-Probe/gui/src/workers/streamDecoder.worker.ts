@@ -6,6 +6,7 @@ import {
 } from '../lib/stream/protocol'
 import { signalFormula } from '../lib/signalFormula'
 import { TypedRingBuffer } from '../lib/stream/typedRingBuffer'
+import { SystemViewDurations } from '../lib/stream/systemViewDurations'
 import {
   safeTickDifference,
   SystemViewEventRing,
@@ -248,18 +249,6 @@ function nonNegativeInteger(value: unknown): number | null {
     : null
 }
 
-function systemViewQuantile(sortedValues: number[], q: number): number {
-  if (!sortedValues.length) return 0
-  if (sortedValues.length === 1) return sortedValues[0]
-  const position = (sortedValues.length - 1) * q
-  const base = Math.floor(position)
-  const fraction = position - base
-  const next = sortedValues[base + 1]
-  return next === undefined
-    ? sortedValues[base]
-    : sortedValues[base] + fraction * (next - sortedValues[base])
-}
-
 export class StreamDecoder {
   private readonly post: PostOutput
   private ring: TypedRingBuffer | null = null
@@ -279,6 +268,7 @@ export class StreamDecoder {
   private currentContext: ActiveSystemViewContext | null = null
   private suspendedContexts: Array<{ type: number; id: number }> = []
   private systemViewContextCatalog = new Map<string, SystemViewContextMetadata>()
+  private systemViewDurations = new Map<string, SystemViewDurations>()
   private tickOrigin: bigint | null = null
   private latestSystemViewTick = 0n
   private systemViewSummaryCache: SystemViewContextSummary[] | null = null
@@ -401,6 +391,7 @@ export class StreamDecoder {
       this.currentContext = null
       this.suspendedContexts = []
       this.systemViewContextCatalog.clear()
+      this.systemViewDurations.clear()
       this.systemViewSummaryCache = null
       this.systemViewSummaryAt = Number.NEGATIVE_INFINITY
       this.tickOrigin = null
@@ -1048,7 +1039,9 @@ export class StreamDecoder {
   ): void {
     const key = this.contextKey(type, id)
     const current = this.systemViewContextCatalog.get(key) || { type, id: id >>> 0 }
-    this.systemViewContextCatalog.set(key, { ...current, ...patch, type, id: id >>> 0 })
+    if (!this.systemViewContextCatalog.has(key) || Object.keys(patch).length) {
+      this.systemViewContextCatalog.set(key, { ...current, ...patch, type, id: id >>> 0 })
+    }
   }
 
   private openSystemViewContext(
@@ -1063,9 +1056,19 @@ export class StreamDecoder {
   private closeCurrentSystemViewInterval(endTick: bigint): void {
     const current = this.currentContext
     if (current && endTick > current.tick) {
-      this.systemViewIntervals?.append(current.id, current.tick, endTick, current.type)
+      const ring = this.systemViewIntervals
+      if (ring && ring.length === ring.capacity) {
+        this.systemViewDurations.get(this.contextKey(ring.contextTypeAt(0), ring.taskIdAt(0)))!
+          .remove(safeTickDifference(ring.endTickAt(0), ring.startTickAt(0)))
+      }
+      const duration = safeTickDifference(endTick, current.tick)
+      const key = this.contextKey(current.type, current.id)
+      let durations = this.systemViewDurations.get(key)
+      if (!durations) { durations = new SystemViewDurations(); this.systemViewDurations.set(key, durations) }
+      durations.add(duration)
+      ring?.append(current.id, current.tick, endTick, current.type)
       if (current.openingEvent) {
-        current.openingEvent.duration_ticks = safeTickDifference(endTick, current.tick)
+        current.openingEvent.duration_ticks = duration
       }
     }
     this.currentContext = null
@@ -1278,48 +1281,19 @@ export class StreamDecoder {
   }
 
   private buildSystemViewContextSummaries(): SystemViewContextSummary[] {
-    const durations = new Map<string, number[]>()
-    const intervalRing = this.systemViewIntervals as SystemViewIntervalRing
-    const addInterval = (type: number, id: number, start: bigint, end: bigint) => {
-      if (end <= start) return
-      this.updateSystemViewContext(type, id)
-      const key = this.contextKey(type, id)
-      const values = durations.get(key) || []
-      values.push(safeTickDifference(end, start))
-      durations.set(key, values)
-    }
-    for (let logical = 0; logical < intervalRing.length; logical++) {
-      const start = intervalRing.startTickAt(logical)
-      const end = intervalRing.endTickAt(logical)
-      addInterval(
-        intervalRing.contextTypeAt(logical), intervalRing.taskIdAt(logical), start, end,
-      )
-    }
-    if (this.currentContext && this.latestSystemViewTick > this.currentContext.tick) {
-      addInterval(
-        this.currentContext.type,
-        this.currentContext.id,
-        this.currentContext.tick,
-        this.latestSystemViewTick,
-      )
-    }
-
+    const open = this.currentContext
+    const openKey = open ? this.contextKey(open.type, open.id) : null
     return [...this.systemViewContextCatalog.entries()].map(([key, metadata]) => {
-      const values = (durations.get(key) || []).sort((a, b) => a - b)
-      const totalTicks = values.reduce((sum, value) => sum + value, 0)
+      const durations = this.systemViewDurations.get(key) || new SystemViewDurations()
+      const openDuration = open && key === openKey
+        ? safeTickDifference(this.latestSystemViewTick, open.tick) : undefined
       return {
         id: metadata.id,
         type: metadata.type,
         priority: metadata.priority,
         stackBase: metadata.stackBase,
         stackSize: metadata.stackSize,
-        count: values.length,
-        totalTicks,
-        minTicks: values[0] || 0,
-        p25Ticks: systemViewQuantile(values, 0.25),
-        p50Ticks: systemViewQuantile(values, 0.5),
-        p75Ticks: systemViewQuantile(values, 0.75),
-        maxTicks: values[values.length - 1] || 0,
+        ...durations.summary(openDuration),
       }
     })
   }
@@ -1344,6 +1318,7 @@ export class StreamDecoder {
     this.currentContext = null
     this.suspendedContexts = []
     this.systemViewContextCatalog.clear()
+    this.systemViewDurations.clear()
     this.tickOrigin = null
     this.latestSystemViewTick = 0n
     this.lastNumericTimestampMs = null

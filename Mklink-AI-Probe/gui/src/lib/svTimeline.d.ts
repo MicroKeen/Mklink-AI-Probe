@@ -41,3 +41,9 @@ export class SvTimeline {
 }
 
 export function exactTickFromOffset(origin: bigint, offset: number): string
+
+export class LiveFollowClock {
+  constructor(end: number, now: number, unitsPerMs: number)
+  receive(end: number, now: number): void
+  advance(now: number, span: number): number
+}

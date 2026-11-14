@@ -1256,6 +1256,37 @@ describe('StreamDecoder worker controller', () => {
     now.mockRestore()
   })
 
+  it('evicts exact duration statistics with the interval ring and clears them on reset', () => {
+    const { decoder, messages } = setup()
+    decoder.handle({ type: 'configure', capacity: 3, channelCount: 1 })
+    const send = (seq: number, id: number, start: number, duration: number) => {
+      decoder.handle({ type: 'frame', buffer: frame(BigInt(seq), 2, systemViewRecords(
+        { kind: 4, taskId: id, ticks: BigInt(start), timeUs: start },
+        { kind: 5, taskId: id, ticks: BigInt(start + duration), timeUs: start + duration },
+      ), StreamType.SYSTEMVIEW), connectionGeneration: 1, frameTicket: seq })
+    }
+    const query = () => {
+      decoder.handle({ type: 'visible-range', requestId: 1, start: 0, end: 1000, pixelWidth: 100 })
+      const visible = messages.at(-1)
+      if (visible?.type !== 'systemview-visible') throw new Error('expected visible data')
+      return visible
+    }
+    send(1, 1, 10, 2)
+    send(2, 2, 20, 4)
+    send(3, 1, 30, 6)
+    send(4, 1, 40, 8)
+    expect(query().contexts.find(c => c.id === 1)).toMatchObject({
+      count: 2, totalTicks: 14, minTicks: 6, p25Ticks: 6.5, p50Ticks: 7, p75Ticks: 7.5, maxTicks: 8,
+    })
+    send(5, 1, 50, 10)
+    const wrapped = query()
+    expect(wrapped.contexts.find(c => c.id === 2)).toMatchObject({ count: 0, totalTicks: 0 })
+    expect(wrapped.contexts.find(c => c.id === 1)).toMatchObject({ count: 3, totalTicks: 24, p50Ticks: 8 })
+    decoder.handle({ type: 'reset' })
+    send(1, 1, 5, 3)
+    expect(query().contexts).toEqual([expect.objectContaining({ count: 1, totalTicks: 3, minTicks: 3, maxTicks: 3 })])
+  })
+
   it('keeps context statistics cumulative when the visible range moves', () => {
     const { decoder, messages } = setup()
     decoder.handle({ type: 'configure', capacity: 32, channelCount: 1 })

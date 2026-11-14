@@ -48,7 +48,7 @@ const mocks = vi.hoisted(() => ({
     zoom: vi.fn(), renderInspection: vi.fn(),
     onViewChange: null as (() => void) | null,
     pauseRendering: vi.fn(), resumeRendering: vi.fn(), renderFrame: vi.fn(),
-    setPrefilteredIntervals: vi.fn(),
+    setPrefilteredIntervals: vi.fn(), setFollowMode: vi.fn(),
   },
   importLog: vi.fn(),
   api: {
@@ -76,6 +76,7 @@ vi.mock('../../lib/svTimeline', () => ({
     setData() {}
     setTickOrigin() {}
     setPrefilteredIntervals = mocks.timeline.setPrefilteredIntervals
+    setFollowMode = mocks.timeline.setFollowMode
     renderFrame = mocks.timeline.renderFrame
     setWindowSize() {}
     pauseRendering = mocks.timeline.pauseRendering
@@ -393,6 +394,30 @@ describe('SystemViewTab asynchronous lifecycle', () => {
     wrapper.unmount()
   })
 
+  it('paints between coalesced geometry queries and refreshes interactions immediately', async () => {
+    const now = vi.spyOn(performance, 'now').mockReturnValue(1000)
+    const wrapper = mount(SystemViewTab, { props: { deviceConnected: true } })
+    await flushPromises()
+    const render = (time: number, reasons: string[]) => {
+      now.mockReturnValue(time)
+      mocks.scheduler.render?.(new Set(reasons))
+    }
+    render(1000, ['data'])
+    publishVisibleEvent(1_000_000, mocks.binary.requestVisibleRange.mock.calls.at(-1)![0])
+    await nextTick()
+    for (const time of [1016, 1033, 1049]) render(time, ['data'])
+    expect(mocks.binary.requestVisibleRange).toHaveBeenCalledTimes(1)
+    expect(mocks.timeline.renderFrame).toHaveBeenCalledTimes(4)
+    render(1050, []) // pending refresh must survive a frame with no new data
+    expect(mocks.binary.requestVisibleRange).toHaveBeenCalledTimes(2)
+    publishVisibleEvent(1_000_000, mocks.binary.requestVisibleRange.mock.calls.at(-1)![0])
+    await nextTick()
+    render(1051, ['zoom'])
+    expect(mocks.binary.requestVisibleRange).toHaveBeenCalledTimes(3)
+    wrapper.unmount()
+    now.mockRestore()
+  })
+
   it('keeps the startup Timeline cadence fixed until the live window is filled', async () => {
     mocks.dash.getStatus.mockResolvedValue({ running: false })
     const wrapper = mount(SystemViewTab, { props: { deviceConnected: true } })
@@ -641,7 +666,22 @@ describe('SystemViewTab asynchronous lifecycle', () => {
     expect(mocks.scheduler.start).toHaveBeenCalledTimes(2)
     expect(mocks.scheduler.invalidate).toHaveBeenCalledWith('data')
     expect(mocks.timeline.resumeRendering).toHaveBeenCalled()
+    expect(mocks.timeline.setFollowMode).toHaveBeenLastCalledWith(true)
     expect(mocks.dash.resume).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('binds a new canvas when a disconnected page reconnects without a clock change', async () => {
+    const wrapper = mount(SystemViewTab, { props: { deviceConnected: false } })
+    await flushPromises()
+    expect(mocks.timeline.construct).not.toHaveBeenCalled()
+    await wrapper.setProps({ deviceConnected: true })
+    await nextTick()
+    expect(mocks.timeline.construct).toHaveBeenCalledOnce()
+    await wrapper.setProps({ deviceConnected: false })
+    await wrapper.setProps({ deviceConnected: true })
+    await nextTick()
+    expect(mocks.timeline.construct).toHaveBeenCalledTimes(2)
     wrapper.unmount()
   })
 

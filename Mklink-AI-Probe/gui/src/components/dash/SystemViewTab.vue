@@ -529,6 +529,8 @@ const tlCanvas = ref<HTMLCanvasElement | null>(null)
 const tlTip = ref<HTMLDivElement | null>(null)
 const tlLegend = ref<HTMLDivElement | null>(null)
 let tlInstance: SvTimeline | null = null
+let boundTimelineCanvas: HTMLCanvasElement | null = null
+let boundTimelineClock = 0
 let renderScheduler: RenderScheduler | null = null
 const timelineFrameRate = new AdaptiveFrameRateController()
 // Keep the initial fill cadence stable. The viewport still follows the newest
@@ -539,6 +541,8 @@ let timelineStartupLocked = true
 let visibleRequestId = 0
 let visibleRequestInFlight = false
 let visibleRequestPending = false
+let lastVisibleRequestAt = Number.NEGATIVE_INFINITY
+const VISIBLE_QUERY_INTERVAL_MS = 50
 let pendingTimelineInspection = false
 let timelineInspectionRequestId = 0
 let latestBinaryTime: number | null = null
@@ -599,6 +603,7 @@ function requestTimelineVisibleRange(
   if (visibleRequestInFlight) return
   visibleRequestInFlight = true
   visibleRequestPending = false
+  lastVisibleRequestAt = performance.now()
   timelineInspectionRequestId = inspection ? visibleRequestId + 1 : 0
   binaryStream.requestVisibleRange(++visibleRequestId, start, end, pixelWidth, undefined, undefined,
     inspection ? 0 : TABLE_UPDATE_INTERVAL_MS)
@@ -643,21 +648,7 @@ onMounted(() => {
   window.addEventListener(DESKTOP_SETTINGS_CHANGED_EVENT, syncRttAddressFromSettings)
   ++operationGeneration
   refreshLogList()
-  if (tlCanvas.value && tlTip.value && tlLegend.value) {
-    tlInstance = new SvTimeline(
-      { canvas: tlCanvas.value, tooltip: tlTip.value, legend: tlLegend.value, onViewChange: onTimelineViewChange },
-      {
-        intervals: tlGetIntervals(),
-        unit: meta.cpuFreq ? 'us' : 'tk',
-        tickHz: meta.cpuFreq || undefined,
-        tickOrigin: binaryTickOrigin,
-        follow: true,
-        windowSize: windowUs.value,
-        renderPaused: renderPaused.value,
-        emptyText: tr('窗口内无任务', 'No tasks in this window'),
-      },
-    )
-  }
+  rebuildTimeline()
   renderScheduler = new RenderScheduler((reasons) => {
     // The timeline itself interpolates toward the newest follow range. Keep
     // this repaint loop independent from worker delivery so the ruler moves
@@ -670,9 +661,16 @@ onMounted(() => {
       tlCanvas.value?.clientWidth || 800,
     )
     renderScheduler?.setFrameRate(nextFrameRate)
-    if (!reasons.has('data') && !reasons.has('zoom') && !reasons.has('resize')) return
+    const interacting = reasons.has('zoom') || reasons.has('resize')
+    if (!reasons.has('data') && !interacting && !visibleRequestPending) return
     if (offlineMode.value) {
       if (reasons.has('data')) tlInstance?.setData(tlGetIntervals())
+      return
+    }
+    // Geometry extraction need not run at canvas FPS. Keep only one pending
+    // refresh; interaction is immediate and acquisition remains unthrottled.
+    if (!interacting && renderStarted - lastVisibleRequestAt < VISIBLE_QUERY_INTERVAL_MS) {
+      visibleRequestPending = true
       return
     }
     const manualView = tlInstance && !tlInstance.follow ? tlInstance.getViewRange?.() : null
@@ -745,25 +743,34 @@ watch(windowUs, () => {
   scheduleTimelineFlush()
 })
 watch(language, () => tlInstance?.setLabels({ emptyText: tr('窗口内无任务', 'No tasks in this window') }))
-// cpuFreq 变了切换单位（重建）
-watch(() => meta.cpuFreq, () => {
-  if (tlCanvas.value && tlTip.value && tlLegend.value) {
+// The canvas is also replaced when reconnecting or entering offline replay.
+// Rebind after Vue installs its new DOM instead of painting the detached canvas.
+function rebuildTimeline() {
+  if (!tlCanvas.value || !tlTip.value || !tlLegend.value) {
     tlInstance?.destroy()
-    tlInstance = new SvTimeline(
-      { canvas: tlCanvas.value, tooltip: tlTip.value, legend: tlLegend.value, onViewChange: onTimelineViewChange },
-      {
-        intervals: tlGetIntervals(),
-        unit: meta.cpuFreq ? 'us' : 'tk',
-        tickHz: meta.cpuFreq || undefined,
-        tickOrigin: binaryTickOrigin,
-        follow: true,
-        windowSize: windowUs.value,
-        renderPaused: renderPaused.value,
-        emptyText: tr('窗口内无任务', 'No tasks in this window'),
-      },
-    )
+    tlInstance = null
+    return
   }
-})
+  if (tlInstance && boundTimelineCanvas === tlCanvas.value && boundTimelineClock === meta.cpuFreq) return
+  tlInstance?.destroy()
+  boundTimelineCanvas = tlCanvas.value
+  boundTimelineClock = meta.cpuFreq
+  tlInstance = new SvTimeline(
+    { canvas: tlCanvas.value, tooltip: tlTip.value, legend: tlLegend.value, onViewChange: onTimelineViewChange },
+    {
+      intervals: tlGetIntervals(),
+      unit: meta.cpuFreq ? 'us' : 'tk',
+      tickHz: meta.cpuFreq || undefined,
+      tickOrigin: binaryTickOrigin,
+      follow: true,
+      windowSize: windowUs.value,
+      renderPaused: renderPaused.value,
+      emptyText: tr('窗口内无任务', 'No tasks in this window'),
+    },
+  )
+  scheduleTimelineFlush()
+}
+watch([tlCanvas, () => meta.cpuFreq], rebuildTimeline, { flush: 'post' })
 
 const MAX_EVENTS = 800
 const ANALYSIS_EVENTS = 100_000
@@ -1044,12 +1051,19 @@ watch(binaryStream.systemViewVisible, visible => {
   const startTicks = new BigUint64Array(visible.startTicks)
   const endTicks = new BigUint64Array(visible.endTicks)
   const nextIntervals: TaskInterval[] = []
+  const laneIds = new Map<string, number>()
   for (let index = 0; index < visible.intervalCount; index++) {
-    const context = ensureContext(contextTypes[index] || 1, taskIds[index])
+    const type = contextTypes[index] || 1
+    const key = `${type}:${taskIds[index]}`
+    let laneId = laneIds.get(key)
+    if (laneId === undefined) {
+      laneId = ensureContext(type, taskIds[index]).id
+      laneIds.set(key, laneId)
+    }
     const start = starts[index] * tickScale
     const end = ends[index] * tickScale
     nextIntervals.push({
-      taskId: context.id, start, end,
+      taskId: laneId, start, end,
       startTk: startTicks[index], endTk: endTicks[index],
     })
   }
@@ -1066,31 +1080,35 @@ watch(binaryStream.systemViewVisible, visible => {
     return
   }
 
-  for (const context of Object.values(taskStats)) {
-    context.runUs = 0
-    context.switches = 0
-  }
-  const summaries = visible.contexts || []
-  const totalTicks = summaries.reduce((sum, context) => sum + context.totalTicks, 0)
-  exactRuntimeRows.value = summaries.map(contextSummary => {
-    const context = ensureContext(contextSummary.type, contextSummary.id)
-    context.prio = contextSummary.priority
-    context.stackBase = contextSummary.stackBase
-    context.stackSize = contextSummary.stackSize
-    context.runUs = contextSummary.totalTicks * tickScale
-    context.switches = contextSummary.count
-    return {
-      ...context,
-      count: contextSummary.count,
-      minUs: contextSummary.minTicks * tickScale,
-      p25Us: contextSummary.p25Ticks * tickScale,
-      p50Us: contextSummary.p50Ticks * tickScale,
-      p75Us: contextSummary.p75Ticks * tickScale,
-      maxUs: contextSummary.maxTicks * tickScale,
-      totalUs: contextSummary.totalTicks * tickScale,
-      pct: totalTicks > 0 ? contextSummary.totalTicks / totalTicks * 100 : 0,
+  const now = performance.now()
+  const updateTables = now - lastTableUpdate >= TABLE_UPDATE_INTERVAL_MS
+  if (updateTables) {
+    for (const context of Object.values(taskStats)) {
+      context.runUs = 0
+      context.switches = 0
     }
-  }).sort((a, b) => b.totalUs - a.totalUs || a.name.localeCompare(b.name))
+    const summaries = visible.contexts || []
+    const totalTicks = summaries.reduce((sum, context) => sum + context.totalTicks, 0)
+    exactRuntimeRows.value = summaries.map(contextSummary => {
+      const context = ensureContext(contextSummary.type, contextSummary.id)
+      context.prio = contextSummary.priority
+      context.stackBase = contextSummary.stackBase
+      context.stackSize = contextSummary.stackSize
+      context.runUs = contextSummary.totalTicks * tickScale
+      context.switches = contextSummary.count
+      return {
+        ...context,
+        count: contextSummary.count,
+        minUs: contextSummary.minTicks * tickScale,
+        p25Us: contextSummary.p25Ticks * tickScale,
+        p50Us: contextSummary.p50Ticks * tickScale,
+        p75Us: contextSummary.p75Ticks * tickScale,
+        maxUs: contextSummary.maxTicks * tickScale,
+        totalUs: contextSummary.totalTicks * tickScale,
+        pct: totalTicks > 0 ? contextSummary.totalTicks / totalTicks * 100 : 0,
+      }
+    }).sort((a, b) => b.totalUs - a.totalUs || a.name.localeCompare(b.name))
+  }
   // The Worker owns retained history and returns a pixel-bounded selection.
   // Re-merging/sorting old selections on the UI thread both duplicates its
   // work and retains obsolete downsampled intervals when zooming.
@@ -1101,8 +1119,7 @@ watch(binaryStream.systemViewVisible, visible => {
   tlInstance?.setPrefilteredIntervals(tlGetIntervals())
   if (visibleRequestPending) renderScheduler?.invalidate('data')
 
-  const now = performance.now()
-  if (now - lastTableUpdate >= TABLE_UPDATE_INTERVAL_MS) {
+  if (updateTables) {
     lastTableUpdate = now
     eventList.value = visible.events.map(event => ({
       ...event,
@@ -1222,6 +1239,7 @@ function clearAll() {
   visibleRequestInFlight = false
   visibleRequestPending = false
   eventList.value = []
+  lastVisibleRequestAt = Number.NEGATIVE_INFINITY
   analysisEvents = []
   analysisBufferCount.value = 0
   intervals.value = []
@@ -1590,6 +1608,15 @@ function onPauseRender() {
 }
 function onResumeRender() {
   renderPaused.value = false
+  // Discard pending history inspection and return to fresh live data. Otherwise
+  // a paused zoom keeps querying an old range after it has left the ring.
+  visibleRequestId++
+  visibleRequestInFlight = false
+  visibleRequestPending = false
+  pendingTimelineInspection = false
+  timelineInspectionRequestId = 0
+  lastVisibleRequestAt = Number.NEGATIVE_INFINITY
+  if (!offlineMode.value) tlInstance?.setFollowMode(true)
   tlInstance?.resumeRendering()
   renderScheduler?.start()
   renderScheduler?.invalidate('data')
