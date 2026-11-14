@@ -56,8 +56,10 @@ python -m mklink resources status --port COM9 --json
 
 ### Windows 覆盖安装时的旧任务记录
 
-新版 V0.5.0 安装器在写入新程序后检查当前用户的共享后台任务记录。
-请先退出桌面、Skill/MCP 和独立后台；只要仍有后台持有锁，就保留原记录，不强行清理。
+新版 V0.5.0 覆盖安装会自动强制结束当前用户的旧 MKLink 桌面、Skill/MCP 和独立后台，
+包括没有新管理接口的旧版本；正在进行的烧录、采集和调试会随之结束。AI 客户端本身及
+无关 Python 程序保留。安装后重新打开 MKLink；Skill/MCP 若未自动重连，重载其连接。
+安装器在写入新程序后检查共享后台任务记录；仍有后台持锁时保留原记录，不强行清理。
 格式正确的记录（包括结果未知的任务）保持原样，带 UTF-8 BOM 的 JSON 也可正常读取。
 无法解析的 `jobs.json` 会先按原始字节备份到 runtime 目录的 `history-backups`，
 保存 SHA-256 和来源清单后再初始化。结果记入 `installation-history-report.json`。

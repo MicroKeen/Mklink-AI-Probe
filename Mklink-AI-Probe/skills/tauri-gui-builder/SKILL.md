@@ -38,6 +38,11 @@ Never distribute the executable alone. Unix packaging retains its existing
 tree as well as the executables, and verify startup and normal shutdown with
 only Windows directories on PATH. Keep the existing process ownership and
 installer file-in-use checks; do not reuse another process's temporary files.
+Windows overwrite setup terminates the current user's MKLink desktop and
+Skill/MCP processes before replacement, including legacy versions without a
+shutdown API. This intentionally ends active MKLink tasks. It must preserve
+unrelated Python/AI clients and other users' processes. Verify legacy process
+cleanup and configuration preservation during actual overwrite qualification.
 
 The 0.2.0 release sidecar and public Skill ZIP must contain the repository-local
 algorithm assets under `_maintainer/local/builtin_flm`. This directory is
