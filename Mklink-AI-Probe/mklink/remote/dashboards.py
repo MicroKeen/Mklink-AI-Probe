@@ -912,7 +912,8 @@ class SystemViewStreamManager:
         self._paused = threading.Event()
         self._paused.set()  # not paused
         self._stop_event = threading.Event()
-        self._history: list[dict] = []
+        from mklink.remote.systemview_history import SystemViewHistory
+        self._history = SystemViewHistory()
         self._history_lock = threading.RLock()
         self._history_session = uuid.uuid4().hex
         self._history_seq = 0
@@ -1374,6 +1375,7 @@ class SystemViewStreamManager:
             self._cpu_freq_source = source
             with self._history_lock:
                 self._ensure_event_time_fields(self._history)
+                self._history.reindex_times()
             return freq
 
         if p.cpu_freq:
@@ -1409,6 +1411,7 @@ class SystemViewStreamManager:
             self._cpu_freq_source = source
             with self._history_lock:
                 self._ensure_event_time_fields(self._history)
+                self._history.reindex_times()
         return freq
 
     def _profile_cpu_freq_default(self, device) -> int:
@@ -1458,21 +1461,8 @@ class SystemViewStreamManager:
                 ev["cpu_delta_us"] = delta * 1_000_000.0 / freq
 
     def _trim_history(self) -> None:
-        if self._history_buffer_us > 0:
-            latest_us = None
-            for ev in reversed(self._history):
-                t_us = ev.get("t_us")
-                if isinstance(t_us, (int, float)):
-                    latest_us = t_us
-                    break
-            if latest_us is not None:
-                cutoff = latest_us - self._history_buffer_us
-                self._history = [
-                    ev for ev in self._history
-                    if not isinstance(ev.get("t_us"), (int, float)) or ev["t_us"] >= cutoff
-                ]
-        if len(self._history) > self._max_history:
-            self._history = self._history[-self._max_history:]
+        self._history.trim(max_count=self._max_history,
+                           window_us=self._history_buffer_us)
 
     def _start_recording(self, device, extra_meta: dict | None = None) -> None:
         with self._recording_lock:
