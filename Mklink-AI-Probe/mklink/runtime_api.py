@@ -580,9 +580,12 @@ class RuntimeGate:
             check_connection()
         except HTTPException as exc:
             return await reject(exc.status_code, exc.detail)
-        if path == '/api/device/disconnect':
+        if path in {'/api/device/disconnect', '/api/device/reboot'}:
             async def disconnect():
                 check_connection()
+                if path == '/api/device/reboot':
+                    await c.require_identity_async()
+                    check_connection()
                 return await self.app(scope, receive, send)
             try:
                 return await c.run_lifecycle(path, disconnect, session_id=session_id)
@@ -677,7 +680,7 @@ class RuntimeGate:
                 c.attach_lock.locked() or any(key != session_id for key in c.target_sessions)):
             return await reject(409, 'Detach other shared clients before changing the peripheral catalog')
         if path in {"/api/symbols/c-layout",
-                    "/api/device/reboot", "/api/probe/firmware-upgrade"} and (c.target_sessions or c.attach_lock.locked()):
+                    "/api/probe/firmware-upgrade"} and (c.target_sessions or c.attach_lock.locked()):
             return await reject(409, {
                 'reason': 'shared_clients_attached',
                 'message': 'Other runtime clients are attached; open Backend Management to end their sessions before releasing the shared device',

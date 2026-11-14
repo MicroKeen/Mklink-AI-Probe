@@ -366,7 +366,9 @@ export class SvTimeline {
     };
     const progress = Math.min(1, Math.max(0,
       (timestamp - this._followTransitionAt) / FOLLOW_INTERPOLATION_MS));
-    const ease = 1 - Math.pow(1 - progress, 3);
+    // Constant-speed movement avoids a repeated accelerate/brake cycle at
+    // every Worker batch. Only interpolate delivered bounds, never events.
+    const ease = progress;
     return {
       start: from.start + (this._followTarget.start - from.start) * ease,
       end: from.end + (this._followTarget.end - from.end) * ease,

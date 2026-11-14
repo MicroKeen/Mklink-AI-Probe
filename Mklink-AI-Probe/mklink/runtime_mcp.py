@@ -381,8 +381,8 @@ def build_server():
     def reboot_probe(confirm: StrictBool = False) -> dict:
         """Reboot the selected downloader after explicit approval, never the MCU.
 
-        Detaches this AI session first; other clients/captures must be released
-        explicitly. No automatic reconnect or retry after USB disappears.
+        Stops this probe's captures and ends its target sessions, including
+        other attached clients. No automatic reconnect or retry after USB disappears.
         """
         if confirm is not True:
             raise ValueError('Confirm the downloader reboot first')

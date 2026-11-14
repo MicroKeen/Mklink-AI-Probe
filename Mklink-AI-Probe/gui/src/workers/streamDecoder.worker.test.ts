@@ -1224,6 +1224,38 @@ describe('StreamDecoder worker controller', () => {
       ]))
   })
 
+  it('bounds live summary work while fresh inspection and a new session bypass the cache', () => {
+    const { decoder, messages } = setup()
+    const now = vi.spyOn(performance, 'now').mockReturnValue(0)
+    decoder.handle({ type: 'configure', capacity: 32, channelCount: 1 })
+    const send = (seq: bigint, tick: bigint) => decoder.handle({
+      type: 'frame', buffer: frame(seq, 2, systemViewRecords(
+        { kind: 4, taskId: 1, ticks: tick, timeUs: Number(tick) },
+        { kind: 5, taskId: 1, ticks: tick + 10n, timeUs: Number(tick) + 10 },
+      ), StreamType.SYSTEMVIEW), connectionGeneration: 1, frameTicket: Number(seq),
+    })
+    const query = (summaryIntervalMs = 200) => {
+      decoder.handle({ type: 'visible-range', requestId: 1, start: 0, end: 100, pixelWidth: 200, summaryIntervalMs })
+      const result = messages.at(-1)
+      if (result?.type !== 'systemview-visible') throw new Error('expected visible data')
+      return result
+    }
+    send(1n, 10n)
+    expect(query().contexts[0]?.count).toBe(1)
+    send(2n, 30n)
+    now.mockReturnValue(50)
+    expect(query().intervalCount).toBe(2) // drawing is always current
+    expect(query().contexts[0]?.count).toBe(1)
+    expect(query(0).contexts[0]?.count).toBe(2) // paused inspection
+    send(3n, 50n)
+    now.mockReturnValue(250)
+    expect(query().contexts[0]?.count).toBe(3)
+    decoder.handle({ type: 'configure', capacity: 32, channelCount: 1 })
+    send(1n, 10n)
+    expect(query().contexts[0]?.count).toBe(1)
+    now.mockRestore()
+  })
+
   it('keeps context statistics cumulative when the visible range moves', () => {
     const { decoder, messages } = setup()
     decoder.handle({ type: 'configure', capacity: 32, channelCount: 1 })

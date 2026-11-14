@@ -66,6 +66,13 @@ Revision: $Rev: 6249 $
 #define SEGGER_SYSVIEW_CONF_H
 #include "rtthread.h"
 
+// This RT-Thread adapter records from tasks and IRQs. BASEPRI may leave a
+// higher-priority recorder able to overwrite the shared static packet buffer.
+// Save/restore the port's full interrupt mask, including nested calls. NMI and
+// fault handlers must not call SystemView recording functions.
+#define SEGGER_SYSVIEW_LOCK()   { rt_base_t sv_irq_state = rt_hw_interrupt_disable();
+#define SEGGER_SYSVIEW_UNLOCK()   rt_hw_interrupt_enable(sv_irq_state); }
+
 /*********************************************************************
 *
 *       Defines, fixed
@@ -141,7 +148,7 @@ Revision: $Rev: 6249 $
 	#define SEGGER_SYSVIEW_RTT_BUFFER_SIZE      PKG_SEGGER_SYSVIEW_RTT_BUFFER_SIZE
 
 	#ifdef PKG_SEGGER_SYSVIEW_RTT_CHANNEL          
-		#define SEGGER_SYSVIEW_RTT_CHANNEL 1
+		#define SEGGER_SYSVIEW_RTT_CHANNEL PKG_SEGGER_SYSVIEW_RTT_CHANNEL
 	#endif
 
 	#ifdef PKG_SEGGER_SYSVIEW_USE_STATIC_BUFFER          

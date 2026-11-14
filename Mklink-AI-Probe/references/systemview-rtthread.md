@@ -85,6 +85,18 @@ RT-Thread 4.x / 5.x 兼容处理：通过公共对象头访问名称与链表；
 集成命令**不覆盖工程已有文件**。升级 Skill 后，已复制到工程的旧适配器不会
 自动改变；先比较并合并适配器修复，保留目标工程自己的时钟、内存和缓冲配置。
 
+### 事件损坏与中断锁
+
+静态事件缓冲由任务与 ISR 共用。若使用 BASEPRI 临界区，所有调用 SystemView
+的中断都必须被它屏蔽；例如阈值 `0x20` 无法屏蔽优先级 `0x10` 的 UART，
+重入可能损坏原始字节并造成伪 ISR、解析丢弃，即使 USB/MUX 没有丢帧。
+随包的 RT-Thread 配置使用保存/恢复中断状态的 `rt_hw_interrupt_disable/enable`，
+Cortex-M 端为可嵌套 PRIMASK；不改 IRQ 优先级。NMI/故障处理不得调用这些记录接口。
+已有工程需合并锁配置并重编译目标应用；仅升级上位机不能修复已经损坏的流。
+
+GUI 的“时间窗口”是 Timeline 可见跨度，不是刷新周期。实时滚动与统计表刷新独立；
+暂停显示、缩放和平移不停止目标采集。实际丢失仍需检查各层计数，不用插值补造事件。
+
 ### 初始化顺序与多个 RTT 通道
 
 打包的 SystemView 核心在定义 `SEGGER_RTT_SECTION` 时会在初始化中调用
@@ -190,9 +202,14 @@ MCP（Agent）等价：`systemview_start` / `capture_systemview` / `systemview_a
 |---|---|
 | `未找到 RTT 控制块` | 在 RTOS Trace 中 Auto Search；确认 AXF/ELF 已加载或工程构建产物可被自动发现，并检查 `rtt-integrate` 和 `HEAP_END`；必要时重连探针 |
 | `incremental RTT firmware support` | 配套固件缺能力，更新后显式重连；不发送 raw 握手绕过 |
-| 启动后一直无数据 | 检查 RTT 地址、通道 1、`USE_SYSTEMVIEW` 和目标是否正在运行；后端会在超时后报告错误，不会永久停在 starting |
+| 启动后一直无数据 | 检查 RTT 地址、目标配置的 SystemView 通道、`USE_SYSTEMVIEW` 和目标是否正在运行；后端会在超时后报告错误，不会永久停在 starting |
 | 解码 0 事件 / `未同步` | 确认 `USE_SYSTEMVIEW` 已定义、固件已重烧；`rt_trace_init` 自动注册（看启动 `kprintf`）|
 | 任务名全 `0x...` | 检查 axf 已加载；`task_id` 是否还原成真实指针（`ram_base` 对不对）|
 | µs/秒率为空 | `SystemCoreClock` 读取失败（axf 未加载或符号缺失）→ 回退 ticks |
 | ISR 段为空 | 默认关闭；需要时定义 `SYSVIEW_TRACE_ISR` 并检查事件率与丢失计数 |
 | 丢包计数大 | 分别检查目标 overflow/drop、parser dropped、MUX 丢失；调大缓冲或降低事件率不能修正损坏的 TASK_INFO，解析丢弃也不能直接归因于传输丢包 |
+
+高事件率与 SuperWatch 并行时，1 KiB 目标 RTT 缓冲可能无法吸收短暂调度抖动。
+可按目标 RAM 余量增大 `PKG_SEGGER_SYSVIEW_RTT_BUFFER_SIZE`（如 8 KiB），同步
+`.config` 与实际编译的 `rtconfig.h`，重编后核对栈、堆及全部任务正常启动。
+保留非阻塞记录；不要为避免丢失而让目标在临界区等待主机读取。

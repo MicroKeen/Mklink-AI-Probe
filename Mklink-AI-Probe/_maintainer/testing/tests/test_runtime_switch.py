@@ -460,6 +460,39 @@ def test_disconnect_releases_physical_ownership_but_not_backend(window):
     assert state['last_device_connection']['port'] == 'COM1'
 
 
+@pytest.mark.parametrize('capture', ['rtt', 'systemview', 'superwatch', 'vofa'])
+def test_explicit_reboot_stops_capture_retires_target_and_preserves_uart(window, capture):
+    client, control, device, state = window
+    managers = dict(dashboards.get_managers())
+    manager = managers[capture]
+    manager._running = True
+    order = []
+    def stop():
+        order.append('stop')
+        manager._running = False
+    manager.stop = Mock(side_effect=stop)
+    def reboot():
+        assert not manager.running
+        order.append('reboot')
+        device.connected = False
+    device.reboot = Mock(side_effect=reboot)
+    control.sessions['target'] = Session(state['project_root'], None, streams={capture})
+    control.sessions['uart'] = Session(state['project_root'], None, scope='uart')
+    control.created_streams[capture] = 'target'
+    with runtime.runtime_lock('owner.lock', B):
+        response = client.post('/api/device/reboot')
+        assert response.status_code == 200, response.text
+        assert response.json()['stopped'] == [capture]
+        assert order == ['stop', 'reboot']
+        assert set(control.sessions) == {'uart'}
+        assert control.info['probe_id'] == 'lobby'
+        assert state['device'] is None and state['device_generation'] == 1
+        assert dashboards.get_managers()['serial'] is managers['serial']
+        assert not control.created_streams
+        with runtime.runtime_lock('owner.lock', A):
+            pass
+
+
 def test_desktop_lease_and_presentation_socket_are_one_window(window):
     client, control, device, state = window
     client.post('/api/runtime/control/view', json={'client_id': 'desktop-parent'})

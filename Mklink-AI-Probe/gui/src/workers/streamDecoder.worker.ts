@@ -30,7 +30,7 @@ export type WorkerInput =
       connectionGeneration: number
       frameTicket: number
     }
-  | { type: 'visible-range'; requestId: number; start: number; end: number; pixelWidth: number; formulas?: string[]; gapThresholdMs?: number }
+  | { type: 'visible-range'; requestId: number; start: number; end: number; pixelWidth: number; formulas?: string[]; gapThresholdMs?: number; summaryIntervalMs?: number }
   | { type: 'waveform-detail'; enabled: boolean }
   | { type: 'waveform-capacity'; capacity: number; requestId?: number }
   | { type: 'history-snapshot'; requestId: number }
@@ -281,6 +281,8 @@ export class StreamDecoder {
   private systemViewContextCatalog = new Map<string, SystemViewContextMetadata>()
   private tickOrigin: bigint | null = null
   private latestSystemViewTick = 0n
+  private systemViewSummaryCache: SystemViewContextSummary[] | null = null
+  private systemViewSummaryAt = Number.NEGATIVE_INFINITY
   private lastNumericTimestampMs: number | null = null
   private lastNumericSpacingMs: number | null = null
   private timeIndexScratch: Int32Array | null = null
@@ -399,6 +401,8 @@ export class StreamDecoder {
       this.currentContext = null
       this.suspendedContexts = []
       this.systemViewContextCatalog.clear()
+      this.systemViewSummaryCache = null
+      this.systemViewSummaryAt = Number.NEGATIVE_INFINITY
       this.tickOrigin = null
       this.latestSystemViewTick = 0n
       this.lastNumericTimestampMs = null
@@ -1253,12 +1257,24 @@ export class StreamDecoder {
       // Context statistics describe the retained trace, not just the pixels
       // currently visible in the timeline. Keeping this independent from the
       // viewport prevents Runtime counts from restarting as follow advances.
-      contexts: this.buildSystemViewContextSummaries(),
+      contexts: this.systemViewContextSummaries(message.summaryIntervalMs),
     }
     this.post(output, [
       output.taskIds, output.contextTypes, output.starts, output.ends,
       output.startTicks, output.endTicks,
     ])
+  }
+
+  private systemViewContextSummaries(intervalMs = 0): SystemViewContextSummary[] {
+    const now = performance.now()
+    // Live tables refresh at 5 Hz. Do not sort the entire retained trace on
+    // every canvas frame. Inspection/export requests keep exact fresh results.
+    if (!this.systemViewSummaryCache || !(intervalMs > 0)
+      || now - this.systemViewSummaryAt >= Math.min(intervalMs, 1000)) {
+      this.systemViewSummaryCache = this.buildSystemViewContextSummaries()
+      this.systemViewSummaryAt = now
+    }
+    return this.systemViewSummaryCache
   }
 
   private buildSystemViewContextSummaries(): SystemViewContextSummary[] {
@@ -1315,6 +1331,8 @@ export class StreamDecoder {
   }
 
   private resetSession(): void {
+    this.systemViewSummaryCache = null
+    this.systemViewSummaryAt = Number.NEGATIVE_INFINITY
     this.frozenRing = null
     this.exactSampleTimes = null
     this.nextSampleOrdinal = null

@@ -493,15 +493,21 @@ describe('SvTimeline continuous filtering', () => {
       _draw: vi.fn(),
     })
 
+    timeline._followFrom = { start: 0, end: 100 }
+    timeline.renderFrame(25)
+    expect(timeline.viewStart).toBe(5)
     timeline.renderFrame(50)
+    expect(timeline.viewStart).toBe(10)
     expect(timeline.viewStart).toBeGreaterThan(0)
     expect(timeline.viewStart).toBeLessThan(20)
     expect(timeline.viewEnd).toBeGreaterThan(100)
-    expect(timeline._draw).toHaveBeenCalledOnce()
+    expect(timeline._draw).toHaveBeenCalledTimes(2)
 
     timeline.renderFrame(100)
     expect([timeline.viewStart, timeline.viewEnd]).toEqual([20, 120])
     expect(timeline._followTarget).toBeNull()
+    timeline.renderFrame(200)
+    expect(timeline.viewEnd).toBe(120) // no extrapolated target data
   })
 
   it('restarts follow interpolation from the displayed frame for each data batch', () => {

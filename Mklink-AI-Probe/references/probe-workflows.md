@@ -13,7 +13,7 @@
 | `probe_control` | `setting="auto_scan"/"beep"/"auto_follow_vref"`、布尔 `enabled`、`confirm_user=true`。蜂鸣器开启后需明确关闭；扫描开关改变探针发现行为。 |
 | `set_power_on` | `voltage_mv=1800/3300/5000`，每次先获用户具体电压确认，再传 `confirm_user=true`；5 V 另须 `confirm_5v=true`。 |
 | `set_power_off` | 每次确认断电后传 `confirm_user=true`。 |
-| `reboot_probe` | `confirm=true`，重启下载器而非 MCU；先退出本 AI 订阅，其他客户端和采集仍会阻止重启。不自动重连或重发。 |
+| `reboot_probe` | `confirm=true`，重启所选下载器而非 MCU；主动停止该探针的采集并结束其目标订阅，其他下载器不受影响。已接受的烧录操作先完成，不自动重连或重发。 |
 | `isp_link_probe` | `baud_rate=115200/1000000/2000000/5000000/10000000`、`duration_ms=1000..120000`、可选 `strict=false`。目标预先处于匹配波特率的 ROM ISP；释放独立 UART 客户端。 |
 
 所有操作要求采集空闲，不抢停任务。配置的 `acknowledged` 只确认固件返回值，

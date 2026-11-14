@@ -378,7 +378,7 @@ describe('SystemViewTab asynchronous lifecycle', () => {
     wrapper.unmount()
   })
 
-  it('keeps earlier envelope intervals while the follow viewport advances', async () => {
+  it('uses the latest worker envelope without retaining obsolete pixel selections', async () => {
     mocks.dash.getStatus.mockResolvedValue({ running: false })
     const wrapper = mount(SystemViewTab, { props: { deviceConnected: true } })
     await flushPromises()
@@ -389,7 +389,7 @@ describe('SystemViewTab asynchronous lifecycle', () => {
     await nextTick()
 
     const last = mocks.timeline.setPrefilteredIntervals.mock.calls.at(-1)?.[0] as Array<{ start: number }>
-    expect(last.map(interval => interval.start)).toEqual([100, 300])
+    expect(last.map(interval => interval.start)).toEqual([300])
     wrapper.unmount()
   })
 
@@ -398,15 +398,15 @@ describe('SystemViewTab asynchronous lifecycle', () => {
     const wrapper = mount(SystemViewTab, { props: { deviceConnected: true } })
     await flushPromises()
 
-    expect(mocks.scheduler.options).toEqual({ frameRate: 30, continuous: true })
+    expect(mocks.scheduler.options).toEqual({ frameRate: 60, continuous: true })
     mocks.scheduler.render?.(new Set(['data']))
-    expect(mocks.scheduler.setFrameRate).toHaveBeenLastCalledWith(30)
+    expect(mocks.scheduler.setFrameRate).toHaveBeenLastCalledWith(60)
 
     const firstRequestId = mocks.binary.requestVisibleRange.mock.calls.at(-1)?.[0] as number
     publishVisibleEvent(1_000_000, firstRequestId, 1)
     await nextTick()
     mocks.scheduler.render?.(new Set(['data']))
-    expect(mocks.scheduler.setFrameRate).toHaveBeenLastCalledWith(30)
+    expect(mocks.scheduler.setFrameRate).toHaveBeenLastCalledWith(60)
 
     const filledRequestId = mocks.binary.requestVisibleRange.mock.calls.at(-1)?.[0] as number
     publishVisibleEvent(1_000_000, filledRequestId, 10_000_000)

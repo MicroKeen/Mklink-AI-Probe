@@ -73,8 +73,8 @@
         <button class="btn-clear sv-tool-btn" @click="triggerImport">{{ tr('导入 JSONL', 'Import JSONL') }}</button>
         <button class="btn-clear sv-tool-btn" :disabled="IS_REMOTE || !currentJsonlPath" @click="exportLog(currentJsonlPath)">{{ tr('导出 JSONL', 'Export JSONL') }}</button>
         <button class="btn-clear sv-tool-btn" :disabled="IS_REMOTE || !currentSummaryPath" @click="exportLog(currentSummaryPath)">{{ tr('导出摘要', 'Export Summary') }}</button>
-        <label class="sv-window">
-          {{ tr('窗口', 'Window') }}
+        <label class="sv-window" :title="tr('Timeline 显示的时间跨度；实时连续滚动，不是刷新周期。', 'Time span shown by the continuously scrolling Timeline, not its refresh period.')">
+          {{ tr('时间窗口', 'Time window') }}
           <select v-model.number="windowUs">
             <option :value="500_000">0.5s</option>
             <option :value="1_000_000">1s</option>
@@ -116,6 +116,9 @@
       </div>
 
       <div class="sv-health-grid">
+        <div v-if="!offlineMode && eventCount >= 120 && taskCount === 0" class="sv-health-card warn" data-testid="systemview-channel-hint">
+          <b>{{ tr('尚未收到任务事件，请确认选择的是目标的 SystemView 通道，而非 RTT 文本或波形通道。', 'No task events received. Select the target SystemView channel, not an RTT text or waveform channel.') }}</b>
+        </div>
         <div v-if="!offlineMode && meta.waitingForEvents && dash.state.value === 'running'" data-testid="systemview-waiting" class="sv-health-card sv-waiting">
           <span>{{ tr('采集保持连接', 'Capture connected') }}</span>
           <b>{{ tr('等待目标事件；若目标已运行，请检查 SystemView 录制配置与通道。', 'Waiting for target events. If the target is running, check SystemView recording and channel configuration.') }}</b>
@@ -386,12 +389,8 @@ let analysisEvents: any[] = []
 const analysisBufferCount = ref(0)
 const taskStats = reactive<Record<number, TaskStat>>({})
 const intervals = shallowRef<TaskInterval[]>([])
-// The worker returns a pixel envelope for the requested viewport. Its bucket
-// boundaries move as the follow window advances, so replacing the previous
-// response makes whole groups of intervals disappear and reappear. Keep a
-// bounded live cache keyed by interval start and update it incrementally;
-// rendering still filters this cache to the current viewport.
-const visibleIntervalCache = new Map<string, TaskInterval>()
+// Retained intervals and viewport downsampling live in the Worker; the UI
+// holds only its current pixel envelope and exact retained-trace summaries.
 const exactRuntimeRows = shallowRef<any[]>([])
 let intervalState: SystemViewIntervalState = { currentTaskId: null, currentStart: null }
 const idleUs = ref(0)
@@ -535,9 +534,8 @@ const timelineFrameRate = new AdaptiveFrameRateController()
 // Keep the initial fill cadence stable. The viewport still follows the newest
 // event; only the intentional 60/30/20 FPS adaptation waits until one full
 // timeline window is available.
-const TIMELINE_STARTUP_FRAME_RATE = 30
+const TIMELINE_STARTUP_FRAME_RATE = 60
 let timelineStartupLocked = true
-let timelineVisibleItemCount = 0
 let visibleRequestId = 0
 let visibleRequestInFlight = false
 let visibleRequestPending = false
@@ -600,29 +598,8 @@ function requestTimelineVisibleRange(
   visibleRequestInFlight = true
   visibleRequestPending = false
   timelineInspectionRequestId = inspection ? visibleRequestId + 1 : 0
-  binaryStream.requestVisibleRange(++visibleRequestId, start, end, pixelWidth)
-}
-
-function intervalCacheKey(interval: TaskInterval): string {
-  const start = interval.startTk ?? interval.start
-  return `${interval.taskId}:${String(start)}`
-}
-
-function mergeVisibleIntervals(next: TaskInterval[], latestTime: number): TaskInterval[] {
-  const retainAfter = latestTime - ANALYSIS_BUFFER_US
-  for (const interval of next) {
-    if (interval.end >= retainAfter) visibleIntervalCache.set(intervalCacheKey(interval), interval)
-  }
-  for (const [key, interval] of visibleIntervalCache) {
-    if (interval.end < retainAfter) visibleIntervalCache.delete(key)
-  }
-  if (visibleIntervalCache.size > MAX_INTERVALS) {
-    const oldest = [...visibleIntervalCache.entries()]
-      .sort((a, b) => a[1].end - b[1].end)
-      .slice(0, visibleIntervalCache.size - MAX_INTERVALS)
-    for (const [key] of oldest) visibleIntervalCache.delete(key)
-  }
-  return [...visibleIntervalCache.values()].sort((a, b) => a.start - b.start || a.end - b.end)
+  binaryStream.requestVisibleRange(++visibleRequestId, start, end, pixelWidth, undefined, undefined,
+    inspection ? 0 : TABLE_UPDATE_INTERVAL_MS)
 }
 
 function resetTimelineRefreshPolicy(): void {
@@ -652,7 +629,9 @@ function observeTimelineFrameRate(
   return timelineFrameRate.observe({
     now,
     renderCostMs,
-    visibleItems: timelineVisibleItemCount,
+    // Each lane is already pixel-bounded by the Worker. A task/event count
+    // is not paint density; use measured canvas cost to choose 60/30/20 FPS.
+    visibleItems: 0,
     pixelWidth,
   })
 }
@@ -1043,14 +1022,6 @@ watch(binaryStream.systemViewVisible, visible => {
   }
   const inspectingPaused = renderPaused.value
   if (!inspectingPaused) latestBinaryTime = visible.latestTime
-  // candidateIntervalCount is the Worker scan cost, not the amount painted.
-  // HPM traces contain many 1 ms ISR intervals; using the scan count here
-  // incorrectly forces the live canvas to 20/30 FPS even when painting is
-  // cheap. The controller also observes measured paint cost below.
-  timelineVisibleItemCount = Math.max(
-    visible.intervalCount,
-    visible.eventCount,
-  )
   binaryTickOrigin = visible.tickOrigin
   const tickScale = meta.cpuFreq ? 1_000_000 / meta.cpuFreq : 1
   const taskIds = new Uint32Array(visible.taskIds)
@@ -1109,7 +1080,10 @@ watch(binaryStream.systemViewVisible, visible => {
       pct: totalTicks > 0 ? contextSummary.totalTicks / totalTicks * 100 : 0,
     }
   }).sort((a, b) => b.totalUs - a.totalUs || a.name.localeCompare(b.name))
-  intervals.value = mergeVisibleIntervals(nextIntervals, visible.latestTime * tickScale)
+  // The Worker owns retained history and returns a pixel-bounded selection.
+  // Re-merging/sorting old selections on the UI thread both duplicates its
+  // work and retains obsolete downsampled intervals when zooming.
+  intervals.value = nextIntervals
   lastT = visible.latestTime * tickScale
   tlInstance?.setTickOrigin(binaryTickOrigin)
   tlInstance?.setContexts?.(tlGetContexts(), { render: false })
@@ -1240,7 +1214,6 @@ function clearAll() {
   analysisEvents = []
   analysisBufferCount.value = 0
   intervals.value = []
-  visibleIntervalCache.clear()
   exactRuntimeRows.value = []
   Object.keys(taskStats).forEach(k => delete taskStats[Number(k)])
   intervalState = { currentTaskId: null, currentStart: null }

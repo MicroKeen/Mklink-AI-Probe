@@ -2433,7 +2433,7 @@ def create_app(
         from mklink.remote.dashboards import BRIDGE_DASHBOARD_TYPES, stop_bridge_dashboards
 
         async with _dashboard_start_lock(_state):
-            if _state.get("shared_runtime") or operation in ('debug-speed', 'config-clock', 'sleep-debug'):
+            if (_state.get("shared_runtime") and operation != 'reboot-probe') or operation in ('debug-speed', 'config-clock', 'sleep-debug'):
                 active = [name for name in BRIDGE_DASHBOARD_TYPES
                           if _dashboard_worker_alive(get_managers().get(name))]
                 if active:
@@ -2487,8 +2487,18 @@ def create_app(
                 await run_in_threadpool(device.reboot)
         finally:
             if device is not None and not device.connected:
+                _state['symbol_device'] = device
                 _state["device"] = None
                 _state["dispatcher"] = None
+                runtime = getattr(app.state, 'shared_runtime', None)
+                if runtime is not None:
+                    # Explicit reboot ends this probe's captures and target
+                    # leases. Other probes and UART-only sessions stay intact.
+                    _retire_target_connection(runtime)
+                    if getattr(runtime, 'binding', None) is not None:
+                        with runtime.binding.reserve('lobby') as commit:
+                            commit()
+                        _state['shared_probe_id'] = 'lobby'
         return {"status": "rebooted", "connected": False, "stopped": stopped}
 
     async def _erase_device(body, *, sector=False):
