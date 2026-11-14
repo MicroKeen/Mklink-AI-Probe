@@ -4,6 +4,49 @@ import SelectedSignals from './SelectedSignals.vue'
 import { useWatchWorkspace } from '../../composables/useWatchWorkspace'
 
 afterEach(() => vi.unstubAllGlobals())
+it('hides the selected row in a standalone variable view while keeping controlled waveform catalogs readable', async () => {
+  const workspace = { version: 2, groups: [{ id: 'main', name: 'Main', collapsed: false, height: 200 }], panes: [{ id: 'main' }], signals: {} }
+  vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ workspace, revision: '1' }) })))
+  const wrapper = mount(SelectedSignals, { props: { paths: ['rpm'], values: {}, hidden: new Set(['rpm']), hideRows: true } })
+  await flushPromises()
+  expect((wrapper.get('.selected-signal').element as HTMLElement).style.display).toBe('none')
+  await wrapper.setProps({ hideRows: false })
+  expect((wrapper.get('.selected-signal').element as HTMLElement).style.display).not.toBe('none')
+  wrapper.unmount()
+})
+it('publishes shared group updates to every SuperWatch instance without affecting RTT viewers', async () => {
+  const left = { mode: 'SuperWatch', setWorkspace: vi.fn() }, right = { mode: 'SuperWatch', setWorkspace: vi.fn() }, rtt = { mode: 'RTT', setWorkspace: vi.fn() }
+  ;(window as any).__waveformViewers = { left, right, rtt }
+  const workspace = { version: 2, groups: [{ id: 'main', name: 'Main', collapsed: false, height: 200 }], panes: [{ id: 'main' }], signals: {} }
+  vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ workspace, revision: 'shared' }) })))
+  await useWatchWorkspace().load()
+  expect(left.setWorkspace).toHaveBeenCalledWith(workspace)
+  expect(right.setWorkspace).toHaveBeenCalledWith(workspace)
+  expect(rtt.setWorkspace).not.toHaveBeenCalled()
+  delete (window as any).__waveformViewers
+})
+it('routes semantic styles through shared persistence, rejects invalid formulas and reports conflicts', async () => {
+  let fail = false
+  let workspace: any = { version: 2, defaultGroup: 'main', groups: [{ id: 'main', name: 'Main', collapsed: false, height: 200 }], panes: [{ id: 'main' }], signals: {} }
+  const request = vi.fn(async (_url: any, init?: RequestInit) => {
+    if (fail && init) return { ok: false, json: async () => ({ detail: 'revision conflict' }) }
+    if (init) workspace = JSON.parse(String(init.body)).workspace
+    return { ok: true, json: async () => ({ workspace: structuredClone(workspace), revision: 'r' }) }
+  })
+  vi.stubGlobal('fetch', request)
+  const first = mount(SelectedSignals, { props: { paths: ['rpm'], values: {} } })
+  const second = mount(SelectedSignals, { props: { paths: ['rpm'], values: {} } })
+  await flushPromises()
+  await first.vm.execute('signals.style.set', { paths: ['rpm'], formula: 'x * 2', alias: 'Speed' })
+  expect(second.vm.read().styles.rpm).toMatchObject({ formula: 'x * 2', alias: 'Speed' })
+  await expect(first.vm.execute('signals.style.set', { paths: ['rpm'], formula: 'window.alert(x)' })).rejects.toThrow()
+  await expect(first.vm.execute('signals.group.remove', { id: 'main' })).rejects.toThrow('final group')
+  fail = true
+  await expect(first.vm.execute('signals.style.set', { paths: ['rpm'], alias: 'Lost' })).rejects.toThrow('revision conflict')
+  expect(second.vm.read().styles.rpm.alias).toBe('Speed')
+  expect(request.mock.calls.every(([url]) => String(url).endsWith('/workspace'))).toBe(true)
+  first.unmount(); second.unmount()
+})
 it('configures a formula and individual color and merges a separated group without changing samples', async () => {
   let workspace:any={version:2,defaultGroup:'main',groups:[{id:'main',name:'波形',height:240},{id:'adc',name:'分离',height:200}],panes:[{id:'main'},{id:'adc'}],signals:{adc:{group:'adc',pane:'adc'}}}
   const request=vi.fn(async (_url:any,init?:RequestInit) => {

@@ -10,7 +10,10 @@ let revision = '', loading: Promise<void> | null = null
 function publish() {
   const snapshot = JSON.parse(JSON.stringify(workspace.value))
   ;(window as any).__MKLINK_WATCH_WORKSPACE__ = snapshot
-  ;(window as any).__waveformViewers?.SuperWatch?.setWorkspace?.(snapshot)
+  for (const [key, viewer] of Object.entries((window as any).__waveformViewers || {})) {
+    const instance = viewer as { mode?: string; setWorkspace?: (value: WatchWorkspace) => void }
+    if (key === 'SuperWatch' || instance.mode === 'SuperWatch') instance.setWorkspace?.(snapshot)
+  }
 }
 async function request(options?: RequestInit) {
   const response = await fetch(`${API_BASE}/api/dash/superwatch/workspace`, options)

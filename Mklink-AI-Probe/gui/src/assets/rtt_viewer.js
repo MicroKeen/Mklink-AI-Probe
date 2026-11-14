@@ -1,3 +1,24 @@
+// Each embedded panel owns its renderer state and DOM queries. The standalone
+// fallback keeps the historical mode key for integrations without panel IDs.
+function createWaveformViewer(CONFIG, root) {
+var nativeDocument = window.document;
+var document = root ? new Proxy(nativeDocument, { get: function(target, key) {
+  if (key === 'getElementById') return function(id) { return root.querySelector('[id="' + id + '"]'); };
+  if (key === 'querySelector' || key === 'querySelectorAll') return root[key].bind(root);
+  var value = Reflect.get(target, key, target);
+  return typeof value === 'function' ? value.bind(target) : value;
+} }) : nativeDocument;
+var translations = window.__mklinkCreateViewerI18n && root ? window.__mklinkCreateViewerI18n(CONFIG, document) : null;
+var t = translations ? translations.t : window.t;
+var viewerKey = CONFIG.panelId || CONFIG.mode;
+var signalSubset = null;
+var signalSubsetOverride = false;
+var configuredSignals = null;
+var panelFrameIds = new Set();
+var requestAnimationFrame = function(callback) {
+  var id = window.requestAnimationFrame(function(time) { panelFrameIds.delete(id); callback(time); });
+  panelFrameIds.add(id); return id;
+};
 // ============================================================
 // RingBuffer: Float64Array-based circular buffer (Task 7I)
 // Replaces Array push/shift with O(1) head/tail pointer ops.
@@ -223,20 +244,30 @@ var API_SW = API_BASE + '/api/dash/superwatch/';
 var viewerAbortController = new AbortController();
 
 function addViewerGlobalListener(target, type, listener) {
-  target.addEventListener(type, listener, { signal: viewerAbortController.signal });
+  target.addEventListener(type, function(event) {
+    if (root && /^key/.test(type) && !root.contains(event.target) && !root.contains(nativeDocument.activeElement)) return;
+    listener.call(this, event);
+  }, { signal: viewerAbortController.signal });
 }
 
 addViewerGlobalListener(window, 'mklink-theme-change', function() {
   syncViewerTheme(); drawChart(); drawMinimap();
 });
 
-window.MAX_POINTS = MAX_POINTS;
-window.RING_BUFFER_CAPACITY = RING_BUFFER_CAPACITY;
+if (!root) {
+  window.MAX_POINTS = MAX_POINTS;
+  window.RING_BUFFER_CAPACITY = RING_BUFFER_CAPACITY;
+}
 
 // ============================================================
 // State
 // ============================================================
 var FIELDS = {};
+var initialChannelColors = {};
+function channelDefaultColor(name, color) {
+  if (!Object.prototype.hasOwnProperty.call(initialChannelColors, name)) initialChannelColors[name] = color;
+  return initialChannelColors[name];
+}
 var hiddenChannelNames = {};
 var FIELD_ORDER = [];
 var fieldOrderDirty = true;
@@ -342,10 +373,35 @@ var channelYState = {};  // { name: { zoom: 1, offset: 0, autoRange: true } }
 var selectedChannel = null;  // Channel under mouse for Y-axis zoom
 var splitChannelName = null;
 var chartPanelLayout = null;
-var watchWorkspace = IS_SUPERWATCH_MODE ? window.__MKLINK_WATCH_WORKSPACE__ || null : null;
+var watchWorkspace = CONFIG.mode === 'SuperWatch' ? window.__MKLINK_WATCH_WORKSPACE__ || null : null;
+var sharedWorkspaceSnapshot = watchWorkspace;
+var localPlotLayout = null;
+var panelSignalStyles = {};
+var panelStyleCache = Object.create(null);
+function dispatchWorkspaceEvent(event) {
+  if (!root || viewerKey === CONFIG.mode) { window.dispatchEvent(event); return; }
+  var next = JSON.parse(JSON.stringify(watchWorkspace || { version: 2, groups: [{ id: 'main', name: 'Main', height: 240 }], panes: [{ id: 'main', name: 'Main', height: 240 }], signals: {} }));
+  var detail = event.detail;
+  var defaultGroup = next.defaultGroup || next.panes[0].id;
+  if (event.type === 'mklink:workspace-split') {
+    var id = 'plot-' + crypto.randomUUID();
+    next.panes.push({ id: id, name: signalLabel(detail.path), height: 200, collapsed: false });
+    next.signals[detail.path] = Object.assign({}, next.signals[detail.path], { pane: id });
+  } else if (event.type === 'mklink:workspace-merge') {
+    Object.keys(next.signals).forEach(function(name) { if (next.signals[name].pane === detail.group) next.signals[name].pane = defaultGroup; });
+    next.panes = next.panes.filter(function(p) { return p.id !== detail.group || p.id === defaultGroup; });
+  } else if (event.type === 'mklink:workspace-resize') next.panes = detail;
+  else if (event.type === 'mklink:workspace-import') next = detail;
+  localPlotLayout = { panes: next.panes, signalPanes: Object.fromEntries(Object.entries(next.signals).map(function(pair) { return [pair[0], pair[1].pane]; })) };
+  setWorkspace(next, true);
+}
 var workspaceY = Object.create(null);
 var workspaceSignature = null;
-function signalStyle(name) { return watchWorkspace && watchWorkspace.signals && watchWorkspace.signals[name] || {}; }
+function signalStyle(name) {
+  var shared = watchWorkspace && watchWorkspace.signals && watchWorkspace.signals[name] || {};
+  if (!panelSignalStyles[name]) return shared;
+  return panelStyleCache[name] || (panelStyleCache[name] = Object.assign({}, shared, panelSignalStyles[name]));
+}
 function calculatedValue(name, raw) {
   var formula = signalStyle(name).formula;
   return formula && window.__mklinkSignalFormula ? window.__mklinkSignalFormula(formula)(raw) : raw;
@@ -363,12 +419,21 @@ function calculatedRange(name) {
   return {min: low, max: high};
 }
 function signalLabel(name) { return signalStyle(name).alias || name; }
-function setWorkspace(value) {
+function setWorkspace(value, local) {
   if (!IS_SUPERWATCH_MODE || !value || !Array.isArray(value.panes) || !value.panes.length) return;
+  if (!local) sharedWorkspaceSnapshot = value;
+  if (localPlotLayout) {
+    value = JSON.parse(JSON.stringify(value));
+    value.panes = localPlotLayout.panes;
+    Object.keys(localPlotLayout.signalPanes).forEach(function(name) {
+      value.signals[name] = Object.assign({}, value.signals[name], { pane: localPlotLayout.signalPanes[name] });
+    });
+  }
   var signature=JSON.stringify(value);
   if (signature === workspaceSignature) return;
   workspaceSignature=signature;
   watchWorkspace = value;
+  panelStyleCache = Object.create(null);
   Object.keys(FIELDS).forEach(function(name) {
     if (/^#[0-9a-fA-F]{6}$/.test(signalStyle(name).color || '')) FIELDS[name].color = signalStyle(name).color;
   });
@@ -410,7 +475,7 @@ function syncWorkspaceDividers(panels) {
         var total=first.height+second.height;
         first.height=Math.max(100,Math.min(total-100,first.height+delta));
         second.height=total-first.height;
-        window.dispatchEvent(new CustomEvent('mklink:workspace-resize',{detail:panes}));
+        dispatchWorkspaceEvent(new CustomEvent('mklink:workspace-resize',{detail:panes}));
       }
       divider.addEventListener('keydown',function(e){if(e.key==='ArrowUp'||e.key==='ArrowDown'){e.preventDefault();resizeBy(e.key==='ArrowUp'?-20:20);}});
       divider.addEventListener('mousedown',function(e){
@@ -433,7 +498,7 @@ function syncWorkspaceDividers(panels) {
     button.textContent = t('merge_channel'); button.title = t('merge_channel_tip');
     button.setAttribute('aria-label', t('merge_channel_tip') + ': ' + panel.name);
     button.style.top = (panel.top + 2) + 'px';
-    button.onclick = function() { window.dispatchEvent(new CustomEvent('mklink:workspace-merge', {detail: {group: panel.id}})); };
+    button.onclick = function() { dispatchWorkspaceEvent(new CustomEvent('mklink:workspace-merge', {detail: {group: panel.id}})); };
     if (!button.parentNode) host.appendChild(button);
   });
 }
@@ -650,7 +715,7 @@ function updateSplitPanelControl(active, dividerY) {
 function setSplitChannel(name) {
   if (!IS_SUPERWATCH_MODE || !FIELDS[name] || !FIELDS[name].visible) return false;
   if (watchWorkspace) {
-    window.dispatchEvent(new CustomEvent('mklink:workspace-split', {detail: {path: name}}));
+    dispatchWorkspaceEvent(new CustomEvent('mklink:workspace-split', {detail: {path: name}}));
     return true;
   }
   var names = visibleChartChannelNames();
@@ -1058,17 +1123,17 @@ function setDeviceConnected(connected) {
   renderBinaryHealth();
 }
 if (typeof window !== 'undefined') {
-  if (!window.__waveformViewers) window.__waveformViewers = {};
-  window.__waveformViewers[CONFIG ? CONFIG.mode : ''] = { setDeviceConnected: setDeviceConnected };
+  if (!window.__waveformViewers) window.__waveformViewers = Object.create(null);
+  Object.defineProperty(window.__waveformViewers, viewerKey, { value: { setDeviceConnected: setDeviceConnected }, writable: true, configurable: true, enumerable: true });
 }
 
-document.getElementById('btn-start').addEventListener('click', function() {
-  if (replaySession) { replaySession.control('play'); return; }
-  if (typeof CONFIG !== 'undefined' && CONFIG.deviceConnected === false) return;
+function startCollection() {
+  if (replaySession) { replaySession.control('play'); return Promise.resolve({ replay: true }); }
+  if (typeof CONFIG !== 'undefined' && CONFIG.deviceConnected === false) return Promise.reject(new Error('Device is disconnected'));
   if (IS_BINARY_WAVEFORM_MODE && renderPaused && acquisitionState === 'running') {
     renderPaused = false;
     updateCollectionUI('running');
-    return;
+    return Promise.resolve({ state: acquisitionState, localResume: true });
   }
   renderPaused = false;
   var opts = {method:'POST'};
@@ -1083,7 +1148,7 @@ document.getElementById('btn-start').addEventListener('click', function() {
     opts.headers = {'Content-Type': 'application/json'};
     opts.body = JSON.stringify({interval: restoredInterval});
   }
-  fetch(API_CTRL + 'start', opts)
+  return fetch(API_CTRL + 'start', opts)
     .then(function(r){
       return r.json().catch(function(){ return {}; }).then(function(d){
         if (!r.ok) throw new Error(apiErrorMessage(d, r.status));
@@ -1112,12 +1177,15 @@ document.getElementById('btn-start').addEventListener('click', function() {
         es.onerror = sseOnError;
         es.onopen = sseOnOpen;
       }
+      return d;
     })
     .catch(function(err){
       updateCollectionUI('stopped');
       showControlError(err && err.message ? err.message : t('error'));
+      throw err;
     });
-});
+}
+document.getElementById('btn-start').addEventListener('click', function() { startCollection().catch(function() {}); });
 document.getElementById('btn-pause').addEventListener('click', function() {
   if (replaySession) { replaySession.control('toggle'); return; }
   if (collectionState === 'stopped') return;
@@ -1138,12 +1206,14 @@ function stopCollection() {
       acquisitionState = 'stopped';
       updateCollectionUI('stopped');
       notifyVofaStreamState('stopped');
+      return d;
     })
     .catch(function(err){
       showControlError(err && err.message ? err.message : t('error'));
+      throw err;
     });
 }
-document.getElementById('btn-stop').addEventListener('click', stopCollection);
+document.getElementById('btn-stop').addEventListener('click', function() { stopCollection().catch(function() {}); });
 var bufferInput = document.getElementById('buffer-input');
 bufferInput.addEventListener('input', updateBufferMemoryEstimate);
 updateBufferMemoryEstimate();
@@ -1155,19 +1225,18 @@ document.getElementById('btn-apply-buffer').addEventListener('click', function()
   }
   setBufferCapacity(val);
 });
-document.getElementById('btn-apply-interval').addEventListener('click', function() {
-  if (replaySession) return;
-  var val = parseFloat(intervalInput.value);
+function applyCollectionInterval(val) {
+  if (replaySession) return Promise.reject(new Error('Return to live before changing acquisition interval'));
   var minimumInterval = IS_SUPERWATCH_MODE ? SUPERWATCH_MIN_INTERVAL : 0;
   if (!Number.isFinite(val) || val < minimumInterval || val > 60) {
     setIntervalError(true);
     intervalInput.focus();
-    return;
+    return Promise.reject(new Error('Invalid collection interval'));
   }
   setIntervalError(false);
   intervalDirty = false;
   intervalUpdatePending = true;
-  fetch(API_CTRL + 'interval', {
+  return fetch(API_CTRL + 'interval', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({interval: val})
@@ -1187,13 +1256,18 @@ document.getElementById('btn-apply-interval').addEventListener('click', function
       restoredInterval = null;
       syncIntervalFromServer(normalized);
       scheduleViewerPreferences();
+      return { interval: normalized };
     })
     .catch(function(err){
       intervalUpdatePending = false;
       intervalDirty = false;
       intervalInput.value = String(currentInterval);
       showControlError(err && err.message ? err.message : t('error'));
+      throw err;
     });
+}
+document.getElementById('btn-apply-interval').addEventListener('click', function() {
+  applyCollectionInterval(parseFloat(intervalInput.value)).catch(function() {});
 });
 
 // Sync initial state from server
@@ -2216,7 +2290,7 @@ function applyChannelMetadata(channels, purge) {
     CHANNEL_METADATA[name] = Object.assign({}, CHANNEL_METADATA[name] || {}, meta);
     if (!FIELDS[name]) {
       FIELDS[name] = {
-        color: COLORS[Object.keys(FIELDS).length % COLORS.length],
+        color: channelDefaultColor(name, COLORS[Object.keys(FIELDS).length % COLORS.length]),
         ringBuf: new RingBuffer(waveformMainRingCapacity()),
         visible: meta.source !== 'struct',
         unit: "",
@@ -2265,6 +2339,7 @@ function setChannelVisible(name, visible) {
   var meta = FIELDS[name];
   if (!meta) return;
   meta.visible = !!visible;
+  if (signalSubset && visible) signalSubset.add(name);
   if (!meta.visible && splitChannelName === name) clearSplitChannel();
   if (meta.visible) delete hiddenChannelNames[name];
   else hiddenChannelNames[name] = true;
@@ -2367,6 +2442,7 @@ function captureSuperwatchTimelineSpanIfReady() {
 
 var binaryCapacityRequester = null;
 var binaryCapacityPending = false;
+var binaryCapacityOperation = null;
 function setBinaryCapacityRequester(requester) {
   binaryCapacityRequester = requester;
   if (requester) setBufferCapacity(RING_BUFFER_CAPACITY);
@@ -2401,7 +2477,7 @@ function setBufferCapacity(newCapacity, confirmed, prepared) {
     var recoveryFailed = false;
     var button = document.getElementById('btn-apply-buffer');
     if (button) button.disabled = true;
-    Promise.resolve().then(function() { return binaryCapacityRequester(newCapacity); })
+    binaryCapacityOperation = Promise.resolve().then(function() { return binaryCapacityRequester(newCapacity); })
       .then(function() {
         workerConfirmed = true;
         if (!viewerAbortController.signal.aborted) setBufferCapacity(newCapacity, true, prepared);
@@ -2453,8 +2529,10 @@ function setBufferCapacity(newCapacity, confirmed, prepared) {
   }
   RING_BUFFER_CAPACITY = newCapacity;
   MAX_POINTS = newCapacity;
-  window.RING_BUFFER_CAPACITY = RING_BUFFER_CAPACITY;
-  window.MAX_POINTS = MAX_POINTS;
+  if (!root) {
+    window.RING_BUFFER_CAPACITY = RING_BUFFER_CAPACITY;
+    window.MAX_POINTS = MAX_POINTS;
+  }
   var input = document.getElementById('buffer-input');
   if (input) input.value = String(newCapacity);
   for (var name in FIELDS) {
@@ -2619,7 +2697,7 @@ function deserializeState(json) {
   try {
     var state = (typeof json === 'string') ? JSON.parse(json) : json;
     if (!state || !state.channels) return false;
-    if (state.workspace) window.dispatchEvent(new CustomEvent('mklink:workspace-import', { detail: state.workspace }));
+    if (state.workspace) dispatchWorkspaceEvent(new CustomEvent('mklink:workspace-import', { detail: state.workspace }));
     globalYView = { zoom: 1, offset: 0, autoRange: true, manualMin: null, manualMax: null };
     splitChannelName = null;
     for (var i = 0; i < state.channels.length; i++) {
@@ -2834,8 +2912,11 @@ function exportPNG() {
     var bytes = Uint8Array.from(atob(dataURL.split(',')[1]), function(c) { return c.charCodeAt(0); });
     var blob = new Blob([bytes], { type: 'image/png' });
     if (typeof window.__MKLINK_SAVE_BLOB__ === 'function') {
-      Promise.resolve(window.__MKLINK_SAVE_BLOB__('waveform-chart.png', blob)).catch(function(error) {
+      return Promise.resolve(window.__MKLINK_SAVE_BLOB__('waveform-chart.png', blob)).then(function(saved) {
+        return { saved: saved !== false, filename: 'waveform-chart.png', bytes: blob.size, mime: blob.type };
+      }).catch(function(error) {
         showControlError('Save failed: ' + error.message);
+        throw error;
       });
     } else {
       var url = URL.createObjectURL(blob);
@@ -2843,8 +2924,9 @@ function exportPNG() {
       a.href = url; a.download = 'waveform-chart.png';
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+      return Promise.resolve({ saved: true, filename: 'waveform-chart.png', bytes: blob.size, mime: blob.type });
     }
-  } catch (error) { showControlError('Save failed: ' + error.message); }
+  } catch (error) { showControlError('Save failed: ' + error.message); return Promise.reject(error); }
 }
 
 // ============================================================
@@ -2896,7 +2978,7 @@ function processPoint(point) {
       if (!CHANNEL_METADATA[k]) continue; // Only auto-create registered channels
       if (colorIdx >= MAX_CHANNELS) continue; // Enforce channel limit
       FIELDS[k] = {
-        color: COLORS[colorIdx % COLORS.length],
+        color: channelDefaultColor(k, COLORS[colorIdx % COLORS.length]),
         ringBuf: new RingBuffer(waveformMainRingCapacity()),
         visible: true,
         unit: "",
@@ -2966,7 +3048,7 @@ function setHiddenChannels(names, replay) {
   }
   for (var name in FIELDS) {
     if (!FIELDS.hasOwnProperty(name)) continue;
-    FIELDS[name].visible = !hiddenChannelNames[name];
+    FIELDS[name].visible = !hiddenChannelNames[name] && (!signalSubset || signalSubset.has(name));
   }
   updateWatchTable();
   updateChartLegend();
@@ -3011,9 +3093,9 @@ function setArraySnapshot(snapshot) {
       field.arrayValues && field.arrayValues.length === values.length) return false;
   if (!field) {
     field = FIELDS[name] = {
-      color: COLORS[colorIdx % COLORS.length],
+      color: channelDefaultColor(name, COLORS[colorIdx % COLORS.length]),
       ringBuf: new RingBuffer(2),
-      visible: !hiddenChannelNames[name],
+      visible: !hiddenChannelNames[name] && (!signalSubset || signalSubset.has(name)),
       unit: '',
       type: String(snapshot.type_name || 'array') + '[]',
       size: snapshot.element_size || '',
@@ -3660,6 +3742,10 @@ function beginReplay(metadata, control) {
   if (replaySession) endReplay();
   var liveChannels = replayLiveChannels;
   var liveHidden = Object.keys(hiddenChannelNames);
+  var liveSignals = signalSubset;
+  var liveSignalsOverride = signalSubsetOverride;
+  signalSubset = null;
+  signalSubsetOverride = false;
   var liveSpan = superwatchTimelineSpan;
   saveViewerPreferences();
   resetBinaryStream();
@@ -3667,7 +3753,7 @@ function beginReplay(metadata, control) {
   configureBinaryChannels(metadata.channels.map(function(channel) { return {name: channel.name, type: 'float'}; }));
   setHiddenChannels([]);
   replayLiveChannels = liveChannels;
-  replaySession = {control: control, playing: false, duration: Math.max(.001, metadata.duration), liveHidden: liveHidden, liveSpan: liveSpan,
+  replaySession = {control: control, playing: false, duration: Math.max(.001, metadata.duration), liveHidden: liveHidden, liveSpan: liveSpan, liveSignals: liveSignals, liveSignalsOverride: liveSignalsOverride,
     overview: Object.fromEntries((metadata.overview || []).map(function(channel) { return [channel.name, channel.points]; }))};
   binaryTimeOrigin = 0;
   binaryBufferStart = 0;
@@ -3728,6 +3814,8 @@ function endReplay() {
   if (!replaySession) return;
   var session = replaySession;
   replaySession = null;
+  signalSubset = session.liveSignals;
+  signalSubsetOverride = session.liveSignalsOverride;
   // Avoid saving offline channel preferences over the live layout.
   binaryChannelNames = []; binaryChannelSignature = null;
   configureBinaryChannels(replayLiveChannels);
@@ -3744,6 +3832,8 @@ function endReplay() {
 }
 
 function disposeViewer() {
+  panelFrameIds.forEach(function(id) { window.cancelAnimationFrame(id); });
+  panelFrameIds.clear();
   clearTimeout(autoTimeout);
   clearTimeout(triggerRearmTimer);
   saveViewerPreferences();
@@ -3755,8 +3845,11 @@ function disposeViewer() {
 }
 
 if (typeof window !== 'undefined') {
-  if (!window.__waveformViewers) window.__waveformViewers = {};
-  var binaryViewer = window.__waveformViewers[CONFIG.mode] || {};
+  if (!window.__waveformViewers) window.__waveformViewers = Object.create(null);
+  var binaryViewer = window.__waveformViewers[viewerKey] || {};
+  binaryViewer.mode = CONFIG.mode;
+  binaryViewer.panelId = viewerKey;
+  binaryViewer.setLanguage = function(lang) { CONFIG.lang = lang; if (translations) translations.setLang(lang); };
   binaryViewer.setWorkspace = setWorkspace;
   binaryViewer.getFormulas = function() { return binaryChannelNames.map(function(name) { return signalStyle(name).formula || ''; }); };
   binaryViewer.beginReplay = beginReplay;
@@ -3786,7 +3879,7 @@ if (typeof window !== 'undefined') {
   binaryViewer.setDeviceConnected = setDeviceConnected;
   binaryViewer.dispose = disposeViewer;
   binaryViewer.es = es;
-  window.__waveformViewers[CONFIG.mode] = binaryViewer;
+  Object.defineProperty(window.__waveformViewers, viewerKey, { value: binaryViewer, writable: true, configurable: true, enumerable: true });
 }
 
 // ============================================================
@@ -5808,7 +5901,7 @@ function freezeSingleTriggerCapture() {
   // Freeze first so queued summaries/envelopes cannot overwrite the capture.
   // The normal stop path then stops device sampling and closes the transport;
   // on failure it keeps the capture and exposes the error for a stop retry.
-  stopCollection();
+  if (!root || viewerKey === CONFIG.mode) stopCollection().catch(function() {});
 }
 
 function appendTriggerPoint(point) {
@@ -5938,7 +6031,7 @@ addViewerGlobalListener(document, 'keydown', function(e) {
 
 // -- export button bindings --
 document.getElementById('btn-export-csv')?.addEventListener('click', function() { exportCSV(); });
-document.getElementById('btn-export-png').addEventListener('click', function() { exportPNG(); });
+document.getElementById('btn-export-png').addEventListener('click', function() { exportPNG().catch(function() {}); });
 document.getElementById('btn-save-project')?.addEventListener('click', function() { saveProject(); });
 document.getElementById('btn-load-project')?.addEventListener('click', function() {
   document.getElementById('project-load-input').click();
@@ -6041,6 +6134,10 @@ function restoreChannelPreferences() {
     if (!ch || typeof ch.name !== 'string' || !Object.prototype.hasOwnProperty.call(FIELDS, ch.name)) return;
     var field = FIELDS[ch.name];
     if (!field) return;
+    if (typeof ch.visible === 'boolean') {
+      field.visible = ch.visible && (!signalSubset || signalSubset.has(ch.name));
+      if (!ch.visible) hiddenChannelNames[ch.name] = true;
+    }
     if (typeof ch.color === 'string') field.color = ch.color;
     field.format = normalizeValueFormat(ch.format || 'auto');
     field.precision = Number.isInteger(ch.precision) ? Math.max(0, Math.min(12, ch.precision)) : 2;
@@ -6077,3 +6174,305 @@ if (IS_SUPERWATCH_MODE) {
   });
   addViewerGlobalListener(window, 'pagehide', saveViewerPreferences);
 }
+
+// Semantic actions call the same state transitions as the visible controls.
+// Only display settings are persisted; acquisition and target writes are never restored.
+var semanticNumber = { type: 'number' };
+var semanticBoolean = { type: 'boolean' };
+var semanticName = { type: 'string', maxLength: 256 };
+function semanticObject(properties, required) {
+  return { type: 'object', properties: properties, required: required || [], additionalProperties: false };
+}
+function semanticEnum(values) { return { type: 'string', enum: values }; }
+function semanticAction(name, description, properties, required, effect) {
+  return { name: 'waveform.' + name, description: description, args: semanticObject(properties || {}, required), effect: effect || 'view' };
+}
+var semanticActions = [
+  semanticAction('pause', 'Pause or resume this panel during acquisition or replay without stopping the device', { paused: semanticBoolean }, ['paused']),
+  semanticAction('channels', 'Choose this panel’s signal subset', { names: { type: 'array', items: semanticName, maxItems: 500 } }, ['names']),
+  semanticAction('channel', 'Set visibility, color, numeric format and precision', { name: semanticName, visible: semanticBoolean, color: { type: 'string', maxLength: 7 }, format: semanticEnum(['auto', 'dec', 'hex', 'bin']), precision: { type: 'integer', minimum: 0, maximum: 12 } }, ['name']),
+  semanticAction('style', 'Override signal presentation in this panel', { name: semanticName, alias: { type: 'string', maxLength: 256 }, color: { type: 'string', maxLength: 7 }, emphasis: semanticBoolean, renderMode: semanticEnum(['line', 'points']), formula: { type: 'string', maxLength: 256 } }, ['name']),
+  semanticAction('plot', 'Split a signal into a plot, merge a plot, or resize its height', { command: semanticEnum(['split', 'merge', 'resize']), name: semanticName, group: semanticName, height: { type: 'integer', minimum: 100, maximum: 2000 } }, ['command']),
+  semanticAction('legend', 'Show or hide the chart legend', { visible: semanticBoolean }, ['visible']),
+  semanticAction('column', 'Configure a watch table column', { key: semanticEnum(WATCH_COLUMNS.map(function(c) { return c.key; })), visible: semanticBoolean, width: { type: 'integer', minimum: 44, maximum: 1000 } }, ['key']),
+  semanticAction('viewport', 'Set time span in seconds, normalized position, or reset to latest', { span: { type: 'number', minimum: 0.000001, maximum: 86400 }, offset: { type: 'number', minimum: 0, maximum: 1 }, reset: semanticBoolean }),
+  semanticAction('y', 'Set global, plot-group or channel Y range, zoom and offset', { name: semanticName, group: semanticName, auto: semanticBoolean, min: semanticNumber, max: semanticNumber, zoom: { type: 'number', minimum: 0.0001, maximum: 10000 }, offset: semanticNumber }),
+  semanticAction('buffer', 'Resize this panel’s retained sample buffer', { points: { type: 'integer', minimum: MIN_POINTS, maximum: MAX_BUFFER_POINTS } }, ['points']),
+  semanticAction('trigger', 'Configure this panel’s local trigger', { enabled: semanticBoolean, source: { type: 'string', maxLength: 256 }, edge: semanticEnum(['rising', 'falling', 'both']), level: semanticNumber, mode: semanticEnum(['auto', 'normal', 'single']), preTrigger: { type: 'integer', minimum: 10, maximum: 50000 } }),
+  semanticAction('trigger.control', 'Arm, force or reset the configured trigger', { command: semanticEnum(['arm', 'force', 'reset']) }, ['command']),
+  semanticAction('cursor', 'Configure A/B measurement cursors (positions in seconds)', { enabled: semanticBoolean, mode: semanticEnum(['time', 'value']), a: semanticNumber, b: semanticNumber }),
+  semanticAction('threshold', 'Set or clear channel warning and alarm thresholds', { name: semanticName, clear: semanticBoolean, warnLow: semanticNumber, warnHigh: semanticNumber, alarmLow: semanticNumber, alarmHigh: semanticNumber }, ['name']),
+  semanticAction('png', 'Export the actual visible waveform canvas as PNG', {}, [], 'file'),
+  semanticAction('inspect', 'Read a page of channel configuration, statistics and cursor measurements', { offset: { type: 'integer', minimum: 0, maximum: 10000 }, limit: { type: 'integer', minimum: 1, maximum: 100 } }, [], 'view')
+];
+if (IS_SUPERWATCH_MODE) semanticActions.push(
+  { name: 'superwatch.start', description: 'Start shared device acquisition (all panels)', args: semanticObject({}), effect: 'device' },
+  { name: 'superwatch.stop', description: 'Stop shared device acquisition (all panels)', args: semanticObject({}), effect: 'device' },
+  { name: 'superwatch.interval', description: 'Set shared device sample interval in seconds', args: semanticObject({ interval: { type: 'number', minimum: SUPERWATCH_MIN_INTERVAL, maximum: 60 } }, ['interval']), effect: 'device' },
+  { name: 'superwatch.status', description: 'Read current shared acquisition status from the backend', args: semanticObject({}), effect: 'view' }
+);
+function validateSemanticValue(schema, value, path) {
+  if (schema.type === 'object') {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(path + ' must be an object');
+    Object.keys(value).forEach(function(key) {
+      if (!Object.prototype.hasOwnProperty.call(schema.properties, key)) throw new Error('Unknown argument: ' + path + '.' + key);
+      validateSemanticValue(schema.properties[key], value[key], path + '.' + key);
+    });
+    schema.required.forEach(function(key) { if (!(key in value)) throw new Error('Missing argument: ' + key); });
+  } else if (schema.type === 'array') {
+    if (!Array.isArray(value) || value.length > schema.maxItems) throw new Error(path + ' must be a bounded array');
+    value.forEach(function(item) { validateSemanticValue(schema.items, item, path); });
+  } else if (schema.type === 'number' || schema.type === 'integer') {
+    if (typeof value !== 'number' || !Number.isFinite(value) || schema.type === 'integer' && !Number.isInteger(value) || schema.minimum !== undefined && value < schema.minimum || schema.maximum !== undefined && value > schema.maximum || schema.exclusiveMinimum !== undefined && value <= schema.exclusiveMinimum) throw new Error('Invalid number: ' + path);
+  } else if (typeof value !== schema.type || schema.enum && !schema.enum.includes(value) || schema.minLength && value.length < schema.minLength || schema.maxLength && value.length > schema.maxLength || schema.pattern && !new RegExp(schema.pattern).test(value)) throw new Error('Invalid argument: ' + path);
+}
+function validateSemanticAction(action, args) {
+  var spec = semanticActions.find(function(item) { return item.name === action; });
+  if (!spec) throw new Error('Unknown waveform action: ' + action);
+  validateSemanticValue(spec.args, args || {}, 'args');
+  if (action === 'waveform.pause' && args.paused && !replaySession && acquisitionState !== 'running') throw new Error('Display pause requires running acquisition; start shared acquisition first');
+  if (args.name !== undefined && (!args.name || !Object.prototype.hasOwnProperty.call(FIELDS, args.name))) throw new Error('Unknown channel: ' + args.name);
+  if (args.color !== undefined && !/^#[0-9a-fA-F]{6}$/.test(args.color)) throw new Error('Invalid channel color');
+  if (action === 'waveform.trigger' && args.source && !Object.prototype.hasOwnProperty.call(FIELDS, args.source)) throw new Error('Unknown trigger source: ' + args.source);
+  if (action === 'waveform.y' && ((args.min === undefined) !== (args.max === undefined) || args.min !== undefined && args.max <= args.min)) throw new Error('Y range requires min < max');
+  if (action === 'waveform.y' && args.group && (!watchWorkspace || !watchWorkspace.panes.some(function(p) { return p.id === args.group; }))) throw new Error('Unknown plot group');
+  if (action === 'waveform.y' && args.group && args.name) throw new Error('Choose a channel or a plot group');
+  if (action === 'waveform.trigger' && args.preTrigger !== undefined && !validPreTriggerSamples(args.preTrigger)) throw new Error('Invalid pre-trigger sample count');
+  if (action === 'waveform.style' && args.formula) {
+    if (!window.__mklinkCompileSignalFormula) throw new Error('Formula parser is unavailable');
+    window.__mklinkCompileSignalFormula(args.formula);
+  }
+  if (action === 'waveform.plot') {
+    if (args.command === 'split' && !args.name) throw new Error('Signal name is required');
+    if (args.command !== 'split' && (!args.group || !watchWorkspace || !watchWorkspace.panes.some(function(p) { return p.id === args.group; }))) throw new Error('Unknown plot group');
+    if (args.command === 'resize' && args.height === undefined) throw new Error('Plot height is required');
+  }
+  return { valid: true };
+}
+function panelViewState() {
+  var state = serializeState();
+  delete state.workspace; delete state.csvExport; delete state.firmwareHash; delete state.parserMode;
+  state.channels = state.channels.slice(0, 256).map(function(ch) {
+    var display = { name: ch.name };
+    if (hiddenChannelNames[ch.name]) display.visible = false;
+    if (ch.format !== 'auto') display.format = ch.format;
+    if (ch.precision !== 2) display.precision = ch.precision;
+    if (ch.thresholds) display.thresholds = ch.thresholds;
+    if (ch.yOffset) display.yOffset = ch.yOffset;
+    if (ch.yZoom !== 1 && ch.yZoom !== undefined) display.yZoom = ch.yZoom;
+    if (ch.yAutoRange === false) { display.yAutoRange = false; display.yMin = ch.yMin; display.yMax = ch.yMax; }
+    return display;
+  }).filter(function(ch) { return Object.keys(ch).length > 1; });
+  if (signalSubsetOverride) state.signals = signalSubset ? Array.from(signalSubset) : null;
+  state.timeline = { span: Number.isFinite(superwatchTimelineSpan) ? superwatchTimelineSpan : null, offset: collectionState === 'running' ? null : timelineView.offset, zoom: IS_SUPERWATCH_MODE ? null : timelineView.zoom, lag: superwatchTimelineLag };
+  state.plotLayout = localPlotLayout ? JSON.parse(JSON.stringify(localPlotLayout)) : null;
+  state.plotY = JSON.parse(JSON.stringify(workspaceY));
+  state.signalStyles = JSON.parse(JSON.stringify(panelSignalStyles));
+  state.cursor = { enabled: cursorState.enabled, mode: cursorState.mode, a: cursorState.a && cursorState.a.t, b: cursorState.b && cursorState.b.t };
+  state.legend = chartLegendVisible;
+  state.paused = renderPaused;
+  state.intervalInput = Number(intervalInput.value);
+  return state;
+}
+function readSemanticState() {
+  return { panelId: viewerKey, mode: CONFIG.mode, ready: true, acquisition: acquisitionState, localPaused: renderPaused,
+    replaying: !!replaySession, triggerState: triggerSettings.state, channels: { total: Object.keys(FIELDS).length, preview: Object.keys(FIELDS).slice(0, 16).map(function(name) { return { name: name, visible: FIELDS[name].visible }; }) }, view: panelViewState() };
+}
+function setSignalSubset(names, override) {
+  if (!override) configuredSignals = Array.isArray(names) ? names.slice() : null;
+  signalSubset = Array.isArray(names) ? new Set(names) : null;
+  signalSubsetOverride = !!override;
+  setHiddenChannels(Object.keys(hiddenChannelNames), !!replaySession);
+}
+function restorePanelView(state) {
+  if (!state || typeof state !== 'object' || Array.isArray(state)) throw new Error('Invalid waveform view');
+  // Whitelist settings before using the legacy project deserializer.
+  var allowed = {};
+  ['channels', 'globalYView', 'bufferPoints', 'watchColumns', 'triggerSettings', 'splitChannel'].forEach(function(key) { if (state[key] !== undefined) allowed[key] = state[key]; });
+  allowed.channels = (Array.isArray(allowed.channels) ? allowed.channels : []).slice(0, 256).map(function(ch) {
+    var next = {};
+    ['name', 'visible', 'color', 'format', 'precision', 'thresholds', 'yOffset', 'yZoom', 'yAutoRange', 'yMin', 'yMax'].forEach(function(key) { if (ch[key] !== undefined) next[key] = ch[key]; });
+    return next;
+  });
+  viewerPreferences = Object.assign({}, viewerPreferences, allowed);
+  panelSignalStyles = {}; panelStyleCache = Object.create(null);
+  hiddenChannelNames = {}; channelYState = {};
+  Object.keys(FIELDS).forEach(function(name) {
+    Object.assign(FIELDS[name], { visible: (!CHANNEL_METADATA[name] || CHANNEL_METADATA[name].source !== 'struct') && (!signalSubset || signalSubset.has(name)), format: 'auto', precision: 2, thresholds: null, color: initialChannelColors[name] || FIELDS[name].color });
+  });
+  if (!deserializeState(allowed)) throw new Error('Could not restore waveform view');
+  allowed.channels.forEach(function(ch) { if (ch.visible === false) hiddenChannelNames[ch.name] = true; else if (ch.visible === true) delete hiddenChannelNames[ch.name]; });
+  if (state.signalStyles && typeof state.signalStyles === 'object' && !Array.isArray(state.signalStyles)) {
+    var styles = {};
+    var styleSchema = semanticActions.find(function(a) { return a.name === 'waveform.style'; }).args;
+    Object.keys(state.signalStyles).slice(0, 256).forEach(function(name) {
+      var settings = Object.assign({ name: name }, state.signalStyles[name]);
+      validateSemanticValue(styleSchema, settings, 'signalStyles');
+      if (settings.color !== undefined && !/^#[0-9a-fA-F]{6}$/.test(settings.color)) throw new Error('Invalid channel color');
+      if (settings.formula && window.__mklinkCompileSignalFormula) window.__mklinkCompileSignalFormula(settings.formula);
+      delete settings.name; styles[name] = settings;
+    });
+    panelSignalStyles = styles;
+    panelStyleCache = Object.create(null);
+  }
+  if (state.plotLayout === null) localPlotLayout = null;
+  if (state.plotLayout && Array.isArray(state.plotLayout.panes) && state.plotLayout.panes.length && state.plotLayout.panes.length <= 64) {
+    localPlotLayout = state.plotLayout;
+  }
+  if (watchWorkspace) { workspaceSignature = null; setWorkspace(sharedWorkspaceSnapshot || { version: 2, groups: [{ id: 'main', name: 'Main', height: 240 }], panes: [{ id: 'main', name: 'Main', height: 240 }], signals: {} }, true); }
+  workspaceY = Object.create(null);
+  if (state.plotY && typeof state.plotY === 'object') Object.keys(state.plotY).slice(0, 64).forEach(function(group) {
+    var range = state.plotY[group];
+    if (Number.isFinite(range.yMin) && Number.isFinite(range.yMax) && range.yMax > range.yMin) workspaceY[group] = { yMin: range.yMin, yMax: range.yMax };
+  });
+  if (state.signals === null || Array.isArray(state.signals)) setSignalSubset(state.signals, true);
+  else setSignalSubset(configuredSignals, false);
+  if (state.timeline) {
+    if (Number.isFinite(state.timeline.span) && state.timeline.span > 0) superwatchTimelineSpan = state.timeline.span;
+    if (Number.isFinite(state.timeline.zoom) && state.timeline.zoom > 0) timelineView.zoom = state.timeline.zoom;
+    if (Number.isFinite(state.timeline.offset)) timelineView.offset = Math.max(0, Math.min(1, state.timeline.offset));
+    if (Number.isFinite(state.timeline.lag)) superwatchTimelineLag = Math.max(0, state.timeline.lag);
+  }
+  if (typeof state.legend === 'boolean') setChartLegendVisible(state.legend);
+  if (Number.isFinite(state.intervalInput) && state.intervalInput >= SUPERWATCH_MIN_INTERVAL && state.intervalInput <= 60) {
+    intervalInput.value = String(state.intervalInput);
+    intervalDirty = true;
+  }
+  if (state.cursor) applyCursorSettings(state.cursor);
+  if (typeof state.paused === 'boolean') {
+    // A saved layout contains no retained samples to freeze after an offline
+    // reload. Report the effective state immediately instead of a transient pause.
+    renderPaused = state.paused && (acquisitionState === 'running' || !!replaySession);
+    if (acquisitionState === 'running') updateCollectionUI(renderPaused ? 'paused' : 'running');
+  }
+  drawChart(); drawMinimap(); requestBinaryVisibleRangeAfterTimelineChange();
+  return readSemanticState();
+}
+function applyCursorSettings(args) {
+  if (typeof args.enabled === 'boolean' && args.enabled !== cursorState.enabled) document.getElementById('btn-cursor-toggle').click();
+  if (args.mode && args.mode !== cursorState.mode) document.getElementById('btn-cursor-mode').click();
+  if (Number.isFinite(args.a)) cursorState.a = { t: args.a };
+  if (Number.isFinite(args.b)) cursorState.b = { t: args.b };
+}
+async function executeSemanticAction(action, args) {
+  args = args || {};
+  validateSemanticAction(action, args);
+  if (viewerAbortController.signal.aborted) throw new Error('Waveform panel is disposed');
+  if (action.startsWith('superwatch.')) {
+    if (replaySession && action !== 'superwatch.status') throw new Error('Return to live before controlling device acquisition');
+    if (action === 'superwatch.start') {
+      // Explicit shared start cannot silently become the local Resume shortcut.
+      renderPaused = false;
+      return await startCollection();
+    }
+    if (action === 'superwatch.stop') return await stopCollection();
+    if (action === 'superwatch.interval') return await applyCollectionInterval(args.interval);
+    var response = await fetch(API_CTRL + 'status');
+    var status = await response.json();
+    if (!response.ok) throw new Error(apiErrorMessage(status, response.status));
+    syncDashboardStatus(status);
+    return status;
+  }
+  if (action === 'waveform.pause') {
+    if (replaySession) { replaySession.control(args.paused ? 'pause' : 'play'); return readSemanticState(); }
+    renderPaused = args.paused;
+    if (acquisitionState === 'running') updateCollectionUI(renderPaused ? 'paused' : 'running');
+  } else if (action === 'waveform.channels') setSignalSubset(args.names, true);
+  else if (action === 'waveform.channel') {
+    var channel = FIELDS[args.name];
+    ['color', 'format', 'precision'].forEach(function(key) { if (args[key] !== undefined) channel[key] = args[key]; });
+    if (args.color !== undefined) { panelSignalStyles[args.name] = Object.assign({}, panelSignalStyles[args.name], { color: args.color }); delete panelStyleCache[args.name]; }
+    if (args.visible !== undefined) setChannelVisible(args.name, args.visible);
+  } else if (action === 'waveform.style') {
+    var stylePatch = Object.assign({}, args); delete stylePatch.name;
+    panelSignalStyles[args.name] = Object.assign({}, panelSignalStyles[args.name], stylePatch);
+    delete panelStyleCache[args.name];
+    if (args.color !== undefined) FIELDS[args.name].color = args.color;
+    requestBinaryVisibleRangeAfterTimelineChange();
+  } else if (action === 'waveform.plot') {
+    if (args.command === 'split') dispatchWorkspaceEvent(new CustomEvent('mklink:workspace-split', { detail: { path: args.name } }));
+    else if (args.command === 'merge') dispatchWorkspaceEvent(new CustomEvent('mklink:workspace-merge', { detail: { group: args.group } }));
+    else dispatchWorkspaceEvent(new CustomEvent('mklink:workspace-resize', { detail: watchWorkspace.panes.map(function(p) { return p.id === args.group ? Object.assign({}, p, { height: args.height }) : p; }) }));
+  } else if (action === 'waveform.legend') setChartLegendVisible(args.visible);
+  else if (action === 'waveform.column') {
+    if (args.visible !== undefined) setWatchColumnVisible(args.key, args.visible);
+    if (args.width !== undefined) setWatchColumnWidth(args.key, args.width);
+  } else if (action === 'waveform.viewport') {
+    if (args.reset) resetTimelineView();
+    if (args.span !== undefined) { superwatchTimelineSpan = args.span; superwatchTimelineUserAdjusted = true; }
+    if (args.offset !== undefined) timelineView.offset = args.offset;
+    var full = getFullTimeRange(), span = superwatchTimelineSpan || (full.tMax - full.tMin) / timelineView.zoom;
+    superwatchTimelineLag = Math.max(0, (full.tMax - full.tMin - span) * (1 - timelineView.offset));
+    requestBinaryVisibleRangeAfterTimelineChange();
+  } else if (action === 'waveform.y') {
+    var y = args.name ? ensureChannelYState(args.name) : globalYView;
+    if (args.auto !== undefined) { y.autoRange = args.auto; if (args.auto) { y.zoom = 1; y.offset = 0; } }
+    if (args.min !== undefined) { y.autoRange = false; y.manualMin = args.min; y.manualMax = args.max; }
+    if (args.zoom !== undefined) y.zoom = args.zoom;
+    if (args.offset !== undefined) y.offset = args.offset;
+    if (!args.name && chartPanelLayout && chartPanelLayout.panes) {
+      chartPanelLayout.panes.filter(function(p) { return !args.group || p.id === args.group; }).forEach(function(panel) {
+        if (args.auto) resetPanelY(panel);
+        else if (args.min !== undefined) setPanelYRange(panel, args.min, args.max);
+        else {
+          var range = getPanelYRange(panel), center = (range.yMin + range.yMax) / 2 + (args.offset || 0), span = (range.yMax - range.yMin) / (args.zoom || 1);
+          setPanelYRange(panel, center - span / 2, center + span / 2);
+        }
+      });
+    }
+  } else if (action === 'waveform.buffer') {
+    if (!setBufferCapacity(args.points)) throw new Error('Buffer resize could not start');
+    if (binaryCapacityOperation) await binaryCapacityOperation;
+    if (RING_BUFFER_CAPACITY !== args.points) throw new Error('Buffer resize failed');
+  } else if (action === 'waveform.trigger') {
+    var trigger = Object.assign({}, serializeState().triggerSettings, args);
+    deserializeState({ channels: [], globalYView: serializeState().globalYView, triggerSettings: trigger });
+    if (args.enabled !== undefined) triggerSettings.enabled = args.enabled;
+    document.getElementById('trigger-enable-btn').classList.toggle('active', triggerSettings.enabled);
+    if (triggerSettings.enabled) armTrigger(); else resetTrigger();
+  } else if (action === 'waveform.trigger.control') {
+    if (args.command === 'reset') { triggerSettings.enabled = false; resetTrigger(); }
+    else if (args.command === 'arm') { triggerSettings.enabled = true; armTrigger(); }
+    else { if (triggerSettings.state !== 'armed') throw new Error('Trigger must be armed'); forceTrigger(); }
+    document.getElementById('trigger-enable-btn').classList.toggle('active', triggerSettings.enabled);
+  } else if (action === 'waveform.cursor') applyCursorSettings(args);
+  else if (action === 'waveform.threshold') FIELDS[args.name].thresholds = args.clear ? null : normalizeThresholds(args);
+  else if (action === 'waveform.png') return await exportPNG();
+  else if (action === 'waveform.inspect') {
+    updateCursorReadout();
+    var names = Object.keys(FIELDS), offset = args.offset || 0;
+    return { total: names.length, offset: offset, range: getVisibleTimeRange(), cursor: cursorReadout.textContent, plots: (activeWorkspacePanes() || []).slice(0, 64), channels: names.slice(offset, offset + (args.limit || 32)).map(function(name) {
+      var field = FIELDS[name], latest = field.ringBuf.latest(), visible = getBinaryEnvelopeChannelRange(name);
+      var rawLatest = latest && Number.isFinite(latest.y) ? latest.y : null;
+      var displayedLatest = rawLatest === null ? null : calculatedValue(name, rawLatest);
+      return { name: name, visible: field.visible, color: signalStyle(name).color || field.color, format: field.format, precision: field.precision, style: signalStyle(name), latest: Number.isFinite(displayedLatest) ? displayedLatest : null, rawLatest: rawLatest, visibleMin: visible && Number.isFinite(visible.min) ? visible.min : null, visibleMax: visible && Number.isFinite(visible.max) ? visible.max : null };
+    }) };
+  }
+  _watchStructGen++; updateWatchTable(); updateChartLegend(); drawChart(); drawMinimap(); updateCursorReadout(); scheduleViewerPreferences();
+  return readSemanticState();
+}
+binaryViewer.catalog = function() { return JSON.parse(JSON.stringify(semanticActions)); };
+binaryViewer.read = readSemanticState;
+binaryViewer.validate = validateSemanticAction;
+binaryViewer.execute = executeSemanticAction;
+binaryViewer.restore = async function(state) {
+  restorePanelView(state);
+  if (binaryCapacityOperation) await binaryCapacityOperation;
+  if (state.bufferPoints !== undefined && RING_BUFFER_CAPACITY !== state.bufferPoints) throw new Error('Could not restore panel buffer capacity');
+  return readSemanticState();
+};
+binaryViewer.setSignals = setSignalSubset;
+if (root) {
+  root.tabIndex = -1;
+  addViewerGlobalListener(root, 'pointerdown', function(event) {
+    var focusable = event.target.closest('input,select,textarea,button,[tabindex]');
+    if (!focusable || focusable === root) root.focus({ preventScroll: true });
+  });
+}
+// END VIEWER FACTORY — instrumentation may inspect the closure at this boundary.
+return binaryViewer;
+}
+window.__mklinkCreateWaveformViewer = createWaveformViewer;
+var viewerContext = document.currentScript && document.currentScript.__mklinkContext;
+if (viewerContext) { if (!viewerContext.cancelled) createWaveformViewer(viewerContext.config, viewerContext.root); }
+else if (typeof CONFIG !== 'undefined') createWaveformViewer(CONFIG, null);

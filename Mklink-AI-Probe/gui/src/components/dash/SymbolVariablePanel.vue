@@ -53,9 +53,9 @@
         <ChevronRight v-if="collapsed.signals" :size="14" /><ChevronDown v-else :size="14" />
         <span>{{ tr('信号分组', 'Signal groups') }}</span><small>{{ tr(`已选 ${selected.size}`, `${selected.size} selected`) }}</small>
       </button>
-      <SelectedSignals v-show="!collapsed.signals" :paths="selectedPaths" :values="latestValues" :hidden="hiddenChannels"
+      <SelectedSignals ref="selectedSignals" v-show="!collapsed.signals" :paths="selectedPaths" :values="latestValues" :hidden="hiddenChannels" :hide-rows="standaloneVariables"
         :expanded-path="actions?.section === 'selected' ? actions.path : undefined" @actions="path => toggleActions('selected', path)"
-        @visibility="(path, visible) => emit('visibility-change', path, visible)">
+        @visibility="changeVisibility">
         <template #actions="{ path }">
           <SymbolRowActions :path="path" selected-list removable
             :write-disabled="!canWrite(selectedDescriptors.get(path)) || writing.has(path)" :write-title="writeTitle(selectedDescriptors.get(path))"
@@ -174,14 +174,14 @@
             <Activity :size="15" aria-hidden="true" />
           </button>
           <button
-            v-if="snapshotPath === row.node.key"
+            v-if="snapshotPath === row.node.key && !standaloneVariables"
             class="visibility-button"
             :class="{ hidden: hiddenChannels?.has(row.node.key) }"
             type="button"
             :data-testid="`visibility-${row.node.key}`"
-            :aria-label="hiddenChannels?.has(row.node.key) ? tr(`显示 ${row.node.key} 波形`, `Show ${row.node.key} waveform`) : tr(`隐藏 ${row.node.key} 波形`, `Hide ${row.node.key} waveform`)"
+            :aria-label="visibilityLabel(row.node.key)"
             :aria-pressed="!hiddenChannels?.has(row.node.key)"
-            :title="hiddenChannels?.has(row.node.key) ? tr('显示波形', 'Show waveform') : tr('隐藏波形', 'Hide waveform')"
+            :title="visibilityLabel(row.node.key)"
             @click.stop="toggleVisibility(row.node.key)"
           >
             <EyeOff v-if="hiddenChannels?.has(row.node.key)" :size="15" aria-hidden="true" />
@@ -223,9 +223,9 @@
                 type="button"
                 :class="{ hidden: hiddenChannels?.has(row.node.descriptor.path) }"
                 :data-testid="`visibility-${row.node.descriptor.path}`"
-                :aria-label="hiddenChannels?.has(row.node.descriptor.path) ? tr(`显示 ${row.node.descriptor.path} 波形`, `Show ${row.node.descriptor.path} waveform`) : tr(`隐藏 ${row.node.descriptor.path} 波形`, `Hide ${row.node.descriptor.path} waveform`)"
+                :aria-label="visibilityLabel(row.node.descriptor.path)"
                 :aria-pressed="!hiddenChannels?.has(row.node.descriptor.path)"
-                :title="hiddenChannels?.has(row.node.descriptor.path) ? tr('显示波形', 'Show waveform') : tr('隐藏波形', 'Hide waveform')"
+                :title="visibilityLabel(row.node.descriptor.path)"
                 @click.stop="toggleVisibility(row.node.descriptor.path)"
               >
                 <EyeOff v-if="hiddenChannels?.has(row.node.descriptor.path)" :size="15" aria-hidden="true" />
@@ -369,7 +369,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, reactive, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, shallowRef, watch } from 'vue'
 import { trackedSymbolPending, reloadTrackedSymbolSource } from '../../lib/trackedSymbolSource'
 import { Activity, ArrowDown, ArrowUp, ChevronDown, ChevronRight, Code2, Eye, EyeOff, LoaderCircle, Pin, PinOff, RefreshCw, X } from '@lucide/vue'
 import { useSymbolCatalog } from '../../composables/useSymbolCatalog'
@@ -386,8 +386,10 @@ import SymbolWriteEditor from './SymbolWriteEditor.vue'
 import SymbolRowActions from './SymbolRowActions.vue'
 import { useWatchWorkspace } from '../../composables/useWatchWorkspace'
 import { API_BASE } from '../../lib/runtimeEndpoint'
-import { DESKTOP_SETTINGS_STORAGE_KEY } from '../../lib/desktopSettings'
+import { DESKTOP_SETTINGS_STORAGE_KEY, isSymbolFilePath, isSameFileSourcePath, loadDesktopSettings, saveDesktopSettings } from '../../lib/desktopSettings'
 import { useWatchSectionSizes } from '../../composables/useWatchSectionSizes'
+import { domainAction, pathArg, pathsArg, boolArg, requireDomain, type DomainArgs } from '../../lib/domainActions'
+import { useBinaryStream } from '../../composables/useBinaryStream'
 
 const props = withDefaults(defineProps<{
   deviceConnected: boolean
@@ -396,6 +398,9 @@ const props = withDefaults(defineProps<{
   latestValues: Record<string, number | boolean>
   hiddenChannels?: ReadonlySet<string>
   snapshotPath?: string | null
+  panelId?: string
+  viewPaths?: string[]
+  subscribeValues?: boolean
 }>(), {
   symbolLoaded: true,
   symbolError: '',
@@ -409,6 +414,20 @@ const emit = defineEmits<{
 }>()
 
 const catalog = useSymbolCatalog()
+// A variables-only card subscribes to the same backend acquisition stream.
+// It owns a small display buffer and never starts or stops the producer.
+const valueStream = props.subscribeValues ? useBinaryStream('superwatch', { capacity: 128, channelCount: 1 }) : null
+const sampledValues = shallowRef<Record<string, number | boolean>>({})
+const latestValues = computed(() => props.subscribeValues ? sampledValues.value : props.latestValues)
+if (valueStream) {
+  watch(valueStream.waveformSummary, summary => {
+    const channels = valueStream.superwatchMetadata.value?.channels || []
+    if (!summary || summary.channelCount !== channels.length) return
+    const values = new Float32Array(summary.latestValues)
+    sampledValues.value = Object.fromEntries(channels.slice(0, 500).flatMap((channel, index) => Number.isFinite(values[index]) ? [[channel.name, values[index]]] : []))
+  })
+  watch(() => props.deviceConnected, connected => { if (connected) valueStream.start(); else { valueStream.stop(); sampledValues.value = {} } }, { immediate: true })
+}
 const displayPrefs = useWatchWorkspace()
 const toast = useToast()
 const {
@@ -420,10 +439,10 @@ const {
   parseSelectedSymbols,
 } = useDashboardSetup()
 // Local layout preferences must not alter shared sampling or waveform groups.
-const sectionStorageKey = DESKTOP_SETTINGS_STORAGE_KEY + '.superwatch-sections'
+const sectionStorageKey = DESKTOP_SETTINGS_STORAGE_KEY + '.superwatch-sections' + (props.panelId ? '.' + props.panelId : '')
 const collapsed = reactive({ signals: false, pinned: false, all: false })
 const sectionRegion = ref<HTMLElement | null>(null)
-const sectionSizes = useWatchSectionSizes(sectionRegion, collapsed)
+const sectionSizes = useWatchSectionSizes(sectionRegion, collapsed, props.panelId)
 try {
   const saved = JSON.parse(localStorage.getItem(sectionStorageKey) || '{}')
   for (const key of ['signals', 'pinned', 'all'] as const) {
@@ -444,7 +463,13 @@ const cLayoutDefinition = ref('')
 const cLayoutPack = ref('')
 const selectedOnly = ref(false)
 const selected = shallowRef(new Set<string>())
-const selectedPaths = computed(() => [...selected.value])
+const localHidden = shallowRef(new Set<string>())
+const standaloneVariables = computed(() => props.hiddenChannels === undefined)
+const hiddenChannels = computed(() => props.hiddenChannels ?? localHidden.value)
+const localViewPaths = ref<string[] | null>(props.viewPaths?.length ? [...props.viewPaths] : null)
+watch(() => props.viewPaths, value => { localViewPaths.value = value?.length ? [...value] : null })
+const selectedPaths = computed(() => [...selected.value].filter(path => !localViewPaths.value || localViewPaths.value.includes(path)))
+const selectedSignals = ref<InstanceType<typeof SelectedSignals>>()
 const selectionBusy = shallowRef(new Set<string>())
 const writing = shallowRef(new Set<string>())
 type WriteSection = 'selected' | 'pinned' | 'all'
@@ -504,7 +529,7 @@ const rows = computed(() => visibleSymbolRows(tree.value, {
 const variableGroups = computed(() => [
   {
     key: 'pinned' as const, title: tr(`常用变量 · ${pins.value.length}`, `Pinned variables · ${pins.value.length}`),
-    rows: pins.value.map(path => ({
+    rows: pins.value.filter(path => !localViewPaths.value || localViewPaths.value.includes(path)).map(path => ({
       node: { key: path, label: path, kind: 'leaf', descriptor: pinnedDescriptors.value.get(path) ?? null,
         container: null, browse: null, children: [], leafCount: 1, childCount: null },
       depth: 0, expanded: false, selectedLeafCount: Number(selected.value.has(path)),
@@ -540,8 +565,8 @@ async function loadPins(): Promise<void> {
   }
 }
 
-async function savePins(next: string[]): Promise<void> {
-  if (pinsBusy.value || !pinsReady.value) return
+async function savePins(next: string[], strict = false): Promise<void> {
+  if (pinsBusy.value || !pinsReady.value) { if (strict) throw new Error('Pins are not ready'); return }
   pinsBusy.value = true
   pinsRequest += 1
   try {
@@ -552,6 +577,7 @@ async function savePins(next: string[]): Promise<void> {
   } catch (cause) {
     pinsRefreshPending = true
     pinsError.value = tr('置顶未保存：', 'Pinned variables were not saved: ') + String(cause)
+    if (strict) throw cause
   } finally {
     pinsBusy.value = false
     if (pinsRefreshPending) {
@@ -656,9 +682,9 @@ async function toggleArraySnapshot(node: SymbolTreeNode): Promise<void> {
   openArraySnapshotDialog(node)
 }
 
-async function confirmArraySnapshot(): Promise<void> {
+async function confirmArraySnapshot(strict: unknown = false): Promise<void> {
   const node = snapshotDialogNode.value
-  if (!node || snapshotRangeError.value) return
+  if (!node || snapshotRangeError.value) { if (strict === true) throw new Error(snapshotRangeError.value || 'No array selected'); return }
   snapshotBusy.value = node.key
   try {
     await request('/api/dash/superwatch/array-snapshot/select', {
@@ -673,6 +699,7 @@ async function confirmArraySnapshot(): Promise<void> {
     snapshotDialogNode.value = null
   } catch (cause) {
     toast.error(cause instanceof Error ? cause.message : String(cause))
+    if (strict === true) throw cause
   } finally {
     snapshotBusy.value = null
   }
@@ -715,8 +742,8 @@ async function toggleSelection(symbol: SymbolDescriptor, event: Event): Promise<
   input.checked = selected.value.has(symbol.path)
 }
 
-async function changeSelection(path: string, symbol: SymbolDescriptor | null): Promise<void> {
-  if (selectionBusy.value.has(path) || catalog.stale.value) return
+async function changeSelection(path: string, symbol: SymbolDescriptor | null, strict = false): Promise<void> {
+  if (selectionBusy.value.has(path) || catalog.stale.value) { if (strict) throw new Error('Selection busy or symbols stale'); return }
   const checked = symbol !== null
   selectionBusy.value = withSet(selectionBusy.value, path, true)
   try {
@@ -734,6 +761,7 @@ async function changeSelection(path: string, symbol: SymbolDescriptor | null): P
     if (!checked) selectionRemoved(path)
   } catch (cause) {
     toast.error(cause instanceof Error ? cause.message : String(cause))
+    if (strict) throw cause
   } finally {
     selectionRevision++
     selectionBusy.value = withSet(selectionBusy.value, path, false)
@@ -796,7 +824,7 @@ function closeCLayout(): void {
   cLayoutOpen.value = false
 }
 
-async function applyCLayout(): Promise<void> {
+async function applyCLayout(strict: unknown = false): Promise<void> {
   try {
     const result = await catalog.applyCLayout(
       cLayoutVariable.value.trim(),
@@ -808,11 +836,20 @@ async function applyCLayout(): Promise<void> {
     toast.success(tr(`已解析 ${result.layout.leaf_count} 个成员`, `Parsed ${result.layout.leaf_count} members`))
   } catch (cause) {
     toast.error(cause instanceof Error ? cause.message : String(cause))
+    if (strict === true) throw cause
   }
 }
 
 function toggleVisibility(path: string): void {
-  emit('visibility-change', path, props.hiddenChannels?.has(path) ?? false)
+  changeVisibility(path, hiddenChannels.value.has(path))
+}
+function visibilityLabel(path: string): string {
+  const action = hiddenChannels.value.has(path) ? tr('显示', 'Show') : tr('隐藏', 'Hide')
+  return `${action} ${path} ${standaloneVariables.value ? tr('已选变量', 'selected variable') : tr('波形', 'waveform')}`
+}
+function changeVisibility(path: string, visible: boolean): void {
+  if (standaloneVariables.value) localHidden.value = withSet(localHidden.value, path, !visible)
+  emit('visibility-change', path, visible)
 }
 
 function canWrite(symbol?: SymbolDescriptor): boolean {
@@ -828,7 +865,7 @@ function writeTitle(symbol?: SymbolDescriptor): string {
 
 function beginEdit(symbol: SymbolDescriptor | undefined, section: WriteSection): void {
   if (!symbol || !canWrite(symbol) || writing.value.has(symbol.path)) return
-  const current = props.latestValues[symbol.path]
+  const current = latestValues.value[symbol.path]
   if (symbol.scalar_kind === 'bool') {
     draft.value = String(Boolean(current))
   } else if (symbol.scalar_kind === 'enum') {
@@ -854,17 +891,17 @@ function typedValue(symbol: SymbolDescriptor): unknown {
   return value
 }
 
-async function writeValue(): Promise<void> {
+async function writeValue(strict: unknown = false): Promise<void> {
   const editor = editing.value
-  if (!editor || editor.generation !== catalog.generation.value || !canWrite(editor.symbol) || !draft.value.trim()) return
+  if (!editor || editor.generation !== catalog.generation.value || !canWrite(editor.symbol) || !draft.value.trim()) { if (strict === true) throw new Error('Variable is not writable'); return }
   const symbol = editor.symbol
-  if (writing.value.has(symbol.path)) return
+  if (writing.value.has(symbol.path)) { if (strict === true) throw new Error('Variable write is busy'); return }
   writing.value = withSet(writing.value, symbol.path, true)
   delete writeSuccess[symbol.path]
   try {
     const requestedValue = typedValue(symbol)
     const result = await catalog.writeSymbol(symbol.path, requestedValue)
-    if (disposed || editor.generation !== catalog.generation.value || !props.deviceConnected) return
+    if (disposed || editor.generation !== catalog.generation.value || !props.deviceConnected) { if (strict === true) throw new Error('Write acknowledged but view changed; read current state before continuing'); return }
     writeSuccess[symbol.path] = result.value
     if (result.mode === 'legacy-gap') {
       toast.info(tr('已写入。当前固件或目标地址使用兼容写入，期间有采样空档，曲线历史已保留。',
@@ -873,6 +910,7 @@ async function writeValue(): Promise<void> {
     if (editing.value === editor) editing.value = null
   } catch (cause) {
     toast.error(cause instanceof Error ? cause.message : String(cause))
+    if (strict === true) throw cause
   } finally {
     writing.value = withSet(writing.value, symbol.path, false)
   }
@@ -884,7 +922,7 @@ const reloadPromptOpen = ref(false)
 watch(trackedSymbolPending, revision => { if (revision) reloadPromptOpen.value = true }, { immediate: true })
 let promptedSourceSequence: number | undefined
 const reloadingSources = ref(false)
-async function reloadSources(): Promise<void> {
+async function reloadSources(strict: unknown = false): Promise<void> {
   reloadingSources.value = true
   reloadPromptOpen.value = false
   try {
@@ -892,12 +930,13 @@ async function reloadSources(): Promise<void> {
     await refreshSourceStatus()
   } catch (cause) {
     toast.error(cause instanceof Error ? cause.message : String(cause))
+    if (strict === true) throw cause
   } finally {
     reloadingSources.value = false
   }
 }
 
-async function reparseSymbols(): Promise<void> {
+async function reparseSymbols(strict: unknown = false): Promise<void> {
   try {
     const summary = await catalog.reparse()
     applyRebindSummary(summary)
@@ -907,6 +946,7 @@ async function reparseSymbols(): Promise<void> {
     )
   } catch (cause) {
     toast.error(cause instanceof Error ? cause.message : String(cause))
+    if (strict === true) throw cause
   }
 }
 
@@ -1010,6 +1050,134 @@ watch(tree, roots => {
     searchExpansionSnapshot = new Set([...searchExpansionSnapshot].filter(path => valid.has(path)))
   }
 })
+function semanticCatalog() {
+  return [
+    domainAction('symbols.search', 'Search symbols and show matching tree rows', { query: { type: 'string', maxLength: 512 }, selectedOnly: boolArg }, ['query']),
+    domainAction('symbols.inspect', 'Read a page of selection, pins and current symbol rows on demand', { offset: { type: 'integer', minimum: 0 }, limit: { type: 'integer', minimum: 1, maximum: 200 } }),
+    domainAction('symbols.expand', 'Expand or collapse a symbol tree branch', { path: pathArg, expanded: boolArg }, ['path', 'expanded']),
+    domainAction('symbols.describe', 'Resolve a symbol type, address and write permissions', { path: pathArg }, ['path']),
+    domainAction('symbols.select', 'Add or remove a shared acquisition item', { path: pathArg, selected: boolArg }, ['path', 'selected'], 'device'),
+    domainAction('symbols.write', 'Write using the existing typed editor: numeric/hex text, enum name, or true/false; acknowledgement is not a fresh sample', { path: pathArg, value: { type: 'string', maxLength: 512 } }, ['path', 'value'], 'device'),
+    domainAction('symbols.pins.set', 'Replace ordered shared pinned variable paths', { paths: pathsArg }, ['paths'], 'file'),
+    domainAction('symbols.array.set', 'Select the shared one-dimensional array snapshot window', { path: pathArg, start: { type: 'integer', minimum: 0 }, count: { type: 'integer', minimum: 1, maximum: 4096 } }, ['path', 'start', 'count'], 'device'),
+    domainAction('symbols.array.clear', 'Clear the shared array snapshot selection', {}, [], 'device'),
+    domainAction('symbols.reload', 'Reload currently configured symbol sources', {}, [], 'file'),
+    domainAction('symbols.source.load', 'Load an existing backend AXF/ELF path using the dashboard symbol loader', { path: { type: 'string', maxLength: 4096 } }, ['path'], 'file'),
+    domainAction('symbols.source.parse', 'Parse the currently selected symbol file', {}, [], 'file'),
+    domainAction('symbols.connection.connect', 'Use the dashboard quick-connect operation with its existing device ownership checks', {}, [], 'device'),
+    domainAction('symbols.reparse', 'Reparse the current symbol source and rebind selected items', {}, [], 'file'),
+    domainAction('symbols.c-layout.apply', 'Apply a C layout to an existing variable', { path: pathArg, definition: { type: 'string', maxLength: 65536 }, pack: { type: 'integer', enum: [1, 2, 4, 8, 16] } }, ['path', 'definition'], 'file'),
+    domainAction('symbols.view.set', 'Set this panel display subset, alignment and sections without changing sampling', { paths: pathsArg, allSignals: boolArg, alignment: { type: 'string', enum: ['left', 'right'] }, signalsCollapsed: boolArg, pinnedCollapsed: boolArg, allCollapsed: boolArg }),
+    domainAction('symbols.visibility.set', standaloneVariables.value ? 'Show or hide a row only in this variable panel; does not change other waveform panels or sampling' : 'Show or hide a curve in the associated SuperWatch view', { path: pathArg, visible: boolArg }, ['path', 'visible']),
+    domainAction('symbols.sections.resize', 'Adjust a catalog section height in this panel', { section: { type: 'string', enum: ['signals', 'pinned'] }, height: { type: 'number', minimum: 76, maximum: 4000 } }, ['section', 'height']),
+    domainAction('symbols.sections.reset', 'Restore the default catalog section heights'),
+    ...(selectedSignals.value?.catalog?.() || []),
+  ]
+}
+function read() {
+  const visible = rows.value.slice(0, 24)
+  const inheritedPaths = props.viewPaths?.length ? props.viewPaths : null
+  const viewPaths = JSON.stringify(localViewPaths.value) === JSON.stringify(inheritedPaths) ? undefined : localViewPaths.value
+  return {
+    view: { viewPaths, hidden: standaloneVariables.value ? [...localHidden.value] : undefined, alignment: pathAlignment.value.edge, sections: { ...collapsed }, sectionSizes: { ...sectionSizes.preferred }, signals: { organizing: selectedSignals.value?.read?.()?.organizing || false } },
+    generation: catalog.generation.value, stale: catalog.stale.value, loading: catalog.loading.value,
+    query: query.value, selectedOnly: selectedOnly.value, selectedCount: selected.value.size, selected: [...selected.value].slice(0, 64),
+    visibleSelectedCount: selectedPaths.value.filter(path => !standaloneVariables.value || !localHidden.value.has(path)).length, visibleSelected: selectedPaths.value.filter(path => !standaloneVariables.value || !localHidden.value.has(path)).slice(0, 64), hidden: [...hiddenChannels.value].slice(0, 64),
+    pinCount: pins.value.length, pins: pins.value.slice(0, 64), snapshotPath: props.snapshotPath, sourcePending: sourcePending.value,
+    alignment: pathAlignment.value.edge, sections: { ...collapsed }, expanded: [...expanded.value].slice(0, 64), rowCount: rows.value.length,
+    rows: visible.map(row => ({ path: row.node.key, label: row.node.label, kind: row.node.kind, expanded: row.expanded, selected: selected.value.has(row.node.key), descriptor: row.node.descriptor ? { type: row.node.descriptor.type_name, address: row.node.descriptor.address, writable: row.node.descriptor.writable, size: row.node.descriptor.size } : null })),
+    rowsTruncated: rows.value.length > visible.length, signals: selectedSignals.value?.read?.() || null,
+  }
+}
+function findNode(path: string, nodes = tree.value): SymbolTreeNode | undefined {
+  for (const node of nodes) { if (node.key === path) return node; const match = findNode(path, node.children); if (match) return match }
+}
+async function execute(action: string, args: DomainArgs = {}) {
+  requireDomain(!disposed, 'Panel is no longer available')
+  if (args.path !== undefined) requireDomain(typeof args.path === 'string' && args.path.trim(), 'Symbol path cannot be empty')
+  if (action.startsWith('signals.')) { requireDomain(selectedSignals.value, 'Selected signal view is unavailable'); return selectedSignals.value.execute(action, args) }
+  if (action === 'symbols.inspect') {
+    const start = args.offset || 0, end = start + (args.limit || 100)
+    return { selectedCount: selected.value.size, pinCount: pins.value.length, selected: [...selected.value].slice(start, end), pins: pins.value.slice(start, end), expanded: [...expanded.value].slice(start, end), rowCount: rows.value.length, rows: rows.value.slice(start, end).map(row => ({ path: row.node.key, kind: row.node.kind, label: row.node.label, expanded: row.expanded, type: row.node.descriptor?.type_name, address: row.node.descriptor?.address, writable: row.node.descriptor?.writable })) }
+  }
+  if (action === 'symbols.search') {
+    query.value = args.query
+    if (args.selectedOnly !== undefined) selectedOnly.value = args.selectedOnly
+    await nextTick()
+    if (query.value.trim()) searchItems.value = await catalog.searchSymbols(query.value.trim())
+  } else if (action === 'symbols.expand') {
+    const node = findNode(args.path)
+    requireDomain(node && node.kind !== 'leaf', 'Unknown branch; expand its parent first')
+    if (args.expanded && node.browse) await catalog.loadBrowseChildren(node.browse)
+    if (query.value.trim() || selectedOnly.value) filteredCollapsed.value = withSet(filteredCollapsed.value, args.path, !args.expanded)
+    else expanded.value = withSet(expanded.value, args.path, args.expanded)
+  } else if (action === 'symbols.describe') {
+    const descriptor = await catalog.resolveSymbol(args.path)
+    requireDomain(descriptor, 'Unknown symbol')
+    return { descriptor, generation: catalog.generation.value, writable: canWrite(descriptor) }
+  } else if (action === 'symbols.select') {
+    requireDomain(props.deviceConnected, 'Device is not connected')
+    const descriptor = args.selected ? await catalog.resolveSymbol(args.path) : null
+    requireDomain(!args.selected || descriptor, 'Unknown symbol')
+    await changeSelection(args.path, descriptor || null, true)
+  } else if (action === 'symbols.write') {
+    const descriptor = await catalog.resolveSymbol(args.path)
+    requireDomain(descriptor && canWrite(descriptor), 'Variable is not writable')
+    requireDomain(!writing.value.has(args.path), 'Variable write is busy')
+    requireDomain(typeof args.value === 'string', 'Variable value must use the typed editor text format')
+    requireDomain(descriptor.scalar_kind !== 'bool' || args.value === 'true' || args.value === 'false', 'Boolean variable requires true or false')
+    beginEdit(descriptor, 'selected'); draft.value = String(args.value)
+    requireDomain(editing.value?.symbol.path === args.path, 'Variable editor changed before the write')
+    await writeValue(true)
+    return { path: args.path, acknowledgedValue: writeSuccess[args.path], sampled: false, generation: catalog.generation.value }
+  } else if (action === 'symbols.pins.set') { requireDomain(new Set(args.paths).size === args.paths.length && args.paths.every((path: string) => path.trim()), 'Pinned paths must be non-empty and unique'); await savePins(args.paths, true) }
+  else if (action === 'symbols.array.set') {
+    const node = findNode(args.path)
+    requireDomain(node && isArraySnapshotNode(node), 'Array is unavailable; expand its parent first')
+    requireDomain(!snapshotBusy.value, 'Array snapshot is busy')
+    openArraySnapshotDialog(node); snapshotStartIndex.value = String(args.start); snapshotCount.value = String(args.count)
+    await confirmArraySnapshot(true)
+  } else if (action === 'symbols.array.clear') { await request('/api/dash/superwatch/array-snapshot/clear', { method: 'POST' }); emit('snapshot-change', null) }
+  else if (action === 'symbols.reload') { requireDomain(!reloadingSources.value, 'Symbol reload is busy'); await reloadSources(true) }
+  else if (action === 'symbols.connection.connect') requireDomain(await quickConnect(), 'Dashboard connection failed; inspect device state')
+  else if (action === 'symbols.source.load' || action === 'symbols.source.parse') {
+    requireDomain(!loadingSymbols.value, 'Symbol loading is busy')
+    if (action === 'symbols.source.load') {
+      requireDomain(isSymbolFilePath(args.path), 'Provide an AXF or ELF path accessible to the backend')
+      const settings = loadDesktopSettings(window.localStorage)
+      saveDesktopSettings(window.localStorage, { ...settings, symbolPath: args.path, symbolDisplayPath: '', rttAddress: isSameFileSourcePath(settings.symbolPath, args.path) ? settings.rttAddress : '' })
+    }
+    requireDomain(await parseSelectedSymbols(), 'Symbol loading failed; inspect symbol status')
+  }
+  else if (action === 'symbols.reparse') { requireDomain(!catalog.reparsing.value, 'Symbol parse is busy'); await reparseSymbols(true) }
+  else if (action === 'symbols.c-layout.apply') {
+    requireDomain(!catalog.applyingLayout.value, 'C layout is busy')
+    cLayoutVariable.value = args.path; cLayoutDefinition.value = args.definition; cLayoutPack.value = args.pack === undefined ? '' : String(args.pack)
+    await applyCLayout(true)
+  } else if (action === 'symbols.sections.resize') {
+    requireDomain(sectionSizes.canResize(args.section), 'This section is collapsed or fills the remaining area')
+    sectionSizes.resize(args.section, args.height)
+  } else if (action === 'symbols.sections.reset') sectionSizes.reset()
+  else if (action === 'symbols.visibility.set') { requireDomain(selected.value.has(args.path), 'Signal is not selected'); changeVisibility(args.path, args.visible) }
+  else if (action === 'symbols.view.set') {
+    if (args.allSignals) localViewPaths.value = null
+    else if (args.paths !== undefined) localViewPaths.value = [...args.paths]
+    if (args.alignment) alignPaths(args.alignment)
+    for (const key of ['signals', 'pinned', 'all'] as const) if (typeof args[key + 'Collapsed'] === 'boolean') collapsed[key] = args[key + 'Collapsed']
+  } else throw new Error(`Unknown symbol action: ${action}`)
+  await nextTick()
+  return read()
+}
+function restore(view: DomainArgs) {
+  if (standaloneVariables.value && Array.isArray(view.hidden)) localHidden.value = new Set(view.hidden.filter((path: unknown) => typeof path === 'string').slice(0, 500))
+  if (Array.isArray(view.viewPaths)) localViewPaths.value = view.viewPaths.filter((path: unknown) => typeof path === 'string').slice(0, 500)
+  else if (view.viewPaths === null) localViewPaths.value = null
+  if (view.alignment === 'left' || view.alignment === 'right') alignPaths(view.alignment)
+  for (const key of ['signals', 'pinned', 'all'] as const) if (typeof view.sections?.[key] === 'boolean') collapsed[key] = view.sections[key]
+  if (view.sectionSizes) sectionSizes.restore(view.sectionSizes)
+  if (view.signals) selectedSignals.value?.restore(view.signals)
+}
+defineExpose({ catalog: semanticCatalog, read, execute, restore, hasSignal: (path: string) => selected.value.has(path) })
 </script>
 
 <style scoped>

@@ -6,6 +6,7 @@ import { nextTick, shallowRef } from 'vue'
 import WaveformViewer from './WaveformViewer.vue'
 import { StreamType } from '../../lib/stream/protocol'
 import { StreamDecoder, type WorkerOutput } from '../../workers/streamDecoder.worker'
+import { interaction } from '../../lib/frontendControl'
 
 const mocks = vi.hoisted(() => ({
   useBinaryStream: vi.fn(),
@@ -125,7 +126,7 @@ function wheelEvent(init: WheelEventInit) {
 }
 
 async function loadRttViewerRuntime(
-  mode: 'VOFA' | 'SuperWatch' = 'VOFA', capacity = 4, request?: typeof fetch,
+  mode: 'VOFA' | 'SuperWatch' = 'VOFA', capacity = 4, request?: typeof fetch, panelId?: string,
 ) {
   vi.stubGlobal('fetch', request ?? vi.fn().mockResolvedValue({
     ok: true, json: async () => ({ running: false, channels: [] }),
@@ -174,7 +175,7 @@ async function loadRttViewerRuntime(
   ;(window as any).__canvasPointVisits = 0
   ;(window as any).__watchTableUpdates = 0
   ;(window as any).__canvasLabels = []
-  const wrapper = mount(WaveformViewer, { props: { mode, deviceConnected: true } })
+  const wrapper = mount(WaveformViewer, { props: { mode, deviceConnected: true, panelId } })
   await new Promise(resolve => setTimeout(resolve, 0))
   const host = wrapper.element
   host.querySelectorAll('script[src]').forEach(script => script.remove())
@@ -191,7 +192,7 @@ async function loadRttViewerRuntime(
   ).replace(
     'function updateWatchTable() {',
     'function updateWatchTable() { window.__watchTableUpdates++;',
-  ) + `
+  ).replace(/\/\/ END VIEWER FACTORY[^\n]*/, `
 window.__rttTestProbe = {
   timeGrid: timeGrid,
   fields: function() { return FIELDS; },
@@ -235,11 +236,14 @@ window.__rttTestProbe = {
   binaryEnvelope: function() { return binaryEnvelope; },
   drawChart: drawChart,
   addSuperwatchName: superwatchAddName
-};`
-  new Function(instrumented).call(window)
+};`)
+  if (panelId) {
+    new Function(instrumented.replace("else if (typeof CONFIG !== 'undefined') createWaveformViewer(CONFIG, null);", '')).call(window)
+    ;(window as any).__mklinkCreateWaveformViewer({ ...(globalThis as any).CONFIG, panelId, viewerSettingsKey: 'waveform-test.' + panelId }, host)
+  } else new Function(instrumented).call(window)
   return {
     wrapper,
-    viewer: (window as any).__waveformViewers[mode] as any,
+    viewer: (window as any).__waveformViewers[panelId || mode] as any,
     probe: (window as any).__rttTestProbe as any,
     cleanup() {
       wrapper.unmount()
@@ -1538,7 +1542,7 @@ describe('VOFA viewer hot path source guard', () => {
   it('routes waveform API calls through the runtime-selected backend origin', () => {
     expect(componentSource).toContain("import { API_BASE } from '../../lib/runtimeEndpoint'")
     expect(componentSource).toContain('fetch(`${API_BASE}/api/dash/${')
-    expect(componentSource).toContain('apiBase: ${JSON.stringify(API_BASE)}')
+    expect(componentSource).toContain('apiBase: API_BASE')
     expect(source).toContain("var API_BASE = CONFIG.apiBase || '';")
     expect(source).toContain("var API_CTRL = API_BASE + '/api/dash/'")
     expect(source).toContain("var API_SW = API_BASE + '/api/dash/superwatch/';")
@@ -2565,7 +2569,7 @@ describe('VOFA viewer hot path source guard', () => {
   })
 
   it('disposes global viewer observers and listeners when the Vue view unmounts', () => {
-    expect(componentSource).toContain('viewers?.[props.mode]?.dispose?.()')
+    expect(componentSource).toContain('viewers?.[viewerKey]?.dispose?.()')
     expect(source).toContain('var viewerAbortController = new AbortController();')
     expect(source).toContain('viewerResizeObserver.disconnect();')
     expect(source).toContain('viewerAbortController.abort();')
@@ -2662,7 +2666,7 @@ describe('VOFA viewer hot path source guard', () => {
   })
 
   it('clears a stale render pause before starting a new acquisition', () => {
-    const startHandler = source.match(/document\.getElementById\('btn-start'\)\.addEventListener[\s\S]*?\n}\);/)?.[0] ?? ''
+    const startHandler = source.match(/function startCollection\(\)[\s\S]*?\n}/)?.[0] ?? ''
     expect(startHandler).toContain('renderPaused = false;')
   })
 
@@ -4070,4 +4074,167 @@ describe('VOFA viewer typed-ring runtime', () => {
     } finally { runtime.cleanup(); delete (window as any).__MKLINK_WATCH_WORKSPACE__ }
   })
 
+})
+
+
+describe('independent semantic waveform panels', () => {
+  it('isolates duplicate canvases, view controls, signal subsets, shortcuts and disposal', async () => {
+    const left = await loadRttViewerRuntime('SuperWatch', 100, undefined, 'wave-left')
+    const right = await loadRttViewerRuntime('SuperWatch', 100, undefined, 'wave-right')
+    try {
+      const channels = [{ name: 'a', type: 'float' }, { name: 'b', type: 'float' }]
+      left.viewer.configureBinaryChannels(channels)
+      right.viewer.configureBinaryChannels(channels)
+      left.viewer.setSignals(['a'])
+      right.viewer.setSignals(['b'])
+      left.viewer.updateAcquisitionStatus({ running: true, state: 'running', interval: 0.001 })
+      right.viewer.updateAcquisitionStatus({ running: true, state: 'running', interval: 0.001 })
+      await left.viewer.execute('waveform.pause', { paused: true })
+      await left.viewer.execute('waveform.channel', { name: 'a', color: '#123456', precision: 5 })
+      await left.viewer.execute('waveform.legend', { visible: true })
+      await left.viewer.execute('waveform.viewport', { span: 2 })
+      expect((await left.viewer.execute('waveform.inspect', {})).channels.find((ch: any) => ch.name === 'a')).toMatchObject({ color: '#123456', visible: true, precision: 5 })
+      expect(left.viewer.read().channels.preview.find((ch: any) => ch.name === 'b').visible).toBe(false)
+      expect(right.viewer.read().channels.preview.find((ch: any) => ch.name === 'a').visible).toBe(false)
+      expect(right.viewer.read().channels.preview.find((ch: any) => ch.name === 'b').visible).toBe(true)
+      expect(right.viewer.read().localPaused).toBe(false)
+      expect(right.viewer.read().view.legend).toBe(false)
+      expect(left.wrapper.element.querySelector('#btn-pause')?.textContent).not.toBe(right.wrapper.element.querySelector('#btn-pause')?.textContent)
+      ;(right.wrapper.element as HTMLElement).focus()
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', bubbles: true }))
+      expect(right.viewer.read().view.cursor.enabled).toBe(true)
+      expect(left.viewer.read().view.cursor.enabled).toBe(false)
+      right.cleanup()
+      expect((window as any).__waveformViewers['wave-left']).toBe(left.viewer)
+      expect((window as any).__waveformViewers['wave-right']).toBeUndefined()
+      await left.viewer.execute('waveform.legend', { visible: false })
+      expect(left.viewer.read().view.legend).toBe(false)
+    } finally {
+      if ((window as any).__waveformViewers['wave-right']) right.cleanup()
+      left.cleanup()
+    }
+  })
+
+  it('round trips bounded display settings without starting or writing the target', async () => {
+    const request = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ state: 'stopped', channels: [] }) })
+    const runtime = await loadRttViewerRuntime('SuperWatch', 100, request, 'restore-view')
+    try {
+      runtime.viewer.configureBinaryChannels([{ name: 'gain', type: 'float' }])
+      const calls = request.mock.calls.length
+      await runtime.viewer.execute('waveform.channel', { name: 'gain', format: 'hex', precision: 4 })
+      await runtime.viewer.execute('waveform.y', { name: 'gain', min: -4, max: 10 })
+      await runtime.viewer.execute('waveform.threshold', { name: 'gain', alarmHigh: 9 })
+      await runtime.viewer.execute('waveform.column', { key: 'unit', visible: false })
+      await runtime.viewer.execute('waveform.cursor', { enabled: true, a: 1, b: 2, mode: 'value' })
+      await runtime.viewer.execute('waveform.trigger', { source: 'gain', edge: 'falling', level: 4, mode: 'single', preTrigger: 100 })
+      const state = runtime.viewer.read().view
+      // The real protocol rejects unsupported schema vocabulary before dispatch.
+      for (const spec of runtime.viewer.catalog()) {
+        const example: Record<string, unknown> = {}
+        for (const name of spec.args.required) {
+          const rule = spec.args.properties[name]
+          example[name] = rule.enum?.[0] ?? (rule.type === 'array' ? [] : rule.type === 'boolean' ? true : rule.type === 'string' ? 'gain' : rule.minimum ?? 1)
+        }
+        expect(() => interaction.validateArgs(example, spec.args)).not.toThrow()
+        expect(['view', 'device', 'file']).toContain(spec.effect)
+      }
+      expect(JSON.stringify(state)).not.toContain('ringBuf')
+      expect(state).not.toHaveProperty('workspace')
+      await runtime.viewer.execute('waveform.channel', { name: 'gain', precision: 1 })
+      await runtime.viewer.restore({ ...state, workspace: { malicious: true }, interval: 1 })
+      expect(runtime.viewer.read().view.channels[0]).toMatchObject({ precision: 4, format: 'hex', yMin: -4, yMax: 10, thresholds: { alarmHigh: 9 } })
+      expect(runtime.viewer.read().view.cursor).toEqual({ enabled: true, mode: 'value', a: 1, b: 2 })
+      expect(runtime.viewer.read().view.watchColumns.unit.visible).toBe(false)
+      expect(request).toHaveBeenCalledTimes(calls)
+      expect(() => runtime.viewer.validate('waveform.channel', { name: 'missing' })).toThrow('Unknown channel')
+      expect(() => runtime.viewer.validate('waveform.y', { min: 10, max: 2 })).toThrow('Y range')
+      expect(() => runtime.viewer.validate('waveform.channel', { name: 'gain', precision: 99 })).toThrow()
+      expect(() => runtime.viewer.validate('waveform.pause', { paused: true, script: 'x' })).toThrow('Unknown argument')
+    } finally { runtime.cleanup() }
+  })
+})
+
+
+it('reports real shared acquisition responses and propagates failures to semantic callers', async () => {
+  const request = vi.fn(async (url: any) => ({ ok: true, json: async () => String(url).endsWith('/interval') ? { interval: 0.002 } : { state: 'running', shared: true } }))
+  const runtime = await loadRttViewerRuntime('SuperWatch', 100, request as any, 'capture-control')
+  try {
+    await expect(runtime.viewer.execute('superwatch.start', {})).resolves.toMatchObject({ state: 'running', shared: true })
+    await expect(runtime.viewer.execute('superwatch.interval', { interval: 0.002 })).resolves.toEqual({ interval: 0.002 })
+    expect(request).toHaveBeenCalledWith(expect.stringContaining('/superwatch/interval'), expect.objectContaining({ method: 'POST', body: JSON.stringify({ interval: 0.002 }) }))
+    const calls = request.mock.calls.length
+    const view = runtime.viewer.read().view
+    await runtime.viewer.restore({ ...view, intervalInput: 0.25 })
+    expect(request).toHaveBeenCalledTimes(calls)
+    expect(runtime.wrapper.element.querySelector<HTMLInputElement>('#interval-input')!.value).toBe('0.25')
+    await expect(runtime.viewer.execute('superwatch.status', {})).resolves.toMatchObject({ shared: true })
+    request.mockImplementationOnce(async () => ({ ok: false, status: 409, json: async () => ({ detail: 'device is busy' }) }) as any)
+    await expect(runtime.viewer.execute('superwatch.stop', {})).rejects.toThrow('device is busy')
+    expect(runtime.viewer.catalog().find((action: any) => action.name === 'superwatch.stop').effect).toBe('device')
+  } finally { runtime.cleanup() }
+})
+
+
+it('keeps default large-channel layouts sparse and restores defaults after local edits', async () => {
+  const runtime = await loadRttViewerRuntime('SuperWatch', 100, undefined, 'sparse-view')
+  try {
+    const channels = Array.from({ length: 256 }, (_, index) => ({ name: 'device.' + 'long_variable_name_'.repeat(8) + index, type: 'float' }))
+    runtime.viewer.configureBinaryChannels(channels)
+    const saved = runtime.viewer.read().view
+    expect(saved.channels).toEqual([])
+    expect(JSON.stringify(saved).length).toBeLessThan(4096)
+    expect(runtime.viewer.read().channels.preview.length).toBeLessThanOrEqual(16)
+    await runtime.viewer.execute('waveform.channel', { name: channels[0]!.name, precision: 8 })
+    expect(runtime.viewer.read().view.channels).toHaveLength(1)
+    await runtime.viewer.restore(saved)
+    const inspection = await runtime.viewer.execute('waveform.inspect', { offset: 0, limit: 1 })
+    expect(inspection.channels).toHaveLength(1)
+    expect(inspection.channels[0].precision).toBe(2)
+    expect(() => runtime.viewer.validate('waveform.style', { name: channels[0]!.name, formula: 'x.foo' })).toThrow()
+  } finally { runtime.cleanup() }
+})
+
+
+it('cancels a deferred viewer script after unmount instead of registering a detached renderer', async () => {
+  const wrapper = mount(WaveformViewer, { props: { mode: 'SuperWatch', deviceConnected: false, panelId: 'pending-panel' } })
+  await new Promise(resolve => setTimeout(resolve, 0))
+  const translation = wrapper.element.querySelector<HTMLScriptElement>('script[src]')!
+  translation.onload?.(new Event('load'))
+  const scripts = wrapper.element.querySelectorAll<HTMLScriptElement>('script[src]')
+  const script = scripts[scripts.length - 1]!
+  const host = wrapper.element
+  wrapper.unmount()
+  expect((script as any).__mklinkContext.cancelled).toBe(true)
+  expect(host.childElementCount).toBe(0)
+  const current = vi.spyOn(document, 'currentScript', 'get').mockReturnValue(script)
+  try {
+    expect(() => new Function(viewerSource).call(window)).not.toThrow()
+    expect((window as any).__waveformViewers['pending-panel']).toBeUndefined()
+  } finally { current.mockRestore() }
+})
+
+
+it('rejects display pause while stopped and preserves a running panel pause across status ticks', async () => {
+  const runtime = await loadRttViewerRuntime('SuperWatch', 100, undefined, 'pause-precondition')
+  try {
+    runtime.viewer.updateAcquisitionStatus({ state: 'stopped', running: false })
+    await expect(runtime.viewer.execute('waveform.pause', { paused: true })).rejects.toThrow('requires running acquisition')
+    expect(runtime.viewer.read().view.paused).toBe(false)
+    runtime.viewer.updateAcquisitionStatus({ state: 'stopped', running: false })
+    expect(runtime.viewer.read().view.paused).toBe(false)
+    const restored = await runtime.viewer.restore({ ...runtime.viewer.read().view, paused: true })
+    expect(restored.view.paused).toBe(false)
+    expect(runtime.viewer.read().localPaused).toBe(false)
+    runtime.viewer.updateAcquisitionStatus({ state: 'stopped', running: false })
+    expect(runtime.viewer.read().view.paused).toBe(false)
+    runtime.viewer.updateAcquisitionStatus({ state: 'running', running: true })
+    expect((await runtime.viewer.restore({ ...runtime.viewer.read().view, paused: true })).view.paused).toBe(true)
+    await runtime.viewer.execute('waveform.pause', { paused: true })
+    runtime.viewer.updateAcquisitionStatus({ state: 'running', running: true })
+    expect(runtime.viewer.read().view.paused).toBe(true)
+    expect(runtime.viewer.read().localPaused).toBe(true)
+    await runtime.viewer.execute('waveform.pause', { paused: false })
+    runtime.viewer.updateAcquisitionStatus({ state: 'running', running: true })
+    expect(runtime.viewer.read().view.paused).toBe(false)
+  } finally { runtime.cleanup() }
 })

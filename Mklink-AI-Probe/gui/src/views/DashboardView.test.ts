@@ -7,6 +7,10 @@ import { setLanguage } from '../composables/useLanguage'
 const routerMock = vi.hoisted(() => ({
   query: {} as Record<string, string>,
 }))
+vi.mock('../composables/useFrontendWorkbench', () => ({ useFrontendWorkbench: () => ({
+  connected: { value: false }, error: { value: '' }, busy: { value: false }, sessionEpoch: { value: 0 },
+  entries: () => [], submitIntent: vi.fn(),
+}) }))
 const apiMock = vi.hoisted(() => ({
   deviceStatus: {
     __v_isRef: true,
@@ -295,6 +299,7 @@ describe('DashboardView layout classes', () => {
     expect(labels).toEqual([
       'RTT View',
       'SuperWatch',
+      '组合工作台',
       'HardFault',
       'Memory',
       '串口助手',
@@ -325,6 +330,7 @@ describe('DashboardView layout classes', () => {
     expect(wrapper.findAll('.tab-btn').map(button => button.text())).toEqual([
       'RTT View',
       'SuperWatch',
+      'Workbench',
       'HardFault',
       'Memory',
       'Serial Assistant',

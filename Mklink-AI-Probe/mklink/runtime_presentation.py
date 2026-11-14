@@ -4,7 +4,7 @@ import secrets
 import time
 from fastapi import HTTPException
 
-TABS = frozenset({'superwatch', 'rtt', 'memory', 'symbols', 'hardfault', 'systemview'})
+TABS = frozenset({'superwatch', 'rtt', 'memory', 'symbols', 'hardfault', 'systemview', 'workbench'})
 
 
 def windows(control):
