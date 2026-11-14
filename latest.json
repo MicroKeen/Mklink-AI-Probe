@@ -12,7 +12,8 @@
       "uf2_blocks": 3223,
       "urls": {
         "github": "https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/firmware-assets/HPMLink_V4.7.4.uf2"
-      }
+      },
+      "build_id": "2026-11-14T11:35:00"
     },
     {
       "family": "microlink",
@@ -24,7 +25,8 @@
       "uf2_blocks": 1664,
       "urls": {
         "github": "https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/firmware-assets/MicroLink_V3.7.0.uf2"
-      }
+      },
+      "build_id": "2026-11-13T15:18:58"
     },
     {
       "family": "microlink",
@@ -36,7 +38,8 @@
       "uf2_blocks": 3222,
       "urls": {
         "github": "https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/firmware-assets/MicroLink_V4.7.4.uf2"
-      }
+      },
+      "build_id": "2026-11-14T11:33:15"
     }
   ]
 }

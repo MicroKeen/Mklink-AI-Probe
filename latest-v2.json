@@ -13,7 +13,8 @@
       "rbl_payload_bytes": 368848,
       "urls": {
         "github": "https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/firmware-assets/MicroLink_V2.9.4.rbl"
-      }
+      },
+      "build_id": "2026-11-13T16:05:31"
     }
   ]
 }
