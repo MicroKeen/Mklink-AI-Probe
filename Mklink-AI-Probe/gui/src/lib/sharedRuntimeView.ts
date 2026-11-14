@@ -1,7 +1,9 @@
-import { API_BASE, IS_REMOTE } from './runtimeEndpoint'
+import { API_BASE, IS_REMOTE, IS_TAURI } from './runtimeEndpoint'
+import type { GuiCommand } from './guiAutomation'
 
 /** A transport-owned presence survives background timer throttling. */
-export function startSharedRuntimeView(present?: (tab: string) => Promise<void>): () => void {
+export function startSharedRuntimeView(present?: (tab: string) => Promise<void>,
+  execute?: (command: GuiCommand) => Promise<Record<string, unknown>>): () => void {
   let socket: WebSocket | null = null
   let retry: ReturnType<typeof setTimeout> | undefined
   let stopped = false
@@ -13,10 +15,29 @@ export function startSharedRuntimeView(present?: (tab: string) => Promise<void>)
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
     const current = new WebSocket(url.href)
     socket = current
+    current.onopen = () => {
+      if (execute && !IS_REMOTE && socket === current && !stopped) {
+        current.send(JSON.stringify({ type: 'gui_hello', protocol: 2, kind: IS_TAURI ? 'desktop' : 'web' }))
+      }
+    }
     current.onmessage = async event => {
       if (socket !== current || stopped || suspended || IS_REMOTE || !present) return
       let message: any
       try { message = JSON.parse(event.data) } catch { return }
+      if (message?.type === 'gui_request' && execute && typeof message.request_id === 'string' &&
+          typeof message.expires_at === 'number' && message.expires_at * 1000 >= Date.now()) {
+        let state: Record<string, unknown> = {}, error = '', ok = false
+        try { state = await execute(message.command); ok = true }
+        catch (e) { error = String(e).slice(0, 512) }
+        if (socket === current && !stopped && !suspended && current.readyState === WebSocket.OPEN) {
+          // Presence accepts bounded replies. Preserve action acknowledgement and
+          // controls even when optional panel metadata is unusually large.
+          if (JSON.stringify(state).length > 30_000) state = { ...state, panels: {}, panels_truncated: true }
+          if (JSON.stringify(state).length > 30_000) state = { truncated: true, page: state.page, context: state.context }
+          current.send(JSON.stringify({ type: 'gui_result', request_id: message.request_id, ok, state, error }))
+        }
+        return
+      }
       if (!message || typeof message !== 'object' || message.type !== 'present' || typeof message.request_id !== 'string' ||
           !['superwatch', 'rtt', 'memory', 'symbols', 'hardfault', 'systemview'].includes(message.tab) ||
           typeof message.expires_at !== 'number' || message.expires_at * 1000 < Date.now()) return

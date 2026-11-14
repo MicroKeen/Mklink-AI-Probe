@@ -7,6 +7,8 @@ STREAMS = ('rtt', 'superwatch', 'systemview', 'vofa')
 CAPABILITIES = {
     'gui_windows': ('GET', '/api/runtime/control/windows'),
     'gui_present': ('POST', '/api/runtime/control/present'),
+    'gui_action': ('POST', '/api/runtime/control/gui-action'),
+    'gui_snapshot': ('POST', '/api/runtime/control/gui-snapshot'),
     'uart_ports': ('GET', '/api/ports/uart'),
     'device_status': ('GET', '/api/device/status'),
     'debug_speed': ('GET', '/api/device/debug-speed'),
@@ -192,7 +194,7 @@ def is_uart_path(path: str) -> bool:
     return path == '/api/ports/uart' or path.startswith(('/api/dash/serial/', '/api/dash/modbus/'))
 
 
-UART_CAPABILITIES = frozenset(name for name, (_, path) in CAPABILITIES.items() if is_uart_path(path)) | {'gui_windows', 'gui_present'}
+UART_CAPABILITIES = frozenset(name for name, (_, path) in CAPABILITIES.items() if is_uart_path(path)) | {'gui_windows', 'gui_present', 'gui_action', 'gui_snapshot'}
 
 
 def validate_arguments(capability, arguments):

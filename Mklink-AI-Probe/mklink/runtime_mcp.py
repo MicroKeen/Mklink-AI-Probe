@@ -130,6 +130,48 @@ def build_server():
                                                                        open_browser=open_browser), **selection}
 
     @server.tool()
+    def gui_control(action: Literal['windows', 'snapshot', 'navigate', 'focus', 'controls', 'control.click', 'control.set', 'file.select', 'directory.select', 'systemview.window',
+                                   'systemview.pause', 'systemview.resume', 'systemview.zoom-in',
+                                   'systemview.zoom-out', 'systemview.fit', 'superwatch.pause', 'superwatch.resume'] = 'snapshot',
+                    window_id: str | None = None, page: str | None = None, tab: str | None = None,
+                    section: str | None = None, seconds: float | None = None,
+                    control_id: str | None = None, expected_context: str | None = None,
+                    value: str | int | float | bool | None = None, offset: int | None = None,
+                    path: str | None = None) -> dict:
+        """Operate the attached GUI through its real controls, without desktop automation.
+
+        First gui_open or connect, then windows; with multiple windows specify window_id.
+        navigate accepts config/dashboard/online-flash/offline-flash/remote-service;
+        dashboard tabs: rtt/superwatch/hardfault/memory/serial/modbus/systemview/symbols.
+        config sections: local/files/firmware/runtime. Navigate before panel actions.
+        snapshot asks the actual window for current page, backend health and display state.
+        systemview.window seconds: .5/1/2/5/10/30/60. Pause/resume affect display only.
+        Only applied plus returned state confirms execution; unconfirmed must not be replayed
+        automatically. focus requests OS/browser focus; inspect focused (browser may refuse).
+        controls returns paginated visible controls (50 maximum), IDs, labels, options,
+        disabled state and context. control.click/control.set require control_id and
+        expected_context from that window; set uses value. Buttons run normal GUI handlers,
+        including device operations, so execute only the user's authorized operations.
+        No arbitrary JS/selectors. Read errors/job state afterwards: dispatch is not completion.
+        file.select delivers the absolute backend path to the chosen file input/picker;
+        inspect state.file then the panel's import/replay state, never treat delivered as parsed.
+        Replay controls (RTT/SystemView/SuperWatch/Serial) appear in controls; use those same
+        play/pause/speed/seek/return-live controls. Never replay captured TX to hardware.
+        Prefer existing shared tools for capture, symbols/device operations, then navigate.
+        """
+        arguments = {key: value for key, value in {'window_id': window_id, 'page': page, 'tab': tab,
+                     'section': section, 'seconds': seconds, 'control_id': control_id,
+                     'expected_context': expected_context, 'value': value, 'offset': offset,
+                     'path': path}.items() if value is not None}
+        if action == 'windows':
+            if arguments:
+                raise ValueError('windows takes no selectors or display arguments')
+            return client().call('gui_windows')
+        if action == 'snapshot':
+            return client().call('gui_snapshot', arguments)
+        return client().call('gui_action', {'action': action, **arguments})
+
+    @server.tool()
     def inspect_mcu(project_root: str = ".", device: str | None = None, flm: str | None = None) -> dict:
         """Inspect or fuzzy-search the unified MCU catalog; no writes or CDC I/O.
 
@@ -602,6 +644,7 @@ def build_server():
     def gui_call(capability: str, arguments: dict | None = None) -> dict | list[dict]:
         """Invoke an advertised GUI capability on the shared backend.
 
+        gui_control is the typed entry for navigation, fresh window snapshots and display controls.
         gui_windows lists presentation-capable windows; gui_present({window_id, tab})
         switches an existing window only when showing results is useful. Routine collection
         stays in the background. Only displayed confirms navigation; never auto-replay.

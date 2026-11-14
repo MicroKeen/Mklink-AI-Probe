@@ -521,21 +521,22 @@ describe('DashboardView layout classes', () => {
     expect(rttButton?.classes()).toContain('active')
   })
 
-  it('reconnects SystemView control and binary streams when opening a running trace', () => {
+  it('uses the existing status poll and binary stream without occupying an HTTP SSE slot', () => {
     const source = readFileSync('src/components/dash/SystemViewTab.vue', 'utf8')
 
     expect(source).toContain('async function reconnectRunningTrace')
     expect(source).toContain('dash.getStatus()')
     expect(source).toMatch(/if\s*\(status\?\.running\)/)
-    expect(source).toContain('connectStatus()')
+    expect(source).not.toContain('useEventSource')
+    expect(source).toContain('watch(dash.status')
     expect(source).toContain('binaryStream.start()')
   })
 
-  it('stops both SystemView transports when the tab unmounts', () => {
+  it('stops SystemView polling and binary transport when the tab unmounts', () => {
     const source = readFileSync('src/components/dash/SystemViewTab.vue', 'utf8')
     const cleanup = source.slice(source.indexOf('onUnmounted(() => {'), source.indexOf('\n})', source.indexOf('onUnmounted(() => {')))
 
-    expect(cleanup).toContain('disconnectStatus()')
+    expect(cleanup).toContain('clearTimeout(externalTraceTimer)')
     expect(cleanup).toContain('binaryStream.stop()')
     expect(cleanup).toContain('cancelPendingConnect()')
     expect(cleanup).toContain('renderScheduler?.dispose()')

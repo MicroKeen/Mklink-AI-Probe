@@ -4,6 +4,7 @@
       ref="fileInput"
       class="sv-file-input"
       type="file"
+      data-testid="systemview-replay-file"
       accept=".jsonl,application/x-ndjson,application/json"
       @change="onImportFileChange"
     >
@@ -305,7 +306,6 @@ import { CAPTURE_START_TIMEOUT_MS } from '../../lib/captureStartup'
 import { ref, shallowRef, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { Circle, Pause, Play, RotateCcw, Search, Square } from '@lucide/vue'
 import { useDashboard } from '../../composables/useDashboard'
-import { useEventSource } from '../../composables/useEventSource'
 import { useBinaryStream } from '../../composables/useBinaryStream'
 import { useResourceStatus } from '../../composables/useResourceStatus'
 import { useMklinkApi } from '../../composables/useMklinkApi'
@@ -322,7 +322,6 @@ import { SvTimeline } from '../../lib/svTimeline'
 import { cancelRttAddressRefresh } from '../../lib/rttSymbolAddress'
 import { AdaptiveFrameRateController, RenderScheduler } from '../../lib/stream/renderScheduler'
 import { appendManyToLast } from '../../lib/boundedBuffer'
-import { takeNewStreamPoints } from '../../lib/streamCursor'
 import { ingestSystemViewIntervals, type SystemViewIntervalState } from '../../lib/systemViewIntervals'
 import {
   buildSystemViewEventRows,
@@ -337,13 +336,11 @@ import ControlToolbar from './ControlToolbar.vue'
 import SetupHint from './SetupHint.vue'
 import { language, tr } from '../../composables/useLanguage'
 import { API_BASE, IS_REMOTE } from '../../lib/runtimeEndpoint'
+import { useGuiPanel } from '../../lib/guiAutomation'
 
 const props = defineProps<{ deviceConnected: boolean }>()
 
 const dash = useDashboard('systemview')
-const { data: statusData, connect: connectStatus, disconnect: disconnectStatus } = useEventSource('/api/dash/systemview/stream', {
-  passthroughEvents: ['status'],
-})
 const binaryStream = useBinaryStream('systemview', { capacity: 300_000, channelCount: 1 })
 const renderPaused = ref(false)
 const desktopStorage = localStorage
@@ -419,7 +416,6 @@ const meta = reactive({
   waitingForEvents: false,
 })
 let lastAutoRetryKey = ''
-let lastStreamSeq = 0
 const totalEventCount = ref(0)
 const windowUs = ref(10_000_000)
 const showEventStream = ref(true)
@@ -549,6 +545,27 @@ let latestBinaryTime: number | null = null
 let binaryTickOrigin = 0n
 let lastTableUpdate = Number.NEGATIVE_INFINITY
 const TABLE_UPDATE_INTERVAL_MS = 200
+useGuiPanel('systemview', {
+  snapshot: () => ({ state: dash.state.value, paused: renderPaused.value, channel: systemviewChannel.value,
+    window_seconds: windowUs.value / 1e6, events: totalEventCount.value,
+    replay: { active: offlineMode.value, state: replayState.value, progress: replayProgress.value,
+      speed: replaySpeed.value, file: offlineFileName.value, error: importError.value, message: importStatus.value },
+    task_count: Object.keys(meta.taskNames).length, contexts: tlGetContexts().slice(0, 64),
+    parser_dropped: meta.dropped, target_overflows: meta.targetOverflowEvents,
+    range: tlInstance?.getViewRange() || null, follow: tlInstance?.follow ?? null,
+    canvas: tlCanvas.value ? { width: tlCanvas.value.width, height: tlCanvas.value.height } : null }),
+  actions: {
+    'systemview.window': command => {
+      if (![0.5, 1, 2, 5, 10, 30, 60].includes(command.seconds!)) throw new Error('Unsupported Timeline window')
+      windowUs.value = command.seconds! * 1e6
+    },
+    'systemview.pause': () => onPauseRender(),
+    'systemview.resume': () => onResumeRender(),
+    'systemview.zoom-in': () => { if (!tlInstance) throw new Error('Timeline is not ready'); tlZoom(0.5) },
+    'systemview.zoom-out': () => { if (!tlInstance) throw new Error('Timeline is not ready'); tlZoom(2) },
+    'systemview.fit': () => { if (!tlInstance) throw new Error('Timeline is not ready'); tlReset() },
+  },
+})
 
 function tlGetIntervals() {
   const manualRange = tlInstance && !tlInstance.follow ? tlInstance.getViewRange() : null
@@ -713,7 +730,6 @@ onUnmounted(() => {
   window.removeEventListener(DESKTOP_SETTINGS_CHANGED_EVENT, syncRttAddressFromSettings)
   abortImport()
   cancelPendingConnect()
-  disconnectStatus()
   binaryStream.stop()
   visibleRequestInFlight = false
   visibleRequestPending = false
@@ -950,29 +966,13 @@ async function reconnectRunningTrace(generation: number) {
     const status = await dash.getStatus()
     if (!operationIsActive(generation)) return
     if (status?.running) {
-      applySessionStatus(status)
-      applyTargetOverflowStatus(status)
-      if (status.synced !== undefined) meta.synced = !!status.synced
-      if (status.cpu_freq !== undefined) meta.cpuFreq = Number(status.cpu_freq) || 0
-      if (status.cpu_freq_source !== undefined) meta.cpuFreqSource = status.cpu_freq_source || ''
-      if (status.dropped_bytes !== undefined) {
-        meta.sessionDropped = Number(status.dropped_bytes || 0) + Number(status.dropped_packets || 0)
-      }
-      if (status.recording !== undefined) meta.recording = !!status.recording
-      if (status.recording_path) meta.recordingPath = status.recording_path
-      if (status.recording_summary_path) meta.recordingSummaryPath = status.recording_summary_path
-      if (status.recording_error !== undefined) meta.recordingError = status.recording_error || ''
-      if (status.task_names) applyTaskNames(status.task_names)
-      if (status.isr_names) applyIsrNames(status.isr_names)
       if (dash.state.value !== 'running') {
         dash.syncState(true)
         renderScheduler?.start()
-        connectStatus()
         binaryStream.start()
       }
     } else if (dash.state.value === 'running') {
       dash.syncState(false)
-      disconnectStatus()
       binaryStream.stop()
     }
   } catch {
@@ -980,34 +980,31 @@ async function reconnectRunningTrace(generation: number) {
   }
 }
 
-watch(statusData, (nw) => {
-  if (offlineMode.value) return
-  const fresh = takeNewStreamPoints(nw as any[], lastStreamSeq)
-  for (const dp of fresh.points as any[]) {
-    const evt = dp.event || dp._event
-    applySessionStatus(dp)
-    applyTargetOverflowStatus(dp)
-    if (dp.synced !== undefined) meta.synced = !!dp.synced
-    if (dp.dropped_bytes !== undefined) meta.sessionDropped = dp.dropped_bytes + (dp.dropped_packets || 0)
-    if (dp.runtime_dropped_bytes !== undefined || dp.dropped_bytes !== undefined) {
-      meta.dropped = (dp.runtime_dropped_bytes ?? dp.dropped_bytes ?? 0) + (dp.dropped_packets || 0)
-    }
-    if (dp.cpu_freq !== undefined) meta.cpuFreq = dp.cpu_freq
-    if (dp.cpu_freq_source !== undefined) meta.cpuFreqSource = dp.cpu_freq_source || ''
-    if (dp.recording !== undefined) meta.recording = !!dp.recording
-    if (dp.recording_path !== undefined) meta.recordingPath = dp.recording_path || meta.recordingPath
-    if (dp.recording_summary_path !== undefined) meta.recordingSummaryPath = dp.recording_summary_path || meta.recordingSummaryPath
-    if (dp.recording_error !== undefined) meta.recordingError = dp.recording_error || ''
-    if (dp.progress_state === 'error' && dp.progress_error) {
-      runtimeError.value = String(dp.progress_error)
-    }
-    const backendEvents = Number(dp.stats?.events)
-    if (Number.isFinite(backendEvents)) totalEventCount.value = Math.max(totalEventCount.value, backendEvents)
-    if (dp.task_names) applyTaskNames(dp.task_names)
-    if (dp.isr_names) applyIsrNames(dp.isr_names)
-    if (evt !== 'status') continue
+// The existing status poll also detects starts/stops from other clients. A second
+// HTTP/1 SSE per window exhausts the browser connection pool at six windows,
+// starving health/control requests while binary WebSocket events still arrive.
+watch(dash.status, dp => {
+  if (!dp || !mounted || offlineMode.value) return
+  applySessionStatus(dp)
+  applyTargetOverflowStatus(dp)
+  if (dp.synced !== undefined) meta.synced = !!dp.synced
+  if (dp.dropped_bytes !== undefined) meta.sessionDropped = dp.dropped_bytes + (dp.dropped_packets || 0)
+  if (dp.runtime_dropped_bytes !== undefined || dp.dropped_bytes !== undefined) {
+    meta.dropped = (dp.runtime_dropped_bytes ?? dp.dropped_bytes ?? 0) + (dp.dropped_packets || 0)
   }
-  lastStreamSeq = fresh.nextSeq
+  if (dp.cpu_freq !== undefined) meta.cpuFreq = dp.cpu_freq
+  if (dp.cpu_freq_source !== undefined) meta.cpuFreqSource = dp.cpu_freq_source || ''
+  if (dp.recording !== undefined) meta.recording = !!dp.recording
+  if (dp.recording_path !== undefined) meta.recordingPath = dp.recording_path || meta.recordingPath
+  if (dp.recording_summary_path !== undefined) meta.recordingSummaryPath = dp.recording_summary_path || meta.recordingSummaryPath
+  if (dp.recording_error !== undefined) meta.recordingError = dp.recording_error || ''
+  if (dp.progress_state === 'error' && dp.progress_error) {
+    runtimeError.value = String(dp.progress_error)
+  }
+  const backendEvents = Number(dp.stats?.events)
+  if (Number.isFinite(backendEvents)) totalEventCount.value = Math.max(totalEventCount.value, backendEvents)
+  if (dp.task_names) applyTaskNames(dp.task_names)
+  if (dp.isr_names) applyIsrNames(dp.isr_names)
 })
 
 watch(binaryStream.telemetry, telemetry => {
@@ -1247,7 +1244,7 @@ function clearAll() {
   Object.keys(taskStats).forEach(k => delete taskStats[Number(k)])
   intervalState = { currentTaskId: null, currentStart: null }
   totalEventCount.value = 0
-  idleUs.value = 0; firstT = 0; lastT = 0; lastStreamSeq = 0
+  idleUs.value = 0; firstT = 0; lastT = 0
   latestBinaryTime = null
   resetTimelineRefreshPolicy()
   binaryTickOrigin = 0n
@@ -1329,14 +1326,12 @@ async function importLogFile(file: File) {
   cancelPendingConnect()
   const controller = new AbortController()
   importAbort = controller
-  disconnectStatus()
   binaryStream.stop()
   renderPaused.value = false
   tlInstance?.resumeRendering()
   renderScheduler?.start()
-  if (dash.state.value !== 'idle') {
-    await dash.stop()
-  }
+  // Replay belongs to this window. Other GUI/MCP clients keep their live capture.
+  dash.syncState(false)
   clearAll()
   replayFile = file
   replayLastTime = null
@@ -1495,6 +1490,7 @@ function returnToLive() {
   replayLastTime = null
   clearAll()
   refreshLogList()
+  void reconnectRunningTrace(operationGeneration)
 }
 
 function isAbortError(value: unknown): boolean {
@@ -1590,7 +1586,6 @@ async function onStart() {
     connectTimer = setTimeout(() => {
       connectTimer = null
       if (!operationIsActive(generation)) return
-      connectStatus()
       binaryStream.start()
     }, 500)
     await waitForSystemViewReady(generation)
@@ -1624,7 +1619,6 @@ function onResumeRender() {
 async function onStop() {
   const generation = ++operationGeneration
   cancelPendingConnect()
-  disconnectStatus()
   binaryStream.stop()
   renderPaused.value = false
   tlInstance?.resumeRendering()

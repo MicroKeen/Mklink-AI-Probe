@@ -4,6 +4,25 @@ from mklink import runtime_cli
 from mklink.runtime import RuntimeErrorResponse
 
 
+def test_gui_call_attaches_existing_selected_runtime_without_hardware(monkeypatch, capsys):
+    import json, sys
+    from mklink import cli
+    calls = []
+    info = {'runtime_id': 'chosen', 'probe_id': 'lobby'}
+    monkeypatch.setattr('mklink.runtime.running_runtimes', lambda: [info])
+    monkeypatch.setattr('mklink.runtime_gui.select_gui_runtime', lambda **kw: (info, {}))
+    class Client:
+        def __init__(self, **kwargs): assert kwargs['info'] is info
+        def connect(self, **kwargs): calls.append(('attach', kwargs))
+        def call(self, name, body): calls.append((name, body)); return {'windows': []}
+        def close(self): calls.append(('detach', {}))
+    monkeypatch.setattr('mklink.runtime.RuntimeClient', Client)
+    monkeypatch.setattr(sys, 'argv', ['mklink', 'runtime', 'call', 'gui_windows', '--runtime-id', 'chosen'])
+    cli.main()
+    assert json.loads(capsys.readouterr().out) == {'windows': []}
+    assert calls == [('attach', {'scope': 'uart', 'existing_only': True}), ('gui_windows', {}), ('detach', {})]
+
+
 @pytest.mark.parametrize('action,kwargs', [
     ('kill', {'confirm': True}), ('detach-client', {'confirm': True}),
     ('stop-acquisition', {'confirm': True}), ('status', {'client_id': 'x'}),

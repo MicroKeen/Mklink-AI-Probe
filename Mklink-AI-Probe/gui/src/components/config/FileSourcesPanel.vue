@@ -90,6 +90,7 @@ const parserBackend = computed(() => {
           type="button"
           :title="tr('浏览 AXF 或 ELF 文件', 'Browse for AXF or ELF file')"
           data-testid="browse-symbol"
+          data-gui-file-picker
           :disabled="browsing || parsing"
           @click="emit('browse-symbol')"
         >

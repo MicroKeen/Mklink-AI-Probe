@@ -3766,6 +3766,15 @@ function disposeViewer() {
 if (typeof window !== 'undefined') {
   if (!window.__waveformViewers) window.__waveformViewers = {};
   var binaryViewer = window.__waveformViewers[CONFIG.mode] || {};
+  binaryViewer.getDisplayState = function() {
+    return { ready: true, state: collectionState, paused: renderPaused, replay: !!replaySession,
+      range: getBinaryVisibleRange(), channels: binaryChannelNames.slice(0, 64) };
+  };
+  binaryViewer.setDisplayPaused = function(paused) {
+    if (replaySession || collectionState === 'stopped') throw new Error('Live SuperWatch display is not running');
+    renderPaused = paused;
+    updateCollectionUI(paused ? 'paused' : 'running');
+  };
   binaryViewer.setWorkspace = setWorkspace;
   binaryViewer.setProfilePreferences = applyProfilePreferences;
   binaryViewer.flushPreferences = function() { clearTimeout(viewerPreferenceTimer); saveViewerPreferences(true); };

@@ -27,6 +27,7 @@ RTT、SystemView、VOFA 和 SuperWatch 的图表暂停或页面隐藏只减少�
 旧 `serve`、`mklink.serve()` 和 `mklink.remote.serve_fastapi()` 已移除。
 本机 GUI/AI 统一使用 `mklink gui` / `mklink runtime`，无需启动第二个服务器。
 AI 需要可见窗口时优先用 MCP `gui_open`，确认页面接入后在同一 MCP 连接设备；
+桌面和 Web 的控件操作、窗口快照及 RTT/SystemView 回放见 [GUI 操作](gui-control.md)。
 详见[共享后台的打开与展示](shared-runtime.md#按需向用户展示)。
 `python -m mklink gui --no-browser` 只跳过自动打开浏览器，仍等待 GUI 接入最多 60 秒，
 不是常驻后台命令。期限内没有页面接入时启动器释放会话；无其他客户端/任务时后台随后退出。
@@ -114,9 +115,8 @@ sidecar 的所有权。平台安装位置、权限和故障排查见
 
 Tauri v2 将 Vue 3 前端包装为原生桌面应用，内嵌 Python FastAPI sidecar。
 
-Windows 标准 NSIS 安装包采用 per-machine 安装，在安装结束后以非阻断方式检查
-当前在线的 MKLink V2/V3/V4，并为完整校验通过的 CDC 接口设置可区分的设备管理器
-名称。安装时没有连接下载器时，可在“配置 > 本地设备”使用“修改端口名称”；
+Windows 标准 NSIS 安装包采用 currentUser 安装，不自动修改设备管理器名称。
+需要修改时，可在“配置 > 本地设备”使用“修改端口名称”；
 “恢复名称”会请求 UAC 并恢复 Windows 驱动默认显示。浏览器版不提供注册表操作。
 
 ## 在线烧录 API

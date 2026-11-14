@@ -1926,9 +1926,27 @@ def _cli_runtime(args):
             info = selected_runtime(args.probe)
             result = request(info, "POST", "/_runtime/stop", {"confirm": True}) if info else {"status": "not_running"}
         else:
-            client = RuntimeClient(project_root=args.project_root or ".", kind='cli', name='CLI runtime call')
+            gui_only = args.capability in {'gui_windows', 'gui_present', 'gui_action', 'gui_snapshot'}
+            info = None
+            if gui_only:
+                from mklink.runtime_gui import select_gui_runtime
+                from mklink.runtime import running_runtimes
+                if not running_runtimes():
+                    raise RuntimeErrorResponse('Open a GUI first; no existing backend is available')
+                info, selection = select_gui_runtime(probe=args.probe, runtime_id=args.runtime_id)
+                if info is None:
+                    print(json.dumps(selection, ensure_ascii=False, indent=2))
+                    return
+            elif args.runtime_id:
+                raise ValueError('--runtime-id is supported only for GUI display capabilities')
+            client = RuntimeClient(info=info, project_root=args.project_root or ".", kind='cli', name='CLI runtime call')
             try:
-                client.connect(project_root=args.project_root, probe=args.probe, port=args.device_port, axf=args.axf)
+                if gui_only:
+                    if args.axf or args.device_port or args.project_root:
+                        raise ValueError('GUI display calls do not configure hardware or files')
+                    client.connect(scope='uart', existing_only=True)
+                else:
+                    client.connect(project_root=args.project_root, probe=args.probe, port=args.device_port, axf=args.axf)
                 result = client.call(args.capability, json.loads(args.arguments))
             finally:
                 client.close()
@@ -2770,6 +2788,7 @@ def main():
     runtime_call.add_argument("--device-port", default=None)
     runtime_call.add_argument("--axf", default=None)
     runtime_call.add_argument("--probe", default=None)
+    runtime_call.add_argument("--runtime-id", default=None, help="GUI 显示调用选择已有后台，不连接硬件")
 
     probes_parser = subparsers.add_parser("probes", help="被动列出下载器、设置本机别名")
     probes_sub = probes_parser.add_subparsers(dest="probes_command", required=True)

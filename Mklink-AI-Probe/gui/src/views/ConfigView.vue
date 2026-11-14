@@ -54,13 +54,11 @@ const activeSection = ref<ConfigSection>('local')
 const route = useRoute()
 const router = useRouter()
 watch(() => route?.query.section, section => {
-  if (section === 'firmware') activeSection.value = 'firmware'
+  if (typeof section === 'string' && ['local', 'files', 'firmware', 'runtime'].includes(section)) activeSection.value = section as ConfigSection
 }, { immediate: true })
 watch(activeSection, section => {
-  if (section === 'firmware' && route?.query.section !== 'firmware') {
-    void router.replace({ query: { ...route?.query, section: 'firmware' } })
-  } else if (route?.query.section === 'firmware' && section !== 'firmware') {
-    void router.replace({ query: { ...route.query, section: undefined } })
+  if (route?.query.section !== section) {
+    void router.replace({ query: { ...route?.query, section } })
   }
 })
 const config = ref<ProjectConfig>({})

@@ -144,6 +144,7 @@ import { language, toggleLanguage, tr } from './composables/useLanguage'
 import { themePreference, setTheme, type ThemePreference } from './composables/useTheme'
 import { startBrowserSessionLease } from './lib/browserSessionLease'
 import { startSharedRuntimeView } from './lib/sharedRuntimeView'
+import { createGuiAutomation } from './lib/guiAutomation'
 import { updateCoordinationKey } from './lib/updateCoordination'
 
 const router = useRouter()
@@ -181,6 +182,11 @@ provide(updateCoordinationKey, { clientPending, clientInstalling, firmwareBusy }
 let statusPollingStarted = false
 let stopWindowLease: () => void = () => undefined
 let windowLeaseMode: boolean | undefined
+const guiAutomation = createGuiAutomation(router, () => ({
+  backend: backendState.value, connected: deviceStatus.value.connected,
+  probe_id: deviceStatus.value.probe_id, device_generation: deviceStatus.value.device_generation,
+  kind: isTauri ? 'desktop' : 'web', version: __APP_VERSION__,
+}))
 watch(() => backendState.value === 'alive' ? sharedRuntime?.value === true : undefined, shared => {
   if (shared === undefined || shared === windowLeaseMode) return
   stopWindowLease()
@@ -189,7 +195,7 @@ watch(() => backendState.value === 'alive' ? sharedRuntime?.value === true : und
     await router.push({ name: 'dashboard', query: { tab } })
     await nextTick()
     if (router.currentRoute.value.name !== 'dashboard' || router.currentRoute.value.query.tab !== tab) throw new Error('Navigation was not applied')
-  }) : startBrowserSessionLease(!isTauri)
+  }, guiAutomation.execute) : startBrowserSessionLease(!isTauri)
 }, { immediate: true })
 const appVersion = __APP_VERSION__
 

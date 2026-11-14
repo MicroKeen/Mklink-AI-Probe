@@ -20,6 +20,7 @@ import { DESKTOP_SETTINGS_STORAGE_KEY } from '../../lib/desktopSettings'
 import { signalFormula } from '../../lib/signalFormula'
 import { language } from '../../composables/useLanguage'
 import { API_BASE } from '../../lib/runtimeEndpoint'
+import { useGuiPanel } from '../../lib/guiAutomation'
 import { saveTextFile, saveImageFile } from '../../lib/downloadTextFile'
 import { mountReplayButton } from '../../../../mklink/static/superwatch_replay.js'
 import '../../../../mklink/static/superwatch_replay.css'
@@ -41,6 +42,18 @@ const emit = defineEmits<{
 const container = ref<HTMLDivElement>()
 const recordHost = ref<HTMLElement>()
 const actionsHost = ref<HTMLElement>()
+if (props.mode === 'SuperWatch') {
+  const getViewer = () => {
+    const viewer = (window as any).__waveformViewers?.SuperWatch
+    if (!viewer?.getDisplayState) throw new Error('SuperWatch display is not ready')
+    return viewer
+  }
+  useGuiPanel('superwatch', {
+    snapshot: () => (window as any).__waveformViewers?.SuperWatch?.getDisplayState?.() || { ready: false },
+    actions: { 'superwatch.pause': () => getViewer().setDisplayPaused(true),
+      'superwatch.resume': () => getViewer().setDisplayPaused(false) },
+  })
+}
 function updateRecordingLabel(state: string) {
   const summary = container.value?.querySelector('.watch-log-controls summary')
   if (!summary) return
