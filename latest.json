@@ -1,20 +1,20 @@
 {
-  "version": "0.4.3",
-  "notes": "# MKLink AI Probe 0.4.3\n\n- 优化内存读取延迟和高速采集，SuperWatch 最低采样间隔为 1 µs。界面按实际采样时间戳统计速率，并在已确认的数据缺口处断线。\n- SuperWatch 支持在所选变量和常用变量中写入，移除所选变量后同步取消勾选。修复 RTT 终端与 HEX 视图的日志遮挡。\n- 完善调试器与 RTT、SuperWatch 共存及调试退出后的恢复，改进周期睡眠目标的数据接收。在线烧录保留原有连接方式。\n- AI 可通过完整 Skill 打开上位机 GUI、选择下载器并与桌面共享采集。改善 Windows 首次打开时的黑屏和 USB 文件拷贝兼容性。\n\n本次提供 Windows 安装包、完整 Skill 及 Site Agent。MicroLink V3.6.9、MicroLink V4.7.3 和 HPMLink V4.7.3 按型号独立分发。\n",
-  "pub_date": "2026-11-07T14:58:48+00:00",
+  "version": "0.5.0",
+  "notes": "# MKLink AI Probe V0.5.0\n\nWindows \u4e0a\u4f4d\u673a\u3001\u5b8c\u6574 Skill \u4e0e Windows Site Agent \u66f4\u65b0\u3002\n\n- \u4fee\u590d\u666e\u901a\u7528\u6237\u8fde\u63a5\u548c\u8986\u76d6\u5b89\u88c5\u6743\u9650\uff1bWindows \u9ed8\u8ba4\u6309\u7528\u6237\u5b89\u88c5\uff0c\u4e0d\u518d\u81ea\u52a8\u4fee\u6539\u7aef\u53e3\u540d\u79f0\u3002\n- \u6539\u5584 SuperWatch \u65ad\u7ebf\u6062\u590d\u4e0e\u91c7\u96c6\u4e2d\u5199\u5165\uff0c\u53d8\u91cf\u548c\u91c7\u96c6\u914d\u7f6e\u968f AXF/ELF \u81ea\u52a8\u4fdd\u5b58\u3001\u6062\u590d\u3002\n- \u65e5\u5fd7\u6539\u4e3a\u624b\u52a8\u8f6c\u6362\uff1aSuperWatch \u5bfc\u51fa Excel\uff0cRTT \u5bfc\u51fa\u7cbe\u7b80\u7684\u5e26\u65f6\u95f4\u6233 TXT\u3002\n- \u4fee\u590d RTOS Trace \u518d\u6b21\u542f\u52a8\u65f6\u7684\u4efb\u52a1\u540d\u79f0\u5237\u65b0\uff0c\u4f18\u5316 Timeline \u8fde\u7eed\u663e\u793a\u3001\u7f29\u653e\u548c\u5e73\u79fb\uff1b\u4fee\u590d\u591a\u7a97\u53e3\u4e8b\u4ef6\u66f4\u65b0\u65f6\u8bef\u62a5\u540e\u7aef\u79bb\u7ebf\u3002\n- Skill/MCP \u53ef\u64cd\u4f5c\u684c\u9762\u548c Web GUI \u7684\u9875\u9762\u3001\u63a7\u4ef6\u3001\u6587\u4ef6\u53ca SystemView\u3001RTT\u3001SuperWatch\u3001\u4e32\u53e3\u65e5\u5fd7\u56de\u653e\uff1b\u56de\u653e\u4e0d\u505c\u6b62\u5176\u4ed6\u7a97\u53e3\u7684\u91c7\u96c6\u3002\n- \u4fee\u590d\u591a\u4e0b\u8f7d\u5668\u72ec\u7acb\u8fde\u63a5\u3001\u5355\u7a97\u53e3\u5207\u6362\u4e0e USB \u62d4\u63d2\u540e\u7684\u9009\u62e9\u4fdd\u6301\uff1b\u6062\u590d\u7b49\u5f85\u7f29\u77ed\u81f3 0.5 \u79d2\u3002\u663e\u5f0f\u91cd\u542f MKLink \u53ef\u505c\u6b62\u5f53\u524d\u91c7\u96c6\u540e\u6267\u884c\u3002\n- HPM \u5728\u7ebf/\u8131\u673a\u70e7\u5f55\u6309\u82af\u7247\u9009\u62e9\u914d\u7f6e\uff0c\u652f\u6301\u7528\u6237\u586b\u5199\u5916\u90e8 NOR Flash \u53c2\u6570\uff1b\u4f18\u5316\u8131\u673a OTP \u914d\u7f6e\u754c\u9762\u3002\n- \u8865\u5168\u4e32\u53e3\u548c Modbus \u6ce2\u7279\u7387\u6863\u4f4d\u81f3 10M\uff0c\u4fee\u590d\u90e8\u5206 ELF \u53d8\u91cf\u9057\u6f0f\uff0c\u652f\u6301\u901a\u7528\u5de5\u7a0b\u521d\u59cb\u5316\u548c\u663e\u5f0f\u91cd\u8f7d\u7b26\u53f7\u3002\n- \u4fee\u590d macOS \u540e\u53f0\u542f\u52a8\u548c USB \u8eab\u4efd\u8bc6\u522b\uff0c\u4f18\u5316\u679a\u4e3e\u8017\u65f6\u4e0e\u5171\u4eab\u4f1a\u8bdd\u7eed\u7ea6\u3002\n- \u65b0\u589e\u5ba2\u6237\u7aef\u548c\u56fa\u4ef6\u66f4\u65b0\u63d0\u9192\uff0c\u534f\u8c03\u66f4\u65b0\u987a\u5e8f\uff1b\u9ed8\u8ba4\u4ece\u817e\u8baf\u4e91\u4e0b\u8f7d\uff0c\u4e0d\u53ef\u7528\u65f6\u56de\u9000 MicroKeen GitHub\u3002\n\n\u914d\u5957\u53d1\u5e03 MicroLink V2.9.4\u3001V3.7.0\u3001MicroLink V4.7.4 \u548c HPMLink V4.7.4\u3002\u4e24\u6b3e V4 \u5747\u652f\u6301 Arm SWD \u4e0e HPM JTAG\uff0c\u5347\u7ea7\u65f6\u5fc5\u987b\u9009\u62e9\u5bf9\u5e94\u4e0b\u8f7d\u5668\u578b\u53f7\u7684\u6587\u4ef6\u3002\u5efa\u8bae\u5148\u66f4\u65b0\u4e0a\u4f4d\u673a/Skill\u3001\u91cd\u8f7d MCP\uff0c\u518d\u6309\u63d0\u793a\u5347\u7ea7\u56fa\u4ef6\u3002\n\nWindows \u8986\u76d6\u5b89\u88c5\u4f1a\u7ed3\u675f\u5f53\u524d\u7528\u6237\u7684\u65e7 MKLink\u3001Skill/MCP \u540e\u53f0\u53ca\u6b63\u5728\u6267\u884c\u7684\u4efb\u52a1\uff0c\u8bf7\u5148\u4fdd\u5b58\u6570\u636e\u3002\u5347\u7ea7\u80fd\u529b\u4ecd\u4ee5\u56fa\u4ef6\u534f\u5546\u4e3a\u51c6\u30021 \u00b5s \u6781\u9650\u4e09\u8def\u91c7\u96c6\u548c 10 Mbps / 16 KiB RS485 \u4ecd\u5b58\u5728\u5df2\u77e5\u4e22\u5f03\u8fb9\u754c\uff1bSTOP \u4f4e\u529f\u8017\u8bbf\u95ee\u53d6\u51b3\u4e8e\u76ee\u6807\u72b6\u6001\u3002\u672c\u6b21\u4e0d\u63d0\u4f9b\u65b0\u7684 macOS \u5b89\u88c5\u5305\uff0cMac \u539f\u751f\u7a97\u53e3\u3001Gatekeeper \u548c\u5ba2\u6237\u5b9e\u7269\u9a8c\u6536\u4ecd\u5f85\u5b8c\u6210\u3002\n",
+  "pub_date": "2026-11-14T16:21:27Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWkJ5dmZ4MnVLVVhlTS9BMW5Id3JmRk4wNkpaYUZsUFNJVVpSaU1jZm5wR0pWZjByT2wvbGhxUmtlSTY5UDc1R2dBZy9TcmNNU0NsK1JhMWU4ZlBJeGVhY0NXenFOd3drPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk0MDYwMzE5CWZpbGU6TWtsaW5rIEFJIFByb2JlXzAuNC4zX3g2NC1zZXR1cC5leGUKOUxpQXFtRXd1ZWJJc1pvN0FReFN6NmNvNWJVYmQvQlQxMDF1R29MMVk5NzZ3Y1JWKzNXc0lvdFgvdkd2Mm8zeXlyeEVTei9mR2FtWTBvWFRVb2dSQUE9PQo=",
-      "url": "https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/v0.4.3/Mklink-AI-Probe-v0.4.3-x64-Setup.exe",
-      "sha256": "45786abdfac3ad49671988ac5a8b6fcb5054259964a8dca961090a8a92d90342",
-      "size": 186759560
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWkJ5dmZ4MnVLVVZjUExYN0F6ZlFuV2lVU2d3VmMySFhaVUk1c3orTlFOV21xaWNzN2NuUVBwS1M3SytIM05qRzQ1bzdmS1VWdzU5T0JmMWtMU3NsYWJLSEM3VHV5VVE0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk0NjcxODA1CWZpbGU6TWtsaW5rIEFJIFByb2JlXzAuNS4wX3g2NC1zZXR1cC5leGUKblR3Ny9mNFRGaEk2bGpUNnZGNHRxdklCMXBZR1hkZVVyUStZOFc4dTJST0pqRE1OVitMa2pJK0JBT2lGUjBLTEZwMTBtWmRweE5NRzZ2R2lMalVIQXc9PQo=",
+      "url": "https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/v0.5.0/Mklink-AI-Probe-v0.5.0-x64-Setup.exe",
+      "sha256": "c209018a4f29eae196148b8f628f215a41a65b42ccfb2f8782d7fcd995ef75af",
+      "size": 187243644
     }
   },
   "skill": {
-    "version": "0.4.3",
-    "url": "https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/v0.4.3/Mklink-AI-Probe-v0.4.3-Skill.zip",
-    "sha256": "9fd2d80cd85be2f8e6189524f16fce650bb4d9914ead7480c7fd2f94df92fc78",
-    "size": 100333143,
-    "source_commit": "3905a68bceaf6d863b9159de2a390e161788af48"
+    "version": "0.5.0",
+    "url": "https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/v0.5.0/Mklink-AI-Probe-v0.5.0-Skill.zip",
+    "sha256": "60544de4d2cb0c05d40252f09d3c74b09032149d3fa733ad2593099ff900956f",
+    "size": 100412821,
+    "source_commit": "1097f98eb9025b38b16cd32095bced7dd65ecdcd"
   }
 }
