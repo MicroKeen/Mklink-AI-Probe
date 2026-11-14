@@ -1,5 +1,29 @@
 # Maintainer Release Procedure
 
+## Current publication overrides (2026-11-14)
+
+The GitHub/Gitee dual-publication details below describe historical releases,
+not the current destination policy. Package preparation and qualification
+remain applicable, but current publishers upload only to canonical MicroKeen
+GitHub. Deploy Tencent separately per `docs/ai/tencent-updates.md`. Never run
+historical Gitee upload adapters or update Gitee/legacy GitHub tags or indexes.
+
+The application index publisher now fetches the existing release branch,
+preserves its history and other files, then pushes fast-forward. Concurrent
+publication rejects the push; inspect actual state before resuming. Never
+force-push. Verify public assets and signatures before publishing indexes.
+
+V2 RBL uses a separate publisher and index: run
+`_maintainer/firmware/publish_v2_firmware.py MicroLink_V2.x.y.rbl --repo
+MicroKeen/Mklink-AI-Probe` for a read-only plan, then add `--apply` to publish
+`latest-v2.json`. The UF2 publisher updates `latest.json` and preserves V2.
+Use the firmware session's exact qualified bytes under required public names;
+do not recompile. Verify all four models and both indexes after publication.
+Advance client indexes before firmware indexes so users can update app/Skill
+first. Tencent and GitHub must retain identical artifact bytes.
+
+## Package workflow and historical channel details
+
 默认下载/发布策略（2026-11-13）：仅腾讯云与 MicroKeen/Mklink-AI-Probe GitHub。AI 与 Skill 先取 `https://download.microkeenai.com/mklink/stable/latest.json`，不可用时再取官方 GitHub `release/latest.json`；按索引获取完整 Skill，不能用源码 ZIP 代替。Gitee 只保留历史文件，不再上传新资产或更新索引。Skill 文件回退须校验相同版本、大小及 SHA-256。
 
 The active GitHub repository is MicroKeen/Mklink-AI-Probe. Only Aladdin-Wang may

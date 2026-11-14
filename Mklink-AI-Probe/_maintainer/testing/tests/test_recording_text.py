@@ -254,18 +254,25 @@ def test_frozen_export_launch_owns_environment_and_does_not_inherit_pipes(tmp_pa
     real_popen = recording_text.subprocess.Popen
     def source_launch(command, **kwargs):
         calls.append((command, kwargs.copy()))
+        # The fixture promises breakaway support to inspect the frozen launch
+        # contract; the CI runner's own job need not allow a real breakaway.
+        # Keep the captured flags intact, but run the source substitute in its job.
+        if os.name == 'nt':
+            kwargs['creationflags'] &= ~recording_text.subprocess.CREATE_BREAKAWAY_FROM_JOB
         return real_popen([sys.executable, str(Path(recording_text.__file__)), command[-1]], **kwargs)
     monkeypatch.setattr(sys, 'frozen', True, raising=False)
     monkeypatch.setattr(recording_text.subprocess, 'Popen', source_launch)
     monkeypatch.setenv('MKLINK_PARENT_JOB_BREAKAWAY_OK', '1')
     export = recording_text.ManualExport('superwatch')
     export.start(dict(path=str(source), parts=1, started_at=1700000000, state='completed'))
-    assert exported(export)['export_state'] == 'completed'
+    result = exported(export)
+    assert result['export_state'] == 'completed', result
     command, options = calls[0]
     assert command[1] == '--internal-recording-export'
     assert options['env']['PYINSTALLER_RESET_ENVIRONMENT'] == '1'
     assert options['env']['TEMP'] == str(tmp_path)
     assert options['cwd'] == str(tmp_path)
+    assert options['stdin'] == options['stdout'] == options['stderr'] == recording_text.subprocess.DEVNULL
     if os.name == 'nt':
         assert options['creationflags'] & recording_text.subprocess.CREATE_BREAKAWAY_FROM_JOB
 

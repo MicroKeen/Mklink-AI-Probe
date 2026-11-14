@@ -508,25 +508,26 @@ def publish_updates_branch(
     *, document: Mapping[str, object], github_repo: str, gitee_repo: str = "",
     gitee_token: str = "", github_document: Mapping[str, object] | None = None,
 ) -> None:
-    with tempfile.TemporaryDirectory(prefix="mklink-updates-") as directory:
-        checkout = Path(directory)
-        _run(["git", "init", "--initial-branch=updates"], cwd=checkout)
-        _run(["git", "config", "user.name", "Mklink Release Bot"], cwd=checkout)
-        _run(["git", "config", "user.email", "release@mklink.local"], cwd=checkout)
-        (checkout / "latest.json").write_text(
-            json.dumps(document, indent=2, ensure_ascii=True) + "\n",
-            encoding="utf-8",
-        )
-        _run(["git", "add", "latest.json"], cwd=checkout)
-        _run(["git", "commit", "-m", f"release: publish v{document['version']} update"], cwd=checkout)
-        if github_document is not None:
-            (checkout / "latest.json").write_text(
-                json.dumps(github_document, indent=2, ensure_ascii=True) + "\n", encoding="utf-8",
-            )
+    payload = json.dumps(github_document if github_document is not None else document,
+                         indent=2, ensure_ascii=True) + "\n"
+    for repo, branch in github_channels(github_repo):
+        with tempfile.TemporaryDirectory(prefix="mklink-updates-") as directory:
+            checkout = Path(directory)
+            remote = f"https://github.com/{repo}.git"
+            _run(["git", "init", "--initial-branch=updates"], cwd=checkout)
+            _run(["git", "config", "user.name", "Mklink Release Bot"], cwd=checkout)
+            _run(["git", "config", "user.email", "release@mklink.local"], cwd=checkout)
+            _run(["git", "fetch", "--depth=1", remote, branch], cwd=checkout)
+            _run(["git", "checkout", "-B", "updates", "FETCH_HEAD"], cwd=checkout)
+            path = checkout / "latest.json"
+            if path.is_file() and path.read_text(encoding="utf-8") == payload:
+                continue
+            path.write_text(payload, encoding="utf-8")
             _run(["git", "add", "latest.json"], cwd=checkout)
-            _run(["git", "commit", "--allow-empty", "-m", "release: GitHub asset endpoints"], cwd=checkout)
-        for repo, branch in github_channels(github_repo):
-            _run(["git", "push", "--force", f"https://github.com/{repo}.git", f"updates:{branch}"], cwd=checkout)
+            _run(["git", "commit", "-m", f"release: publish v{document['version']} update"], cwd=checkout)
+            # Preserve channel history and other files. A concurrent publisher
+            # makes this fail non-fast-forward; never overwrite its result.
+            _run(["git", "push", remote, f"updates:{branch}"], cwd=checkout)
 
 
 def publish_update_release(

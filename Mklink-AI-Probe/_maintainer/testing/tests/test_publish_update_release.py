@@ -445,8 +445,52 @@ def test_publisher_uses_canonical_github_index_and_preserves_gitee(publisher, mo
     )
     pushes = [c for c in calls if c[0] == "gitee" or "push" in c]
     assert pushes == [
-        ["git", "push", "--force", "https://github.com/MicroKeen/Mklink-AI-Probe.git", "updates:release"],
+        ["git", "push", "https://github.com/MicroKeen/Mklink-AI-Probe.git", "updates:release"],
     ]
+    assert ["git", "fetch", "--depth=1", "https://github.com/MicroKeen/Mklink-AI-Probe.git", "release"] in calls
+    assert ["git", "checkout", "-B", "updates", "FETCH_HEAD"] in calls
+
+
+def test_update_index_preserves_history_and_rejects_concurrent_publication(publisher, monkeypatch, tmp_path):
+    import subprocess
+    remote = tmp_path / "remote.git"
+    seed = tmp_path / "seed"
+    seed.mkdir()
+    run = publisher._run
+    run(["git", "init", "--bare", str(remote)], cwd=tmp_path)
+    run(["git", "init", "--initial-branch=release"], cwd=seed)
+    run(["git", "config", "user.name", "test"], cwd=seed)
+    run(["git", "config", "user.email", "test@example.invalid"], cwd=seed)
+    (seed / "latest.json").write_text('{"version":"0.4.3"}\n', encoding="utf-8")
+    (seed / "preserve.txt").write_text("retained", encoding="utf-8")
+    run(["git", "add", "."], cwd=seed)
+    run(["git", "commit", "-m", "baseline"], cwd=seed)
+    run(["git", "push", str(remote), "release"], cwd=seed)
+    original = run(["git", "rev-parse", "HEAD"], cwd=seed).stdout.strip()
+    competing = False
+
+    def local_run(command, **kwargs):
+        command = [str(remote) if arg == "https://github.com/MicroKeen/Mklink-AI-Probe.git" else arg for arg in command]
+        if competing and command[1] == "push":
+            run(["git", "fetch", str(remote), "release"], cwd=seed)
+            run(["git", "reset", "--hard", "FETCH_HEAD"], cwd=seed)
+            (seed / "latest.json").write_text('{"version":"0.6.0"}\n', encoding="utf-8")
+            run(["git", "add", "latest.json"], cwd=seed)
+            run(["git", "commit", "-m", "concurrent publisher"], cwd=seed)
+            run(["git", "push", str(remote), "release"], cwd=seed)
+        return run(command, **kwargs)
+
+    monkeypatch.setattr(publisher, "_run", local_run)
+    publisher.publish_updates_branch(document={"version": "0.5.0"}, github_repo="MicroKeen/Mklink-AI-Probe")
+    assert run(["git", "show", "release:preserve.txt"], cwd=remote).stdout == "retained"
+    assert run(["git", "rev-parse", "release^"], cwd=remote).stdout.strip() == original
+    head = run(["git", "rev-parse", "release"], cwd=remote).stdout
+    publisher.publish_updates_branch(document={"version": "0.5.0"}, github_repo="MicroKeen/Mklink-AI-Probe")
+    assert run(["git", "rev-parse", "release"], cwd=remote).stdout == head
+    competing = True
+    with pytest.raises((RuntimeError, subprocess.CalledProcessError)):
+        publisher.publish_updates_branch(document={"version": "0.5.1"}, github_repo="MicroKeen/Mklink-AI-Probe")
+    assert json.loads(run(["git", "show", "release:latest.json"], cwd=remote).stdout)["version"] == "0.6.0"
 
 
 def test_installed_updaters_share_new_primary_and_unchanged_fallback(publisher):
