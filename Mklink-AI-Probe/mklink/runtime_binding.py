@@ -40,9 +40,12 @@ class RuntimeBinding:
         if probe_id != 'lobby':
             lock = runtime_lock('owner.lock', probe_id)
             try:
-                lock.__enter__()
+                with runtime_lock('history-maintenance.lock'):
+                    lock.__enter__()
             except RuntimeErrorResponse as error:
-                raise RuntimeErrorResponse('This probe is in use by another backend; disconnect it there before switching') from error
+                message = 'This probe is in use by another backend; select a different probe or disconnect it there before switching'
+                raise RuntimeErrorResponse(message, status_code=409,
+                                           detail={'reason': 'probe_in_use', 'message': message}) from error
         def commit():
             nonlocal committed
             from mklink.probes import rebind_runtime

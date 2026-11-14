@@ -20,6 +20,9 @@ import ModbusTab from './ModbusTab.vue'
 describe('ModbusTab prerequisites', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    const storage = new Map<string, string>()
+    vi.stubGlobal('localStorage', { getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => storage.set(key, value) })
     vi.stubGlobal('EventSource', class { close() {} })
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
       running: false,
@@ -74,6 +77,76 @@ describe('ModbusTab prerequisites', () => {
     expect(wrapper.text()).not.toContain('请先连接设备')
     expect(wrapper.find('select').element.value).toBe('SERIAL_PORT')
     expect(wrapper.findAll('button').some(button => button.text() === '连接')).toBe(true)
+    const baud = wrapper.get('[data-testid="modbus-baudrate"]')
+    expect(baud.element.tagName).toBe('SELECT')
+    expect(baud.findAll('option')).toHaveLength(34)
+    expect(baud.findAll('option').map(item => item.attributes('value'))).toEqual([
+      '300', '600', '1200', '2400', '4800', '9600', '14400', '19200', '38400',
+      '56000', '57600', '115200', '128000', '230400', '256000', '460800',
+      '512000', '750000', '921600', '1000000', '1500000', '2000000', '2500000',
+      '3000000', '3500000', '4000000', '4500000', '5000000', '6000000', '7000000',
+      '7500000', '8000000', '9000000', '10000000',
+    ])
+    wrapper.unmount()
+  })
+
+  it.each(['mklink_uart', 'mklink_rs485'])('reads the %s subset, selects 10M and sends its exact value', async kind => {
+    const port = { device: 'PROBE_PORT', uart_kind: kind, command_port: 'CMD', usb_serial: 'one' }
+    mocks.listUartPorts.mockResolvedValue([port])
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.endsWith('/uart-baudrates')) {
+        expect(JSON.parse(String(init?.body))).toEqual({ port: 'PROBE_PORT' })
+        return new Response(JSON.stringify({ ...port, uart_baud: { profile: 1, source: 'firmware', rates: [300, 10000000] } }))
+      }
+      return new Response(JSON.stringify({ running: false }))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const wrapper = mount(ModbusTab)
+    await flushPromises()
+    expect(fetchMock.mock.calls.every(([url]) => !url.endsWith('/uart-baudrates'))).toBe(true)
+    await wrapper.get('[data-testid="modbus-read-baudrates"]').trigger('click')
+    await flushPromises()
+    const baud = wrapper.get('[data-testid="modbus-baudrate"]')
+    expect(baud.findAll('option').map(item => item.attributes('value'))).toEqual(['300', '10000000'])
+    expect((baud.element as HTMLSelectElement).value).toBe('300')
+    expect(baud.attributes('title')).toContain(kind === 'mklink_uart' ? 'UART' : 'RS485')
+    await baud.setValue('10000000')
+    await wrapper.get('.connection-action').trigger('click')
+    await flushPromises()
+    const start = fetchMock.mock.calls.find(([url]) => url.endsWith('/modbus/start'))
+    expect(JSON.parse(String(start?.[1]?.body)).baudrate).toBe(10000000)
+    expect(baud.attributes('disabled')).toBeDefined()
+    wrapper.unmount()
+  })
+
+  it('preserves an active custom baud rate outside the presets', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ running: true,
+      connection: { port: 'SERIAL_PORT', baudrate: 250000, bytesize: 8, parity: 'N', stopbits: 1 },
+    }))))
+    const wrapper = mount(ModbusTab)
+    await flushPromises()
+    const baud = wrapper.get('[data-testid="modbus-baudrate"]')
+    expect((baud.element as HTMLSelectElement).value).toBe('250000')
+    expect(baud.attributes('disabled')).toBeDefined()
+    expect(baud.text()).toContain('当前会话')
+    wrapper.unmount()
+  })
+
+  it('ignores a late capability response after unmount', async () => {
+    const port = { device: 'RS485', uart_kind: 'mklink_rs485', command_port: 'CMD' }
+    mocks.listUartPorts.mockResolvedValue([port])
+    let respond!: (response: Response) => void
+    vi.stubGlobal('fetch', vi.fn((url: string) => url.endsWith('/uart-baudrates')
+      ? new Promise<Response>(resolve => { respond = resolve })
+      : Promise.resolve(new Response(JSON.stringify({ running: false })))))
+    const wrapper = mount(ModbusTab)
+    await flushPromises()
+    await wrapper.get('[data-testid="modbus-read-baudrates"]').trigger('click')
+    expect(wrapper.get('.connection-action').attributes('disabled')).toBeDefined()
+    wrapper.unmount()
+    respond(new Response(JSON.stringify({ detail: 'old reply' }), { status: 409 }))
+    await flushPromises()
+    expect(mocks.toastError).not.toHaveBeenCalled()
   })
 
   it('surfaces the backend serial-port conflict instead of entering running state', async () => {

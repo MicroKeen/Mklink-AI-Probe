@@ -7,6 +7,8 @@ STREAMS = ('rtt', 'superwatch', 'systemview', 'vofa')
 CAPABILITIES = {
     'gui_windows': ('GET', '/api/runtime/control/windows'),
     'gui_present': ('POST', '/api/runtime/control/present'),
+    'gui_action': ('POST', '/api/runtime/control/gui-action'),
+    'gui_snapshot': ('POST', '/api/runtime/control/gui-snapshot'),
     'uart_ports': ('GET', '/api/ports/uart'),
     'device_status': ('GET', '/api/device/status'),
     'debug_speed': ('GET', '/api/device/debug-speed'),
@@ -48,9 +50,20 @@ CAPABILITIES = {
     'symbol_typeinfo': ('GET', '/api/symbols/typeinfo'),
     'memory_map': ('GET', '/api/device/memory-map'),
     'superwatch_items': ('GET', '/api/dash/superwatch/items'),
+    'superwatch_profile': ('GET', '/api/dash/superwatch/profile'),
+    'superwatch_profile_save': ('PUT', '/api/dash/superwatch/profile'),
+    'superwatch_workspace': ('GET', '/api/dash/superwatch/workspace'),
+    'superwatch_workspace_save': ('PUT', '/api/dash/superwatch/workspace'),
+    'superwatch_pins': ('GET', '/api/dash/superwatch/pins'),
+    'superwatch_pins_save': ('PUT', '/api/dash/superwatch/pins'),
     'superwatch_recording_status': ('GET', '/api/dash/superwatch/recording/status'),
     'superwatch_recording_start': ('POST', '/api/dash/superwatch/recording/start'),
     'superwatch_recording_stop': ('POST', '/api/dash/superwatch/recording/stop'),
+    'superwatch_recording_export': ('POST', '/api/dash/superwatch/recording/export'),
+    'rtt_recording_status': ('GET', '/api/dash/rtt/traffic-recording/status'),
+    'rtt_recording_start': ('POST', '/api/dash/rtt/traffic-recording/start'),
+    'rtt_recording_stop': ('POST', '/api/dash/rtt/traffic-recording/stop'),
+    'rtt_recording_export': ('POST', '/api/dash/rtt/traffic-recording/export'),
     'superwatch_snapshot': ('GET', '/api/dash/superwatch/array-snapshot'),
     'superwatch_snapshot_select': ('POST', '/api/dash/superwatch/array-snapshot/select'),
     'superwatch_snapshot_clear': ('POST', '/api/dash/superwatch/array-snapshot/clear'),
@@ -95,6 +108,32 @@ def capture_reset_supported(state, active):
     return (multiplex_captures(state, active)
             and isinstance(mux, MuxTransport) and mux.ready
             and mux.supports_software_reset)
+
+
+def capture_reset_hint(state, active):
+    from mklink.firmware_compatibility import upgrade_message
+    from mklink.mux import MuxTransport
+    mux = getattr(getattr(state.get('device'), '_bridge', None), '_mux', None)
+    if (multiplex_captures(state, active) and isinstance(mux, MuxTransport)
+            and mux.ready and not mux.supports_software_reset):
+        return upgrade_message('In-stream software reset', 'MUX HELLO 0x20') + ' Acquisition was left running.'
+    return 'In-stream software reset requires shared MUX capture; acquisition was left running. Check the active capture transport.'
+
+
+def capture_firmware_warning(state, active):
+    """Only proven firmware omissions explain otherwise compatible streams."""
+    from mklink.firmware_compatibility import upgrade_message
+    from mklink.mux import MuxTransport
+    bridge = getattr(state.get('device'), '_bridge', None)
+    if not set(active) <= {'rtt', 'superwatch', 'systemview'}:
+        return None
+    if getattr(bridge, '_mux_supported', None) is False:
+        return upgrade_message('Concurrent capture', 'MUX_TARGET=1')
+    mux = getattr(bridge, '_mux', None)
+    if ('systemview' in active and isinstance(mux, MuxTransport) and mux.ready
+            and not mux.capabilities & MuxTransport.RTT_UPDATE_CAPABILITY):
+        return upgrade_message('Concurrent RTT / SystemView', 'MUX HELLO 0x80')
+    return None
 
 
 for stream in STREAMS:
@@ -155,7 +194,7 @@ def is_uart_path(path: str) -> bool:
     return path == '/api/ports/uart' or path.startswith(('/api/dash/serial/', '/api/dash/modbus/'))
 
 
-UART_CAPABILITIES = frozenset(name for name, (_, path) in CAPABILITIES.items() if is_uart_path(path)) | {'gui_windows', 'gui_present'}
+UART_CAPABILITIES = frozenset(name for name, (_, path) in CAPABILITIES.items() if is_uart_path(path)) | {'gui_windows', 'gui_present', 'gui_action', 'gui_snapshot'}
 
 
 def validate_arguments(capability, arguments):

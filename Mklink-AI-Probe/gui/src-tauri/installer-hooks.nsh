@@ -19,8 +19,8 @@ Function MklinkCheckBeforeMaintenance
   Pop $0
 FunctionEnd
 
-; Installer-time USB naming is deliberately best-effort. The main application
-; must remain installable when no MKLink is connected or PnP is still settling.
+; Installation stays in the current user's context. Device registry changes
+; are performed only by an explicit Settings action through the elevated helper.
 Var MklinkLegacyInstallDir
 
 !macro NSIS_HOOK_PREINSTALL
@@ -48,9 +48,20 @@ Var MklinkLegacyInstallDir
 !macroend
 
 !macro NSIS_HOOK_POSTINSTALL
-  ; v0.1.7 used currentUser while v0.1.8 uses perMachine. The native updater
-  ; only updates shortcuts in its own shell context. After successful file
-  ; extraction, retarget matching current-user shortcuts to the new location.
+  ; The new frozen helper uses ordinary user permissions, never opens hardware,
+  ; and archives invalid job journals only after acquiring runtime owner locks.
+  ; Valid history and all project/user settings are retained.
+  nsExec::ExecToStack '"$INSTDIR\mklink-sidecar.exe" --internal-install-history-maintenance'
+  Pop $0
+  Pop $1
+  ${If} $0 != 0
+    DetailPrint "MKLink: task history maintenance was skipped or incomplete. Close all MKLink/Skill backends and rerun setup. Original records were retained; see installation-history-report.json in the runtime directory."
+  ${Else}
+    DetailPrint "MKLink: task history checked; invalid records were backed up before initialization."
+  ${EndIf}
+
+  ; Preserve existing current-user shortcuts when /UPDATE changes the location.
+  ; Only retarget shortcuts which still point to this product's previous path.
   ${If} $UpdateMode = 1
   ${AndIf} $MklinkLegacyInstallDir != ""
   ${AndIf} $MklinkLegacyInstallDir != $INSTDIR
@@ -72,17 +83,6 @@ Var MklinkLegacyInstallDir
     WriteRegStr HKCU "Software\Classes\mklink-ai-probe\Application" "ApplicationDescription" "MKLink AI Probe Web GUI Launcher"
   ${EndIf}
 
-  ; Apply naming immediately when a probe is already present. When no probe is
-  ; connected, the helper still runs successfully and the next explicit rename
-  ; action can handle the device after Windows creates its PnP registry entry.
-  DetailPrint "Initializing MKLink USB serial port naming..."
-  nsExec::ExecToLog '"$INSTDIR\mklink-ai-probe.exe" --manage-usb-port-names apply'
-  Pop $0
-  ${If} $0 == 0
-    DetailPrint "MKLink USB serial port naming initialization completed."
-  ${Else}
-    DetailPrint "MKLink USB serial port naming initialization returned code $0."
-  ${EndIf}
 !macroend
 
 !macro NSIS_HOOK_PREUNINSTALL

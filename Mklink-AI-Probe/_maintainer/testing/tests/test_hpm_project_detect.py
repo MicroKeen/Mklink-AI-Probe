@@ -28,6 +28,14 @@ def _write_output_files(output: Path):
         (output / f"demo.{suffix}").write_bytes(b"demo")
 
 
+def test_generic_cmake_output_is_not_assumed_to_be_hpm(tmp_path):
+    build = tmp_path / 'build'
+    build.mkdir()
+    (build / 'CMakeCache.txt').write_text('CMAKE_PROJECT_NAME:STATIC=demo\n', encoding='utf-8')
+    _write_output_files(build / 'output')
+    assert _detect_hpm_segger_project(str(tmp_path)) is None
+
+
 def test_hpm_detect_prefers_newest_cmake_output_over_ses_export(tmp_path: Path):
     ses = tmp_path / "hpm5301evklite_flash_xip_debug" / "segger_embedded_studio"
     exe = ses / "Output" / "Debug" / "Exe"

@@ -66,6 +66,17 @@ def _write_hex(path: Path, data: bytes, address: int = 0x08000000) -> None:
     image.write_hex_file(str(path))
 
 
+def test_missing_flash_target_suggests_explicit_part_without_programming(tmp_path):
+    firmware = tmp_path / 'firmware.hex'
+    _write_hex(firmware, b'data')
+    device = _device(lambda *args: pytest.fail('Missing target must not read memory'))
+    device._mcu_hint = None
+    device._project_root = str(tmp_path)
+    with pytest.raises(DeviceError, match='--target-part'):
+        device.flash(str(firmware), reset_after=False)
+    assert not device._flash.loaded and not device._flash.burned
+
+
 def test_device_flash_verify_reads_back_hex_before_reset(tmp_path: Path):
     firmware = tmp_path / "firmware.hex"
     expected = bytes(range(32))

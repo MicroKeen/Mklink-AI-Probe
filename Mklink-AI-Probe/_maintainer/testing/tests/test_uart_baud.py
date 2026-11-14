@@ -17,12 +17,37 @@ def test_profile_one_uses_only_explicitly_advertised_rates():
     assert uart_baud.baud_options(lines((115200, 4000000)))['rates'] == [115200, 4000000]
 
 
+def test_browser_presets_match_all_firmware_profile_steps():
+    import re
+    from pathlib import Path
+    source = Path(__file__).resolve().parents[3]
+    ts = (source / 'gui/src/composables/useUartBaudrates.ts').read_text(encoding='utf-8')
+    table = ts.split('export const UART_BAUD_RATES = [', 1)[1].split(']', 1)[0]
+    assert tuple(map(int, re.findall(r'\d+', table))) == uart_baud.PROFILE_1_RATES
+
+
+def test_uart_and_rs485_capabilities_never_cross_interfaces():
+    response = ['V4.7.4', *lines((115200, 4000000)),
+                'RS485_BAUD_PROFILE=1', 'RS485_BAUDS=300,2500000,10000000']
+    assert uart_baud.baud_options(response)['rates'] == [115200, 4000000]
+    assert uart_baud.baud_options(response, kind='mklink_rs485')['rates'] == [300, 2500000, 10000000]
+    old = uart_baud.baud_options(['V4.7.3', *lines()], kind='mklink_rs485')
+    assert old['source'] == 'common' and old['profile'] is None
+    assert 'RS485_BAUD_PROFILE=1' in old['firmware_warning']
+    assert '升级' in old['firmware_warning']
+
+
 @pytest.mark.parametrize('response', [[], ['V4.7.2'], ['UART_BAUD_PROFILE=1'],
     ['UART_BAUDS=4000000'], ['UART_BAUD_PROFILE=2', 'UART_BAUDS=4000000'],
     lines(('4000000', '4000000')), lines(('3000001',)), lines(('-1',)),
     lines(('1.5',)), lines(('４００００００',)), lines(())])
 def test_missing_or_invalid_profile_never_claims_old_high_rates(response):
-    assert uart_baud.baud_options(response) == {
+    result = uart_baud.baud_options(response)
+    warning = result.pop('firmware_warning', None)
+    assert bool(warning) == (response == ['V4.7.2'])
+    if warning:
+        assert 'upgrade' in warning and '升级' in warning
+    assert result == {
         'profile': None, 'rates': list(uart_baud.COMMON_RATES), 'source': 'common'}
 
 
@@ -37,7 +62,7 @@ def test_usb_roles_and_pairing_are_passive_and_ambiguous_serials_are_not_paired(
     monkeypatch.setattr(_port.serial, 'Serial', lambda *a, **k: pytest.fail('Opened hardware'))
     uart, rs485 = _port.list_uart_ports()
     assert uart['uart_kind'] == 'mklink_uart' and uart['command_port'] == 'CMD'
-    assert rs485['uart_kind'] == 'mklink_rs485' and rs485['command_port'] is None
+    assert rs485['uart_kind'] == 'mklink_rs485' and rs485['command_port'] == 'CMD'
     ports.append(port('OTHER_CMD', 4))
     assert _port.list_uart_ports()[0]['command_port'] is None
 
@@ -92,11 +117,23 @@ def test_busy_probe_is_not_retried_or_stopped(paired, monkeypatch):
     assert len(queries) == 1
 
 
-@pytest.mark.parametrize('kind', ['generic', 'mklink_rs485', 'mklink_unknown'])
+def test_rs485_queries_its_own_profile_via_paired_owner(paired, monkeypatch):
+    paired['uart_kind'] = 'mklink_rs485'
+    queried = []
+    def query(capability, **kwargs):
+        queried.append((capability, kwargs))
+        return {'raw': '\n'.join([*lines((115200,)), 'RS485_BAUD_PROFILE=1', 'RS485_BAUDS=300,10000000'])}
+    monkeypatch.setattr('mklink.runtime.query_probe', query)
+    result = uart_baud.read_options({}, 'UART')
+    assert result['uart_baud'] == {'profile': 1, 'rates': [300, 10000000], 'source': 'firmware'}
+    assert queried == [('probe_version', {'probe': 'probe'})]
+
+
+@pytest.mark.parametrize('kind', ['generic', 'mklink_unknown'])
 def test_other_interfaces_cannot_request_uart_profile(paired, monkeypatch, kind):
     paired['uart_kind'] = kind
     monkeypatch.setattr('mklink.runtime.query_probe', lambda *a, **k: pytest.fail('Wrong interface queried'))
-    with pytest.raises(ValueError, match='ordinary MKLink UART'):
+    with pytest.raises(ValueError, match='MKLink UART or RS485'):
         uart_baud.read_options({}, 'UART')
 
 

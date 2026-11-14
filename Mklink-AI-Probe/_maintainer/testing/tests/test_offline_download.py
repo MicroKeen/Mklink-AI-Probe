@@ -701,7 +701,8 @@ def test_hpm_offline_script_uses_rom_api_without_flm(model, image_format):
 
     assert config.algorithms == ()
     assert "import hpm" in script
-    assert 'hpm.board("hpm5301evklite")' in script
+    assert "hpm.flash_cfg(0xfcf90002,0x00000005,0x00001000,0xf3000000)" in script
+    assert "hpm.board(" not in script
     if image_format == "bin":
         assert 'hpm.program("app.bin", 0x80000400)' in script
     else:

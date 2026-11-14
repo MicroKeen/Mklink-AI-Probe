@@ -4,6 +4,25 @@ from mklink import runtime_cli
 from mklink.runtime import RuntimeErrorResponse
 
 
+def test_gui_call_attaches_existing_selected_runtime_without_hardware(monkeypatch, capsys):
+    import json, sys
+    from mklink import cli
+    calls = []
+    info = {'runtime_id': 'chosen', 'probe_id': 'lobby'}
+    monkeypatch.setattr('mklink.runtime.running_runtimes', lambda: [info])
+    monkeypatch.setattr('mklink.runtime_gui.select_gui_runtime', lambda **kw: (info, {}))
+    class Client:
+        def __init__(self, **kwargs): assert kwargs['info'] is info
+        def connect(self, **kwargs): calls.append(('attach', kwargs))
+        def call(self, name, body): calls.append((name, body)); return {'windows': []}
+        def close(self): calls.append(('detach', {}))
+    monkeypatch.setattr('mklink.runtime.RuntimeClient', Client)
+    monkeypatch.setattr(sys, 'argv', ['mklink', 'runtime', 'call', 'gui_windows', '--runtime-id', 'chosen'])
+    cli.main()
+    assert json.loads(capsys.readouterr().out) == {'windows': []}
+    assert calls == [('attach', {'scope': 'uart', 'existing_only': True}), ('gui_windows', {}), ('detach', {})]
+
+
 @pytest.mark.parametrize('action,kwargs', [
     ('kill', {'confirm': True}), ('detach-client', {'confirm': True}),
     ('stop-acquisition', {'confirm': True}), ('status', {'client_id': 'x'}),
@@ -57,11 +76,20 @@ def adapter(monkeypatch):
 
 
 def test_cli_capture_subscribes_and_does_not_stop_gui(adapter):
-    runtime_cli.run(SimpleNamespace(command='superwatch', variables=[], period=.001, duration=.001))
+    runtime_cli.run(SimpleNamespace(command='superwatch', variables=[], period=None, duration=.001))
     assert ('superwatch_start',{}) in adapter
     assert ('superwatch_values',None) in adapter
     assert not any(name=='superwatch_stop' for name,_ in adapter)
     assert adapter[-1][0]=='detach'
+
+
+def test_cli_default_superwatch_period_preserves_saved_backend_setting(adapter, monkeypatch):
+    import sys
+    from mklink import cli
+    monkeypatch.setattr(sys, 'argv', ['mklink', 'superwatch', '--duration', '0.001'])
+    cli.main()
+    assert ('superwatch_start', {}) in adapter
+    assert not any(name == 'superwatch_interval' for name, _ in adapter)
 
 
 def test_cli_read_routes_to_shared_backend(adapter):

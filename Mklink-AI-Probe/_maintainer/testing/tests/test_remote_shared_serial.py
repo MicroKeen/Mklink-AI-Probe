@@ -8,6 +8,7 @@ import websockets
 from mklink.remote.dispatcher import OperationDispatcher, dispatch_capability
 from mklink.remote.protocol import AgentOperationError, RequestValidationError
 from mklink.serial._monitor import SerialMonitor
+from mklink.uart_baud import COMMON_RATES
 from test_serial_autoreply import ports, wait_for
 from test_shared_modbus_scan import scan_cli
 from test_runtime_uart import uart_app, client_factory
@@ -27,17 +28,18 @@ def exchange(**changes):
 
 
 @pytest.mark.parametrize('existing', [False, True])
-def test_agent_exchange_uses_one_reader_and_raw_gui_history(shared_serial, uart_app, monkeypatch, existing):
+@pytest.mark.parametrize('rate', [115200, 10000000])
+def test_agent_exchange_uses_one_reader_and_raw_gui_history(shared_serial, uart_app, monkeypatch, existing, rate):
     http, control, _, factory = shared_serial
     manager = uart_app[2]['serial']
     if existing:
-        assert http.post('/api/dash/serial/start', json={'ports': [{'port': 'TEST'}]}).status_code == 200
+        assert http.post('/api/dash/serial/start', json={'ports': [{'port': 'TEST', 'baudrate': rate}]}).status_code == 200
     original = factory.write
     def write(port, data):
         original(port, data)
         if data == b'Q': port.rx.put(b'ANSWER')
     monkeypatch.setattr(factory, 'write', write)
-    assert dispatch_capability('serial.exchange', exchange()) == {'__bytes__': 'QU5TV0VS'}
+    assert dispatch_capability('serial.exchange', exchange(baudrate=rate)) == {'__bytes__': 'QU5TV0VS'}
     assert len(factory.instances) == 1 and not control.sessions
     assert manager.running == existing
     history = manager.get_history()
@@ -49,7 +51,7 @@ def test_agent_exchange_uses_one_reader_and_raw_gui_history(shared_serial, uart_
 
 
 @pytest.mark.parametrize('changes', [{'timeout': True}, {'timeout': float('inf')}, {'timeout': 6},
-    {'data_b64': '?'}, {'data_b64': 'A' * 5468}, {'baudrate': 4000001}, {'port': ' '}])
+    {'data_b64': '?'}, {'data_b64': 'A' * 5468}, {'baudrate': 10000001}, {'port': ' '}])
 def test_invalid_agent_request_never_attaches(monkeypatch, changes):
     monkeypatch.setattr('mklink.runtime.RuntimeClient', lambda **_: pytest.fail('invalid request attached'))
     with pytest.raises(RequestValidationError):
@@ -70,7 +72,7 @@ def test_agent_list_uses_backend_without_starting_monitor(shared_serial, monkeyp
     monkeypatch.setattr('mklink.runtime.query_probe', lambda *a, **k: pytest.fail('Passive list queried hardware'))
     assert dispatch_capability('serial.list', {}) == [{'device': 'TEST', 'uart_baud': {
         'profile': None, 'source': 'common',
-        'rates': [9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600],
+        'rates': list(COMMON_RATES),
     }}]
     assert not control.sessions and not factory.instances
 

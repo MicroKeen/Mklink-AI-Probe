@@ -22,13 +22,10 @@ const mocks = vi.hoisted(() => ({
   dash: {
     state: { __v_isRef: true, value: 'idle' },
     error: { __v_isRef: true, value: null },
+    status: { __v_isRef: true, value: null as any },
     syncState: vi.fn((running: boolean) => { mocks.dash.state.value = running ? 'running' : 'idle' }),
     getStatus: vi.fn(), start: vi.fn(), stop: vi.fn(),
     pause: vi.fn(), resume: vi.fn(),
-  },
-  status: {
-    data: { __v_isRef: true, value: [] },
-    connect: vi.fn(), disconnect: vi.fn(),
   },
   binary: {
     telemetry: { __v_isRef: true, value: null },
@@ -44,8 +41,11 @@ const mocks = vi.hoisted(() => ({
   },
   timeline: {
     construct: vi.fn(),
+    getViewRange: vi.fn(() => null as { start: number; end: number } | null),
+    zoom: vi.fn(), renderInspection: vi.fn(),
+    onViewChange: null as (() => void) | null,
     pauseRendering: vi.fn(), resumeRendering: vi.fn(), renderFrame: vi.fn(),
-    setPrefilteredIntervals: vi.fn(),
+    setPrefilteredIntervals: vi.fn(), setFollowMode: vi.fn(),
   },
   importLog: vi.fn(),
   api: {
@@ -53,8 +53,9 @@ const mocks = vi.hoisted(() => ({
   },
 }))
 
-vi.mock('../../composables/useDashboard', () => ({ useDashboard: () => mocks.dash }))
-vi.mock('../../composables/useEventSource', () => ({ useEventSource: () => mocks.status }))
+vi.mock('../../composables/useDashboard', () => ({ useDashboard: () => ({ ...mocks.dash, getStatus: async () => {
+  const result = await mocks.dash.getStatus(); mocks.dash.status.value = result; return result
+} }) }))
 vi.mock('../../composables/useBinaryStream', () => ({ useBinaryStream: () => mocks.binary }))
 vi.mock('../../composables/useResourceStatus', () => ({
   useResourceStatus: () => ({ checkConflict: mocks.checkConflict }),
@@ -62,10 +63,18 @@ vi.mock('../../composables/useResourceStatus', () => ({
 vi.mock('../../composables/useMklinkApi', () => ({ useMklinkApi: () => mocks.api }))
 vi.mock('../../lib/svTimeline', () => ({
   SvTimeline: class {
-    constructor(_roots: unknown, data: unknown) { mocks.timeline.construct(data) }
+    follow = true
+    constructor(roots: { onViewChange?: () => void }, data: unknown) {
+      mocks.timeline.construct(data)
+      mocks.timeline.onViewChange = roots.onViewChange || null
+    }
+    getViewRange = mocks.timeline.getViewRange
+    zoom = mocks.timeline.zoom
+    renderInspection = mocks.timeline.renderInspection
     setData() {}
     setTickOrigin() {}
     setPrefilteredIntervals = mocks.timeline.setPrefilteredIntervals
+    setFollowMode = mocks.timeline.setFollowMode
     renderFrame = mocks.timeline.renderFrame
     setWindowSize() {}
     pauseRendering = mocks.timeline.pauseRendering
@@ -124,9 +133,11 @@ function desktopSettings(overrides: Partial<DesktopSettings> = {}): DesktopSetti
 describe('SystemViewTab asynchronous lifecycle', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.timeline.getViewRange.mockReturnValue(null)
+    mocks.timeline.zoom.mockImplementation(() => mocks.timeline.onViewChange?.())
     mocks.dash.state = ref('idle') as typeof mocks.dash.state
     mocks.dash.error = ref(null) as typeof mocks.dash.error
-    mocks.status.data = shallowRef([]) as typeof mocks.status.data
+    mocks.dash.status = shallowRef(null) as typeof mocks.dash.status
     mocks.binary.telemetry = shallowRef(null) as typeof mocks.binary.telemetry
     mocks.binary.systemViewVisible = shallowRef(null) as typeof mocks.binary.systemViewVisible
     mocks.dash.stop.mockResolvedValue(undefined)
@@ -280,6 +291,32 @@ describe('SystemViewTab asynchronous lifecycle', () => {
     wrapper.unmount()
   })
 
+  it('keeps the shared channel across restart and remount instead of switching to CH1', async () => {
+    mocks.dash.getStatus.mockResolvedValue({ running: true, channel: 2, cpu_freq: 72000000 })
+    let wrapper = mount(SystemViewTab, { props: { deviceConnected: true } })
+    await flushPromises()
+    expect((wrapper.get('[data-testid="systemview-channel"]').element as HTMLSelectElement).value).toBe('2')
+    expect(JSON.parse(localStorage.getItem(DESKTOP_SETTINGS_STORAGE_KEY) ?? '{}').systemviewChannel).toBe(2)
+    wrapper.unmount()
+    mocks.dash.state.value = 'idle'
+    mocks.dash.getStatus.mockResolvedValueOnce({ running: false })
+      .mockResolvedValue({ running: true, channel: 2, progress_state: 'streaming', stats: { bytes: 64 } })
+    wrapper = mount(SystemViewTab, { props: { deviceConnected: true } })
+    await flushPromises()
+    await wrapper.get('.control-toolbar .btn-primary').trigger('click')
+    await flushPromises()
+    expect(mocks.dash.start).toHaveBeenCalledWith(expect.objectContaining({ channel: 2 }))
+    wrapper.unmount()
+  })
+
+  it('allows explicitly selecting a SystemView channel before starting', async () => {
+    const wrapper = mount(SystemViewTab, { props: { deviceConnected: true } })
+    await flushPromises()
+    await wrapper.get('[data-testid="systemview-channel"]').setValue('0')
+    expect(JSON.parse(localStorage.getItem(DESKTOP_SETTINGS_STORAGE_KEY) ?? '{}').systemviewChannel).toBe(0)
+    wrapper.unmount()
+  })
+
   it('keeps a validated quiet capture running beyond the startup deadline and resumes', async () => {
     vi.useFakeTimers()
     const wrapper = mount(SystemViewTab, { props: { deviceConnected: true } })
@@ -311,12 +348,9 @@ describe('SystemViewTab asynchronous lifecycle', () => {
   it('shows a real transport error after waiting instead of treating it as idle', async () => {
     const wrapper = mount(SystemViewTab, { props: { deviceConnected: true } })
     await flushPromises()
-    mocks.status.data.value = [{ _streamSeq: 1, event: 'status', progress_state: 'waiting' }] as never[]
+    mocks.dash.status.value = { _streamSeq: 1, event: 'status', progress_state: 'waiting' }
     await nextTick()
-    mocks.status.data.value = [
-      ...mocks.status.data.value,
-      { _streamSeq: 2, event: 'status', progress_state: 'error', progress_error: 'MUX heartbeat timed out' },
-    ] as never[]
+    mocks.dash.status.value = { progress_state: 'error', progress_error: 'MUX heartbeat timed out' }
     await nextTick()
     expect(wrapper.text()).toContain('MUX heartbeat timed out')
     expect(wrapper.find('[data-testid="systemview-waiting"]').exists()).toBe(false)
@@ -340,7 +374,7 @@ describe('SystemViewTab asynchronous lifecycle', () => {
     wrapper.unmount()
   })
 
-  it('keeps earlier envelope intervals while the follow viewport advances', async () => {
+  it('uses the latest worker envelope without retaining obsolete pixel selections', async () => {
     mocks.dash.getStatus.mockResolvedValue({ running: false })
     const wrapper = mount(SystemViewTab, { props: { deviceConnected: true } })
     await flushPromises()
@@ -351,8 +385,32 @@ describe('SystemViewTab asynchronous lifecycle', () => {
     await nextTick()
 
     const last = mocks.timeline.setPrefilteredIntervals.mock.calls.at(-1)?.[0] as Array<{ start: number }>
-    expect(last.map(interval => interval.start)).toEqual([100, 300])
+    expect(last.map(interval => interval.start)).toEqual([300])
     wrapper.unmount()
+  })
+
+  it('paints between coalesced geometry queries and refreshes interactions immediately', async () => {
+    const now = vi.spyOn(performance, 'now').mockReturnValue(1000)
+    const wrapper = mount(SystemViewTab, { props: { deviceConnected: true } })
+    await flushPromises()
+    const render = (time: number, reasons: string[]) => {
+      now.mockReturnValue(time)
+      mocks.scheduler.render?.(new Set(reasons))
+    }
+    render(1000, ['data'])
+    publishVisibleEvent(1_000_000, mocks.binary.requestVisibleRange.mock.calls.at(-1)![0])
+    await nextTick()
+    for (const time of [1016, 1033, 1049]) render(time, ['data'])
+    expect(mocks.binary.requestVisibleRange).toHaveBeenCalledTimes(1)
+    expect(mocks.timeline.renderFrame).toHaveBeenCalledTimes(4)
+    render(1050, []) // pending refresh must survive a frame with no new data
+    expect(mocks.binary.requestVisibleRange).toHaveBeenCalledTimes(2)
+    publishVisibleEvent(1_000_000, mocks.binary.requestVisibleRange.mock.calls.at(-1)![0])
+    await nextTick()
+    render(1051, ['zoom'])
+    expect(mocks.binary.requestVisibleRange).toHaveBeenCalledTimes(3)
+    wrapper.unmount()
+    now.mockRestore()
   })
 
   it('keeps the startup Timeline cadence fixed until the live window is filled', async () => {
@@ -360,21 +418,38 @@ describe('SystemViewTab asynchronous lifecycle', () => {
     const wrapper = mount(SystemViewTab, { props: { deviceConnected: true } })
     await flushPromises()
 
-    expect(mocks.scheduler.options).toEqual({ frameRate: 30, continuous: true })
+    expect(mocks.scheduler.options).toEqual({ frameRate: 60, continuous: true })
     mocks.scheduler.render?.(new Set(['data']))
-    expect(mocks.scheduler.setFrameRate).toHaveBeenLastCalledWith(30)
+    expect(mocks.scheduler.setFrameRate).toHaveBeenLastCalledWith(60)
 
     const firstRequestId = mocks.binary.requestVisibleRange.mock.calls.at(-1)?.[0] as number
     publishVisibleEvent(1_000_000, firstRequestId, 1)
     await nextTick()
     mocks.scheduler.render?.(new Set(['data']))
-    expect(mocks.scheduler.setFrameRate).toHaveBeenLastCalledWith(30)
+    expect(mocks.scheduler.setFrameRate).toHaveBeenLastCalledWith(60)
 
     const filledRequestId = mocks.binary.requestVisibleRange.mock.calls.at(-1)?.[0] as number
     publishVisibleEvent(1_000_000, filledRequestId, 10_000_000)
     await nextTick()
     mocks.scheduler.render?.(new Set())
     expect(mocks.scheduler.setFrameRate).toHaveBeenLastCalledWith(60)
+    wrapper.unmount()
+  })
+
+  it('retains the displayed left edge while a short live window follows a newer batch', async () => {
+    mocks.dash.getStatus.mockResolvedValue({ running: false })
+    const wrapper = mount(SystemViewTab, { props: { deviceConnected: true } })
+    await flushPromises()
+    await wrapper.get('.sv-window select').setValue('500000')
+    mocks.timeline.getViewRange.mockReturnValue({ start: 400_000, end: 900_000 })
+    publishVisibleIntervals(1_000_000, 0, 1_000_000, 400_000, 450_000)
+    await nextTick()
+    const painted = mocks.timeline.setPrefilteredIntervals.mock.calls.at(-1)?.[0] as Array<{ start: number }>
+    expect(painted.map(interval => interval.start)).toEqual([400_000])
+    mocks.scheduler.render?.(new Set(['data']))
+    expect(mocks.binary.requestVisibleRange).toHaveBeenLastCalledWith(
+      expect.any(Number), 400_000, 1_000_000, expect.any(Number), undefined, undefined, 200,
+    )
     wrapper.unmount()
   })
 
@@ -444,7 +519,6 @@ describe('SystemViewTab asynchronous lifecycle', () => {
     await flushPromises()
 
     expect(mocks.dash.start).not.toHaveBeenCalled()
-    expect(mocks.status.connect).not.toHaveBeenCalled()
     expect(mocks.binary.start).not.toHaveBeenCalled()
   })
 
@@ -472,7 +546,6 @@ describe('SystemViewTab asynchronous lifecycle', () => {
     expect(wrapper.text()).toContain('task2')
     expect(wrapper.text()).toContain('task3')
     expect(wrapper.text()).toContain('Tmr Svc')
-    expect(mocks.status.connect).toHaveBeenCalledOnce()
     expect(mocks.binary.start).toHaveBeenCalledOnce()
     wrapper.unmount()
   })
@@ -482,14 +555,14 @@ describe('SystemViewTab asynchronous lifecycle', () => {
     const wrapper = mount(SystemViewTab, { props: { deviceConnected: true } })
     await flushPromises()
 
-    mocks.status.data.value = [{
+    mocks.dash.status.value = {
       _streamSeq: 1,
       target_overflow_events: 1,
       target_drop_count: 3,
       target_dropped_packets_since_baseline: 3,
       dropped_bytes: 0,
       dropped_packets: 0,
-    }] as never[]
+    }
     await nextTick()
 
     const health = wrapper.get('.sv-health-grid')
@@ -507,7 +580,7 @@ describe('SystemViewTab asynchronous lifecycle', () => {
     await flushPromises()
     const resetsBeforeRetry = mocks.binary.reset.mock.calls.length
 
-    mocks.status.data.value = [{
+    mocks.dash.status.value = {
       _streamSeq: 1,
       event: 'status',
       connection_generation: 3,
@@ -515,7 +588,7 @@ describe('SystemViewTab asynchronous lifecycle', () => {
       auto_retry_count: 1,
       auto_retry_reason: 'first_start_data_then_idle',
       stats: { events: 0 },
-    }] as never[]
+    }
     await nextTick()
 
     const recovery = wrapper.get('[data-testid="systemview-auto-retry"]')
@@ -523,7 +596,7 @@ describe('SystemViewTab asynchronous lifecycle', () => {
     expect(recovery.get('b').attributes('title')).toBe('first_start_data_then_idle')
     expect(mocks.binary.reset).toHaveBeenCalledTimes(resetsBeforeRetry + 1)
 
-    mocks.status.data.value = [{
+    mocks.dash.status.value = {
       _streamSeq: 2,
       event: 'status',
       connection_generation: 3,
@@ -531,7 +604,7 @@ describe('SystemViewTab asynchronous lifecycle', () => {
       auto_retry_count: 1,
       auto_retry_reason: 'first_start_data_then_idle',
       stats: { events: 10 },
-    }] as never[]
+    }
     await nextTick()
     expect(mocks.binary.reset).toHaveBeenCalledTimes(resetsBeforeRetry + 1)
 
@@ -562,7 +635,6 @@ describe('SystemViewTab asynchronous lifecycle', () => {
     started.resolve()
     await flushPromises()
 
-    expect(mocks.status.connect).not.toHaveBeenCalled()
     expect(mocks.binary.start).not.toHaveBeenCalled()
   })
 
@@ -586,7 +658,22 @@ describe('SystemViewTab asynchronous lifecycle', () => {
     expect(mocks.scheduler.start).toHaveBeenCalledTimes(2)
     expect(mocks.scheduler.invalidate).toHaveBeenCalledWith('data')
     expect(mocks.timeline.resumeRendering).toHaveBeenCalled()
+    expect(mocks.timeline.setFollowMode).toHaveBeenLastCalledWith(true)
     expect(mocks.dash.resume).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('binds a new canvas when a disconnected page reconnects without a clock change', async () => {
+    const wrapper = mount(SystemViewTab, { props: { deviceConnected: false } })
+    await flushPromises()
+    expect(mocks.timeline.construct).not.toHaveBeenCalled()
+    await wrapper.setProps({ deviceConnected: true })
+    await nextTick()
+    expect(mocks.timeline.construct).toHaveBeenCalledOnce()
+    await wrapper.setProps({ deviceConnected: false })
+    await wrapper.setProps({ deviceConnected: true })
+    await nextTick()
+    expect(mocks.timeline.construct).toHaveBeenCalledTimes(2)
     wrapper.unmount()
   })
 
@@ -604,6 +691,30 @@ describe('SystemViewTab asynchronous lifecycle', () => {
     expect(mocks.timeline.construct).toHaveBeenLastCalledWith(
       expect.objectContaining({ renderPaused: true }),
     )
+    wrapper.unmount()
+  })
+
+  it('coalesces paused zoom inspection and repaints detail without resuming acquisition display', async () => {
+    const wrapper = mount(SystemViewTab, { props: { deviceConnected: true } })
+    await flushPromises()
+    publishVisibleIntervals(1_000_000, 0, 1000, 0, 1000)
+    await nextTick()
+    mocks.dash.state.value = 'running'
+    await nextTick()
+    await wrapper.get('.control-toolbar .btn:not(.btn-danger)').trigger('click')
+    mocks.timeline.getViewRange.mockReturnValue({ start: 200, end: 400 })
+    await wrapper.get('[data-testid="systemview-zoom-in"]').trigger('click')
+    await wrapper.get('[data-testid="systemview-zoom-in"]').trigger('click')
+    expect(mocks.timeline.zoom).toHaveBeenCalledWith(0.5)
+    expect(mocks.binary.requestVisibleRange).toHaveBeenCalledTimes(1)
+    const request = mocks.binary.requestVisibleRange.mock.calls[0][0] as number
+    publishVisibleIntervals(1_000_000, request, 5000, 200, 400)
+    await nextTick()
+    expect(mocks.timeline.renderInspection).toHaveBeenCalledTimes(1)
+    expect(mocks.binary.requestVisibleRange).toHaveBeenCalledTimes(2)
+    expect(mocks.timeline.resumeRendering).not.toHaveBeenCalled()
+    expect(mocks.dash.pause).not.toHaveBeenCalled()
+    expect(mocks.binary.stop).not.toHaveBeenCalled()
     wrapper.unmount()
   })
 
@@ -672,12 +783,13 @@ describe('SystemViewTab asynchronous lifecycle', () => {
     expect(wrapper.get('[data-testid="systemview-replay-controls"]').text()).toContain('重新播放')
     expect(wrapper.get('.sv-replay-progress').text()).toBe('100.0%')
     expect(wrapper.text()).toContain('回放完成 1')
+    expect(mocks.dash.stop).not.toHaveBeenCalled()
     wrapper.unmount()
   })
 })
 
 function publishVisibleEvent(cpuFreq: number, requestId = 0, latestTime = 1) {
-  mocks.status.data.value = cpuFreq > 0 ? [{ _streamSeq: 1, cpu_freq: cpuFreq }] as never[] : []
+  mocks.dash.status.value = { cpu_freq: cpuFreq }
   mocks.binary.systemViewVisible.value = {
     type: 'systemview-visible',
     requestId,
@@ -708,7 +820,7 @@ function publishVisibleIntervals(
   start: number,
   end: number,
 ) {
-  mocks.status.data.value = [{ _streamSeq: requestId, cpu_freq: cpuFreq }] as never[]
+  mocks.dash.status.value = { _streamSeq: requestId, cpu_freq: cpuFreq }
   mocks.binary.systemViewVisible.value = {
     type: 'systemview-visible',
     requestId,
@@ -733,7 +845,7 @@ describe('SystemViewTab event time units', () => {
     vi.clearAllMocks()
     mocks.dash.state = ref('idle') as typeof mocks.dash.state
     mocks.dash.error = ref(null) as typeof mocks.dash.error
-    mocks.status.data = shallowRef([]) as typeof mocks.status.data
+    mocks.dash.status = shallowRef(null) as typeof mocks.dash.status
     mocks.binary.telemetry = shallowRef(null) as typeof mocks.binary.telemetry
     mocks.binary.systemViewVisible = shallowRef(null) as typeof mocks.binary.systemViewVisible
     mocks.dash.getStatus.mockResolvedValue({ running: false })

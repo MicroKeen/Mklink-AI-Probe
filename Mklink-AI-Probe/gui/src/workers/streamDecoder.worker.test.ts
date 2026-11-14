@@ -1224,6 +1224,69 @@ describe('StreamDecoder worker controller', () => {
       ]))
   })
 
+  it('bounds live summary work while fresh inspection and a new session bypass the cache', () => {
+    const { decoder, messages } = setup()
+    const now = vi.spyOn(performance, 'now').mockReturnValue(0)
+    decoder.handle({ type: 'configure', capacity: 32, channelCount: 1 })
+    const send = (seq: bigint, tick: bigint) => decoder.handle({
+      type: 'frame', buffer: frame(seq, 2, systemViewRecords(
+        { kind: 4, taskId: 1, ticks: tick, timeUs: Number(tick) },
+        { kind: 5, taskId: 1, ticks: tick + 10n, timeUs: Number(tick) + 10 },
+      ), StreamType.SYSTEMVIEW), connectionGeneration: 1, frameTicket: Number(seq),
+    })
+    const query = (summaryIntervalMs = 200) => {
+      decoder.handle({ type: 'visible-range', requestId: 1, start: 0, end: 100, pixelWidth: 200, summaryIntervalMs })
+      const result = messages.at(-1)
+      if (result?.type !== 'systemview-visible') throw new Error('expected visible data')
+      return result
+    }
+    send(1n, 10n)
+    expect(query().contexts[0]?.count).toBe(1)
+    send(2n, 30n)
+    now.mockReturnValue(50)
+    expect(query().intervalCount).toBe(2) // drawing is always current
+    expect(query().contexts[0]?.count).toBe(1)
+    expect(query(0).contexts[0]?.count).toBe(2) // paused inspection
+    send(3n, 50n)
+    now.mockReturnValue(250)
+    expect(query().contexts[0]?.count).toBe(3)
+    decoder.handle({ type: 'configure', capacity: 32, channelCount: 1 })
+    send(1n, 10n)
+    expect(query().contexts[0]?.count).toBe(1)
+    now.mockRestore()
+  })
+
+  it('evicts exact duration statistics with the interval ring and clears them on reset', () => {
+    const { decoder, messages } = setup()
+    decoder.handle({ type: 'configure', capacity: 3, channelCount: 1 })
+    const send = (seq: number, id: number, start: number, duration: number) => {
+      decoder.handle({ type: 'frame', buffer: frame(BigInt(seq), 2, systemViewRecords(
+        { kind: 4, taskId: id, ticks: BigInt(start), timeUs: start },
+        { kind: 5, taskId: id, ticks: BigInt(start + duration), timeUs: start + duration },
+      ), StreamType.SYSTEMVIEW), connectionGeneration: 1, frameTicket: seq })
+    }
+    const query = () => {
+      decoder.handle({ type: 'visible-range', requestId: 1, start: 0, end: 1000, pixelWidth: 100 })
+      const visible = messages.at(-1)
+      if (visible?.type !== 'systemview-visible') throw new Error('expected visible data')
+      return visible
+    }
+    send(1, 1, 10, 2)
+    send(2, 2, 20, 4)
+    send(3, 1, 30, 6)
+    send(4, 1, 40, 8)
+    expect(query().contexts.find(c => c.id === 1)).toMatchObject({
+      count: 2, totalTicks: 14, minTicks: 6, p25Ticks: 6.5, p50Ticks: 7, p75Ticks: 7.5, maxTicks: 8,
+    })
+    send(5, 1, 50, 10)
+    const wrapped = query()
+    expect(wrapped.contexts.find(c => c.id === 2)).toMatchObject({ count: 0, totalTicks: 0 })
+    expect(wrapped.contexts.find(c => c.id === 1)).toMatchObject({ count: 3, totalTicks: 24, p50Ticks: 8 })
+    decoder.handle({ type: 'reset' })
+    send(1, 1, 5, 3)
+    expect(query().contexts).toEqual([expect.objectContaining({ count: 1, totalTicks: 3, minTicks: 3, maxTicks: 3 })])
+  })
+
   it('keeps context statistics cumulative when the visible range moves', () => {
     const { decoder, messages } = setup()
     decoder.handle({ type: 'configure', capacity: 32, channelCount: 1 })

@@ -11,7 +11,8 @@ from mklink.connection_diagnostics import event, error_detail
 from mklink.runtime_api import settle
 
 logger = logging.getLogger(__name__)
-RECOVERY_GRACE_SECONDS = 5.0
+RECOVERY_GRACE_SECONDS = 0.5
+RECOVERY_MONITOR_SECONDS = 0.25
 
 
 class TransportRecovery:
@@ -72,6 +73,15 @@ class TransportRecovery:
                     and ((self.pending and self.device is device and self.identity == c.info.get('probe_id'))
                          or isinstance(getattr(getattr(device, '_bridge', None), '_transport_error', None), BaseException)))
 
+    def monitor_delay(self):
+        # Wake at the deadline instead of adding another full polling interval.
+        # Healthy checks only inspect host state; they do not enumerate USB or
+        # send target commands.
+        if self.lost_at is not None and not self.expired:
+            return max(.001, min(RECOVERY_MONITOR_SECONDS,
+                                 self.lost_at + RECOVERY_GRACE_SECONDS - time.monotonic()))
+        return RECOVERY_MONITOR_SECONDS
+
     async def tick(self):
         from mklink.remote.dashboards import get_managers
         c = self.control
@@ -129,11 +139,21 @@ class TransportRecovery:
             return
         from mklink.probes import select_probe
         try:
-            selected = await asyncio.to_thread(select_probe, self.identity)
+            remaining = self.lost_at + RECOVERY_GRACE_SECONDS - time.monotonic()
+            if remaining <= 0:
+                self.expire_if_due()
+                return
+            # Slow platform enumeration must not extend the USB grace period.
+            # A timed-out enumeration is read-only; its late result is ignored.
+            selected = await asyncio.wait_for(
+                asyncio.to_thread(select_probe, self.identity), timeout=remaining)
         except Exception as error:
+            if self.expire_if_due():
+                return
             reason = str(error)
             if reason != self.presence_error:
-                event('recovery.probe_unavailable', error=error_detail(error))
+                event('recovery.probe_unavailable', error=error_detail(error),
+                      selection=getattr(error, 'detail', None))
                 self.presence_error = reason
             return  # Enumeration only while absent; no repeated open attempts.
         self.presence_error = None
@@ -249,7 +269,7 @@ def install_transport_recovery(app, control):
 
     async def monitor():
         while True:
-            await asyncio.sleep(.5)
+            await asyncio.sleep(recovery.monitor_delay())
             try:
                 await recovery.tick()
             except asyncio.CancelledError:

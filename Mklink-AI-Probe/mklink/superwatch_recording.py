@@ -28,12 +28,15 @@ class SuperWatchRecorder:
         self._status = dict(state='recording', active=True, directory=str(directory), path='',
                             parts=0, samples=0, bytes=0, error='', started_at=time.time())
         self._file = None
+        self._export = None
         if _local:
             self._open_part()
         else:
             from mklink._recording_worker import RecordingWorker
             self._worker = RecordingWorker(directory, max_values)
             self._status = self._worker.status
+            from mklink.recording_text import ManualExport
+            self._export = ManualExport('superwatch')
         self._thread = threading.Thread(target=self._run if _local else self._forward,
                                         name='superwatch-recording', daemon=True)
         self._thread.start()
@@ -45,7 +48,16 @@ class SuperWatchRecorder:
 
     def status(self):
         with self._condition:
-            return dict(self._status)
+            result = dict(self._status)
+        if self._export:
+            result.update(self._export.status())
+        return result
+
+    def export(self):
+        if self._export is None:
+            raise ValueError('This recording does not support conversion')
+        self._export.start(self.status())
+        return self.status()
 
     def append(self, values, times, channels, *, boundaries=()):
         size = len(values) * 4 + len(times) * 8 + len(boundaries) * 8
@@ -94,6 +106,9 @@ class SuperWatchRecorder:
                 if result['state'] == 'failed':
                     raise RuntimeError(result['error'])
             result = self._worker.finish()
+            with self._condition:
+                for key in ('path', 'parts', 'samples', 'bytes'):
+                    self._status[key] = result[key]
             if result['state'] != 'completed':
                 raise RuntimeError(result['error'] or 'Recording did not complete')
         except Exception as exc:

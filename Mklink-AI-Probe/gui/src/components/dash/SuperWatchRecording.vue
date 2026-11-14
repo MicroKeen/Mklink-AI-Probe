@@ -1,6 +1,9 @@
 <template>
-  <button class="panel-btn" data-testid="sw-record-toggle" :class="{ active: status.active }" :disabled="busy || (disabled && !status.active)" @click="status.active ? stop() : showPicker()">{{ status.active ? tr('停止记录', 'Stop recording') : tr('开始记录', 'Start recording') }}</button>
+  <button class="panel-btn" data-testid="sw-record-toggle" :data-gui-directory-picker="!status.active && isTauri() ? '' : undefined" :class="{ active: status.active }" :disabled="busy || (disabled && !status.active)" @click="status.active ? stop() : showPicker()">{{ status.active ? tr('停止记录', 'Stop recording') : tr('开始记录', 'Start recording') }}</button>
   <span v-if="status.path" class="record-result" :title="status.path">{{ status.active ? (status.samples ? tr('记录中', 'Recording') : tr('等待数据', 'Waiting for data')) : tr('已保存', 'Saved') }} · {{ status.samples || 0 }} {{ tr('条', 'samples') }}</span>
+  <button v-if="name !== 'Serial' && status.path" class="panel-btn" data-testid="record-convert" :disabled="busy || status.active || status.export_state === 'generating' || status.export_state === 'completed' || status.export_state === 'failed'" @click="convert">{{ name === 'SuperWatch' ? tr('转换为 Excel', 'Convert to Excel') : tr('转换为 TXT', 'Convert to TXT') }}</button>
+  <span v-if="status.export_state && status.export_state !== 'pending'" class="record-result" data-testid="record-export-status" :title="status.export_path">{{ status.export_state === 'completed' ? tr('转换完成', 'Export ready') : status.export_state === 'failed' ? tr('转换失败', 'Export failed') : tr('转换中', 'Converting') }}{{ status.export_parts ? ` · ${status.export_parts} ${tr('段', 'parts')}` : '' }}</span>
+  <span v-if="status.export_error" role="alert" class="record-error">{{ status.export_error }}</span>
   <span v-if="error || status.error" role="alert" class="record-error">{{ error || status.error }}</span>
   <Teleport to="body">
     <dialog ref="dialog" class="record-dialog" @keydown.stop>
@@ -11,6 +14,7 @@
         <div class="record-drives"><button v-for="drive in drives" :key="drive" type="button" @click="browse(drive)">{{ drive }}</button><button type="button" @click="browse(parent)">↑ {{ tr('上一级', 'Parent') }}</button></div>
         <div class="record-folders"><button v-for="dir in dirs" :key="dir.path" type="button" @click="browse(dir.path)">▸ {{ dir.name }}</button></div>
         <p>{{ tr('自动分段保存 JSONL，可在“日志回放”中按编号加载查看。', 'JSONL parts are saved automatically; open numbered parts in Log replay.') }}</p>
+        <p v-if="name !== 'Serial'">{{ name === 'SuperWatch' ? tr('停止后可手动转换为 Excel，时间和变量分列显示；原始 JSONL 保留。', 'After stopping, manually convert to Excel with time and variable columns. Original JSONL is retained.') : tr('停止后可手动转换为带时间戳的 TXT；原始 JSONL 保留。', 'After stopping, manually convert to timestamped TXT. Original JSONL is retained.') }}</p>
         <p v-if="error" role="alert" class="record-error">{{ error }}</p>
         <footer><button type="button" @click="dialog?.close()">{{ tr('取消', 'Cancel') }}</button><button data-testid="sw-record-confirm" :disabled="busy || !directory.trim()">{{ tr('开始记录', 'Start recording') }}</button></footer>
       </form>
@@ -31,7 +35,7 @@ const storageKey = `mklink.${props.name.toLowerCase()}.recordDirectory`
 const route = (action: string) => `${props.endpoint}/${action}${props.name === 'SuperWatch' ? '' : '?channel=' + props.channel}`
 const emit = defineEmits<{ state: [state: string] }>()
 const tr = (zh: string, en: string) => language.value === 'en' ? en : zh
-type Recording = { active: boolean; state: string; samples?: number; path?: string; error?: string }
+type Recording = { active: boolean; state: string; samples?: number; path?: string; error?: string; export_state?: string; export_path?: string; export_error?: string; export_parts?: number }
 const status = ref<Recording>({ active: false, state: 'idle' })
 const directory = ref(localStorage.getItem(storageKey) || '')
 const dialog = ref<HTMLDialogElement>()
@@ -103,6 +107,13 @@ async function stop() {
   statusGeneration++
   busy.value = true; error.value = ''
   try { update(await request(route('stop'), {})) }
+  catch (caught) { error.value = String(caught) }
+  finally { busy.value = false }
+}
+async function convert() {
+  statusGeneration++
+  busy.value = true; error.value = ''
+  try { update(await request(route('export'), { path: status.value.path, ...(props.name === 'SuperWatch' ? {} : { channel: props.channel }) })) }
   catch (caught) { error.value = String(caught) }
   finally { busy.value = false }
 }

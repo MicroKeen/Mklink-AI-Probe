@@ -90,7 +90,7 @@ def test_removed_diagnostic_commands_never_open_serial(devices,monkeypatch,argum
 def test_unplugged_identity_does_not_select_remaining_probe(devices):
     selected=select_probe('COM10')['probe_id']
     devices.pop(0)
-    with pytest.raises(RuntimeErrorResponse,match='missing or ambiguous'):select_probe(selected)
+    with pytest.raises(RuntimeErrorResponse,match='Selected probe is unavailable'):select_probe(selected)
     assert discovery.find_mklink_cdc_port('first') is None
     assert select_probe('COM20')['port']=='COM20'
 

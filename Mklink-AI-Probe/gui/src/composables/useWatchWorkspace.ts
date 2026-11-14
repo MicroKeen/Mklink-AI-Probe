@@ -71,6 +71,7 @@ function imported(event: Event) {
   if (data?.version === 1 || data?.version === 2) void update(w => Object.assign(w, data))
 }
 if (typeof window !== 'undefined') window.addEventListener('mklink:workspace-import', imported)
+if (typeof window !== 'undefined') window.addEventListener('mklink:watch-profile-loaded', () => { void load() })
 export function useWatchWorkspace() { return { workspace, error, busy, ready, load, update, style, setStyle, merge } }
 
 if (typeof window !== 'undefined') window.addEventListener('mklink:workspace-merge', event => {

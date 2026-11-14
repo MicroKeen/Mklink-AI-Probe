@@ -438,7 +438,7 @@ class ProjectConfigStatus:
         self.microkeen_flm_path = microkeen_flm_path
 
     def needs_init(self) -> bool:
-        """是否需要运行 project-init。"""
+        """是否缺少已保存的工程配置；不代表硬件操作必须先初始化。"""
         return not self.has_config or not self.has_keil_project
 
 
@@ -558,6 +558,6 @@ def format_config_status(status: ProjectConfigStatus) -> str:
 
     if status.needs_init():
         lines.append("")
-        lines.append("提示: 运行 `/mklink-project-init` 初始化项目配置")
+        lines.append("提示: 可选用 `mklink project-init` 导入工程，或用 `--target-part <型号>` 保存通用配置；直接烧录可指定 `--firmware` 和 `--target-part`。")
 
     return "\n".join(lines)

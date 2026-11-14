@@ -499,3 +499,50 @@ def test_array_snapshot_mcp_actions_reuse_shared_gui_routes(monkeypatch):
     assert calls == [("superwatch_snapshot_select", {"name": "samples", "start_index": 2, "count": 8}), ("superwatch_snapshot_clear", {})]
     assert CAPABILITIES["superwatch_snapshot_select"] == ("POST", "/api/dash/superwatch/array-snapshot/select")
     assert CAPABILITIES["superwatch_snapshot_clear"] == ("POST", "/api/dash/superwatch/array-snapshot/clear")
+
+
+def test_superwatch_profile_mcp_uses_gui_capabilities(monkeypatch):
+    from mklink.runtime_capabilities import CAPABILITIES
+    calls = []
+    class Adapter:
+        def __init__(self, **kwargs): pass
+        def connect(self, **kwargs): return {'connected': True}
+        def close(self): pass
+        def call(self, name, body):
+            calls.append((name, body))
+            return {'shared': True}
+    monkeypatch.setattr(runtime_mcp, 'RuntimeClient', Adapter)
+    actions = ['profile', 'profile_save', 'workspace', 'workspace_save', 'pins', 'pins_save', 'recording_export']
+    async def scenario():
+        async with Client(runtime_mcp.build_server()) as mcp:
+            await mcp.call_tool('connect', {})
+            for action in actions:
+                assert (await mcp.call_tool('superwatch', {'action': action, 'arguments': {}})).data['shared']
+    asyncio.run(scenario())
+    assert [name for name, _ in calls] == ['superwatch_' + action for action in actions]
+    assert all(CAPABILITIES[name][1].startswith('/api/dash/superwatch/') for name, _ in calls)
+
+
+def test_gui_control_uses_shared_window_capabilities(monkeypatch):
+    calls = []
+    class Adapter:
+        def __init__(self, **kwargs): pass
+        def connect(self, **kwargs): return {'connected': True}
+        def close(self): pass
+        def call(self, name, body=None):
+            calls.append((name, body))
+            return {'status': 'applied'}
+    monkeypatch.setattr(runtime_mcp, 'RuntimeClient', Adapter)
+    async def scenario():
+        async with Client(runtime_mcp.build_server()) as mcp:
+            await mcp.call_tool('connect', {})
+            for action in ('windows', 'snapshot', 'navigate', 'file.select'):
+                args = {'action': action}
+                if action != 'windows': args['window_id'] = 'chosen'
+                if action == 'navigate': args.update(page='dashboard', tab='systemview')
+                if action == 'file.select': args.update(control_id='picker', expected_context='current', path='/tmp/log.jsonl')
+                await mcp.call_tool('gui_control', args)
+            assert (await mcp.call_tool('gui_control', {'action': 'eval'}, raise_on_error=False)).is_error
+    asyncio.run(scenario())
+    assert [name for name, _ in calls] == ['gui_windows', 'gui_snapshot', 'gui_action', 'gui_action']
+    assert calls[2][1] == {'action': 'navigate', 'window_id': 'chosen', 'page': 'dashboard', 'tab': 'systemview'}

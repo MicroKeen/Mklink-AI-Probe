@@ -7,7 +7,7 @@ import subprocess
 from os import PathLike
 from typing import Iterable
 
-from mklink.elf_backend import ElfSection, ElfSymbol
+from mklink.elf_backend import ElfSection, ElfSegment, ElfSymbol
 
 
 _SYMBOL_RE = re.compile(
@@ -122,6 +122,25 @@ class ExternalElfBackend:
         return parse_dwarf_info_output(
             self._run_readelf("--debug-dump=info", source, timeout=60)
         )
+
+    def segments(self, source: str) -> list[ElfSegment]:
+        # -W keeps each program header on one line for both ELF32 and ELF64.
+        output = self._run_readelf("-lW", source, timeout=30)
+        pattern = re.compile(
+            r"^\s*LOAD\s+0x[0-9a-fA-F]+\s+(0x[0-9a-fA-F]+)\s+0x[0-9a-fA-F]+"
+            r"\s+0x[0-9a-fA-F]+\s+(0x[0-9a-fA-F]+)\s+([RWE ]*?)\s+0x[0-9a-fA-F]+\s*$"
+        )
+        segments = []
+        for line in output.splitlines():
+            match = pattern.match(line)
+            if match:
+                flags = match.group(3)
+                segments.append(ElfSegment(
+                    "PT_LOAD", int(match.group(1), 16), int(match.group(2), 16),
+                    (4 if "R" in flags else 0) | (2 if "W" in flags else 0)
+                    | (1 if "E" in flags else 0),
+                ))
+        return segments
 
     def source_locations(
         self, source: str, addresses: Iterable[int]

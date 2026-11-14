@@ -41,6 +41,16 @@ describe('RTT API contracts', () => {
     navigate.mockRestore()
   })
 
+  it('pins an explicit identity and does not reuse its old COM after selection', async () => {
+    sharedRuntime.value = true
+    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ same_runtime: true }) })
+    await useMklinkApi().connectDevice({ probe: 'usb-selected', port: 'COM9' })
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      probe: 'usb-selected', port: 'COM9', connect: { port: 'COM9' },
+    })
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({})
+  })
+
   it('switches in place and refreshes target generation without navigation or duplicate connect', async () => {
     sharedRuntime.value = true
     const navigate = vi.spyOn(window.location, 'replace').mockImplementation(() => {})
@@ -130,7 +140,7 @@ describe('RTT API contracts', () => {
       method: 'POST',
       body: JSON.stringify({ axf: 'C:\\firmware\\app.axf' }),
     }))
-    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/device/parse-axf', expect.objectContaining({
+    expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/device/parse-axf', expect.objectContaining({
       method: 'POST',
       body: JSON.stringify({ axf: 'C:\\firmware\\app.axf', elf_backend: 'external' }),
     }))

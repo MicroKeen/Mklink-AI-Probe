@@ -21,6 +21,7 @@ var I18N = {
     // Control toolbar
     start: '开始', pause: '暂停', resume: '恢复', stop: '停止',
     running: '运行中', buffer: '缓冲区', interval: '间隔', apply: '应用',
+    target_read_interrupted: '目标读取中断，等待恢复',
     superwatch_interval_invalid: '采样间隔不能小于 1 µs（0.000001 s），且不能大于 60 s。',
     buffer_memory_tip: 'Worker 历史缓存预计内存',
     // Trigger toolbar
@@ -76,7 +77,7 @@ var I18N = {
       '已确认缺样的区间显示为灰色并断开连线。连续性未知时只断线，单凭两点时间间隔较长无法判定丢样。'
     ],
     help_sw_export_items: [
-      '打开<strong>日志</strong>，点击<strong>开始记录</strong>并选择后台电脑上的目录。记录按段保存为 JSONL，可在日志菜单打开回放。',
+      '打开<strong>日志</strong>，点击<strong>开始记录</strong>并选择后台电脑上的目录。记录按段保存为 JSONL，可在日志菜单打开回放；停止记录后自动生成带时间戳的 TXT 供直接阅读。',
       '<strong>PNG</strong> 保存当前波形图。'
     ],
     help_sw_pause_items: [
@@ -150,6 +151,7 @@ var I18N = {
     y_axis_tip: 'Y axis: scroll to zoom; hold the left mouse button and drag; double-click for auto range',
     start: 'Start', pause: 'Pause', resume: 'Resume', stop: 'Stop',
     running: 'Running', buffer: 'Buffer', interval: 'Interval', apply: 'Apply',
+    target_read_interrupted: 'Target read interrupted, waiting for data',
     superwatch_interval_invalid: 'Sampling interval must be at least 1 µs (0.000001 s) and at most 60 s.',
     buffer_memory_tip: 'Estimated Worker history memory',
     trigger: 'Trigger', idle: 'Idle', armed: 'Armed', triggered: 'Triggered', done: 'Done',
@@ -197,7 +199,7 @@ var I18N = {
       'Confirmed missing samples break the line and shade the gap. Unknown continuity breaks the line without shading. A long interval alone does not establish sample loss.'
     ],
     help_sw_export_items: [
-      'Open <strong>Logs</strong>, click <strong>Start recording</strong> and choose a folder on the backend computer. Logs are saved as JSONL parts. Open a log from the same menu to replay it.',
+      'Open <strong>Logs</strong>, click <strong>Start recording</strong> and choose a folder on the backend computer. JSONL parts support replay; timestamped TXT copies are generated automatically after recording stops.',
       '<strong>PNG</strong> saves the current waveform image.'
     ],
     help_sw_pause_items: [

@@ -68,6 +68,25 @@ def install_management(app, control):
         from mklink.runtime_presentation import present
         return await present(control, body)
 
+    @api.post('/gui-action')
+    async def gui_action(body: dict):
+        from mklink.runtime_presentation import action
+        return await action(control, body)
+
+    @api.post('/gui-snapshot')
+    async def gui_snapshot(body: dict):
+        from mklink.runtime_presentation import action
+        if body.keys() - {'window_id'}:
+            raise HTTPException(422, 'Snapshot accepts only window_id')
+        return await action(control, {**body, 'action': 'snapshot'})
+
+    @api.get('/gui-files/{token}')
+    async def gui_file(token: str, window_id: str):
+        files = getattr(control, 'gui_files', None)
+        if files is None:
+            raise HTTPException(404, 'No pending GUI file')
+        return files.response(token, window_id)
+
     @api.websocket('/view/{key}')
     async def live_view(socket: WebSocket, key: str):
         if not 1 <= len(key) <= 128 or key in control.views or len(control.views) >= 128:
@@ -87,7 +106,7 @@ def install_management(app, control):
                 if message['type'] == 'websocket.disconnect':
                     break
                 raw = message.get('text', '')
-                if len(raw) <= 1024:
+                if len(raw) <= 32 * 1024:
                     try:
                         payload = json.loads(raw)
                         if isinstance(payload, dict):
@@ -98,6 +117,8 @@ def install_management(app, control):
         except WebSocketDisconnect:
             pass
         finally:
+            if getattr(control, 'gui_files', None) is not None:
+                control.gui_files.release_window(key)
             if record.get('pending') and not record['pending'][1].done():
                 record['pending'][1].set_result('disconnected')
             if control.views.get(key) is record:

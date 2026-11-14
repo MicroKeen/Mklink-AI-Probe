@@ -12,7 +12,7 @@ from elftools.common.exceptions import DWARFError, ELFError
 from elftools.dwarf.dwarf_expr import DWARFExprParser
 from elftools.elf.elffile import ELFFile
 
-from mklink.elf_backend import ElfParseError, ElfSection, ElfSymbol
+from mklink.elf_backend import ElfParseError, ElfSection, ElfSegment, ElfSymbol
 
 
 _SYMBOL_KINDS = {
@@ -272,6 +272,18 @@ class BuiltinElfBackend:
     def symbols(self, source: str) -> list[ElfSymbol]:
         with self._open_elf(source) as elf:
             return _symbols_from_elf(elf)
+
+    def segments(self, source: str) -> list[ElfSegment]:
+        with self._open_elf(source) as elf:
+            return [
+                ElfSegment(
+                    segment_type=str(segment["p_type"]),
+                    address=int(segment["p_vaddr"]),
+                    size=int(segment["p_memsz"]),
+                    flags=int(segment["p_flags"]),
+                )
+                for segment in elf.iter_segments()
+            ]
 
     def sections(self, source: str) -> list[ElfSection]:
         with self._open_elf(source) as elf:

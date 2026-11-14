@@ -1,6 +1,72 @@
 from mklink import mcp_server, update_check
 
 
+def test_skill_and_desktop_versions_can_differ(monkeypatch):
+    monkeypatch.setattr(update_check, 'current_version', lambda: '1.2.3')
+    result = update_check._result({'version': '9.0.0', 'skill': {'version': '1.2.3'}}, 'fixture', cached=False)
+    assert result['update_available'] is False
+    assert result['latest_version'] == '1.2.3'
+    assert result['desktop_latest_version'] == '9.0.0'
+
+
+def test_background_skill_check_does_not_wait_or_duplicate_slow_requests(monkeypatch):
+    import threading
+    started, finish, completed = threading.Event(), threading.Event(), threading.Event()
+    calls = []
+    def check(**kwargs):
+        calls.append(kwargs)
+        started.set()
+        assert finish.wait(5)
+        return {'status': 'ok', 'update_available': True, 'latest_version': '9.0.0'}
+    monkeypatch.setattr(update_check, 'check_for_update', check)
+    monitor = update_check.BackgroundUpdateCheck()
+    original = monitor._check
+    def complete(force):
+        try:
+            original(force)
+        finally:
+            completed.set()
+    monitor._check = complete
+    try:
+        assert monitor.snapshot(force=True)['status'] == 'checking'
+        assert started.wait(5)
+        for _ in range(20):
+            assert monitor.snapshot(force=True)['status'] == 'checking'
+        assert len(calls) == 1
+    finally:
+        finish.set()
+    assert completed.wait(5)
+    assert monitor.snapshot()['update_available'] is True
+    assert len(calls) == 1
+
+
+def test_both_mcp_health_entries_offer_nonblocking_activation(monkeypatch):
+    import asyncio
+    from fastmcp import Client
+    from mklink import runtime_mcp
+    calls = []
+    monkeypatch.setattr(update_check.BackgroundUpdateCheck, 'snapshot',
+                        lambda self, **kw: calls.append(kw) or {'status': 'checking'})
+    monkeypatch.setattr(update_check, 'check_for_update', lambda **kw: (_ for _ in ()).throw(AssertionError('blocking check')))
+    monkeypatch.setattr('mklink.toolchain.status', lambda: {})
+    functions = {}
+    class FakeMcp:
+        def tool(self):
+            def register(fn):
+                functions[fn.__name__] = fn
+                return fn
+            return register
+    mcp_server._register_health_tools(FakeMcp())
+    assert functions['ping'](force_update_check=True, background_update_check=True)['update']['status'] == 'checking'
+    async def run():
+        async with Client(runtime_mcp.build_server()) as mcp:
+            result = (await mcp.call_tool('ping', {'force_update_check': True, 'background_update_check': True})).data
+            assert result['update']['status'] == 'checking'
+            assert result['update_order'][0] == 'app_and_skill'
+    asyncio.run(run())
+    assert calls == [{'force': True}, {'force': True}]
+
+
 def test_skill_version_uses_adjacent_payload_over_stale_distribution(monkeypatch, tmp_path):
     monkeypatch.setattr(update_check, "__file__", str(tmp_path / "mklink" / "update_check.py"))
     (tmp_path / "pyproject.toml").write_text('[project]\nversion = "0.2.1"\n', encoding="utf-8")
@@ -49,23 +115,20 @@ def test_runtime_update_cache_uses_build_workspace(monkeypatch, tmp_path):
     )
 
 
-def test_runtime_manifest_sources_prefer_tencent_and_fall_back_to_github_gitee(monkeypatch):
-    tencent, github, gitee = update_check.DEFAULT_MANIFEST_URLS
+def test_runtime_manifest_sources_prefer_tencent_and_fall_back_to_github(monkeypatch):
+    tencent, github = update_check.DEFAULT_MANIFEST_URLS
     assert tencent == "https://download.microkeenai.com/mklink/stable/latest.json"
     assert github == (
         "https://raw.githubusercontent.com/MicroKeen/"
         "Mklink-AI-Probe/release/latest.json"
-    )
-    assert gitee == (
-        "https://gitee.com/Aladdin-Wang/Mklink-AI-Probe/raw/updates/latest.json"
     )
 
     calls = []
 
     def request(url, timeout):
         calls.append((url, timeout))
-        if url in (tencent, github):
-            raise OSError("GitHub unavailable")
+        if url == tencent:
+            raise OSError("Tencent unavailable")
         return b'{"version":"0.1.6"}'
 
     monkeypatch.setattr(update_check, "_request_bytes", request)
@@ -75,8 +138,8 @@ def test_runtime_manifest_sources_prefer_tencent_and_fall_back_to_github_gitee(m
     )
 
     assert manifest == {"version": "0.1.6"}
-    assert manifest_url == gitee
-    assert calls == [(tencent, 7.5), (github, 7.5), (gitee, 7.5)]
+    assert manifest_url == github
+    assert calls == [(tencent, 7.5), (github, 7.5)]
 
 
 def test_runtime_update_check_uses_shared_cache(monkeypatch, tmp_path):
@@ -115,6 +178,13 @@ def test_runtime_update_check_does_not_block_use_when_network_is_unavailable(
     assert result["status"] == "unavailable"
     assert result["update_available"] is False
     assert result["current_version"] == "1.2.3"
+
+
+def test_readonly_cache_does_not_hide_a_new_release(monkeypatch, tmp_path):
+    monkeypatch.setattr(update_check, 'current_version', lambda: '1.2.3')
+    monkeypatch.setattr(update_check, 'fetch_manifest', lambda *a, **k: ({'version': '1.2.4'}, 'fixture'))
+    monkeypatch.setattr(update_check, '_write_cache', lambda *a: (_ for _ in ()).throw(PermissionError('readonly')))
+    assert update_check.check_for_update(cache_file=tmp_path/'cache')['update_available'] is True
 
 
 def test_mcp_ping_reports_update_state_for_ai_clients(monkeypatch):

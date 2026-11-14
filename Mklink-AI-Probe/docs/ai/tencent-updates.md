@@ -2,8 +2,11 @@
 
 The primary download origin is `https://download.microkeenai.com`.
 Windows installers and the complete public Skill ZIP use immutable version
-directories under `/mklink/releases/`. GitHub and Gitee remain fallback manifest
-sources; keeping their URLs does not imply a new candidate was uploaded there.
+directories under `/mklink/releases/`. As of 2026-11-13, new publication targets
+only Tencent and `MicroKeen/Mklink-AI-Probe`. Clients query Tencent first, then
+canonical GitHub only on failure; no parallel mirror race or new Gitee publication.
+Keep historical Gitee assets and routes intact. A candidate build does not
+authorize uploads, tags or changes to either channel pointer.
 
 ## Channels
 
@@ -20,7 +23,7 @@ sources; keeping their URLs does not imply a new candidate was uploaded there.
   first manifest endpoint and restores the tracked stable configuration even
   when the build fails. Do not distribute this opted-in installer as stable.
 
-The two fallback endpoints retain their existing release-channel URLs. During
+The GitHub fallback retains its existing release-channel URL. During
 0.3.6 preview qualification they still describe the latest formal release;
 clients must not downgrade merely because a fallback is older.
 
@@ -92,8 +95,9 @@ required unless the maintainer explicitly requests other platform installers.
 
 ## Test requirements
 
-Verify TLS, size/hash, partial download, missing-file behavior and both fallback
-manifest paths. Exercise the standalone Skill updater on an isolated older
+Verify TLS, size/hash, partial download, missing-file behavior and the GitHub fallback
+manifest path. Skill payload fallback must match the selected version, size and
+SHA-256; a lagging fallback must not change the selected artifact. Exercise the standalone Skill updater on an isolated older
 installation and preserve all bundled FLM and Packs. Exercise the native Tauri
 updater from a genuinely older test build, including signature validation,
 installation, relaunch and a second no-update check. A current 0.3.6 client

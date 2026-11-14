@@ -59,13 +59,25 @@ def build_server():
 
     from mklink.mcp_workflows import register_workflow_tools
     register_workflow_tools(server, client)
+    from mklink.update_check import BackgroundUpdateCheck
+    update_check = BackgroundUpdateCheck()
 
     @server.tool()
-    def ping(force_update_check: bool = False) -> dict:
-        """Shared-runtime health and supported GUI capabilities; does not open CDC."""
+    def ping(force_update_check: bool = False, background_update_check: bool = False) -> dict:
+        """Shared-runtime health; does not open CDC.
+
+        On Skill activation use force_update_check=True, background_update_check=True.
+        Continue the task while update.status is checking; later read with only
+        background_update_check=True, without polling tightly. Actively tell the user
+        about newer Skill versions. After authorized connect, also relay device_status
+        firmware_update advice. Update app/Skill first, reload MCP and the idle backend,
+        reconnect and recheck firmware; never install/restart during a firmware update.
+        No device connected means firmware is unchecked, not current. Never auto-install.
+        """
         from mklink.update_check import check_for_update
         return {"ok": True, "version": VERSION, "mode": "shared-cdc", "capabilities": sorted(CAPABILITIES),
-                "update": check_for_update(force=force_update_check),
+                "update": update_check.snapshot(force=force_update_check) if background_update_check else check_for_update(force=force_update_check),
+                "update_order": ['app_and_skill', 'reload_clients_and_idle_runtime', 'probe_firmware'],
                 "limits": {"direct_read_max_bytes": 4096, "batch_read_max_regions": BATCH_READ_MAX_REGIONS,
                            "batch_read_max_total_bytes": BATCH_READ_MAX_TOTAL_BYTES,
                            "rtt_mux_channels": 8, "rtt_channel_cache_bytes": 65536,
@@ -116,6 +128,48 @@ def build_server():
                 holder['client'], holder['gui_only'] = current, True
             return {**holder.setdefault('gui_launch', GuiLaunch()).open(current, window_id=window_id,
                                                                        open_browser=open_browser), **selection}
+
+    @server.tool()
+    def gui_control(action: Literal['windows', 'snapshot', 'navigate', 'focus', 'controls', 'control.click', 'control.set', 'file.select', 'directory.select', 'systemview.window',
+                                   'systemview.pause', 'systemview.resume', 'systemview.zoom-in',
+                                   'systemview.zoom-out', 'systemview.fit', 'superwatch.pause', 'superwatch.resume'] = 'snapshot',
+                    window_id: str | None = None, page: str | None = None, tab: str | None = None,
+                    section: str | None = None, seconds: float | None = None,
+                    control_id: str | None = None, expected_context: str | None = None,
+                    value: str | int | float | bool | None = None, offset: int | None = None,
+                    path: str | None = None) -> dict:
+        """Operate the attached GUI through its real controls, without desktop automation.
+
+        First gui_open or connect, then windows; with multiple windows specify window_id.
+        navigate accepts config/dashboard/online-flash/offline-flash/remote-service;
+        dashboard tabs: rtt/superwatch/hardfault/memory/serial/modbus/systemview/symbols.
+        config sections: local/files/firmware/runtime. Navigate before panel actions.
+        snapshot asks the actual window for current page, backend health and display state.
+        systemview.window seconds: .5/1/2/5/10/30/60. Pause/resume affect display only.
+        Only applied plus returned state confirms execution; unconfirmed must not be replayed
+        automatically. focus requests OS/browser focus; inspect focused (browser may refuse).
+        controls returns paginated visible controls (50 maximum), IDs, labels, options,
+        disabled state and context. control.click/control.set require control_id and
+        expected_context from that window; set uses value. Buttons run normal GUI handlers,
+        including device operations, so execute only the user's authorized operations.
+        No arbitrary JS/selectors. Read errors/job state afterwards: dispatch is not completion.
+        file.select delivers the absolute backend path to the chosen file input/picker;
+        inspect state.file then the panel's import/replay state, never treat delivered as parsed.
+        Replay controls (RTT/SystemView/SuperWatch/Serial) appear in controls; use those same
+        play/pause/speed/seek/return-live controls. Never replay captured TX to hardware.
+        Prefer existing shared tools for capture, symbols/device operations, then navigate.
+        """
+        arguments = {key: value for key, value in {'window_id': window_id, 'page': page, 'tab': tab,
+                     'section': section, 'seconds': seconds, 'control_id': control_id,
+                     'expected_context': expected_context, 'value': value, 'offset': offset,
+                     'path': path}.items() if value is not None}
+        if action == 'windows':
+            if arguments:
+                raise ValueError('windows takes no selectors or display arguments')
+            return client().call('gui_windows')
+        if action == 'snapshot':
+            return client().call('gui_snapshot', arguments)
+        return client().call('gui_action', {'action': action, **arguments})
 
     @server.tool()
     def inspect_mcu(project_root: str = ".", device: str | None = None, flm: str | None = None) -> dict:
@@ -310,6 +364,15 @@ def build_server():
         Other target sessions are retired and must explicitly reconnect; GUI pages follow.
         Conflicting project/symbol settings still require explicit reconfiguration.
         The default scope connects the USB probe without requiring a target MCU.
+        Relay firmware_compatibility.warnings and operation firmware_warning to the user.
+        device_status also returns firmware_update from a delayed cloud check of the
+        cached handshake version. If status is available, relay current_version and
+        latest_version and offer the GUI Config > Firmware page; never auto-upgrade.
+        If status is unrecognized, recommend upgrading matching firmware without
+        claiming a known installed/cloud version or selecting an unknown model.
+        Do not wait for the check before normal work or poll it in a tight loop.
+        Missing capabilities require matching probe firmware; never stop capture or
+        upgrade automatically. Version strings alone do not establish support.
         scope='uart' attaches without MCU/CDC initialization, including the unselected lobby.
         Use gui_call for uart_ports, serial/modbus start/status/stop, serial_send, modbus_transaction
         and modbus_probe (one read-only address probe through the existing worker).
@@ -360,8 +423,8 @@ def build_server():
     def reboot_probe(confirm: StrictBool = False) -> dict:
         """Reboot the selected downloader after explicit approval, never the MCU.
 
-        Detaches this AI session first; other clients/captures must be released
-        explicitly. No automatic reconnect or retry after USB disappears.
+        Stops this probe's captures and ends its target sessions, including
+        other attached clients. No automatic reconnect or retry after USB disappears.
         """
         if confirm is not True:
             raise ValueError('Confirm the downloader reboot first')
@@ -556,11 +619,17 @@ def build_server():
         snapshot_clear removes that shared array view. Neither starts acquisition.
         recording_start accepts directory (existing absolute path on the backend computer).
         recording_status/recording_stop inspect or drain the same continuous JSONL recorder as GUI.
+        recording_export explicitly converts the closed recording to Excel; pass path from recording_status.
+        Stopping never converts automatically. Read export_state/export_path for the separate job result.
+        profile/profile_save, workspace/workspace_save and pins/pins_save share the AXF/ELF-adjacent
+        configuration with Web/CLI. Read first; save with the returned section revision.
+        profile_save accepts section (viewer/layout), value, revision; it saves display settings.
+        Use interval to apply/save the acquisition interval. Loading never starts capture.
 
         write requires path, generation from gui_call('symbol_status'), and value. It uses the existing typed
         live-write transaction. Start with empty arguments subscribes to an existing capture.
         """
-        if action not in {'status', 'items', 'values', 'snapshot', 'snapshot_select', 'snapshot_clear', 'add', 'remove', 'start', 'stop', 'pause', 'resume', 'interval', 'write', 'recording_start', 'recording_stop', 'recording_status'}:
+        if action not in {'status', 'items', 'values', 'snapshot', 'snapshot_select', 'snapshot_clear', 'add', 'remove', 'start', 'stop', 'pause', 'resume', 'interval', 'write', 'recording_start', 'recording_stop', 'recording_status', 'recording_export', 'profile', 'profile_save', 'workspace', 'workspace_save', 'pins', 'pins_save'}:
             raise ValueError('Unsupported SuperWatch action')
         return client().call('superwatch_'+action, arguments)
 
@@ -575,10 +644,13 @@ def build_server():
     def gui_call(capability: str, arguments: dict | None = None) -> dict | list[dict]:
         """Invoke an advertised GUI capability on the shared backend.
 
+        gui_control is the typed entry for navigation, fresh window snapshots and display controls.
         gui_windows lists presentation-capable windows; gui_present({window_id, tab})
         switches an existing window only when showing results is useful. Routine collection
         stays in the background. Only displayed confirms navigation; never auto-replay.
         ping lists names. rtt_history/status and superwatch_snapshot/status reuse GUI acquisition.
+        rtt_recording_export takes path from rtt_recording_status and channel (0..7) to manually
+        convert closed RTT JSONL parts to TXT. Read export_state/export_path for progress/result.
         Acquisition start with {} subscribes if already running; new settings require an idle manager.
         Stop requires ownership and no other subscriber. A sole subscriber may recover
         control after the original owner detaches/expires or all GUI owners leave.
@@ -671,7 +743,10 @@ def build_server():
         flash arguments: firmware (explicit local path), verify and reset_after (booleans).
         Optional target_part, base_address (32-bit integer or integer string), board,
         hpm_flash_cfg (four 32-bit hexadecimal strings) and swd_clock (integer Hz)
-        are passed to the existing flash backend. HPM uses ROM API, never FLM.
+        are passed to the existing flash backend. Explicit hpm_flash_cfg overrides board;
+        known board defaults also use hpm.flash_cfg(header,opt0,opt1,xpi_base_addr).
+        Configure for the actual NOR Flash. xpi_base_addr is the controller base, not the BIN address.
+        HPM uses ROM API, never FLM.
         For HPM swd_clock is a legacy parameter name: use advertised JTAG clocks
         from debug_speed (modern 14 clocks, legacy 4/10/20/30 MHz), not 8000000.
         reset_after=false does not prevent the HPM ROM routine's own reset/resume.

@@ -1684,8 +1684,9 @@ describe('online flash task workspace behavior', () => {
     await vi.waitFor(() => expect(wrapper.find('[data-testid="target-HPM5300"]').exists()).toBe(true))
     await wrapper.get('[data-testid="target-HPM5300"]').trigger('click')
 
-    expect(wrapper.get('[data-testid="hpm-board"]').element).toHaveProperty('value', 'hpm5300evk')
+    expect(wrapper.find('[data-testid="hpm-board"]').exists()).toBe(false)
     expect(wrapper.text()).toContain('内置 ROM API')
+    await wrapper.get('[data-testid="hpm-flash-opt0"]').setValue('0x00000007')
     const hz = format === 'bin' ? 1000 : 4000000
     await wrapper.get('[data-testid="frequency"]').setValue(String(hz))
     await chooseFirmware(wrapper, `firmware.${format}`)
@@ -1700,10 +1701,25 @@ describe('online flash task workspace behavior', () => {
     await vi.waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).endsWith('/jobs'))).toBe(true))
     const call = vi.mocked(fetch).mock.calls.find(([url]) => String(url).endsWith('/jobs'))
     const body = JSON.parse(String(call?.[1]?.body))
-    expect(body.board).toBe('hpm5300evk')
+    expect(body.board).toBeNull()
+    expect(body.hpm_flash_cfg).toEqual(['0xfcf90002U', '0x00000007', '0x00001000U', '0xf3000000U'])
     expect(body.frequency).toBe(hz)
     expect(body.sector_addresses).toEqual([])
     expect(body.base_address).toBe(format === 'bin' ? 0x80000400 : null)
+    wrapper.unmount()
+  })
+
+  it('does not reuse a hidden board configuration when changing to an unmapped HPM target', async () => {
+    const fallback = viewFetch([hpmTarget, { ...hpmTarget, part_number: 'HPM6400' }])
+    vi.stubGlobal('fetch', fallback)
+    const wrapper = mount(await onlineFlashView())
+    await vi.waitFor(() => expect(wrapper.find('[data-testid="target-HPM5300"]').exists()).toBe(true))
+    await wrapper.get('[data-testid="target-HPM5300"]').trigger('click')
+    await wrapper.get('[data-testid="target-HPM6400"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('此器件无参考默认值')
+    expect(wrapper.get('[data-testid="start-job"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('[data-testid="hpm-board"]').exists()).toBe(false)
     wrapper.unmount()
   })
 

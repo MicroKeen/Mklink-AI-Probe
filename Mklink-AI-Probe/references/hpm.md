@@ -99,8 +99,12 @@ start_job(
 job_status(job_id="<返回的job_id>")
 ```
 
-地址、型号和板名仅为示例；HEX 不填 BIN 基址。没有已验证板卡配置时传四字
-`hpm_flash_cfg`，不要猜 Flash 容量或将其他板卡的参数原样套用。
+地址、型号和板名仅为示例；HEX 不填 BIN 基址。外接 NOR 按实际硬件传四字
+`hpm_flash_cfg`（header、opt0、opt1、XPI 控制器基址），显式值优先于板名和默认值。
+已知板卡默认值同样通过 `hpm.flash_cfg` 应用；未知显式板名保留旧 `hpm.board` 路径。
+Web 在线/脱机页面可编辑、按器件保存及导入导出配置 JSON；导出文件中的 `target_part`、
+`hpm_flash_cfg` 可用于上述 MCP arguments；CLI 通过 `flash --target-part` 和四参数 `--hpm-flash-cfg` 传入。
+XPI 控制器基址不是 BIN 基址，不要猜 Flash 容量或将其他板卡的参数原样套用。
 轮询直到终态，确认 `algorithm_source="hpm-rom-api"` 和校验结果。
 响应丢失先按 request_id 查原任务，不重复提交。结束后 `detach()`。
 

@@ -7,6 +7,12 @@
 
 MKLink V2/V3 自带 TTL 串口，V4 自带 RS485 接口。两者对电脑来说都是额外的 CDC COM 口，可直接用于 Modbus RTU 通信。
 
+Web 波特率改为下拉档位，与串口助手共用完整 34 档预设（300～10000000），
+详见[波特率与能力查询](commands-serial.md)。UART 与 RS485 各自读取固件声明；
+旧固件未声明 RS485 档位时提示升级，不能把 UART 能力当作 RS485 能力。
+共享 Web、CLI、MCP/SDK 的 Modbus 连接上限均为 10000000。预设列表不保证
+第三方适配器或从站支持相应速率，须按实际设备和驱动选择；不会自动扫描或切换档位。
+
 > **注意**：Modbus 串口与 SWD 调试串口是不同的 COM 口。使用 `--port` 指定 Modbus 串口号。
 
 > **铁律：同一 Modbus 串口禁止多线程/多进程并发访问。** 一个 COM 口同一时刻只能有一个 `mklink modbus ...` 命令、dashboard 或外部串口工具持有。不要把 `scan`、`read`、`dashboard`、`poll` 等命令并行执行到同一个 `--port`。串口 `open()` / `close()` 必须成对；异常退出也要释放。`ModbusClient` 使用端口级文件锁阻止 mklink 进程间重复打开同一端口；如果提示端口被占用，先停止 dashboard/poll/其他串口工具，再重试。

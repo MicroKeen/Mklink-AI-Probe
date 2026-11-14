@@ -17,31 +17,38 @@ let pollTimer: ReturnType<typeof setInterval> | null = null
 let refCount = 0
 let firstCheckDone = false
 let restarting = false
+let healthEpoch = 0
+let pendingHealth: Promise<void> | null = null
 
-async function checkBackendHealth(): Promise<boolean> {
+async function checkBackendHealth(epoch = healthEpoch): Promise<boolean | null> {
+  const endpoint = API_BASE
+  const current = () => epoch === healthEpoch && endpoint === API_BASE
   try {
-    const res = await fetch(`${API_BASE}/api/health`, { signal: AbortSignal.timeout(3000) })
+    const res = await fetch(`${endpoint}/api/health`, { signal: AbortSignal.timeout(3000) })
+    if (!current()) return null
     authenticationRequired.value = res.status === 401
     if (!res.ok) return false
     const payload = await res.json().catch(() => null)
+    if (!current()) return null
     if (payload && typeof payload === 'object') {
       applyReportedBackendPort((payload as { backend_port?: unknown }).backend_port)
       sharedRuntime.value = (payload as { shared_runtime?: unknown }).shared_runtime === true
     }
     return true
   } catch {
+    if (!current()) return null
     authenticationRequired.value = false
     return false
   }
 }
 
-async function refreshHealth() {
+async function performHealthCheck(epoch: number) {
   if (restarting) return
   const alive = IS_TAURI
-    ? await checkViaTauri()
-    : await checkBackendHealth()
+    ? await checkViaTauri(epoch)
+    : await checkBackendHealth(epoch)
 
-  if (restarting) return
+  if (restarting || epoch !== healthEpoch || alive === null) return
   if (alive) {
     backendState.value = 'alive'
     firstCheckDone = true
@@ -52,12 +59,25 @@ async function refreshHealth() {
   // If !firstCheckDone && !alive, keep 'starting'
 }
 
-async function checkViaTauri(): Promise<boolean> {
+function refreshHealth(): Promise<void> {
+  if (restarting) return Promise.resolve()
+  // Startup ticks and manual refresh share one bounded request. A slow older
+  // response must never overwrite a newer result or a restarted endpoint.
+  if (pendingHealth) return pendingHealth
+  const request = performHealthCheck(healthEpoch).finally(() => {
+    if (pendingHealth === request) pendingHealth = null
+  })
+  pendingHealth = request
+  return request
+}
+
+async function checkViaTauri(epoch: number): Promise<boolean | null> {
   // Events can be missed during WebView initialization or a proxy restart.
   // Always resolve this window's owned endpoint through the supported v2 IPC,
   // never keep probing port zero or an obsolete proxy address indefinitely.
   if (!await refreshRuntimeEndpoint()) return false
-  return await checkBackendHealth()
+  if (epoch !== healthEpoch) return null
+  return await checkBackendHealth(epoch)
 }
 
 function startHealthPolling(intervalMs = 5000) {
@@ -68,8 +88,10 @@ function startHealthPolling(intervalMs = 5000) {
 
   refreshHealth()
   pollTimer = setInterval(async () => {
+    const epoch = healthEpoch
     fastPolls++
     await refreshHealth()
+    if (epoch !== healthEpoch) return
     if (!restarting && fastPolls >= maxFastPolls && backendState.value === 'starting') {
       backendState.value = 'dead'
       firstCheckDone = true
@@ -83,6 +105,8 @@ function startHealthPolling(intervalMs = 5000) {
 }
 
 function stopHealthPolling() {
+  healthEpoch++
+  pendingHealth = null
   if (pollTimer) {
     clearInterval(pollTimer)
     pollTimer = null
@@ -92,6 +116,8 @@ function stopHealthPolling() {
 async function restart(): Promise<void> {
   if (restarting) return
   restarting = true
+  healthEpoch++
+  pendingHealth = null
   try {
     backendState.value = 'starting'
     firstCheckDone = false

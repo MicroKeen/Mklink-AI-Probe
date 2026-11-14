@@ -70,7 +70,7 @@ def test_independent_cursors_bounded_pages_replay_and_loss_counts(capture):
     assert dispatch('read', {'session': first['session'], 'after': 0, 'limit': 500}) == page
     assert dispatch('read', name='second') == page
     assert len(dispatch('read')['points']) == 100
-    sv._history = sv._history[-10:]
+    sv._history.trim(max_count=10, window_us=0)
     lost = dispatch('read', {'session': first['session'], 'after': 0})
     assert lost['dropped'] == 590 and len(lost['points']) == 10
     assert calls == ['sv-start']

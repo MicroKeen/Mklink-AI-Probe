@@ -114,10 +114,12 @@ def test_never_any_data_fails_with_startup_hint_and_no_restart():
     """场景(a):错误地址等导致从未收到数据 → 按启动超时报错,不重启。"""
     manager = _make_manager()
     device = FakeDevice()
-    manager.start(device, addr="0x20000000", channel=1, duration=30)
+    manager.start(device, addr="0x20000000", channel=2, duration=30)
+    assert manager.get_status()['channel'] == 2
     assert _wait_terminal(manager)
     manager.stop()
     assert not manager.running
+    assert manager.get_status()['channel'] == 2
     assert "启动后未收到数据" in (manager._progress_error or "")
     assert device.start_calls == 1
     # finally 里的一次 stop 之外,不应有恢复性 stop/start。
@@ -381,6 +383,31 @@ def test_successful_task_name_resolution_keeps_fallback_enabled():
     ) is True
     assert manager._name_resolution_disabled is False
     assert manager._parser._task_names[0x20001000] == "worker"
+
+
+def test_mux_resolves_missing_task_even_with_partial_metadata_without_restart():
+    from mklink.systemview import SystemViewSession
+    manager = _make_manager(real_parser=True)
+    device = FakeDevice(names={0x20001000: 'worker'})
+    device._systemview_session = SystemViewSession(None)
+    events = _prepare_name_resolution(manager, device)
+    manager._parser._task_names[0x20002000] = 'known'
+    assert manager._maybe_resolve_task_names(device, events, addr='0x20000000',
+        channel=1, mode=0, search_size=1024) is False
+    assert manager._parser._task_names == {0x20002000: 'known', 0x20001000: 'worker'}
+    assert device.resolve_calls == 1
+    assert device.start_calls == device.stop_calls == 0
+
+
+def test_fresh_parser_preserves_zero_id_encoding_without_cross_session_names():
+    device = FakeDevice()
+    device._systemview_defaults = lambda: dict(ram_base=0, id_shift=0)
+    manager = _make_manager(real_parser=True)
+    first = manager._create_parser(device)
+    first._task_names[0x12D3710] = 'old task'
+    second = manager._create_parser(device)
+    assert (second._ram_base, second._id_shift) == (0, 0)
+    assert not second._task_names
 
 
 def test_task_name_resolution_stop_failure_keeps_real_cause():

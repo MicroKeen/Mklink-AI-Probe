@@ -3,27 +3,27 @@ name: mklink-ai-probe
 description: 使用 MKLink/MicroLink 操作目标 MCU：固件烧录、内存与 AXF 调试、RTT/VOFA/SuperWatch/SystemView、串口/Modbus、Web GUI、远程调试及安装排障。不用于维护 MKLink 本体、构建安装包或发布版本。
 ---
 
-# MKLink 用户入口
+# MKLink
 
 ## 开始前
 
-- 首次加载立即检查版本：MCP `ping(force_update_check=True)` 读取 `update`；
-  缺 MCP/参数时在 Skill 根目录运行 `python scripts/skill_update.py check --force --json`。
-  本会话只查一次。离线可继续；新版安装须用户同意，见
-  [安装与更新](references/install.md)。
-- **下载后端**：除 HPM ROM 或用户指定方式外，依次选工程现有 IDE、pyOCD、脱机。
-  先读[下载优先级](references/firmware-download-priority.md)，复用已确认的 Keil 配置。
-- 优先使用共享 MCP；先读[共享后台](references/shared-runtime.md)，参数以 schema/`--help` 为准。
-  **GUI 已打开也可连接**：`connect(probe=...)` 复用工程和符号；`gui_call` 调用已声明的共享能力。
+- 首次加载先读[安装与更新](references/install.md)，发起
+  `ping(force_update_check=True, background_update_check=True)`，本会话一次。
+  **主动提醒 Skill 和固件更新**；先更新客户端、重载 MCP/空闲后台，再重连查固件。
+  检查不阻塞任务，离线继续；不为查版本额外连接，不自动安装或中断设备任务。
+- **下载后端**：除 HPM ROM 或用户指定方式外，依次选 IDE、pyOCD、脱机。
+  先读[下载优先级](references/firmware-download-priority.md)，复用 Keil 配置；工程初始化可选。
+- 优先共享 MCP，先读[共享后台](references/shared-runtime.md)。
+  **GUI 共用连接**：`connect(probe=...)` 复用工程/符号；`gui_call` 调用共享能力。
   RTT 已运行时无参数 `rtt_start()` 订阅，用 `rtt_read_channel` 读取。
   不发送旧 `RTTView.start/stop`，不另开串口；缺能力不退回独占。
-  默认后台执行；展示用 `gui_open`，见共享后台文档。
+  桌面/Web 用 `gui_open`、`gui_control`，见 [GUI 操作/回放](references/gui-control.md)。
 - **占用先查后台**：`runtime_status(probe=...)` 无需连接，查询会话、采集和任务。
   GUI 关闭不等于后台退出，AI 任务完成须 `detach`。占用/失败时读
   [控制权与恢复](references/runtime-recovery.md)。
 - 脚本、日志、报告写入用户指定的非系统盘目录，默认目标项目 `.mklink/`。
-  项目在系统盘或缺失时先询问；不写 Skill、AI 客户端、桌面或系统临时目录。
-  见[工作目录与清理](references/work-files.md)，报告实际路径。
+  项目在系统盘或缺失先询问；不写 Skill、AI 客户端、桌面或系统临时目录。
+  见[工作目录](references/work-files.md)，报告路径。
 
 ## 不可绕过的设备边界
 
@@ -36,8 +36,8 @@ description: 使用 MKLink/MicroLink 操作目标 MCU：固件烧录、内存与
   **15 个读取分组**，连续 float 简写最多 **16 路**。SuperWatch/VOFA 最多 15 个
   128 B 分片；MUX 大块采集最多 4096 B，须协商能力。兼容 DMPM 须显式选择、
   固件支持且连接空闲，命令最多 **511 UTF-8 字节**；不自动回退。
-  详见[内存与符号](references/commands-memory.md)。
-- **内存通道**：共享读写自动优先 MUX，无需先启动采集；失败不改道重发。
+  见[内存与符号](references/commands-memory.md)。
+- **内存通道**：读写优先 MUX；失败不改道重发。缺固件能力须提示升级。
 - **flush**：单批总数据最多 **12 KiB**、最多 **8 个地址项**。超额时按批串行，
   每批等待提示符；不得与 dump、VOFA、RTT 或 SystemView 并发。
 - **RTT/SystemView**：地址只允许省略或传目标已知可写 RAM 内的 4 字节对齐地址，
@@ -91,5 +91,5 @@ description: 使用 MKLink/MicroLink 操作目标 MCU：固件烧录、内存与
 | 安装/FLM/MCP | [安装与更新](references/install.md) |
 | U 盘/桌面 HTML 快速入口 | [Web 入口](references/web-entry.md) |
 | Windows USB 端口名称 | [端口命名](references/windows-port-names.md) |
-| 复杂编排或故障排查 | [工作流](references/workflows.md) |
+| 编排/排障 | [工作流](references/workflows.md) |
 | 缺陷反馈/跟进 | [问题反馈](references/issue-reporting.md) |

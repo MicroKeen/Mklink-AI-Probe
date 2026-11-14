@@ -1015,8 +1015,11 @@ function updateCollectionUI(state) {
   btnPause.disabled = (state === 'stopped');
   btnStop.disabled = (state === 'stopped');
 
-  badge.textContent = t(state) || (state.charAt(0).toUpperCase() + state.slice(1));
-  badge.className = 'status-' + state;
+  var interrupted = IS_SUPERWATCH_MODE && state === 'running' && replayLiveStatus?.target_read_interrupted === true;
+  var label = interrupted ? 'target_read_interrupted' : state;
+  badge.setAttribute('data-i18n', label);
+  badge.textContent = t(label) || (state.charAt(0).toUpperCase() + state.slice(1));
+  badge.className = interrupted ? 'status-waiting' : 'status-' + state;
 
   if (state === 'running') {
     if (IS_SUPERWATCH_MODE && previousState !== 'running') {
@@ -1081,7 +1084,7 @@ document.getElementById('btn-start').addEventListener('click', function() {
   // The backend applies this only inside its shared start transaction.
   if (IS_SUPERWATCH_MODE && restoredInterval !== null) {
     opts.headers = {'Content-Type': 'application/json'};
-    opts.body = JSON.stringify({interval: restoredInterval});
+    opts.body = JSON.stringify(withWatchProfile({interval: restoredInterval}));
   }
   fetch(API_CTRL + 'start', opts)
     .then(function(r){
@@ -1170,7 +1173,7 @@ document.getElementById('btn-apply-interval').addEventListener('click', function
   fetch(API_CTRL + 'interval', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({interval: val})
+    body: JSON.stringify(withWatchProfile({interval: val}))
   })
     .then(function(r){
       return r.json().catch(function(){ return {}; }).then(function(d){
@@ -3651,6 +3654,7 @@ function updateReplayControls() {
   document.getElementById('btn-start').classList.toggle('active', playing);
   document.getElementById('btn-pause').classList.toggle('active', !playing);
   var badge = document.getElementById('collection-status-badge');
+  badge.removeAttribute('data-i18n');
   badge.textContent = (CONFIG.lang === 'en' ? 'Replay · ' : '回放 · ') + t(playing ? 'running' : 'paused');
   badge.className = playing ? 'status-running' : 'status-paused';
 }
@@ -3740,6 +3744,11 @@ function endReplay() {
   canvas.dataset.source = 'live';
   if (replayLiveStatus) syncDashboardStatus(replayLiveStatus);
   else updateCollectionUI('stopped');
+  if (pendingProfilePreferences) {
+    var pendingProfile = pendingProfilePreferences;
+    pendingProfilePreferences = null;
+    applyProfilePreferences(pendingProfile.saved, pendingProfile.path);
+  }
   drawChart(); drawMinimap(); updateWatchTable();
 }
 
@@ -3757,7 +3766,18 @@ function disposeViewer() {
 if (typeof window !== 'undefined') {
   if (!window.__waveformViewers) window.__waveformViewers = {};
   var binaryViewer = window.__waveformViewers[CONFIG.mode] || {};
+  binaryViewer.getDisplayState = function() {
+    return { ready: true, state: collectionState, paused: renderPaused, replay: !!replaySession,
+      range: getBinaryVisibleRange(), channels: binaryChannelNames.slice(0, 64) };
+  };
+  binaryViewer.setDisplayPaused = function(paused) {
+    if (replaySession || collectionState === 'stopped') throw new Error('Live SuperWatch display is not running');
+    renderPaused = paused;
+    updateCollectionUI(paused ? 'paused' : 'running');
+  };
   binaryViewer.setWorkspace = setWorkspace;
+  binaryViewer.setProfilePreferences = applyProfilePreferences;
+  binaryViewer.flushPreferences = function() { clearTimeout(viewerPreferenceTimer); saveViewerPreferences(true); };
   binaryViewer.getFormulas = function() { return binaryChannelNames.map(function(name) { return signalStyle(name).formula || ''; }); };
   binaryViewer.beginReplay = beginReplay;
   binaryViewer.setReplayPosition = setReplayPosition;
@@ -6000,10 +6020,16 @@ document.getElementById('project-load-input')?.addEventListener('change', functi
 var viewerPreferenceTimer = null;
 var viewerPreferences = null;
 var viewerPreferencesReady = false;
+var viewerProfilePath = null;
+var pendingProfilePreferences = null;
+function withWatchProfile(value) {
+  if (IS_SUPERWATCH_MODE && viewerProfilePath) value.profile = viewerProfilePath;
+  return value;
+}
 function preferenceKey() {
   return CONFIG.viewerSettingsKey || 'mklink.desktop.settings.v1.waveform.' + CONFIG.mode;
 }
-function saveViewerPreferences() {
+function saveViewerPreferences(persistProfile) {
   if (replaySession) return;
   if (!IS_SUPERWATCH_MODE || !viewerPreferencesReady) return;
   try {
@@ -6023,13 +6049,15 @@ function saveViewerPreferences() {
     var current = new Set(state.channels.map(function(ch) { return ch.name; }));
     state.channels = state.channels.concat(previous.filter(function(ch) { return !current.has(ch.name); })).slice(0, 256);
     viewerPreferences = state;
-    localStorage.setItem(preferenceKey(), JSON.stringify(state));
+    try { localStorage.setItem(preferenceKey(), JSON.stringify(state)); } catch (_) { /* Browser storage is optional. */ }
+    if (persistProfile === true)
+      window.dispatchEvent(new CustomEvent('mklink:viewer-preferences', { detail: state }));
   } catch (_) { /* Unavailable storage must not interrupt acquisition. */ }
 }
 function scheduleViewerPreferences() {
   if (!IS_SUPERWATCH_MODE || !viewerPreferencesReady) return;
   clearTimeout(viewerPreferenceTimer);
-  viewerPreferenceTimer = setTimeout(saveViewerPreferences, 250);
+  viewerPreferenceTimer = setTimeout(function() { saveViewerPreferences(true); }, 250);
 }
 function restoreChannelPreferences() {
   if (!IS_SUPERWATCH_MODE || !viewerPreferences) return;
@@ -6049,6 +6077,36 @@ function restoreChannelPreferences() {
       offset: Number(ch.yOffset) || 0, autoRange: ch.yAutoRange !== false,
       manualMin: parseNullableNumber(ch.yMin), manualMax: parseNullableNumber(ch.yMax) };
   });
+}
+function applyProfilePreferences(saved, profilePath) {
+  if (!IS_SUPERWATCH_MODE || !saved) return;
+  if (replaySession) {
+    pendingProfilePreferences = {saved: saved, path: profilePath};
+    return;
+  }
+  clearTimeout(viewerPreferenceTimer);
+  viewerPreferencesReady = false;
+  viewerPreferences = JSON.parse(JSON.stringify(saved));
+  viewerProfilePath = profilePath || null;
+  watchColumnState = {};
+  WATCH_COLUMNS.forEach(function(column) { watchColumnState[column.key] = {width: column.width, visible: column.visible}; });
+  Object.keys(FIELDS).forEach(function(name, index) {
+    FIELDS[name].color = COLORS[index % COLORS.length];
+    FIELDS[name].thresholds = null;
+    FIELDS[name].format = 'auto';
+    FIELDS[name].precision = 2;
+  });
+  channelYState = {};
+  superwatchTimelineSpan = null;
+  superwatchTimelineUserAdjusted = false;
+  restoredInterval = saved.interval;
+  intervalInput.value = String(restoredInterval);
+  intervalDirty = true;
+  deserializeState({ channels: [], bufferPoints: saved.bufferPoints,
+    globalYView: saved.globalYView, triggerSettings: saved.triggerSettings || {source:'', edge:'rising', level:0, mode:'auto', preTrigger:1000},
+    watchColumns: saved.watchColumns });
+  restoreChannelPreferences();
+  viewerPreferencesReady = true;
 }
 if (IS_SUPERWATCH_MODE) {
   try {
@@ -6075,5 +6133,6 @@ if (IS_SUPERWATCH_MODE) {
   if (preferenceHost) ['change', 'click', 'pointerup', 'wheel', 'keyup'].forEach(function(type) {
     addViewerGlobalListener(preferenceHost, type, scheduleViewerPreferences);
   });
-  addViewerGlobalListener(window, 'pagehide', saveViewerPreferences);
+  addViewerGlobalListener(window, 'pagehide', function() { saveViewerPreferences(true); });
+  window.dispatchEvent(new CustomEvent('mklink:watch-viewer-ready'));
 }

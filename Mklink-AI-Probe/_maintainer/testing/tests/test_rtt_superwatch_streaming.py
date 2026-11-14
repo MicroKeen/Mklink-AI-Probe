@@ -1550,7 +1550,6 @@ def test_superwatch_mux_transient_read_failure_keeps_capture_and_connection():
             for seq, payload in enumerate([
                 bytes([0, 9, 1, 4]) + struct.pack('<If', 100, 1.5),
                 struct.pack('<BBI', 0, 5, 200),
-                bytes([0, 9, 1, 4]) + struct.pack('<If', 400, 2.5),
             ], 1):
                 transport.feed(packet(0x41, 17, seq, payload))
         return result
@@ -1569,10 +1568,18 @@ def test_superwatch_mux_transient_read_failure_keeps_capture_and_connection():
     manager.start(device)
     try:
         deadline = time.monotonic() + 2
+        while manager.get_status()['read_cycles'] < 1 and time.monotonic() < deadline:
+            time.sleep(.001)
+        interrupted = manager.get_status()
+        assert interrupted['state'] == 'running' and interrupted['target_read_interrupted'] is True
+        assert interrupted['actual_rate'] == 0 and interrupted['read_cycles'] == 1
+        transport.feed(packet(0x41, 17, 3, bytes([0, 9, 1, 4]) + struct.pack('<If', 400, 2.5)))
+        deadline = time.monotonic() + 2
         while manager.get_status()['read_cycles'] < 2 and time.monotonic() < deadline:
             time.sleep(.001)
         status = manager.get_status()
         assert status['state'] == 'running' and status['error'] is None
+        assert status['target_read_interrupted'] is False
         assert status['read_cycles'] == 2 and status['read_errors'] == 1
         assert status['stream_integrity']['firmware_read_errors'] == 1
         assert hub.stats().produced_items == 2
@@ -1582,6 +1589,7 @@ def test_superwatch_mux_transient_read_failure_keeps_capture_and_connection():
     finally:
         manager.stop()
     assert [op for op, _ in commands].count(0x31) == 1
+    assert manager.get_status()['target_read_interrupted'] is False
 
 
 def test_superwatch_rejects_bridge_without_dump_stream_instead_of_read_ram_fallback():

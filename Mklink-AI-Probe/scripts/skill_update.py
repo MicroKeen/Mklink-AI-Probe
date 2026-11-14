@@ -15,6 +15,7 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
+from urllib.parse import urlsplit
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
@@ -29,7 +30,6 @@ except ImportError:  # pragma: no cover
 DEFAULT_MANIFEST_URLS = (
     "https://download.microkeenai.com/mklink/stable/latest.json",
     "https://raw.githubusercontent.com/MicroKeen/Mklink-AI-Probe/release/latest.json",
-    "https://gitee.com/Aladdin-Wang/Mklink-AI-Probe/raw/updates/latest.json",
 )
 USER_AGENT = "Mklink-AI-Probe-Skill-Updater"
 MANAGED_CONTENT_ROOTS = (
@@ -139,12 +139,15 @@ def update_result(
     *, root: Path, manifest: Mapping[str, object], manifest_url: str, cached: bool,
 ) -> dict[str, object]:
     local = current_version(root)
-    latest = str(manifest.get("version", ""))
+    skill = manifest.get('skill')
+    latest = str(skill.get('version') or manifest.get('version', '')) if isinstance(skill, dict) else str(manifest.get('version', ''))
     available = version_key(latest) > version_key(local)
     return {
         "status": "ok",
         "current_version": local,
         "latest_version": latest,
+        "component": "skill",
+        "desktop_latest_version": str(manifest.get('version', '')),
         "update_available": available,
         "notes": str(manifest.get("notes", "")),
         "manifest_url": manifest_url,
@@ -166,7 +169,10 @@ def check_for_update(
             return update_result(root=root, manifest=manifest, manifest_url=url, cached=True)
     try:
         manifest, url = fetch_manifest(urls)
-        _write_cache(cache, manifest, url, urls)
+        try:
+            _write_cache(cache, manifest, url, urls)
+        except OSError:
+            pass  # Version advice remains useful when this account cannot cache it.
         return update_result(root=root, manifest=manifest, manifest_url=url, cached=False)
     except (RuntimeError, ValueError) as error:
         return {
@@ -392,12 +398,54 @@ def _update_metadata(manifest: Mapping[str, object], key: str) -> Mapping[str, o
     return value
 
 
+def download_update_asset(
+    manifest: Mapping[str, object], metadata: Mapping[str, object],
+    destination: Path, *, platform: str | None = None,
+) -> None:
+    """Fall back after Tencent failure, without changing the selected artifact."""
+    url = str(metadata['url'])
+    digest, size = str(metadata['sha256']), int(metadata['size'])
+    try:
+        download_verified(url, destination, digest, size)
+        return
+    except (OSError, RuntimeError, urllib.error.URLError):
+        destination.unlink(missing_ok=True)
+        if urlsplit(url).hostname != 'download.microkeenai.com':
+            raise
+    fallback, _ = fetch_manifest((DEFAULT_MANIFEST_URLS[1],))
+    if platform:
+        platforms = fallback.get('platforms')
+        candidate = _update_metadata(platforms if isinstance(platforms, dict) else {}, platform)
+        selected_version, candidate_version = manifest.get('version'), fallback.get('version')
+    else:
+        candidate = _update_metadata(fallback, 'skill')
+        selected_version = metadata.get('version') or manifest.get('version')
+        candidate_version = candidate.get('version') or fallback.get('version')
+    # A lagging index must never install a different version or unchecked bytes.
+    if (candidate_version != selected_version
+            or str(candidate['sha256']).casefold() != digest.casefold()
+            or int(candidate['size']) != size):
+        raise RuntimeError('GitHub fallback does not match the selected update')
+    fallback_url = str(candidate['url'])
+    parsed = urlsplit(fallback_url)
+    if (parsed.scheme != 'https' or parsed.netloc != 'github.com'
+            or not parsed.path.startswith('/MicroKeen/Mklink-AI-Probe/releases/download/')):
+        raise RuntimeError('GitHub fallback is not an official release asset')
+    try:
+        download_verified(fallback_url, destination, digest, size)
+    except (OSError, RuntimeError, urllib.error.URLError):
+        destination.unlink(missing_ok=True)
+        raise
+
+
 def install_update(
     *, root: Path, manifest: Mapping[str, object], install_skill: bool,
     install_app: bool,
 ) -> dict[str, object]:
     latest = str(manifest.get("version", ""))
-    skill_needed = install_skill and version_key(latest) > version_key(current_version(root))
+    skill_metadata = manifest.get('skill')
+    skill_version = str(skill_metadata.get('version') or latest) if isinstance(skill_metadata, dict) else latest
+    skill_needed = install_skill and version_key(skill_version) > version_key(current_version(root))
     _app_location, app_version = _installed_app() if install_app else (None, None)
     app_needed = install_app and (
         app_version is None or version_key(latest) > version_key(app_version)
@@ -418,16 +466,16 @@ def install_update(
                 raise RuntimeError("update manifest platforms metadata is invalid")
             app = _update_metadata(platform, "windows-x86_64")
             installer = temporary / "Mklink-AI-Probe-Setup.exe"
-            download_verified(str(app["url"]), installer, str(app["sha256"]), int(app["size"]))
+            download_update_asset(manifest, app, installer, platform='windows-x86_64')
             result["desktop"] = install_desktop(installer)
         if skill_needed:
             skill = _update_metadata(manifest, "skill")
             archive = temporary / "Mklink-AI-Probe-Skill.zip"
-            download_verified(str(skill["url"]), archive, str(skill["sha256"]), int(skill["size"]))
+            download_update_asset(manifest, skill, archive)
             result["skill"] = install_skill_archive(
                 root=root,
                 archive_path=archive,
-                expected_version=str(skill.get("version", latest)),
+                expected_version=skill_version,
                 source_commit=str(skill.get("source_commit", "")),
             )
     return result

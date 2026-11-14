@@ -371,6 +371,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref, shallowRef, watch } from 'vue'
 import { trackedSymbolPending, reloadTrackedSymbolSource } from '../../lib/trackedSymbolSource'
+import { flushWatchProfile, useWatchProfile } from '../../composables/useWatchProfile'
 import { Activity, ArrowDown, ArrowUp, ChevronDown, ChevronRight, Code2, Eye, EyeOff, LoaderCircle, Pin, PinOff, RefreshCw, X } from '@lucide/vue'
 import { useSymbolCatalog } from '../../composables/useSymbolCatalog'
 import { useToast } from '../../composables/useToast'
@@ -579,6 +580,10 @@ function movePin(path: string, direction: number): void {
 }
 
 async function request(path: string, options?: RequestInit): Promise<any> {
+  const profilePath = useWatchProfile().profile.value?.path
+  if (profilePath && options?.method === 'POST' && path.startsWith('/api/dash/superwatch/array-snapshot/')) {
+    options = { ...options, body: JSON.stringify({ ...JSON.parse(String(options.body || '{}')), profile: profilePath }) }
+  }
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -723,7 +728,7 @@ async function changeSelection(path: string, symbol: SymbolDescriptor | null): P
     const action = checked ? 'add' : 'remove'
     const result = await request(`/api/dash/superwatch/${action}`, {
       method: 'POST',
-      body: JSON.stringify({ name: path }),
+      body: JSON.stringify({ name: path, ...(useWatchProfile().profile.value?.path ? {profile: useWatchProfile().profile.value!.path} : {}) }),
     })
     if (result?.error || result?.item?.error) throw new Error(result.error || result.item.error)
     selected.value = withSet(selected.value, path, checked)
@@ -866,10 +871,6 @@ async function writeValue(): Promise<void> {
     const result = await catalog.writeSymbol(symbol.path, requestedValue)
     if (disposed || editor.generation !== catalog.generation.value || !props.deviceConnected) return
     writeSuccess[symbol.path] = result.value
-    if (result.mode === 'legacy-gap') {
-      toast.info(tr('已写入。当前固件或目标地址使用兼容写入，期间有采样空档，曲线历史已保留。',
-        'Written. Compatibility writes for this firmware or target address have a sampling gap; curve history is preserved.'))
-    }
     if (editing.value === editor) editing.value = null
   } catch (cause) {
     toast.error(cause instanceof Error ? cause.message : String(cause))
@@ -888,6 +889,7 @@ async function reloadSources(): Promise<void> {
   reloadingSources.value = true
   reloadPromptOpen.value = false
   try {
+    await flushWatchProfile()
     if (!await reloadTrackedSymbolSource()) await request('/api/symbols/reload-sources', { method: 'POST' })
     await refreshSourceStatus()
   } catch (cause) {
@@ -960,10 +962,12 @@ async function refreshSourceStatus(): Promise<void> {
   }
 }
 onMounted(() => {
+  window.addEventListener('mklink:watch-profile-loaded', loadWorkspace)
   void loadWorkspace()
   statusTimer = setInterval(() => { void refreshSourceStatus() }, 2000)
 })
 onUnmounted(() => {
+  window.removeEventListener('mklink:watch-profile-loaded', loadWorkspace)
   disposed = true
   clearInterval(statusTimer)
 })

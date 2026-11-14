@@ -1,9 +1,13 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { probeSelectionError } from '../lib/probeSelectionError'
+import { computed, inject, ref, onMounted, onUnmounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { Download, RefreshCw, RotateCcw, Tag, Unplug, Usb } from '@lucide/vue'
 import { invoke } from '@tauri-apps/api/core'
 import { useMklinkApi } from '../composables/useMklinkApi'
 import { useToast } from '../composables/useToast'
+import { provideConfirmation } from '../composables/useConfirmation'
+import ConfirmationDialog from '../components/ConfirmationDialog.vue'
 import { useSymbolCatalog } from '../composables/useSymbolCatalog'
 import { tr } from '../composables/useLanguage'
 import {
@@ -24,6 +28,8 @@ import ConfigSectionNav, { type ConfigSection } from '../components/config/Confi
 import FileSourcesPanel from '../components/config/FileSourcesPanel.vue'
 import RuntimePanel from '../components/config/RuntimePanel.vue'
 import ConnectionClockControl from '../components/config/ConnectionClockControl.vue'
+import { idleUpdateCoordination, updateCoordinationKey } from '../lib/updateCoordination'
+const { clientPending, clientInstalling, firmwareBusy: firmwareUpgrading } = inject(updateCoordinationKey, idleUpdateCoordination, true)
 
 const {
   deviceStatus,
@@ -41,21 +47,36 @@ const {
   downloadProbeFirmware,
 } = useMklinkApi()
 const toast = useToast()
+const { message: confirmationMessage, confirm: confirmPortNaming, answer: answerConfirmation } = provideConfirmation()
 const symbolCatalog = useSymbolCatalog()
 
 const activeSection = ref<ConfigSection>('local')
+const route = useRoute()
+const router = useRouter()
+watch(() => route?.query.section, section => {
+  if (typeof section === 'string' && ['local', 'files', 'firmware', 'runtime'].includes(section)) activeSection.value = section as ConfigSection
+}, { immediate: true })
+watch(activeSection, section => {
+  if (route?.query.section !== section) {
+    void router.replace({ query: { ...route?.query, section } })
+  }
+})
 const config = ref<ProjectConfig>({})
 const localPort = ref('')
 const portOptions = ref<{ label: string; value: string }[]>([])
 const localPortExplicit = ref(false)
+const selectedProbeId = ref('')
+const selectedProbeMissing = computed(() => sharedRuntime.value && localPortExplicit.value
+  && !!selectedProbeId.value && !probePorts.value.some(port => port.probe_id === selectedProbeId.value))
 let localPortTouched = false
 const probePorts = ref<PortInfo[]>([])
 const selectedProbe = computed(() => probePorts.value.find(port => port.device === localPort.value))
-const switchingProbe = computed(() => sharedRuntime.value && localPortExplicit.value
+const switchingProbe = computed(() => sharedRuntime.value && deviceStatus.value.connected && localPortExplicit.value
   && !!selectedProbe.value && localPort.value !== deviceStatus.value.port)
 const settings = ref<DesktopSettings>(loadDesktopSettings(window.localStorage))
 
 const portsLoading = ref(false)
+let portRefreshGeneration = 0
 const savingLocal = ref(false)
 const savingClock = ref(false)
 const connecting = ref(false)
@@ -70,7 +91,6 @@ const localSaveState = ref<'idle' | 'saving' | 'saved' | 'unconfirmed'>('idle')
 const firmwareCheck = ref<ProbeFirmwareCheck | null>(null)
 const firmwareChecking = ref(false)
 const firmwareCheckStatus = ref('')
-const firmwareUpgrading = ref(false)
 const firmwareUpgradeStatus = ref('')
 const firmwareUpgradeResult = ref<ProbeFirmwareUpgrade | null>(null)
 const firmwareDownloading = ref(false)
@@ -95,18 +115,27 @@ const firmwareDownloadTarget = computed(() => {
 })
 
 async function refreshPorts() {
+  const generation = ++portRefreshGeneration
   portsLoading.value = true
   try {
     const ports: PortInfo[] = await listPorts()
+    if (disposed || generation !== portRefreshGeneration) return
     probePorts.value = ports
+    if (sharedRuntime.value && localPortExplicit.value && selectedProbeId.value) {
+      // Follow the selected identity through COM renumbering, never a reused
+      // port belonging to a different device. Preserve the missing identity
+      // until the user explicitly chooses another device or Auto Search.
+      localPort.value = ports.find(port => port.probe_id === selectedProbeId.value)?.device || ''
+    }
     portOptions.value = ports.map(port => ({
       label: `${port.alias ? port.alias + ' · ' : ''}${port.device} — ${port.description} (${port.manufacturer})`,
       value: port.device,
     }))
   } catch (error: any) {
+    if (disposed || generation !== portRefreshGeneration) return
     toast.error(tr('读取串口失败: ', 'Failed to read serial ports: ') + error.message)
   } finally {
-    portsLoading.value = false
+    if (generation === portRefreshGeneration) portsLoading.value = false
   }
 }
 
@@ -148,6 +177,7 @@ async function saveLocalConfig() {
 async function selectLocalPort() {
   localPortTouched = true
   localPortExplicit.value = Boolean(localPort.value.trim())
+  selectedProbeId.value = selectedProbe.value?.probe_id || ''
   if (sharedRuntime.value) return
   await saveLocalConfig()
 }
@@ -158,10 +188,16 @@ async function connectLocal() {
   localPortTouched = true
   connecting.value = true
   try {
+    if (selectedProbeMissing.value) {
+      await refreshPorts()
+      if (selectedProbeMissing.value) {
+        throw { detail: { reason: 'probe_missing' } }
+      }
+    }
     const selectedPort = localPort.value.trim()
     const result = await connectDevice({
       ...(localPortExplicit.value && selectedPort
-        ? { port: selectedPort }
+        ? { port: selectedPort, ...(sharedRuntime.value && selectedProbeId.value ? { probe: selectedProbeId.value } : {}) }
         : { restore_last: true }),
       axf: isSymbolFilePath(settings.value.symbolPath)
         ? settings.value.symbolPath.trim()
@@ -171,6 +207,7 @@ async function connectLocal() {
     if (connectedPort) {
       localPort.value = connectedPort
       localPortExplicit.value = false
+      selectedProbeId.value = deviceStatus.value.probe_id || selectedProbe.value?.probe_id || ''
       config.value = { ...config.value, com_port: connectedPort }
     }
     const symbolPath = settings.value.symbolPath.trim()
@@ -187,11 +224,27 @@ async function connectLocal() {
       localPort.value = ''
       config.value = { ...config.value, com_port: '' }
     }
-    toast.error(tr('连接失败: ', 'Connection failed: ') + error.message)
+    const reason = String(error.detail?.reason || '')
+    if (sharedRuntime.value && (reason.startsWith('probe_') || ['missing', 'port_changed'].includes(reason))) {
+      await refreshPorts()
+    }
+    toast.error(tr('连接失败: ', 'Connection failed: ') + probeSelectionError(error))
   } finally {
     connecting.value = false
   }
 }
+
+watch(() => deviceStatus.value.connected, (connected, previous) => {
+  if (previous && !connected && sharedRuntime.value && !connecting.value && !disconnecting.value) {
+    // Unexpected loss is a reconnect of the same device, not Auto Search.
+    // Keep a different explicit selection if the user was already switching.
+    if (!localPortExplicit.value) {
+      selectedProbeId.value = deviceStatus.value.probe_id || selectedProbeId.value
+      localPortExplicit.value = !!selectedProbeId.value && selectedProbeId.value !== 'lobby'
+    }
+    void refreshPorts()
+  }
+})
 
 async function disconnectLocal() {
   if (disconnecting.value || connecting.value) return
@@ -220,7 +273,7 @@ async function renameUsbPorts(action: 'apply' | 'restore') {
   const prompt = restoring
     ? tr('将恢复已由 MKLink 修改的端口显示名称，并请求管理员权限。继续吗？', 'This restores MKLink port display names and requests administrator permission. Continue?')
     : tr('将严格识别当前在线的 MKLink V2/V3/V4 端口并修改显示名称，需要管理员权限。继续吗？', 'This verifies connected MKLink V2/V3/V4 ports and changes their display names. Administrator permission is required. Continue?')
-  if (!window.confirm(prompt)) return
+  if (!await confirmPortNaming(prompt) || disposed) return
 
   usbNamingAction.value = action
   try {
@@ -369,7 +422,7 @@ async function recheckFirmware() {
 }
 
 async function upgradeFirmware() {
-  if (firmwareUpgrading.value || firmwareChecking.value) return
+  if (firmwareUpgrading.value || firmwareChecking.value || clientInstalling.value) return
   if (!window.confirm(tr(
     '将检查并安装所选下载器的最新修复固件；版本号相同但修订未确认时也会重新安装。V2 写入 RBL，V3/V4 进入 UF2 模式。升级会断开连接，请先停止采集，期间不要拔掉 USB。继续吗？',
     'Install the latest repair firmware for the selected probe, including reinstalling the same version when its build cannot be confirmed. V2 uses RBL; V3/V4 use UF2. Stop acquisition first and keep USB connected. Continue?',
@@ -447,6 +500,13 @@ onMounted(async () => {
   // network manifest lookup during login so the local connection controls are
   // immediately responsive.
   await Promise.all([refreshPorts(), loadConfig()])
+  const bound = deviceStatus.value.probe_id
+  if (!localPortTouched && sharedRuntime.value && bound && bound !== 'lobby'
+      && !deviceStatus.value.connected && deviceStatus.value.connection_recovery?.state === 'expired') {
+    selectedProbeId.value = bound
+    localPortExplicit.value = true
+    localPort.value = probePorts.value.find(port => port.probe_id === bound)?.device || ''
+  }
   const restoredPort = localPort.value.trim()
   if (!localPortTouched && restoredPort && !portOptions.value.some(option => option.value === restoredPort)) {
     localPort.value = ''
@@ -461,6 +521,7 @@ onUnmounted(() => {
 
 <template>
   <div class="config-workspace">
+    <ConfirmationDialog v-if="confirmationMessage !== null" :message="confirmationMessage" @answer="answerConfirmation" />
     <ConfigSectionNav v-model="activeSection" />
 
     <main class="section-content">
@@ -503,6 +564,9 @@ onUnmounted(() => {
         <div v-if="sharedRuntime && selectedProbe?.probe_id" class="connection-detail" data-testid="selected-probe-id">
           {{ selectedProbe.probe_id }}
         </div>
+        <p v-if="selectedProbeMissing" class="connection-detail" data-testid="missing-probe">
+          {{ tr('原下载器已不可用。请刷新列表或明确选择其他下载器，当前未改连其他设备。', 'The selected probe is unavailable. Refresh or explicitly select another probe; no other device has been connected.') }}
+        </p>
 
         <ConnectionClockControl :device-connected="deviceStatus.connected" :device-generation="deviceStatus.device_generation"
           :disabled="savingLocal || connecting || disconnecting || switchingProbe" @busy="savingClock = $event" @firmware-update="activeSection = 'firmware'" />
@@ -585,12 +649,21 @@ onUnmounted(() => {
         </header>
         <div class="firmware-upgrade-content">
           <p>{{ tr('检查并升级所选下载器。V2 使用 RBL，V3/V4 使用 UF2；升级期间请勿拔掉 USB。', 'Check and update the selected probe. V2 uses RBL; V3/V4 use UF2. Keep USB connected during the update.') }}</p>
+          <p v-if="deviceStatus.connected && deviceStatus.firmware_update?.status === 'available' && (!localPortExplicit || localPort === deviceStatus.port)" data-testid="firmware-cloud-version" role="status">
+            {{ tr('当前固件：', 'Installed firmware: ') }}{{ deviceStatus.firmware_update.current_version }} ·
+            {{ tr('云端新版本：', 'New cloud version: ') }}{{ deviceStatus.firmware_update.latest_version }}
+          </p>
+          <p v-if="deviceStatus.connected && deviceStatus.firmware_update?.status === 'unrecognized' && (!localPortExplicit || localPort === deviceStatus.port)" data-testid="firmware-unrecognized" role="status">
+            {{ tr('当前固件信息无法识别，建议升级与下载器型号匹配的固件。', 'The installed firmware could not be identified. Upgrade to firmware matching your probe model.') }}
+          </p>
           <button class="btn" type="button" data-testid="check-firmware" :disabled="firmwareUpgrading || firmwareChecking" @click="recheckFirmware">{{ firmwareChecking ? tr('检查中...', 'Checking...') : tr('检查固件', 'Check Firmware') }}</button>
           <p v-if="firmwareCheckStatus" role="status" data-testid="firmware-check-status">{{ firmwareCheckStatus }}</p>
           <p v-if="firmwareCheck?.status === 'revision_unknown'" data-testid="firmware-revision-unknown">{{ tr('版本号相同，但尚未确认已安装的修订。可以重新安装最新修复包。', 'The version matches, but the installed build is unconfirmed. You can reinstall the latest repair package.') }}</p>
           <p v-if="firmwareCheck?.current_build_id" data-testid="firmware-build-id">{{ tr('当前构建：', 'Installed build: ') }}{{ firmwareCheck.current_build_id }}</p>
           <p v-if="firmwareCheck?.recommended_uf2?.build_id" data-testid="firmware-recommended-build">{{ tr('可用构建：', 'Available build: ') }}{{ firmwareCheck.recommended_uf2.build_id }}</p>
-          <button class="btn" type="button" data-testid="upgrade-firmware" :disabled="firmwareUpgrading || firmwareChecking" @click="upgradeFirmware">
+          <p v-if="clientPending" data-testid="firmware-update-order">{{ tr('上位机正在检查或已有更新，建议先完成上位机更新并重启，再检查固件。暂不更新上位机时仍可手动升级固件。', 'The app is checking for updates or has an update available. Update and restart the app before rechecking firmware. If postponing the app update, you can still update firmware manually.') }}</p>
+          <p v-if="clientInstalling">{{ tr('上位机正在安装更新，请重启后再升级固件。', 'The app update is installing. Update firmware after restarting.') }}</p>
+          <button class="btn" type="button" data-testid="upgrade-firmware" :disabled="firmwareUpgrading || firmwareChecking || clientInstalling" @click="upgradeFirmware">
             {{ firmwareUpgrading ? tr('升级中...', 'Updating...') : tr('升级到最新固件', 'Update to Latest Firmware') }}
           </button>
           <div v-if="manualFirmwareUpgrade" class="manual-firmware-download" data-testid="manual-firmware-download">

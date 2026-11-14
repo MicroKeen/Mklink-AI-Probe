@@ -4,7 +4,6 @@
 """
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
 
 from dataclasses import dataclass
 from datetime import datetime
@@ -92,7 +91,7 @@ class FirmwareInfo:
     path: Path
     family: FirmwareFamily = "microlink"
     download_url: str | None = None
-    download_source: Literal["tencent", "github", "gitee"] | None = None
+    download_source: Literal["tencent", "github"] | None = None
     download_urls: dict[str, str] | None = None
     size: int | None = None
     sha256: str | None = None
@@ -260,7 +259,6 @@ def _find_bootloader_disk() -> str | None:
 FIRMWARE_MANIFEST_URLS = {
     "tencent": "https://download.microkeenai.com/mklink/firmware/latest.json",
     "github": "https://raw.githubusercontent.com/MicroKeen/Mklink-AI-Probe/firmware/latest.json",
-    "gitee": "https://gitee.com/Aladdin-Wang/Mklink-AI-Probe/raw/firmware/latest.json",
 }
 FIRMWARE_MANIFEST_SCHEMA = "mklink-firmware-v1"
 # Old clients reject unknown filenames in latest.json. Never add V2 to it.
@@ -299,7 +297,7 @@ def _parse_manifest(payload: object) -> list[FirmwareInfo]:
             raise ValueError("invalid firmware manifest entry")
         clean_urls = {
             source: str(urls[source])
-            for source in ("tencent", "github", "gitee")
+            for source in ("tencent", "github")
             if isinstance(urls.get(source), str)
             and str(urls[source]).startswith("https://")
         }
@@ -327,7 +325,7 @@ def _parse_manifest(payload: object) -> list[FirmwareInfo]:
 
 
 def _remote_firmwares_from_source(
-    source: Literal["tencent", "github", "gitee"], *, timeout: float = 8.0, v2: bool = False,
+    source: Literal["tencent", "github"], *, timeout: float = 8.0, v2: bool = False,
 ) -> list[FirmwareInfo] | None:
     """Fetch one provider's complete firmware manifest; fail softly."""
     try:
@@ -348,7 +346,7 @@ def _remote_firmwares_from_source(
 
 def _remote_firmware_from_source(
     model: str,
-    source: Literal["tencent", "github", "gitee"],
+    source: Literal["tencent", "github"],
     *,
     family: FirmwareFamily = "microlink",
     timeout: float = 8.0,
@@ -381,19 +379,22 @@ def _remote_firmware(
     return None
 
 
-def _remote_firmwares(*, timeout: float = 8.0, v2: bool = False) -> list[FirmwareInfo] | None:
-    """Compare both trusted mirrors so a lagging successful mirror cannot pin updates."""
-    sources = ("tencent", "github", "gitee")
-    with ThreadPoolExecutor(max_workers=len(sources)) as executor:
-        results = list(executor.map(
-            lambda source: (_remote_firmwares_from_source(source, timeout=timeout, v2=True)
-                            if v2 else _remote_firmwares_from_source(source, timeout=timeout)), sources,
-        ))
-    pinned = [item for item in bundled_firmwares() if (item.model == 'V2') == v2]
-    if all(entries is None for entries in results) and not pinned:
+def _remote_firmwares(*, timeout: float = 8.0, v2: bool = False,
+                      include_bundled: bool = True) -> list[FirmwareInfo] | None:
+    """Use Tencent first; contact GitHub only when that index is unavailable."""
+    results = []
+    for source in ("tencent", "github"):
+        entries = (_remote_firmwares_from_source(source, timeout=timeout, v2=True)
+                   if v2 else _remote_firmwares_from_source(source, timeout=timeout))
+        results.append((source, entries))
+        if entries is not None:
+            break
+    pinned = ([item for item in bundled_firmwares() if (item.model == 'V2') == v2]
+              if include_bundled else [])
+    if all(entries is None for _, entries in results) and not pinned:
         return None
     latest = {}
-    for source, entries in [*zip(sources, results), ('tencent', pinned)]:
+    for source, entries in [*results, ('tencent', pinned)]:
         for info in entries or []:
             key = (info.family, info.model)
             previous = latest.get(key)
@@ -419,11 +420,13 @@ def _materialize_firmware(info: FirmwareInfo) -> tuple[Path, bool, str]:
         os.close(handle)
         destination = Path(raw_path)
         preferred = info.download_source or "github"
-        downloads: list[tuple[str, str]] = [(preferred, info.download_url)]
-        for source in ("tencent", "github", "gitee"):
+        downloads: list[tuple[str, str]] = []
+        for source in ("tencent", "github"):
             url = (info.download_urls or {}).get(source)
             if url and (source, url) not in downloads:
                 downloads.append((source, url))
+        if preferred in ("tencent", "github") and not downloads:
+            downloads.append((preferred, info.download_url))
         attempted_sources: list[str] = []
         last_error: Exception | None = None
         index = 0
@@ -441,18 +444,6 @@ def _materialize_firmware(info: FirmwareInfo) -> tuple[Path, bool, str]:
             except Exception as error:
                 last_error = error
                 destination.unlink(missing_ok=True)
-                if source == "github" and not info.download_urls:
-                    if "gitee" not in attempted_sources:
-                        attempted_sources.append("gitee")
-                    fallback = _remote_firmware_from_source(
-                        info.model, "gitee", family=info.family,
-                    )
-                    if (
-                        fallback is not None
-                        and fallback.version == info.version
-                        and fallback.download_url
-                    ):
-                        downloads.append(("gitee", fallback.download_url))
         destination.unlink(missing_ok=True)
         attempted = "、".join(attempted_sources)
         raise OSError(f"固件下载失败（已尝试 {attempted}）") from last_error
@@ -813,6 +804,18 @@ def parse_probe_version(resp: str) -> Version | None:
     )
 
 
+def cached_probe_version(bridge) -> Version | None:
+    """Read the ordered handshake response, without issuing another command."""
+    from mklink.capture_clock import firmware_lines
+    response = getattr(bridge, '_firmware_version_response', None)
+    if isinstance(response, str):
+        return parse_probe_version(response)
+    # Older transport adapters may expose only a set of capabilities. A set
+    # loses changelog order, so never choose its min/max version as installed.
+    versions = [line for line in firmware_lines(bridge) if re.fullmatch(r'V\d+\.\d+\.\d+', line)]
+    return parse_probe_version(versions[0]) if len(versions) == 1 else None
+
+
 def read_device_version(port: str, *, timeout: float = DEFAULT_VERSION_TIMEOUT) -> Version | None:
     """Read probe firmware version via cmd.get_version().
 
@@ -982,7 +985,7 @@ def check_probe_firmware(
             instructions=(
                 "在线固件索引中没有可用固件"
                 if remote_available
-                else "无法连接腾讯云/GitHub/Gitee 固件通道，且没有本地备用固件"
+                else "无法连接腾讯云/GitHub 固件通道，且没有本地备用固件"
             ),
         )
 

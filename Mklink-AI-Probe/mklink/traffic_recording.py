@@ -20,6 +20,10 @@ class TrafficRecorder:
         self._condition = threading.Condition()
         self._queue = deque()
         self._closing = False
+        self._export = None
+        if kind == 'rtt':
+            from mklink.recording_text import ManualExport
+            self._export = ManualExport(kind)
         self._status = dict(state='recording', active=True, path='', directory=str(directory),
                             samples=0, bytes=0, parts=0, error='', started_at=time.time())
         self._open_part()
@@ -40,7 +44,16 @@ class TrafficRecorder:
 
     def status(self):
         with self._condition:
-            return dict(self._status)
+            result = dict(self._status)
+        if self._export:
+            result.update(self._export.status())
+        return result
+
+    def export(self):
+        if self._export is None:
+            raise ValueError('This recording does not support conversion')
+        self._export.start(self.status())
+        return self.status()
 
     def append(self, source, data, direction, session, timestamp=None, lost_bytes=0):
         if not data:
@@ -127,7 +140,6 @@ class TrafficRecorder:
                 self._status.update(active=False, state='failed' if error else 'completed',
                                     error=error, stopped_at=time.time())
 
-
 class TrafficRecordings:
     """RTT records per channel; serial records all configured ports together."""
     def __init__(self, kind):
@@ -164,6 +176,13 @@ class TrafficRecordings:
         with self._lock:
             recorder = self._recorders.get(self._key(channel))
         return recorder.stop() if recorder else self.status(channel)
+
+    def export(self, path, channel=0):
+        with self._lock:
+            recorder = self._recorders.get(self._key(channel))
+            if recorder is None or recorder.status()['path'] != path:
+                raise RuntimeError('Recording changed; refresh its status before converting')
+            return recorder.export()
 
     def request_stop_all(self):
         with self._lock:

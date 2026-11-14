@@ -8,6 +8,43 @@ import pytest
 SOURCE = Path(__file__).resolve().parents[3] / "mklink/systemview_sources/SEGGER_SYSVIEW_RTThread.c"
 
 
+def test_systemview_lock_masks_high_priority_irq_and_restores_nested_state(tmp_path):
+    cc = shutil.which('gcc') or shutil.which('clang')
+    if not cc:
+        pytest.skip('C compiler required')
+    shutil.copyfile(SOURCE.with_name('SEGGER_SYSVIEW_Conf.h'), tmp_path / 'SEGGER_SYSVIEW_Conf.h')
+    (tmp_path / 'rtthread.h').write_text('''
+#include <assert.h>
+typedef unsigned rt_base_t;
+static unsigned primask;
+static rt_base_t rt_hw_interrupt_disable(void) { unsigned old=primask; primask=1; return old; }
+static void rt_hw_interrupt_enable(rt_base_t old) { primask=old; }
+#define PKG_USING_SYSTEMVIEW
+#define PKG_SEGGER_SYSVIEW_RTT_CHANNEL 2
+''', encoding='utf-8')
+    (tmp_path / 'lock.c').write_text('''
+#include "SEGGER_SYSVIEW_Conf.h"
+static unsigned packet;
+static void high_priority_irq(void) { if (!primask) packet=99; }
+static void record(void) {
+    SEGGER_SYSVIEW_LOCK();
+    packet=42; high_priority_irq(); assert(packet==42);
+    SEGGER_SYSVIEW_LOCK(); high_priority_irq(); assert(primask==1);
+    SEGGER_SYSVIEW_UNLOCK(); assert(primask==1);
+    SEGGER_SYSVIEW_UNLOCK();
+}
+int main(void) {
+    assert(SEGGER_SYSVIEW_RTT_CHANNEL==2);
+    primask=0; record(); assert(primask==0);
+    primask=1; record(); assert(primask==1);
+    return 0;
+}
+''', encoding='utf-8')
+    exe = tmp_path / 'lock.exe'
+    subprocess.run([cc, '-std=c99', '-Wall', '-Werror', str(tmp_path / 'lock.c'), '-o', str(exe)], check=True, capture_output=True)
+    subprocess.run([str(exe)], check=True, capture_output=True)
+
+
 @pytest.mark.parametrize("layout,hooklist,name_size", [
     (40, 0, 8), (41, 0, 8), (50, 0, 8), (51, 0, 8), (51, 1, 8),
     (50, 0, 0), (51, 1, 0),

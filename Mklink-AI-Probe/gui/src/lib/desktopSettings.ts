@@ -22,6 +22,7 @@ export interface DesktopSettings {
   rttAddress: string
   rttEncoding: RttEncoding
   rttHiddenChannels?: number[]
+  systemviewChannel?: number
   transmitMode: RttTransmitMode
   lineEnding: RttLineEnding
   sendHistory: RttSendHistoryEntry[]
@@ -115,6 +116,9 @@ function normalize(value: unknown): DesktopSettings {
     symbolDisplayPath: typeof value.symbolDisplayPath === 'string' ? value.symbolDisplayPath : '',
     rttAddress: isRttAddress(value.rttAddress) ? value.rttAddress : '',
     rttEncoding: isRttEncoding(value.rttEncoding) ? value.rttEncoding : 'utf-8',
+    ...(typeof value.systemviewChannel === 'number' && Number.isInteger(value.systemviewChannel)
+      && value.systemviewChannel >= 0 && value.systemviewChannel < 8
+      ? { systemviewChannel: value.systemviewChannel } : {}),
     ...(Array.isArray(value.rttHiddenChannels) ? {
       rttHiddenChannels: [...new Set(value.rttHiddenChannels.filter((ch): ch is number =>
         Number.isInteger(ch) && ch >= 0 && ch < 8))],

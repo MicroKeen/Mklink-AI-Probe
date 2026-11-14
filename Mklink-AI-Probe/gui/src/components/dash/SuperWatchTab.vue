@@ -31,6 +31,12 @@
       :title="tr('拖动或使用方向键调整目录宽度', 'Drag or use arrow keys to resize catalog')"
       @mousedown.prevent="startResize" @keydown="resizeByKey"></div>
     <div class="waveform-pane">
+      <div v-if="watchProfile.profile.value?.path" class="profile-status" :title="watchProfile.profile.value.path">
+        {{ watchProfile.saving.value ? tr('配置保存中', 'Saving settings') : tr('随 AXF/ELF 保存配置', 'Settings beside AXF/ELF') }}
+        <span v-if="watchProfile.error.value" role="alert">{{ tr('配置未保存：', 'Settings not saved: ') }}{{ watchProfile.error.value }}</span>
+        <span v-if="watchProfile.profile.value.missing.length">{{ tr('当前符号中未找到：', 'Unavailable symbols: ') }}{{ watchProfile.profile.value.missing.join(', ') }}</span>
+        <button class="panel-btn" @click="watchProfile.load()">{{ tr('刷新配置', 'Reload settings') }}</button>
+      </div>
       <WaveformViewer
         mode="SuperWatch"
         :device-connected="deviceConnected"
@@ -51,13 +57,14 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
+import { onBeforeUnmount, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import SymbolVariablePanel from './SymbolVariablePanel.vue'
 import PeripheralWatchPanel from './PeripheralWatchPanel.vue'
 import WaveformViewer from './WaveformViewer.vue'
 import { tr } from '../../composables/useLanguage'
 import { API_BASE } from '../../lib/runtimeEndpoint'
 import { DESKTOP_SETTINGS_STORAGE_KEY } from '../../lib/desktopSettings'
+import { flushWatchProfile, useWatchProfile } from '../../composables/useWatchProfile'
 
 const props = withDefaults(defineProps<{
   deviceConnected: boolean
@@ -89,6 +96,10 @@ function setReplayVisibility(name: string, visible: boolean) {
   replayHidden.value = hidden
 }
 const hiddenChannels = shallowRef(new Set<string>())
+const watchProfile = useWatchProfile()
+let profileTimer: ReturnType<typeof setInterval> | undefined
+onMounted(() => { void watchProfile.load(); profileTimer = setInterval(() => void watchProfile.load(), 2000) })
+onBeforeUnmount(() => { clearInterval(profileTimer); void flushWatchProfile() })
 const layoutStorageKey = DESKTOP_SETTINGS_STORAGE_KEY + '.superwatch-layout'
 try {
   const saved = JSON.parse(localStorage.getItem(layoutStorageKey) || '{}')
@@ -96,7 +107,15 @@ try {
   if (saved?.source === 'variables' || saved?.source === 'peripherals') source.value = saved.source
   if (Array.isArray(saved?.hidden)) hiddenChannels.value = new Set(saved.hidden.filter((name: unknown) => typeof name === 'string').slice(0, 256))
 } catch { /* Local preferences are optional. */ }
+watch(() => watchProfile.profile.value?.layout.revision, () => {
+  const saved = watchProfile.profile.value?.layout.layout
+  if (!saved || !watchProfile.profile.value?.path || watchProfile.profile.value.available === false) return
+  panelWidth.value = clampPanelWidth(saved.panelWidth)
+  source.value = saved.source
+  hiddenChannels.value = new Set(saved.hidden)
+}, { immediate: true })
 watch([panelWidth, source, hiddenChannels], () => {
+  watchProfile.scheduleLayout({ panelWidth: panelWidth.value, source: source.value, hidden: [...hiddenChannels.value] })
   try {
     localStorage.setItem(layoutStorageKey, JSON.stringify({ panelWidth: panelWidth.value, source: source.value,
       hidden: [...hiddenChannels.value] }))
@@ -165,10 +184,6 @@ onUnmounted(() => {
 })
 
 async function loadSnapshotSelection(): Promise<void> {
-  if (!props.deviceConnected) {
-    snapshotPath.value = null
-    return
-  }
   try {
     const response = await fetch(`${API_BASE}/api/dash/superwatch/array-snapshot`)
     if (!response.ok) return
@@ -179,7 +194,11 @@ async function loadSnapshotSelection(): Promise<void> {
   }
 }
 
-onMounted(loadSnapshotSelection)
+onMounted(() => {
+  void loadSnapshotSelection()
+  window.addEventListener('mklink:watch-profile-loaded', loadSnapshotSelection)
+})
+onUnmounted(() => window.removeEventListener('mklink:watch-profile-loaded', loadSnapshotSelection))
 watch(() => props.deviceConnected, loadSnapshotSelection)
 </script>
 
@@ -216,6 +235,8 @@ watch(() => props.deviceConnected, loadSnapshotSelection)
   overflow: hidden;
 }
 .waveform-pane > :last-child { flex: 1; min-height: 0; }
+.profile-status { display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:4px 8px; color:var(--muted); font-size:12px; }
+.profile-status [role="alert"] { color:var(--danger, #f87e66); }
 
 @media (max-width: 760px) {
   .superwatch-workspace {

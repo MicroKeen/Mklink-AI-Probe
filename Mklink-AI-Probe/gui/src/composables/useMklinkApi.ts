@@ -1,5 +1,6 @@
 import { ref, readonly } from 'vue'
 import { tr } from './useLanguage'
+import { flushWatchProfile, useWatchProfile } from './useWatchProfile'
 import { recordStatusFailure, recordStatusRestored } from '../lib/connectionDiagnostics'
 import type {
   PortInfo,
@@ -123,7 +124,12 @@ export function useMklinkApi() {
         data.append('file', next)
         return api<UploadedFileSource>('/api/files/symbol', { method: 'POST', body: data })
       },
-      reload: (path, expectedPath) => api(`/api/symbols/reload-sources?${new URLSearchParams({ source_path: path, expected_axf: expectedPath })}`, { method: 'POST' }),
+      reload: async (path, expectedPath) => {
+        await flushWatchProfile()
+        const result = await api<{ state?: string; rtt_addr?: string }>(`/api/symbols/reload-sources?${new URLSearchParams({ source_path: path, expected_axf: expectedPath })}`, { method: 'POST' })
+        await useWatchProfile().load()
+        return result
+      },
     })
     return uploaded
   }
@@ -225,11 +231,12 @@ export function useMklinkApi() {
   }
 
   async function connectDevice(req: ConnectRequest): Promise<DeviceStatus> {
+    const { probe, ...connection } = req
     if (sharedRuntime.value) {
       let selection: { switched?: boolean; connection?: DeviceStatus }
       try {
         selection = await api('/api/runtime/select', {
-          method: 'POST', body: JSON.stringify({ port: req.port, connect: req }),
+          method: 'POST', body: JSON.stringify({ probe, port: req.port, connect: connection }),
         })
       } catch (error) {
         // Also clear the old target after a switch whose new connection failed.
@@ -243,7 +250,9 @@ export function useMklinkApi() {
     }
     const result = await api<DeviceStatus>('/api/device/connect', {
       method: 'POST',
-      body: JSON.stringify(req),
+      // Selection has resolved the identity to its current command port. Do
+      // not send a stale COM number back after a USB re-enumeration.
+      body: JSON.stringify(sharedRuntime.value && probe ? { ...connection, port: undefined } : connection),
     })
     await refreshStatus()
     return result
@@ -286,6 +295,7 @@ export function useMklinkApi() {
   }
 
   async function parseAxf(axf?: string, elfBackend?: 'builtin' | 'external') {
+    await flushWatchProfile()
     const result = await api('/api/device/parse-axf', {
       method: 'POST',
       body: JSON.stringify({
@@ -294,6 +304,7 @@ export function useMklinkApi() {
       }),
     })
     await refreshStatus()
+    await useWatchProfile().load()
     return result
   }
 

@@ -26,6 +26,12 @@ LOCAL_IMAGE_INSPECTION_PATHS = frozenset({
     '/api/online-flash/images/inspect',
     '/api/online-flash/images/inspect-path',
 })
+# Closed recording conversion only reads host files. It must not reserve or
+# stop a probe when the next acquisition is already running.
+LOCAL_RECORDING_EXPORT_PATHS = frozenset({
+    '/api/dash/superwatch/recording/export',
+    '/api/dash/rtt/traffic-recording/export',
+})
 active_operation = ContextVar('mklink_runtime_operation', default=None)
 
 
@@ -94,6 +100,7 @@ class RuntimeControl:
         self.last_activity = self.started
         self.inflight_requests = 0
         self.jobs = None
+        self._heartbeat_probe_check = None
 
     @property
     def target_sessions(self):
@@ -199,21 +206,68 @@ class RuntimeControl:
             return None
         return (self.info.get('probe_id'), state.get('device_generation', 0), id(device), id(bridge), token)
 
-    def require_identity(self, *, reconnect=False, memory_snapshot=False):
+    def require_identity(self, *, reconnect=False, memory_snapshot=False, probes=None, observed_at=None):
         if not self.info.get('probe_id'):  # isolated API fixtures
             return
         key = self._memory_identity_key() if memory_snapshot and not reconnect else None
         cached = getattr(self, '_memory_identity_cache', None)
-        if key is not None and cached and cached[0] == key and time.monotonic() < cached[1]:
+        if probes is None and key is not None and cached and cached[0] == key and time.monotonic() < cached[1]:
             return
         self._memory_identity_cache = None
-        presence = self.presence()
+        presence = self.presence() if probes is None else self._record_presence(probes)
         if presence['status'] != 'present' and not (reconnect and presence['status'] == 'port_changed'):
             raise HTTPException(409, {'reason': presence['status'], 'message': 'Bound probe unavailable or port changed; release the old connection and reconnect this same identity explicitly'})
         if key is not None and key == self._memory_identity_key():
             # A short cache is scoped to the unchanged, continuously owned CDC
             # handle. Lifecycle/probe operations always perform full discovery.
-            self._memory_identity_cache = (key, time.monotonic() + 0.25)
+            self._memory_identity_cache = (key, (time.monotonic() if observed_at is None else observed_at) + 0.25)
+        return presence
+
+    def identity_stamp(self):
+        state = self.app.state.mklink_state
+        device = state.get('device')
+        return (self.info.get('probe_id'), state.get('device_generation', 0), id(device),
+                getattr(device, 'port', None), getattr(device, 'connected', False),
+                self._memory_identity_key())
+
+    async def require_identity_async(self, *, reconnect=False, memory_snapshot=False):
+        """Keep OS enumeration off the event loop; recheck the connection on return."""
+        if not self.info.get('probe_id'):
+            return
+        key = self._memory_identity_key() if memory_snapshot and not reconnect else None
+        cached = getattr(self, '_memory_identity_cache', None)
+        if key is not None and cached and cached[0] == key and time.monotonic() < cached[1]:
+            return
+        from mklink.probes import inventory
+        stamp, started = self.identity_stamp(), time.monotonic()
+        probes = await asyncio.to_thread(inventory)
+        if stamp != self.identity_stamp():
+            raise HTTPException(409, 'Device connection changed during discovery; retry explicitly')
+        return self.require_identity(reconnect=reconnect, memory_snapshot=memory_snapshot,
+                                     probes=probes, observed_at=started)
+
+    async def heartbeat_presence(self):
+        """Bound renewal latency and share one passive check across pending heartbeats.
+
+        A slow check cannot authorize hardware: each operation still has its own
+        identity admission. Results from an old connection/observation are discarded.
+        """
+        from mklink.probes import inventory
+        pending = self._heartbeat_probe_check
+        if pending is None:
+            task = asyncio.create_task(asyncio.to_thread(inventory))
+            task.add_done_callback(lambda result: None if result.cancelled() else result.exception())
+            pending = (self.identity_stamp(), getattr(self, '_presence_revision', 0), task)
+            self._heartbeat_probe_check = pending
+        stamp, revision, task = pending
+        done, _ = await asyncio.wait([task], timeout=0.5)
+        if not done:
+            return None
+        if self._heartbeat_probe_check is pending:
+            self._heartbeat_probe_check = None
+        if stamp != self.identity_stamp() or revision != getattr(self, '_presence_revision', 0):
+            return None
+        return self._record_presence(task.result())
 
     async def snapshot(self):
         from mklink.capture_clock import sleep_access_status
@@ -280,10 +334,10 @@ class RuntimeControl:
             raise HTTPException(409, 'Symbols changed; reconnect explicitly before reading the new target layout')
         return session
 
-    def require_symbol_change(self, *, stop_acquisition=False):
+    def require_symbol_change(self, *, stop_acquisition=False, identity_checked=False):
         from mklink.remote.dashboards import active_bridge_dashboards
         self.prune()
-        if not stop_acquisition:
+        if not stop_acquisition and not identity_checked:
             self.require_identity()
         if self.target_sessions and not stop_acquisition:
             raise HTTPException(409, 'Detach shared clients before changing symbols')
@@ -297,6 +351,8 @@ class RuntimeControl:
         Check and reserve without an await gap. Cancellation retains ownership
         until the worker settles; no caller may bypass this by invoking a handler.
         """
+        if configuration and name not in {'/api/device/parse-axf', '/api/symbols/reparse', '/api/symbols/reload-sources'}:
+            await self.require_identity_async()
         from mklink.runtime_jobs import executing_job
         own_job = self.jobs and self.jobs.active and executing_job.get() == self.jobs.active['job_id']
         if self.stopping:
@@ -331,7 +387,8 @@ class RuntimeControl:
         if configuration:
             if self.attach_lock.locked():
                 raise HTTPException(409, 'Wait for the attaching client before changing symbols')
-            self.require_symbol_change(stop_acquisition=name in {'/api/device/parse-axf', '/api/symbols/reparse', '/api/symbols/reload-sources'})
+            # Discovery completed before the atomic admission checks above.
+            self.require_symbol_change(stop_acquisition=name in {'/api/device/parse-axf', '/api/symbols/reparse', '/api/symbols/reload-sources'}, identity_checked=True)
         session = self.validate_session(session_id) if session_id else None
         async with self.operation_lock:
             started = time.monotonic()
@@ -400,6 +457,8 @@ class RuntimeControl:
         self.validate_session(session_id, target=capability not in UART_CAPABILITIES)
         arguments = body.get('arguments', {})
         argument_limit = 48 * 1024 if capability == 'flush_memory' else 16 * 1024
+        if capability in {'superwatch_profile_save', 'superwatch_workspace_save', 'superwatch_pins_save'}:
+            argument_limit = 1024 * 1024
         if not isinstance(arguments, dict) or len(json.dumps(arguments)) > argument_limit:
             raise HTTPException(422, f'Arguments must be an object of at most {argument_limit // 1024} KiB')
         return session_id, capability, validate_arguments(capability, arguments)
@@ -507,7 +566,7 @@ class RuntimeGate:
             or path in {"/api/device/core-registers", "/api/device/hardfault", "/api/device/hardfault-detail",
                         "/api/dash/superwatch/inspect", "/api/probe/firmware-check"}
         ) and not path.startswith(("/api/browser-session/", "/api/runtime/"))
-        if not hardware or (method == 'POST' and path in LOCAL_IMAGE_INSPECTION_PATHS):
+        if not hardware or (method == 'POST' and path in LOCAL_IMAGE_INSPECTION_PATHS | LOCAL_RECORDING_EXPORT_PATHS):
             return await self.app(scope, receive, send)
         session_id = headers.get(b"x-mklink-session", b"").decode()
         expected_probe = headers.get(b'x-mklink-probe', b'').decode()
@@ -521,9 +580,12 @@ class RuntimeGate:
             check_connection()
         except HTTPException as exc:
             return await reject(exc.status_code, exc.detail)
-        if path == '/api/device/disconnect':
+        if path in {'/api/device/disconnect', '/api/device/reboot'}:
             async def disconnect():
                 check_connection()
+                if path == '/api/device/reboot':
+                    await c.require_identity_async()
+                    check_connection()
                 return await self.app(scope, receive, send)
             try:
                 return await c.run_lifecycle(path, disconnect, session_id=session_id)
@@ -543,16 +605,16 @@ class RuntimeGate:
             return await reject(409, 'An exclusive job is active; inspect its result before further hardware operations')
         from mklink.probes import select_probe
         from mklink.runtime import RuntimeErrorResponse
-        local_symbols = path in {'/api/device/parse-axf', '/api/dash/superwatch/add', '/api/dash/superwatch/remove', '/api/dash/superwatch/workspace'}
+        local_symbols = path in {'/api/device/parse-axf', '/api/dash/superwatch/add', '/api/dash/superwatch/remove', '/api/dash/superwatch/workspace', '/api/dash/superwatch/pins', '/api/dash/superwatch/profile'}
         if (path.startswith(('/api/device/', '/api/dash/', '/api/probe/')) or path == '/api/mcu-detect') and not path.endswith(('/stop', '/disconnect')) and path != '/api/probe/firmware-upgrade' and not local_symbols:
             try:
                 from mklink.runtime_capabilities import MUX_MEMORY_PATHS
-                c.require_identity(reconnect=path == '/api/device/connect', memory_snapshot=path in MUX_MEMORY_PATHS)
+                await c.require_identity_async(reconnect=path == '/api/device/connect', memory_snapshot=path in MUX_MEMORY_PATHS)
             except HTTPException as exc:
                 return await reject(exc.status_code, exc.detail)
         if path in {'/api/offline-download/deploy', '/api/offline-download/trigger', '/api/offline-download/trigger-job', '/api/offline-download/algorithm'}:
             try:
-                c.require_identity()
+                await c.require_identity_async()
                 from mklink.probe_volumes import resolve_volume
                 await asyncio.to_thread(resolve_volume, c.info.get('probe_id'))
             except (RuntimeError, HTTPException) as exc:
@@ -568,7 +630,7 @@ class RuntimeGate:
         if online_flash or validated_capability:
             if online_flash:
                 try:
-                    selected = select_probe(c.info.get("probe_id"))
+                    selected = await asyncio.to_thread(select_probe, c.info.get("probe_id"))
                 except RuntimeErrorResponse as exc:
                     return await reject(409, str(exc))
             if memory_call is not None:
@@ -618,7 +680,7 @@ class RuntimeGate:
                 c.attach_lock.locked() or any(key != session_id for key in c.target_sessions)):
             return await reject(409, 'Detach other shared clients before changing the peripheral catalog')
         if path in {"/api/symbols/c-layout",
-                    "/api/device/reboot", "/api/probe/firmware-upgrade"} and (c.target_sessions or c.attach_lock.locked()):
+                    "/api/probe/firmware-upgrade"} and (c.target_sessions or c.attach_lock.locked()):
             return await reject(409, {
                 'reason': 'shared_clients_attached',
                 'message': 'Other runtime clients are attached; open Backend Management to end their sessions before releasing the shared device',
@@ -639,17 +701,18 @@ class RuntimeGate:
         # Download operations temporarily yield captures inside shared admission.
         from mklink.remote.dashboards import BRIDGE_DASHBOARD_TYPES, active_bridge_dashboards
         active = active_bridge_dashboards()
-        from mklink.runtime_capabilities import multiplex_captures, MUX_MEMORY_PATHS, capture_reset_supported
+        from mklink.runtime_capabilities import multiplex_captures, MUX_MEMORY_PATHS, capture_reset_supported, capture_reset_hint, capture_firmware_warning
         mux_active = multiplex_captures(c.app.state.mklink_state, active)
         if path in {f"/api/dash/{name}/start" for name in BRIDGE_DASHBOARD_TYPES}:
             requested = path.split('/')[-2]
             if active and not multiplex_captures(c.app.state.mklink_state, [*active, requested]):
-                return await reject(409, "A CDC acquisition is already running; subscribe to its cached data or stop it explicitly")
+                return await reject(409, capture_firmware_warning(c.app.state.mklink_state, [*active, requested])
+                                    or "A CDC acquisition is already running; subscribe to its cached data or stop it explicitly")
         if (path.startswith(("/api/device/", "/api/probe/")) and path not in {"/api/device/connect", "/api/device/flash", "/api/device/parse-axf"}) or path in {'/api/dash/superwatch/inspect', '/api/mcu-detect'}:
             sharing_reset = path == '/api/device/reset' and capture_reset_supported(c.app.state.mklink_state, active)
             if active and not ((mux_active and path in MUX_MEMORY_PATHS) or sharing_reset):
                 if path == '/api/device/reset':
-                    return await reject(409, 'In-stream software reset is unavailable for this firmware or capture transport; acquisition was left running')
+                    return await reject(409, capture_reset_hint(c.app.state.mklink_state, active))
                 return await reject(409, {"busy": active, "hint": "Read a shared dashboard snapshot or explicitly stop acquisition first"})
         async def observe(message):
             if message['type'] == 'http.response.start':
@@ -806,9 +869,11 @@ fetch('/_runtime/login', {method:'POST', headers:{'Content-Type':'application/js
         async with control.attach_lock:
             if control.lifecycle_pending or control.operation_lock.locked() or control.job_busy():
                 raise HTTPException(409, 'Wait for the active operation before attaching a client')
-            control.require_identity(reconnect=True)
+            presence = await control.require_identity_async(reconnect=True)
+            if control.lifecycle_pending or control.operation_lock.locked() or control.job_busy():
+                raise HTTPException(409, 'Wait for the active operation before attaching a client')
             dev = state.get("device")
-            port_changed = info.get('probe_id') and control.presence()['status'] == 'port_changed'
+            port_changed = presence and presence['status'] == 'port_changed'
             if dev and dev.connected and not port_changed:
                 if body.get("port") and body["port"].casefold() != dev.port.casefold():
                     raise HTTPException(409, "Runtime already owns a different probe")
@@ -826,7 +891,7 @@ fetch('/_runtime/login', {method:'POST', headers:{'Content-Type':'application/js
                     from mklink.probes import select_probe
                     from mklink.runtime import RuntimeErrorResponse
                     try:
-                        selected = select_probe(body.get("port") or info["probe_id"])
+                        selected = await asyncio.to_thread(select_probe, body.get("port") or info["probe_id"])
                     except RuntimeErrorResponse as exc:
                         raise HTTPException(409, str(exc)) from exc
                     if selected["probe_id"] != info["probe_id"]:
@@ -846,7 +911,10 @@ fetch('/_runtime/login', {method:'POST', headers:{'Content-Type':'application/js
                     or control.recovery.retains_session())
         if session.scope != 'target' or transitioning():
             return {"ok": True}
-        presence = await asyncio.to_thread(control.presence) if info.get('probe_id') else None
+        presence = await control.heartbeat_presence() if info.get('probe_id') else None
+        # Never resurrect a detached or expired lease after slow discovery.
+        if control.sessions.get(body['session_id']) is not session or session.expires <= time.monotonic():
+            raise HTTPException(409, 'Session expired or detached; connect again')
         device = state.get('device')
         if not transitioning() and (
                 (device is None or not device.connected)

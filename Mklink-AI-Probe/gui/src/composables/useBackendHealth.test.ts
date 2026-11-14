@@ -60,4 +60,50 @@ describe('useBackendHealth startup lifecycle', () => {
     expect(health.backendState.value).toBe('dead')
     expect(health.authenticationRequired.value).toBe(true)
   })
+
+  it('shares slow startup polls and manual checks without overlapping requests', async () => {
+    vi.useFakeTimers()
+    let resolve!: (response: Response) => void
+    const fetchMock = vi.fn(() => new Promise<Response>(done => { resolve = done }))
+    vi.stubGlobal('fetch', fetchMock)
+    const health = (await import('./useBackendHealth')).useBackendHealth()
+    health.startHealthPolling()
+    await vi.advanceTimersByTimeAsync(2000)
+    const manual = health.refreshHealth()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    resolve(Response.json({ status: 'ok', shared_runtime: true }))
+    await manual
+    expect(health.backendState.value).toBe('alive')
+    health.stopHealthPolling()
+  })
+
+  it('ignores a late failure after polling has been replaced', async () => {
+    let fail!: (error: Error) => void
+    const fetchMock = vi.fn()
+      .mockImplementationOnce(() => new Promise((_resolve, reject) => { fail = reject }))
+      .mockResolvedValueOnce(Response.json({ status: 'ok', shared_runtime: true }))
+    vi.stubGlobal('fetch', fetchMock)
+    const health = (await import('./useBackendHealth')).useBackendHealth()
+    const old = health.refreshHealth()
+    health.stopHealthPolling()
+    await health.refreshHealth()
+    fail(new Error('late timeout'))
+    await old
+    expect(health.backendState.value).toBe('alive')
+    expect(health.sharedRuntime.value).toBe(true)
+  })
+
+  it('does not accept an old response after the desktop endpoint changes', async () => {
+    let resolve!: (response: Response) => void
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(done => { resolve = done })))
+    const health = (await import('./useBackendHealth')).useBackendHealth()
+    const old = health.refreshHealth()
+    const runtime = await import('../lib/runtimeEndpoint')
+    runtime.applyBackendEndpoint({ port: 8976, instanceId: 'new' })
+    resolve(Response.json({ status: 'ok', backend_port: 8876, shared_runtime: true }))
+    await old
+    expect(health.backendState.value).toBe('starting')
+    expect(health.backendPort.value).toBe(8976)
+    expect(health.sharedRuntime.value).toBe(false)
+  })
 })

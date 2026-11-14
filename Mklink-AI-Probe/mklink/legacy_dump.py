@@ -43,7 +43,7 @@ class LegacyDumpSession:
                 raise DumpMemoryBusyError('DMPM requires an idle connection; existing streams were not stopped')
             capabilities = bridge._get_firmware_capabilities()
             if not {'DUMP_MEMORY=1', 'DUMP_STOP=1'} <= capabilities:
-                raise DumpMemoryUnsupported('Explicit DMPM capture requires firmware advertising DUMP_MEMORY=1 and DUMP_STOP=1')
+                raise DumpMemoryUnsupported('Explicit DMPM capture requires firmware advertising DUMP_MEMORY=1 and DUMP_STOP=1; 请升级匹配的下载器固件 / upgrade the matching probe firmware')
             bridge._leave_multiplex()
             if not bridge._try_enter_stream(DeviceState.DUMP_STREAM):
                 raise DumpMemoryBusyError('DMPM requires an idle READY bridge')

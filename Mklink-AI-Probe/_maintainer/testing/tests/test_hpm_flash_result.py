@@ -47,14 +47,15 @@ def test_mklink_flash_rejects_non_profile_clock_above_10_mhz():
 
 class _FakeBridge:
     def send_command(self, cmd, timeout=0, echo=False):
-        if cmd.startswith("hpm.board"):
+        if cmd.startswith(("hpm.board", "hpm.flash_cfg")):
             return "board name = hpm5301evklite\n0\n"
         if cmd.startswith("hpm.program"):
             return "0\n"
         raise AssertionError(cmd)
 
 
-def test_hpm_burn_bin_sends_four_word_flash_cfg(tmp_path: Path):
+@pytest.mark.parametrize("board", [None, "hpm5301evklite", "custom_board"])
+def test_hpm_burn_bin_sends_four_word_flash_cfg(tmp_path: Path, board):
     bin_file = tmp_path / "demo.bin"
     bin_file.write_bytes(b"demo")
     commands = []
@@ -74,11 +75,12 @@ def test_hpm_burn_bin_sends_four_word_flash_cfg(tmp_path: Path):
     result = flash.burn_hpm_bin(
         str(bin_file),
         addr="0x80000400",
+        board=board,
         flash_cfg=("0xfcf90001U", "0x00000007U", "0x00000000U", "0xf3040000U"),
     )
 
     assert result["success"] is True
-    assert commands[0] == "hpm.flash_cfg(0xfcf90001U,0x00000007U,0x00000000U,0xf3040000U)"
+    assert commands[0] == "hpm.flash_cfg(0xfcf90001,0x00000007,0x00000000,0xf3040000)"
     assert commands[1] == "hpm.program('demo.bin',0x80000400)"
 
 
