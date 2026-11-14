@@ -18,7 +18,7 @@ export function startSharedRuntimeView(present?: (tab: string) => Promise<void>)
       let message: any
       try { message = JSON.parse(event.data) } catch { return }
       if (!message || typeof message !== 'object' || message.type !== 'present' || typeof message.request_id !== 'string' ||
-          !['superwatch', 'rtt', 'memory', 'symbols', 'hardfault', 'systemview'].includes(message.tab) ||
+          !['workbench', 'superwatch', 'rtt', 'memory', 'symbols', 'hardfault', 'systemview'].includes(message.tab) ||
           typeof message.expires_at !== 'number' || message.expires_at * 1000 < Date.now()) return
       let ok = false
       try { await present(message.tab); ok = true } catch { /* Report failure without replay. */ }

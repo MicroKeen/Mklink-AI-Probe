@@ -13,6 +13,18 @@ beforeEach(() => {
   HTMLDialogElement.prototype.close = vi.fn()
 })
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); document.body.innerHTML = '' })
+it('exposes recording actions without a picker and propagates backend failures without retry', async () => {
+  const request = vi.fn(async (url: string) => ({ ok: !url.endsWith('/start'), status: 409, json: async () => url.endsWith('/start') ? { detail: 'Recording ownership conflict' } : { active: false, state: 'idle', samples: 123 } }))
+  vi.stubGlobal('fetch', request)
+  const wrapper = mount(SuperWatchRecording)
+  await flushPromises()
+  expect(wrapper.vm.catalog().map(action => action.name)).toContain('recording.start')
+  expect(wrapper.vm.read()).not.toHaveProperty('samples')
+  await expect(wrapper.vm.execute('recording.start', { directory: 'D:/logs' })).rejects.toThrow('ownership conflict')
+  expect(request.mock.calls.filter(([url]) => url.endsWith('/start'))).toHaveLength(1)
+  expect(environment.pickDirectory).not.toHaveBeenCalled()
+  wrapper.unmount()
+})
 it('uses one toggle, never starts recording on mount, and stops an existing recording', async () => {
   vi.stubGlobal('localStorage', { getItem: () => null, setItem: vi.fn() })
   const request = vi.fn(async (url: string) => ({ ok: true, json: async () => ({

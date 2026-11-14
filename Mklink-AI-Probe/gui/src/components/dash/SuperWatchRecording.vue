@@ -24,6 +24,7 @@ import { isTauri } from '@tauri-apps/api/core'
 import { API_BASE, IS_REMOTE } from '../../lib/runtimeEndpoint'
 import { pickDirectory } from '../../lib/filePicker'
 import { language } from '../../composables/useLanguage'
+import { domainAction, requireDomain, type DomainArgs } from '../../lib/domainActions'
 const props = withDefaults(defineProps<{ endpoint?: string; name?: string; channel?: number; disabled?: boolean }>(), {
   endpoint: '/api/dash/superwatch/recording', name: 'SuperWatch', channel: 0, disabled: false,
 })
@@ -89,25 +90,46 @@ async function showPicker() {
   } catch (caught) { error.value = String(caught) }
   finally { busy.value = false }
 }
-async function start() {
+async function start(strict: unknown = false) {
   statusGeneration++
   busy.value = true; error.value = ''
   try {
     update(await request(route('start'), { directory: directory.value, ...(props.name === 'SuperWatch' ? {} : { channel: props.channel }) }))
     localStorage.setItem(storageKey, directory.value)
     dialog.value?.close()
-  } catch (caught) { error.value = String(caught) }
+  } catch (caught) { error.value = String(caught); if (strict === true) throw caught }
   finally { busy.value = false }
 }
-async function stop() {
+async function stop(strict: unknown = false) {
   statusGeneration++
   busy.value = true; error.value = ''
   try { update(await request(route('stop'), {})) }
-  catch (caught) { error.value = String(caught) }
+  catch (caught) { error.value = String(caught); if (strict === true) throw caught }
   finally { busy.value = false }
 }
 onMounted(poll)
 onUnmounted(() => { disposed = true; clearTimeout(timer) })
+function catalog() {
+  return [
+    domainAction('recording.refresh', 'Read backend recording progress'),
+    domainAction('recording.start', 'Start recording into a backend-accessible directory', { directory: { type: 'string', maxLength: 4096 } }, ['directory'], 'file'),
+    domainAction('recording.stop', 'Stop and finalize the current recording', {}, [], 'file'),
+  ]
+}
+function read() { return { active: status.value.active, state: status.value.state, path: status.value.path, busy: busy.value, error: error.value || status.value.error, directory: directory.value } }
+async function execute(action: string, args: DomainArgs = {}) {
+  requireDomain(!disposed && !busy.value, 'Recording controls are unavailable or busy')
+  if (action === 'recording.refresh') { update(await request(route('status'))); return { ...read(), progress: { ...status.value } } }
+  else if (action === 'recording.start') {
+    requireDomain(typeof args.directory === 'string' && args.directory.trim(), 'Recording directory cannot be empty')
+    requireDomain(!props.disabled, 'Recording is unavailable while replaying')
+    requireDomain(!status.value.active, 'Recording is already active')
+    directory.value = args.directory; await start(true)
+  } else if (action === 'recording.stop') await stop(true)
+  else throw new Error(`Unknown recording action: ${action}`)
+  return read()
+}
+defineExpose({ catalog, read, execute })
 </script>
 
 <style scoped>

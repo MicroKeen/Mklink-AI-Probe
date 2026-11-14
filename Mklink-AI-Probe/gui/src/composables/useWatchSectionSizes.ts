@@ -23,11 +23,12 @@ export function fitWatchSections(height: number, folded: SectionFolds, preferred
   return { sizes, resizable }
 }
 
-export function useWatchSectionSizes(region: Ref<HTMLElement | null>, folded: SectionFolds) {
+export function useWatchSectionSizes(region: Ref<HTMLElement | null>, folded: SectionFolds, panelId = '') {
+  const instanceStorageKey = storageKey + (panelId ? '.' + panelId : '')
   const preferred = reactive({ ...defaults })
   const height = ref(600)
   try {
-    const saved = JSON.parse(localStorage.getItem(storageKey) || '{}')
+    const saved = JSON.parse(localStorage.getItem(instanceStorageKey) || '{}')
     for (const key of ['signals', 'pinned'] as const) {
       if (Number.isFinite(saved?.[key])) preferred[key] = Math.max(minimum[key], Math.min(4000, saved[key]))
     }
@@ -40,7 +41,7 @@ export function useWatchSectionSizes(region: Ref<HTMLElement | null>, folded: Se
       - keys.reduce((sum, item) => sum + (item === key ? minimum[item] : folded[item] ? 34
         : layout.value.resizable.includes(item as ResizableSection) ? layout.value.sizes[item] : minimum[item]), 0))
   function save() {
-    try { localStorage.setItem(storageKey, JSON.stringify(preferred)) } catch { /* Best effort. */ }
+    try { localStorage.setItem(instanceStorageKey, JSON.stringify(preferred)) } catch { /* Best effort. */ }
   }
   function setSize(key: ResizableSection, size: number) {
     preferred[key] = Math.round(Math.max(minimum[key], Math.min(maxSize(key), size)))
@@ -85,6 +86,10 @@ export function useWatchSectionSizes(region: Ref<HTMLElement | null>, folded: Se
     save()
   }
   function reset() { Object.assign(preferred, defaults); save() }
+  function resize(key: ResizableSection, size: number) { setSize(key, size); save() }
+  function restore(sizes: Partial<Record<ResizableSection, number>>) {
+    for (const key of ['signals', 'pinned'] as const) if (Number.isFinite(sizes[key])) preferred[key] = Math.max(minimum[key], Math.min(4000, sizes[key]!))
+  }
   let observer: ResizeObserver | undefined
   onMounted(() => {
     observer = new ResizeObserver(() => { if (region.value?.clientHeight) height.value = region.value.clientHeight })
@@ -94,5 +99,5 @@ export function useWatchSectionSizes(region: Ref<HTMLElement | null>, folded: Se
     }
   })
   onUnmounted(() => { stop(); observer?.disconnect() })
-  return { layout, style, canResize, maxSize, minimum, start, keyboard, reset }
+  return { layout, style, canResize, maxSize, minimum, start, keyboard, reset, preferred, resize, restore }
 }

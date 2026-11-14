@@ -7,6 +7,15 @@ STREAMS = ('rtt', 'superwatch', 'systemview', 'vofa')
 CAPABILITIES = {
     'gui_windows': ('GET', '/api/runtime/control/windows'),
     'gui_present': ('POST', '/api/runtime/control/present'),
+    'gui_frontend_pages': ('GET', '/api/runtime/frontend/pages'),
+    'gui_frontend_read': ('GET', '/api/runtime/frontend/read'),
+    'gui_frontend_call': ('POST', '/api/runtime/frontend/call'),
+    'gui_frontend_receipt': ('GET', '/api/runtime/frontend/receipt'),
+    'gui_frontend_layout': ('GET', '/api/runtime/frontend/layout'),
+    'gui_frontend_save_layout': ('PUT', '/api/runtime/frontend/layout'),
+    'gui_frontend_intents': ('GET', '/api/runtime/frontend/intents'),
+    'gui_frontend_intent': ('GET', '/api/runtime/frontend/intent'),
+    'gui_frontend_reply': ('POST', '/api/runtime/frontend/reply'),
     'uart_ports': ('GET', '/api/ports/uart'),
     'device_status': ('GET', '/api/device/status'),
     'debug_speed': ('GET', '/api/device/debug-speed'),
@@ -46,8 +55,15 @@ CAPABILITIES = {
     'symbol_search': ('GET', '/api/symbols/search'),
     'symbol_status': ('GET', '/api/symbols/status'),
     'symbol_typeinfo': ('GET', '/api/symbols/typeinfo'),
+    'symbol_reparse': ('POST', '/api/symbols/reparse'),
+    'symbol_reload_sources': ('POST', '/api/symbols/reload-sources'),
+    'symbol_apply_c_layout': ('POST', '/api/symbols/c-layout'),
     'memory_map': ('GET', '/api/device/memory-map'),
     'superwatch_items': ('GET', '/api/dash/superwatch/items'),
+    'superwatch_pins': ('GET', '/api/dash/superwatch/pins'),
+    'superwatch_save_pins': ('PUT', '/api/dash/superwatch/pins'),
+    'superwatch_workspace': ('GET', '/api/dash/superwatch/workspace'),
+    'superwatch_save_workspace': ('PUT', '/api/dash/superwatch/workspace'),
     'superwatch_recording_status': ('GET', '/api/dash/superwatch/recording/status'),
     'superwatch_recording_start': ('POST', '/api/dash/superwatch/recording/start'),
     'superwatch_recording_stop': ('POST', '/api/dash/superwatch/recording/stop'),
@@ -155,12 +171,59 @@ def is_uart_path(path: str) -> bool:
     return path == '/api/ports/uart' or path.startswith(('/api/dash/serial/', '/api/dash/modbus/'))
 
 
-UART_CAPABILITIES = frozenset(name for name, (_, path) in CAPABILITIES.items() if is_uart_path(path)) | {'gui_windows', 'gui_present'}
+UART_CAPABILITIES = frozenset(name for name, (_, path) in CAPABILITIES.items() if is_uart_path(path)) | {
+    'gui_windows', 'gui_present', 'gui_frontend_pages', 'gui_frontend_read', 'gui_frontend_receipt',
+    'gui_frontend_layout', 'gui_frontend_save_layout', 'gui_frontend_intents', 'gui_frontend_intent', 'gui_frontend_reply',
+}
 
 
 def validate_arguments(capability, arguments):
     """Reject malformed/range-overflow writes before a device is touched."""
     arguments = dict(arguments)
+    if capability.startswith('gui_frontend_'):
+        from mklink.frontend_contract import identifier, keys, require, validate_command
+        if capability == 'gui_frontend_call':
+            validate_command(arguments)
+        elif capability == 'gui_frontend_save_layout':
+            from mklink.frontend_layout import normalize_layout
+            normalize_layout(arguments)
+        elif capability in {'gui_frontend_read', 'gui_frontend_receipt', 'gui_frontend_intent'}:
+            key = {'gui_frontend_read': 'page_id', 'gui_frontend_receipt': 'command_id', 'gui_frontend_intent': 'request_id'}[capability]
+            keys(arguments, {key})
+            require(identifier(arguments[key]))
+        elif capability == 'gui_frontend_reply':
+            from mklink.frontend_contract import integer
+            keys(arguments, {'request_id', 'revision', 'reply'})
+            require(identifier(arguments['request_id']) and integer(arguments['revision'])
+                    and isinstance(arguments['reply'], str) and bool(arguments['reply'].strip()) and len(arguments['reply']) <= 16000)
+        else:
+            keys(arguments, set())
+    if capability in {'superwatch_pins', 'superwatch_workspace', 'symbol_reparse'} and arguments:
+        raise HTTPException(422, 'This capability takes no arguments')
+    if capability in {'superwatch_save_pins', 'superwatch_save_workspace'}:
+        from mklink.frontend_contract import keys, require
+        key = 'pins' if capability == 'superwatch_save_pins' else 'workspace'
+        keys(arguments, {key, 'revision'})
+        require(isinstance(arguments['revision'], str) and len(arguments['revision']) == 64)
+        try:
+            if key == 'pins':
+                from mklink.watch_preferences import normalize_pins
+                normalize_pins(arguments[key])
+            else:
+                from mklink.watch_workspace import normalize_workspace
+                normalize_workspace(arguments[key])
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(422, str(exc)) from exc
+    if capability == 'symbol_reload_sources':
+        from mklink.frontend_contract import keys, require
+        keys(arguments, {'source_path', 'expected_axf'}, set())
+        require(all(isinstance(value, str) and 1 <= len(value) <= 4096 for value in arguments.values()))
+    if capability == 'symbol_apply_c_layout':
+        from mklink.frontend_contract import keys, require
+        keys(arguments, {'variable', 'definition', 'pack'}, {'variable', 'definition'})
+        require(isinstance(arguments['variable'], str) and 1 <= len(arguments['variable'].strip()) <= 512
+                and isinstance(arguments['definition'], str) and 1 <= len(arguments['definition']) <= 16000
+                and (arguments.get('pack') is None or type(arguments['pack']) is int and arguments['pack'] in (1, 2, 4, 8, 16)))
     if capability == 'set_sleep_debug' and (set(arguments) != {'enabled'} or type(arguments['enabled']) is not bool):
         raise HTTPException(422, 'Set enabled to true or false for this connection')
     if capability in PROBE_OPERATIONS:

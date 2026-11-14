@@ -12,7 +12,8 @@
         <button :class="{ active: source === 'variables' }" @click="source = 'variables'">{{ tr('程序变量', 'Variables') }}</button>
         <button :class="{ active: source === 'peripherals' }" @click="source = 'peripherals'">{{ tr('芯片外设', 'Peripherals') }}</button>
       </div>
-    <SymbolVariablePanel v-show="!replayChannels && source === 'variables'"
+    <SymbolVariablePanel ref="symbolPanel" v-show="!replayChannels && source === 'variables'"
+      :panel-id="panelId" :view-paths="viewPaths"
       :device-connected="deviceConnected"
       :symbol-loaded="symbolLoaded"
       :symbol-error="symbolError"
@@ -23,7 +24,7 @@
       @selection-removed="clearChannelVisibility"
       @snapshot-change="snapshotPath = $event"
     />
-      <PeripheralWatchPanel v-show="!replayChannels && source === 'peripherals'" :device-connected="deviceConnected" :latest-values="latestValues" />
+      <PeripheralWatchPanel ref="peripheralPanel" v-show="!replayChannels && source === 'peripherals'" :device-connected="deviceConnected" :latest-values="latestValues" />
     </div>
     <div class="workspace-resizer" role="separator" tabindex="0" aria-orientation="vertical"
       :aria-valuenow="panelWidth" :aria-valuemin="280" :aria-valuemax="maxPanelWidth()"
@@ -32,6 +33,7 @@
       @mousedown.prevent="startResize" @keydown="resizeByKey"></div>
     <div class="waveform-pane">
       <WaveformViewer
+        ref="waveformPanel" :panel-id="panelId" :signals="viewPaths"
         mode="SuperWatch"
         :device-connected="deviceConnected"
         :hidden-channels="replayChannels ? replayHidden : hiddenChannels"
@@ -58,17 +60,23 @@ import WaveformViewer from './WaveformViewer.vue'
 import { tr } from '../../composables/useLanguage'
 import { API_BASE } from '../../lib/runtimeEndpoint'
 import { DESKTOP_SETTINGS_STORAGE_KEY } from '../../lib/desktopSettings'
+import { domainAction, pathArg, boolArg, requireDomain, type DomainArgs } from '../../lib/domainActions'
 
 const props = withDefaults(defineProps<{
   deviceConnected: boolean
   symbolLoaded?: boolean
   symbolError?: string
+  panelId?: string
+  viewPaths?: string[]
 }>(), {
   symbolLoaded: true,
   symbolError: '',
 })
 
 const focusMode = ref(false)
+const symbolPanel = ref<InstanceType<typeof SymbolVariablePanel>>()
+const peripheralPanel = ref<InstanceType<typeof PeripheralWatchPanel>>()
+const waveformPanel = ref<InstanceType<typeof WaveformViewer>>()
 function exitFocus(event: KeyboardEvent) { if (event.key === 'Escape') focusMode.value = false }
 onMounted(() => window.addEventListener('keydown', exitFocus))
 onUnmounted(() => window.removeEventListener('keydown', exitFocus))
@@ -89,7 +97,7 @@ function setReplayVisibility(name: string, visible: boolean) {
   replayHidden.value = hidden
 }
 const hiddenChannels = shallowRef(new Set<string>())
-const layoutStorageKey = DESKTOP_SETTINGS_STORAGE_KEY + '.superwatch-layout'
+const layoutStorageKey = DESKTOP_SETTINGS_STORAGE_KEY + '.superwatch-layout' + (props.panelId ? '.' + props.panelId : '')
 try {
   const saved = JSON.parse(localStorage.getItem(layoutStorageKey) || '{}')
   if (Number.isFinite(saved?.panelWidth)) panelWidth.value = Math.max(280, saved.panelWidth)
@@ -181,6 +189,43 @@ async function loadSnapshotSelection(): Promise<void> {
 
 onMounted(loadSnapshotSelection)
 watch(() => props.deviceConnected, loadSnapshotSelection)
+function catalog() {
+  return [
+    domainAction('superwatch.catalog.set', 'Select the variables or peripheral catalog', { source: { type: 'string', enum: ['variables', 'peripherals'] } }, ['source']),
+    domainAction('superwatch.focus', 'Focus or restore this workspace', { focused: boolArg }, ['focused']),
+    domainAction('superwatch.width', 'Set the variable catalog width', { width: { type: 'number', minimum: 280, maximum: 10000 } }, ['width']),
+    domainAction('superwatch.visibility', 'Show or hide a curve without changing acquisition', { path: pathArg, visible: boolArg }, ['path', 'visible']),
+    ...(symbolPanel.value?.catalog?.() || []), ...(peripheralPanel.value?.catalog?.() || []), ...(waveformPanel.value?.catalog?.() || []),
+  ]
+}
+function read() {
+  const symbols = symbolPanel.value?.read?.(), peripherals = peripheralPanel.value?.read?.(), waveform = waveformPanel.value?.read?.()
+  const view = { source: source.value, panelWidth: panelWidth.value, hidden: [...hiddenChannels.value], symbols: symbols?.view, peripherals: peripherals?.view, waveform: waveform?.view }
+  return { view, source: source.value, focused: focusMode.value, panelWidth: panelWidth.value, hidden: [...hiddenChannels.value], snapshotPath: snapshotPath.value, symbols, peripherals, waveform }
+}
+async function execute(action: string, args: DomainArgs = {}) {
+  if (action === 'superwatch.catalog.set') source.value = args.source
+  else if (action === 'superwatch.focus') focusMode.value = args.focused
+  else if (action === 'superwatch.width') panelWidth.value = clampPanelWidth(args.width)
+  else if (action === 'superwatch.visibility') {
+    if (replayChannels.value) { requireDomain(replayChannels.value.includes(args.path), 'Unknown replay channel'); setReplayVisibility(args.path, args.visible) }
+    else { requireDomain(symbolPanel.value?.hasSignal?.(args.path) || peripheralPanel.value?.hasSignal?.(args.path), 'Signal is not selected'); setChannelVisibility(args.path, args.visible) }
+  } else {
+    const target = [symbolPanel.value, peripheralPanel.value, waveformPanel.value].find(panel => panel?.catalog?.().some(item => item.name === action))
+    requireDomain(target, `Action is unavailable: ${action}`)
+    return target.execute(action, args)
+  }
+  return read()
+}
+function restore(view: DomainArgs) {
+  if (view.source === 'variables' || view.source === 'peripherals') source.value = view.source
+  if (Number.isFinite(view.panelWidth)) panelWidth.value = clampPanelWidth(view.panelWidth)
+  if (Array.isArray(view.hidden)) hiddenChannels.value = new Set(view.hidden.filter((path: unknown) => typeof path === 'string').slice(0, 500))
+  if (view.symbols) symbolPanel.value?.restore(view.symbols)
+  if (view.peripherals) peripheralPanel.value?.restore(view.peripherals)
+  if (view.waveform) waveformPanel.value?.restore(view.waveform)
+}
+defineExpose({ catalog, read, execute, restore })
 </script>
 
 <style scoped>

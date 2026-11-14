@@ -32,11 +32,11 @@
             <button :disabled="prefs.busy.value || groups.length === 1" title="删除分组，信号移入第一个分组" @click="remove(group.id)">×</button>
           </template>
         </div>
-        <div v-show="!group.collapsed" v-for="path in group.paths" :key="path" class="selected-signal" :class="{ emphasized: prefs.style(path).emphasis }">
+        <div v-show="!group.collapsed && (!hideRows || !hidden?.has(path))" v-for="path in group.paths" :key="path" class="selected-signal" :class="{ emphasized: prefs.style(path).emphasis }">
           <div class="signal-heading">
             <button class="drag-handle" :aria-label="`移动 ${path} 到分组`" :disabled="!prefs.ready.value" :title="tr('按住拖入目标分组', 'Drag into a group')" @pointerdown="startDrag(path,$event)" @pointermove="dragMove" @pointerup="finishDrag" @pointercancel="cancelDrag" @lostpointercapture="cancelDrag" @dragstart.prevent>⠿</button>
             <input v-if="settings" type="checkbox" :value="path" v-model="checked" :aria-label="`选择 ${path}`" />
-            <button class="signal-visibility" :aria-label="`${hidden?.has(path) ? tr('显示', 'Show') : tr('隐藏', 'Hide')} ${path}`" :aria-pressed="!hidden?.has(path)" :title="tr('显示或隐藏波形', 'Show or hide waveform')" @click="$emit('visibility', path, hidden?.has(path) ?? false)"><EyeOff v-if="hidden?.has(path)" :size="15" aria-hidden="true" /><Eye v-else :size="15" aria-hidden="true" /></button>
+            <button class="signal-visibility" :aria-label="`${hidden?.has(path) ? tr('显示', 'Show') : tr('隐藏', 'Hide')} ${path}`" :aria-pressed="!hidden?.has(path)" :title="hideRows ? tr('显示或隐藏已选变量', 'Show or hide a selected variable') : tr('显示或隐藏波形', 'Show or hide waveform')" @click="$emit('visibility', path, hidden?.has(path) ?? false)"><EyeOff v-if="hidden?.has(path)" :size="15" aria-hidden="true" /><Eye v-else :size="15" aria-hidden="true" /></button>
             <InlineWatchName :value="prefs.style(path).alias" :fallback="path" :title="path" :label="`重命名变量 ${path}`"
               :expanded="$slots.actions ? expandedPath === path : undefined" @actions="$emit('actions', path)"
               :commit="name => prefs.setStyle([path],{alias:name})" /><output>{{ formatValue(values[path]) }}</output>
@@ -62,13 +62,14 @@
 </template>
 <script setup lang="ts">
 import { Eye, EyeOff } from '@lucide/vue'
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useWatchWorkspace } from '../../composables/useWatchWorkspace'
 import InlineWatchName from './InlineWatchName.vue'
 import { tr } from '../../composables/useLanguage'
 import { compileSignalFormula, signalFormula } from '../../lib/signalFormula'
-const props = defineProps<{ paths: string[]; values: Record<string, number | boolean>; hidden?: ReadonlySet<string>; expandedPath?: string }>()
-defineEmits<{ visibility: [path: string, visible: boolean]; actions: [path: string] }>()
+import { domainAction, pathArg, pathsArg, boolArg, requireDomain, type DomainArgs } from '../../lib/domainActions'
+const props = defineProps<{ paths: string[]; values: Record<string, number | boolean>; hidden?: ReadonlySet<string>; expandedPath?: string; hideRows?: boolean }>()
+const emit = defineEmits<{ visibility: [path: string, visible: boolean]; actions: [path: string] }>()
 const prefs = useWatchWorkspace(), settings = ref(false), newName = ref(''), checked = ref<string[]>([])
 const editing = ref(''), formula = ref(''), color = ref('#ef9878'), formulaError = ref('')
 watch(() => props.paths, paths => {
@@ -96,13 +97,14 @@ async function add() {
     for(const path of checked.value.filter(p=>props.paths.includes(p))) w.signals[path]={...prefs.style(path),group:id,pane:id}
   })
   if(saved) {newName.value='';checked.value=[]}
+  return saved
 }
 function toggleStyle(path: string, key: 'emphasis'|'renderMode') { void prefs.update(w=>{const current=w.signals[path] || {...prefs.style(path)}; w.signals[path]={...current,...(key==='emphasis' ? {emphasis:!current.emphasis} : {renderMode:current.renderMode==='points' ? 'line' as const : 'points' as const})} }) }
 function collapse(id: string) { void prefs.update(w => { const g=w.groups.find(g=>g.id===id)!;g.collapsed=!g.collapsed }) }
 async function batch(e: Event) { await prefs.setStyle(checked.value.filter(p=>props.paths.includes(p)),{group:value(e)}); (e.target as HTMLSelectElement).value='' }
 function rename(id: string,name: string) { return prefs.update(w=>{const group=w.groups.find(p=>p.id===id);if(group)group.name=name || group.name}) }
-function remove(id: string) { void prefs.update(w=>{w.groups=w.groups.filter(p=>p.id!==id); if(w.defaultGroup===id)w.defaultGroup=w.groups[0].id; for(const s of Object.values(w.signals)) if(s.group===id){s.group=w.groups[0].id;s.pane=s.group} }) }
-function move(id: string,delta: number) { void prefs.update(w=>{const a=w.groups,index=a.findIndex(g=>g.id===id);const [item]=a.splice(index,1);a.splice(index+delta,0,item)}) }
+function remove(id: string) { return prefs.update(w=>{w.groups=w.groups.filter(p=>p.id!==id); if(w.defaultGroup===id)w.defaultGroup=w.groups[0].id; for(const s of Object.values(w.signals)) if(s.group===id){s.group=w.groups[0].id;s.pane=s.group} }) }
+function move(id: string,delta: number) { return prefs.update(w=>{const a=w.groups,index=a.findIndex(g=>g.id===id);const [item]=a.splice(index,1);a.splice(index+delta,0,item)}) }
 function startDrag(path: string,event: PointerEvent) {
   if(event.button !== 0 || drag || !prefs.ready.value) return
   event.preventDefault()
@@ -137,6 +139,71 @@ function cancelDrag() {
   if(previous?.handle.hasPointerCapture(previous.pointerId))previous.handle.releasePointerCapture(previous.pointerId)
 }
 function cancelDragKey(event: KeyboardEvent) { if(event.key==='Escape')cancelDrag() }
+const groupArg = { type: 'string', maxLength: 128 }
+function semanticCatalog() {
+  return [
+    domainAction('signals.refresh', 'Reload shared groups and signal styles'),
+    domainAction('signals.inspect', 'Read shared groups and a page of selected signal styles', { offset: { type: 'integer', minimum: 0 }, limit: { type: 'integer', minimum: 1, maximum: 100 } }),
+    domainAction('signals.group.add', 'Create a shared waveform group and optionally move signals into it', { name: { type: 'string', maxLength: 128 }, paths: pathsArg }),
+    domainAction('signals.group.rename', 'Rename a shared group', { id: groupArg, name: { type: 'string', maxLength: 128 } }, ['id', 'name']),
+    domainAction('signals.group.remove', 'Remove a group and move its signals into the first group', { id: groupArg }, ['id']),
+    domainAction('signals.group.move', 'Move a group up or down', { id: groupArg, delta: { type: 'integer', enum: [-1, 1] } }, ['id', 'delta']),
+    domainAction('signals.group.merge', 'Merge a group into the default group', { id: groupArg }, ['id']),
+    domainAction('signals.group.split', 'Move a signal to a newly created group', { path: pathArg, name: { type: 'string', maxLength: 128 } }, ['path']),
+    domainAction('signals.group.configure', 'Set shared group collapse or height', { id: groupArg, collapsed: boolArg, height: { type: 'integer', minimum: 80, maximum: 2000 } }, ['id']),
+    domainAction('signals.style.set', 'Set signal alias, color, formula, emphasis, points or group', { paths: pathsArg, alias: { type: 'string', maxLength: 128 }, color: { type: 'string', maxLength: 7 }, formula: { type: 'string', maxLength: 256 }, emphasis: boolArg, renderMode: { type: 'string', enum: ['line', 'points'] }, group: groupArg }, ['paths']),
+    domainAction('signals.visibility.set', props.hideRows ? 'Show or hide a row in this variable panel; does not change any waveform panel or sampling' : 'Show or hide a signal in this waveform view without changing sampling', { path: pathArg, visible: boolArg }, ['path', 'visible']),
+  ]
+}
+function read() {
+  return { view: { organizing: settings.value }, ready: prefs.ready.value, error: prefs.error.value, groupCount: groups.value.length, groups: groups.value.slice(0, 16).map(group => ({ ...group, pathCount: group.paths.length, paths: group.paths.slice(0, 16) })), signalCount: props.paths.length, hidden: [...(props.hidden || [])].slice(0, 64), styles: Object.fromEntries(props.paths.slice(0, 32).map(path => [path, prefs.style(path)])), organizing: settings.value }
+}
+async function execute(action: string, args: DomainArgs = {}) {
+  if (action === 'signals.inspect') {
+    const paths = props.paths.slice(args.offset || 0, (args.offset || 0) + (args.limit || 100))
+    return { groups: JSON.parse(JSON.stringify(prefs.workspace.value.groups)), defaultGroup: prefs.workspace.value.defaultGroup, signalCount: props.paths.length, paths, styles: Object.fromEntries(paths.map(path => [path, prefs.style(path)])) }
+  }
+  if (action === 'signals.refresh') { await prefs.load(); requireDomain(prefs.ready.value, prefs.error.value || 'Workspace unavailable'); return read() }
+  requireDomain(prefs.ready.value, 'Workspace is not ready')
+  const paths: string[] = args.paths || (args.path ? [args.path] : [])
+  requireDomain(paths.every(path => path.trim()) && new Set(paths).size === paths.length, 'Signal paths must be non-empty and unique')
+  requireDomain(paths.every(path => props.paths.includes(path)), 'Signal is not selected in this panel')
+  const group = prefs.workspace.value.groups.find(item => item.id === args.id)
+  if (action.startsWith('signals.group.') && !['signals.group.add', 'signals.group.split'].includes(action)) requireDomain(group, 'Unknown group')
+  let saved: boolean | undefined = true
+  if (action === 'signals.group.add' || action === 'signals.group.split') {
+    requireDomain(prefs.workspace.value.groups.length < 128, 'Group limit reached')
+    checked.value = paths; newName.value = args.name || (action === 'signals.group.split' ? prefs.style(args.path).alias || args.path : '')
+    saved = await add()
+  } else if (action === 'signals.group.rename') { requireDomain(args.name.trim(), 'Group name cannot be empty'); saved = await rename(args.id, args.name) }
+  else if (action === 'signals.group.remove') {
+    requireDomain(prefs.workspace.value.groups.length > 1, 'Cannot remove the final group')
+    saved = await remove(args.id)
+  } else if (action === 'signals.group.move') {
+    const index = prefs.workspace.value.groups.findIndex(item => item.id === args.id)
+    requireDomain(index + args.delta >= 0 && index + args.delta < prefs.workspace.value.groups.length, 'Group is already at that edge')
+    saved = await move(args.id, args.delta)
+  } else if (action === 'signals.group.merge') saved = await prefs.merge(args.id)
+  else if (action === 'signals.group.configure') saved = await prefs.update(w => {
+    const target = w.groups.find(item => item.id === args.id)!
+    if (typeof args.collapsed === 'boolean') target.collapsed = args.collapsed
+    if (args.height !== undefined) target.height = args.height
+  })
+  else if (action === 'signals.style.set') {
+    requireDomain(paths.length, 'Select at least one signal')
+    if (args.color !== undefined) requireDomain(/^#[0-9a-fA-F]{6}$/.test(args.color), 'Color must be a six-digit hex value')
+    if (args.formula !== undefined) compileSignalFormula(args.formula)
+    if (args.group !== undefined) requireDomain(prefs.workspace.value.groups.some(item => item.id === args.group), 'Unknown target group')
+    const patch = Object.fromEntries(['alias', 'color', 'formula', 'emphasis', 'renderMode', 'group'].filter(key => args[key] !== undefined).map(key => [key, args[key]]))
+    saved = await prefs.setStyle(paths, patch)
+  } else if (action === 'signals.visibility.set') emit('visibility', args.path, args.visible)
+  else throw new Error(`Unknown signal action: ${action}`)
+  requireDomain(saved, prefs.error.value || 'Workspace change was not saved')
+  await nextTick()
+  return read()
+}
+function restore(view: DomainArgs) { if (typeof view.organizing === 'boolean') settings.value = view.organizing }
+defineExpose({ catalog: semanticCatalog, read, execute, restore })
 let timer: ReturnType<typeof setInterval>
 onMounted(() => { window.addEventListener('keydown',cancelDragKey); window.addEventListener('blur',cancelDrag); void prefs.load(); timer=setInterval(() => { if (!settings.value) void prefs.load() },3000) })
 onUnmounted(() => {clearInterval(timer);cancelDrag();window.removeEventListener('keydown',cancelDragKey);window.removeEventListener('blur',cancelDrag)})
