@@ -416,6 +416,23 @@ describe('SystemViewTab asynchronous lifecycle', () => {
     wrapper.unmount()
   })
 
+  it('retains the displayed left edge while a short live window follows a newer batch', async () => {
+    mocks.dash.getStatus.mockResolvedValue({ running: false })
+    const wrapper = mount(SystemViewTab, { props: { deviceConnected: true } })
+    await flushPromises()
+    await wrapper.get('.sv-window select').setValue('500000')
+    mocks.timeline.getViewRange.mockReturnValue({ start: 400_000, end: 900_000 })
+    publishVisibleIntervals(1_000_000, 0, 1_000_000, 400_000, 450_000)
+    await nextTick()
+    const painted = mocks.timeline.setPrefilteredIntervals.mock.calls.at(-1)?.[0] as Array<{ start: number }>
+    expect(painted.map(interval => interval.start)).toEqual([400_000])
+    mocks.scheduler.render?.(new Set(['data']))
+    expect(mocks.binary.requestVisibleRange).toHaveBeenLastCalledWith(
+      expect.any(Number), 400_000, 1_000_000, expect.any(Number), undefined, undefined, 200,
+    )
+    wrapper.unmount()
+  })
+
   it('updates its address when RTT View saves a new shared value', async () => {
     const wrapper = mount(SystemViewTab, { props: { deviceConnected: true } })
     await flushPromises()

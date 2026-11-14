@@ -550,6 +550,8 @@ function tlGetIntervals() {
   const manualRange = tlInstance && !tlInstance.follow ? tlInstance.getViewRange() : null
   const visible = manualRange
     ? intervals.value.filter(it => it.end >= manualRange.start && it.start <= manualRange.end)
+    : !offlineMode.value
+    ? intervals.value
     : meta.cpuFreq
     ? filterRangesByWindow(intervals.value, lastT, windowUs.value)
     : intervals.value
@@ -690,7 +692,16 @@ onMounted(() => {
     const windowTicks = meta.cpuFreq
       ? followSpanUs * meta.cpuFreq / 1_000_000
       : followSpanUs
-    const start = latestBinaryTime === null ? 0 : Math.max(0, end - windowTicks)
+    let start = latestBinaryTime === null ? 0 : Math.max(0, end - windowTicks)
+    // Follow animation still displays the preceding range while the new
+    // batch arrives. Include that left edge; cropping at the newest range
+    // would erase data that is still on screen, especially in a 0.5 s view.
+    // Bound the extra history to one window so a delayed frame stays cheap.
+    const displayedStart = tlInstance?.getViewRange?.()?.start
+    if (Number.isFinite(displayedStart)) {
+      start = Math.max(0, end - 2 * windowTicks,
+        Math.min(start, Math.floor(displayedStart! / tickScale)))
+    }
     requestTimelineVisibleRange(start, end, tlCanvas.value?.clientWidth || 800)
   }, undefined, undefined, { frameRate: TIMELINE_STARTUP_FRAME_RATE, continuous: true })
   renderScheduler.start()
