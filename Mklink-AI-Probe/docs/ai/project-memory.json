@@ -1,20 +1,20 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-14T12:22:24+08:00",
+  "updated_at": "2026-11-14T15:01:43+08:00",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.5.0-fixes",
-    "head": "14b86cd0",
-    "remote_head": "14b86cd0",
-    "working_tree": "产品提交 14b86cd0 已推送；本次单独提交验收报告及项目记忆。Windows 已覆盖安装，未合并或发布。"
+    "head": "eeb29e31",
+    "remote_head": "eeb29e31",
+    "working_tree": "产品提交 eeb29e31 已推送；本次单独提交验收报告及项目记忆。Windows 已覆盖安装，未合并或发布。"
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "V0.5.0 / 14b86cd0 强制覆盖安装与 STM32F103 现有连接验收完成，发布门禁仍有未验范围",
-    "current_task": "按用户最终要求，覆盖安装直接结束当前用户旧 MKLink/Skill/MCP，不依赖旧版退出接口，活动任务也会结束。实际普通用户覆盖成功，配置和原工程保留。STM32F103 在线/脱机后各256KiB完整回读一致；SW/RTT写入、手动转换、符号旁配置和冻结CLI/MCP通过。Trace 9任务名、暂停缩放/平移通过，解析丢字节和异常ISR仍在；UART/Modbus未接线等范围不宣称通过。设备/窗口已释放并告知固件会话；包及哈希见[本轮报告](../verification/v050-installer-force-acceptance.md)。未发布。"
+    "status": "V0.5.0 / eeb29e31 SystemView 锁、连续滚动及采集中重启修复，Windows 已覆盖复验",
+    "current_task": "用户授权修改 STM32F103 应用并刷入：RT-Thread IRQ 锁消除 UART5 重入损坏，Trace CH2 缓冲同步为8KiB，新输出已回写原工程并保留备份。最终安装版 RTT/Trace/四变量SW 1ms 共存约60秒、1150742事件、9任务，解析丢字节和目标溢出均0。Timeline连续跟随/左边缘/缩放及三路采集中重启、显式重连通过；1µs极限三路仍有5次目标溢出/895丢包，已同步固件会话。设备与窗口已释放，未发布。见[本轮报告与哈希](../verification/v050-systemview-loss-reboot.md)。"
   },
   "milestones": [
     {
@@ -39,7 +39,7 @@
     },
     {
       "area": "SystemView 重启与时序图缩放",
-      "result": "原修复及软件门禁见[完整报告](../verification/v050-systemview-restart-zoom.md)。14b86cd0安装版/V4.7.4/STM32F103RC：RTT0/1与Trace CH2共存，三次启停各恢复9任务名；原生界面暂停后约38µs视窗缩放、平移通过。解析丢字节34/46/32，较长GUI采集仍有非零丢弃和异常ISR，不保证无损或全部时序统计正确，见[本轮报告](../verification/v050-installer-force-acceptance.md)。"
+      "result": "原元数据修复见[此前报告](../verification/v050-systemview-restart-zoom.md)。本轮证实UART5 0x10可穿透旧BASEPRI 0x20锁，改RT-Thread IRQ保存/恢复后同V4.7.4原始流解析丢字节归0、ISR仅15/69。目标8KiB缓冲；最终安装版三路1ms约60秒1150742事件、9任务且无溢出，1µs仍有895目标丢包。后端259+补充175通过，GUI109文件1271项，最终左边缘修正相关143项及生产构建通过（有重叠）。真实GUI连续滚动、0.5s左边缘、暂停缩放平移、采集中确认重启及重连通过，见[本轮报告与哈希](../verification/v050-systemview-loss-reboot.md)。"
     },
     {
       "area": "固件能力提醒与采集中写入",
@@ -55,7 +55,7 @@
     },
     {
       "area": "Windows 安装与工程初始化",
-      "result": "14b86cd0强制覆盖：旧版正在采集时结束桌面/后台、实际Python Skill及冻结MCP，无关Python保留；约13.44秒、RID8192、3683载荷一致，6配置及USB/机器登记不变。强制脚本4项；Python首轮7136通过/2跳过，元数据和旧HPM断言修正后相关84项及独立包6项通过（重叠）；GUI1270项和生产构建通过。冻结CLI/MCP58工具，Skill2345资源与安装一致。STM32F103在线/脱机各256KiB回读相同，40次MUX写入样本对应，手动Excel347440值一致、配置重载恢复。见[本轮报告](../verification/v050-installer-force-acceptance.md)。前轮历史维护、双V4切换及500ms恢复见[此前报告](../verification/v050-usb-hpm-overwrite.md)。"
+      "result": "eeb29e31普通用户空闲覆盖约13.366秒、RID8192，结束3个旧原生进程和实际Python Skill/冻结MCP，无关Python保留；3683载荷、6配置、USB名称/机器登记核验通过。冻结CLI/58工具MCP/通用project-init、2345个Skill资源一致，正常退出无后台残留，见[本轮报告与哈希](../verification/v050-systemview-loss-reboot.md)。前轮活动强制覆盖、全量软件及STM32F103在线/脱机/写入/Excel证据见[前轮报告](../verification/v050-installer-force-acceptance.md)；双V4与500ms恢复见[此前报告](../verification/v050-usb-hpm-overwrite.md)。"
     },
     {
       "area": "V3 / V4 SuperWatch 恢复",
@@ -63,7 +63,7 @@
     }
   ],
   "decisions": [
-    "采集或调试改动须按[上位机基线](../verification/v043-host-baseline.md)同条件复测 SuperWatch、RTT 和调试共存，核对数据完整性。 SystemView 每次附着刷新 INIT/任务列表，通道以显式选择及后台状态为准；暂停显示仍可缩放，视窗查询合并且不暂停采集。",
+    "采集或调试改动须按[上位机基线](../verification/v043-host-baseline.md)同条件核对数据完整性和性能。SystemView每次附着刷新INIT/任务列表，按实际通道，不猜选；RT-Thread模板锁覆盖可记录的高优先级IRQ，保留嵌套掩码。时间窗口仅控制可视跨度，连续跟随不补造事件；统计限频不影响精确检查，暂停显示仍可缩放且不暂停采集。用户显式重启所选MKLink时停止其采集、重启一次并退役会话/释放占用，其他探针与独立UART隔离，不自动重连或重放。",
     "默认仅构建 Windows。用 PowerShell 7、UTF-8 和 `scripts/build_workspace.ps1`，构建根为 `F:/MKLink-Build`。",
     "Windows NSIS默认currentUser；不自动命名USB端口，只有用户确认修改/恢复名称才调用UAC助手。按2026-11-14最终指令，覆盖安装直接强制结束当前用户MKLink桌面/共享后台/Skill/MCP及其WebView，含活动任务，不依赖旧版API，不杀AI宿主或无关Python；无权限时明确失败，不自动提权。旧机器级登记/受保护目录不自动迁移。损坏历史仍原样备份核验后初始化；有效未知结果不清空，权限/占用/链接异常跳过，不重放旧操作。",
     "后续发布只到腾讯云和 MicroKeen/Mklink-AI-Probe GitHub，Gitee 与旧 GitHub 保留历史，不上传新附件/标签/索引。AI / Skill / 固件按腾讯云、GitHub 顺序回退，不并发查询；备用 Skill 文件须匹配所选版本、大小、SHA-256。上海服务器直供最新版，COS/Git 存历史；COS 189 GiB 告警、207.9 GiB 停止，无日期截止。见[下载策略](tencent-updates.md)。",
@@ -76,7 +76,7 @@
   ],
   "hardware": {
     "操作前": "重新核对下载器型号、目标和占用。固件变更由指定会话协调，升降级按本次授权执行。VCC、OTP 操作分别确认。",
-    "普通 V4": "固件会话交回V4.7.4 / 2026-11-14 11:33:15，STM32F103RC；上位机14b86cd0同固件安装前后短测SW约15.793kHz、与RTT共存约13.816kHz，40次写入对应。在线/脱机各256KiB回读与原Flash相同，AXF117760字节匹配；原工程/符号旁配置保留。所有采集已停止、设备正常断开、窗口/后台退出并已告知固件会话；操作前重新核对占用。",
+    "普通 V4": "仍为V4.7.4 / 2026-11-14 11:33:15，STM32F103RC。用户授权目标SystemView改IRQ锁及8KiB缓冲，重编刷入；AXF117760字节与回读一致，完整256KiB验证保留引导区/非写入扇区。原输出和Flash已备份，新AXF/HEX/BIN回写原工程，符号旁配置不变。eeb29e31安装版RTT/Trace/SW 1ms约60秒1150742事件无解析丢弃或目标溢出；三路重启后显式重连读ID成功。全部采集正常停止、断开、窗口/后台退出，已同步固件会话释放；下次重新核对占用。",
     "普通 V3": "固件会话已回读 V3.6.10 / 2026-11-10T14:14:14，原 STM32F103 的一次 SWCLK 拔插恢复通过；测试结束时后台退出、设备释放。下次仍需重新核对占用。",
     "普通 V2": "2026-11-13 提醒验证时实际仅接入一只 V2.9.4，无产品标识。当前版本取首行而非历史版本，真实云端返回 V2.9.3，未提示降级；正常分离后后台退出释放设备。未刷写、改电源或目标程序，未启动采集；下次操作重新核对占用。",
     "HPMLink V4": "固件会话本轮交回V4.7.4 / 2026-11-14 11:35:00，HPM5301；上位机本轮未占用或改目标。前轮db81241d JTAG10MHz/flash_cfg在线脱机与52988字节回读证据见[覆盖报告](../verification/v050-usb-hpm-overwrite.md)。固件会话RS485互测是单独证据，10Mbps大帧边界仍保留；下一轮重新核对接线/固件/占用。"
@@ -88,13 +88,13 @@
     "Mac ARM/Intel DMG 是 0.4.3 标记的未公证候选，未做 Finder 覆盖安装、Gatekeeper、原生窗口及 macOS 27 真机 USB 验收。Mac 修复轮未覆盖安装 Windows，也未做新的硬件吞吐/P95/调试共存 A/B；客户 ioreg 3.7→0.15 秒未独立复现。",
     "客户旧版长停流未复现；14b86cd0同固件安装前后短测SW单独约15.793kHz、RTT共存约13.816kHz，40次写入无序号/读错，但不能证明所有负载零退化。普通HTTP读取P95含代理约4.463/4.921ms。未完成外部调试器共存、全部性能目标、8通道字节全量或长期压力。用户确认UART/RS485未接，本轮串口/Modbus未验。签名自动更新和重启未验；覆盖安装按明确要求会中断活动任务，普通用户无法结束管理员进程或突破目录权限。",
     "STOP 案例中，V4 源码确认 0x17 重连失败会误报 6；固件会话提供修正为 5 的独立补丁和离线证据，尚未应用或刷写。客户固件版本、完整芯片型号与电气条件未齐备；持续 STOP 的调试访问不保证可唤醒，status 5 可能包含恢复未确认。",
-    "客户 SystemView 完全丢名未在 STM32F103RC 基线复现，客户芯片/RTOS 尚未确认，HPM/FreeRTOS 实物未验。短测解析器仍有对齐丢字节，长 GUI 采集偶见不合理 ISR/运行片段；需要原始流另查，当前修复不证明所有时序统计正确。",
+    "STM32F103RC旧锁导致的SystemView解析丢字节/异常ISR已修复；客户丢名是否同根因仍需芯片、RTOS、通道和原始流。1µs四变量SW+RTT+Trace约60秒仍有5次目标溢出/895丢包，MUX/主机队列0，未定位极限调度瓶颈，不自动降采样。多视图长采集中健康提示曾暂时离线后恢复，Trace无解析损坏；未证明长期低延迟或恒定60FPS。HPM/FreeRTOS实物、NMI记录和全部性能门禁未验。",
     "ELF与34档波特率已在Windows候选包含；客户ELF仅离线解析/配置，未操作客户板。Mac旧候选不含后续修复。本轮没有高速串口/Modbus物理验收；固件会话RS485双V4测试不等同本轮/客户快速应答验证，10Mbps大帧丢包边界仍保留，第三方驱动可拒绝高档位。"
   ],
   "next_actions": [
-    "继续审阅PR #79；最新Windows候选/完整Skill为V0.5.0 / 14b86cd0，见[报告与哈希](../verification/v050-installer-force-acceptance.md)。仅现有STM32F103连接范围验收，不宣称全功能发布门禁全部通过。UART/RS485/Modbus待接线；外部调试器共存、VOFA专用流、长期性能等未验。HPM多板循环首次断开计数路径待单独检查，OTP永久操作需具体确认。未发布，签名/发布仍须授权。",
+    "继续审阅PR #79；最新Windows候选/完整Skill为V0.5.0 / eeb29e31，见[本轮报告与哈希](../verification/v050-systemview-loss-reboot.md)。仅STM32F103现有接线及受影响界面验收；UART/RS485/Modbus、外部调试器、VOFA专用流与长期性能等未验，不宣称完整发布门禁通过。HPM多板循环首次断开计数待查，OTP永久操作需具体确认。未发布，签名/发布仍须授权。",
     "客户可直接运行新版覆盖安装器，自动结束当前用户旧MKLink与Skill/MCP，不要求手动先关旧版；活动任务会结束。安装后AI宿主需重新加载被结束的MCP。损坏历史备份保留，仍失败时收集installation-history-report.json、history-backups和诊断包，区分权限/占用/格式；不手工删除有效未知结果，不重放烧录。",
-    "取得客户目标芯片、RTOS 和原始 SystemView 流后，确认其丢名是否命中元数据/通道修复，并单独排查解析对齐及异常运行片段；不把现有板测试扩大为所有平台保证。",
+    "客户SystemView先核对实际CH、目标IRQ锁及元数据，结合芯片/RTOS和原始流确认，不能把本板结果扩大为所有平台保证。与固件会话继续查1µs三路极限采集的RTT/watch公平性及背压；多视图健康提示短暂离线需独立量化。保留本轮目标构建快照供AXF源码路径使用，用户重新编译原工程后再清理。",
     "在用户 Mac 上验收对应 ARM/Intel 候选的首次启动、覆盖安装、探针接口/卷身份和真实查询耗时，再核对共享会话及 MCP 重载。当前软件与包内自检不替代真实环境门禁。",
     "固件会话继续维护 STOP 状态码补丁；客户信息齐备并获得明确实物安排后再做同条件 STOP/唤醒验证，不自动抢占调试器或刷写设备。"
   ],
