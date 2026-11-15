@@ -6,11 +6,11 @@
 
 - 更新时间：`2026-11-15`
 - 分支：`codex/agent-ui-workbench`
-- HEAD：`52221ae3`
-- 远端 HEAD：`52221ae3`
+- HEAD：`a1a910ce`
+- 远端 HEAD：`a1a910ce`
 - 工作树：本次功能与独立记忆提交一起推送到 PR #80；基线 main 7610ab20。正式安装/发布及其他工作树未改。
-- 当前任务：统一自由面板控件32/28px、留白12px、文字角色14/13/12px；菜单/弹窗/440与680窄窗实测、37测试和构建通过，6面板布局保留。对比度无确定失败但仍有incomplete；全局技能已补规范。3304f8e1 CI成功；本轮仅设备只读核对。详见[报告](../verification/v050-capability-validation.md)。
-- 状态：`控件尺寸与留白修复已实测，待用户复核及本提交 CI`
+- 当前任务：标签、标题、Agent目录和接入说明更名灵活面板/Flexible Panels，workbench协议和布局不变；37测试、构建、中英文实页通过，6面板及真实回放保留。全盘5主页面/9标签/4配置分区，234接口不代表GUI全覆盖，见[功能评审](../verification/v050-flexible-panel-gui-coverage.md)。全局技能同步；仅设备只读，b66ef612 CI成功。
+- 状态：`灵活面板已更名；完整 GUI 评审确认仍有缺口`
 
 ## 里程碑
 
@@ -27,7 +27,7 @@
 - **macOS 兼容性与跨平台回归**：最终原生包源8d532019；Mac ARM/Intel DMG与Linux AppImage/DEB的冻结后台、真实WebView/MCP操作、错误签名拒绝、有效更新与重启通过。USB各73项通过/1项Windows专属跳过。Windows Python7175/2跳过、GUI1291和生产构建通过；两渠道13附件及5平台索引验证完成。设施边界见[原生验收](../verification/v050-native-release.md)。
 - **SuperWatch 配置与手动日志转换**：手动转换56项、共享后台296项、GUI152项及构建通过。冻结实物1114032组，Excel两页1048575/65457行、4456128值与JSONL对应；RTT505行TXT对应，7原文件哈希不变。重复请求复用任务且不停止采集，见[转换](../verification/v050-manual-recording-export.md)。符号旁配置与AXF恢复见[配置](../verification/v050-superwatch-profile.md)。TXT精简37项、Skill69项通过；505行等价、63996→40304字节、原文件不变，见[TXT](../verification/v050-rtt-txt-readable.md)。
 - **V0.5.0 发布、安装与升级**：正式源1097f98e：Python7173通过/2跳过、GUI1291、Rust23、构建/CI通过。普通用户新装/卸载/覆盖、原始0.4.3签名升级及重启、Skill两渠道升级、原生/Web四类回放、冻结59工具MCP及双渠道附件/索引验证通过；配置和USB名称保留。详见[发布交接](../verification/v050-release-handoff.md)及其安装/USB报告。本条是正式版既有证据，不替代当前扩展验收。
-- **自由面板能力与调试场景矩阵**：234直接操作/59MCP/124CLI/291HTTP；Python919、FastAPI新旧各526，2ef0c684 CI后端5074通过。无JSON界面与GridStack：GUI全量1373、相关37及生产构建通过，3304f8e1 CI成功。尺寸/留白本轮4文件37测试、最终构建、实际菜单/弹窗/440与680窄窗通过；字号角色通过，对比度保留REVIEW。此前STM32F411正常与四越界共6项恢复、1735组8675值与Excel逐项对应，JSONL不变且回放通过。详见[矩阵验收](../verification/v050-capability-validation.md)。本扩展原生安装/触屏/语音未验。
+- **灵活面板能力与 GUI 覆盖**：234操作/59MCP/124CLI/291HTTP；前轮Python919、FastAPI新旧各526、GUI全量1373通过。GridStack和尺寸留白有真实浏览器证据，字号通过/对比度REVIEW。此前RAM两正常四越界恢复、1735组8675值与Excel一致见[场景](../verification/v050-capability-validation.md)。本轮改名37测试/构建通过；中英文、6面板、回放保留，只读页面0亮度10采样停止。全GUI缺口见[评审](../verification/v050-flexible-panel-gui-coverage.md)；原生/触屏/语音未验。
 
 ## 架构决策
 
@@ -52,7 +52,7 @@
 
 ## 下一动作
 
-1. 继续 codex/agent-ui-workbench / PR #80，按[接入说明](../../references/agent-ui.md)重新发现运行时/窗口/页面及设备身份。补[矩阵](../verification/v050-capability-matrix.md)真机缺口，不将接口数量当验收率；合并、安装/发布分别授权。保留示例与真机空闲界面。用户UI无JSON，沿用成熟布局、明确配置入口、轻量手柄、同密度控件与统一留白；用户视觉验收独立于自动测试。
+1. 继续 PR #80，按[接入](../../references/agent-ui.md)重新发现实例/窗口/页面与设备。按[完整GUI评审](../verification/v050-flexible-panel-gui-coverage.md)补SWD设置组件、完整RTT/串口、Memory、Trace等缺口及多实例回放隔离；接口数不作覆盖率。保留示例与真机空闲界面。无JSON用户UI，沿用成熟组件与一致尺寸留白；合并、安装/发布另授权。
 2. V0.5.0 三平台与四固件已完成双渠道发布；保留并同步 codex/v0.5.0-fixes 继续后续上位机开发。已清理 #70/#76/#78 的合并分支；开放 #65/#80 保留。版本不变，正式附件/标签不可覆写，见[原生验收](../verification/v050-native-release.md)。 有Linux/Mac实物后补验真实USB、Gatekeeper首次安装和交互式提权；不能把本轮CI结果当作这些硬件/系统验收。
 3. 客户可直接运行新版覆盖安装器，自动结束当前用户旧MKLink与Skill/MCP，不要求手动先关旧版；活动任务会结束。安装后AI宿主需重新加载被结束的MCP。损坏历史备份保留，仍失败时收集installation-history-report.json、history-backups和诊断包，区分权限/占用/格式；不手工删除有效未知结果，不重放烧录。
 4. 客户SystemView先核对实际CH、目标IRQ锁及元数据。1µs三路溢出先采集0x40 CH2设备时间戳/长度/序号与主机单调到达时间，低频读0x10错误和0x14批次耗时；诊断开销保持一致，再判断背压、重试或调度，不直接假定80ms停读或给CH2固定优先级。多视图假离线已完成修复与安装版六窗口复验。保留目标构建快照供AXF源码路径使用，原工程重编后再清理；见[静态补充](../verification/v050-systemview-loss-reboot.md)。
