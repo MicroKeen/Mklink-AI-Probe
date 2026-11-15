@@ -14,7 +14,7 @@
         <div class="tabs-bar">
           <button :class="['tab-btn', { active: tab === 'rtt' }]" @click="tab = 'rtt'">RTT View</button>
           <button :class="['tab-btn', { active: tab === 'superwatch' }]" @click="tab = 'superwatch'">SuperWatch</button>
-          <button :class="['tab-btn', { active: tab === 'workbench' }]" @click="tab = 'workbench'">{{ tr('组合工作台', 'Workbench') }}</button>
+          <button :class="['tab-btn', { active: tab === 'workbench' }]" @click="tab = 'workbench'">{{ tr('灵活面板', 'Flexible Panels') }}</button>
           <button :class="['tab-btn', { active: tab === 'hardfault' }]" @click="tab = 'hardfault'">HardFault</button>
           <button :class="['tab-btn', { active: tab === 'memory' }]" @click="tab = 'memory'">Memory</button>
           <button :disabled="IS_REMOTE" :class="['tab-btn', { active: tab === 'serial' }]" @click="tab = 'serial'">{{ tr('串口助手', 'Serial Assistant') }}</button>

@@ -4,6 +4,7 @@ import { bindingHostKey } from '../lib/workbenchBindings'
 import { applyConnectionClock, readConnectionClock } from '../lib/connectionClock'
 import { IS_REMOTE } from '../lib/runtimeEndpoint'
 import { useGuiPanel } from '../lib/guiAutomation'
+import { tr } from './useLanguage'
 
 interface PanelEntry { id: string; title: string; type: string; source?: unknown; surface?: SemanticSurface | null }
 interface WorkbenchSurface extends SemanticSurface { entries(): PanelEntry[] }
@@ -60,7 +61,7 @@ export function useFrontendWorkbench(tab: Ref<string>, superwatch: Ref<SemanticS
     return [
       { id: 'dashboard', title: 'MKLink Dashboard', type: 'navigation', surface: navigation },
       { id: 'superwatch', title: 'SuperWatch', type: 'superwatch', surface: superwatch.value },
-      { id: 'workbench', title: 'Workbench', type: 'layout', surface: workbench.value },
+      { id: 'workbench', title: tr('灵活面板', 'Flexible Panels'), type: 'layout', surface: workbench.value },
       ...(workbench.value?.entries() || []),
     ].filter(entry => entry.surface && typeof entry.surface.catalog === 'function')
   }

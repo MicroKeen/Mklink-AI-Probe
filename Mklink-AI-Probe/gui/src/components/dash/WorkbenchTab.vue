@@ -1,7 +1,7 @@
 <template>
   <section class="workbench" :class="{ 'is-editing': layoutEditing }" data-testid="workbench">
     <header class="workbench-toolbar">
-      <div><strong>{{ tr('组合工作台', 'Workbench') }}</strong><small>{{ tr('独立视图 · 共享采集', 'Independent views · shared acquisition') }}</small></div>
+      <div><strong>{{ tr('灵活面板', 'Flexible Panels') }}</strong><small>{{ tr('独立视图 · 共享采集', 'Independent views · shared acquisition') }}</small></div>
       <div class="workbench-actions">
         <button class="btn" :class="layoutEditing ? 'btn-primary' : 'btn-secondary'" :aria-pressed="layoutEditing" @click="layoutEditing = !layoutEditing"><LayoutDashboard :size="16" />{{ layoutEditing ? tr('完成布局', 'Done editing') : tr('编辑布局', 'Edit layout') }}</button>
         <select v-if="layoutEditing" v-model="newType" :aria-label="tr('新面板类型', 'New panel type')"><option v-for="type in panelTypes" :key="type" :value="type">{{ labels[type] }}</option></select>

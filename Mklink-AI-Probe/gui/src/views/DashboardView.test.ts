@@ -299,7 +299,7 @@ describe('DashboardView layout classes', () => {
     expect(labels).toEqual([
       'RTT View',
       'SuperWatch',
-      '组合工作台',
+      '灵活面板',
       'HardFault',
       'Memory',
       '串口助手',
@@ -330,7 +330,7 @@ describe('DashboardView layout classes', () => {
     expect(wrapper.findAll('.tab-btn').map(button => button.text())).toEqual([
       'RTT View',
       'SuperWatch',
-      'Workbench',
+      'Flexible Panels',
       'HardFault',
       'Memory',
       'Serial Assistant',
