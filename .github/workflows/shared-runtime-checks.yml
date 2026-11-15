@@ -116,7 +116,7 @@ jobs:
           $tests += 'test_dump_control'
           $tests += @('test_legacy_dump', 'test_mux_bulk_watch', 'test_capture_clock', 'test_clock_configuration_interfaces', 'test_watch_timing_v2')
           $tests += 'test_runtime_switch'
-          $tests += @('test_runtime_slow_discovery', 'test_online_flash_api')
+          $tests += @('test_runtime_slow_discovery', 'test_online_flash_api', 'test_download_probe_selection')
           $tests += 'test_hpm_isp_offline'
           $tests += @('test_hpm_debug_protocol', 'test_hpm_clock_contract', 'test_debug_speed', 'test_systemview_parser')
           $tests += 'test_offline_verify'
