@@ -5,9 +5,9 @@
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/agent-ui-workbench",
-    "head": "ae249e7c",
-    "remote_head": "ae249e7c",
-    "working_tree": "功能提交已推送；本次单独更新记忆。PR #80 保持草稿；已合入 main 7610ab20，正式 v0.5.0 及后续原生维护事实与上游同步。其他 worktree、安装版和正式资源未修改。"
+    "head": "0282e011",
+    "remote_head": "0282e011",
+    "working_tree": "功能提交已推送；本次单独更新记忆。PR #80 保持草稿；已合入 main 7610ab20，正式 v0.5.0 及后续原生维护事实与上游同步。其他 worktree、安装版和正式资源未修改。 CI已加入矩阵自检及新增回归。"
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
