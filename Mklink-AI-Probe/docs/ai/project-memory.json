@@ -1,31 +1,31 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-15",
+  "updated_at": "2026-11-16",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
-    "branch": "codex/v0.5.0-fixes",
-    "head": "65826071",
-    "remote_head": "65826071",
-    "working_tree": "修订候选已覆盖；Python7190/2跳过、GUI1294、完整Skill及已绑定V2脱机刷新通过。PR #84待合并授权；固件解释器边界修复中，云端未改。"
+    "branch": "codex/v050-revision-publication",
+    "head": "200a4db2",
+    "remote_head": "200a4db2",
+    "working_tree": "PR #84 已合入 main ed5d55aa；V0.5.0 r20261115 与 V2.9.5 双渠道发布完成。本地清理和公众号稿更新完成，交接在文档 PR #85。"
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "V0.5.0 修订主机门禁通过，等待固件修复与PR合并授权",
-    "current_task": "6523d0e7主机候选的覆盖迁移、快捷方式、原生/Web、完整Skill和最终全量通过；已绑定V2脱机页20秒静默与手动刷新通过。RST重接后硬件复位通过；固件会话另发现64参数旧文本命令卡住解释器，正修复重编，继续独占设备。用户待确认PR #84合并，云端仍等待新固件最终联测。见[修订验收](../verification/v050-install-path-offline-refresh.md)。"
+    "status": "发布、清理与公众号稿交付完成",
+    "current_task": "V0.5.0 r20261115 / V2.9.5 双渠道发布及覆盖验收完成。清理65目录、11135测试链接，释放7.203GiB，原件哈希保持。公众号以AI可视化、回放和人机AI协同为主线，02/03换成STM32F103实拍，新增两张视觉伴随原理图；11图及桌面/手机预览通过，见[清理记录](../verification/v050-release-cleanup.md)。"
   },
   "milestones": [
     {
       "name": "MKLink 0.5.0",
       "status": "正式",
-      "notes": "2026-11-15 双渠道发布完成；[PR #79](https://github.com/MicroKeen/Mklink-AI-Probe/pull/79) 合并源和 v0.5.0 为 1097f98e。Windows、完整 Skill、Site Agent 及 MicroLink V2.9.4 / V3.7.0 / V4.7.4、HPMLink V4.7.4 已上线。先更新客户端、重载 MCP，再按型号更新固件。原生补充包源 8d532019，Mac ARM/Intel 与 Linux x64 已补齐并支持签名更新；正式标签/旧附件保留。"
+      "notes": "2026-11-15 双渠道正式发布；[PR #79](https://github.com/MicroKeen/Mklink-AI-Probe/pull/79) 与 v0.5.0 为1097f98e；Windows/Skill/Site Agent、MicroLink V2.9.4/V3.7.0/V4.7.4、HPMLink V4.7.4 首发。Mac ARM/Intel、Linux x64 补发源8d532019，支持签名更新。随后PR #84 main ed5d55aa的Windows/Skill修订r20261115与V2.9.5已双渠道上线。已有0.5.0用户手动覆盖；先更新客户端、重载MCP，再更新对应固件。原标签和其他原件保留。"
     },
     {
       "name": "0.5.0 上位机开发基线",
       "status": "已合入 main",
-      "notes": "2026-11-09，[PR #78](https://github.com/MicroKeen/Mklink-AI-Probe/pull/78) 以 `2861d7a6` 合入，新增 CLI 显式重载 AXF/ELF 符号，[Issue #77](https://github.com/MicroKeen/Mklink-AI-Probe/issues/77) 已关闭（Completed）。随后 [PR #76](https://github.com/MicroKeen/Mklink-AI-Probe/pull/76) 以 `cf034fe1` 合入，修复 Windows 普通用户因 jobs.json 访问受限而无法连接探针的问题，[Issue #75](https://github.com/MicroKeen/Mklink-AI-Probe/issues/75) 已关闭（Completed）。"
+      "notes": "[PR #78](https://github.com/MicroKeen/Mklink-AI-Probe/pull/78) 以2861d7a6合入，新增显式重载AXF/ELF；[PR #76](https://github.com/MicroKeen/Mklink-AI-Probe/pull/76) 以cf034fe1合入，修复普通用户jobs.json权限导致连接失败。[Issue #77](https://github.com/MicroKeen/Mklink-AI-Probe/issues/77)、[Issue #75](https://github.com/MicroKeen/Mklink-AI-Probe/issues/75) 均已Completed。"
     },
     {
       "name": "MKLink 0.4.3",
@@ -36,7 +36,7 @@
   "verification": [
     {
       "area": "GUI共享控制、回放与多窗口健康",
-      "result": "ba3a334b实现5主页面/4配置分区/8仪表盘标签控制，原生/Web回放、显式选窗、探针身份/代次失效保护通过；取消SystemView冗余状态SSE解决浏览器连接池耗尽。最终安装版6受控窗口72/72正常，645064事件/9任务，解析和目标/主机丢弃0。GUI1290项及最终13项、后端245项/71边界/最终17项通过，存在重叠。NSIS普通用户覆盖3686文件一致，本机Skill同步，见[完整验收](../verification/v050-gui-control.md)。 此前IRQ锁/8KiB缓冲/采集中重启见[前轮](../verification/v050-systemview-loss-reboot.md)，显示及历史优化见[刷新报告](../verification/v050-systemview-refresh.md)。"
+      "result": "ba3a334b实现5主页面/4配置分区/8仪表盘标签控制、原生/Web回放、显式选窗、身份/代次失效保护；移除SystemView冗余状态SSE修复连接池耗尽。安装版6窗口72/72正常，645064事件/9任务，解析及目标/主机丢弃0；普通用户覆盖3686文件一致。软件/安装/Skill验证见[完整验收](../verification/v050-gui-control.md)，IRQ锁与采集中重启见[前轮](../verification/v050-systemview-loss-reboot.md)，历史与显示优化见[刷新报告](../verification/v050-systemview-refresh.md)。"
     },
     {
       "area": "HPM Flash 配置、连接设置与脱机 OTP",
@@ -56,11 +56,11 @@
     },
     {
       "area": "SuperWatch 配置与手动日志转换",
-      "result": "手动转换 56 项、共享后台/流/边界 296 项、GUI 152 项通过，生产构建通过。冻结安装版实物记录 1,114,032 组，Excel 两页 1,048,575 / 65,457 行、4,456,128 个值与 JSONL 对应；RTT 505 行 TXT 对应，7 个原始文件哈希不变。GUI 手动触发、实际 CLI/MCP 重复请求复用任务且不停止采集。见[转换报告](../verification/v050-manual-recording-export.md)。符号旁配置原有软件/浏览器证据见[配置报告](../verification/v050-superwatch-profile.md)；前一安装候选已验证真实 AXF 重启恢复，本候选解析 6,718 个变量并保存四变量、500000 缓存与 1 µs 间隔。 TXT 精简追加：转换/记录器 37 项、Skill 69 项通过；既有 505 行时间和正文等价，63,996→40,304 字节，原始文件哈希不变。见[TXT 报告](../verification/v050-rtt-txt-readable.md)。"
+      "result": "手动转换56项、共享后台/流/边界296项、GUI152项及生产构建通过。冻结安装版记录1,114,032组，Excel两页及4,456,128个值与JSONL对应；RTT505行TXT对应，七个原件哈希不变。GUI/CLI/MCP重复请求复用转换任务且不停止采集，见[转换报告](../verification/v050-manual-recording-export.md)。AXF旁配置重启恢复、6,718变量/四选择/500000缓存/1µs间隔验证见[配置报告](../verification/v050-superwatch-profile.md)。TXT精简37项、Skill69项通过；505行时间正文等价，63,996→40,304字节，见[TXT报告](../verification/v050-rtt-txt-readable.md)。"
     },
     {
       "area": "V0.5.0 发布、安装与升级",
-      "result": "正式源1097f98e：Python7173通过/2跳过、GUI1291、Rust23、生产构建与CI通过。普通用户新装/卸载/覆盖exit0，3686载荷一致，6配置及USB名称/机器登记保留。原始0.4.3原生GitHub回退下载、签名、安装、重启0.5及二次无更新通过；Skill腾讯云/备用GitHub升级2680文件一致。原生/Web页面与四类回放通过，冻结59工具MCP/算法/SVD通过。双渠道11新文件全量SHA/HEAD/Range、索引及历史11文件COS归档通过；见[发布交接](../verification/v050-release-handoff.md)。前轮强制活动覆盖与实物见[安装验收](../verification/v050-installer-force-acceptance.md)，双V4/500ms恢复见[USB报告](../verification/v050-usb-hpm-overwrite.md)。 本轮修订：已定位跨安装范围漏读 HKLM 与后台轮询触发忙碌状态；此前发布测试使用 /D 或已有 HKCU，不能代表该迁移路径。本轮专项解析器/脱机轮询测试已过，完整软件、实际覆盖和固件协同验收进行中，见[报告](../verification/v050-install-path-offline-refresh.md)。"
+      "result": "正式源1097f98e的Windows/Skill、四类GUI回放、冻结MCP/算法/SVD、普通用户安装、旧版签名更新和双渠道发布通过，见[首发交接](../verification/v050-release-handoff.md)。前轮强制活动覆盖与实物见[安装验收](../verification/v050-installer-force-acceptance.md)，双V4/500ms恢复见[USB报告](../verification/v050-usb-hpm-overwrite.md)。本轮main ed5d55aa普通用户无/D覆盖3687文件一致、六设置保留、无C盘副本；原生/Web轮询5/4次忙碌闪动0。Python7190/2跳过、GUI1294与生产构建通过；完整Skill包内验证，全局未替换。六文件腾讯/Git完整回读、HEAD/Range、原标签/其他平台保持通过。release ff005bff、firmware 83c650a2；旧六文件COS归档核验后移除Lighthouse副本288027675字节；临时传输入口清理，见[修订发布](../verification/v050-revision-release.md)。"
     },
     {
       "area": "V3 / V4 SuperWatch 恢复",
@@ -83,7 +83,7 @@
     "操作前": "重新核对下载器型号、目标和占用。固件变更由指定会话协调，升降级按本次授权执行。VCC、OTP 操作分别确认。",
     "普通 V4": "沿用V4.7.4 / STM32F103RC及此前IRQ锁/CH2 8KiB目标；本轮没有刷写、供电或应用变更。ba3a334b安装版SWD10MHz，四变量1ms+RTT CH0/1+Trace CH2，645064事件/9任务且无解析/目标/主机丢弃。RTT没有文本载荷，UART/RS485未接；采集停止、断开、测试窗口关闭，下次重新核对占用。",
     "普通 V3": "固件会话已回读 V3.6.10 / 2026-11-10T14:14:14，原 STM32F103 的一次 SWCLK 拔插恢复通过；测试结束时后台退出、设备释放。下次仍需重新核对占用。",
-    "普通 V2": "2026-11-13 提醒验证时实际仅接入一只 V2.9.4，无产品标识。当前版本取首行而非历史版本，真实云端返回 V2.9.3，未提示降级；正常分离后后台退出释放设备。未刷写、改电源或目标程序，未启动采集；下次操作重新核对占用。",
+    "普通 V2": "固件V2.9.5 / 2026-11-15T21:39:19，测试源码56f5fdf5、合并main866fc5ff，未重编。固件会话备用V2+STM32F103RE完成47/49命令、34档UART189回环及复位/烧录/采集/Keil联测，原512KiB恢复一致。YMODEM对端、Modbus从站、USB12Mbps、H7双核、深度低功耗和SWD拔插未完整验收；原故障V2取消恢复。11月16日上位机用当前V2+STM32F103拍公众号：匹配AXF后四路1kHz记录10135组、Excel与回放通过；未刷写，设备已释放，GUI留在回放。",
     "HPMLink V4": "固件会话本轮交回V4.7.4 / 2026-11-14 11:35:00，HPM5301；上位机本轮未占用或改目标。前轮db81241d JTAG10MHz/flash_cfg在线脱机与52988字节回读证据见[覆盖报告](../verification/v050-usb-hpm-overwrite.md)。固件会话RS485互测是单独证据，10Mbps大帧边界仍保留；下一轮重新核对接线/固件/占用。"
   },
   "known_limits": [
@@ -97,13 +97,13 @@
     "ELF与34档波特率已在Windows候选包含；客户ELF仅离线解析/配置，未操作客户板。本轮没有高速串口/Modbus物理验收；固件会话RS485双V4测试不等同本轮/客户快速应答验证，10Mbps大帧丢包边界仍保留，第三方驱动可拒绝高档位。"
   ],
   "next_actions": [
-    "等待用户对PR #84的明确合并回复，检查确切头CI后合入；从干净main重建修订。固件会话须完成解释器参数边界修复及新候选最终联测，之后才更新腾讯云/官方GitHub备用源。已有0.5.0者手动覆盖，保留原标签/附件及其他平台。",
+    "发布已完成。已装0.5.0者手动覆盖r20261115；旧版索引已更新。先更新上位机/Skill、重载MCP，再升级MicroLink V2.9.5。交接文档PR #85待合并；后续开发从最新microkeen/main开启任务分支。公众号稿已交付，未上传公众号。",
     "客户可直接运行新版覆盖安装器，自动结束当前用户旧MKLink与Skill/MCP，不要求手动先关旧版；活动任务会结束。安装后AI宿主需重新加载被结束的MCP。损坏历史备份保留，仍失败时收集installation-history-report.json、history-backups和诊断包，区分权限/占用/格式；不手工删除有效未知结果，不重放烧录。",
     "客户SystemView先核对实际CH、目标IRQ锁及元数据。1µs三路溢出先采集0x40 CH2设备时间戳/长度/序号与主机单调到达时间，低频读0x10错误和0x14批次耗时；诊断开销保持一致，再判断背压、重试或调度，不直接假定80ms停读或给CH2固定优先级。多视图假离线已完成修复与安装版六窗口复验。保留目标构建快照供AXF源码路径使用，原工程重编后再清理；见[静态补充](../verification/v050-systemview-loss-reboot.md)。",
     "有Linux/Mac实物后补验真实USB、Gatekeeper首次安装和交互式提权；不能把本轮CI结果当作这些硬件/系统验收。",
     "固件会话继续维护 STOP 状态码补丁；客户信息齐备并获得明确实物安排后再做同条件 STOP/唤醒验证，不自动抢占调试器或刷写设备。"
   ],
   "continuation_protocol": [
-    "继续PR #84集成及同版本修订发布，合并确认已发出，未答复前不合并。主机候选已覆盖，完整Skill仅包内验证，全局Skill未替换；最终测试临时目录已清理。固件会话正在修复V2解释器边界，禁止覆盖或抢占硬件；云端未改。"
+    "本轮发布完成，无待授权或待交付项。应用main ed5d55aa，release ff005bff，firmware 83c650a2，腾讯云匹配。本机已覆盖；完整Skill仅包内验证。硬件释放，旧文件已COS归档；临时传输入口/服务/凭据已清理。原件、证据及真实未验限制保留，后续任务重新核对现场。"
   ]
 }
