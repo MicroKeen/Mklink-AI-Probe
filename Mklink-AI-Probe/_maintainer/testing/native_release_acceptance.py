@@ -88,7 +88,7 @@ async def native_gui(command, sidecar, work, label):
     log = (OUT / f'{label}.log').open('w')
     process = subprocess.Popen(command, cwd=scratch, env=env, stdout=log, stderr=log, stdin=subprocess.DEVNULL)
     info = None
-    result = {'label': label, 'pages': [], 'tabs': []}
+    result = {'label': label, 'pages': [], 'tabs': [], 'operations': []}
     try:
         deadline = time.monotonic() + 120
         while time.monotonic() < deadline:
@@ -129,7 +129,12 @@ async def native_gui(command, sidecar, work, label):
             wid = windows[0]['window_id']
 
             async def gui(action, **args):
+                started = time.monotonic()
+                operation = {'action': action, **args}
+                result['operations'].append(operation)
                 response = (await client.call_tool('gui_control', {'action': action, 'window_id': wid, **args})).data
+                operation['seconds'] = round(time.monotonic() - started, 3)
+                operation['status'] = response.get('status')
                 assert response['status'] == 'applied', response
                 return response['state']
 
@@ -148,6 +153,7 @@ async def native_gui(command, sidecar, work, label):
         result['native_webview_and_mcp_controls'] = 'passed'
         return result
     finally:
+        (OUT / f'{label}-gui.json').write_text(json.dumps(result, indent=2) + '\n')
         if info:
             try:
                 local_request(f"http://127.0.0.1:{info['port']}", '/api/desktop/shutdown', {'instance_id': info['instanceId']})
@@ -161,6 +167,8 @@ async def native_gui(command, sidecar, work, label):
                 process.kill()
                 process.wait(timeout=10)
         log.close()
+        for runtime_log in scratch.rglob('*.log'):
+            shutil.copy2(runtime_log, OUT / f'{label}-{runtime_log.name}')
         # Backend uses the normal shutdown API; only this test's window is terminated.
         await asyncio.sleep(7)
 
