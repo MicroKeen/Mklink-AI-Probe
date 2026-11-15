@@ -5,16 +5,16 @@
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/agent-ui-workbench",
-    "head": "0282e011",
-    "remote_head": "0282e011",
-    "working_tree": "功能提交已推送；本次单独更新记忆。PR #80 保持草稿；已合入 main 7610ab20，正式 v0.5.0 及后续原生维护事实与上游同步。其他 worktree、安装版和正式资源未修改。 CI已加入矩阵自检及新增回归。"
+    "head": "b7a78e05",
+    "remote_head": "b7a78e05",
+    "working_tree": "功能修复已推送，本次单独记忆；PR #80草稿，基线main 7610ab20。CI新增回归暴露并修复新版FastAPI路由发现遗漏；其他工作树、安装版与发布资源未修改。"
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "自由面板能力矩阵与软件/浏览器场景验收完成，待真机矩阵及 PR 审阅",
-    "current_task": "盘点155共享调用、59 MCP、124 CLI节点、291 HTTP操作；234项可由新增能力面板直接执行。完成软件故障、原记录器合成数据保存/Excel/回放、CLI/页面同路和当前Agent请求回写；见[验证报告](../verification/v050-capability-validation.md)与[逐项矩阵](../verification/v050-capability-matrix.md)。示例后台保留供当前会话测试；未连接设备、未发布安装包。"
+    "status": "能力矩阵及新版FastAPI兼容修复已验证，待CI和真机范围核对",
+    "current_task": "用户已纳入真机并提供智能手表工程；正在核对实际固件、可写位置和复位范围，尚未注入。已有155共享调用/59 MCP/124 CLI/291 HTTP盘点及234项面板接入，见[验证报告](../verification/v050-capability-validation.md)与[矩阵](../verification/v050-capability-matrix.md)。示例保持运行。"
   },
   "milestones": [
     {
@@ -64,7 +64,7 @@
     },
     {
       "area": "自由面板能力与调试场景矩阵",
-      "result": "ae249e7c：234项目录/参数接入；相关Python919通过，GUI全量127文件1363通过，生产构建通过。真实Web/独立CLI验证同路操作、重复回执、损坏回放拒绝、双图隔离、重启发现/恢复不执行、PNG保存和当前Agent回写。原记录器12000组/24000合成数值与Excel逐行对应，JSONL哈希不变，见[矩阵验收](../verification/v050-capability-validation.md)。此前控件转移保留草稿、多窗口及显示配置隔离见[整合验收](../verification/v050-agent-ui-workbench.md)。两轮均无真机/原生/语音/安装验收。"
+      "result": "ae249e7c：234项目录/参数接入；相关Python919通过，GUI全量127文件1363通过，生产构建通过。真实Web/独立CLI验证同路操作、重复回执、损坏回放拒绝、双图隔离、重启发现/恢复不执行、PNG保存和当前Agent回写。原记录器12000组/24000合成数值与Excel逐行对应，JSONL哈希不变，见[矩阵验收](../verification/v050-capability-validation.md)。此前控件转移保留草稿、多窗口及显示配置隔离见[整合验收](../verification/v050-agent-ui-workbench.md)。两轮均无真机/原生/语音/安装验收。 CI首轮43目录失败已隔离复现并修复；新旧FastAPI各526项通过，见同报告。"
     }
   ],
   "decisions": [

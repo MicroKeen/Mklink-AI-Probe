@@ -6,11 +6,11 @@
 
 - 更新时间：`2026-11-15`
 - 分支：`codex/agent-ui-workbench`
-- HEAD：`0282e011`
-- 远端 HEAD：`0282e011`
-- 工作树：功能提交已推送；本次单独更新记忆。PR #80 保持草稿；已合入 main 7610ab20，正式 v0.5.0 及后续原生维护事实与上游同步。其他 worktree、安装版和正式资源未修改。 CI已加入矩阵自检及新增回归。
-- 当前任务：盘点155共享调用、59 MCP、124 CLI节点、291 HTTP操作；234项可由新增能力面板直接执行。完成软件故障、原记录器合成数据保存/Excel/回放、CLI/页面同路和当前Agent请求回写；见[验证报告](../verification/v050-capability-validation.md)与[逐项矩阵](../verification/v050-capability-matrix.md)。示例后台保留供当前会话测试；未连接设备、未发布安装包。
-- 状态：`自由面板能力矩阵与软件/浏览器场景验收完成，待真机矩阵及 PR 审阅`
+- HEAD：`b7a78e05`
+- 远端 HEAD：`b7a78e05`
+- 工作树：功能修复已推送，本次单独记忆；PR #80草稿，基线main 7610ab20。CI新增回归暴露并修复新版FastAPI路由发现遗漏；其他工作树、安装版与发布资源未修改。
+- 当前任务：用户已纳入真机并提供智能手表工程；正在核对实际固件、可写位置和复位范围，尚未注入。已有155共享调用/59 MCP/124 CLI/291 HTTP盘点及234项面板接入，见[验证报告](../verification/v050-capability-validation.md)与[矩阵](../verification/v050-capability-matrix.md)。示例保持运行。
+- 状态：`能力矩阵及新版FastAPI兼容修复已验证，待CI和真机范围核对`
 
 ## 里程碑
 
@@ -27,7 +27,7 @@
 - **macOS 兼容性与跨平台回归**：最终原生包源8d532019；Mac ARM/Intel DMG与Linux AppImage/DEB的冻结后台、真实WebView/MCP操作、错误签名拒绝、有效更新与重启通过。USB各73项通过/1项Windows专属跳过。Windows Python7175/2跳过、GUI1291和生产构建通过；两渠道13附件及5平台索引验证完成。设施边界见[原生验收](../verification/v050-native-release.md)。
 - **SuperWatch 配置与手动日志转换**：手动转换56项、共享后台296项、GUI152项及构建通过。冻结实物1114032组，Excel两页1048575/65457行、4456128值与JSONL对应；RTT505行TXT对应，7原文件哈希不变。重复请求复用任务且不停止采集，见[转换](../verification/v050-manual-recording-export.md)。符号旁配置与AXF恢复见[配置](../verification/v050-superwatch-profile.md)。TXT精简37项、Skill69项通过；505行等价、63996→40304字节、原文件不变，见[TXT](../verification/v050-rtt-txt-readable.md)。
 - **V0.5.0 发布、安装与升级**：正式源1097f98e：Python7173通过/2跳过、GUI1291、Rust23、构建/CI通过。普通用户新装/卸载/覆盖、原始0.4.3签名升级及重启、Skill两渠道升级、原生/Web四类回放、冻结59工具MCP及双渠道附件/索引验证通过；配置和USB名称保留。详见[发布交接](../verification/v050-release-handoff.md)及其安装/USB报告。本条是正式版既有证据，不替代当前扩展验收。
-- **自由面板能力与调试场景矩阵**：ae249e7c：234项目录/参数接入；相关Python919通过，GUI全量127文件1363通过，生产构建通过。真实Web/独立CLI验证同路操作、重复回执、损坏回放拒绝、双图隔离、重启发现/恢复不执行、PNG保存和当前Agent回写。原记录器12000组/24000合成数值与Excel逐行对应，JSONL哈希不变，见[矩阵验收](../verification/v050-capability-validation.md)。此前控件转移保留草稿、多窗口及显示配置隔离见[整合验收](../verification/v050-agent-ui-workbench.md)。两轮均无真机/原生/语音/安装验收。
+- **自由面板能力与调试场景矩阵**：ae249e7c：234项目录/参数接入；相关Python919通过，GUI全量127文件1363通过，生产构建通过。真实Web/独立CLI验证同路操作、重复回执、损坏回放拒绝、双图隔离、重启发现/恢复不执行、PNG保存和当前Agent回写。原记录器12000组/24000合成数值与Excel逐行对应，JSONL哈希不变，见[矩阵验收](../verification/v050-capability-validation.md)。此前控件转移保留草稿、多窗口及显示配置隔离见[整合验收](../verification/v050-agent-ui-workbench.md)。两轮均无真机/原生/语音/安装验收。 CI首轮43目录失败已隔离复现并修复；新旧FastAPI各526项通过，见同报告。
 
 ## 架构决策
 
