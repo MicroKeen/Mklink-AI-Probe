@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mountReplayButton } from '../../../mklink/static/superwatch_replay.js'
+import { interaction } from './frontendControl'
 
 class FakeWorker {
   static instances: FakeWorker[] = []
@@ -90,5 +91,58 @@ describe('inline replay controls and lifetime', () => {
   it('handles a single-timestamp log without starting a playback loop', () => {
     const worker = upload(); loaded(worker, 0); control('play')
     expect(element('.sw-replay-inline').dataset.playbackState).toBe('ended')
+  })
+  it('routes semantic playback to its injected viewer and rejects invalid actions', async () => {
+    const host = document.createElement('div')
+    host.innerHTML = '<div class="waveform-viewer"><div class="watch-toolbar-row"><div class="second-host"></div></div></div>'
+    document.body.append(host)
+    const secondViewer = {
+      beginReplay: vi.fn(() => true), endReplay: vi.fn(), setReplayPosition: vi.fn(), renderReplayView: vi.fn(),
+      getBinaryVisibleRange: () => ({ start: 0, end: 5000, pixelWidth: 400 }),
+    }
+    const second = mountReplayButton(host.querySelector('.second-host')!, { viewer: () => secondViewer })
+    try {
+      for (const spec of second.catalog()) {
+        const schema = spec.args as any
+        const example = Object.fromEntries(schema.required.map((key: string) => [key, schema.properties[key].enum?.[0] ?? (schema.properties[key].type === 'number' ? 0 : 'log')]))
+        expect(() => interaction.validateArgs(example, schema)).not.toThrow()
+      }
+      const load = second.execute('waveform.replay.load', { filename: 'capture.csv', text: 'timestamp,a\n0,1\n5,2' })
+      const worker = FakeWorker.instances.at(-1)!
+      loaded(worker, 5)
+      await expect(load).resolves.toMatchObject({ loaded: true, filename: 'capture.csv' })
+      await second.execute('waveform.replay.seek', { position: 2 })
+      await second.execute('waveform.replay.speed', { speed: 4 })
+      expect(second.read()).toMatchObject({ position: 2, speed: 4, playing: false })
+      expect(secondViewer.beginReplay).toHaveBeenCalledOnce()
+      expect(viewer.beginReplay).not.toHaveBeenCalled()
+      await expect(second.execute('waveform.replay.seek', { position: 99 })).rejects.toThrow('exceeds duration')
+      await expect(second.execute('waveform.replay.speed', { speed: 100 })).rejects.toThrow('Invalid replay')
+      await expect(second.execute('waveform.replay.load', { filename: 'x', text: 'x', url: 'http://invalid' })).rejects.toThrow('Unknown replay')
+      await second.execute('waveform.replay.control', { command: 'live' })
+      expect(second.read().loaded).toBe(false)
+      expect(worker.terminate).toHaveBeenCalledOnce()
+    } finally { second(); host.remove() }
+  })
+  it('loads a backend file through the original worker and waits for parsing to finish', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const file = new File(['timestamp,a\n0,1\n5,2'], 'large-recording.csv')
+    const loadFile = vi.fn().mockResolvedValue(file)
+    const remote = mountReplayButton(host, { viewer: () => viewer, loadFile })
+    try {
+      let completed = false
+      const result = remote.execute('waveform.replay.load', { path: 'D:/logs/large-recording.csv' }).then(value => { completed = true; return value })
+      await Promise.resolve()
+      expect(loadFile).toHaveBeenCalledWith('D:/logs/large-recording.csv')
+      expect(completed).toBe(false)
+      const worker = FakeWorker.instances.at(-1)!
+      expect(worker.postMessage).toHaveBeenCalledWith({ type: 'load', file })
+      loaded(worker, 5)
+      await expect(result).resolves.toMatchObject({ loaded: true, filename: 'large-recording.csv' })
+      await expect(remote.execute('waveform.replay.load', { path: 'x.csv', filename: 'x.csv', text: 'timestamp,a' })).rejects.toThrow('exactly one')
+      loadFile.mockRejectedValueOnce(new Error('File access denied'))
+      await expect(remote.execute('waveform.replay.load', { path: 'D:/missing.csv' })).rejects.toThrow('File access denied')
+    } finally { remote(); host.remove() }
   })
 })

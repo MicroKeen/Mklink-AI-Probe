@@ -1926,7 +1926,7 @@ def _cli_runtime(args):
             info = selected_runtime(args.probe)
             result = request(info, "POST", "/_runtime/stop", {"confirm": True}) if info else {"status": "not_running"}
         else:
-            gui_only = args.capability in {'gui_windows', 'gui_present', 'gui_action', 'gui_snapshot'}
+            gui_only = args.capability in {'gui_windows', 'gui_present', 'gui_action', 'gui_snapshot'} or args.capability.startswith('gui_frontend_')
             info = None
             if gui_only:
                 from mklink.runtime_gui import select_gui_runtime

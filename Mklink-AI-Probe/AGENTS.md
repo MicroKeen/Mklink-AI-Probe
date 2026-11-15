@@ -103,6 +103,10 @@ Paths below are relative to the source root containing this file and
 
 ## Read Only When Needed
 
+- Agent UI conversation entry: read `references/agent-ui.md` to discover the
+  existing runtime/window/page and operate the workbench through its published
+  schema and receipts. Reuse the product MCP/CLI; do not guess private session paths.
+
 - Build storage/commands: `docs/ai/build-storage.md`.
 - Source development: `docs/ai/development.md`.
 - Desktop packaging: `skills/tauri-gui-builder/SKILL.md`.

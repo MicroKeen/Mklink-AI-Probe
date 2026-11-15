@@ -46,7 +46,7 @@ export function createGuiAutomation(router: Router, status: () => Record<string,
     if (command.action === 'navigate') {
       const page = command.page || 'dashboard'
       const pages = ['config', 'dashboard', 'online-flash', 'offline-flash', 'remote-service']
-      const tabs = ['rtt', 'superwatch', 'hardfault', 'memory', 'serial', 'modbus', 'systemview', 'symbols']
+      const tabs = ['rtt', 'superwatch', 'hardfault', 'memory', 'serial', 'modbus', 'systemview', 'symbols', 'workbench']
       if (!pages.includes(page) || (command.tab && (page !== 'dashboard' || !tabs.includes(command.tab))) ||
           (command.section && (page !== 'config' || !['local', 'files', 'firmware', 'runtime'].includes(command.section)))) throw new Error('Unsupported destination')
       await router.push({ name: page, query: page === 'dashboard' ? { tab: command.tab || 'rtt' }

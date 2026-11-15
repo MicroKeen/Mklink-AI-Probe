@@ -4,7 +4,7 @@ import secrets
 import time
 from fastapi import HTTPException
 
-TABS = frozenset({'superwatch', 'rtt', 'memory', 'symbols', 'hardfault', 'systemview'})
+TABS = frozenset({'superwatch', 'rtt', 'memory', 'symbols', 'hardfault', 'systemview', 'workbench'})
 PAGES = frozenset({'config', 'dashboard', 'online-flash', 'offline-flash', 'remote-service'})
 ALL_TABS = TABS | {'serial', 'modbus'}
 SECTIONS = frozenset({'local', 'files', 'firmware', 'runtime'})

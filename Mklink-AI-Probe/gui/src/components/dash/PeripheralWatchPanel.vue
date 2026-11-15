@@ -40,6 +40,7 @@ import { API_BASE } from '../../lib/runtimeEndpoint'
 import { tr } from '../../composables/useLanguage'
 import { pickSvdFile } from '../../lib/filePicker'
 import { useMklinkApi } from '../../composables/useMklinkApi'
+import { domainAction, pathArg, boolArg, requireDomain, type DomainArgs } from '../../lib/domainActions'
 
 const props = defineProps<{ deviceConnected: boolean; latestValues: Record<string, number | boolean> }>()
 type Peripheral = { name: string; register: string; address: string }
@@ -107,12 +108,8 @@ async function loadSvd() {
     if (!file || epoch !== generation) return
     const path = typeof file === 'string' ? file : (await useMklinkApi().uploadFileSource('svd', file)).path
     if (epoch !== generation) return
-    const payload = await request('peripherals/select', { svd: path })
-    if (epoch !== generation) return
-    applyCatalog(payload)
+    await selectCatalog({ svd: path }, epoch)
     targetId.value = ''
-    selected.value = new Set()
-    group.value = groups.value.includes('GPIOB') ? 'GPIOB' : groups.value[0] ?? ''
   } catch (cause) { if (epoch === generation) error.value = String(cause) }
   finally { busy.value = false }
 }
@@ -121,13 +118,16 @@ async function loadChip() {
   error.value = ''
   const epoch = generation
   try {
-    const payload = await request('peripherals/select', { target_id: targetId.value })
-    if (epoch !== generation) return
-    applyCatalog(payload)
-    selected.value = new Set()
-    group.value = groups.value.includes('GPIOB') ? 'GPIOB' : groups.value[0] ?? ''
+    await selectCatalog({ target_id: targetId.value }, epoch)
   } catch (cause) { if (epoch === generation) error.value = String(cause) }
   finally { busy.value = false }
+}
+async function selectCatalog(source: { svd?: string; target_id?: string }, epoch = generation) {
+  const payload = await request('peripherals/select', source)
+  requireDomain(epoch === generation, 'Peripheral source changed during selection')
+  applyCatalog(payload)
+  selected.value = new Set()
+  group.value = groups.value.includes('GPIOB') ? 'GPIOB' : groups.value[0] ?? ''
 }
 function chooseTarget(target: Target) {
   clearTimeout(searchTimer)
@@ -220,13 +220,7 @@ async function toggle(name: string, event: Event) {
   error.value = ''
   const epoch = generation
   try {
-    const removing = selected.value.has(name)
-    await request(removing ? 'remove' : 'add', { name })
-    if (epoch !== generation) return
-    const next = new Set(selected.value)
-    if (removing) next.delete(name)
-    else next.add(name)
-    selected.value = next
+    await setSelected(name, !selected.value.has(name), epoch)
   } catch (cause) {
     if (epoch === generation) error.value = String(cause)
   } finally {
@@ -235,6 +229,47 @@ async function toggle(name: string, event: Event) {
     ;(event.target as HTMLInputElement).checked = selected.value.has(name)
   }
 }
+async function setSelected(name: string, enabled: boolean, epoch = generation) {
+  await request(enabled ? 'add' : 'remove', { name })
+  requireDomain(epoch === generation, 'Peripheral selection changed during the operation')
+  const next = new Set(selected.value)
+  if (enabled) next.add(name); else next.delete(name)
+  selected.value = next
+}
+
+function catalog() {
+  return [
+    domainAction('peripherals.search', 'Filter the loaded peripheral register catalog', { query: { type: 'string', maxLength: 512 }, group: { type: 'string', maxLength: 128 } }, ['query']),
+    domainAction('peripherals.inspect', 'Read a page of matching registers and discovered targets', { offset: { type: 'integer', minimum: 0 }, limit: { type: 'integer', minimum: 1, maximum: 200 } }),
+    domainAction('peripherals.targets', 'Find installed peripheral target definitions', { query: { type: 'string', maxLength: 512 }, refresh: boolArg }, ['query']),
+    domainAction('peripherals.source.select', 'Load a peripheral definition by target ID or backend SVD path', { targetId: pathArg, svd: { type: 'string', maxLength: 4096 } }, [], 'file'),
+    domainAction('peripherals.select', 'Add or remove a peripheral register from shared acquisition', { path: pathArg, selected: boolArg }, ['path', 'selected'], 'device'),
+  ]
+}
+function read() { return { view: { query: query.value, group: group.value }, query: query.value, group: group.value, groups: groups.value.slice(0, 32), groupCount: groups.value.length, selection: selection.value, selected: [...selected.value].slice(0, 64), selectedCount: selected.value.size, targets: targets.value.slice(0, 24), targetCount: targets.value.length, items: filtered.value.slice(0, 24), total: items.value.length, busy: busy.value, error: error.value || restoreError.value } }
+async function execute(action: string, args: DomainArgs = {}) {
+  requireDomain(!busy.value, 'Peripheral controls are busy')
+  if (action === 'peripherals.inspect') {
+    const start = args.offset || 0, end = start + (args.limit || 100)
+    return { targetCount: targets.value.length, targets: targets.value.slice(start, end), selectedCount: selected.value.size, selected: [...selected.value].slice(start, end), items: filtered.value.slice(start, end) }
+  }
+  if (action === 'peripherals.search') { query.value = args.query; if (args.group !== undefined) { requireDomain(!args.group || groups.value.includes(args.group), 'Unknown peripheral group'); group.value = args.group } }
+  else if (action === 'peripherals.targets') {
+    chipQuery.value = args.query; error.value = ''; await loadTargets(args.refresh === true); requireDomain(!error.value, error.value)
+  } else if (action === 'peripherals.source.select') {
+    requireDomain(Boolean(args.targetId) !== Boolean(args.svd), 'Provide exactly one targetId or svd')
+    busy.value = true
+    try { await selectCatalog(args.svd ? { svd: args.svd } : { target_id: args.targetId }); targetId.value = args.targetId || '' }
+    finally { busy.value = false }
+  } else if (action === 'peripherals.select') {
+    requireDomain(props.deviceConnected && items.value.some(item => item.name === args.path), 'Peripheral is unavailable')
+    busy.value = true
+    try { await setSelected(args.path, args.selected) } finally { busy.value = false }
+  } else throw new Error(`Unknown peripheral action: ${action}`)
+  return read()
+}
+function restore(view: DomainArgs) { if (typeof view.query === 'string') query.value = view.query.slice(0, 512); if (typeof view.group === 'string') group.value = view.group }
+defineExpose({ catalog, read, execute, restore, hasSignal: (path: string) => selected.value.has(path) })
 
 watch(() => props.deviceConnected, async connected => {
   const epoch = ++generation

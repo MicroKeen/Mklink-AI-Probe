@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "components": {
+    "button": {
+      "title": "动作按钮",
+      "description": "Execute a bound action with saved arguments",
+      "presentation": "button",
+      "minW": 2,
+      "minH": 1,
+      "defaultW": 4,
+      "defaultH": 1
+    },
+    "form": {
+      "title": "参数表单",
+      "description": "Edit typed arguments and execute a bound action",
+      "presentation": "form",
+      "minW": 4,
+      "minH": 2,
+      "defaultW": 6,
+      "defaultH": 3
+    },
+    "value": {
+      "title": "状态数值",
+      "description": "Read an existing public state field without executing an action",
+      "presentation": "value",
+      "minW": 2,
+      "minH": 1,
+      "defaultW": 4,
+      "defaultH": 1
+    },
+    "indicator": {
+      "title": "状态灯",
+      "description": "Display a bound boolean or scalar status",
+      "presentation": "value",
+      "minW": 2,
+      "minH": 1,
+      "defaultW": 3,
+      "defaultH": 1
+    }
+  }
+}

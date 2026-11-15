@@ -21,6 +21,7 @@ describe('semantic GUI control', () => {
       expect(state.backend).toBe('alive')
     }
     expect((await gui.execute({ action: 'navigate', page: 'dashboard', tab: 'modbus' })).tab).toBe('modbus')
+    expect((await gui.execute({ action: 'navigate', page: 'dashboard', tab: 'workbench' })).tab).toBe('workbench')
     expect((await gui.execute({ action: 'navigate', page: 'config', section: 'files' })).section).toBe('files')
     await expect(gui.execute({ action: 'navigate', page: 'https://bad' })).rejects.toThrow()
     await expect(gui.execute({ action: 'eval' })).rejects.toThrow()

@@ -283,7 +283,7 @@ class RuntimeControl:
         device = self.app.state.mklink_state.get('device')
         presence = await asyncio.to_thread(self.presence)
         return {'protocol': PROTOCOL, 'version': VERSION, 'probe_id': self.info.get('probe_id'),
-                'instance_id': self.info['instance_id'], 'pid': self.info.get('pid'),
+                'instance_id': self.info['instance_id'], 'runtime_id': self.info.get('runtime_id'), 'pid': self.info.get('pid'),
                 'project_root': self.app.state.mklink_state['project_root'], 'transport': self.info.get('transport', 'cdc'),
                 'uptime_seconds': now-self.started, 'clients': clients, 'busy': bool(self.lifecycle_pending) or self.operation_lock.locked() or self.job_busy(),
                 'connection_changes_pending': self.lifecycle_pending,
@@ -455,21 +455,31 @@ class RuntimeControl:
         if not isinstance(capability, str) or capability not in CAPABILITIES:
             raise HTTPException(422, 'Unsupported shared capability; no direct CDC fallback')
         self.validate_session(session_id, target=capability not in UART_CAPABILITIES)
-        arguments = body.get('arguments', {})
-        argument_limit = 48 * 1024 if capability == 'flush_memory' else 16 * 1024
+        return session_id, capability, self.prepare_arguments(capability, body.get('arguments', {}))
+
+    def prepare_arguments(self, capability, arguments):
+        if not isinstance(capability, str) or capability not in CAPABILITIES:
+            raise HTTPException(422, 'Unsupported shared capability; no direct CDC fallback')
+        argument_limit = (256 * 1024 if capability == 'gui_frontend_save_layout' else
+                          64 * 1024 if capability in {'gui_frontend_call', 'gui_frontend_reply'} else
+                          48 * 1024 if capability == 'flush_memory' else 16 * 1024)
         if capability in {'superwatch_profile_save', 'superwatch_workspace_save', 'superwatch_pins_save'}:
             argument_limit = 1024 * 1024
         if not isinstance(arguments, dict) or len(json.dumps(arguments)) > argument_limit:
             raise HTTPException(422, f'Arguments must be an object of at most {argument_limit // 1024} KiB')
-        return session_id, capability, validate_arguments(capability, arguments)
+        return validate_arguments(capability, arguments)
 
-    async def invoke(self, method, path, arguments=None, *, session_id=None, sleep_notice=None):
+    async def invoke(self, method, path, arguments=None, *, session_id=None, sleep_notice=None, frontend_session=None, request_id=None):
         if (method == 'POST' and path == '/api/device/read-memory' and session_id
                 and callable(getattr(self.app.state, 'shared_memory_read', None))):
             from mklink.runtime_memory import MemoryCall
             return await MemoryCall(self, arguments, session_id, sleep_notice).run()
         import httpx
         headers = {"X-Auth-Token": self.info["token"]}
+        if frontend_session:
+            headers['X-MKLink-Frontend-Session'] = frontend_session
+        if request_id:
+            headers['X-MKLink-Request-Id'] = request_id
         if session_id:
             headers["X-MKLink-Session"] = session_id
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=self.app),
@@ -479,7 +489,11 @@ class RuntimeControl:
                                    'request_id': arguments['request_id']}}
                 headers['X-MKLink-Request-Id'] = arguments['request_id']
             else:
-                kwargs = {"params" if method == "GET" else "json": arguments or {}}
+                query = method in ('GET', 'DELETE') or path == '/api/symbols/reload-sources'
+                kwargs = {"params" if query else "json": arguments or {}}
+                if path in ('/api/dash/rtt/traffic-recording/stop', '/api/dash/serial/traffic-recording/stop'):
+                    kwargs = {'params': {key: value for key, value in (arguments or {}).items() if key == 'channel'},
+                              'json': {key: value for key, value in (arguments or {}).items() if key != 'channel'}}
             response = await client.request(method, path, headers=headers, **kwargs)
         if response.status_code >= 400:
             raise HTTPException(response.status_code, response.json())
@@ -549,6 +563,14 @@ class RuntimeGate:
             return await reject(401, "Open the GUI using mklink gui, or authenticate with the runtime token")
         if c.stopping:
             return await reject(503, "Runtime is stopping")
+        frontend_session = headers.get(b'x-mklink-frontend-session', b'').decode()
+        def check_frontend_target():
+            if frontend_session:
+                c.frontend.check_target(frontend_session)
+        try:
+            check_frontend_target()
+        except HTTPException as exc:
+            return await reject(exc.status_code, exc.detail)
         # Discovery alone must not keep an abandoned backend alive. Authenticated
         # HTTP/WS work is protected until its response/connection completes.
         if path != "/_runtime/status":
@@ -572,6 +594,7 @@ class RuntimeGate:
         expected_probe = headers.get(b'x-mklink-probe', b'').decode()
         expected_generation = headers.get(b'x-mklink-device-generation', b'').decode()
         def check_connection():
+            check_frontend_target()
             if not is_uart_path(path) and (
                     (expected_probe and expected_probe != c.info.get('probe_id'))
                     or (expected_generation and expected_generation != str(c.app.state.mklink_state.get('device_generation', 0)))):
@@ -592,8 +615,11 @@ class RuntimeGate:
             except HTTPException as exc:
                 return await reject(exc.status_code, exc.detail)
         if is_uart_path(path):
+            async def uart_operation():
+                check_connection()
+                return await self.app(scope, receive, send)
             try:
-                return await c.run_operation(path, lambda: self.app(scope, receive, send), session_id=session_id)
+                return await c.run_operation(path, uart_operation, session_id=session_id)
             except HTTPException as exc:
                 return await reject(exc.status_code, exc.detail)
         from mklink.runtime_jobs import PATHS, executing_job
@@ -803,7 +829,7 @@ fetch('/_runtime/login', {method:'POST', headers:{'Content-Type':'application/js
     async def status():
         control.prune()
         return {"protocol": PROTOCOL, "version": VERSION, "instance_id": info["instance_id"],
-                "gui_launch": 1,
+                "gui_launch": 1, "runtime_id": info.get("runtime_id"),
                 "pid": info.get("pid"), "project_root": state["project_root"], "transport": info.get('transport', 'cdc'),
                 "probe_id": info.get("probe_id"), "clients": len(control.sessions), "busy": control.operation_lock.locked(),
                 "capabilities": sorted(CAPABILITIES)}
@@ -966,6 +992,8 @@ fetch('/_runtime/login', {method:'POST', headers:{'Content-Type':'application/js
     app.router.routes[0:0] = create_probe_router(state).routes
     from mklink.runtime_management import install_management
     install_management(app, control)
+    from mklink.runtime_frontend import install_frontend
+    install_frontend(app, control)
     from mklink.runtime_jobs import install_jobs
     install_jobs(app, control)
     from mklink.runtime_idle import install_idle_shutdown

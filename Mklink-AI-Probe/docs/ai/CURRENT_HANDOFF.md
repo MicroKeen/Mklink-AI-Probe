@@ -5,12 +5,12 @@
 ## 当前断点
 
 - 更新时间：`2026-11-15`
-- 分支：`codex/v0.5.0-fixes`
-- HEAD：`8d532019`
-- 远端 HEAD：`8d532019`
-- 工作树：PR #82 已合入；原生包双渠道补发和清盘完成，本轮仅补齐交接记录。
-- 当前任务：Mac ARM/Intel、Linux x64 原生包由 8d532019 构建并通过CI原生启动/签名更新，已补发腾讯云/GitHub。版本和旧发布文件不变；清盘约 12.03 GiB，见[原生验收](../verification/v050-native-release.md)。
-- 状态：`V0.5.0 三平台发布及清理完成`
+- 分支：`codex/agent-ui-workbench`
+- HEAD：`a1a910ce`
+- 远端 HEAD：`a1a910ce`
+- 工作树：本次功能与独立记忆提交一起推送到 PR #80；基线 main 7610ab20。正式安装/发布及其他工作树未改。
+- 当前任务：标签、标题、Agent目录和接入说明更名灵活面板/Flexible Panels，workbench协议和布局不变；37测试、构建、中英文实页通过，6面板及真实回放保留。全盘5主页面/9标签/4配置分区，234接口不代表GUI全覆盖，见[功能评审](../verification/v050-flexible-panel-gui-coverage.md)。全局技能同步；仅设备只读，b66ef612 CI成功。
+- 状态：`灵活面板已更名；完整 GUI 评审确认仍有缺口`
 
 ## 里程碑
 
@@ -23,11 +23,11 @@
 - **GUI共享控制、回放与多窗口健康**：ba3a334b实现5主页面/4配置分区/8仪表盘标签控制，原生/Web回放、显式选窗、探针身份/代次失效保护通过；取消SystemView冗余状态SSE解决浏览器连接池耗尽。最终安装版6受控窗口72/72正常，645064事件/9任务，解析和目标/主机丢弃0。GUI1290项及最终13项、后端245项/71边界/最终17项通过，存在重叠。NSIS普通用户覆盖3686文件一致，本机Skill同步，见[完整验收](../verification/v050-gui-control.md)。 此前IRQ锁/8KiB缓冲/采集中重启见[前轮](../verification/v050-systemview-loss-reboot.md)，显示及历史优化见[刷新报告](../verification/v050-systemview-refresh.md)。
 - **HPM Flash 配置、连接设置与脱机 OTP**：HPM 四字配置与接口/OTP 源码验证见[Flash 配置](../verification/v050-hpm-flash-config.md)及[前轮](../verification/v050-hpm-interface-otp.md)。现已包含在 db81241d 安装包；真实生产浏览器指定串口可选接口/时钟、配置导入/跨页复用、OTP 读取与4/8列/写确认保护通过。HPMLink V4.7.4 / HPM5301 在线校验、脱机和 52988 字节完整回读一致，见[最终覆盖](../verification/v050-usb-hpm-overwrite.md)。未做 OTP 永久编程或其他 NOR 验收。
 - **ELF 解析与完整 UART 波特率**：ELF 可写范围合并 PT_LOAD，客户 ELF 的结构体成员恢复，400 项解析/共享关联及真实浏览器通过，未操作客户板，见[ELF 报告](../verification/v050-elf-load-segments.md)。串口助手/Modbus 按 UART、RS485 独立声明使用 34 档至 10M，870 后端/25 GUI/69 Skill 及双 V4 实读通过，未发高速载荷，见[波特率报告](../verification/v050-uart-baud.md)。两项已随 ad00c962 普通用户覆盖并复验，见[覆盖报告](../verification/v050-elf-baud-overwrite.md)。
-- **固件能力提醒与采集中写入**：同一V4/STM32F103RC实测V4.7.3与V4.7.4写入前后最大采样间隔0.195/0.208/0.192ms；RTT并行为1.562ms，各轮10次写入成功且无序号/读错。真实Web写入保持约15.9kHz，三端警告一致，状态检查无设备I/O，见[能力报告](../verification/v050-firmware-capabilities.md)。V2.9.4与云端V2.9.3不误报降级；版本缓存/提醒/跳转验收见[提醒报告](../verification/v050-firmware-update-notice.md)。客户端先行、MCP重载与重启失败互斥恢复见[更新顺序](../verification/v050-update-order.md)。专项用例有重叠，最终全量结果以发布交接为准。
+- **固件能力提醒与采集中写入**：V4/STM32F103RC在V4.7.3/4写入并发采样及提醒、更新顺序见[能力](../verification/v050-firmware-capabilities.md)、[提醒](../verification/v050-firmware-update-notice.md)、[顺序](../verification/v050-update-order.md)。V3.6.10/V4.7.4实物拔插恢复通过，分别1484544/223728组，零队列丢弃；恢复后中位43056.7/43486.6组/秒。V3无同条件旧版基线，见[恢复验证](../verification/v050-superwatch-swclk.md)。均为既有独立证据，不代表当前面板真机验收。
 - **macOS 兼容性与跨平台回归**：最终原生包源8d532019；Mac ARM/Intel DMG与Linux AppImage/DEB的冻结后台、真实WebView/MCP操作、错误签名拒绝、有效更新与重启通过。USB各73项通过/1项Windows专属跳过。Windows Python7175/2跳过、GUI1291和生产构建通过；两渠道13附件及5平台索引验证完成。设施边界见[原生验收](../verification/v050-native-release.md)。
-- **SuperWatch 配置与手动日志转换**：手动转换 56 项、共享后台/流/边界 296 项、GUI 152 项通过，生产构建通过。冻结安装版实物记录 1,114,032 组，Excel 两页 1,048,575 / 65,457 行、4,456,128 个值与 JSONL 对应；RTT 505 行 TXT 对应，7 个原始文件哈希不变。GUI 手动触发、实际 CLI/MCP 重复请求复用任务且不停止采集。见[转换报告](../verification/v050-manual-recording-export.md)。符号旁配置原有软件/浏览器证据见[配置报告](../verification/v050-superwatch-profile.md)；前一安装候选已验证真实 AXF 重启恢复，本候选解析 6,718 个变量并保存四变量、500000 缓存与 1 µs 间隔。 TXT 精简追加：转换/记录器 37 项、Skill 69 项通过；既有 505 行时间和正文等价，63,996→40,304 字节，原始文件哈希不变。见[TXT 报告](../verification/v050-rtt-txt-readable.md)。
-- **V0.5.0 发布、安装与升级**：正式源1097f98e：Python7173通过/2跳过、GUI1291、Rust23、生产构建与CI通过。普通用户新装/卸载/覆盖exit0，3686载荷一致，6配置及USB名称/机器登记保留。原始0.4.3原生GitHub回退下载、签名、安装、重启0.5及二次无更新通过；Skill腾讯云/备用GitHub升级2680文件一致。原生/Web页面与四类回放通过，冻结59工具MCP/算法/SVD通过。双渠道11新文件全量SHA/HEAD/Range、索引及历史11文件COS归档通过；见[发布交接](../verification/v050-release-handoff.md)。前轮强制活动覆盖与实物见[安装验收](../verification/v050-installer-force-acceptance.md)，双V4/500ms恢复见[USB报告](../verification/v050-usb-hpm-overwrite.md)。
-- **V3 / V4 SuperWatch 恢复**：普通 V4 修复候选实物拔插跨 12.637 秒缺口原订阅恢复，V4.7.4 健康检查通过，223,728 组、零读错及队列丢弃，中位 43,486.6 组/秒。V3.6.10 实刷及拔插恢复通过，1,484,544 组，零队列丢弃、序号异常和时间倒退，恢复后中位 43,056.7 组/秒。旧 V3.6.8 缺采样能力，无同条件旧版基线。版本及未验范围见[恢复验证记录](../verification/v050-superwatch-swclk.md)。
+- **SuperWatch 配置与手动日志转换**：手动转换56项、共享后台296项、GUI152项及构建通过。冻结实物1114032组，Excel两页1048575/65457行、4456128值与JSONL对应；RTT505行TXT对应，7原文件哈希不变。重复请求复用任务且不停止采集，见[转换](../verification/v050-manual-recording-export.md)。符号旁配置与AXF恢复见[配置](../verification/v050-superwatch-profile.md)。TXT精简37项、Skill69项通过；505行等价、63996→40304字节、原文件不变，见[TXT](../verification/v050-rtt-txt-readable.md)。
+- **V0.5.0 发布、安装与升级**：正式源1097f98e：Python7173通过/2跳过、GUI1291、Rust23、构建/CI通过。普通用户新装/卸载/覆盖、原始0.4.3签名升级及重启、Skill两渠道升级、原生/Web四类回放、冻结59工具MCP及双渠道附件/索引验证通过；配置和USB名称保留。详见[发布交接](../verification/v050-release-handoff.md)及其安装/USB报告。本条是正式版既有证据，不替代当前扩展验收。
+- **灵活面板能力与 GUI 覆盖**：234操作/59MCP/124CLI/291HTTP；前轮Python919、FastAPI新旧各526、GUI全量1373通过。GridStack和尺寸留白有真实浏览器证据，字号通过/对比度REVIEW。此前RAM两正常四越界恢复、1735组8675值与Excel一致见[场景](../verification/v050-capability-validation.md)。本轮改名37测试/构建通过；中英文、6面板、回放保留，只读页面0亮度10采样停止。全GUI缺口见[评审](../verification/v050-flexible-panel-gui-coverage.md)；原生/触屏/语音未验。
 
 ## 架构决策
 
@@ -38,9 +38,9 @@
 - 跨会话固件联测固定上位机提交并核对 mklink/runtime 模块导入路径；主工作区和全局 editable 入口不自动代表当前任务版本。
 - project-init 是可选离线配置工具；通用工程可显式传型号和文件，直接烧录不依赖初始化。型号或镜像不明确时要求补充输入，不猜测，也不自动迁移已有芯片配置。 ELF 可写范围合并 SHF_WRITE/ALLOC 节及 PF_W 的 PT_LOAD 段，使用 p_vaddr/p_memsz；不凭 AX 或 RAM 地址放宽，不把 Flash 装载镜像当 RAM。已知只读映射不走通用回退。 HPM 四字 Flash 配置按实际 NOR 设置，GUI 可编辑/按器件保存/JSON 导入导出；无默认值时手填，不沿用旧型号。GUI/Python 共用参考表，显式 hpm_flash_cfg 优先于 board，已知默认值也走 flash_cfg；未知显式板名保留旧入口。XPI 控制器基址不等于 BIN 地址，USART ISP 配置独立。JTAG 脱机 OTP 只生成已确认的 hpm_user_otp 配方，读取绑定身份与代次；修改、断开或换设备后重新确认，系统字段只读。
 - RTT / SuperWatch 实时记录 JSONL；停止记录不自动转换。用户手动将 SuperWatch 转为 Excel、RTT 转为带主机时间戳的 UTF-8 TXT，三端共用低优先级后台转换；Excel 保留采样相对时间，开始日期写在 Info 页。JSONL 保留作无损回放源。 RTT TXT 普通行仅含时间、CH 通道、RX/TX 和正文；session 在每个分段首次输出或切换时单列注释，JSONL 保留完整字段。
-- SuperWatch 配置由共享后台保存在 AXF/ELF 旁，名称为原文件名加 .superwatch.json；三端共用名称与修订协议，不存变量地址、不自动开始采集。显示修改防抖，样本接收不写配置；浏览器上传只能保存到后台副本旁。
+- SuperWatch 配置由共享后台保存在 AXF/ELF 旁，名称为原文件名加 .superwatch.json；三端共用名称与修订协议，不存变量地址、不自动开始采集。显示修改防抖，样本接收不写配置；浏览器上传只能保存到后台副本旁。 自由面板命名视图按 panel ID 独立，不覆盖默认 AXF 显示配置或 GUI 注册；布局恢复不执行，语义附着不自动连设备。新会话按[接入说明](../../references/agent-ui.md)选择运行时/窗口/页面，先读能力与新鲜回执。
 - macOS 原生包使用 ad-hoc 签名且不启用 Hardened Runtime；Developer ID 发布须在冻结阶段正确签内嵌库。0.5.0 原生补发与CI验收已完成，正式标签/旧附件不变。在线烧录身份枚举已移到工作线程，查询前后核对身份/代次；其他发现接口不据此宣称已全部异步化。
-- 缺固件能力按已有文本/HELLO 缓存判断，版本号不替代协商；Web/CLI/SDK/MCP 共用 firmware_compatibility 和 firmware_warning。未知型号或未协商状态不猜测；status 5/6、超时、目标及硬件限制不误报升级可解决。SuperWatch 运行或暂停时缺 MUX 写能力则提示升级并保留采集，不自动停流写入；地址限制提示显式停止。未知写结果不重放，不自动升级固件。 串口助手与 Modbus 共用完整 34 档预设（300～10M）；已识别 UART / RS485 分别按自身固件声明限制选择。列表刷新只用缓存，显式查询走物理探针共享所有者且不停止采集；缺声明提示升级，第三方预设不保证支持。已有连接的自定义速率只读保留。 固件云端提醒复用有序握手缓存，后台延迟 3 秒检查、成功缓存 6 小时/失败 15 分钟；无产品标识默认 MicroLink，显式 HPMLink 独立匹配。不能解析时直接提示升级但不猜版本/镜像。弹窗仅跳转，不停止采集或刷写，同窗口/设备/版本去重；能力协商保留。 更新顺序推荐客户端先行，重载 MCP/空闲旧后台后再重连检查固件；应用内更新保留空闲预约，外部覆盖安装按用户最终要求强制结束旧进程；重启失败暂缓固件。Skill 首次异步检查并主动提醒，未连接固件待查，不自动安装。
+- 缺固件能力按已有 HELLO/文本缓存判断，四端共用 firmware_compatibility/warning；版本不替代协商，未知型号或 status 5/6 不猜可升级解决。SuperWatch 缺 MUX 写能力时提示并保留采集；未知结果不重放、不自动升级。UART/RS485 共用34档预设，各按固件声明限制；第三方不保证支持，列表只读缓存，显式查询共享所有者且不停采集，已有自定义速率只读保留。云端提醒有序握手缓存，弹窗只跳转、不停止或刷写；同窗口/设备/版本去重。客户端先行，重载MCP及空闲后台后重连检查固件；应用内空闲预约，明确覆盖安装可强制结束旧进程，重启失败暂缓固件。Skill仅主动检查提醒。细节见[能力](../verification/v050-firmware-capabilities.md)、[提醒](../verification/v050-firmware-update-notice.md)、[更新顺序](../verification/v050-update-order.md)。
 
 ## 真机环境
 
@@ -52,16 +52,16 @@
 
 ## 下一动作
 
-1. V0.5.0 三平台与四固件已完成双渠道发布；保留并同步 codex/v0.5.0-fixes 继续后续上位机开发。已清理 #70/#76/#78 的合并分支；开放 #65/#80 保留。版本不变，正式附件/标签不可覆写，见[原生验收](../verification/v050-native-release.md)。
-2. 客户可直接运行新版覆盖安装器，自动结束当前用户旧MKLink与Skill/MCP，不要求手动先关旧版；活动任务会结束。安装后AI宿主需重新加载被结束的MCP。损坏历史备份保留，仍失败时收集installation-history-report.json、history-backups和诊断包，区分权限/占用/格式；不手工删除有效未知结果，不重放烧录。
-3. 客户SystemView先核对实际CH、目标IRQ锁及元数据。1µs三路溢出先采集0x40 CH2设备时间戳/长度/序号与主机单调到达时间，低频读0x10错误和0x14批次耗时；诊断开销保持一致，再判断背压、重试或调度，不直接假定80ms停读或给CH2固定优先级。多视图假离线已完成修复与安装版六窗口复验。保留目标构建快照供AXF源码路径使用，原工程重编后再清理；见[静态补充](../verification/v050-systemview-loss-reboot.md)。
-4. 有Linux/Mac实物后补验真实USB、Gatekeeper首次安装和交互式提权；不能把本轮CI结果当作这些硬件/系统验收。
+1. 继续 PR #80，按[接入](../../references/agent-ui.md)重新发现实例/窗口/页面与设备。按[完整GUI评审](../verification/v050-flexible-panel-gui-coverage.md)补SWD设置组件、完整RTT/串口、Memory、Trace等缺口及多实例回放隔离；接口数不作覆盖率。保留示例与真机空闲界面。无JSON用户UI，沿用成熟组件与一致尺寸留白；合并、安装/发布另授权。
+2. V0.5.0 三平台与四固件已完成双渠道发布；保留并同步 codex/v0.5.0-fixes 继续后续上位机开发。已清理 #70/#76/#78 的合并分支；开放 #65/#80 保留。版本不变，正式附件/标签不可覆写，见[原生验收](../verification/v050-native-release.md)。 有Linux/Mac实物后补验真实USB、Gatekeeper首次安装和交互式提权；不能把本轮CI结果当作这些硬件/系统验收。
+3. 客户可直接运行新版覆盖安装器，自动结束当前用户旧MKLink与Skill/MCP，不要求手动先关旧版；活动任务会结束。安装后AI宿主需重新加载被结束的MCP。损坏历史备份保留，仍失败时收集installation-history-report.json、history-backups和诊断包，区分权限/占用/格式；不手工删除有效未知结果，不重放烧录。
+4. 客户SystemView先核对实际CH、目标IRQ锁及元数据。1µs三路溢出先采集0x40 CH2设备时间戳/长度/序号与主机单调到达时间，低频读0x10错误和0x14批次耗时；诊断开销保持一致，再判断背压、重试或调度，不直接假定80ms停读或给CH2固定优先级。多视图假离线已完成修复与安装版六窗口复验。保留目标构建快照供AXF源码路径使用，原工程重编后再清理；见[静态补充](../verification/v050-systemview-loss-reboot.md)。
 5. 固件会话继续维护 STOP 状态码补丁；客户信息齐备并获得明确实物安排后再做同条件 STOP/唤醒验证，不自动抢占调试器或刷写设备。
 
 ## 已知限制
 
 - 普通读取 P95 和间隔读取稳定低于 1 ms、最大采样间隔 20 µs、40 µs 翻转零漏采仍是未达目标。
-- 公网远程中继继续延期。独立 [S3 PR #65](https://github.com/MicroKeen/Mklink-AI-Probe/pull/65) 仍开放。其他硬件的[历史未验范围](known-limits-20261030.md)按需查阅。
+- 公网远程中继继续延期。独立 [S3 PR #65](https://github.com/MicroKeen/Mklink-AI-Probe/pull/65) 仍开放。其他硬件的[历史未验范围](known-limits-20261030.md)按需查阅。 PR #80自由面板候选尚未合入/安装/发布；234直接操作已接入，不等同逐项真机通过。文件传输、连续流、宿主/工程/远程管理继续走原页面或Agent CLI任务，尚非全部独立可绑定面板。当前宿主旧MCP需对应候选入口；已验授权工程的页面/亮度RAM边界；其他物理故障、复位、烧录、供电和语音未验。
 - 转换入口针对后台最近一次记录，应在开启下一次记录前触发；没有历史文件选择器或全局转换并发上限。Excel 约 15 位有效数字，原始 JSONL 不变。转换仍消耗 CPU/磁盘，本轮未做完整真机性能 A/B；冻结 Excel 父进程退出后仍运行的时间窗口未直接观测，详见报告。 RTT TXT 精简已包含在 V0.5.0 / 3a3fb298 安装包。
 - Mac/Linux 实物 USB、Gatekeeper/Finder 首次安装、交互式提权及历史原生客户端升级未验；维护者接受CI原生验证。合成旧版本AppHandle的真实签名安装与最终包窗口操作已通过，见[原生验收](../verification/v050-native-release.md)。
 - 客户旧版长停流未复现；14b86cd0同固件安装前后短测SW单独约15.793kHz、RTT共存约13.816kHz，40次写入无序号/读错，但不能证明所有负载零退化。普通HTTP读取P95含代理约4.463/4.921ms。未完成外部调试器共存、全部性能目标、8通道字节全量或长期压力。用户确认UART/RS485未接，本轮串口/Modbus未验。正式0.4.3→0.5.0签名自动更新和重启已验；覆盖安装按明确要求会中断活动任务，普通用户无法结束管理员进程或突破目录权限。

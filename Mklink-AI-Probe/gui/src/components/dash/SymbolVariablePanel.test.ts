@@ -183,6 +183,87 @@ describe('SymbolVariablePanel', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(okJson({ items: [{ name: 'gain' }] })))
   })
 
+  it('exposes typed writes with truthful failures and independent view subsets', async () => {
+    const server = mockPinnedWorkspace(['gain'])
+    const first = mount(SymbolVariablePanel, { props: { panelId: 'left', deviceConnected: true, latestValues: {}, viewPaths: ['gain'] } })
+    const second = mount(SymbolVariablePanel, { props: { panelId: 'right', deviceConnected: true, latestValues: {}, viewPaths: ['controller.target'] } })
+    await flushPromises()
+    expect(first.vm.read().visibleSelected).toEqual(['gain'])
+    expect(second.vm.read().visibleSelected).toEqual([])
+    const writesBefore = server.fetch.mock.calls.filter(([, init]) => init?.method).length
+    first.vm.restore({ viewPaths: [], sections: { pinned: true } })
+    expect(first.vm.read().visibleSelected).toEqual([])
+    expect(first.vm.read().selected).toEqual(['gain'])
+    expect(server.fetch.mock.calls.filter(([, init]) => init?.method)).toHaveLength(writesBefore)
+    expect(await first.vm.execute('symbols.write', { path: 'gain', value: '1.3' })).toMatchObject({ acknowledgedValue: 1.3, sampled: false })
+    expect(mocks.writeSymbol).toHaveBeenLastCalledWith('gain', 1.3)
+    mocks.writeSymbol.mockRejectedValueOnce(new Error('write outcome unknown'))
+    await expect(first.vm.execute('symbols.write', { path: 'gain', value: '2' })).rejects.toThrow('outcome unknown')
+    expect(mocks.writeSymbol).toHaveBeenCalledTimes(2)
+    mocks.stale.value = true
+    await expect(first.vm.execute('symbols.write', { path: 'gain', value: '3' })).rejects.toThrow('not writable')
+    expect(mocks.writeSymbol).toHaveBeenCalledTimes(2)
+    first.unmount(); second.unmount()
+  })
+
+  it('propagates semantic selection failures without inventing a selected item', async () => {
+    mockPinnedWorkspace()
+    const wrapper = mount(SymbolVariablePanel, { props: { deviceConnected: true, latestValues: {} } })
+    await flushPromises()
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ detail: 'Device is busy' }), { status: 409 })))
+    await expect(wrapper.vm.execute('symbols.select', { path: 'controller.target', selected: true })).rejects.toThrow('Device is busy')
+    expect(wrapper.vm.read().selected).toEqual(['gain'])
+    wrapper.unmount()
+  })
+
+  it('keeps standalone variable visibility local and round-trips it without changing acquisition', async () => {
+    const server = mockPinnedWorkspace()
+    const first = mount(SymbolVariablePanel, { props: { panelId: 'left', deviceConnected: true, latestValues: {} } })
+    const second = mount(SymbolVariablePanel, { props: { panelId: 'right', deviceConnected: true, latestValues: {} } })
+    await flushPromises()
+    const before = server.fetch.mock.calls.filter(([, options]) => options?.method).length
+    expect(await first.vm.execute('symbols.visibility.set', { path: 'gain', visible: false })).toMatchObject({ hidden: ['gain'], visibleSelected: [], selected: ['gain'] })
+    expect(second.vm.read().visibleSelected).toEqual(['gain'])
+    expect(first.vm.read().view.hidden).toEqual(['gain'])
+    expect(first.get('[data-testid="visibility-gain"]').attributes('aria-label')).toContain('已选变量')
+    await first.get('[data-testid="visibility-gain"]').trigger('click')
+    expect(first.vm.read().visibleSelected).toEqual(['gain'])
+    first.vm.restore({ hidden: ['gain'] })
+    expect(first.vm.read().visibleSelected).toEqual([])
+    expect(server.fetch.mock.calls.filter(([, options]) => options?.method)).toHaveLength(before)
+    first.unmount(); second.unmount()
+  })
+
+  it('keeps thirty-two populated variable panel reports below the protocol budget', async () => {
+    const descriptors = Array.from({ length: 200 }, (_, index) => ({ ...catalogItems[2], path: `control.axis_${index}.speed`, parent_path: null }))
+    mocks.items.value = descriptors
+    mocks.browseRoots.value = descriptors.map(browseLeaf)
+    mocks.searchSymbols.mockImplementation(async (query: string) => descriptors.filter(item => item.path.includes(query)))
+    const workspace = { version: 2, defaultGroup: 'main', groups: [{ id: 'main', name: 'Main', height: 200, collapsed: false }], panes: [{ id: 'main' }], signals: {} }
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => okJson(url.endsWith('/workspace') ? { workspace, revision: '1' } : url.endsWith('/pins')
+      ? { pins: descriptors.map(item => item.path), revision: '1', generation: 1, entries: descriptors.map(descriptor => ({ path: descriptor.path, descriptor })) }
+      : { items: descriptors.map(item => ({ name: item.path })) })))
+    const { default: Signals } = await vi.importActual<typeof import('./SelectedSignals.vue')>('./SelectedSignals.vue')
+    const symbols = mount(SymbolVariablePanel, { props: { panelId: 'budget', deviceConnected: true, latestValues: {} } })
+    const signals = mount(Signals, { props: { paths: descriptors.map(item => item.path), values: {} } })
+    await flushPromises()
+    const actions = [...symbols.vm.catalog(), ...signals.vm.catalog()]
+    const state = { ...symbols.vm.read(), signals: signals.vm.read() }
+    const report = { protocol: 'agent-frontend/1', session_id: 'session', page_id: 'page', title: 'Workbench', catalog: { panels: [] as any[] }, actions: {} as Record<string, any>, state: { revision: 1, value: { panels: [] as any[] } } }
+    for (let panel = 0; panel < 32; panel++) {
+      const id = `panel_${panel}`, ids = actions.map((action, index) => `${id}_${index}`)
+      report.catalog.panels.push({ id, type: 'variables', title: `Variables ${panel}`, source: { signals: [] }, actions: actions.map((action, index) => ({ id: ids[index], name: action.name })) })
+      report.state.value.panels.push({ id, state })
+      actions.forEach((action, index) => { report.actions[ids[index]] = { name: action.name, panel_id: id, effect: action.effect, description: action.description, inputSchema: action.args } })
+    }
+    // Leave 256 KiB for the dashboard, layout and default SuperWatch surface.
+    expect(new TextEncoder().encode(JSON.stringify(report)).byteLength).toBeLessThan(768 * 1024)
+    expect(state.rowCount).toBe(200)
+    expect(state.rows).toHaveLength(24)
+    expect((await symbols.vm.execute('symbols.inspect', { offset: 100, limit: 100 })).rows).toHaveLength(100)
+    symbols.unmount(); signals.unmount()
+  })
+
   it('shows scalars immediately and keeps structured variables collapsed by default', async () => {
     const wrapper = mount(SymbolVariablePanel, {
       props: { deviceConnected: true, latestValues: { gain: 1.25 } },

@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { API_BASE } from '../../lib/runtimeEndpoint'
 import { tr } from '../../composables/useLanguage'
+import { applyConnectionClock } from '../../lib/connectionClock'
 
 interface ClockStatus {
   connected: boolean
@@ -96,34 +97,18 @@ async function apply() {
   const mode = selectedInterface.value
   try {
     const applyToProbe = matchingInterface.value
-    const response = await fetch(`${API_BASE}${applyToProbe ? '/api/device/debug-speed' : '/api/config'}`, {
-      method: applyToProbe ? 'POST' : 'PUT',
-      headers: { 'Content-Type': 'application/json',
-        ...(status.value?.device_generation !== undefined
-          ? { 'X-MKLink-Device-Generation': String(status.value.device_generation) } : {}) },
-      body: JSON.stringify(applyToProbe ? { interface: mode, clock_hz: requested, save: true } : { clock_interface: mode, clock_hz: requested }),
-    })
-    const payload = await response.json()
-    if (!response.ok) {
-      const detail = payload.detail
-      if (Array.isArray(detail?.busy) && detail.busy.length) throw new Error(tr(
-        '此固件暂不支持采集中改频率。请先停止采集，再应用时钟；原任务保持运行。',
-        'This firmware cannot change the clock during acquisition. Stop acquisition, then apply; existing captures remain running.',
-      ))
-      throw new Error(typeof detail === 'string' ? detail : detail?.message || response.statusText)
-    }
+    await applyConnectionClock(status.value, mode, requested, applyToProbe)
     if (disposed || current !== revision) return
-    if (applyToProbe
-      ? payload.interface !== mode || payload.configured_hz !== requested || !['configured', 'applied', 'acknowledged'].includes(payload.apply_state)
-      : payload.clock_interface !== mode || Number(payload[`${mode.toLowerCase()}_clock`]) !== requested) {
-      throw new Error(tr('下载器未确认所选时钟，请核对当前状态。', 'The probe did not confirm the selected clock; check its current status.'))
-    }
     dirty.value = false
     if (previousMigration?.from_hz === 4_000_000 && requested === previousMigration.to_hz) {
       message.value = tr('旧 4 MHz 配置已迁移到 2 MHz。', 'The old 4 MHz configuration was migrated to 2 MHz.')
     }
   } catch (error) {
-    if (!disposed && current === revision) message.value = error instanceof Error ? error.message : String(error)
+    const detail = (error as { detail?: { busy?: unknown[] } }).detail
+    if (!disposed && current === revision) message.value = detail?.busy?.length ? tr(
+      '此固件暂不支持采集中改频率。请先停止采集，再应用时钟；原任务保持运行。',
+      'This firmware cannot change the clock during acquisition. Stop acquisition, then apply; existing captures remain running.',
+    ) : error instanceof Error ? error.message : String(error)
   } finally {
     if (!disposed && current === revision) {
       busy.value = false
