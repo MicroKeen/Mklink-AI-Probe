@@ -62,6 +62,10 @@ jobs:
         run: |
           ./scripts/build_workspace.ps1 -Action run -Executable python -ArgumentList @('-m', 'pip', 'install', '.[gui,mcp]', 'pytest==8.4.2')
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          if ($IsLinux) {
+            ./scripts/build_workspace.ps1 -Action run -Executable python -ArgumentList @('-m', 'pip', 'install', 'py-spy==0.4.1')
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          }
           rustup update stable --no-self-update
       - name: Install macOS USB library
         if: runner.os == 'macOS'
@@ -81,6 +85,7 @@ jobs:
         env:
           NATIVE_TARGET: ${{ matrix.target }}
           WEBKIT_DISABLE_DMABUF_RENDERER: '1'
+          NATIVE_PROFILE: '1'
         run: |
           if ($IsLinux) {
             ./scripts/build_workspace.ps1 -Action run -Executable xvfb-run -ArgumentList @('-a', 'python', '_maintainer/testing/native_release_acceptance.py', 'qualify')

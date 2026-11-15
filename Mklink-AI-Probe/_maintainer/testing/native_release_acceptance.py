@@ -88,6 +88,8 @@ async def native_gui(command, sidecar, work, label):
     log = (OUT / f'{label}.log').open('w')
     process = subprocess.Popen(command, cwd=scratch, env=env, stdout=log, stderr=log, stdin=subprocess.DEVNULL)
     info = None
+    profiler = None
+    profiler_log = None
     result = {'label': label, 'pages': [], 'tabs': [], 'operations': []}
     try:
         deadline = time.monotonic() + 120
@@ -127,6 +129,15 @@ async def native_gui(command, sidecar, work, label):
                 await asyncio.sleep(.5)
             assert len(windows) == 1 and windows[0]['kind'] == 'desktop', windows
             wid = windows[0]['window_id']
+            if platform.system() == 'Linux' and os.environ.get('NATIVE_PROFILE') == '1':
+                endpoints = [json.loads(p.read_text()) for p in (scratch / 'registry').rglob('endpoint.json')]
+                pids = {entry['pid'] for entry in endpoints}
+                assert len(pids) == 1, 'Expected one isolated backend to profile'
+                profiler_log = (OUT / f'{label}-profiler.log').open('w')
+                profiler = subprocess.Popen(['sudo', shutil.which('py-spy'), 'record',
+                    '--pid', str(pids.pop()), '--duration', '20', '--rate', '50', '--idle',
+                    '--format', 'raw', '--output', str(OUT / f'{label}-stacks.log')],
+                    stdout=profiler_log, stderr=profiler_log)
 
             async def gui(action, **args):
                 started = time.monotonic()
@@ -154,6 +165,9 @@ async def native_gui(command, sidecar, work, label):
         return result
     finally:
         (OUT / f'{label}-gui.json').write_text(json.dumps(result, indent=2) + '\n')
+        if profiler is not None:
+            profiler.wait(timeout=25)
+            profiler_log.close()
         if info:
             try:
                 local_request(f"http://127.0.0.1:{info['port']}", '/api/desktop/shutdown', {'instance_id': info['instanceId']})
