@@ -11,6 +11,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, Request
 from pydantic import ValidationError, create_model
 from starlette.concurrency import run_in_threadpool
+from starlette.routing import compile_path
 
 from .frontend_contract import bounded_json, identifier, keys, require
 from .runtime_capabilities import CAPABILITIES
@@ -137,13 +138,16 @@ def capability_catalog(app):
                 return expand(definitions[ref], (*seen, ref))
             return {key: expand(item, seen) for key, item in value.items()}
 
+        # OpenAPI includes nested routers even when FastAPI keeps opaque route wrappers.
+        for path, methods in schema.get('paths', {}).items():
+            for method, operation in methods.items():
+                if method not in ('get', 'post', 'put', 'patch', 'delete', 'head', 'options'):
+                    continue
+                full_path = prefix + path
+                operations[(method.upper(), full_path)] = (compile_path(full_path)[0], expand(operation))
         for route in application.routes:
             if hasattr(route, 'app') and hasattr(route.app, 'routes'):
                 collect(route.app, prefix + route.path)
-            for method in getattr(route, 'methods', ()):
-                operation = schema.get('paths', {}).get(route.path, {}).get(method.lower())
-                if operation:
-                    operations[(method, prefix + route.path)] = (route, expand(operation))
 
     collect(app)
     result = []
@@ -151,7 +155,7 @@ def capability_catalog(app):
         found = operations.get((method, path))
         if found is None:
             found = next((entry for (verb, pattern), entry in operations.items()
-                          if verb == method and '{' in pattern and entry[0].path_regex.fullmatch(path)), None)
+                          if verb == method and '{' in pattern and entry[0].fullmatch(path)), None)
         operation = found[1] if found else {}
         operation = {**operation, 'parameters': [parameter for parameter in operation.get('parameters', [])
                      if parameter['in'] != 'path' or '{' + parameter['name'] + '}' in path]}

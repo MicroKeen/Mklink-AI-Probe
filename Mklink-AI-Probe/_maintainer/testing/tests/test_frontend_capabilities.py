@@ -10,6 +10,33 @@ from test_shared_runtime import runtime
 PATH = '/api/runtime/capabilities/call'
 
 
+@pytest.mark.parametrize('mounted', [False, True])
+def test_catalog_uses_public_schema_for_nested_router_paths(mounted):
+    from fastapi import APIRouter, FastAPI
+    from fastapi.testclient import TestClient
+    from types import SimpleNamespace
+    app, child, router = FastAPI(), FastAPI(), APIRouter()
+
+    @router.get('/{kind}/status')
+    def status(kind: str, detail: bool = False):
+        return {'kind': kind, 'detail': detail}
+
+    child.include_router(router, prefix='' if mounted else '/api/dash')
+    # The public schema remains complete when route internals are opaque.
+    catalog_app = SimpleNamespace(openapi=child.openapi, routes=[])
+    if mounted:
+        app.mount('/api/dash', child)
+        catalog_app = SimpleNamespace(openapi=app.openapi,
+                                      routes=[SimpleNamespace(app=catalog_app, path='/api/dash')])
+    else:
+        app = child
+    assert TestClient(app).get('/api/dash/rtt/status?detail=true').json() == {'kind': 'rtt', 'detail': True}
+    item = next(item for item in capability_catalog(catalog_app)['capabilities'] if item['name'] == 'rtt_status')
+    assert item['available']
+    assert [parameter['name'] for parameter in item['parameters']] == ['detail']
+    assert item['parameters'][0]['schema']['type'] == 'boolean'
+
+
 @pytest.fixture(scope='module')
 def catalog(tmp_path_factory):
     from mklink.remote.api import create_app
