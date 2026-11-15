@@ -88,7 +88,7 @@ jobs:
           $tests += 'test_cli_systemview'
           $tests += 'test_systemview_streaming'
           $tests += 'test_runtime_uart'
-          $tests += @('test_runtime_frontend', 'test_frontend_storage', 'test_frontend_replay')
+          $tests += @('test_runtime_frontend', 'test_frontend_storage', 'test_frontend_replay', 'test_frontend_capabilities')
           $tests += 'test_web_entry'
           $tests += 'test_shared_modbus_scan'
           $tests += 'test_modbus_cli_defaults'
@@ -127,6 +127,12 @@ jobs:
           $arguments += $tests | ForEach-Object { "_maintainer/testing/tests/$_.py" }
           $arguments += '_maintainer/testing/tests/test_remote_packaging.py::test_final_package_evidence_is_explicitly_deferred_to_n5'
           ./scripts/build_workspace.ps1 -Action run -Executable python -ArgumentList $arguments
+      - name: Check workbench capability inventory
+        shell: pwsh
+        working-directory: Mklink-AI-Probe
+        run: |
+          $paths = ./scripts/build_workspace.ps1 -Action paths | ConvertFrom-Json
+          ./scripts/build_workspace.ps1 -Action run -Executable python -ArgumentList @('_maintainer/testing/frontend_capability_matrix.py', '--output', "$($paths.reports)/frontend-capabilities")
       - name: Attach contract report
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -154,7 +160,7 @@ jobs:
         working-directory: Mklink-AI-Probe
         run: |
           $paths = ./scripts/build_workspace.ps1 -Action paths | ConvertFrom-Json
-          ./scripts/build_workspace.ps1 -Action run -WorkingDirectory ./gui -Executable npm -ArgumentList @('test', '--', 'src/App.test.ts', 'src/views/DashboardView.test.ts', 'src/views/RemoteDashboardReuse.test.ts', 'src/lib/remoteRuntimeEndpoint.test.ts', 'src/components/dash/WaveformViewer.test.ts', 'src/components/dash/SerialMonitorTab.test.ts', 'src/components/dash/SerialAutomationPanel.test.ts', 'src/components/dash/SerialRecordingPanel.test.ts', 'src/components/dash/SerialSequencePanel.test.ts', 'src/components/dash/SerialSendExtras.test.ts', 'src/components/dash/ModbusTab.test.ts', 'src/lib/sharedRuntimeView.test.ts', 'src/lib/runtimeEndpoint.test.ts', 'src/lib/runtimeEndpoint.startup.test.ts', 'src/composables/useBackendHealth.test.ts', 'src/composables/useResourceStatus.test.ts', 'src/components/config/RuntimePanel.test.ts', 'src/views/ConfigView.test.ts', 'src/views/SiteAgentView.test.ts', 'src/components/config/RemoteConnectPanel.test.ts', 'src/composables/useMklinkApi.test.ts', 'src/components/dash/PeripheralWatchPanel.test.ts', 'src/components/dash/SuperWatchTab.test.ts', 'src/components/dash/SuperWatchRecording.test.ts', 'src/lib/filePicker.test.ts', 'src/components/dash/RttViewTab.test.ts', 'src/components/dash/RttRawView.test.ts', '--reporter=default', '--reporter=junit', "--outputFile.junit=$($paths.reports)/shared-gui.xml")
+          ./scripts/build_workspace.ps1 -Action run -WorkingDirectory ./gui -Executable npm -ArgumentList @('test', '--', 'src/App.test.ts', 'src/views/DashboardView.test.ts', 'src/views/RemoteDashboardReuse.test.ts', 'src/lib/remoteRuntimeEndpoint.test.ts', 'src/components/dash/WaveformViewer.test.ts', 'src/components/dash/SerialMonitorTab.test.ts', 'src/components/dash/SerialAutomationPanel.test.ts', 'src/components/dash/SerialRecordingPanel.test.ts', 'src/components/dash/SerialSequencePanel.test.ts', 'src/components/dash/SerialSendExtras.test.ts', 'src/components/dash/ModbusTab.test.ts', 'src/lib/sharedRuntimeView.test.ts', 'src/lib/runtimeEndpoint.test.ts', 'src/lib/runtimeEndpoint.startup.test.ts', 'src/composables/useBackendHealth.test.ts', 'src/composables/useResourceStatus.test.ts', 'src/components/config/RuntimePanel.test.ts', 'src/views/ConfigView.test.ts', 'src/views/SiteAgentView.test.ts', 'src/components/config/RemoteConnectPanel.test.ts', 'src/composables/useMklinkApi.test.ts', 'src/components/dash/PeripheralWatchPanel.test.ts', 'src/components/dash/SuperWatchTab.test.ts', 'src/components/dash/SuperWatchRecording.test.ts', 'src/lib/filePicker.test.ts', 'src/components/dash/RttViewTab.test.ts', 'src/components/dash/RttRawView.test.ts', 'src/components/dash/CapabilityPanel.test.ts', 'src/components/dash/FrontendIntent.test.ts', 'src/components/dash/WorkbenchTab.test.ts', 'src/components/dash/WorkbenchPanel.test.ts', 'src/lib/frontendControl.test.ts', 'src/lib/frontendControl.exchange.test.ts', 'src/composables/useFrontendWorkbench.test.ts', 'src/composables/useFrontendBindings.test.ts', '--reporter=default', '--reporter=junit', "--outputFile.junit=$($paths.reports)/shared-gui.xml")
       - name: Check offline USART ISP configuration
         shell: pwsh
         working-directory: Mklink-AI-Probe

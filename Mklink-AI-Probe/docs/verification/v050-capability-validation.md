@@ -50,6 +50,7 @@ Windows，既有源码虚拟环境，Node/npm 使用已安装依赖；全部运�
 
 - 最终 Python 15 个相关套件 **919 通过**，包含新增能力测试 **475 项**。范围为 frontend_capabilities、frontend_replay、runtime_frontend、frontend_storage、shared_runtime、runtime_jobs、runtime_uart、runtime_cli、runtime_mcp、superwatch_recording、traffic_recording、serial_recording、hardfault、skill_context_boundaries、recording_text。
 - GUI 全量 **127 文件 / 1363 项通过**；`vue-tsc -b` 与 Vite 生产构建通过。保留既有 Dashboard 大分块提示。
+- 持续集成清单已加入能力路由回归、能力矩阵自检及 8 个自由面板/会话测试文件；工作流 YAML 与 207 个测试路径检查通过。CI 结果以对应 PR 提交的检查为准。
 - 首轮导出失败来自旧验证虚拟环境缺少正式版声明的 XlsxWriter；补齐已声明依赖后重跑。另将一处录制测试的默认编码改为 UTF-8，消除中文 Windows 默认 GBK 的误失败。未增加产品依赖。
 - 现存依赖弃用与 OpenAPI 重复 operation ID 警告保留，没有隐藏或据此放宽断言。
 
