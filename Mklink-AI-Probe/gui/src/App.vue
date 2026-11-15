@@ -66,6 +66,9 @@
       :version="updateVersion"
       :progress="updateProgress"
       :error="updateError"
+      :blocked="updateBlocked"
+      :firmware-busy="firmwareBusy"
+      :firmware-pending="['available', 'unrecognized'].includes(deviceStatus.firmware_update?.status || '')"
       @install="installAndRelaunch"
       @retry="retryUpdate"
       @dismiss="updateDismissed = true"
@@ -78,6 +81,14 @@
       </div>
       <button class="btn" data-testid="backend-recheck" @click="refreshHealth">{{ tr('重新检查', 'Check Again') }}</button>
     </div>
+    <FirmwareCompatibilityBanner v-if="backendState === 'alive' && deviceStatus.connected"
+      :compatibility="deviceStatus.firmware_compatibility" :remote="IS_REMOTE"
+      @open-firmware="router.push({ name: 'config', query: { section: 'firmware' } })" />
+    <FirmwareUpdatePrompt v-if="!IS_REMOTE"
+      :deferred="clientPending || clientInstalling || firmwareBusy"
+      :notice="backendState === 'alive' && deviceStatus.connected ? deviceStatus.firmware_update : null"
+      :on-firmware-page="currentTab === 'config' && route.query?.section === 'firmware'"
+      @open-firmware="router.push({ name: 'config', query: { section: 'firmware' } })" />
     <div class="app-main" :inert="IS_REMOTE && backendState !== 'alive'">
       <DashboardView v-if="initialBackendReady && dashboardVisited" v-show="currentTab === 'dashboard'" />
       <router-view v-if="initialBackendReady" v-slot="{ Component, route: viewRoute }">
@@ -114,7 +125,7 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
+import { nextTick, computed, defineAsyncComponent, onMounted, onUnmounted, provide, ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { Languages } from '@lucide/vue'
 import { IS_REMOTE } from './lib/runtimeEndpoint'
@@ -123,6 +134,8 @@ import RemoteSessionBar from './components/RemoteSessionBar.vue'
 import StatusBar from './components/StatusBar.vue'
 import ToastContainer from './components/ToastContainer.vue'
 import AppUpdateBanner from './components/AppUpdateBanner.vue'
+import FirmwareCompatibilityBanner from './components/FirmwareCompatibilityBanner.vue'
+import FirmwareUpdatePrompt from './components/FirmwareUpdatePrompt.vue'
 import VersionHistoryPopover from './components/VersionHistoryPopover.vue'
 import { useMklinkApi } from './composables/useMklinkApi'
 import { useBackendHealth } from './composables/useBackendHealth'
@@ -131,6 +144,8 @@ import { language, toggleLanguage, tr } from './composables/useLanguage'
 import { themePreference, setTheme, type ThemePreference } from './composables/useTheme'
 import { startBrowserSessionLease } from './lib/browserSessionLease'
 import { startSharedRuntimeView } from './lib/sharedRuntimeView'
+import { createGuiAutomation } from './lib/guiAutomation'
+import { updateCoordinationKey } from './lib/updateCoordination'
 
 const router = useRouter()
 // Stream viewers use persistent DOM references while sampling in the background.
@@ -148,20 +163,30 @@ const recoveryTitle = computed(() => authenticationRequired.value
 const recoveryHint = computed(() => authenticationRequired.value
   ? tr('请重新运行 mklink gui --probe <下载器 ID 或别名>，使用新链接打开对应下载器。', 'Run mklink gui --probe <probe ID or alias> again and open the new link for that probe.')
   : tr('连接恢复后会自动更新；若后台已退出，请重新运行 mklink gui --probe <下载器 ID 或别名>。', 'Updates resume when the connection returns. If the backend has exited, run mklink gui --probe <probe ID or alias> again.'))
+const firmwareBusy = ref(false)
 const {
   state: updateState,
   version: updateVersion,
   progress: updateProgress,
   error: updateError,
+  blocked: updateBlocked,
   checkForUpdates,
   installAndRelaunch,
   retry: retryUpdate,
-} = useAppUpdater()
+} = useAppUpdater(() => !firmwareBusy.value)
 const initialBackendReady = ref(false)
 const updateDismissed = ref(false)
+const clientInstalling = computed(() => ['installing', 'restart-required'].includes(updateState.value))
+const clientPending = computed(() => !updateDismissed.value && ['checking', 'downloading', 'ready'].includes(updateState.value))
+provide(updateCoordinationKey, { clientPending, clientInstalling, firmwareBusy })
 let statusPollingStarted = false
 let stopWindowLease: () => void = () => undefined
 let windowLeaseMode: boolean | undefined
+const guiAutomation = createGuiAutomation(router, () => ({
+  backend: backendState.value, connected: deviceStatus.value.connected,
+  probe_id: deviceStatus.value.probe_id, device_generation: deviceStatus.value.device_generation,
+  kind: isTauri ? 'desktop' : 'web', version: __APP_VERSION__,
+}))
 watch(() => backendState.value === 'alive' ? sharedRuntime?.value === true : undefined, shared => {
   if (shared === undefined || shared === windowLeaseMode) return
   stopWindowLease()
@@ -170,7 +195,7 @@ watch(() => backendState.value === 'alive' ? sharedRuntime?.value === true : und
     await router.push({ name: 'dashboard', query: { tab } })
     await nextTick()
     if (router.currentRoute.value.name !== 'dashboard' || router.currentRoute.value.query.tab !== tab) throw new Error('Navigation was not applied')
-  }) : startBrowserSessionLease(!isTauri)
+  }, guiAutomation.execute) : startBrowserSessionLease(!isTauri)
 }, { immediate: true })
 const appVersion = __APP_VERSION__
 

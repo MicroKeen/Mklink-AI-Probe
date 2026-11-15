@@ -1,5 +1,25 @@
 import { describe, expect, it, vi } from 'vitest'
-import { recoverPendingIntent } from './useFrontendWorkbench'
+import { recoverPendingIntent, useFrontendWorkbench } from './useFrontendWorkbench'
+import { mount, flushPromises } from '@vue/test-utils'
+import { ref } from 'vue'
+import { createMemoryHistory, createRouter } from 'vue-router'
+import { createGuiAutomation } from '../lib/guiAutomation'
+
+it('maps the selected GUI window to its current semantic page without publishing credentials', async () => {
+  const target = { instance_id: 'runtime-one', probe_id: 'lobby', device_generation: 0, project_root: 'D:/project' }
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => new Response(JSON.stringify(url.endsWith('/pages')
+    ? { protocol: 'agent-frontend/1', session_id: 'session-one', target, pages: [] } : { command: null }))))
+  let frontend: ReturnType<typeof useFrontendWorkbench>
+  const wrapper = mount({ setup() { frontend = useFrontendWorkbench(ref('workbench'), ref(null), ref(null)) }, template: '<div/>' })
+  try {
+    await flushPromises()
+    const gui = createGuiAutomation(createRouter({ history: createMemoryHistory(), routes: [] }), () => ({}))
+    expect(gui.snapshot().panels.workbench).toEqual({ connected: true, protocol: 'agent-frontend/1',
+      session_id: 'session-one', page_id: frontend!.runtime.value!.report().page_id, target })
+    wrapper.unmount()
+    expect(gui.snapshot().panels).not.toHaveProperty('workbench')
+  } finally { wrapper.unmount(); vi.unstubAllGlobals() }
+})
 
 const pending = { request_id: 'original_request', session_id: 'original_target', page_id: 'original_page',
   revision: 3, object_id: 'panel', intent: 'inspect', message: 'Inspect the captured state' }

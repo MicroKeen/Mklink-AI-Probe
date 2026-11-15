@@ -45,6 +45,14 @@ class ElfSection:
     section_type: str
 
 
+@dataclass(frozen=True)
+class ElfSegment:
+    segment_type: str
+    address: int  # Execution address (p_vaddr), never the Flash load address.
+    size: int  # p_memsz includes zero-initialized memory beyond p_filesz.
+    flags: int  # PF_* bits, not SHF_* bits.
+
+
 class ElfBackend(Protocol):
     name: str
     parser_version: str
@@ -52,6 +60,8 @@ class ElfBackend(Protocol):
     def symbols(self, source: str) -> list[ElfSymbol]: ...
 
     def sections(self, source: str) -> list[ElfSection]: ...
+
+    def segments(self, source: str) -> list[ElfSegment]: ...
 
     def dwarf_info(self, source: str) -> DwarfInfo: ...
 
@@ -177,20 +187,46 @@ def writable_memory_ranges(
     project_root: str | os.PathLike[str] | None = None,
     fallback: Iterable[tuple[int, int]] = DEFAULT_WRITABLE_MEMORY_RANGES,
 ) -> tuple[tuple[int, int], ...]:
-    """Return merged address ranges for allocated, writable ELF sections."""
+    """Merge writable sections and PT_LOAD execution ranges.
+
+    A linker may mark a RAM .data section AX while its load segment is RWX.
+    Program-header permissions still describe writable runtime memory. Never
+    use p_paddr: for initialized RAM it commonly points to the Flash load image.
+    """
     try:
         sections = list_elf_sections(
             source, backend=backend, project_root=project_root
         )
     except Exception:
-        return tuple((int(start), int(end)) for start, end in fallback)
+        sections = []
+    try:
+        segments = get_elf_backend(backend, project_root=project_root).segments(source)
+    except Exception:
+        # Keep section-only AXF/ELF and explicitly selected older external tools
+        # usable if program headers are absent/unavailable.
+        segments = []
 
     ranges = sorted(
-        (section.address, section.address + section.size)
-        for section in sections
-        if section.size > 0 and section.flags & 0x3 == 0x3
+        [
+            (section.address, section.address + section.size)
+            for section in sections
+            if section.size > 0 and section.flags & 0x3 == 0x3
+        ]
+        + [
+            (segment.address, segment.address + segment.size)
+            for segment in segments
+            if segment.segment_type == "PT_LOAD"
+            and segment.size > 0 and segment.flags & 0x2
+        ]
     )
     if not ranges:
+        # Known read-only mappings must not become writable via the legacy
+        # generic Cortex-M fallback window.
+        if any(section.size > 0 and section.flags & 0x2 for section in sections) or any(
+            segment.segment_type == "PT_LOAD" and segment.size > 0
+            for segment in segments
+        ):
+            return ()
         return tuple((int(start), int(end)) for start, end in fallback)
 
     merged: list[tuple[int, int]] = []

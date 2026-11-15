@@ -1,4 +1,4 @@
-import { ref, readonly } from 'vue'
+import { ref, shallowRef, readonly } from 'vue'
 import { API_BASE } from '../lib/runtimeEndpoint'
 import { tr } from './useLanguage'
 
@@ -33,6 +33,7 @@ type StreamState = 'idle' | 'running' | 'paused' | 'error'
 export function useDashboard(type: string) {
   const state = ref<StreamState>('idle')
   const error = ref<string | null>(null)
+  const status = shallowRef<Record<string, any> | null>(null)
 
   async function start(params?: Record<string, unknown>): Promise<boolean> {
     error.value = null
@@ -82,7 +83,9 @@ export function useDashboard(type: string) {
   }
 
   async function getStatus() {
-    return api(`/api/dash/${type}/status`)
+    const result = await api(`/api/dash/${type}/status`)
+    status.value = result
+    return result
   }
 
   async function getHistory() {
@@ -92,6 +95,7 @@ export function useDashboard(type: string) {
   return {
     state: readonly(state),
     error: readonly(error),
+    status: readonly(status),
     start,
     stop,
     pause,

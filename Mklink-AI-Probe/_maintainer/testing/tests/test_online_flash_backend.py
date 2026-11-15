@@ -1076,7 +1076,7 @@ def test_hpm_rom_backend_programs_without_flm_and_verifies_by_readback(
             "target_part": "HPM5300",
             "base_address": 0x80000400,
             "board": "hpm5300evk",
-            "hpm_flash_cfg": None,
+            "hpm_flash_cfg": ("0xfcf90002U", "0x00000005U", "0x00001000U", "0xf3000000U"),
             "swd_clock": 10_000_000,
             "verify": False,
             "reset_after": False,

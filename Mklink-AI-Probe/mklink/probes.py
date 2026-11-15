@@ -75,6 +75,14 @@ def inventory() -> list[dict]:
     return sorted(probes, key=lambda p: (p["alias"].casefold(), p["probe_id"]))
 
 
+def _selection_error(reason, message, probes, matches=0):
+    from mklink.runtime import RuntimeErrorResponse
+    # Counts explain absence vs ambiguity without recording USB identities.
+    detail = {'reason': reason, 'message': message,
+              'available_count': len(probes), 'match_count': matches}
+    raise RuntimeErrorResponse(message, status_code=409, detail=detail)
+
+
 def select_probe(selector=None, *, allow_lobby=False) -> dict:
     from mklink.runtime import RuntimeErrorResponse
     if allow_lobby and str(selector).strip().casefold() == 'lobby':
@@ -83,15 +91,20 @@ def select_probe(selector=None, *, allow_lobby=False) -> dict:
     if selector:
         key = str(selector).strip().casefold()
         matching = [p for p in probes if key in {p["probe_id"].casefold(), p["port"].casefold(), p["alias"].casefold()}]
-        if len(matching) != 1:
-            raise RuntimeErrorResponse("Probe selector is missing or ambiguous; run mklink probes list")
+        if not matching:
+            _selection_error('probe_missing', 'Selected probe is unavailable; refresh the device list '
+                             'and reconnect or explicitly select another probe', probes)
+        if len(matching) > 1:
+            _selection_error('probe_ambiguous', 'Multiple probes match this selection; refresh the device list '
+                             'and select one command port explicitly', probes, len(matching))
         return matching[0]
     if len(probes) == 1:
         return probes[0]
     if allow_lobby:
         return {"probe_id": "lobby", "port": None, "identity_stable": False, "alias": ""}
-    raise RuntimeErrorResponse("Multiple probes attached; specify --probe ID/alias or --device-port COM port" if probes
-                               else "No supported probe found; connect a probe or select a command interface explicitly")
+    _selection_error('probe_selection_required' if probes else 'probe_missing',
+                     "Multiple probes attached; specify --probe ID/alias or --device-port COM port" if probes
+                     else "No supported probe found; connect a probe and refresh the device list", probes, len(probes))
 
 
 def load_aliases() -> dict:

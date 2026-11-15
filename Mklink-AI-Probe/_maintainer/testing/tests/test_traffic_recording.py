@@ -71,6 +71,13 @@ def test_rtt_http_per_channel_records_without_viewer_and_stop_drains(tmp_path, m
     assert b''.join(bytes.fromhex(r['hex']) for r in frames if r['direction'] == 'RX') == b'\xe4\xb8\xad\x00\xff' * 100
     assert frames[0]['lost_bytes'] == 3
     assert frames[-1]['direction'] == 'TX' and frames[-1]['hex'] == b'tx\x00'.hex()
+    assert result['export_state'] == 'pending' and not list(tmp_path.glob('*.txt'))
+    assert client.post(base + 'export', json={'path': result['path'], 'channel': 0}).status_code == 409
+    assert client.post(base + 'export', json={'path': result['path'], 'channel': 2}).status_code == 200
+    from test_recording_text import exported
+    assert exported(manager.traffic_recordings._recorders[2]._export)['export_state'] == 'completed'
+    client.post(base + 'start', json={'directory':str(tmp_path), 'channel':2})
+    assert client.post(base + 'stop', json={'channel': 2}).json()['active'] is False
 
 
 def test_serial_records_all_ports_raw_rx_tx_without_browser_and_closes_with_monitor(ports, tmp_path):

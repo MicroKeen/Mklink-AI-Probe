@@ -349,8 +349,11 @@ python -m mklink watch g_config.setpoint,samples[1] --probe "电机板" --period
 
 `read_ram`/`read_memory` 只用于单次 RAM 快照、变量详情和 AI 故障分析，不用于 SuperWatch 曲线采样，也不作为固件或连接不支持二进制流时的后备方案。此时 SuperWatch 会明确报错并停止。
 
+加载 AXF/ELF 时自动创建/恢复同名 SuperWatch 配置，变量、间隔和显示参数在 Web、
+Skill/CLI、MCP 间共用，详见[随符号文件保存配置](superwatch-profile.md)。
+
 常用参数：
-- `--period 0.1`：采样周期，单位秒
+- `--period 0.1`：采样周期，单位秒；省略时沿用保存值，新配置默认 0.001
 - `--duration 30`：运行时长，`0` 表示持续运行到手动停止
 - `--port COM6`：指定 MKLink 串口；省略时自动检测
 - `--host 127.0.0.1 --port-http 0`：Web 看板监听地址和端口，`0` 表示随机端口

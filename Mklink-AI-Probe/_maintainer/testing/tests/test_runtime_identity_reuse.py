@@ -43,6 +43,14 @@ def test_memory_reuses_only_short_continuously_owned_handle_identity(identity):
     assert inventory.call_count == 2
 
 
+def test_completed_missing_observation_cannot_be_hidden_by_existing_cache(identity):
+    control, _, _, _, _ = identity
+    control.require_identity(memory_snapshot=True)
+    with pytest.raises(HTTPException):
+        control.require_identity(memory_snapshot=True, probes=[])
+    assert control._memory_identity_cache is None
+
+
 @pytest.mark.parametrize('change', ['closed', 'new_handle', 'new_connection', 'generation', 'error',
     'state', 'unlock', 'reader_stopped', 'new_device', 'new_identity', 'recovery'])
 def test_connection_change_invalidates_cached_identity_before_admission(identity, change):

@@ -5,12 +5,36 @@ import SuperWatchTab from './SuperWatchTab.vue'
 import SymbolVariablePanel from './SymbolVariablePanel.vue'
 import WaveformViewer from './WaveformViewer.vue'
 import { DESKTOP_SETTINGS_STORAGE_KEY } from '../../lib/desktopSettings'
+import { useWatchProfile } from '../../composables/useWatchProfile'
 
 describe('SuperWatchTab', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ profile: 'medium' }) })))
   })
   afterEach(() => vi.unstubAllGlobals())
+  it('keeps workbench layout independent of the shared AXF profile', async () => {
+    const profile = useWatchProfile()
+    const previous = profile.profile.value
+    profile.profile.value = { path: 'target.axf.superwatch.json', error: '', missing: [],
+      viewer: { revision: 'viewer-1', viewer: {} },
+      layout: { revision: 'layout-1', layout: { source: 'peripherals', panelWidth: 480, hidden: ['gain'] } } }
+    const wrappers = ['left', 'right'].map(panelId => mount(SuperWatchTab, {
+      props: { deviceConnected: false, panelId },
+      global: { stubs: { SymbolVariablePanel: true, PeripheralWatchPanel: true, WaveformViewer: true } },
+    }))
+    try {
+      await flushPromises()
+      expect(wrappers[0]!.vm.read()).toMatchObject({ source: 'variables', hidden: [] })
+      expect(wrappers.every(wrapper => !wrapper.find('.profile-status').exists())).toBe(true)
+      await wrappers[0]!.vm.execute('superwatch.catalog.set', { source: 'peripherals' })
+      expect(wrappers[1]!.vm.read().source).toBe('variables')
+      await new Promise(resolve => setTimeout(resolve, 300))
+      expect(vi.mocked(fetch).mock.calls.some(([, options]) => options?.method === 'PUT')).toBe(false)
+    } finally {
+      wrappers.forEach(wrapper => wrapper.unmount())
+      profile.profile.value = previous
+    }
+  })
   it('ignores obsolete hidden-pane preferences while retaining the useful layout settings', async () => {
     vi.stubGlobal('localStorage', { getItem: (key: string) => key === DESKTOP_SETTINGS_STORAGE_KEY + '.superwatch-layout'
       ? JSON.stringify({ panelWidth: 420, hideSettings: true, hideCatalog: true }) : null, setItem: vi.fn() })

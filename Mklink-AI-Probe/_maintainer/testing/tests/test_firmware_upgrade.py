@@ -90,7 +90,7 @@ def test_manifest_parser_requires_integrity_and_exact_hardware_identity():
     assert len(entries) == 1
     assert entries[0].family == "hpmlink"
     assert entries[0].size == 512
-    assert entries[0].download_urls == payload["firmwares"][0]["urls"]
+    assert entries[0].download_urls == {"github": payload["firmwares"][0]["urls"]["github"]}
 
 
 def test_materialize_manifest_firmware_validates_and_falls_back(monkeypatch):
@@ -102,8 +102,8 @@ def test_materialize_manifest_firmware_validates_and_falls_back(monkeypatch):
             "name": "MicroLink_V3.3.7.uf2", "size": len(content),
             "sha256": hashlib.sha256(content).hexdigest(),
             "urls": {
+                "tencent": "https://tencent.example/firmware.uf2",
                 "github": "https://github.example/firmware.uf2",
-                "gitee": "https://gitee.example/firmware.uf2",
             },
         }],
     })[0]
@@ -111,7 +111,7 @@ def test_materialize_manifest_firmware_validates_and_falls_back(monkeypatch):
 
     def download(request, timeout):
         requested.append(request.full_url)
-        if "github" in request.full_url:
+        if "tencent" in request.full_url:
             raise URLError("unavailable")
         return io.BytesIO(content)
 
@@ -119,9 +119,9 @@ def test_materialize_manifest_firmware_validates_and_falls_back(monkeypatch):
     path, temporary, source = fc._materialize_firmware(info)
     try:
         assert temporary is True
-        assert source == "gitee"
+        assert source == "github"
         assert path.read_bytes() == content
-        assert requested == [info.download_urls["github"], info.download_urls["gitee"]]
+        assert requested == [info.download_urls["tencent"], info.download_urls["github"]]
     finally:
         path.unlink(missing_ok=True)
 
@@ -334,46 +334,13 @@ def test_firmware_check_includes_newer_local_release_candidate(
     assert result.recommended_uf2.path == local
 
 
-def test_materialize_firmware_falls_back_from_github_to_gitee(monkeypatch):
-    github = fc.FirmwareInfo(
-        "MicroLink_V3.3.7.uf2",
-        fc.Version(3, 3, 7),
-        "V3",
-        Path("MicroLink_V3.3.7.uf2"),
-        download_url="https://github.example/MicroLink_V3.3.7.uf2",
-        download_source="github",
-    )
-    gitee = fc.FirmwareInfo(
-        github.name,
-        github.version,
-        github.model,
-        github.path,
-        download_url="https://gitee.example/MicroLink_V3.3.7.uf2",
-        download_source="gitee",
-    )
-    monkeypatch.setattr(
-        fc,
-        "_remote_firmware_from_source",
-        lambda model, source, **kwargs: gitee,
-    )
-    requested = []
-
-    def open_download(request, timeout):
-        requested.append(request.full_url)
-        if "github" in request.full_url:
-            raise URLError("github unavailable")
-        return io.BytesIO(b"gitee-uf2")
-
-    monkeypatch.setattr(fc, "urlopen", open_download)
-
-    path, temporary, source = fc._materialize_firmware(github)
-    try:
-        assert temporary is True
-        assert source == "gitee"
-        assert path.read_bytes() == b"gitee-uf2"
-        assert requested == [github.download_url, gitee.download_url]
-    finally:
-        path.unlink(missing_ok=True)
+def test_failed_legacy_github_download_does_not_query_retired_gitee(monkeypatch):
+    info = fc.FirmwareInfo('MicroLink_V3.3.7.uf2', fc.Version(3, 3, 7), 'V3',
+        Path('MicroLink_V3.3.7.uf2'), download_url='https://github.example/file.uf2', download_source='github')
+    monkeypatch.setattr(fc, '_remote_firmware_from_source', lambda *a, **kw: pytest.fail('Gitee is retired'))
+    monkeypatch.setattr(fc, 'urlopen', lambda *a, **kw: (_ for _ in ()).throw(URLError('offline')))
+    with pytest.raises(OSError, match='github'):
+        fc._materialize_firmware(info)
 
 
 def test_materialize_firmware_does_not_query_gitee_when_github_succeeds(monkeypatch):
@@ -549,26 +516,26 @@ def test_firmware_download_endpoint_rejects_hpmlink_v3(tmp_path):
     assert response.status_code == 400
     assert response.json()["detail"] == "HPMLink firmware is only available for V4"
 
-@pytest.mark.parametrize('unavailable', [None, 'github', 'gitee'])
-def test_online_firmware_compares_channels_and_keeps_exact_model(monkeypatch, unavailable):
+@pytest.mark.parametrize('unavailable', [False, True])
+def test_online_firmware_prioritizes_tencent_and_keeps_exact_model(monkeypatch, unavailable):
     def entry(name, source):
         info = fc.parse_firmware_filename(name)
         info.download_urls = {source: f'https://{source}.example/{name}'}
         return info
-    inventories = {
-        'github': [entry('MicroLink_V3.6.3.uf2', 'github'), entry('HPMLink_V4.6.8.uf2', 'github')],
-        'gitee': [entry('MicroLink_V3.6.4.uf2', 'gitee'), entry('MicroLink_V4.6.8.uf2', 'gitee')],
-    }
-    monkeypatch.setattr(fc, '_remote_firmwares_from_source',
-        lambda source, **kwargs: None if source == unavailable else inventories.get(source))
+    calls = []
+    def fetch(source, **kwargs):
+        calls.append(source)
+        if source == 'tencent':
+            return None if unavailable else [entry('MicroLink_V3.6.3.uf2', source)]
+        assert source == 'github'
+        return [entry('MicroLink_V3.6.4.uf2', source), entry('HPMLink_V4.6.8.uf2', source)]
+    monkeypatch.setattr(fc, '_remote_firmwares_from_source', fetch)
     info = fc._remote_firmware('V3')
-    assert info.version == fc.Version(3, 6, 3 if unavailable == 'gitee' else 4)
+    assert info.version == fc.Version(3, 6, 4 if unavailable else 3)
     assert info.model == 'V3' and info.family == 'microlink'
-    assert info.download_source == ('github' if unavailable == 'gitee' else 'gitee')
+    assert info.download_source == ('github' if unavailable else 'tencent')
+    assert calls == (['tencent', 'github'] if unavailable else ['tencent'])
     assert fc._remote_firmware('V3', family='hpmlink') is None
-    if unavailable != 'gitee':
-        inventories['gitee'] = [entry('MicroLink_V3.6.5.uf2', 'gitee')]
-        assert fc._remote_firmware('V3').version == fc.Version(3, 6, 5)
 
 
 def test_online_firmware_requests_cache_revalidation(monkeypatch):

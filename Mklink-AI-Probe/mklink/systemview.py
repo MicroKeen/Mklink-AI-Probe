@@ -28,6 +28,7 @@ class SystemViewSession:
         self._session = None
         self._running = False
         self._tasklist_requested = False
+        self._sysdesc_requested = False
 
     def start(self, addr, search_size=1024, project_root='.', *, mode=0):
         from mklink.mux import MuxTransport
@@ -59,13 +60,21 @@ class SystemViewSession:
         self._running = True
         self._started_at = time.monotonic()
         self._tasklist_requested = False
+        self._sysdesc_requested = False
         return {**result, 'storage_mode': mode, 'channel': self._channel}
 
     def read_bytes(self, duration=2.0, max_bytes=None):
         if not self._running:
             raise RuntimeError('SystemView not started')
         result = self._session.read_channels(duration, max_bytes=max_bytes)[self._channel]
-        if not self._tasklist_requested and time.monotonic() - self._started_at >= .15:
+        elapsed = time.monotonic() - self._started_at
+        # START is a no-op when another RTT consumer keeps the target recorder
+        # running. Refresh INIT/ID encoding and names for every new parser.
+        # Drain between the two metadata bursts on small target RTT buffers.
+        if not self._sysdesc_requested and elapsed >= .15:
+            self._sysdesc_requested = True  # Never replay an unknown write.
+            self._session.send_input(b'\x05')
+        elif not self._tasklist_requested and elapsed >= .30:
             self._tasklist_requested = True  # Unknown results must not be replayed.
             self._session.send_input(b'\x04')
         return result

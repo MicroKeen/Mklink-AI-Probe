@@ -21,6 +21,10 @@ def installer(tmp_path, request):
     output = tmp_path / 'gate.exe'
     script = tmp_path / 'gate.nsi'
     gate = ROOT / 'gui/src-tauri/installer-file-check.nsh'
+    # This suite exercises file locks only. The process helper has a separate
+    # real-process suite with an isolated inventory; never close user apps here.
+    prepare = tmp_path / 'prepare.ps1'
+    prepare.write_text('exit 0\n', encoding='utf-8')
     create_uninstaller = 'WriteUninstaller "$EXEDIR\\remove.exe"' if request.param == 'uninstall' else ''
     install_check = 'Call MklinkWaitForUpgradeFiles' if request.param == 'install' else ''
     script.write_text(f'''Unicode true
@@ -30,6 +34,7 @@ RequestExecutionLevel user
 SilentInstall silent
 SilentUnInstall silent
 !include "LogicLib.nsh"
+!define MKLINK_PREPARE_SCRIPT "{prepare}"
 !include "{gate}"
 Section
   StrCpy $INSTDIR "$EXEDIR\\payload"

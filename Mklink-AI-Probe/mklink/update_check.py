@@ -18,7 +18,6 @@ from typing import Iterable, Mapping, Sequence
 DEFAULT_MANIFEST_URLS = (
     "https://download.microkeenai.com/mklink/stable/latest.json",
     "https://raw.githubusercontent.com/MicroKeen/Mklink-AI-Probe/release/latest.json",
-    "https://gitee.com/Aladdin-Wang/Mklink-AI-Probe/raw/updates/latest.json",
 )
 USER_AGENT = "Mklink-AI-Probe-Runtime-Updater"
 _CHECK_LOCK = threading.Lock()
@@ -128,12 +127,15 @@ def _result(
     manifest: Mapping[str, object], manifest_url: str, *, cached: bool,
 ) -> dict[str, object]:
     local = current_version()
-    latest = str(manifest.get("version", ""))
+    skill = manifest.get('skill')
+    latest = str(skill.get('version') or manifest.get('version', '')) if isinstance(skill, dict) else str(manifest.get('version', ''))
     available = version_key(latest) > version_key(local)
     return {
         "status": "ok",
         "current_version": local,
         "latest_version": latest,
+        "component": "skill",
+        "desktop_latest_version": str(manifest.get('version', '')),
         "update_available": available,
         "notes": str(manifest.get("notes", "")),
         "manifest_url": manifest_url,
@@ -166,9 +168,12 @@ def check_for_update(
         try:
             manifest, manifest_url = fetch_manifest(urls, timeout=timeout)
             result = _result(manifest, manifest_url, cached=False)
-            _write_cache(cache, manifest, manifest_url, urls)
+            try:
+                _write_cache(cache, manifest, manifest_url, urls)
+            except OSError:
+                pass  # A read-only cache must not hide a successfully checked release.
             return result
-        except (RuntimeError, ValueError) as error:
+        except (RuntimeError, ValueError, OSError) as error:
             return {
                 "status": "unavailable",
                 "current_version": current_version(),
@@ -177,3 +182,36 @@ def check_for_update(
                 "checked_at": utc_now(),
                 "install_requires_user_approval": True,
             }
+
+
+class BackgroundUpdateCheck:
+    """One daemon worker per MCP server; health/connection calls never wait on it."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._running = False
+        self._result = None
+        self._expires = 0.0
+
+    def snapshot(self, *, force=False):
+        with self._lock:
+            if not self._running and (force or time.monotonic() >= self._expires):
+                self._running = True
+                self._result = None
+                threading.Thread(target=self._check, args=(force,), daemon=True,
+                                 name='mklink-release-check').start()
+            return dict(self._result) if self._result is not None else {
+                'status': 'checking', 'update_available': False,
+                'install_requires_user_approval': True,
+            }
+
+    def _check(self, force):
+        try:
+            result = check_for_update(force=force)
+        except Exception:
+            result = {'status': 'unavailable', 'update_available': False,
+                      'install_requires_user_approval': True}
+        with self._lock:
+            self._result = result
+            self._expires = time.monotonic() + (86400 if result['status'] == 'ok' else 900)
+            self._running = False

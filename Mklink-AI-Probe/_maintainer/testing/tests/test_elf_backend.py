@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from mklink.elf_backend import (
     address_is_writable,
     ElfSection,
+    ElfSegment,
     ElfSymbol,
     ElfBackendConfigError,
     elf_status,
@@ -128,6 +129,51 @@ def test_external_backend_normalizes_readelf_symbols(monkeypatch):
         ("HardFault_Handler", "function"),
     ]
     assert calls[0][0] == ["readelf.exe", "-sW", "firmware.axf"]
+
+
+def test_external_load_headers_use_execution_memory_not_flash_image(monkeypatch):
+    output = '''
+  Type           Offset   VirtAddr   PhysAddr   FileSiz MemSiz  Flg Align
+  LOAD           0x010000 0x08000000 0x08000000 0x075e4 0x075e4 R E 0x10000
+  LOAD           0x020000 0x20000000 0x080075e4 0x012d0 0x01da8 RWE 0x10000
+  LOAD           0x0000000000030000 0x00000000f0400000 0x0000000080010000 0x000001 0x000010 RW  0x1000
+  GNU_STACK      0x000000 0x00000000 0x00000000 0x00000 0x00000 RW 0x10
+'''
+    calls = []
+    def run(command, **kwargs):
+        calls.append(command)
+        return SimpleNamespace(returncode=0, stdout=output, stderr='')
+    monkeypatch.setattr('mklink.elf_external.subprocess.run', run)
+    backend = ExternalElfBackend(readelf='readelf.exe')
+    assert backend.segments('firmware.elf') == [
+        ElfSegment('PT_LOAD', 0x08000000, 0x75E4, 5),
+        ElfSegment('PT_LOAD', 0x20000000, 0x1DA8, 7),
+        ElfSegment('PT_LOAD', 0xF0400000, 16, 6),
+    ]
+    assert calls == [['readelf.exe', '-lW', 'firmware.elf']]
+
+
+@pytest.mark.parametrize('flags', range(8))
+def test_load_permissions_do_not_use_section_flag_bit_positions(monkeypatch, flags):
+    monkeypatch.setattr('mklink.elf_backend.list_elf_sections', lambda *a, **k: [])
+    monkeypatch.setattr('mklink.elf_backend.get_elf_backend', lambda *a, **k: SimpleNamespace(
+        segments=lambda source: [ElfSegment('PT_LOAD', 0x20000000, 16, flags),
+            ElfSegment('PT_NOTE', 0x20000100, 16, 6), ElfSegment('PT_LOAD', 0x20000200, 0, 6)]))
+    expected = ((0x20000000, 0x20000010),) if flags & 2 else ()
+    assert writable_memory_ranges('firmware.elf') == expected
+
+
+def test_read_only_sections_do_not_enable_generic_sram_fallback(monkeypatch):
+    monkeypatch.setattr('mklink.elf_backend.list_elf_sections', lambda *a, **k: [
+        ElfSection('.rodata', 0x20000000, 32, 2, 'SHT_PROGBITS')])
+    monkeypatch.setattr('mklink.elf_backend.get_elf_backend', lambda *a, **k: SimpleNamespace(segments=lambda source: []))
+    assert writable_memory_ranges('firmware.elf') == ()
+
+
+def test_legacy_fallback_remains_when_neither_layout_is_available(monkeypatch):
+    monkeypatch.setattr('mklink.elf_backend.list_elf_sections', lambda *a, **k: [])
+    monkeypatch.setattr('mklink.elf_backend.get_elf_backend', lambda *a, **k: SimpleNamespace(segments=lambda source: []))
+    assert writable_memory_ranges('firmware.elf', fallback=[(0x80000, 0x81000)]) == ((0x80000, 0x81000),)
 
 
 def test_builtin_consumers_use_structured_service_without_subprocess(monkeypatch):

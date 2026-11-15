@@ -52,7 +52,12 @@ def unix_bundle_config(config_path: Path, system: str):
     bundle["externalBin"] = ["binaries/mklink-sidecar"]
     bundle["icon"] = [p for p in bundle["icon"] if p.endswith(".png")]
     if system == "Darwin":
-        bundle["macOS"] = {"minimumSystemVersion": "11.0", "signingIdentity": "-"}
+        # Ad-hoc signatures have no Team ID. Re-signing the onefile launcher
+        # with Hardened Runtime would reject its embedded ad-hoc Python library.
+        # Developer ID builds must sign embedded libraries at freeze time;
+        # this candidate builder deliberately never reads those credentials.
+        bundle["macOS"] = {"minimumSystemVersion": "11.0", "signingIdentity": "-",
+                           "hardenedRuntime": False}
     else:
         bundle["linux"] = {"deb": {
             "depends": ["libwebkit2gtk-4.1-0", "libusb-1.0-0", "libudev1"],

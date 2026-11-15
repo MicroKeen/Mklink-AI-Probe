@@ -39,7 +39,7 @@ def execute(monkeypatch, ids, *, count=2, supported=1, fail_image=0):
                         set_beep_on=record('beep_on'), set_beep_off=record('beep_off')))
     monkeypatch.setitem(sys.modules, 'hpm', SimpleNamespace(
         jtag_presence_supported=record('capability', supported), read_idcode=read,
-        board=record('board'), program=program))
+        flash_cfg=record('config'), program=program))
     namespace = {'print': lambda *args: output.append(' '.join(map(str, args)))}
     exec(generate_offline_script(parse_offline_config(config(count))), namespace)
     return events, output, namespace['abort']
@@ -100,7 +100,7 @@ def test_timeouts_do_not_reprogram_a_board(monkeypatch, ids, message, images, be
 def test_unsupported_probe_stops_before_target_or_image_access(monkeypatch, supported):
     events, output, aborted = execute(monkeypatch, [], supported=supported)
     assert aborted
-    assert not any(e[0] in ('presence', 'image', 'beep_on', 'board') for e in events)
+    assert not any(e[0] in ('presence', 'image', 'beep_on', 'config') for e in events)
     assert any('Upgrade HPMLink' in line for line in output)
 
 

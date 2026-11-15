@@ -63,7 +63,7 @@ function address(value: number) { return `0x${value.toString(16).toUpperCase().p
     @drop.prevent="dropped"
   >
   <div class="firmware-toolbar">
-    <button v-if="nativeApp || trackedBrowserPicker" data-testid="firmware-trigger" class="file-button" type="button" @click="emit('browse')">{{ tr('选择 BIN / HEX', 'Select BIN / HEX') }}</button>
+    <button v-if="nativeApp || trackedBrowserPicker" data-testid="firmware-trigger" data-gui-file-picker class="file-button" type="button" @click="emit('browse')">{{ tr('选择 BIN / HEX', 'Select BIN / HEX') }}</button>
     <label v-else data-testid="firmware-trigger" class="file-button" role="button" tabindex="0" @keydown.enter.prevent="openFile" @keydown.space.prevent="openFile">{{ tr('选择 BIN / HEX', 'Select BIN / HEX') }}<input ref="fileInput" class="visually-hidden" data-testid="firmware-input" type="file" accept=".bin,.hex" @change="fileChanged"></label>
     <label v-if="trackedBrowserPicker && !nativeApp" class="file-button" role="button" tabindex="0" :title="tr('上传当前文件副本，不跟随源文件更新', 'Upload a snapshot without tracking source changes')" @keydown.enter.prevent="openFile" @keydown.space.prevent="openFile">{{ tr('上传副本', 'Upload copy') }}<input ref="fileInput" class="visually-hidden" data-testid="firmware-copy-input" type="file" accept=".bin,.hex" @change="fileChanged"></label>
     <span class="filename" :title="sourceName">{{ sourceName || tr('拖拽 BIN / HEX 到此处，或选择固件', 'Drop BIN / HEX here, or select firmware') }}</span>

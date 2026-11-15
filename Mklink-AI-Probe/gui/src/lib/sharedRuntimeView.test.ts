@@ -7,6 +7,7 @@ class Socket {
   readyState = 1
   send = vi.fn()
   onmessage: ((event: { data: string }) => Promise<void>) | null = null
+  onopen: (() => void) | null = null
   onclose: ((event?: { code: number; reason: string }) => void) | null = null
   close = vi.fn(() => this.onclose?.())
   constructor(public url: string) { Socket.all.push(this) }
@@ -45,6 +46,21 @@ describe('shared window transport presence', () => {
     vi.advanceTimersByTime(120000)
     expect(Socket.all).toHaveLength(1)
     expect(Socket.all[0]!.close).not.toHaveBeenCalled()
+  })
+  it('reports real GUI results and does not execute expired or disconnected commands', async () => {
+    stop()
+    const execute = vi.fn().mockResolvedValue({ page: 'dashboard', tab: 'systemview' })
+    stop = startSharedRuntimeView(vi.fn(), execute)
+    const socket = Socket.all.at(-1)!
+    socket.onopen!()
+    expect(JSON.parse(socket.send.mock.calls[0]![0])).toMatchObject({ type: 'gui_hello', protocol: 2 })
+    const request = { type: 'gui_request', request_id: 'one', command: { action: 'snapshot' }, expires_at: Date.now() / 1000 + 3 }
+    await socket.onmessage!({ data: JSON.stringify(request) })
+    expect(JSON.parse(socket.send.mock.calls[1]![0])).toMatchObject({ type: 'gui_result', ok: true, state: { tab: 'systemview' } })
+    await socket.onmessage!({ data: JSON.stringify({ ...request, expires_at: 0 }) })
+    stop()
+    await socket.onmessage!({ data: JSON.stringify(request) })
+    expect(execute).toHaveBeenCalledOnce()
   })
   it('restores bfcache with a new identity and ignores stale close', () => {
     const first = Socket.all[0]!

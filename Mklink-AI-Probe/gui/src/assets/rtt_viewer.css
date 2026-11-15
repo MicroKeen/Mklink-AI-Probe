@@ -1060,7 +1060,7 @@ tr.watch-child-row td[data-col="value"] {
   letter-spacing: 0.02em;
 }
 .status-running { background: var(--success-bg); color: var(--success); }
-.status-paused  { background: var(--warn-bg); color: var(--warn); }
+.status-paused, .status-waiting { background: var(--warn-bg); color: var(--warn); }
 .status-stopped { background: var(--danger-bg); color: var(--danger); }
 #interval-input,
 #buffer-input {

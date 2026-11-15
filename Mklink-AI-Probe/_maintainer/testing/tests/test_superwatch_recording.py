@@ -150,6 +150,13 @@ def test_http_controls_share_manager_and_capture_stop_finalizes(tmp_path, monkey
     assert result['state'] == 'completed' and result['samples'] == 1
     assert client.post(base + 'stop').json() == result
     assert rows(tmp_path) == [{'value': 7, '_t': .1}]
+    assert result['export_state'] == 'pending' and not list(tmp_path.glob('*.xlsx'))
+    assert client.post(base + 'export', json={'path': 'stale.jsonl'}).status_code == 409
+    response = client.post(base + 'export', json={'path': result['path']})
+    assert response.status_code == 200 and response.json()['export_format'] == 'xlsx'
+    from test_recording_text import exported
+    # The explicit endpoint launched the same recorder's exporter.
+    assert exported(sw._recorder._export)['export_state'] == 'completed'
 
 
 def test_idle_recording_can_stop_and_restart_without_samples(tmp_path):

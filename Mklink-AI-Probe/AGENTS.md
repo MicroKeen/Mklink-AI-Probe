@@ -28,10 +28,11 @@ Paths below are relative to the source root containing this file and
 
 - Canonical development/issue repository is `MicroKeen/Mklink-AI-Probe`, default
   `main`, remote `microkeen`. See `docs/ai/repository-governance.md` for the live
-  branch rules and publisher boundary. Existing client update URLs are unchanged.
+  branch rules and publisher boundary. Default downloads use Tencent first and canonical GitHub only on failure.
 - As of 2026-10-25, new GitHub releases, assets, tags and indexes go only to
   `MicroKeen/Mklink-AI-Probe`; stop legacy Aladdin-Wang GitHub maintenance.
-  Preserve historical releases. Gitee `Aladdin-Wang/Mklink-AI-Probe` remains active.
+  As of 2026-11-13, future publication targets only Tencent and canonical GitHub.
+  Preserve historical releases; do not upload new assets, tags or indexes to Gitee.
 - Start each authorized fix/feature from current `microkeen/main` in an isolated
   `codex/<task>` branch/worktree, or continue its existing task branch. Push that
   branch to `microkeen` and submit a PR. Never push directly to `main`.
@@ -101,6 +102,10 @@ Paths below are relative to the source root containing this file and
   tests, build/release instructions, and maintainer skills out of user packages.
 
 ## Read Only When Needed
+
+- Agent UI conversation entry: read `references/agent-ui.md` to discover the
+  existing runtime/window/page and operate the workbench through its published
+  schema and receipts. Reuse the product MCP/CLI; do not guess private session paths.
 
 - Build storage/commands: `docs/ai/build-storage.md`.
 - Source development: `docs/ai/development.md`.

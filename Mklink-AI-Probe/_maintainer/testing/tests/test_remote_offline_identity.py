@@ -77,7 +77,8 @@ def test_shared_deploy_obeys_backend_admission(target, deployment, monkeypatch, 
     monkeypatch.setattr('mklink.probe_volumes.resolve_volume', lambda _: {'root': 'identity-fixture'})
     if blocked == 'identity':
         from fastapi import HTTPException
-        monkeypatch.setattr(control, 'require_identity', lambda: (_ for _ in ()).throw(HTTPException(409, 'missing')))
+        async def missing(**kwargs): raise HTTPException(409, 'missing')
+        monkeypatch.setattr(control, 'require_identity_async', missing)
     if blocked == 'capture': managers['rtt'].running = True
     if blocked == 'job': control.jobs.jobs['active'] = {'job_id': 'active', 'state': 'running'}
     try:

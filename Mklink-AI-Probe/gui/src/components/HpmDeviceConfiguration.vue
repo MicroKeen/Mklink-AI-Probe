@@ -2,7 +2,7 @@
 import { tr } from '../composables/useLanguage'
 import HpmUserOtpPanel from './HpmUserOtpPanel.vue'
 defineProps<{
-  partNumber: string; model: string; readAt?: string
+  partNumber: string; model: string; readAt?: string; hideUserOtp?: boolean
   fields: { id: string; label: string; description: string; bit_width?: number; current: number | string | null; shadow: number | null }[]
 }>()
 function value(item: number | string | null, width = 32): string {
@@ -13,8 +13,8 @@ function value(item: number | string | null, width = 32): string {
   <section data-testid="hpm-device-configuration">
     <p v-if="readAt" data-testid="configuration-timestamp">{{ tr('读取快照', 'Snapshot') }} · {{ readAt }}</p>
     <div class="configuration-table" v-if="fields.length"><table><thead><tr><th>{{ tr('OTP 字段', 'OTP field') }}</th><th>{{ tr('熔丝值', 'Fuse') }}</th><th>{{ tr('影子值', 'Shadow') }}</th></tr></thead><tbody><tr v-for="field in fields" :key="field.id" :data-testid="`configuration-field-${field.id}`"><td :title="field.description"><b>{{ field.id }}</b><small>{{ field.label }}</small></td><td>{{ value(field.current, field.bit_width) }}</td><td>{{ value(field.shadow, field.bit_width) }}</td></tr></tbody></table></div>
-    <p data-testid="otp-reading-help">{{ tr('系统字段只读。熔丝值与影子值分别显示；— 表示未读取。用户区写入与永久写保护在下方配置。', 'System fields are read-only. Fuse and shadow values are shown separately; — means not read. Configure user data and permanent protection below.') }}</p>
-    <HpmUserOtpPanel v-if="model === 'V4' && ['HPM5301', 'HPM5301XEGX'].includes(partNumber.toUpperCase())" :part-number="partNumber" :model="model" />
+    <p data-testid="otp-reading-help">{{ tr('系统字段只读。熔丝值与影子值分别显示；— 表示未读取。', 'System fields are read-only. Fuse and shadow values are shown separately; — means not read.') }}<template v-if="!hideUserOtp"> {{ tr('用户区写入与永久写保护在下方配置。', 'Configure user data and permanent protection below.') }}</template></p>
+    <HpmUserOtpPanel v-if="!hideUserOtp && model === 'V4' && ['HPM5301', 'HPM5301XEGX'].includes(partNumber.toUpperCase())" :part-number="partNumber" :model="model" />
   </section>
 </template>
 <style scoped>

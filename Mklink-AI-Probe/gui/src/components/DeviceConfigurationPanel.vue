@@ -32,6 +32,7 @@ const props = withDefaults(defineProps<{
   changes?: Record<string, number | string>
   hasFirmware?: boolean
   expanded?: boolean
+  hideUserOtp?: boolean
 }>(), { hasFirmware: true })
 const emit = defineEmits<{ 'update:changes': [value: Record<string, number | string>] }>()
 function setField(id: string, event: Event) {
@@ -119,8 +120,8 @@ onBeforeUnmount(cancel)
     <p v-if="!partNumber || !model">{{ tr('选择芯片和下载器型号后加载配置。', 'Select a chip and probe model to load configuration.') }}</p>
     <p v-if="error" class="configuration-error" role="alert">{{ error }}</p>
     <template v-if="configuration">
-      <p>{{ configuration.reason }}</p>
-      <HpmDeviceConfiguration v-if="configuration.kind === 'otp'" :part-number="partNumber" :model="model" :fields="configuration.fields" :read-at="configuration.read_at" />
+      <p v-if="!hideUserOtp || configuration.kind !== 'otp' || !configuration.read_supported">{{ configuration.reason }}</p>
+      <HpmDeviceConfiguration v-if="configuration.kind === 'otp'" :part-number="partNumber" :model="model" :fields="configuration.fields" :read-at="configuration.read_at" :hide-user-otp="hideUserOtp" />
       <template v-else>
       <p v-if="configuration.read_at" data-testid="configuration-timestamp">{{ tr('读取快照', 'Snapshot') }} · {{ configuration.read_at }}</p>
       <div v-if="configuration.fields.length" class="configuration-table">

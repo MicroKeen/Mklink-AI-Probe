@@ -148,40 +148,49 @@ export class SystemViewIntervalRing extends TickRingBase {
   }
 
   selectEnvelope(start: bigint, end: bigint, pixelWidth: number): IntervalEnvelopeSelection {
-    const firstByPixel = new Int32Array(pixelWidth)
-    const lastByPixel = new Int32Array(pixelWidth)
-    firstByPixel.fill(-1)
-    lastByPixel.fill(-1)
     const first = this.firstOverlappingIndex(start)
-    const span = end > start ? end - start : 1n
-    let candidateCount = 0
-
-    for (let logical = first; logical < this.count; logical++) {
-      const intervalStart = this.startTickAt(logical)
-      if (intervalStart > end) break
-      const intervalEnd = this.endTickAt(logical)
-      if (intervalEnd < start) continue
-      candidateCount += 1
-      const middle = (intervalStart + intervalEnd) / 2n
-      const relative = middle <= start ? 0n : middle >= end ? span : middle - start
-      const bucket = Math.min(
-        pixelWidth - 1,
-        Number(relative * BigInt(pixelWidth) / span),
-      )
-      if (firstByPixel[bucket] < 0) firstByPixel[bucket] = logical
-      lastByPixel[bucket] = logical
+    let low = first
+    let high = this.count
+    while (low < high) {
+      const middle = (low + high) >>> 1
+      if (this.startTickAt(middle) <= end) low = middle + 1
+      else high = middle
     }
-
+    const afterLast = low
+    const span = end > start ? end - start : 1n
+    const width = BigInt(pixelWidth)
+    const midpoint = (logical: number) => (this.startTickAt(logical) + this.endTickAt(logical)) / 2n
     const selected = new Int32Array(pixelWidth * 2)
     let selectedCount = 0
-    for (let pixel = 0; pixel < pixelWidth; pixel++) {
-      const firstLogical = firstByPixel[pixel]
-      if (firstLogical < 0) continue
-      selected[selectedCount++] = firstLogical
-      const lastLogical = lastByPixel[pixel]
-      if (lastLogical !== firstLogical) selected[selectedCount++] = lastLogical
+    // Single-core execution intervals are ordered and non-overlapping. Skip
+    // the interior of a pixel bucket with binary search instead of scanning
+    // every retained interval on every visible-range request. Selection is
+    // exactly the same first/last envelope, including clipped boundary runs.
+    for (let logical = first; logical < afterLast;) {
+      const middle = midpoint(logical)
+      const relative = middle <= start ? 0n : middle >= end ? span : middle - start
+      const bucket = Math.min(pixelWidth - 1, Number(relative * width / span))
+      selected[selectedCount++] = logical
+      let next = logical + 1
+      if (bucket === pixelWidth - 1) next = afterLast
+      else {
+        const boundary = start + (BigInt(bucket + 1) * span + width - 1n) / width
+        // Sparse/zoomed ranges normally have one interval per pixel.
+        if (next < afterLast && midpoint(next) < boundary) {
+          low = next + 1
+          high = afterLast
+          while (low < high) {
+            const mid = (low + high) >>> 1
+            if (midpoint(mid) < boundary) low = mid + 1
+            else high = mid
+          }
+          next = low
+        }
+      }
+      if (next > logical + 1) selected[selectedCount++] = next - 1
+      logical = next
     }
-    return { logicalIndices: selected, count: selectedCount, candidateCount }
+    return { logicalIndices: selected, count: selectedCount, candidateCount: afterLast - first }
   }
 }
 

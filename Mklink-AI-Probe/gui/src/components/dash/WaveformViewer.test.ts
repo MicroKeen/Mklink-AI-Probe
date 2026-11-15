@@ -7,6 +7,8 @@ import WaveformViewer from './WaveformViewer.vue'
 import { StreamType } from '../../lib/stream/protocol'
 import { StreamDecoder, type WorkerOutput } from '../../workers/streamDecoder.worker'
 import { interaction } from '../../lib/frontendControl'
+import { createGuiAutomation } from '../../lib/guiAutomation'
+import { createMemoryHistory, createRouter } from 'vue-router'
 
 const mocks = vi.hoisted(() => ({
   useBinaryStream: vi.fn(),
@@ -326,10 +328,12 @@ describe('WaveformViewer VOFA binary transport', () => {
       const after = probe.visibleTimeRange()
       expect(after.tMax - after.tMin).toBeLessThan(before.tMax - before.tMin)
       expect(document.querySelector('#btn-export-csv')).toBeNull()
+      viewer.setProfilePreferences({channels: [], bufferPoints: 100000, interval: .00001}, 'reloaded.axf.superwatch.json')
       viewer.endReplay()
       expect(viewer.isReplaying()).toBe(false)
       expect(probe.binary().names).toEqual(['new_live'])
       expect(probe.collectionState().state).toBe('stopped')
+      expect(probe.serializeState().bufferPoints).toBe(100000)
     } finally { runtime.cleanup() }
   })
   beforeEach(() => {
@@ -840,6 +844,26 @@ describe('WaveformViewer VOFA binary transport', () => {
       )
       if (failRecovery) expect(runtime.probe.setBufferCapacity(4)).toBe(false)
     } finally { allocation?.mockRestore(); runtime.cleanup() }
+  })
+
+  it('shows an interrupted target read without stopping collection and clears it on recovery', async () => {
+    const runtime = await loadRttViewerRuntime('SuperWatch')
+    try {
+      const badge = document.getElementById('collection-status-badge')!
+      const start = document.getElementById('btn-start') as HTMLButtonElement
+      const stop = document.getElementById('btn-stop') as HTMLButtonElement
+      runtime.probe.syncStatus({ state: 'running', target_read_interrupted: true, actual_rate: 0 })
+      expect(badge.dataset.i18n).toBe('target_read_interrupted')
+      expect(badge.className).toBe('status-waiting')
+      expect(document.getElementById('sample-rate-badge')?.textContent).toBe('0.00 Hz')
+      expect(start.disabled).toBe(true)
+      expect(stop.disabled).toBe(false)
+      runtime.probe.syncStatus({ state: 'running', target_read_interrupted: false, actual_rate: 100 })
+      expect(badge.dataset.i18n).toBe('running')
+      expect(document.getElementById('sample-rate-badge')?.textContent).toBe('100.00 Hz')
+      runtime.probe.syncStatus({ state: 'stopped' })
+      expect(badge.dataset.i18n).toBe('stopped')
+    } finally { runtime.cleanup() }
   })
 
   it('keeps the transport failure reason visible while backend status remains running', async () => {
@@ -2984,6 +3008,39 @@ describe('VOFA viewer hot path source guard', () => {
     }
   })
 
+  it('restores file settings without old addresses and exports only after user save', async () => {
+    const requests = vi.fn(async () => ({ok: true, json: async () => ({state: 'stopped', interval: .001, items: []})}))
+    const runtime = await loadRttViewerRuntime('SuperWatch', 50000, requests as typeof fetch)
+    const changed = vi.fn()
+    window.addEventListener('mklink:viewer-preferences', changed)
+    try {
+      runtime.viewer.configureBinaryChannels([{name: 'gain', addr: 0x20001000}])
+      runtime.viewer.setProfilePreferences({
+        channels: [{name: 'gain', address: 0xDEADBEEF, color: '#123456'}],
+        bufferPoints: 500000, interval: .000001,
+        triggerSettings: {source: 'gain', edge: 'falling', level: 12, mode: 'normal', preTrigger: 1000},
+      }, 'app.axf.superwatch.json')
+      await flushPromises()
+      expect(runtime.probe.serializeState().bufferPoints).toBe(500000)
+      expect(runtime.probe.metadata().gain.address).toBe(0x20001000)
+      expect(runtime.probe.fields().gain.color).toBe('#123456')
+      expect(runtime.probe.trigger.level).toBe(12)
+      expect(changed).not.toHaveBeenCalled()
+      expect(requests.mock.calls.some((call: any[]) => call[1]?.method === 'POST')).toBe(false)
+      vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => { throw new Error('Storage disabled') } })
+      runtime.viewer.flushPreferences()
+      expect(changed).toHaveBeenCalledOnce()
+      expect((changed.mock.calls[0][0] as CustomEvent).detail.channels[0].address).toBeUndefined()
+      runtime.viewer.setProfilePreferences({channels: [], bufferPoints: 50000, interval: .001}, 'other.elf.superwatch.json')
+      expect(runtime.probe.trigger.level).toBe(0)
+      expect(runtime.probe.fields().gain.color).not.toBe('#123456')
+    } finally {
+      window.removeEventListener('mklink:viewer-preferences', changed)
+      runtime.cleanup()
+      vi.unstubAllGlobals()
+    }
+  })
+
   it.each([false, true])('restores interval without changing a live shared acquisition (running=%s)', async running => {
     const saved = JSON.stringify({ channels: [null], interval: 0.000001 })
     vi.stubGlobal('localStorage', { getItem: () => saved, setItem: vi.fn() })
@@ -4078,6 +4135,35 @@ describe('VOFA viewer typed-ring runtime', () => {
 
 
 describe('independent semantic waveform panels', () => {
+  it('keeps default GUI control and AXF preferences independent of workbench viewers', async () => {
+    const original = await loadRttViewerRuntime('SuperWatch', 100)
+    const preferences = vi.fn(), ready = vi.fn()
+    window.addEventListener('mklink:viewer-preferences', preferences)
+    window.addEventListener('mklink:watch-viewer-ready', ready)
+    const panel = await loadRttViewerRuntime('SuperWatch', 100, undefined, 'separate-view')
+    let closed = false
+    try {
+      expect(ready).not.toHaveBeenCalled()
+      panel.viewer.flushPreferences()
+      expect(preferences).not.toHaveBeenCalled()
+      original.viewer.flushPreferences()
+      expect(preferences).toHaveBeenCalledOnce()
+      original.viewer.updateAcquisitionStatus({ running: true, state: 'running' })
+      panel.viewer.updateAcquisitionStatus({ running: true, state: 'running' })
+      const gui = createGuiAutomation(createRouter({ history: createMemoryHistory(), routes: [] }), () => ({}))
+      await gui.execute({ action: 'superwatch.pause' })
+      expect(original.viewer.getDisplayState().paused).toBe(true)
+      expect(panel.viewer.getDisplayState().paused).toBe(false)
+      panel.cleanup(); closed = true
+      await gui.execute({ action: 'superwatch.resume' })
+      expect(original.viewer.getDisplayState().paused).toBe(false)
+    } finally {
+      if (!closed) panel.cleanup()
+      window.removeEventListener('mklink:viewer-preferences', preferences)
+      window.removeEventListener('mklink:watch-viewer-ready', ready)
+      original.cleanup()
+    }
+  })
   it('isolates duplicate canvases, view controls, signal subsets, shortcuts and disposal', async () => {
     const left = await loadRttViewerRuntime('SuperWatch', 100, undefined, 'wave-left')
     const right = await loadRttViewerRuntime('SuperWatch', 100, undefined, 'wave-right')

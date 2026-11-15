@@ -1,4 +1,5 @@
 """Shared security admission and observation without issuing hardware commands."""
+import asyncio
 import json
 import threading
 import time
@@ -140,7 +141,7 @@ def test_interrupted_security_record_loads_unknown_without_replay(security):
     recovery = s.control.jobs.path.with_name('recovered.json')
     recovery.write_bytes(s.control.jobs.path.read_bytes())
     restored = RuntimeJobs(SimpleNamespace(info={'jobs_path':str(recovery)}))
-    assert restored.submit(submission())['state'] == 'unknown'
+    assert asyncio.run(restored.submit(submission()))['state'] == 'unknown'
     assert len(s.calls) == 1
     s.release.set()
     terminal(s.client, job['job_id'])

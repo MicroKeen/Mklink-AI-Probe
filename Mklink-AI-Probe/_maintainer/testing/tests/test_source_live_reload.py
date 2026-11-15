@@ -165,6 +165,9 @@ def test_reload_rebinds_superwatch_addresses_removes_renamed_items_and_stays_sto
     manager._running = True
     if not paused:
         manager._collecting.set()
+    # Normal symbol loading activates the sidecar before user selections.
+    app.state.watch_profile.activate(str(axf), manager)
+    app.state.watch_profile.save('selected', ['gain', 'removed'])
     actions = []
     def stop():
         actions.append('stop')

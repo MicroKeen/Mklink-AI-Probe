@@ -426,13 +426,13 @@ def test_tauri_bundle_includes_complete_third_party_license_texts():
     assert "http://unlicense.org/" in notices
 
 
-def test_tauri_bundle_integrates_mklink_usb_port_naming():
+def test_tauri_bundle_installs_per_user_without_automatic_port_naming():
     tauri_dir = PROJECT_ROOT / "gui" / "src-tauri"
     config = json.loads((tauri_dir / "tauri.conf.json").read_text(encoding="utf-8"))
     nsis = config["bundle"]["windows"]["nsis"]
     hook = (tauri_dir / "installer-hooks.nsh").read_text(encoding="utf-8")
 
-    assert nsis["installMode"] == "perMachine"
+    assert nsis["installMode"] == "currentUser"
     assert nsis["installerHooks"] == "installer-hooks.nsh"
     assert "NSIS_HOOK_PREINSTALL" in hook
     # Never start a second uninstaller around Tauri's native /UPDATE path.
@@ -445,10 +445,14 @@ def test_tauri_bundle_integrates_mklink_usb_port_naming():
     assert 'MKLINK_RETARGET_LEGACY_SHORTCUT "$SMPROGRAMS\\${PRODUCTNAME}.lnk"' in hook
     assert 'IsShortcutTarget "${SHORTCUT}" "$MklinkLegacyInstallDir\\${MAINBINARYNAME}.exe"' in hook
     assert "NSIS_HOOK_POSTINSTALL" in hook
-    assert "Initializing MKLink USB serial port naming" in hook
-    assert "the helper still runs successfully" in hook
-    assert "--manage-usb-port-names apply" in hook
-    assert "$INSTDIR\\mklink-ai-probe.exe" in hook
+    assert "--manage-usb-port-names" not in hook
+    assert hook.count('nsExec::ExecToStack') == 1
+    assert '--internal-install-history-maintenance' in hook
+    assert '"$INSTDIR\\mklink-sidecar.exe" --internal-install-history-maintenance' in hook
+    assert "WriteRegStr HKLM" not in hook
+    lib_rs = (tauri_dir / "src" / "lib.rs").read_text(encoding="utf-8")
+    assert 'format!("--manage-usb-port-names {}", operation)' in lib_rs
+    assert "-Verb RunAs" in lib_rs
     assert 'ReadRegStr $0 HKCU "Software\\Classes\\mklink-ai-probe\\shell\\open\\command" ""' in hook
     assert '"FriendlyTypeName" "MKLink Web GUI"' in hook
     assert '"ApplicationName" "MKLink Web GUI"' in hook
@@ -456,7 +460,6 @@ def test_tauri_bundle_integrates_mklink_usb_port_naming():
     # The installer only adds friendly metadata and never reroutes the portable
     # cross-platform Web launcher to the Windows-only desktop executable.
     protocol_block = hook.split("Keep the portable HTML launcher cross-platform", 1)[1]
-    protocol_block = protocol_block.split("Apply naming immediately", 1)[0]
     assert "shell\\open\\command\" \"\"" in protocol_block
     assert "WriteRegStr" in protocol_block
     assert "$INSTDIR\\${MAINBINARYNAME}.exe" not in protocol_block
@@ -498,7 +501,6 @@ def test_product_version_and_signed_updater_are_configured():
     assert config["plugins"]["updater"]["endpoints"] == [
         "https://download.microkeenai.com/mklink/stable/latest.json",
         "https://raw.githubusercontent.com/MicroKeen/Mklink-AI-Probe/release/latest.json",
-        GITEE_UPDATER_ENDPOINT,
     ]
     assert config["plugins"]["updater"]["pubkey"].strip()
 

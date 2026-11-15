@@ -422,16 +422,16 @@ class MKLinkFlash:
             if not lines or lines[-1] != "-1" or any(
                 word in capability.lower() for word in ("error", "traceback")
             ):
-                raise FlashError("HPM HEX requires downloader firmware with hpm.program_hex support")
+                raise FlashError("HPM HEX requires downloader firmware with hpm.program_hex support; 请升级匹配的下载器固件 / upgrade the matching probe firmware")
         filename = self._copy_to_microkeen(bin_path, microkeen_filename)
         if not filename:
             raise FlashError("无法将文件拷贝到 MICROKEEN 磁盘")
 
         commands: list[str] = []
-        if normalized_board:
+        if normalized_cfg:
+            commands.append("hpm.flash_cfg({})".format(",".join(word.rstrip("uU") for word in normalized_cfg)))
+        elif normalized_board:
             commands.append(f'hpm.board("{normalized_board}")')
-        elif normalized_cfg:
-            commands.append(f"hpm.flash_cfg({','.join(normalized_cfg)})")
 
         quoted_filename = quote_probe_string(filename)
         commands.append(
@@ -630,7 +630,7 @@ def burn_hex_file(
             mcu_key = "custom"
             catalog_required = True
         else:
-            raise FlashError("mcu_key 未配置，请先运行 `python -m mklink project-init`")
+            raise FlashError("缺少目标型号；可用 `mklink flash --firmware <HEX/BIN> --target-part <型号>` 直接烧录，或在 project_info.json 保存 device。")
 
     flash = MKLinkFlash.connect(port)
     try:

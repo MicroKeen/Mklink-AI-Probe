@@ -9,6 +9,29 @@ export interface ReleaseHistoryEntry {
 
 export const releaseHistory: ReleaseHistoryEntry[] = [
   {
+    version: '0.5.0', date: '2026-11-13',
+    summary: '完善采集、设备兼容与更新体验',
+    summaryEn: 'Improve capture, device compatibility and updates',
+    changes: [
+      "修复普通用户连接和覆盖安装权限；Windows 默认按用户安装，不再自动修改端口名称。",
+      "改善 SuperWatch 断线恢复与采集中写入，变量和采集配置随 AXF/ELF 自动保存、恢复。",
+      "日志改为手动转换：SuperWatch 导出 Excel，RTT 导出精简的带时间戳 TXT。",
+      "修复 RTOS Trace 再次启动时的任务名称刷新，支持时序图缩放和平移。",
+      "补全串口和 Modbus 波特率档位至 10M，修复部分 ELF 变量遗漏，支持通用工程初始化和显式重载符号。",
+      "修复 macOS 后台启动和 USB 身份识别，优化枚举耗时与共享会话续约。",
+      "新增客户端和固件更新提醒，协调更新顺序；默认从腾讯云下载，不可用时回退 MicroKeen GitHub。",
+    ],
+    changesEn: [
+      "Fix standard-user connection and upgrade permissions; install per user without automatically renaming ports.",
+      "Improve SuperWatch recovery and writes during capture; save and restore settings beside AXF/ELF files.",
+      "Manually export SuperWatch recordings to Excel and RTT recordings to readable timestamped TXT.",
+      "Refresh RTOS Trace task names on restart and support timeline zoom and pan.",
+      "Add firmware-supported serial/Modbus baud rates up to 10M, fix missing ELF variables, and support generic projects and explicit symbol reload.",
+      "Fix macOS backend startup and USB identity detection; improve enumeration and shared-session renewal.",
+      "Add client and firmware update notices with coordinated installation; prefer Tencent downloads and fall back to MicroKeen GitHub when unavailable.",
+    ],
+  },
+  {
     version: '0.4.3', date: '2026-11-04',
     summary: '优化读取速度与波形显示',
     summaryEn: 'Improve read speed and waveform display',

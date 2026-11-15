@@ -28,6 +28,10 @@ function detailMessage(detail: unknown, fallback: string): string {
   if (typeof detail === 'string') return detail
   if (detail && typeof detail === 'object') {
     const value = detail as Record<string, unknown>
+    if (value.reason === 'job_history_invalid') {
+      return tr('旧任务记录无法读取，已暂停新任务提交。请关闭 MKLink 和 Skill/MCP 后台，再覆盖安装新版 V0.5.0；安装器会先备份异常记录，再初始化任务历史。修复不代表旧任务未执行，不要重复提交结果未知的旧任务。',
+        'The old task history cannot be read; new submissions are blocked. Close MKLink and Skill/MCP backends, then reinstall the latest V0.5.0. Setup backs up invalid records before initializing task history. Recovery does not prove old tasks were never executed; do not replay unknown outcomes.')
+    }
     if (value.code === 'PROBE_BUSY') {
       return tr(`探针正在执行 ${resourceOwnerLabel(value.conflict_owner ?? value.owner)} 的操作，请等待操作完成。`, `The probe is executing an operation for ${resourceOwnerLabel(value.conflict_owner ?? value.owner)}. Wait for it to finish.`)
     }

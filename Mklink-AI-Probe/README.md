@@ -14,7 +14,7 @@ MKLink AI Probe 为 MKLink/MicroLink/HPMLink 下载器提供桌面界面、Web �
 
 把下面这段话发给能够操作本机文件和软件的 AI 助手，例如 Codex、Claude Code 或 Cursor：
 
-> 请从 https://github.com/MicroKeen/Mklink-AI-Probe 安装 MKLink AI Probe 最新正式版。按照仓库的 Skill 和安装文档，为你自己安装完整 Skill，配置运行环境并完成自检。优先从 https://download.microkeenai.com/ 下载，保留 GitHub/Gitee 备用。检查下载器和目标板连接，并打开调试界面；涉及烧录、供电或保护配置时，先说明操作内容。
+> 请从 https://github.com/MicroKeen/Mklink-AI-Probe 安装 MKLink AI Probe 最新正式版。按照仓库的 Skill 和安装文档，为你自己安装完整 Skill，配置运行环境并完成自检。优先从 https://download.microkeenai.com/ 下载，仅在腾讯云不可用时回退到 MicroKeen GitHub。检查下载器和目标板连接，并打开调试界面；涉及烧录、供电或保护配置时，先说明操作内容。
 
 AI 助手需要本地文件和程序执行能力。普通网页聊天需连接本地执行环境；系统授权提示由你在电脑上确认。将工程目录、目标芯片和要完成的任务告诉 AI，它会先检查设备能力与资源，再选择操作方式。
 
@@ -31,7 +31,7 @@ AI 助手需要本地文件和程序执行能力。普通网页聊天需连接�
 
 完整 Skill 已包含常用芯片的 FLM 和 Pack/SVD 资源。GitHub 自动生成的源码 ZIP 用于开发，不能替代完整 Skill 发布包。芯片名称不完整时，AI 可以模糊搜索候选型号，再结合工程和板卡信息确认。
 
-下载资源优先使用腾讯云 COS，保留 [GitHub Releases](https://github.com/MicroKeen/Mklink-AI-Probe/releases) 和 [Gitee Releases](https://gitee.com/Aladdin-Wang/Mklink-AI-Probe/releases) 备用。软件默认提供 Windows 安装包；Linux/macOS 安装包是否可用，以对应发布页面为准。Gitee 受附件大小限制，部分安装包会使用页面注明的备用地址。
+下载资源默认使用腾讯云服务器，仅在不可用时回退到 [MicroKeen GitHub Releases](https://github.com/MicroKeen/Mklink-AI-Probe/releases)。后续版本仅发布到腾讯云与该 GitHub 仓库，Gitee 和旧 GitHub 仓库只保留历史文件。软件默认提供 Windows 安装包；Linux/macOS 安装包是否可用，以对应发布页面为准。
 
 ## 可以完成什么
 

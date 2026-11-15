@@ -89,6 +89,7 @@ async function toggleSleepAccess() {
       throw new Error(typeof result.detail === 'string' ? result.detail : result.detail?.hint
         || tr('请核对当前采集和睡眠访问状态', 'Check active captures and sleep access status'))
     }
+    if (!disposed && result.firmware_warning) error.value = result.firmware_warning
   } catch (e: any) { if (!disposed) error.value = e.message }
   finally {
     if (!disposed) { await refresh(); acting.value = false }

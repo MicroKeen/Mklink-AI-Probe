@@ -93,7 +93,12 @@ def test_reset_failure_does_not_stop_or_replay_capture(capturing, failure):
 def test_unadvertised_reset_cannot_interrupt_or_stop_capture(capturing):
     client, state, _, transport, managers = capturing
     transport.capabilities = 31
-    assert request_reset(client).status_code == 409
+    reply = request_reset(client)
+    assert reply.status_code == 409
+    assert 'upgrade' in reply.json()['detail']
+    web = client.post('/api/device/reset')
+    assert web.status_code == 409
+    assert 'runtime/jobs' in web.json()['detail']  # GUI reset uses the same job route.
     transport.software_reset.assert_not_called()
     assert_captures_kept(state, transport, managers)
 

@@ -106,7 +106,7 @@ def check_node():
 
 def check_python_deps():
     """Verify GUI dependencies and the BLE backend shipped by the Windows desktop."""
-    imports = "import mklink, fastapi, uvicorn"
+    imports = "import mklink, fastapi, uvicorn, xlsxwriter"
     if IS_WINDOWS:
         imports += "; import mklink.s3_ble, bleak.backends.winrt.client"
     extras = ".[gui,s3]" if IS_WINDOWS else ".[gui]"

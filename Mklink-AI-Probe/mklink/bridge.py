@@ -104,6 +104,7 @@ class MKLinkSerialBridge:
         self._mux = None
         self._mux_supported = None
         self._firmware_capabilities: frozenset[str] | None = None
+        self._firmware_version_response: str | None = None
         self._echo_enabled = False
         self._echo_prefix = "[SERIAL] "
         self._echo_offset = 0
@@ -143,6 +144,9 @@ class MKLinkSerialBridge:
         with self._cmd_lock:
             if self._firmware_capabilities is None:
                 response = self.send_command("cmd.get_version()", timeout=3.0)
+                # Preserve response order: the first version is installed;
+                # later version lines belong to the firmware changelog.
+                self._firmware_version_response = response
                 self._firmware_capabilities = frozenset(line.strip() for line in response.splitlines())
             return self._firmware_capabilities
 
@@ -184,6 +188,7 @@ class MKLinkSerialBridge:
         self._mux_supported = None  # Re-negotiate after reconnect/firmware changes.
         self._mux_capabilities = None
         self._firmware_capabilities = None
+        self._firmware_version_response = None
         self._sleep_debug_previous_clock = None
         self._sleep_debug_atomic = False
         # 进程级互斥：获取文件锁

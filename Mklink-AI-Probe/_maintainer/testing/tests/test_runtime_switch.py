@@ -86,9 +86,94 @@ def test_occupied_destination_keeps_current_device_and_data(window):
     with runtime.runtime_lock('owner.lock', B):
         response = client.post('/api/runtime/select', json={'port': 'COM2'})
     assert response.status_code == 409
+    assert response.json()['detail']['reason'] == 'probe_in_use'
     assert control.info['probe_id'] == A and state['device'] is device
     assert dashboards.get_managers()['rtt'] is old
     device.close.assert_not_called()
+
+
+def test_explicit_switch_during_usb_grace_does_not_wait_or_replay_old_connection(window):
+    from types import SimpleNamespace
+    client, control, device, state = window
+    device.connected = False
+    device._bridge = SimpleNamespace(_transport_error=OSError('USB unplugged'))
+    recovery = control.recovery
+    recovery.device, recovery.identity = device, A
+    recovery.pending, recovery.lost_at = True, time.monotonic()
+    recovery.plan = [('old-capture',)]
+    response = client.post('/api/runtime/select', json={'probe': B})
+    assert response.status_code == 200, response.text
+    assert control.info['probe_id'] == B and state['device'] is None
+    assert not recovery.retains_session()
+    device.close.assert_called_once()
+
+
+def test_explicit_identity_never_follows_reused_port_and_can_follow_renumbering(window, monkeypatch):
+    client, control, device, state = window
+    monkeypatch.setattr(probes, 'inventory', lambda: [
+        {'probe_id': A, 'port': 'COM2', 'alias': ''}])
+    response = client.post('/api/runtime/select', json={'probe': B, 'port': 'COM2'})
+    assert response.status_code == 409
+    assert response.json()['detail']['reason'] == 'probe_missing'
+    assert control.info['probe_id'] == A and state['device'] is device
+    device.close.assert_not_called()
+    monkeypatch.setattr(probes, 'inventory', lambda: [
+        {'probe_id': A, 'port': 'COM2', 'alias': ''},
+        {'probe_id': B, 'port': 'COM99', 'alias': ''}])
+    response = client.post('/api/runtime/select', json={'probe': B, 'port': 'COM2'})
+    assert response.status_code == 200
+    assert control.info['probe_id'] == B
+
+
+@pytest.mark.parametrize('candidates', [[B], [A, B]])
+def test_disconnected_window_stale_saved_port_does_not_block_selection(window, monkeypatch, tmp_path, candidates):
+    client, control, device, state = window
+    assert client.post('/api/device/disconnect').status_code == 200
+    state['last_device_connection']['port'] = 'COM99'
+    replacement, _ = _connected_symbol_device(tmp_path)
+    replacement.port = 'COM4'
+    monkeypatch.setattr('mklink.connect', Mock(return_value=replacement))
+    monkeypatch.setattr(probes, 'inventory', lambda: [
+        {'probe_id': identity, 'port': f'COM{i+4}', 'alias': ''}
+        for i, identity in enumerate(candidates)])
+    response = client.post('/api/runtime/select', json={'connect': {'restore_last': True}})
+    if len(candidates) > 1:
+        assert response.status_code == 409
+        assert response.json()['detail']['reason'] == 'probe_selection_required'
+        assert control.info['probe_id'] == 'lobby'
+    else:
+        assert response.status_code == 200, response.text
+        assert control.info['probe_id'] == B
+
+
+@pytest.mark.parametrize('content', [b'\x89PNG\r\n', b'{unfinished', b'{}', b'[null]',
+                                     b'[{"state":"running","job_id":"old"}]'])
+def test_malformed_journal_preserves_file_and_allows_connect_without_replay(window, monkeypatch, tmp_path, content):
+    client, control, _, state = window
+    path = runtime._private_dir(B) / 'jobs.json'
+    path.write_bytes(content)
+    replacement, _ = _connected_symbol_device(tmp_path)
+    replacement.port = 'COM2'
+    connect = Mock(return_value=replacement)
+    monkeypatch.setattr('mklink.connect', connect)
+    response = client.post('/api/runtime/select', json={'probe': B, 'connect': {}})
+    assert response.status_code == 200, response.text
+    assert state['device'] is replacement
+    assert client.get('/api/device/status').json()['connected']
+    assert not client.get('/api/runtime/control/status').json()['job_history_available']
+    result = client.post('/api/runtime/jobs/', json=dict(action='reset', request_id='unknown', confirm=True))
+    assert result.status_code == 503
+    assert result.json()['detail']['reason'] == 'job_history_invalid'
+    assert not control.jobs.tasks and not control.jobs.jobs
+    assert path.read_bytes() == content
+    # Carry the uncertainty across a single-window switch without touching the
+    # released probe's records. A repaired journal is read only after reselect.
+    assert client.post('/api/runtime/select', json={'probe': A}).status_code == 200
+    path.write_text('[]', encoding='utf-8')
+    assert client.get('/api/runtime/jobs/').status_code == 503
+    assert client.post('/api/runtime/select', json={'probe': B}).status_code == 200
+    assert client.get('/api/runtime/jobs/').json() == {'jobs': []}
+    assert path.read_text(encoding='utf-8') == '[]'
 
 
 @pytest.mark.parametrize('stale_connected', [False, True])
@@ -309,6 +394,35 @@ def test_bound_backend_starts_with_denied_journal_and_recovers_in_place(tmp_path
             assert not (path.parent / 'endpoint.json').exists()
 
 
+def test_malformed_journal_backend_starts_without_affecting_other_backend(tmp_path, monkeypatch):
+    monkeypatch.setenv('MKLINK_RUNTIME_DIR', str(tmp_path / 'registry'))
+    monkeypatch.setattr(probes, 'select_probe', lambda selector, **kw: {'probe_id': selector})
+    bad = runtime._private_dir(A) / 'jobs.json'
+    good = runtime._private_dir(B) / 'jobs.json'
+    original = b'\x89not-utf8'
+    bad.write_bytes(original)
+    good.write_text('[ ]', encoding='utf-8')
+    workers = []
+    try:
+        for identity in (A, B):
+            workers.append(runtime.ensure_runtime(project_root=str(tmp_path), probe=identity, port=0))
+        assert workers[0]['pid'] != workers[1]['pid']
+        assert not runtime.request(workers[0], 'GET', '/api/runtime/control/status')['job_history_available']
+        assert runtime.request(workers[1], 'GET', '/api/runtime/control/status')['job_history_available']
+        with pytest.raises(runtime.RuntimeErrorResponse) as caught:
+            runtime.request(workers[0], 'GET', '/api/runtime/jobs/')
+        assert caught.value.status_code == 503 and caught.value.detail['reason'] == 'job_history_invalid'
+        assert runtime.request(workers[1], 'GET', '/api/runtime/jobs/') == {'jobs': []}
+        assert bad.read_bytes() == original and good.read_text(encoding='utf-8') == '[ ]'
+    finally:
+        for info in workers:
+            runtime.request(info, 'POST', '/_runtime/stop', {'confirm': True})
+        deadline = time.monotonic() + 10
+        while any((runtime.runtime_dir(info['probe_id']) / 'endpoint.json').exists() for info in workers) and time.monotonic() < deadline:
+            time.sleep(.05)
+        assert not any((runtime.runtime_dir(info['probe_id']) / 'endpoint.json').exists() for info in workers)
+
+
 def test_released_probe_does_not_restore_another_owners_journal(window, monkeypatch):
     client, _, _, _ = window
     path = runtime._private_dir(B) / 'jobs.json'
@@ -344,6 +458,39 @@ def test_disconnect_releases_physical_ownership_but_not_backend(window):
     with runtime.runtime_lock('owner.lock', A):
         pass
     assert state['last_device_connection']['port'] == 'COM1'
+
+
+@pytest.mark.parametrize('capture', ['rtt', 'systemview', 'superwatch', 'vofa'])
+def test_explicit_reboot_stops_capture_retires_target_and_preserves_uart(window, capture):
+    client, control, device, state = window
+    managers = dict(dashboards.get_managers())
+    manager = managers[capture]
+    manager._running = True
+    order = []
+    def stop():
+        order.append('stop')
+        manager._running = False
+    manager.stop = Mock(side_effect=stop)
+    def reboot():
+        assert not manager.running
+        order.append('reboot')
+        device.connected = False
+    device.reboot = Mock(side_effect=reboot)
+    control.sessions['target'] = Session(state['project_root'], None, streams={capture})
+    control.sessions['uart'] = Session(state['project_root'], None, scope='uart')
+    control.created_streams[capture] = 'target'
+    with runtime.runtime_lock('owner.lock', B):
+        response = client.post('/api/device/reboot')
+        assert response.status_code == 200, response.text
+        assert response.json()['stopped'] == [capture]
+        assert order == ['stop', 'reboot']
+        assert set(control.sessions) == {'uart'}
+        assert control.info['probe_id'] == 'lobby'
+        assert state['device'] is None and state['device_generation'] == 1
+        assert dashboards.get_managers()['serial'] is managers['serial']
+        assert not control.created_streams
+        with runtime.runtime_lock('owner.lock', A):
+            pass
 
 
 def test_desktop_lease_and_presentation_socket_are_one_window(window):

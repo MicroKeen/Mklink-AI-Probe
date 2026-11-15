@@ -166,12 +166,16 @@ def test_discovery_layout_and_gui_call_use_existing_auth_without_hardware(runtim
     assert calls == []
 
 
-def test_uart_only_client_cannot_execute_target_page_actions(runtime):
+def test_gui_only_client_can_deliver_page_commands_without_connecting_hardware(runtime):
     client, control, calls, _, _ = runtime
     session = client.post('/_runtime/attach', json={'scope': 'uart'}).json()['session_id']
+    control.frontend.exchange({'report': report(control.frontend), 'receipts': []})
     assert call(client, session, 'gui_frontend_pages').status_code == 200
-    assert call(client, session, 'gui_frontend_call', command(control.frontend)).status_code == 409
-    assert not control.frontend.commands and not calls
+    assert call(client, session, 'gui_frontend_call', command(control.frontend)).json()['status'] == 'queued'
+    assert call(client, session, 'read_memory', {'address': '0x20000000', 'size': 4}).status_code == 409
+    assert call(client, session, 'gui_frontend_call', command(control.frontend, session_id='stale')).status_code == 409
+    assert call(client, 'expired', 'gui_frontend_call', command(control.frontend)).status_code == 409
+    assert len(control.frontend.commands) == 1 and not calls
 
 
 @pytest.mark.parametrize('uart', [False, True])
@@ -205,8 +209,9 @@ def test_invalid_json_and_large_control_request_fail_without_mutating(runtime):
 
 
 def test_workbench_presentation_is_advertised():
-    from mklink.runtime_presentation import TABS
+    from mklink.runtime_presentation import TABS, validate_action
     assert 'workbench' in TABS
+    validate_action({'action': 'navigate', 'page': 'dashboard', 'tab': 'workbench'})
 
 
 def test_symbol_reload_capability_preserves_query_parameters(runtime):

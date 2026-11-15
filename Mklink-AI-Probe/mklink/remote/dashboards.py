@@ -897,7 +897,7 @@ class RttStreamManager(RttChannelDecoder):
 
 
 class SystemViewStreamManager:
-    """Manages SEGGER SystemView RTOS-trace streaming via RTT channel 1.
+    """Manages SEGGER SystemView RTOS-trace on the selected RTT channel.
 
     Reads raw bytes from the target's RTT "SysView" up-buffer, decodes them
     with a persistent SystemViewParser (accumulating timestamps + name maps),
@@ -912,7 +912,8 @@ class SystemViewStreamManager:
         self._paused = threading.Event()
         self._paused.set()  # not paused
         self._stop_event = threading.Event()
-        self._history: list[dict] = []
+        from mklink.remote.systemview_history import SystemViewHistory
+        self._history = SystemViewHistory()
         self._history_lock = threading.RLock()
         self._history_session = uuid.uuid4().hex
         self._history_seq = 0
@@ -1335,8 +1336,9 @@ class SystemViewStreamManager:
                 defaults = getter()
             except Exception:
                 defaults = {}
-        parser._ram_base = _positive_int(defaults.get("ram_base")) or 0x20000000
-        parser._id_shift = _positive_int(defaults.get("id_shift")) or 2
+        ram_base, id_shift = defaults.get("ram_base"), defaults.get("id_shift")
+        parser._ram_base = ram_base if type(ram_base) is int and 0 <= ram_base <= 0xffffffff else 0x20000000
+        parser._id_shift = id_shift if type(id_shift) is int and 0 <= id_shift <= 31 else 2
         freq = _positive_int(defaults.get("cpu_freq"))
         if freq:
             parser._cpu_freq = freq
@@ -1373,6 +1375,7 @@ class SystemViewStreamManager:
             self._cpu_freq_source = source
             with self._history_lock:
                 self._ensure_event_time_fields(self._history)
+                self._history.reindex_times()
             return freq
 
         if p.cpu_freq:
@@ -1408,6 +1411,7 @@ class SystemViewStreamManager:
             self._cpu_freq_source = source
             with self._history_lock:
                 self._ensure_event_time_fields(self._history)
+                self._history.reindex_times()
         return freq
 
     def _profile_cpu_freq_default(self, device) -> int:
@@ -1457,21 +1461,8 @@ class SystemViewStreamManager:
                 ev["cpu_delta_us"] = delta * 1_000_000.0 / freq
 
     def _trim_history(self) -> None:
-        if self._history_buffer_us > 0:
-            latest_us = None
-            for ev in reversed(self._history):
-                t_us = ev.get("t_us")
-                if isinstance(t_us, (int, float)):
-                    latest_us = t_us
-                    break
-            if latest_us is not None:
-                cutoff = latest_us - self._history_buffer_us
-                self._history = [
-                    ev for ev in self._history
-                    if not isinstance(ev.get("t_us"), (int, float)) or ev["t_us"] >= cutoff
-                ]
-        if len(self._history) > self._max_history:
-            self._history = self._history[-self._max_history:]
+        self._history.trim(max_count=self._max_history,
+                           window_us=self._history_buffer_us)
 
     def _start_recording(self, device, extra_meta: dict | None = None) -> None:
         with self._recording_lock:
@@ -1563,6 +1554,7 @@ class SystemViewStreamManager:
     def _status_meta(self) -> dict:
         p = self._parser
         session_status = {
+            "channel": getattr(self, "_start_options", {}).get("channel"),
             "transport_stats": self._mux_transport_stats,
             "connection_generation": self._connection_generation,
             "session_generation": self._session_generation,
@@ -1615,7 +1607,7 @@ class SystemViewStreamManager:
             "recording_error": self._recording_error,
         }
 
-    def _unknown_task_ids(self, events: list[dict]) -> set[int]:
+    def _unknown_task_ids(self, events: list[dict], *, allow_partial=False) -> set[int]:
         p = self._parser
         if not p:
             return set()
@@ -1623,7 +1615,7 @@ class SystemViewStreamManager:
         # restart a live high-rate trace for later unknown IDs; those may be
         # false-alignment candidates and are safer to display as hex values.
         # RAM resolution remains a fallback only when startup names were lost.
-        if p._task_names:
+        if p._task_names and not allow_partial:
             return set()
         ram_base = int(getattr(p, "_ram_base", 0x20000000))
         ids: set[int] = set()
@@ -1686,7 +1678,15 @@ class SystemViewStreamManager:
         # 执行过 stop/start(调用方需重置空闲看门狗基准)。
         if getattr(self, "_name_resolution_disabled", False):
             return False
-        ids = self._unknown_task_ids(events)
+        session = getattr(device, '_systemview_session', None)
+        from mklink.systemview import SystemViewSession
+        shared_mux = isinstance(session, SystemViewSession)
+        if shared_mux and time.monotonic() - getattr(session, '_started_at', 0) < .5:
+            return False  # Give fresh INIT and TASKLIST responses time to arrive.
+        ids = self._unknown_task_ids(events, allow_partial=shared_mux)
+        # Bound optional RAM fallback work even if an incomplete packet produces
+        # many candidate IDs. Other names still come from target TASK_INFO.
+        ids = set(sorted(ids)[:16])
         if not ids:
             return False
         now = time.time()
@@ -1695,9 +1695,7 @@ class SystemViewStreamManager:
         self._last_name_resolution = now
         self._name_resolution_attempted.update(ids)
 
-        session = getattr(device, '_systemview_session', None)
-        from mklink.systemview import SystemViewSession
-        if isinstance(session, SystemViewSession):
+        if shared_mux:
             # MUX memory requests share the transport; do not stop or restart
             # a recorder merely to fill missing RT-Thread metadata.
             resolved = self._resolve_task_names(device, ids)
@@ -1867,6 +1865,9 @@ class SuperWatchTransactionError(RuntimeError):
         super().__init__(str(cause))
 
     def to_detail(self) -> dict:
+        from mklink.firmware_compatibility import FirmwareUpgradeRequired
+        if isinstance(self.cause, FirmwareUpgradeRequired):
+            return {**self.cause.to_detail(), 'phase': self.phase}
         return {
             "code": self.code,
             "phase": self.phase,
@@ -1937,6 +1938,7 @@ class SuperWatchStreamManager:
         self._completed_read_cycles = 0
         self._dropped_read_cycles = 0
         self._read_errors = 0
+        self._active_mux_watch = None
         self._rate_timestamps = deque()
         self._actual_rate = 0.0
         self._binary_dropped_batches = 0
@@ -2272,7 +2274,8 @@ class SuperWatchStreamManager:
                         completed_integrity = dict(self._stream_integrity)
                         try:
                             session.start()
-                            if getattr(session, '_mux_watch', None) is not None:
+                            self._active_mux_watch = getattr(session, '_mux_watch', None)
+                            if self._active_mux_watch is not None:
                                 self._acquisition_mode = "cdc-mux"
                             while (
                                 not stop_event.is_set()
@@ -2292,26 +2295,8 @@ class SuperWatchStreamManager:
                                                     future.set_exception(exc)
                                                 raise
                                         else:
-                                            # Legacy firmware needs command mode, but the logical
-                                            # capture, metadata epoch and device clock stay intact.
-                                            try:
-                                                session.stop()
-                                                write_error = None
-                                                try:
-                                                    device.write_memory(address, payload)
-                                                except Exception as exc:
-                                                    write_error = exc
-                                                finally:
-                                                    session.start()
-                                                if write_error is not None:
-                                                    future.set_exception(write_error)
-                                                else:
-                                                    future.set_result({"data": payload, "acknowledged": True, "verified": False,
-                                                                       "mode": "legacy-gap", "timestamp_us": None})
-                                            except Exception as exc:
-                                                if not future.done():
-                                                    future.set_exception(exc)
-                                                raise
+                                            # Recheck at consumption, without interrupting capture.
+                                            future.set_exception(self._live_write_error(address, payload))
                                 frames = session.read_frames(max_bytes=1024 * 1024)
                                 self._stream_integrity = _sum_counter_snapshots(
                                     completed_integrity, session.stats,
@@ -2371,6 +2356,7 @@ class SuperWatchStreamManager:
                             raise
                         finally:
                             failure = sys.exc_info()[1]
+                            self._active_mux_watch = None
                             try:
                                 session.stop()
                             except Exception as stop_error:
@@ -2424,6 +2410,13 @@ class SuperWatchStreamManager:
         recorder = self._recorder
         return recorder.status() if recorder else {"state": "idle", "active": False}
 
+    def export_recording(self, path: str) -> dict:
+        with self._recording_lock:
+            recorder = self._recorder
+            if recorder is None or recorder.status()['path'] != path:
+                raise RuntimeError('Recording changed; refresh its status before converting')
+            return recorder.export()
+
     def start_recording(self, directory: str) -> dict:
         from mklink.superwatch_recording import SuperWatchRecorder
 
@@ -2457,6 +2450,13 @@ class SuperWatchStreamManager:
                     recorder.request_stop()
             return recorder.stop() if recorder else self.recording_status()
 
+    def _live_write_error(self, address, payload):
+        from mklink.firmware_compatibility import FirmwareUpgradeRequired
+        if not self._live_write_supported:
+            return FirmwareUpgradeRequired('SuperWatch 采集中写入 / live writes', 'MUX target commands (0x12)')
+        return RuntimeError('该地址不在采集中可写 RAM 范围内；采集保持运行，请先手动停止采集。 '
+                            'Address is outside live-write RAM ranges; stop acquisition explicitly before writing.')
+
     def write_symbol(self, path: str, *, generation: int, value: object) -> dict:
         from mklink.symbol_catalog import decode_descriptor, encode_descriptor
 
@@ -2476,6 +2476,11 @@ class SuperWatchStreamManager:
                 raise RuntimeError("SuperWatch stream is stopping")
 
             if was_running:
+                if not self._live_write_supported or not any(
+                    a <= descriptor.address and descriptor.address + len(payload) <= b
+                    for a, b in self._live_write_ranges
+                ):
+                    raise SuperWatchTransactionError('write', self._live_write_error(descriptor.address, payload))
                 from concurrent.futures import Future, TimeoutError as WriteTimeout
                 future = Future()
                 with self._read_lock:
@@ -3090,8 +3095,11 @@ class SuperWatchStreamManager:
         with self._read_lock:
             _payload, snapshot_json, metadata_version = self._metadata_cache
             write_events = list(self._write_events)
+        watch = self._active_mux_watch
+        interrupted = state == "running" and watch is not None and watch.target_read_interrupted
         return {
             "state": state,
+            "target_read_interrupted": interrupted,
             "interval": self._interval,
             "error": self._error,
             "items": json.loads(snapshot_json),
@@ -3102,7 +3110,7 @@ class SuperWatchStreamManager:
             "read_cycles": self._completed_read_cycles,
             "read_drops": self._dropped_read_cycles,
             "read_errors": self._read_errors + self._stream_integrity.get('firmware_read_errors', 0),
-            "actual_rate": round(self._actual_rate, 6),
+            "actual_rate": 0.0 if interrupted else round(self._actual_rate, 6),
             "binary_drops": {
                 "batches": self._binary_dropped_batches,
                 "items": self._binary_dropped_items,
@@ -3870,7 +3878,8 @@ class ModbusStreamManager:
         settings['port'] = canonical_serial_port(settings['port'])
         settings['parity'] = str(settings.get('parity', 'N')).upper()
         validate_slave(slave)
-        limits = {'baudrate': (9600, 300, 4000000), 'retries': (0, 0, 5)}
+        from mklink.uart_baud import MAX_BAUD
+        limits = {'baudrate': (9600, 300, MAX_BAUD), 'retries': (0, 0, 5)}
         for key, (default, low, high) in limits.items():
             value = settings.get(key, default)
             if isinstance(value, bool) or not isinstance(value, int) or not low <= value <= high:

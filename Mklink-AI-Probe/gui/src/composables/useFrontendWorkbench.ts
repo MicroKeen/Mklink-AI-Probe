@@ -3,6 +3,7 @@ import { connectFrontend, frontendRequest, objectSchema, interaction, withFronte
 import { bindingHostKey } from '../lib/workbenchBindings'
 import { applyConnectionClock, readConnectionClock } from '../lib/connectionClock'
 import { IS_REMOTE } from '../lib/runtimeEndpoint'
+import { useGuiPanel } from '../lib/guiAutomation'
 
 interface PanelEntry { id: string; title: string; type: string; source?: unknown; surface?: SemanticSurface | null }
 interface WorkbenchSurface extends SemanticSurface { entries(): PanelEntry[] }
@@ -30,6 +31,14 @@ export function useFrontendWorkbench(tab: Ref<string>, superwatch: Ref<SemanticS
   const connected = ref(false), error = ref(''), busy = ref(false)
   const runtime = ref<FrontendRuntime | null>(null), target = ref<FrontendTarget | null>(null)
   const sessionEpoch = ref(0)
+  useGuiPanel('workbench', {
+    snapshot: () => {
+      const report = runtime.value?.report()
+      return { connected: connected.value, protocol: report?.protocol, session_id: report?.session_id,
+        page_id: report?.page_id, target: target.value }
+    },
+    actions: {},
+  })
   let stop: (() => void) | undefined
   const navigation: SemanticSurface = {
     catalog: () => [

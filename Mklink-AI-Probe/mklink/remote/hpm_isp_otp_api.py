@@ -103,12 +103,12 @@ def create_hpm_isp_otp_router(resource_manager, device_provider):
         fixed = None
         if runtime is not None:
             from mklink.probes import select_probe
-            runtime.require_identity()
+            await runtime.require_identity_async()
             if runtime.uart_operations or any(s.scope == "uart" for s in runtime.sessions.values()):
                 raise HTTPException(409, "Finish UART operations and detach UART clients before reading OTP")
             if runtime.current_operation is not None:
                 runtime.current_operation["uart_exclusive"] = True
-            port = select_probe(runtime.info["probe_id"])["port"]
+            port = (await asyncio.to_thread(select_probe, runtime.info["probe_id"]))["port"]
             binding = OtpBinding(runtime.info['probe_id'], port.casefold(),
                                  request.app.state.mklink_state.get('device_generation', 0),
                                  payload.part_number, payload.extended)

@@ -5,6 +5,12 @@ import sys
 def dispatch_internal_process(arguments):
     """Return an exit code for an internal command, otherwise None."""
     values = list(arguments)
+    if values == ['--internal-install-history-maintenance']:
+        from mklink.job_history import installer_main
+        return installer_main()
+    if values[:1] in (['--internal-recording-text'], ['--internal-recording-export']):
+        from mklink.recording_text import main
+        return main(values[1:])
     if values[:1] == ['--internal-recording-worker']:
         from mklink._recording_worker import main
         return main(values[1:])

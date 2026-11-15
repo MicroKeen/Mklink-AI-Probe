@@ -1,4 +1,5 @@
 name: macOS and Linux desktop packages
+run-name: Native ${{ inputs.target }} package (${{ github.ref_name }})
 on:
   # Only dispatch after an explicit maintainer request for these platforms.
   workflow_dispatch:
@@ -16,14 +17,14 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: desktop-unix-${{ github.ref }}
-  cancel-in-progress: true
+  group: desktop-unix-${{ github.ref }}-${{ inputs.target }}
+  cancel-in-progress: false
 jobs:
   package:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON('{"linux-x64":[{"runner":"ubuntu-22.04","target":"x86_64-unknown-linux-gnu"}],"macos-arm64":[{"runner":"macos-14","target":"aarch64-apple-darwin"}],"macos-x64":[{"runner":"macos-15-intel","target":"x86_64-apple-darwin"}],"all":[{"runner":"macos-14","target":"aarch64-apple-darwin"},{"runner":"macos-15-intel","target":"x86_64-apple-darwin"},{"runner":"ubuntu-22.04","target":"x86_64-unknown-linux-gnu"}]}')[inputs.target] }}
+        include: ${{ fromJSON('{"linux-x64":[{"runner":"ubuntu-22.04","target":"x86_64-unknown-linux-gnu"}],"macos-arm64":[{"runner":"macos-15","target":"aarch64-apple-darwin"}],"macos-x64":[{"runner":"macos-15-intel","target":"x86_64-apple-darwin"}],"all":[{"runner":"macos-15","target":"aarch64-apple-darwin"},{"runner":"macos-15-intel","target":"x86_64-apple-darwin"},{"runner":"ubuntu-22.04","target":"x86_64-unknown-linux-gnu"}]}')[inputs.target] }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     defaults:

@@ -60,7 +60,7 @@ def list_uart_ports() -> list[dict]:
                 "pid": info.pid,
                 "is_mklink": False,
                 "uart_kind": kind,
-                "command_port": siblings[0].device if kind == 'mklink_uart' and len(siblings) == 1 else None,
+                "command_port": siblings[0].device if kind in ('mklink_uart', 'mklink_rs485') and len(siblings) == 1 else None,
                 "usb_serial": serial_number if is_mklink_usb_port(info) else '',
             })
     return results

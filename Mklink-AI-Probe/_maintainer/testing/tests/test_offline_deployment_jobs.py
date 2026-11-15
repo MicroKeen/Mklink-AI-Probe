@@ -432,8 +432,8 @@ def test_algorithm_frozen_input_and_changed_volume_rejection(algorithm_copy, mon
 def test_algorithm_copy_obeys_shared_admission(algorithm_copy, monkeypatch, conflict):
     _, control, disk, _, submit = algorithm_copy
     if conflict == 'identity':
-        def missing(): raise HTTPException(409, 'probe missing')
-        monkeypatch.setattr(control, 'require_identity', missing)
+        async def missing(**kwargs): raise HTTPException(409, 'probe missing')
+        monkeypatch.setattr(control, 'require_identity_async', missing)
     else:
         monkeypatch.setattr(control, 'job_busy', lambda: True)
     assert submit().status_code == 409

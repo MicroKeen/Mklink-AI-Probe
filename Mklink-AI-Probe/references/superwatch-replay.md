@@ -15,6 +15,17 @@
 每段最多 100 万个数值或 32 MiB，通道变化时另起一段，可按文件编号回放。
 磁盘失败或写入队列溢出会明确显示失败，不把不完整记录报告为成功。
 
+停止记录只保存 JSONL，**不会自动转换**。点击日志区域的 **转换为 Excel**，
+才会在后台以较低优先级将本次记录的所有分段生成一个 `.xlsx` 工作簿。
+界面显示转换进度、完成或失败，完成提示的悬停信息包含输出路径。
+工作簿的 `Info` 页记录开始日期、完整性和时间含义；`Data 001` 等页将采样相对时间
+和各变量分列，冻结表头并提供筛选。超过 Excel 行数上限或新增变量列时继续到下一页，
+中断单独标为 `DISCONTINUITY`，不会插值补样本。变量名按文本写入，不作为公式。
+Excel 数值约有 15 位有效数字，**JSONL 仍用于无损回放**。已有同名工作簿不会被覆盖。
+转换按行写入，不把完整记录加载进内存；转换期间仍使用 CPU 和磁盘资源。
+当前按钮针对后台保留的最近一次记录，请在开始下一次记录前触发所需转换。
+停止或转换失败不会改写 JSONL。
+
 CLI 和 MCP 控制的是同一个后台记录器：
 
 ```sh
@@ -24,7 +35,16 @@ mklink runtime call superwatch_recording_stop
 ```
 
 MCP 使用 `superwatch(action="recording_start", arguments={"directory":"D:/logs"})`，
-另有 `recording_status`、`recording_stop`。记录可以在开始 SuperWatch 采样前开启。
+另有 `recording_status`、`recording_stop`、`recording_export`。
+手动转换需传入 `recording_status` 返回的 `path`，防止旧窗口误转新记录：
+
+```powershell
+mklink runtime call superwatch_recording_export --probe <设备> --arguments '{"path":"D:/logs/superwatch-...-0001.jsonl"}'
+```
+
+MCP 使用 `superwatch(action="recording_export", arguments={"path":"..."})`。
+轮询 `recording_status` 的 `export_state`、`export_path`、`export_parts`；转换状态独立于采集状态。
+记录可以在开始 SuperWatch 采样前开启。
 目录必须已存在；重名文件不会覆盖。仅断开 AI 会话不会结束后台的记录。
 
 1. 点击 **日志 → 加载日志**，选择本地 CSV、TXT、LOG、JSONL 或 NDJSON 文件。

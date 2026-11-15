@@ -173,7 +173,7 @@ def test_recovery_keeps_client_ownership_and_subscriptions(recovery):
     assert ('start', 'rtt') in calls
 
 
-def test_absence_over_five_seconds_never_reconnects_on_later_arrival(recovery, monkeypatch):
+def test_absence_over_half_second_never_reconnects_on_later_arrival(recovery, monkeypatch):
     r, state, _, calls = recovery
     clock = [100.0]
     monkeypatch.setattr('mklink.runtime_recovery.time.monotonic', lambda: clock[0])
@@ -183,7 +183,10 @@ def test_absence_over_five_seconds_never_reconnects_on_later_arrival(recovery, m
         await lose(r, state)
         await r.tick()
         assert r.status['state'] == 'waiting' and r.retains_session()
-        clock[0] += 5
+        clock[0] += .49
+        assert r.retains_session()
+        assert r.monitor_delay() == pytest.approx(.01)
+        clock[0] += .02
         await r.tick()
         assert r.status['state'] == 'expired' and not r.retains_session()
         select.side_effect = None
@@ -204,7 +207,7 @@ def test_open_finishing_after_deadline_is_closed_without_resuming(recovery, monk
     connect = state['device']._connect
     def slow_connect(**kwargs):
         connect(**kwargs)
-        clock[0] += 5.1
+        clock[0] += .51
     state['device']._connect = slow_connect
     async def run():
         await lose(r, state)
@@ -220,7 +223,7 @@ def test_expiry_during_worker_join_does_not_close_its_handle(recovery, monkeypat
     clock = [100.0]
     monkeypatch.setattr('mklink.runtime_recovery.time.monotonic', lambda: clock[0])
     def stuck():
-        clock[0] += 6
+        clock[0] += .51
         raise TimeoutError('worker remains active')
     managers['rtt'].stop = stuck
     async def run():
@@ -239,7 +242,7 @@ def test_recovery_expiry_is_logged_once_with_elapsed_time(recovery, monkeypatch,
         monkeypatch.setattr('mklink.probes.select_probe', lambda key: (_ for _ in ()).throw(OSError('probe absent')))
         await r.tick()
         await r.tick()
-        r.lost_at -= 6
+        r.lost_at -= .51
         await r.tick()
         await r.tick()
     with connection_log(tmp_path):
@@ -247,4 +250,28 @@ def test_recovery_expiry_is_logged_once_with_elapsed_time(recovery, monkeypatch,
     result = rows(tmp_path)
     assert len([r for r in result if r['event'] == 'recovery.probe_unavailable']) == 1
     expiry = [r for r in result if r['event'] == 'recovery.expired']
-    assert len(expiry) == 1 and expiry[0]['elapsed_ms'] >= 5000
+    assert len(expiry) == 1 and 500 <= expiry[0]['elapsed_ms'] < 1000
+
+
+def test_slow_enumeration_cannot_extend_grace_or_apply_late_result(recovery, monkeypatch):
+    import threading
+    import time
+    r, state, _, calls = recovery
+    release = threading.Event()
+    def slow_select(key):
+        assert release.wait(3)
+        return {'probe_id': key, 'port': 'COM12'}
+    monkeypatch.setattr('mklink.probes.select_probe', slow_select)
+    async def run():
+        await lose(r, state)
+        started = time.monotonic()
+        try:
+            await r.tick()
+            assert time.monotonic() - started < .9
+            assert r.status['state'] == 'expired' and not r.retains_session()
+        finally:
+            release.set()
+        await asyncio.sleep(.02)
+        await r.tick()
+    asyncio.run(run())
+    assert calls == []

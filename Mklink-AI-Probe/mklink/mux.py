@@ -14,6 +14,7 @@ import struct
 import threading
 import time
 from mklink.connection_diagnostics import event, error_detail
+from mklink.firmware_compatibility import upgrade_message
 
 
 class MuxError(ConnectionError):
@@ -41,8 +42,14 @@ def sleep_rpc_timeout(size, *, write=False, verify=False):
 class MuxTargetError(RuntimeError):
     def __init__(self, status, op=None):
         self.status = status
-        if status == 6:
-            message = ('Multiplex target busy (status 6); debugger access is currently reserved. '
+        self.op = op
+        if status == 1 and op in (0x10, 0x11, 0x12, 0x13, 0x15, 0x16, 0x17,
+                                  0x20, 0x21, 0x22, 0x23, 0x24, 0x25,
+                                  0x31, 0x32, 0x33, 0x34):
+            message = upgrade_message('Requested host operation', f'MUX command 0x{op:02X} (status 1: unsupported)')
+        elif status == 6:
+            message = ('Multiplex target busy or access preparation incomplete (status 6); '
+                       'debugger ownership is one possible cause, not confirmed by this status. '
                        'Retry explicitly when available; the request was not replayed')
         elif status == 5 and op == SLEEP_ACCESS_COMMAND:
             message = 'Sleep access or restoration of the original core state was not confirmed; submitted writes must not be replayed'
@@ -52,6 +59,8 @@ class MuxTargetError(RuntimeError):
                 message += ' A submitted write or reset may have an unknown outcome.'
         else:
             message = f'Multiplex target status {status}; failed writes may have an unknown outcome'
+        if op is not None:
+            message += f' (opcode 0x{op:02X})'
         super().__init__(message)
 
 
@@ -160,7 +169,7 @@ class MuxTransport:
 
     def _send(self, op, payload, heartbeat=False, *, background=False):
         if op == SLEEP_ACCESS_COMMAND and not self.supports_atomic_sleep:
-            raise ValueError('Probe did not advertise atomic Cortex-M sleep access')
+            raise ValueError(upgrade_message('Atomic Cortex-M sleep access', 'MUX HELLO 0x1000'))
         if self.sleep_access and self.supports_atomic_sleep and op in (0x20, 0x23, 0x32, 0x33, 0x34):
             raise RuntimeError('Asynchronous sampling is unavailable in atomic sleep access mode; disable sleep access to start a stream')
         if op == 0x12 and len(payload) > 4 + self.transfer_quantum:
@@ -236,8 +245,10 @@ class MuxTransport:
 
     def handshake(self):
         caps = self.request(1)
-        if len(caps) != 8 or struct.unpack_from('<I', caps)[0] & 3 != 3:
-            raise MuxError('Firmware does not support multiplex target operations')
+        if len(caps) != 8:
+            raise MuxError('Invalid MUX HELLO response; firmware capabilities are unconfirmed')
+        if struct.unpack_from('<I', caps)[0] & 3 != 3:
+            raise MuxError(upgrade_message('Multiplex target operations', 'MUX HELLO 0x3'))
         self.capabilities = struct.unpack_from('<I', caps)[0]
         if self.request(4, self.nonce) != self.nonce:
             raise MuxError('Session claim mismatch')
@@ -250,7 +261,7 @@ class MuxTransport:
         if type(quantum) is not int or quantum not in (128, self.FAST_TRANSFER_BYTES):
             raise ValueError('Transfer quantum must be 128 or 480')
         if not self.capabilities & self.FAST_TRANSFER_CAPABILITY:
-            raise RuntimeError('Probe firmware lacks bounded fast-transfer support')
+            raise RuntimeError(upgrade_message('Bounded fast transfers', 'MUX HELLO 0x100'))
         with self._commands:
             self._pending_quantum = quantum
             try:
@@ -503,7 +514,7 @@ class MuxTransport:
 
     def _sleep_transfer(self, kind, address, size, expected, data=b'', *, deadline=None):
         if not self.supports_atomic_sleep:
-            raise ValueError('Probe did not advertise atomic Cortex-M sleep access')
+            raise ValueError(upgrade_message('Atomic Cortex-M sleep access', 'MUX HELLO 0x1000'))
         answer = self.request(SLEEP_ACCESS_COMMAND, struct.pack('<BIH', kind, address, size) + data,
                               deadline=deadline)
         if len(answer) != expected:

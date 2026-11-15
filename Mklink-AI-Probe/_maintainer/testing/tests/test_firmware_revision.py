@@ -94,7 +94,7 @@ def test_corrupt_same_name_cache_is_rejected_before_reboot(repair):
     assert result['status'] == 'manual_required' and 'SHA-256' in result['message']
 
 
-def test_newer_same_version_mirror_wins_and_bad_download_falls_back(monkeypatch, repair):
+def test_tencent_priority_and_bad_download_falls_back_without_changing_bytes(monkeypatch, repair):
     _, _, info = repair
     newer = replace(info, download_urls={'tencent':'https://cos.test/new.uf2', 'github':'https://github.test/new.uf2'},
                     download_source='tencent', download_url='https://cos.test/new.uf2')
@@ -103,7 +103,7 @@ def test_newer_same_version_mirror_wins_and_bad_download_falls_back(monkeypatch,
     monkeypatch.setattr(fc, 'bundled_firmwares', lambda: [])
     monkeypatch.setattr(fc, '_remote_firmwares_from_source', lambda source, **kw: [old] if source == 'tencent' else [newer])
     selected = fc._remote_firmware('V4')
-    assert selected.build_id == newer.build_id
+    assert selected.build_id == old.build_id
     selected.download_source = 'tencent'; selected.download_url = newer.download_urls['tencent']
     requested = []
     def get(request, timeout):

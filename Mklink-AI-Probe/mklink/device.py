@@ -922,8 +922,9 @@ class Device:
         )
         if not mcu_profile and not explicit_custom and not requested_target and not project_hpm:
             raise DeviceError(
-                "Unknown MCU profile; run `python -m mklink mcu-detect` "
-                "or `python -m mklink project-init` before flashing"
+                "Target MCU is not specified; pass --target-part <exact-part> "
+                "(SDK: target_part=...) with the firmware. Initialization is optional; "
+                "use `mklink project-init --target-part <exact-part>` to save a project default."
             )
 
         flash_base = "0x08000000"
@@ -1411,6 +1412,19 @@ class Device:
         return None
 
     def _systemview_defaults(self) -> dict[str, Any]:
+        def encoding_value(config, keys, maximum):
+            for key in keys:
+                value = config.get(key)
+                if isinstance(value, bool) or not isinstance(value, (int, str)):
+                    continue
+                try:
+                    parsed = int(value, 0) if isinstance(value, str) else value
+                except ValueError:
+                    continue
+                if 0 <= parsed <= maximum:
+                    return parsed
+            return None
+
         defaults: dict[str, Any] = {
             "ram_base": 0x20000000,
             "id_shift": 2,
@@ -1425,18 +1439,15 @@ class Device:
             profile = None
 
         if isinstance(profile, dict):
-            ram_base = _positive_int(
-                profile.get("systemview_ram_base")
-                or profile.get("sysview_ram_base")
-                or profile.get("ram_base")
+            ram_base = encoding_value(
+                profile, ("systemview_ram_base", "sysview_ram_base", "ram_base"), 0xffffffff,
             )
-            if ram_base:
+            if ram_base is not None:
                 defaults["ram_base"] = ram_base
-            id_shift = _positive_int(
-                profile.get("systemview_id_shift")
-                or profile.get("sysview_id_shift")
+            id_shift = encoding_value(
+                profile, ("systemview_id_shift", "sysview_id_shift"), 31,
             )
-            if id_shift:
+            if id_shift is not None:
                 defaults["id_shift"] = id_shift
             freq = _positive_int(
                 profile.get("systemview_cpu_freq")
@@ -1464,20 +1475,18 @@ class Device:
                 and ("hpm5301" in board or "hpm5301" in soc or "hpm5301" in device)
             ) or board == "hpm5301evklite"
 
-            ram_base = _positive_int(
-                project.get("systemview_ram_base")
-                or project.get("sysview_ram_base")
+            ram_base = encoding_value(
+                project, ("systemview_ram_base", "sysview_ram_base"), 0xffffffff,
             )
-            if ram_base:
+            if ram_base is not None:
                 defaults["ram_base"] = ram_base
             elif looks_hpm5301:
                 defaults["ram_base"] = 0x10000000
 
-            id_shift = _positive_int(
-                project.get("systemview_id_shift")
-                or project.get("sysview_id_shift")
+            id_shift = encoding_value(
+                project, ("systemview_id_shift", "sysview_id_shift"), 31,
             )
-            if id_shift:
+            if id_shift is not None:
                 defaults["id_shift"] = id_shift
 
             freq = _positive_int(

@@ -36,6 +36,51 @@ def rig(caps=255):
     return t, calls, reject, emit, info, bridge
 
 
+def test_repeated_systemview_refreshes_init_then_names_without_stopping_observer(monkeypatch):
+    now = [100.0]
+    monkeypatch.setattr('mklink.systemview.time.monotonic', lambda: now[0])
+    t, calls, _, emit, info, bridge = rig()
+    observer = MuxRTTSession(t, info, channel=1)
+    observer.start('0x20000000')
+    for attempt in range(2):
+        sv = SystemViewSession(bridge, info=info)
+        sv.start('0x20000000')
+        started = now[0]
+        before = len(calls)
+        emit(1, b'events')
+        now[0] = started + .16
+        assert sv.read_bytes(0) == b'events'
+        assert calls[before:] == [(0x21, b'\x01\x05')]
+        emit(1, b'fresh INIT and ID encoding')
+        now[0] = started + .31
+        assert sv.read_bytes(0) == b'fresh INIT and ID encoding'
+        assert calls[before:] == [(0x21, b'\x01\x05'), (0x21, b'\x01\x04')]
+        now[0] += 3
+        sv.read_bytes(0)
+        sv.stop()
+        assert not any(op == 0x22 or (op == 0x21 and data == b'\x01\x02') for op, data in calls)
+    assert calls.count((0x21, b'\x01\x01')) == 1
+    observer.stop()
+
+
+def test_metadata_unknown_write_is_not_replayed(monkeypatch):
+    now = [100.0]
+    monkeypatch.setattr('mklink.systemview.time.monotonic', lambda: now[0])
+    _, _, _, _, info, bridge = rig()
+    sv = SystemViewSession(bridge, info=info)
+    sv.start('0x20000000')
+    writes = []
+    def fail(data):
+        writes.append(data)
+        raise TimeoutError('unknown metadata write')
+    monkeypatch.setattr(sv._session, 'send_input', fail)
+    now[0] += .16
+    with pytest.raises(TimeoutError):
+        sv.read_bytes(0)
+    sv.read_bytes(0)
+    assert writes == [b'\x05']
+
+
 def test_two_channels_preserve_other_capture_and_watch():
     t, calls, _, emit, info, bridge = rig()
     rtt = MuxRTTSession(t, info)

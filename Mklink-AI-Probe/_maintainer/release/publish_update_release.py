@@ -1,4 +1,4 @@
-"""Publish a signed MKLink update to GitHub, Gitee, and the updates branch."""
+"""Publish a signed MKLink update to canonical GitHub; deploy Tencent separately."""
 
 from __future__ import annotations
 
@@ -420,8 +420,8 @@ def _gitee_push(
 
 
 def push_version_tag(
-    *, repository: Path, tag: str, github_repo: str, gitee_repo: str,
-    gitee_token: str,
+    *, repository: Path, tag: str, github_repo: str, gitee_repo: str = "",
+    gitee_token: str = "",
 ) -> None:
     current = _run(["git", "rev-parse", "HEAD"], cwd=repository).stdout.strip()
     existing = subprocess.run(
@@ -438,9 +438,6 @@ def push_version_tag(
     # Source integration is a reviewed PR operation, never a publisher push.
     for repo, _branch in github_channels(github_repo):
         _run(["git", "push", f"https://github.com/{repo}.git", tag], cwd=repository)
-    _gitee_push(
-        repository=repository, repo=gitee_repo, refspec=tag, token=gitee_token
-    )
 
 
 def select_github_uploads(
@@ -508,38 +505,35 @@ def publish_gitee_release(
 
 
 def publish_updates_branch(
-    *, document: Mapping[str, object], github_repo: str, gitee_repo: str,
-    gitee_token: str, github_document: Mapping[str, object] | None = None,
+    *, document: Mapping[str, object], github_repo: str, gitee_repo: str = "",
+    gitee_token: str = "", github_document: Mapping[str, object] | None = None,
 ) -> None:
-    with tempfile.TemporaryDirectory(prefix="mklink-updates-") as directory:
-        checkout = Path(directory)
-        _run(["git", "init", "--initial-branch=updates"], cwd=checkout)
-        _run(["git", "config", "user.name", "Mklink Release Bot"], cwd=checkout)
-        _run(["git", "config", "user.email", "release@mklink.local"], cwd=checkout)
-        (checkout / "latest.json").write_text(
-            json.dumps(document, indent=2, ensure_ascii=True) + "\n",
-            encoding="utf-8",
-        )
-        _run(["git", "add", "latest.json"], cwd=checkout)
-        _run(["git", "commit", "-m", f"release: publish v{document['version']} update"], cwd=checkout)
-        _gitee_push(
-            repository=checkout, repo=gitee_repo, refspec="updates:updates",
-            token=gitee_token, force=True,
-        )
-        if github_document is not None:
-            (checkout / "latest.json").write_text(
-                json.dumps(github_document, indent=2, ensure_ascii=True) + "\n", encoding="utf-8",
-            )
+    payload = json.dumps(github_document if github_document is not None else document,
+                         indent=2, ensure_ascii=True) + "\n"
+    for repo, branch in github_channels(github_repo):
+        with tempfile.TemporaryDirectory(prefix="mklink-updates-") as directory:
+            checkout = Path(directory)
+            remote = f"https://github.com/{repo}.git"
+            _run(["git", "init", "--initial-branch=updates"], cwd=checkout)
+            _run(["git", "config", "user.name", "Mklink Release Bot"], cwd=checkout)
+            _run(["git", "config", "user.email", "release@mklink.local"], cwd=checkout)
+            _run(["git", "fetch", "--depth=1", remote, branch], cwd=checkout)
+            _run(["git", "checkout", "-B", "updates", "FETCH_HEAD"], cwd=checkout)
+            path = checkout / "latest.json"
+            if path.is_file() and path.read_text(encoding="utf-8") == payload:
+                continue
+            path.write_text(payload, encoding="utf-8")
             _run(["git", "add", "latest.json"], cwd=checkout)
-            _run(["git", "commit", "--allow-empty", "-m", "release: GitHub asset endpoints"], cwd=checkout)
-        for repo, branch in github_channels(github_repo):
-            _run(["git", "push", "--force", f"https://github.com/{repo}.git", f"updates:{branch}"], cwd=checkout)
+            _run(["git", "commit", "-m", f"release: publish v{document['version']} update"], cwd=checkout)
+            # Preserve channel history and other files. A concurrent publisher
+            # makes this fail non-fast-forward; never overwrite its result.
+            _run(["git", "push", remote, f"updates:{branch}"], cwd=checkout)
 
 
 def publish_update_release(
     *, version: str, notes: str, published_at: str, release_dir: Path,
     updater_installer: Path, updater_signature: Path, github_repo: str,
-    gitee_repo: str, gitee_token: str, repository: Path,
+    repository: Path, gitee_repo: str = "", gitee_token: str = "",
 ) -> dict[str, object]:
     github_channels(github_repo)  # Reject retired targets before any mutation.
     tag = f"v{version}"
@@ -570,31 +564,16 @@ def publish_update_release(
                 url=f"https://github.com/{repo}/releases/download/{tag}/{asset.name}",
                 expected_sha256=sha256(asset), expected_size=asset.stat().st_size,
             )
-    gitee = publish_gitee_release(
-        repo=gitee_repo, tag=tag, title=title, notes=notes, token=gitee_token,
-        assets=required,
-        required_urls=(
-            updater_installer.name,
-            f"Mklink-AI-Probe-v{version}-Skill.zip",
-            *desktop_updates.values(),
-        ),
-    )
-    asset_urls = gitee["asset_urls"]
-    if not isinstance(asset_urls, dict):
-        raise RuntimeError("Gitee release asset URL map is invalid")
+    # Tencent staging/verification and its channel pointer are a separate,
+    # explicitly authorized deployment (docs/ai/tencent-updates.md).
+    # This publisher creates only the canonical GitHub fallback.
+    asset_urls = {
+        asset.name: f"https://github.com/{github_repo}/releases/download/{tag}/{asset.name}"
+        for asset in required
+    }
     skill_archive = release_dir / f"Mklink-AI-Probe-v{version}-Skill.zip"
-    updater_url = str(asset_urls[updater_installer.name])
-    skill_url = str(asset_urls[skill_archive.name])
-    verify_public_asset(
-        url=updater_url,
-        expected_sha256=sha256(updater_installer),
-        expected_size=updater_installer.stat().st_size,
-    )
-    verify_public_asset(
-        url=skill_url,
-        expected_sha256=sha256(skill_archive),
-        expected_size=skill_archive.stat().st_size,
-    )
+    updater_url = asset_urls[updater_installer.name]
+    skill_url = asset_urls[skill_archive.name]
     source_commit = git_output(repository, "rev-parse", "HEAD")
     desktop_platforms = {}
     for platform, name in desktop_updates.items():
@@ -643,7 +622,6 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--updater-installer", required=True, type=Path)
     parser.add_argument("--updater-signature", required=True, type=Path)
     parser.add_argument("--github-repo", default=PRIMARY_GITHUB_REPO)
-    parser.add_argument("--gitee-repo", default="Aladdin-Wang/Mklink-AI-Probe")
     parser.add_argument("--repository", type=Path, default=Path.cwd())
     return parser
 
@@ -658,8 +636,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         updater_installer=args.updater_installer.resolve(),
         updater_signature=args.updater_signature.resolve(),
         github_repo=args.github_repo,
-        gitee_repo=args.gitee_repo,
-        gitee_token=resolve_gitee_token(),
         repository=args.repository.resolve(),
     )
     print(json.dumps({"version": document["version"], "published": True}))

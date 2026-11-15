@@ -1,4 +1,4 @@
-"""Publish UF2 files to the independent GitHub/Gitee firmware channel.
+"""Publish UF2 files to the canonical GitHub firmware fallback channel.
 
 The default input is the repository's MK-Firmware directory. Firmware assets
 live in the long-lived ``firmware-assets`` Release; the ``firmware`` branch is
@@ -268,16 +268,15 @@ def ensure_gitee_assets(
 
 
 def publish_manifest_branch(
-    document: Mapping[str, object], *, github_repo: str, gitee_repo: str,
-    gitee_token: str,
+    document: Mapping[str, object], *, github_repo: str, gitee_repo: str = "",
+    gitee_token: str = "",
 ) -> None:
     with tempfile.TemporaryDirectory(prefix="mklink-firmware-index-") as directory:
         pending = []
         local = {(row['family'], row['model']): row for row in document['firmwares']}
         urls = {row['name']: row['urls'] for row in document['firmwares']}
-        # Read and validate both providers before changing either index. Each
-        # branch has its own history and may contain an independent V2 index.
-        for provider, repo in (('github', github_repo), ('gitee', gitee_repo)):
+        # Preserve the canonical branch history and independent V2 index.
+        for provider, repo in (('github', github_repo),):
             checkout = Path(directory) / provider
             checkout.mkdir()
             remote = f'https://{provider}.com/{repo}.git'
@@ -303,14 +302,11 @@ def publish_manifest_branch(
         for provider, repo, remote, checkout in pending:
             # A concurrent publication fails as non-fast-forward instead of
             # overwriting newer entries or dropping another channel's files.
-            if provider == 'github':
-                _run(['git', 'push', remote, 'firmware:firmware'], cwd=checkout)
-            else:
-                _gitee_push(repository=checkout, repo=repo, refspec='firmware:firmware', token=gitee_token, force=False)
+            _run(['git', 'push', remote, 'firmware:firmware'], cwd=checkout)
 
 
 def publish_firmware(
-    *, root: Path, github_repo: str, gitee_repo: str, token: str,
+    *, root: Path, github_repo: str, gitee_repo: str = "", token: str = "",
     dry_run: bool = False,
 ) -> dict[str, object]:
     github_channels(github_repo)  # Enforce the same retired-repository boundary.
@@ -318,22 +314,12 @@ def publish_firmware(
     files = [Path(entry["path"]) for entry in local.values()]
     existing = load_github_manifest(github_repo)
     if dry_run:
-        existing_urls = {
-            str(entry.get("name")): entry.get("urls")
-            for entry in (existing or {}).get("firmwares", [])
-            if isinstance(entry, dict) and isinstance(entry.get("urls"), dict)
-        }
         placeholder_urls = {}
         for path in files:
-            old_urls = existing_urls.get(path.name, {})
             placeholder_urls[path.name] = {
                 "github": (
                     f"https://github.com/{github_repo}/releases/download/"
                     f"{FIRMWARE_RELEASE_TAG}/{quote(path.name)}"
-                ),
-                "gitee": str(
-                    old_urls.get("gitee")
-                    or f"https://gitee.example/{path.name}"
                 ),
             }
         document, changed = merge_manifest(
@@ -352,10 +338,6 @@ def publish_firmware(
                 f"https://github.com/{github_repo}/releases/download/"
                 f"{FIRMWARE_RELEASE_TAG}/{quote(path.name)}"
             ),
-            "gitee": (
-                f"https://gitee.com/{gitee_repo}/releases/download/"
-                f"{FIRMWARE_RELEASE_TAG}/{quote(path.name)}"
-            ),
         }
         for path in files
     }
@@ -367,9 +349,8 @@ def publish_firmware(
     )
 
     github_urls = ensure_github_assets(github_repo, files)
-    gitee_urls = ensure_gitee_assets(gitee_repo, token, files)
     urls = {
-        path.name: {"github": github_urls[path.name], "gitee": gitee_urls[path.name]}
+        path.name: {"github": github_urls[path.name]}
         for path in files
     }
     document, changed = merge_manifest(
@@ -378,8 +359,7 @@ def publish_firmware(
         urls,
         published_at=datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
     )
-    # Also reconcile a previous partial publication where GitHub succeeded but
-    # Gitee failed. The per-provider update is idempotent and preserves history.
+    # Publish the GitHub fallback last; Tencent staging remains separate.
     publish_manifest_branch(
         document,
         github_repo=github_repo,
@@ -393,19 +373,15 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--firmware-dir", type=Path, default=REPOSITORY / "MK-Firmware")
     parser.add_argument("--github-repo", default="MicroKeen/Mklink-AI-Probe")
-    parser.add_argument("--gitee-repo", default="Aladdin-Wang/Mklink-AI-Probe")
     parser.add_argument("--dry-run", action="store_true")
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
-    token = "" if args.dry_run else resolve_gitee_token()
     result = publish_firmware(
         root=args.firmware_dir.resolve(),
         github_repo=args.github_repo,
-        gitee_repo=args.gitee_repo,
-        token=token,
         dry_run=args.dry_run,
     )
     manifest = result["manifest"]

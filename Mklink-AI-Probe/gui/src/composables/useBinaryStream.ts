@@ -13,7 +13,7 @@ export interface BinaryStreamClient {
   reset(): void
   configure(capacity: number, channelCount: number): void
   resizeWaveform?(capacity: number, requestId?: number): void
-  requestVisibleRange(requestId: number, start: number, end: number, pixelWidth: number, formulas?: string[], gapThresholdMs?: number): void
+  requestVisibleRange(requestId: number, start: number, end: number, pixelWidth: number, formulas?: string[], gapThresholdMs?: number, summaryIntervalMs?: number): void
   selectSerialPort?(port: string): void
   setWaveformDetail?(enabled: boolean): void
   setWaveformFrozen?(frozen: boolean): void
@@ -291,8 +291,10 @@ export function useBinaryStream(
     pixelWidth: number,
     formulas?: string[],
     gapThresholdMs?: number,
+    summaryIntervalMs?: number,
   ): void {
-    if (gapThresholdMs !== undefined) client.requestVisibleRange(requestId, start, end, pixelWidth, formulas, gapThresholdMs)
+    if (summaryIntervalMs !== undefined) client.requestVisibleRange(requestId, start, end, pixelWidth, formulas, gapThresholdMs, summaryIntervalMs)
+    else if (gapThresholdMs !== undefined) client.requestVisibleRange(requestId, start, end, pixelWidth, formulas, gapThresholdMs)
     else if (formulas) client.requestVisibleRange(requestId, start, end, pixelWidth, formulas)
     else client.requestVisibleRange(requestId, start, end, pixelWidth)
   }

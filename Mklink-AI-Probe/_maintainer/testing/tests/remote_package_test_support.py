@@ -143,7 +143,8 @@ def get_clean_package(tmp_path_factory):
             "MKLINK_TEST_ENDPOINT": BUILD_ENDPOINT_SENTINEL,
             "MKLINK_TEST_HARDWARE_ID": BUILD_HARDWARE_SENTINEL,
             "MKLINK_STCP_LIBRARY": str(
-                ROOT / "native" / "stcp_bridge" / "build" / "mklink-stcp.dll"
+                os.environ.get("MKLINK_STCP_LIBRARY")
+                or ROOT / "native" / "stcp_bridge" / "build" / "mklink-stcp.dll"
             ),
             "PIP_DISABLE_PIP_VERSION_CHECK": "1",
         }
@@ -212,6 +213,7 @@ def get_clean_package(tmp_path_factory):
         "build_log": log,
         "artifact": artifact,
         "manifest": manifest,
+        "stcp_library": Path(environment["MKLINK_STCP_LIBRARY"]),
         "elapsed_seconds": round(time.monotonic() - started, 2),
         "source_worktree": ROOT.parent,
         "source_product": ROOT,

@@ -39,6 +39,7 @@ class RuntimeJobs:
         # An unread journal may contain a request already sent to hardware.
         # Carry that uncertainty across switches just like known request IDs.
         self.unread_paths = previous.unread_paths.copy() if previous else set()
+        self.invalid_paths = previous.invalid_paths.copy() if previous else set()
         self.tasks = set()
         path = path or control.info.get('jobs_path')
         self.path = Path(path) if path else None
@@ -58,13 +59,18 @@ class RuntimeJobs:
             self.unread_paths.add(path)
             return
         except UnicodeError as exc:
-            raise RuntimeError('Cannot read job journal; preserve it for inspection') from exc
+            self._invalid(path, exc)
+            return
 
         try:
-            rows = json.loads(stored)
+            from mklink.job_history import parse_history
+            rows = parse_history(stored)
             restored = {}
             changed = len(rows) > 64
-            for row in rows[-64:]:
+            # Validate before changing memory or writing back interrupted jobs.
+            # A malformed older record still makes replay history uncertain.
+            for original in rows[-64:]:
+                row = dict(original)
                 if row['state'] not in TERMINAL:
                     changed = True
                     row.update(state='unknown', error='Backend interrupted; inspect target before any new operation', finished=time.time())
@@ -74,9 +80,11 @@ class RuntimeJobs:
                 restored = dict(sorted(restored.items(), key=lambda pair: pair[1]['started'])[-64:])
             self.jobs = restored
         except (ValueError, KeyError, TypeError) as exc:
-            raise RuntimeError('Cannot read job journal; preserve it for inspection') from exc
+            self._invalid(path, exc)
+            return
 
         self.unread_paths.discard(path)
+        self.invalid_paths.discard(path)
         if path == self.path and (changed or list(restored.values()) != rows):
             try:
                 self.save()
@@ -84,6 +92,12 @@ class RuntimeJobs:
                 # Reads and duplicate lookups still work. New jobs must save
                 # the full merged history before starting their operation.
                 event('journal.write_denied', error=error_detail(exc))
+
+    def _invalid(self, path, error):
+        if path not in self.invalid_paths:
+            event('journal.invalid', error=error_detail(error))
+        self.invalid_paths.add(path)
+        self.unread_paths.add(path)
 
     def require_history(self):
         if not self.unread_paths:
@@ -98,6 +112,14 @@ class RuntimeJobs:
         if self.path and (not window_id or self.path.parent.name in owned_ids):
             self._restore(self.path)
         if self.unread_paths:
+            if self.invalid_paths:
+                raise HTTPException(503, {
+                    'reason': 'job_history_invalid',
+                    'message': 'jobs.json contains invalid UTF-8, JSON or job records. '
+                               'The original file is preserved and connection remains available. '
+                               'Restore valid history and reconnect the affected probe before '
+                               'submitting or retrying a job; do not delete unknown task results.',
+                })
             raise HTTPException(503, 'Cannot read jobs.json; check file access and reconnect the affected probe '
                                      'to recover its job history before submitting or retrying a job')
 
@@ -120,7 +142,7 @@ class RuntimeJobs:
                 temporary.unlink(missing_ok=True)
                 raise
 
-    def submit(self, body):
+    async def submit(self, body):
         action, request_id = body.get('action'), body.get('request_id')
         arguments = body.get('arguments', {})
         if body.get('session_id') is not None:
@@ -168,16 +190,23 @@ class RuntimeJobs:
         if previous:
             return previous
         c = self.control
-        c.require_identity()
+        await c.require_identity_async()
+        # Discovery yields: another request may have accepted this request_id.
+        # Recheck the journal and session before the atomic acceptance below.
+        previous = self._previous(request_id, fingerprint)
+        if previous:
+            return previous
+        if body.get('session_id') is not None:
+            c.validate_session(body['session_id'])
         if c.lifecycle_pending or self.active or c.operation_lock.locked() or c.attach_lock.locked() or c.online_job():
             raise HTTPException(409, 'Another operation is active; no job was queued')
         from mklink.remote.dashboards import active_bridge_dashboards
-        from mklink.runtime_capabilities import capture_reset_supported
+        from mklink.runtime_capabilities import capture_reset_supported, capture_reset_hint
         active = active_bridge_dashboards()
         sharing_reset = action == 'reset' and capture_reset_supported(c.app.state.mklink_state, active)
         if active and action not in ('flash', 'offline_trigger') and not sharing_reset:
             if action == 'reset':
-                raise HTTPException(409, 'In-stream software reset requires supported probe firmware and shared MUX capture; acquisition was left running')
+                raise HTTPException(409, capture_reset_hint(c.app.state.mklink_state, active))
             raise HTTPException(409, 'Stop acquisition explicitly before an exclusive job')
         device = c.app.state.mklink_state.get('device')
         if action != 'security' and (not device or not device.connected):
@@ -372,7 +401,7 @@ def install_jobs(app, control):
 
     @api.post('/', status_code=202)
     async def submit(body: dict):
-        return control.jobs.submit(body)
+        return await control.jobs.submit(body)
 
     @api.get('/{job_id}')
     async def get(job_id: str):

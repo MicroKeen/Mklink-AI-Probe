@@ -20,6 +20,7 @@ import { DESKTOP_SETTINGS_STORAGE_KEY } from '../../lib/desktopSettings'
 import { signalFormula, compileSignalFormula } from '../../lib/signalFormula'
 import { language } from '../../composables/useLanguage'
 import { API_BASE } from '../../lib/runtimeEndpoint'
+import { useGuiPanel } from '../../lib/guiAutomation'
 import { saveTextFile, saveImageFile } from '../../lib/downloadTextFile'
 import { mountReplayButton, type ReplayControl } from '../../../../mklink/static/superwatch_replay.js'
 import '../../../../mklink/static/superwatch_replay.css'
@@ -49,6 +50,18 @@ const container = ref<HTMLDivElement>()
 let mountedContainer: HTMLDivElement | undefined
 const recordHost = ref<HTMLElement>()
 const actionsHost = ref<HTMLElement>()
+if (props.mode === 'SuperWatch' && !props.panelId) {
+  const getViewer = () => {
+    const viewer = (window as any).__waveformViewers?.SuperWatch
+    if (!viewer?.getDisplayState) throw new Error('SuperWatch display is not ready')
+    return viewer
+  }
+  useGuiPanel('superwatch', {
+    snapshot: () => (window as any).__waveformViewers?.SuperWatch?.getDisplayState?.() || { ready: false },
+    actions: { 'superwatch.pause': () => getViewer().setDisplayPaused(true),
+      'superwatch.resume': () => getViewer().setDisplayPaused(false) },
+  })
+}
 function updateRecordingLabel(state: string) {
   const summary = container.value?.querySelector('.watch-log-controls summary')
   if (!summary) return

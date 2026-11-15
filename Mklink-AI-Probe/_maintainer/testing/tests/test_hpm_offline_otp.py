@@ -43,7 +43,7 @@ def test_generated_recipe_stops_before_any_following_operation(monkeypatch, fail
             assert old == 0x30400016
         events.append(label)
         return -1 if failure == label else 0
-    hpm = SimpleNamespace(otp_user=word, otp_user_lock=lock, board=lambda _: 0,
+    hpm = SimpleNamespace(otp_user=word, otp_user_lock=lock, flash_cfg=lambda *_: 0,
                           jtag_presence_supported=lambda: 1, read_idcode=lambda: 0x1000563D)
     if failure != 'missing-api':
         hpm.program_verified = verified

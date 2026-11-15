@@ -1,6 +1,6 @@
 # Agent 语义工作台验证记录
 
-日期：2026-11-14。开发分支：`codex/agent-ui-workbench`。基线为重新获取的 `microkeen/main`：`cf034fe1cf11ee39c3bc7e40d38d6811a019e1d0`；收尾再次获取后主线未变化。工作使用独立 worktree，没有改动其他分支、已安装程序或正式 `gui/dist`。
+日期：2026-11-14。开发分支：`codex/agent-ui-workbench`。本页保留初始基线 `cf034fe1cf11ee39c3bc7e40d38d6811a019e1d0` 的历史证据。2026-11-15 已整合 v0.5.0 正式源码和最新 main，当前结果见 [v0.5.0 整合验收](v050-agent-ui-workbench.md)。工作使用独立 worktree，没有改动其他分支或已安装程序；受跟踪的 `gui/dist` 仅随上游合并更新。
 
 实现及 19 组 SuperWatch 功能、A01–A20 映射见 [使用与契约说明](../frontend-workbench.md)。本报告区分自动回归、实际浏览器和未验真机范围；不作为合并、安装或发布资格。
 

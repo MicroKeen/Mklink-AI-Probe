@@ -19,6 +19,49 @@ def updater():
     return module
 
 
+@pytest.mark.parametrize('platform', [None, 'windows-x86_64'])
+@pytest.mark.parametrize('failure', [None, 'offline', 'corrupt'])
+def test_payload_download_uses_tencent_then_verified_github(updater, monkeypatch, tmp_path, platform, failure):
+    import hashlib
+    import io
+    content = b'complete package bytes'
+    metadata = {'version': '0.5.0', 'url': 'https://download.microkeenai.com/mklink/releases/0.5.0/package.zip',
+                'sha256': hashlib.sha256(content).hexdigest(), 'size': len(content)}
+    github = {**metadata, 'url': 'https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/v0.5.0/package.zip'}
+    def manifest(asset):
+        return {'version': '0.5.0', 'skill': asset, 'platforms': {'windows-x86_64': asset}}
+    calls = []
+    def get(request, timeout):
+        url = request.full_url
+        calls.append(url)
+        if url == metadata['url']:
+            if failure == 'offline':
+                raise OSError('Tencent unavailable')
+            return io.BytesIO(b'wrong bytes' if failure == 'corrupt' else content)
+        if url == updater.DEFAULT_MANIFEST_URLS[1]:
+            return io.BytesIO(json.dumps(manifest(github)).encode())
+        assert url == github['url']
+        return io.BytesIO(content)
+    monkeypatch.setattr(updater.urllib.request, 'urlopen', get)
+    destination = tmp_path/'package.zip'
+    updater.download_update_asset(manifest(metadata), metadata, destination, platform=platform)
+    assert destination.read_bytes() == content
+    assert calls == ([metadata['url']] if failure is None else
+                     [metadata['url'], updater.DEFAULT_MANIFEST_URLS[1], github['url']])
+
+
+@pytest.mark.parametrize('field,value', [('version', '0.4.3'), ('sha256', 'b'*64), ('size', 42),
+    ('url', 'https://gitee.com/old/package.zip')])
+def test_payload_fallback_rejects_mismatched_or_retired_asset(updater, monkeypatch, tmp_path, field, value):
+    metadata = {'version': '0.5.0', 'url': 'https://download.microkeenai.com/package.zip',
+                'sha256': 'a'*64, 'size': 123}
+    github = {**metadata, 'url': 'https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/v0.5.0/package.zip', field: value}
+    monkeypatch.setattr(updater, 'download_verified', lambda *a: (_ for _ in ()).throw(OSError('offline')))
+    monkeypatch.setattr(updater, 'fetch_manifest', lambda urls: ({'version': '0.5.0', 'skill': github}, urls[0]))
+    with pytest.raises(RuntimeError, match='GitHub fallback'):
+        updater.download_update_asset({'version': '0.5.0'}, metadata, tmp_path/'package.zip')
+
+
 def make_root(path: Path, version: str, skill_text: str = "old") -> Path:
     (path / ".claude-plugin").mkdir(parents=True)
     (path / "pyproject.toml").write_text(
@@ -44,6 +87,16 @@ def test_version_comparison_handles_stable_and_prerelease(updater):
     assert updater.version_key("0.1.3") > updater.version_key("0.1.3-rc.1")
     with pytest.raises(ValueError, match="unsupported version"):
         updater.version_key("latest")
+
+
+def test_independent_skill_version_does_not_install_an_older_payload(updater, monkeypatch, tmp_path):
+    root = make_root(tmp_path / 'installed', '1.2.3')
+    manifest = {'version': '9.0.0', 'skill': {'version': '1.2.2'}}
+    result = updater.update_result(root=root, manifest=manifest, manifest_url='fixture', cached=False)
+    assert result['update_available'] is False
+    assert result['desktop_latest_version'] == '9.0.0'
+    monkeypatch.setattr(updater, 'download_verified', lambda *args: pytest.fail('must not downgrade Skill'))
+    assert updater.install_update(root=root, manifest=manifest, install_skill=True, install_app=False)['status'] == 'current'
 
 
 def test_skill_update_cache_uses_explicit_task_cache(updater, monkeypatch, tmp_path):
@@ -92,25 +145,22 @@ def test_release_gui_versions_match_package(updater):
     } == {package_version}
 
 
-def test_manifest_sources_prefer_tencent_and_fall_back_to_github_gitee(
+def test_manifest_sources_prefer_tencent_and_fall_back_to_github(
     updater, monkeypatch,
 ):
-    tencent, github, gitee = updater.DEFAULT_MANIFEST_URLS
+    tencent, github = updater.DEFAULT_MANIFEST_URLS
     assert tencent == "https://download.microkeenai.com/mklink/stable/latest.json"
     assert github == (
         "https://raw.githubusercontent.com/MicroKeen/"
         "Mklink-AI-Probe/release/latest.json"
-    )
-    assert gitee == (
-        "https://gitee.com/Aladdin-Wang/Mklink-AI-Probe/raw/updates/latest.json"
     )
 
     calls = []
 
     def request(url):
         calls.append(url)
-        if url in (tencent, github):
-            raise OSError("GitHub unavailable")
+        if url == tencent:
+            raise OSError("Tencent unavailable")
         return json.dumps({"version": "0.1.6"}).encode("utf-8")
 
     monkeypatch.setattr(updater, "_request_bytes", request)
@@ -118,8 +168,8 @@ def test_manifest_sources_prefer_tencent_and_fall_back_to_github_gitee(
     manifest, manifest_url = updater.fetch_manifest(updater.DEFAULT_MANIFEST_URLS)
 
     assert manifest == {"version": "0.1.6"}
-    assert manifest_url == gitee
-    assert calls == [tencent, github, gitee]
+    assert manifest_url == github
+    assert calls == [tencent, github]
 
 
 def test_check_uses_24_hour_cache_without_hiding_newer_version(
@@ -445,8 +495,9 @@ def test_skill_instructions_require_proactive_check_and_user_approval():
     install = (SCRIPT_PATH.parents[1] / "references" / "install.md").read_text(
         encoding="utf-8"
     )
-    assert "skill_update.py check --force --json" in text
-    assert any(wording in text for wording in ("安装须用户同意", "安装仍须用户同意"))
+    assert "background_update_check=True" in text
+    assert "skill_update.py check --force --json" in install
+    assert "不自动安装" in text
     assert "(references/install.md)" in text
     assert "install --yes --json" in install
     assert install.index("只有用户明确同意后") < install.index("install --yes --json")

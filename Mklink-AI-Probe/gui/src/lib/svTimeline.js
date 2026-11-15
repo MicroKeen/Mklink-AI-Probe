@@ -22,6 +22,43 @@
  *
  * 区间 start/end 用同一时间单位（µs 或 ticks），与 unit 一致。
  */
+/** A bounded presentation clock. It moves the viewport, never event timestamps. */
+export class LiveFollowClock {
+
+  constructor(end, now, unitsPerMs) {
+    this.latest = this.displayed = this.sampleEnd = end
+    this.frameAt = this.sampleAt = now
+    this.rate = unitsPerMs > 0 ? unitsPerMs : 1
+  }
+
+  receive(end, now) {
+    if (end <= this.latest) return
+    this.latest = end
+    // Measure over several deliveries; one slow Worker response must not
+    // make the next animation accelerate and stop with that individual batch.
+    const elapsed = now - this.sampleAt
+    if (elapsed >= 500) {
+      const observed = (end - this.sampleEnd) / elapsed
+      this.rate = this.rate * 0.8 + Math.min(this.rate * 4, Math.max(this.rate / 4, observed)) * 0.2
+      this.sampleAt = now
+      this.sampleEnd = end
+    }
+  }
+
+  advance(now, span) {
+    const elapsed = Math.max(0, now - this.frameAt)
+    this.frameAt = now
+    // A small display reserve absorbs ordinary delivery jitter. A hidden tab
+    // returning after a long gap catches up once instead of replaying minutes.
+    const reserve = Math.min(this.rate * 180, span * 0.4)
+    if (elapsed > 1000) this.displayed = Math.max(this.displayed, this.latest - reserve)
+    const gap = this.latest - this.displayed
+    const correction = Math.max(0.5, Math.min(1.5, 1 + (gap - reserve) / (this.rate * 600)))
+    this.displayed = Math.min(this.latest, this.displayed + this.rate * correction * Math.min(elapsed, 100))
+    return this.displayed
+  }
+}
+
 export function exactTickFromOffset(origin, offset) {
   if (typeof origin !== 'bigint' || !Number.isSafeInteger(Math.round(offset))) {
     throw new RangeError('tick origin must be BigInt and offset must be a safe integer');
@@ -30,7 +67,6 @@ export function exactTickFromOffset(origin, offset) {
 }
 
 const FOLLOW_FRAME_INTERVAL_MS = 1000 / 60;
-const FOLLOW_INTERPOLATION_MS = 100;
 const MIN_INTERVAL_LABEL_WIDTH = 34;
 const MIN_INTERVAL_STROKE_WIDTH = 2;
 const LABEL_WIDTH_CACHE_LIMIT = 512;
@@ -70,12 +106,7 @@ export class SvTimeline {
     this.follow = (data && data.follow) !== false;
     this.windowSize = Number((data && data.windowSize) || 0);
     this.followSpan = null;
-    // The displayed range at the moment the current follow transition began.
-    // Keep this separate from viewStart/viewEnd, which are advanced every
-    // animation frame and therefore cannot be reused as interpolation input.
-    this._followFrom = null;
-    this._followTarget = null;
-    this._followTransitionAt = null;
+    this._followClock = null;
     this._lastLiveRender = Number.NEGATIVE_INFINITY;
     this._labelWidthCache = new Map();
     this._renderPaused = (data && data.renderPaused) === true;
@@ -99,6 +130,9 @@ export class SvTimeline {
 
   setContexts(contexts, options = {}) {
     this._explicitContexts = Array.isArray(contexts) ? contexts : [];
+    // Live input immediately supplies the new intervals too. Do not rebuild
+    // the previous layout once here and then again for that same delivery.
+    if (options.render === false) return;
     this._acceptData(this.intervals || [], options);
   }
 
@@ -160,28 +194,17 @@ export class SvTimeline {
       if (
         viewInvalid
         || !hadIntervalsBefore
+        || !this._followClock
       ) {
         this.viewStart = target.start;
         this.viewEnd = target.end;
-        this._followFrom = null;
-        this._followTarget = null;
-        this._followTransitionAt = null;
-      } else if (
-        Math.abs((this._followTarget?.start ?? this.viewStart) - target.start) > 0.001
-        || Math.abs((this._followTarget?.end ?? this.viewEnd) - target.end) > 0.001
-      ) {
-        // Capture the displayed frame and ease toward the newest range.
-        const now = performance.now();
-        const current = this._interpolatedFollowRange(now);
-        this.viewStart = current.start;
-        this.viewEnd = current.end;
-        this._followFrom = current;
-        this._followTarget = target;
-        // Each target starts a fresh, short transition from the range that is
-        // actually on screen. This prevents a completed transition's stale
-        // timestamp from making the next worker batch jump in one frame.
-        this._followTransitionAt = now;
+        this._followClock = null;
       }
+      const now = performance.now();
+      if (!this._followClock) this._followClock = new LiveFollowClock(
+        this.viewEnd, now, this.unit === 'us' ? 1000 : this.tickHz / 1000,
+      );
+      this._followClock.receive(target.end, now);
     } else if (!preserveManualView) {
       const viewOutsideData = this.viewEnd < this.tMin || this.viewStart > this.tMax;
       if (viewInvalid || viewOutsideData || (!hadIntervalsBefore && this.intervals.length)) {
@@ -197,10 +220,11 @@ export class SvTimeline {
       }
     }
     const resized = this._layout();
-    const drew = options.render === false
-      ? false
-      : shouldFollow ? this._drawLive(undefined, resized) : (this._draw(), true);
-    if (drew) this._updateStatus();
+    if (options.render !== false) {
+      if (shouldFollow) this._drawLive(undefined, resized);
+      else this._draw();
+    }
+    this._updateStatus();
   }
 
   // Live workers already filter the requested visible range. This entrypoint
@@ -223,6 +247,34 @@ export class SvTimeline {
 
   getFollowSpan() {
     return this.followSpan > 0 ? this.followSpan : this.windowSize;
+  }
+
+  zoom(factor, anchor = 0.5) {
+    const range = this.getViewRange();
+    const fullSpan = this.tMax - this.tMin;
+    if (!range || !Number.isFinite(factor) || factor <= 0 || !(fullSpan > 0)) return;
+    anchor = Math.min(1, Math.max(0, anchor));
+    const currentSpan = range.end - range.start;
+    const minimum = this.unit === 'us' ? (this.tickHz > 0 ? 1e6 / this.tickHz : 0.001) : 1;
+    const nextSpan = Math.min(fullSpan, Math.max(minimum, currentSpan * factor));
+    const time = range.start + currentSpan * anchor;
+    // Paused/history inspection must stay at the selected time. Live zoom
+    // continues following, keeping its new span across subsequent batches.
+    if (this._renderPaused) this.setFollowMode(false);
+    if (this.follow) this.followSpan = nextSpan;
+    if (this.follow && this.windowSize > 0) {
+      this._snapFollowRange();
+    } else {
+      this.viewStart = Math.max(this.tMin, Math.min(this.tMax - nextSpan, time - nextSpan * anchor));
+      this.viewEnd = this.viewStart + nextSpan;
+    }
+    this.renderInspection();
+    this.roots.onViewChange?.();
+  }
+
+  renderInspection() {
+    this._draw(true);
+    this._updateStatus();
   }
 
   _mergeTasks(run, names, types = new Map()) {
@@ -273,9 +325,7 @@ export class SvTimeline {
   setWindowSize(windowSize) {
     this.windowSize = Math.max(0, Number(windowSize) || 0);
     this.followSpan = null;
-    this._followFrom = null;
-    this._followTarget = null;
-    this._followTransitionAt = null;
+    this._followClock = null;
     if (this.follow && this.windowSize > 0) this._snapFollowRange();
   }
 
@@ -288,9 +338,7 @@ export class SvTimeline {
     this.follow = !!enabled;
     if (!this.follow) {
       this.followSpan = null;
-      this._followFrom = null;
-      this._followTarget = null;
-      this._followTransitionAt = null;
+      this._followClock = null;
     }
     if (this.follow && this.windowSize > 0) this._snapFollowRange();
   }
@@ -307,9 +355,7 @@ export class SvTimeline {
     const target = this._targetFollowRange();
     this.viewStart = target.start;
     this.viewEnd = target.end;
-    this._followFrom = null;
-    this._followTarget = null;
-    this._followTransitionAt = null;
+    this._followClock = null;
     if (this.W && this.H) {
       this._draw();
       this._updateStatus();
@@ -327,39 +373,13 @@ export class SvTimeline {
     return true;
   }
 
-  _interpolatedFollowRange(timestamp) {
-    if (!this._followTarget || this._followTransitionAt == null
-      || !Number.isFinite(this.viewStart) || !Number.isFinite(this.viewEnd)) {
-      return { start: this.viewStart, end: this.viewEnd };
-    }
-    const from = this._followFrom || {
-      start: this.viewStart,
-      end: this.viewEnd,
-    };
-    const progress = Math.min(1, Math.max(0,
-      (timestamp - this._followTransitionAt) / FOLLOW_INTERPOLATION_MS));
-    const ease = 1 - Math.pow(1 - progress, 3);
-    return {
-      start: from.start + (this._followTarget.start - from.start) * ease,
-      end: from.end + (this._followTarget.end - from.end) * ease,
-    };
-  }
-
-  /** Paint one live frame and advance the follow viewport toward its target. */
+  /** Advance on the presentation clock, independently of Worker delivery. */
   renderFrame(timestamp = performance.now()) {
     if (this._renderPaused) return false;
-    if (this._followTarget) {
-      const next = this._interpolatedFollowRange(timestamp);
-      this.viewStart = next.start;
-      this.viewEnd = next.end;
-      if (this._followTransitionAt != null
-        && timestamp - this._followTransitionAt >= FOLLOW_INTERPOLATION_MS) {
-        this.viewStart = this._followTarget.start;
-        this.viewEnd = this._followTarget.end;
-        this._followTarget = null;
-        this._followFrom = null;
-        this._followTransitionAt = null;
-      }
+    if (this.follow && this._followClock) {
+      const span = this.getFollowSpan();
+      this.viewEnd = this._followClock.advance(timestamp, span);
+      this.viewStart = this.viewEnd - span;
     }
     this._draw();
     return true;
@@ -557,8 +577,8 @@ export class SvTimeline {
     return this.canvas?.ownerDocument?.documentElement?.dataset?.theme === 'dark' ? dark : light;
   }
 
-  _draw() {
-    if (this._renderPaused) return;
+  _draw(force = false) {
+    if (this._renderPaused && !force) return;
     const ctx = this.ctx;
     ctx.clearRect(0, 0, this.W, this.H);
     ctx.font = '11px -apple-system,Segoe UI,Roboto,sans-serif';
@@ -738,24 +758,7 @@ export class SvTimeline {
       const mx = e.clientX - rect.left;
       if (!this._shouldZoomWheel(mx, e) || e.deltaY === 0) return;
       e.preventDefault();
-      const t = this._x2t(mx);
-      const factor = e.deltaY < 0 ? 0.8 : 1.25; // 缩放因子
-      const fullSpan = Math.max(this.tMax - this.tMin, Number.EPSILON);
-      const currentSpan = Math.max(this.viewEnd - this.viewStart, Number.EPSILON);
-      const minSpan = Math.max(fullSpan * 1e-5, this.unit === 'us' ? 0.001 : 1);
-      const nextSpan = Math.min(fullSpan, Math.max(minSpan, currentSpan * factor));
-      this.followSpan = nextSpan;
-      const anchor = Math.min(1, Math.max(0, (mx - this.plotX0) / this.plotW));
-      let ns = t - nextSpan * anchor;
-      let ne = ns + nextSpan;
-      if (ns < this.tMin) { ne += this.tMin - ns; ns = this.tMin; }
-      if (ne > this.tMax) { ns -= ne - this.tMax; ne = this.tMax; }
-      this.viewStart = Math.max(this.tMin, ns);
-      this.viewEnd = Math.min(this.tMax, ne);
-      // Zoom keeps the live cursor at the newest data while preserving the
-      // zoom level. Dragging is still the explicit way to inspect history.
-      this.setFollowMode(true);
-      this._draw(); this._updateStatus();
+      this.zoom(e.deltaY < 0 ? 0.8 : 1.25, (mx - this.plotX0) / this.plotW);
     };
 
     this._onMouseDown = (e) => {
@@ -787,7 +790,7 @@ export class SvTimeline {
         if (ns < this.tMin) { ne += this.tMin - ns; ns = this.tMin; }
         if (ne > this.tMax) { ns -= ne - this.tMax; ne = this.tMax; }
         this.viewStart = ns; this.viewEnd = ne;
-        this._draw(); this._updateStatus();
+        this.renderInspection();
       } else if (mx >= 0 && mx <= this.W && my >= 0 && my <= this.H) {
         const hit = this._hitTest(mx, my);
         this.hover = hit;
@@ -796,7 +799,7 @@ export class SvTimeline {
         }
         this.canvas.style.cursor = hit ? 'pointer' : 'grab';
         if (hit) this._showTip(e.clientX, e.clientY, hit); else this._hideTip();
-        this._draw();
+        this._draw(true);
       }
     };
 
@@ -809,13 +812,14 @@ export class SvTimeline {
       }
       this.dragging = false;
       this.canvas.style.cursor = 'grab';
-      this._draw();
+      this._draw(true);
+      if (this.dragMoved) this.roots.onViewChange?.();
     };
     this._onMouseLeave = () => {
       this.hover = null;
       if (!this.markerPinned) this.markerTime = null;
       this._hideTip();
-      this._draw();
+      this._draw(true);
     };
     this._onDoubleClick = () => {
       this.markerPinned = false;
@@ -864,10 +868,13 @@ export class SvTimeline {
 
   _updateStatus() {
     if (this.roots.legend) {
-      this.roots.legend.innerHTML = this.tasks.map(t =>
+      const markup = this.tasks.map(t =>
         `<span class="sv-lg${this.hidden.has(t.tid) ? ' sv-lg-off' : ''}" data-tid="${t.tid}">`
         + `<i style="background:${t.color}"></i>${this._escapeHtml(t.name.slice(0, 16))}</span>`
       ).join('');
+      if (markup === this._legendMarkup) return;
+      this._legendMarkup = markup;
+      this.roots.legend.innerHTML = markup;
       this.roots.legend.querySelectorAll('.sv-lg').forEach(el => {
         el.onclick = () => { const tid = +el.dataset.tid; this.toggleTask(tid); };
       });
@@ -876,21 +883,21 @@ export class SvTimeline {
 
   toggleTask(tid) {
     if (this.hidden.has(tid)) this.hidden.delete(tid); else this.hidden.add(tid);
-    this._layout(); this._draw(); this._updateStatus();
+    this._layout(); this.renderInspection();
   }
 
   reset() {
     this.markerPinned = false;
     this.markerTime = null;
     this.followSpan = null;
-    this._followFrom = null;
-    this._followTarget = null;
-    this._followTransitionAt = null;
+    this._followClock = null;
     if (this.windowSize > 0) {
       this.setFollowMode(true);
-      return;
+    } else {
+      this.viewStart = this.tMin; this.viewEnd = this.tMax;
     }
-    this.viewStart = this.tMin; this.viewEnd = this.tMax; this._draw(); this._updateStatus();
+    this.renderInspection();
+    this.roots.onViewChange?.();
   }
 
   destroy() {
@@ -907,9 +914,7 @@ export class SvTimeline {
       this._listenersBound = false;
     }
     this._hideTip();
-    this._followFrom = null;
-    this._followTarget = null;
-    this._followTransitionAt = null;
+    this._followClock = null;
     // （其它监听挂在 window/canvas，组件卸载时随 DOM 释放；简单场景可接受）
   }
 }

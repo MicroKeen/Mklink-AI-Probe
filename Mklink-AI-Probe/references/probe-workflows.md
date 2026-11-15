@@ -13,7 +13,7 @@
 | `probe_control` | `setting="auto_scan"/"beep"/"auto_follow_vref"`、布尔 `enabled`、`confirm_user=true`。蜂鸣器开启后需明确关闭；扫描开关改变探针发现行为。 |
 | `set_power_on` | `voltage_mv=1800/3300/5000`，每次先获用户具体电压确认，再传 `confirm_user=true`；5 V 另须 `confirm_5v=true`。 |
 | `set_power_off` | 每次确认断电后传 `confirm_user=true`。 |
-| `reboot_probe` | `confirm=true`，重启下载器而非 MCU；先退出本 AI 订阅，其他客户端和采集仍会阻止重启。不自动重连或重发。 |
+| `reboot_probe` | `confirm=true`，重启所选下载器而非 MCU；主动停止该探针的采集并结束其目标订阅，其他下载器不受影响。已接受的烧录操作先完成，不自动重连或重发。 |
 | `isp_link_probe` | `baud_rate=115200/1000000/2000000/5000000/10000000`、`duration_ms=1000..120000`、可选 `strict=false`。目标预先处于匹配波特率的 ROM ISP；释放独立 UART 客户端。 |
 
 所有操作要求采集空闲，不抢停任务。配置的 `acknowledged` 只确认固件返回值，
@@ -70,6 +70,10 @@ VCC、OTP、保护等配置中的操作仍需单独批准，普通烧录授权�
 不允许通用写内存或 ARM 安全工具绕过。失败、超时、断连均不自动重发。
 
 JTAG 支持 HPM5301 用户字 69..79、锁定组 18/19：
+
+脱机页的 JTAG OTP 采用读/写视图，可刷新所选已连接下载器的用户区、导入/导出 CSV，
+编辑预期旧值并确认随镜像部署。配置仍走 `offline_download` 的 `hpm_user_otp`，
+不立即写熔丝；编辑、换设备或连接代次变化后确认失效。系统字段只读，范围不因界面统一而扩大。
 
 - `read`：`part_number="HPM5301"`，可选 `model="V4"`。
 - `plan`：再加明确的 `word`、`expected`、`desired`；值可为整数/十六进制字符串。

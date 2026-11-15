@@ -1,7 +1,8 @@
 export interface PortInfo {
   uart_kind?: 'mklink_uart' | 'mklink_rs485' | 'mklink_unknown' | 'generic'
   command_port?: string | null
-  uart_baud?: { profile: number | null; rates: number[]; source: 'firmware' | 'common' }
+  uart_baud?: { profile: number | null; rates: number[]; source: 'firmware' | 'common'; firmware_warning?: string }
+  usb_serial?: string
   probe_id?: string
   alias?: string
   identity_stable?: boolean
@@ -72,7 +73,16 @@ export interface AxlStatus {
   error?: string
 }
 
+export interface FirmwareCompatibility {
+  checked: boolean
+  version: string | null
+  warnings: readonly { code: string; feature: string; feature_zh: string; required: string; message: string; action: string }[]
+}
+
 export interface DeviceStatus {
+  probe_id?: string | null
+  firmware_update?: FirmwareUpdateNotice | null
+  firmware_compatibility?: FirmwareCompatibility | null
   probe_product?: 'MKLink' | 'HPMLINK'
   connection_recovery?: { state: string; attempts: number; error?: string; errors?: string[]; restored_at?: number }
   device_generation?: number
@@ -86,6 +96,17 @@ export interface DeviceStatus {
   axf: AxlStatus
 }
 
+export interface FirmwareUpdateNotice {
+  status: 'unknown' | 'unrecognized' | 'checking' | 'available' | 'current' | 'unavailable' | 'no_firmware'
+  family?: 'microlink' | 'hpmlink'
+  model?: 'V2' | 'V3' | 'V4'
+  current_version?: string
+  latest_version?: string | null
+  probe_id?: string
+  device_generation?: number
+  action?: 'upgrade_probe_firmware'
+}
+
 export interface MicrokeenInfo {
   disk_path: string | null
   flm_dir: string | null
@@ -93,6 +114,7 @@ export interface MicrokeenInfo {
 }
 
 export interface ConnectRequest {
+  probe?: string
   port?: string
   axf?: string
   mcu?: string

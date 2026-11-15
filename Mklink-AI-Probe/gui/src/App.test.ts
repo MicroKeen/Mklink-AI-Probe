@@ -4,6 +4,7 @@ import { nextTick, ref } from 'vue'
 import { readFileSync } from 'node:fs'
 import App from './App.vue'
 import VersionHistoryPopover from './components/VersionHistoryPopover.vue'
+import FirmwareUpdatePrompt from './components/FirmwareUpdatePrompt.vue'
 import { setLanguage } from './composables/useLanguage'
 
 const routeName = ref('dashboard')
@@ -17,7 +18,7 @@ const sharedRuntime = ref(false)
 const checkForUpdates = vi.fn()
 const installAndRelaunch = vi.fn()
 const retryUpdate = vi.fn()
-const updateState = ref<'idle' | 'checking' | 'downloading' | 'ready' | 'installing' | 'error'>('idle')
+const updateState = ref<'idle' | 'checking' | 'downloading' | 'ready' | 'installing' | 'restart-required' | 'error'>('idle')
 const nativeRuntime = ref(true)
 const { startBrowserSessionLease } = vi.hoisted(() => ({
   startBrowserSessionLease: vi.fn(() => vi.fn()),
@@ -184,6 +185,28 @@ describe('App version footer', () => {
     const wrapper = mountApp()
 
     expect(checkForUpdates).toHaveBeenCalledOnce()
+    wrapper.unmount()
+  })
+
+  it('queues firmware advice behind the client check and releases it after Later or failure', async () => {
+    updateState.value = 'checking'
+    const wrapper = mountApp()
+    expect(wrapper.getComponent(FirmwareUpdatePrompt).props('deferred')).toBe(true)
+    updateState.value = 'ready'
+    await nextTick()
+    expect(wrapper.getComponent(FirmwareUpdatePrompt).props('deferred')).toBe(true)
+    wrapper.getComponent({ name: 'AppUpdateBanner' }).vm.$emit('dismiss')
+    await nextTick()
+    expect(wrapper.getComponent(FirmwareUpdatePrompt).props('deferred')).toBe(false)
+    updateState.value = 'installing'
+    await nextTick()
+    expect(wrapper.getComponent(FirmwareUpdatePrompt).props('deferred')).toBe(true)
+    updateState.value = 'restart-required'
+    await nextTick()
+    expect(wrapper.getComponent(FirmwareUpdatePrompt).props('deferred')).toBe(true)
+    updateState.value = 'error'
+    await nextTick()
+    expect(wrapper.getComponent(FirmwareUpdatePrompt).props('deferred')).toBe(false)
     wrapper.unmount()
   })
 

@@ -53,6 +53,7 @@ import { Search } from '@lucide/vue'
 import { CAPTURE_START_TIMEOUT_MS } from '../../lib/captureStartup'
 import { useDashboard } from '../../composables/useDashboard'
 import { useMklinkApi } from '../../composables/useMklinkApi'
+import { flushWatchProfile } from '../../composables/useWatchProfile'
 import { useDashboardSetup } from '../../composables/useDashboardSetup'
 import { DESKTOP_SETTINGS_CHANGED_EVENT, isSameFileSourcePath, isSymbolFilePath, loadDesktopSettings, saveDesktopSettings, type DesktopSettings } from '../../lib/desktopSettings'
 import { cancelRttAddressRefresh } from '../../lib/rttSymbolAddress'
@@ -241,6 +242,7 @@ let lastSourceChange = 0
 async function reloadSources(): Promise<void> {
   reloadingSources.value = true
   try {
+    await flushWatchProfile()
     if (!await reloadTrackedSymbolSource()) {
       const response = await fetch(`${API_BASE}/api/symbols/reload-sources`, { method: 'POST' })
       const result = await response.json()

@@ -26,11 +26,18 @@ import { computed, onUnmounted, ref, shallowRef } from 'vue'
 import SuperWatchRecording from './SuperWatchRecording.vue'
 import { tr } from '../../composables/useLanguage'
 import { parseTrafficLog, TRAFFIC_FILE_LIMIT, type TrafficFrame, type TrafficLog } from '../../lib/trafficReplay'
+import { useGuiPanel } from '../../lib/guiAutomation'
 const props = withDefaults(defineProps<{ kind: 'rtt' | 'serial'; channel?: number; compact?: boolean }>(), { channel: 0 })
 const emit = defineEmits<{ state: [active: boolean]; reset: []; batch: [frames: TrafficFrame[]] }>()
 const picker = ref<HTMLInputElement>(), log = shallowRef<TrafficLog | null>(null), filename = ref(''), source = ref('')
 const frames = computed(() => log.value?.frames.filter(frame => frame.source === source.value) || [])
 const recording = ref(false), loading = ref(false), error = ref(''), playing = ref(false), speed = ref(1), cursor = ref(0)
+useGuiPanel(`${props.kind}.replay.${props.channel}`, {
+  snapshot: () => ({ active: !!log.value, loading: loading.value, file: filename.value, source: source.value,
+    sources: log.value?.sources, playing: playing.value, speed: speed.value, cursor: cursor.value,
+    frames: frames.value.length, error: error.value, warning: log.value?.warning }),
+  actions: {},
+})
 let disposed = false, generation = 0, position = 0, lastTick = 0
 const times = computed(() => {
   let previous = 0

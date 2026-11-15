@@ -6,6 +6,17 @@ describe('useOfflineFlashApi', () => {
     vi.unstubAllGlobals()
   })
 
+  it('explains history repair while retaining uncertainty and never replaying', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      detail: { reason: 'job_history_invalid', message: 'invalid UTF-8' },
+    }), { status: 503 })))
+    const error = await useOfflineFlashApi().deploymentStatus('old-request').catch(value => value)
+    expect(error.message).toContain('先备份异常记录')
+    expect(error.message).toContain('不代表旧任务未执行')
+    expect(error.notStarted).toBe(false)
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
   it('preserves structured probe conflict details as an actionable Chinese error', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
       detail: {

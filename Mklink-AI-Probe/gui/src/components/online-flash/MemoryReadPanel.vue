@@ -11,6 +11,7 @@ const props = defineProps<{
   targetPart: string
   hpm: boolean
   board?: string
+  hpmFlashCfg?: [string, string, string, string]
   frequency: number
   connectMode: string
   resetMode: string
@@ -177,6 +178,7 @@ async function readMemory(): Promise<void> {
       connect_mode: props.connectMode,
       reset_mode: props.resetMode,
       board: props.board || null,
+      hpm_flash_cfg: props.hpmFlashCfg || null,
     }, received => {
       let completed = 0
       for (const entry of progressEntries.value) {

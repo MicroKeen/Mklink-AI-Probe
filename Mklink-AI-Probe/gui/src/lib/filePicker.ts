@@ -1,4 +1,5 @@
 import { isTauri } from '@tauri-apps/api/core'
+import { takeGuiFile, takeGuiDirectory } from './guiFileSelection'
 
 const SYMBOL_FILTER = { name: 'AXF / ELF', extensions: ['axf', 'elf', 'out'] }
 const FIRMWARE_FILTER = { name: 'BIN / HEX', extensions: ['bin', 'hex'] }
@@ -7,6 +8,8 @@ const FLM_FILTER = { name: 'CMSIS Flash Algorithm', extensions: ['flm'] }
 export type PickedFile = string | File | null
 
 export async function pickDirectory(title: string, defaultPath?: string): Promise<string | null> {
+  const selected = takeGuiDirectory()
+  if (selected) return selected
   const { open } = await import('@tauri-apps/plugin-dialog')
   const result = await open({ directory: true, multiple: false, title, ...(defaultPath ? { defaultPath } : {}) })
   return typeof result === 'string' ? result : null
@@ -58,6 +61,8 @@ function pickBrowserFile(filter: { name: string, extensions: string[] }): Promis
 }
 
 async function pickFile(filter: { name: string, extensions: string[] }): Promise<PickedFile> {
+  const selected = takeGuiFile()
+  if (selected) return selected
   if (!isTauri()) return pickBrowserFile(filter)
   try {
     const { open } = await import('@tauri-apps/plugin-dialog')
@@ -69,6 +74,8 @@ async function pickFile(filter: { name: string, extensions: string[] }): Promise
 }
 
 export async function pickSymbolFile(): Promise<PickedFile> {
+  const selected = takeGuiFile()
+  if (selected) return selected
   const picker = (window as FirmwarePickerWindow).showOpenFilePicker
   if (isTauri() || typeof picker !== 'function') return pickFile(SYMBOL_FILTER)
   try {
@@ -95,6 +102,8 @@ export function pickSvdFile(): Promise<PickedFile> {
 }
 
 export async function pickFirmwareFiles(multiple = false): Promise<Array<string | File>> {
+  const selected = takeGuiFile()
+  if (selected) return [selected]
   if (!isTauri()) {
     const selected = await pickBrowserFile(FIRMWARE_FILTER)
     return selected ? [selected] : []
@@ -114,6 +123,8 @@ export function supportsTrackedFirmwarePicker(): boolean {
 }
 
 export async function pickTrackedFirmwareFiles(multiple = false): Promise<PickedFirmwareSource[]> {
+  const selected = takeGuiFile()
+  if (selected) return [selected]
   if (isTauri()) return pickFirmwareFiles(multiple)
 
   const picker = (window as FirmwarePickerWindow).showOpenFilePicker

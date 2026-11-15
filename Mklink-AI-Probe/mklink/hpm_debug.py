@@ -20,7 +20,7 @@ CSRS = dict(mstatus=0x300, misa=0x301, mie=0x304, mtvec=0x305,
 ERRORS = {-1: 'invalid arguments', -2: 'target busy', -3: 'unsupported target/register/trigger',
           -4: 'debug transport failed', -5: 'bounded wait expired', -6: 'cancelled',
           -7: 'hart must already be halted', -8: 'breakpoint slot/address conflict',
-          -9: 'operation outcome uncertain', -12: 'firmware lacks HPM debug support'}
+          -9: 'operation outcome uncertain', -12: 'firmware lacks HPM debug support; 请升级匹配的下载器固件 / upgrade the matching probe firmware'}
 
 
 class HpmDebugError(RuntimeError):
@@ -132,12 +132,12 @@ def execute(device, body):
     version = send('hpm.debug_version()')
     values = [line.strip() for line in version.splitlines() if re.fullmatch(r'-?\d+', line.strip())] if isinstance(version, str) else []
     if values != ['1']:
-        raise HpmDebugError('Probe firmware does not expose HPM_DEBUG v1; use compatible firmware or the configured HPM IDE debugger')
+        raise HpmDebugError('Probe firmware does not expose HPM_DEBUG v1; 请升级匹配的下载器固件 / upgrade the matching probe firmware, or use the configured HPM IDE debugger')
     capabilities = _record(send('hpm.debug(0)', op=0), 0)
     if args[0] == 0:
         return capabilities
     if not capabilities['value'] & (1 << (args[0] - 1)):
-        raise HpmDebugError('Probe firmware does not advertise this HPM debug action')
+        raise HpmDebugError('Probe firmware does not advertise this HPM debug action; 请升级匹配的下载器固件 / upgrade the matching probe firmware')
     if args[0] in (7, 8, 9) and args[1] > capabilities['max_slot']:
         raise ValueError('Breakpoint slot exceeds the firmware probe range')
     command = 'hpm.debug(' + ','.join(str(value) for value in args) + ')'

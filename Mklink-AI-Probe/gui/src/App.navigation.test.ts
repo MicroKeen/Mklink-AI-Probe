@@ -3,8 +3,9 @@ import { defineComponent, ref } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { describe, expect, it, vi } from 'vitest'
 import App from './App.vue'
+import type { FirmwareUpdateNotice } from './types/mklink'
 
-const deviceStatus = ref({ device_generation: 0 })
+const deviceStatus = ref<{ device_generation: number; connected?: boolean; firmware_update?: FirmwareUpdateNotice }>({ device_generation: 0 })
 vi.mock('./composables/useMklinkApi', () => ({
   useMklinkApi: () => ({ startStatusPolling: vi.fn(), stopStatusPolling: vi.fn(), deviceStatus }),
 }))
@@ -29,6 +30,32 @@ function page(name: string, id: string) {
 }
 
 describe('App route cache', () => {
+  it('opens the existing firmware page only after accepting cloud advice', async () => {
+    sessionStorage.clear()
+    const router = createRouter({ history: createMemoryHistory(), routes: [
+      { path: '/config', name: 'config', component: page('ConfigView', 'config-page') },
+      { path: '/dashboard', name: 'dashboard', component: { template: '<div />' } },
+    ] })
+    await router.push('/dashboard')
+    await router.isReady()
+    deviceStatus.value = { device_generation: 1, connected: true, firmware_update: {
+      status: 'available', family: 'microlink', model: 'V4', current_version: 'V4.7.3',
+      latest_version: 'V4.7.4', probe_id: 'fixture',
+    } }
+    const wrapper = mount(App, { global: { plugins: [router], stubs: {
+      StatusBar: true, ToastContainer: true, AppUpdateBanner: true, VersionHistoryPopover: true,
+    } } })
+    try {
+      await flushPromises()
+      expect(router.currentRoute.value.name).toBe('dashboard')
+      await wrapper.get('[data-testid="confirmation-accept"]').trigger('click')
+      await flushPromises()
+      expect(router.currentRoute.value.name).toBe('config')
+      expect(router.currentRoute.value.query.section).toBe('firmware')
+      expect(deviceStatus.value.connected).toBe(true)
+      expect(wrapper.find('[role="alertdialog"]').exists()).toBe(false)
+    } finally { wrapper.unmount(); deviceStatus.value = { device_generation: 0 } }
+  })
   it.each(['online-flash', 'offline-flash'])('keeps pages and edits separate starting at %s', async first => {
     const router = createRouter({ history: createMemoryHistory(), routes: [
       { path: '/online-flash', name: 'online-flash', component: async () => page('OnlineFlashView', 'online-page') },

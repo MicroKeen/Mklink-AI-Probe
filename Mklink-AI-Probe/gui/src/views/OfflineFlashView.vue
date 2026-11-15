@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import HpmFlashConfigPanel from "../components/HpmFlashConfigPanel.vue"
+import { useHpmFlashConfig } from "../composables/useHpmFlashConfig"
 import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
 import { consumerTarget, saveConsumerTarget, TARGET_SELECTION_CHANGED, PACKS_CHANGED } from '../lib/targetSelection'
 import { selectDownloadProbe } from '../lib/downloadProbe'
@@ -60,25 +62,10 @@ function validIspBaud(value: unknown): value is number {
 }
 let savedIspBaud = validIspBaud(saved.ispBaudRate) ? saved.ispBaudRate : 2000000
 
-const hpmBoards = [
-  'hpm5300evk', 'hpm5301evklite', 'hpm5e00evk', 'hpm6e00evk',
-  'hpm6p00evk', 'hpm6200evk', 'hpm6300evk', 'hpm6750evk2',
-  'hpm6750evkmini', 'hpm6800evk',
-]
 function isHpmPart(partNumber: string): boolean {
   return partNumber.trim().toLowerCase().startsWith('hpm')
 }
-function defaultHpmBoard(partNumber: string): string {
-  const part = partNumber.trim().toLowerCase()
-  const match = [
-    ['hpm5301', 'hpm5301evklite'], ['hpm5300', 'hpm5300evk'],
-    ['hpm5e', 'hpm5e00evk'], ['hpm6e', 'hpm6e00evk'],
-    ['hpm6p', 'hpm6p00evk'], ['hpm6200', 'hpm6200evk'],
-    ['hpm6300', 'hpm6300evk'], ['hpm6750', 'hpm6750evk2'],
-    ['hpm6800', 'hpm6800evk'],
-  ].find(([prefix]) => part.startsWith(prefix))
-  return match?.[1] || ''
-}
+
 
 const offline = useOfflineFlashApi()
 const online = useOnlineFlashApi()
@@ -104,7 +91,7 @@ const algorithms = ref<AlgorithmRow[]>([])
 const firmwares = ref<FirmwareRow[]>([])
 const targetQuery = ref(consumerTarget('offline') || 'STM32F103RC')
 const targetPart = ref('')
-const hpmBoard = ref('')
+const { words: hpmWords, flashCfg: hpmFlashCfg, referenceBoard: hpmReferenceBoard, storageError: hpmStorageError, setWords: setHpmWords } = useHpmFlashConfig(targetPart)
 const programmingProtocol = ref<'debug' | 'hpm_rom_isp_uart'>('debug')
 const beepOnCompletion = ref(true)
 const beepDurationMs = ref(1000)
@@ -214,7 +201,11 @@ const selectionWarning = computed(() => unavailableSelectedAlgorithms.value.leng
   : '')
 const optionByteChanges = ref<Record<string, number | string>>({})
 const hpmOfflineOtp = ref<HpmOfflineOtp>()
-watch([targetPart, model], () => { hpmOfflineOtp.value = undefined })
+const hpmOtpPending = ref(false)
+function setHpmOfflineOtp(value: HpmOfflineOtp | undefined, pending: boolean) {
+  hpmOfflineOtp.value = value; hpmOtpPending.value = pending
+}
+watch([targetPart, model, diskProbe, programmingProtocol], () => setHpmOfflineOtp(undefined, false))
 const securityRequested = computed(() => unlockBeforeDownload.value || lockAfterDownload.value)
 const securityReady = computed(() => (
   !securityRequested.value
@@ -230,13 +221,14 @@ const canBuild = computed(() => (
   && !!disk.value?.available
   && securityReady.value
   && (!ispMode.value || !ispOtpPending.value || !!ispOfflineOtp.value)
+  && (ispMode.value || !hpmOtpPending.value || !!hpmOfflineOtp.value)
   && ((firmwares.value.length === 0 && Object.keys(optionByteChanges.value).length > 0
     && !securityRequested.value && !eraseAllBeforeDownload.value)
   || (firmwares.value.length > 0 && (hpmMode.value
     ? (ispMode.value ? effectiveModel.value === 'V4' && validIspBaud(ispConfig.value.baud_rate)
         && firmwares.value.length <= 8 && firmwares.value.every(item => item.format === 'bin')
         && (ispConfig.value.completion.reset !== 'power_cycle' || !!ispConfig.value.completion.restore_voltage_mv)
-      : !!hpmBoard.value) && firmwares.value.every(item => (item.file || item.source_path) && (item.format === 'hex' || !!item.base_address))
+      : !!hpmFlashCfg.value) && firmwares.value.every(item => (item.file || item.source_path) && (item.format === 'hex' || !!item.base_address))
     : selectedAlgorithms.value.length > 0
       && unavailableSelectedAlgorithms.value.length === 0
       && firmwares.value.every(item => (item.file || item.source_path) && item.algorithm_id && algorithms.value.some(algorithm => algorithm.id === item.algorithm_id)))))
@@ -251,7 +243,7 @@ const canTrigger = computed(() => (
 ))
 
 watch(
-  [model, scriptName, automaticCount, idcodeTimeout, swdClock, targetPart, hpmBoard, algorithms, firmwares, eraseAllBeforeDownload, unlockBeforeDownload, lockAfterDownload, securityVoltageMv, optionByteChanges, hpmOfflineOtp, programmingProtocol, ispConfig, beepOnCompletion, beepDurationMs, resetAfterDownload, resetMode, resetVoltageMv, verifyAfterDownload],
+  [model, scriptName, automaticCount, idcodeTimeout, swdClock, targetPart, hpmWords, algorithms, firmwares, eraseAllBeforeDownload, unlockBeforeDownload, lockAfterDownload, securityVoltageMv, optionByteChanges, hpmOfflineOtp, hpmOtpPending, programmingProtocol, ispConfig, beepOnCompletion, beepDurationMs, resetAfterDownload, resetMode, resetVoltageMv, verifyAfterDownload],
   () => {
     preview.value = null
     deployedScriptName.value = ''
@@ -607,11 +599,9 @@ async function addTargetAlgorithms(target: TargetRecord): Promise<void> {
     activeTargetSuggestion.value = -1
     if (isHpmPart(target.part_number)) {
       algorithms.value = []
-      hpmBoard.value = defaultHpmBoard(target.part_number)
       firmwares.value.forEach(item => { item.algorithm_id = '' })
       return
     }
-    hpmBoard.value = ''
     if (!target.installed) await online.installPack(target.part_number)
     const items = await offline.listAlgorithms(target.part_number)
     if (!items.length) throw new Error(tr(`未找到 ${target.part_number} 的 FLM 算法`, `No FLM algorithm found for ${target.part_number}`))
@@ -866,7 +856,8 @@ function buildRequest(): {
       wait_idcode_timeout_ms: Number(idcodeTimeout.value),
       swd_clock_hz: Number(swdClock.value),
       target_part: targetPart.value || null,
-      board: hpmMode.value && !ispMode.value ? hpmBoard.value || null : null,
+      board: null,
+      hpm_flash_cfg: hpmMode.value && !ispMode.value ? hpmFlashCfg.value : null,
       erase_all_before_download: eraseAllBeforeDownload.value,
       unlock_before_download: unlockBeforeDownload.value,
       lock_after_download: lockAfterDownload.value,
@@ -1127,6 +1118,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
         <p v-if="targetPart" class="selected-target"><span>{{ tr('已选器件', 'Selected target') }}</span><b>{{ targetPart }}</b></p>
+        <HpmFlashConfigPanel v-if="hpmMode && !ispMode" :model-value="hpmWords" :target-part="targetPart" :reference-board="hpmReferenceBoard" :storage-error="hpmStorageError" :disabled="operationBusy || targetBusy" @update:model-value="setHpmWords" />
         <label class="setting-row"><span>{{ tr('下载类型', 'Programming type') }}</span>
           <select v-model="programmingProtocol" class="form-select" data-testid="offline-protocol">
             <option value="debug">{{ hpmMode ? 'JTAG · ROM API' : 'SWD' }}</option>
@@ -1146,7 +1138,6 @@ onBeforeUnmount(() => {
             <label v-if="resetMode === 'power_cycle'" class="setting-row"><span>{{ tr('VCC 恢复电压', 'VCC restore voltage') }}</span><select v-model.number="resetVoltageMv" data-testid="offline-reset-voltage" class="form-select"><option :value="1800">1.8V</option><option :value="3300">3.3V</option><option :value="5000">5V</option></select></label>
           </template>
         </div>
-        <label v-if="hpmMode && !ispMode" class="setting-row"><span>{{ tr('HPM 板卡', 'HPM Board') }}</span><select v-model="hpmBoard" class="form-select"><option v-for="item in hpmBoards" :key="item" :value="item">{{ item }}</option></select></label>
         <label class="setting-row"><span>{{ tr('自动烧录次数', 'Automatic Flash Count') }}</span><input v-model.number="automaticCount" data-testid="offline-automatic-count" type="number" min="1" max="9999" class="form-input" :disabled="effectiveModel === 'V2'"></label>
         <label v-if="!ispMode && automaticCount > 1" class="setting-row"><span>{{ tr('目标连接／换板等待时间（ms）', 'Connection / board replacement timeout (ms)') }}</span><input v-model.number="idcodeTimeout" data-testid="offline-connection-timeout" type="number" min="500" max="600000" step="500" class="form-input"></label>
         <label v-if="!ispMode" class="setting-row"><span>{{ hpmMode ? 'JTAG' : 'SWD' }} {{ tr('时钟', 'clock') }}</span><select :value="offlineClocks.includes(swdClock) ? swdClock : ''" class="form-select" data-testid="offline-clock" @change="swdClock = Number(($event.target as HTMLSelectElement).value)"><option v-if="!offlineClocks.includes(swdClock)" value="" disabled>{{ formatFlashClock(swdClock) }} — {{ tr('请重新选择', 'Choose again') }}</option><option v-for="hz in offlineClocks" :key="hz" :value="hz">{{ formatFlashClock(hz) }}</option></select></label>
@@ -1208,8 +1199,10 @@ onBeforeUnmount(() => {
         :key="`${model}:${targetPart}:${diskProbe}`" deployment :active="workspaceTab === 'configuration'" :part-number="targetPart" :snapshot="otpSnapshot" :plan="otpPlan" :result="otpResult" :busy="otpReading" :disabled="operationBusy || triggerUncertain"
         :error="otpError" @read="readIspOtp" @prepare="prepareIspOtp" @program="programIspOtp" @invalidate="clearOtpPlan" @configuration="setIspOfflineOtp" />
       <p v-else-if="ispMode" class="muted">{{ tr('当前型号尚未开放 UART OTP 配置。', 'UART OTP configuration is not available for this target.') }}</p>
+      <HpmOfflineOtpPanel v-else-if="model === 'V4' && ['HPM5301','HPM5301XEGX'].includes(targetPart.toUpperCase())"
+        :key="`${model}:${targetPart}:${diskProbe}`" :active="workspaceTab === 'configuration'" :part-number="targetPart" :probe-id="diskProbe"
+        :disabled="operationBusy || triggerUncertain" @change="setHpmOfflineOtp" />
       <DeviceConfigurationPanel v-else-if="workspaceTab === 'configuration' && !ispMode" expanded v-model:changes="optionByteChanges" :has-firmware="firmwares.length > 0" :part-number="targetPart" :model="model" :unlock-before-download="unlockBeforeDownload" :lock-after-download="lockAfterDownload" />
-        <HpmOfflineOtpPanel v-if="!ispMode && model === 'V4' && ['HPM5301','HPM5301XEGX'].includes(targetPart.toUpperCase())" :key="`${model}:${targetPart}`" @change="hpmOfflineOtp = $event" />
         </section>
           <section class="work-panel production-panel">
             <h2 class="section-title">{{ tr('烧录选项', 'Programming options') }}</h2>
@@ -1246,6 +1239,7 @@ onBeforeUnmount(() => {
           </section>
         <section class="deployment-toolbar" :aria-label="tr('部署与测试', 'Deploy and test')">
         <p v-if="ispMode && ispOtpPending" data-testid="offline-otp-summary">{{ ispOfflineOtp ? tr(`镜像 + OTP（${ispOfflineOtp.words.length} 个字）将一起部署`, `Images + OTP (${ispOfflineOtp.words.length} words) will be deployed together`) : tr('OTP 配置尚未确认，请在 OTP 操作中检查并确认。', 'Review and confirm the OTP configuration in OTP operations.') }}</p>
+        <p v-if="!ispMode && hpmOtpPending" data-testid="offline-jtag-otp-summary">{{ hpmOfflineOtp ? tr('镜像校验成功后执行已确认的用户 OTP 配置。', 'Apply the confirmed user OTP configuration after image verification succeeds.') : tr('OTP 配置尚未确认，请在 OTP 操作中检查并确认。', 'Review and confirm the OTP configuration in OTP operations.') }}</p>
         <div class="deploy-actions">
           <button class="btn" data-testid="offline-preview" :disabled="operationBusy || !canBuild" @click="generatePreview">{{ tr('生成预览', 'Generate Preview') }}</button>
           <button class="btn btn-primary" data-testid="offline-deploy" :disabled="operationBusy || !canBuild || deploymentUncertain" @click="deploy">{{ tr('部署到 U 盘', 'Deploy to USB Drive') }}</button>

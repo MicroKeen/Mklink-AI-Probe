@@ -4,6 +4,7 @@
       ref="fileInput"
       class="sv-file-input"
       type="file"
+      data-testid="systemview-replay-file"
       accept=".jsonl,application/x-ndjson,application/json"
       @change="onImportFileChange"
     >
@@ -31,6 +32,12 @@
           <Search :size="15" />
           <span>{{ searching ? tr('搜索中', 'Searching') : tr('自动搜索', 'Auto Search') }}</span>
         </button>
+        <label for="systemview-channel">{{ tr('通道', 'Channel') }}</label>
+        <select id="systemview-channel" v-model.number="systemviewChannel" data-testid="systemview-channel"
+          :disabled="starting || dash.state.value === 'running' || dash.state.value === 'paused'"
+          @change="persistSystemviewChannel">
+          <option v-for="channel in 8" :key="channel - 1" :value="channel - 1">CH {{ channel - 1 }}</option>
+        </select>
         <span v-if="addressError" class="address-error" role="alert">{{ addressError }}</span>
         <span v-else-if="addressSource" class="address-source">{{ tr('来源:', 'Source:') }} {{ addressSource }}</span>
       </div>
@@ -67,8 +74,8 @@
         <button class="btn-clear sv-tool-btn" @click="triggerImport">{{ tr('导入 JSONL', 'Import JSONL') }}</button>
         <button class="btn-clear sv-tool-btn" :disabled="IS_REMOTE || !currentJsonlPath" @click="exportLog(currentJsonlPath)">{{ tr('导出 JSONL', 'Export JSONL') }}</button>
         <button class="btn-clear sv-tool-btn" :disabled="IS_REMOTE || !currentSummaryPath" @click="exportLog(currentSummaryPath)">{{ tr('导出摘要', 'Export Summary') }}</button>
-        <label class="sv-window">
-          {{ tr('窗口', 'Window') }}
+        <label class="sv-window" :title="tr('Timeline 显示的时间跨度；实时连续滚动，不是刷新周期。', 'Time span shown by the continuously scrolling Timeline, not its refresh period.')">
+          {{ tr('时间窗口', 'Time window') }}
           <select v-model.number="windowUs">
             <option :value="500_000">0.5s</option>
             <option :value="1_000_000">1s</option>
@@ -110,6 +117,9 @@
       </div>
 
       <div class="sv-health-grid">
+        <div v-if="!offlineMode && eventCount >= 120 && taskCount === 0" class="sv-health-card warn" data-testid="systemview-channel-hint">
+          <b>{{ tr('尚未收到任务事件，请确认选择的是目标的 SystemView 通道，而非 RTT 文本或波形通道。', 'No task events received. Select the target SystemView channel, not an RTT text or waveform channel.') }}</b>
+        </div>
         <div v-if="!offlineMode && meta.waitingForEvents && dash.state.value === 'running'" data-testid="systemview-waiting" class="sv-health-card sv-waiting">
           <span>{{ tr('采集保持连接', 'Capture connected') }}</span>
           <b>{{ tr('等待目标事件；若目标已运行，请检查 SystemView 录制配置与通道。', 'Waiting for target events. If the target is running, check SystemView recording and channel configuration.') }}</b>
@@ -197,10 +207,14 @@
         <div class="sv-section-title">
           <span>Timeline</span>
           <span class="sv-section-subtitle">{{ tr('微秒标尺与任务运行区间', 'Microsecond scale and execution intervals') }}</span>
-          <button class="btn-clear" @click="tlReset">{{ tr('全览', 'Fit All') }}</button>
+          <div class="sv-section-actions">
+            <button class="btn-clear" data-testid="systemview-zoom-in" :disabled="!intervals.length" @click="tlZoom(0.5)">{{ tr('放大', 'Zoom In') }}</button>
+            <button class="btn-clear" data-testid="systemview-zoom-out" :disabled="!intervals.length" @click="tlZoom(2)">{{ tr('缩小', 'Zoom Out') }}</button>
+            <button class="btn-clear" @click="tlReset">{{ tr('全览', 'Fit All') }}</button>
+          </div>
         </div>
         <div class="sv-legend" ref="tlLegend"></div>
-        <div class="sv-canvas-wrap"><canvas ref="tlCanvas" :title="tr('滚轮缩放，按住鼠标左键拖动，双击恢复全览', 'Wheel to zoom, drag with the left mouse button, double-click to fit all')"></canvas></div>
+        <div class="sv-canvas-wrap"><canvas ref="tlCanvas" :title="tr('Ctrl/⌘ + 滚轮缩放，左键拖动，双击恢复全览；暂停后仍可缩放', 'Ctrl/⌘ + wheel to zoom, drag to pan, double-click to fit; zoom also works while paused')"></canvas></div>
         <div class="sv-tip" ref="tlTip"></div>
       </div>
 
@@ -292,7 +306,6 @@ import { CAPTURE_START_TIMEOUT_MS } from '../../lib/captureStartup'
 import { ref, shallowRef, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { Circle, Pause, Play, RotateCcw, Search, Square } from '@lucide/vue'
 import { useDashboard } from '../../composables/useDashboard'
-import { useEventSource } from '../../composables/useEventSource'
 import { useBinaryStream } from '../../composables/useBinaryStream'
 import { useResourceStatus } from '../../composables/useResourceStatus'
 import { useMklinkApi } from '../../composables/useMklinkApi'
@@ -309,7 +322,6 @@ import { SvTimeline } from '../../lib/svTimeline'
 import { cancelRttAddressRefresh } from '../../lib/rttSymbolAddress'
 import { AdaptiveFrameRateController, RenderScheduler } from '../../lib/stream/renderScheduler'
 import { appendManyToLast } from '../../lib/boundedBuffer'
-import { takeNewStreamPoints } from '../../lib/streamCursor'
 import { ingestSystemViewIntervals, type SystemViewIntervalState } from '../../lib/systemViewIntervals'
 import {
   buildSystemViewEventRows,
@@ -324,19 +336,18 @@ import ControlToolbar from './ControlToolbar.vue'
 import SetupHint from './SetupHint.vue'
 import { language, tr } from '../../composables/useLanguage'
 import { API_BASE, IS_REMOTE } from '../../lib/runtimeEndpoint'
+import { useGuiPanel } from '../../lib/guiAutomation'
 
 const props = defineProps<{ deviceConnected: boolean }>()
 
 const dash = useDashboard('systemview')
-const { data: statusData, connect: connectStatus, disconnect: disconnectStatus } = useEventSource('/api/dash/systemview/stream', {
-  passthroughEvents: ['status'],
-})
 const binaryStream = useBinaryStream('systemview', { capacity: 300_000, channelCount: 1 })
 const renderPaused = ref(false)
 const desktopStorage = localStorage
 const settings = ref<DesktopSettings>(loadDesktopSettings(desktopStorage))
 const hasAddressFileSource = computed(() => isSymbolFilePath(settings.value.symbolPath))
 const rttAddress = ref(settings.value.rttAddress)
+const systemviewChannel = ref(settings.value.systemviewChannel ?? 1)
 const addressError = ref('')
 const addressSource = ref('')
 const searching = ref(false)
@@ -375,12 +386,8 @@ let analysisEvents: any[] = []
 const analysisBufferCount = ref(0)
 const taskStats = reactive<Record<number, TaskStat>>({})
 const intervals = shallowRef<TaskInterval[]>([])
-// The worker returns a pixel envelope for the requested viewport. Its bucket
-// boundaries move as the follow window advances, so replacing the previous
-// response makes whole groups of intervals disappear and reappear. Keep a
-// bounded live cache keyed by interval start and update it incrementally;
-// rendering still filters this cache to the current viewport.
-const visibleIntervalCache = new Map<string, TaskInterval>()
+// Retained intervals and viewport downsampling live in the Worker; the UI
+// holds only its current pixel envelope and exact retained-trace summaries.
 const exactRuntimeRows = shallowRef<any[]>([])
 let intervalState: SystemViewIntervalState = { currentTaskId: null, currentStart: null }
 const idleUs = ref(0)
@@ -409,7 +416,6 @@ const meta = reactive({
   waitingForEvents: false,
 })
 let lastAutoRetryKey = ''
-let lastStreamSeq = 0
 const totalEventCount = ref(0)
 const windowUs = ref(10_000_000)
 const showEventStream = ref(true)
@@ -430,12 +436,15 @@ let connectTimer: ReturnType<typeof setTimeout> | null = null
 let mounted = false
 let operationGeneration = 0
 let searchGeneration = 0
-const SYSTEMVIEW_CHANNEL = 1
 // Zero lets the host bound the default scan to the actual RAM map.
 const RTT_SEARCH_SIZE = 0
 
 function persistSettings(next: DesktopSettings): void {
   settings.value = saveDesktopSettings(desktopStorage, next)
+}
+
+function persistSystemviewChannel(): void {
+  persistSettings({ ...loadDesktopSettings(desktopStorage), systemviewChannel: systemviewChannel.value })
 }
 
 function isRttAddress(value: string): boolean {
@@ -516,24 +525,55 @@ const tlCanvas = ref<HTMLCanvasElement | null>(null)
 const tlTip = ref<HTMLDivElement | null>(null)
 const tlLegend = ref<HTMLDivElement | null>(null)
 let tlInstance: SvTimeline | null = null
+let boundTimelineCanvas: HTMLCanvasElement | null = null
+let boundTimelineClock = 0
 let renderScheduler: RenderScheduler | null = null
 const timelineFrameRate = new AdaptiveFrameRateController()
 // Keep the initial fill cadence stable. The viewport still follows the newest
 // event; only the intentional 60/30/20 FPS adaptation waits until one full
 // timeline window is available.
-const TIMELINE_STARTUP_FRAME_RATE = 30
+const TIMELINE_STARTUP_FRAME_RATE = 60
 let timelineStartupLocked = true
-let timelineVisibleItemCount = 0
 let visibleRequestId = 0
 let visibleRequestInFlight = false
 let visibleRequestPending = false
+let lastVisibleRequestAt = Number.NEGATIVE_INFINITY
+const VISIBLE_QUERY_INTERVAL_MS = 50
+let pendingTimelineInspection = false
+let timelineInspectionRequestId = 0
 let latestBinaryTime: number | null = null
 let binaryTickOrigin = 0n
 let lastTableUpdate = Number.NEGATIVE_INFINITY
 const TABLE_UPDATE_INTERVAL_MS = 200
+useGuiPanel('systemview', {
+  snapshot: () => ({ state: dash.state.value, paused: renderPaused.value, channel: systemviewChannel.value,
+    window_seconds: windowUs.value / 1e6, events: totalEventCount.value,
+    replay: { active: offlineMode.value, state: replayState.value, progress: replayProgress.value,
+      speed: replaySpeed.value, file: offlineFileName.value, error: importError.value, message: importStatus.value },
+    task_count: Object.keys(meta.taskNames).length, contexts: tlGetContexts().slice(0, 64),
+    parser_dropped: meta.dropped, target_overflows: meta.targetOverflowEvents,
+    range: tlInstance?.getViewRange() || null, follow: tlInstance?.follow ?? null,
+    canvas: tlCanvas.value ? { width: tlCanvas.value.width, height: tlCanvas.value.height } : null }),
+  actions: {
+    'systemview.window': command => {
+      if (![0.5, 1, 2, 5, 10, 30, 60].includes(command.seconds!)) throw new Error('Unsupported Timeline window')
+      windowUs.value = command.seconds! * 1e6
+    },
+    'systemview.pause': () => onPauseRender(),
+    'systemview.resume': () => onResumeRender(),
+    'systemview.zoom-in': () => { if (!tlInstance) throw new Error('Timeline is not ready'); tlZoom(0.5) },
+    'systemview.zoom-out': () => { if (!tlInstance) throw new Error('Timeline is not ready'); tlZoom(2) },
+    'systemview.fit': () => { if (!tlInstance) throw new Error('Timeline is not ready'); tlReset() },
+  },
+})
 
 function tlGetIntervals() {
-  const visible = meta.cpuFreq
+  const manualRange = tlInstance && !tlInstance.follow ? tlInstance.getViewRange() : null
+  const visible = manualRange
+    ? intervals.value.filter(it => it.end >= manualRange.start && it.start <= manualRange.end)
+    : !offlineMode.value
+    ? intervals.value
+    : meta.cpuFreq
     ? filterRangesByWindow(intervals.value, lastT, windowUs.value)
     : intervals.value
   return visible.map(it => ({
@@ -550,11 +590,29 @@ function tlGetContexts() {
     .map(context => ({ tid: context.id, name: context.name, type: context.type || 'Task' }))
 }
 function tlReset() { tlInstance?.reset() }
+function tlZoom(factor: number) { tlInstance?.zoom(factor) }
+
+function onTimelineViewChange() {
+  if (offlineMode.value) return
+  if (!renderPaused.value) {
+    renderScheduler?.invalidate('zoom')
+    return
+  }
+  pendingTimelineInspection = true
+  if (visibleRequestInFlight) return
+  const range = tlInstance?.getViewRange()
+  if (!range) return
+  pendingTimelineInspection = false
+  const scale = meta.cpuFreq ? 1_000_000 / meta.cpuFreq : 1
+  requestTimelineVisibleRange(Math.max(0, Math.floor(range.start / scale)),
+    Math.ceil(range.end / scale), tlCanvas.value?.clientWidth || 800, true)
+}
 
 function requestTimelineVisibleRange(
   start: number,
   end: number,
   pixelWidth: number,
+  inspection = false,
 ): void {
   // HPM traces can make Worker range extraction slower than one frame. Keep
   // only the newest request so the Worker queue cannot grow into bursty UI.
@@ -562,29 +620,10 @@ function requestTimelineVisibleRange(
   if (visibleRequestInFlight) return
   visibleRequestInFlight = true
   visibleRequestPending = false
-  binaryStream.requestVisibleRange(++visibleRequestId, start, end, pixelWidth)
-}
-
-function intervalCacheKey(interval: TaskInterval): string {
-  const start = interval.startTk ?? interval.start
-  return `${interval.taskId}:${String(start)}`
-}
-
-function mergeVisibleIntervals(next: TaskInterval[], latestTime: number): TaskInterval[] {
-  const retainAfter = latestTime - ANALYSIS_BUFFER_US
-  for (const interval of next) {
-    if (interval.end >= retainAfter) visibleIntervalCache.set(intervalCacheKey(interval), interval)
-  }
-  for (const [key, interval] of visibleIntervalCache) {
-    if (interval.end < retainAfter) visibleIntervalCache.delete(key)
-  }
-  if (visibleIntervalCache.size > MAX_INTERVALS) {
-    const oldest = [...visibleIntervalCache.entries()]
-      .sort((a, b) => a[1].end - b[1].end)
-      .slice(0, visibleIntervalCache.size - MAX_INTERVALS)
-    for (const [key] of oldest) visibleIntervalCache.delete(key)
-  }
-  return [...visibleIntervalCache.values()].sort((a, b) => a.start - b.start || a.end - b.end)
+  lastVisibleRequestAt = performance.now()
+  timelineInspectionRequestId = inspection ? visibleRequestId + 1 : 0
+  binaryStream.requestVisibleRange(++visibleRequestId, start, end, pixelWidth, undefined, undefined,
+    inspection ? 0 : TABLE_UPDATE_INTERVAL_MS)
 }
 
 function resetTimelineRefreshPolicy(): void {
@@ -614,7 +653,9 @@ function observeTimelineFrameRate(
   return timelineFrameRate.observe({
     now,
     renderCostMs,
-    visibleItems: timelineVisibleItemCount,
+    // Each lane is already pixel-bounded by the Worker. A task/event count
+    // is not paint density; use measured canvas cost to choose 60/30/20 FPS.
+    visibleItems: 0,
     pixelWidth,
   })
 }
@@ -624,21 +665,7 @@ onMounted(() => {
   window.addEventListener(DESKTOP_SETTINGS_CHANGED_EVENT, syncRttAddressFromSettings)
   ++operationGeneration
   refreshLogList()
-  if (tlCanvas.value && tlTip.value && tlLegend.value) {
-    tlInstance = new SvTimeline(
-      { canvas: tlCanvas.value, tooltip: tlTip.value, legend: tlLegend.value },
-      {
-        intervals: tlGetIntervals(),
-        unit: meta.cpuFreq ? 'us' : 'tk',
-        tickHz: meta.cpuFreq || undefined,
-        tickOrigin: binaryTickOrigin,
-        follow: true,
-        windowSize: windowUs.value,
-        renderPaused: renderPaused.value,
-        emptyText: tr('窗口内无任务', 'No tasks in this window'),
-      },
-    )
-  }
+  rebuildTimeline()
   renderScheduler = new RenderScheduler((reasons) => {
     // The timeline itself interpolates toward the newest follow range. Keep
     // this repaint loop independent from worker delivery so the ruler moves
@@ -651,9 +678,16 @@ onMounted(() => {
       tlCanvas.value?.clientWidth || 800,
     )
     renderScheduler?.setFrameRate(nextFrameRate)
-    if (!reasons.has('data') && !reasons.has('zoom') && !reasons.has('resize')) return
+    const interacting = reasons.has('zoom') || reasons.has('resize')
+    if (!reasons.has('data') && !interacting && !visibleRequestPending) return
     if (offlineMode.value) {
       if (reasons.has('data')) tlInstance?.setData(tlGetIntervals())
+      return
+    }
+    // Geometry extraction need not run at canvas FPS. Keep only one pending
+    // refresh; interaction is immediate and acquisition remains unthrottled.
+    if (!interacting && renderStarted - lastVisibleRequestAt < VISIBLE_QUERY_INTERVAL_MS) {
+      visibleRequestPending = true
       return
     }
     const manualView = tlInstance && !tlInstance.follow ? tlInstance.getViewRange?.() : null
@@ -673,7 +707,16 @@ onMounted(() => {
     const windowTicks = meta.cpuFreq
       ? followSpanUs * meta.cpuFreq / 1_000_000
       : followSpanUs
-    const start = latestBinaryTime === null ? 0 : Math.max(0, end - windowTicks)
+    let start = latestBinaryTime === null ? 0 : Math.max(0, end - windowTicks)
+    // Follow animation still displays the preceding range while the new
+    // batch arrives. Include that left edge; cropping at the newest range
+    // would erase data that is still on screen, especially in a 0.5 s view.
+    // Bound the extra history to one window so a delayed frame stays cheap.
+    const displayedStart = tlInstance?.getViewRange?.()?.start
+    if (Number.isFinite(displayedStart)) {
+      start = Math.max(0, end - 2 * windowTicks,
+        Math.min(start, Math.floor(displayedStart! / tickScale)))
+    }
     requestTimelineVisibleRange(start, end, tlCanvas.value?.clientWidth || 800)
   }, undefined, undefined, { frameRate: TIMELINE_STARTUP_FRAME_RATE, continuous: true })
   renderScheduler.start()
@@ -687,7 +730,6 @@ onUnmounted(() => {
   window.removeEventListener(DESKTOP_SETTINGS_CHANGED_EVENT, syncRttAddressFromSettings)
   abortImport()
   cancelPendingConnect()
-  disconnectStatus()
   binaryStream.stop()
   visibleRequestInFlight = false
   visibleRequestPending = false
@@ -717,25 +759,34 @@ watch(windowUs, () => {
   scheduleTimelineFlush()
 })
 watch(language, () => tlInstance?.setLabels({ emptyText: tr('窗口内无任务', 'No tasks in this window') }))
-// cpuFreq 变了切换单位（重建）
-watch(() => meta.cpuFreq, () => {
-  if (tlCanvas.value && tlTip.value && tlLegend.value) {
+// The canvas is also replaced when reconnecting or entering offline replay.
+// Rebind after Vue installs its new DOM instead of painting the detached canvas.
+function rebuildTimeline() {
+  if (!tlCanvas.value || !tlTip.value || !tlLegend.value) {
     tlInstance?.destroy()
-    tlInstance = new SvTimeline(
-      { canvas: tlCanvas.value, tooltip: tlTip.value, legend: tlLegend.value },
-      {
-        intervals: tlGetIntervals(),
-        unit: meta.cpuFreq ? 'us' : 'tk',
-        tickHz: meta.cpuFreq || undefined,
-        tickOrigin: binaryTickOrigin,
-        follow: true,
-        windowSize: windowUs.value,
-        renderPaused: renderPaused.value,
-        emptyText: tr('窗口内无任务', 'No tasks in this window'),
-      },
-    )
+    tlInstance = null
+    return
   }
-})
+  if (tlInstance && boundTimelineCanvas === tlCanvas.value && boundTimelineClock === meta.cpuFreq) return
+  tlInstance?.destroy()
+  boundTimelineCanvas = tlCanvas.value
+  boundTimelineClock = meta.cpuFreq
+  tlInstance = new SvTimeline(
+    { canvas: tlCanvas.value, tooltip: tlTip.value, legend: tlLegend.value, onViewChange: onTimelineViewChange },
+    {
+      intervals: tlGetIntervals(),
+      unit: meta.cpuFreq ? 'us' : 'tk',
+      tickHz: meta.cpuFreq || undefined,
+      tickOrigin: binaryTickOrigin,
+      follow: true,
+      windowSize: windowUs.value,
+      renderPaused: renderPaused.value,
+      emptyText: tr('窗口内无任务', 'No tasks in this window'),
+    },
+  )
+  scheduleTimelineFlush()
+}
+watch([tlCanvas, () => meta.cpuFreq], rebuildTimeline, { flush: 'post' })
 
 const MAX_EVENTS = 800
 const ANALYSIS_EVENTS = 100_000
@@ -915,29 +966,13 @@ async function reconnectRunningTrace(generation: number) {
     const status = await dash.getStatus()
     if (!operationIsActive(generation)) return
     if (status?.running) {
-      applySessionStatus(status)
-      applyTargetOverflowStatus(status)
-      if (status.synced !== undefined) meta.synced = !!status.synced
-      if (status.cpu_freq !== undefined) meta.cpuFreq = Number(status.cpu_freq) || 0
-      if (status.cpu_freq_source !== undefined) meta.cpuFreqSource = status.cpu_freq_source || ''
-      if (status.dropped_bytes !== undefined) {
-        meta.sessionDropped = Number(status.dropped_bytes || 0) + Number(status.dropped_packets || 0)
-      }
-      if (status.recording !== undefined) meta.recording = !!status.recording
-      if (status.recording_path) meta.recordingPath = status.recording_path
-      if (status.recording_summary_path) meta.recordingSummaryPath = status.recording_summary_path
-      if (status.recording_error !== undefined) meta.recordingError = status.recording_error || ''
-      if (status.task_names) applyTaskNames(status.task_names)
-      if (status.isr_names) applyIsrNames(status.isr_names)
       if (dash.state.value !== 'running') {
         dash.syncState(true)
         renderScheduler?.start()
-        connectStatus()
         binaryStream.start()
       }
     } else if (dash.state.value === 'running') {
       dash.syncState(false)
-      disconnectStatus()
       binaryStream.stop()
     }
   } catch {
@@ -945,34 +980,31 @@ async function reconnectRunningTrace(generation: number) {
   }
 }
 
-watch(statusData, (nw) => {
-  if (offlineMode.value) return
-  const fresh = takeNewStreamPoints(nw as any[], lastStreamSeq)
-  for (const dp of fresh.points as any[]) {
-    const evt = dp.event || dp._event
-    applySessionStatus(dp)
-    applyTargetOverflowStatus(dp)
-    if (dp.synced !== undefined) meta.synced = !!dp.synced
-    if (dp.dropped_bytes !== undefined) meta.sessionDropped = dp.dropped_bytes + (dp.dropped_packets || 0)
-    if (dp.runtime_dropped_bytes !== undefined || dp.dropped_bytes !== undefined) {
-      meta.dropped = (dp.runtime_dropped_bytes ?? dp.dropped_bytes ?? 0) + (dp.dropped_packets || 0)
-    }
-    if (dp.cpu_freq !== undefined) meta.cpuFreq = dp.cpu_freq
-    if (dp.cpu_freq_source !== undefined) meta.cpuFreqSource = dp.cpu_freq_source || ''
-    if (dp.recording !== undefined) meta.recording = !!dp.recording
-    if (dp.recording_path !== undefined) meta.recordingPath = dp.recording_path || meta.recordingPath
-    if (dp.recording_summary_path !== undefined) meta.recordingSummaryPath = dp.recording_summary_path || meta.recordingSummaryPath
-    if (dp.recording_error !== undefined) meta.recordingError = dp.recording_error || ''
-    if (dp.progress_state === 'error' && dp.progress_error) {
-      runtimeError.value = String(dp.progress_error)
-    }
-    const backendEvents = Number(dp.stats?.events)
-    if (Number.isFinite(backendEvents)) totalEventCount.value = Math.max(totalEventCount.value, backendEvents)
-    if (dp.task_names) applyTaskNames(dp.task_names)
-    if (dp.isr_names) applyIsrNames(dp.isr_names)
-    if (evt !== 'status') continue
+// The existing status poll also detects starts/stops from other clients. A second
+// HTTP/1 SSE per window exhausts the browser connection pool at six windows,
+// starving health/control requests while binary WebSocket events still arrive.
+watch(dash.status, dp => {
+  if (!dp || !mounted || offlineMode.value) return
+  applySessionStatus(dp)
+  applyTargetOverflowStatus(dp)
+  if (dp.synced !== undefined) meta.synced = !!dp.synced
+  if (dp.dropped_bytes !== undefined) meta.sessionDropped = dp.dropped_bytes + (dp.dropped_packets || 0)
+  if (dp.runtime_dropped_bytes !== undefined || dp.dropped_bytes !== undefined) {
+    meta.dropped = (dp.runtime_dropped_bytes ?? dp.dropped_bytes ?? 0) + (dp.dropped_packets || 0)
   }
-  lastStreamSeq = fresh.nextSeq
+  if (dp.cpu_freq !== undefined) meta.cpuFreq = dp.cpu_freq
+  if (dp.cpu_freq_source !== undefined) meta.cpuFreqSource = dp.cpu_freq_source || ''
+  if (dp.recording !== undefined) meta.recording = !!dp.recording
+  if (dp.recording_path !== undefined) meta.recordingPath = dp.recording_path || meta.recordingPath
+  if (dp.recording_summary_path !== undefined) meta.recordingSummaryPath = dp.recording_summary_path || meta.recordingSummaryPath
+  if (dp.recording_error !== undefined) meta.recordingError = dp.recording_error || ''
+  if (dp.progress_state === 'error' && dp.progress_error) {
+    runtimeError.value = String(dp.progress_error)
+  }
+  const backendEvents = Number(dp.stats?.events)
+  if (Number.isFinite(backendEvents)) totalEventCount.value = Math.max(totalEventCount.value, backendEvents)
+  if (dp.task_names) applyTaskNames(dp.task_names)
+  if (dp.isr_names) applyIsrNames(dp.isr_names)
 })
 
 watch(binaryStream.telemetry, telemetry => {
@@ -997,17 +1029,14 @@ watch(binaryStream.error, error => {
 
 watch(binaryStream.systemViewVisible, visible => {
   if (!visible) return
-  if (renderPaused.value || offlineMode.value || visible.requestId !== visibleRequestId) return
+  if (offlineMode.value || visible.requestId !== visibleRequestId) return
   visibleRequestInFlight = false
-  latestBinaryTime = visible.latestTime
-  // candidateIntervalCount is the Worker scan cost, not the amount painted.
-  // HPM traces contain many 1 ms ISR intervals; using the scan count here
-  // incorrectly forces the live canvas to 20/30 FPS even when painting is
-  // cheap. The controller also observes measured paint cost below.
-  timelineVisibleItemCount = Math.max(
-    visible.intervalCount,
-    visible.eventCount,
-  )
+  if (renderPaused.value && visible.requestId !== timelineInspectionRequestId) {
+    if (pendingTimelineInspection) onTimelineViewChange()
+    return
+  }
+  const inspectingPaused = renderPaused.value
+  if (!inspectingPaused) latestBinaryTime = visible.latestTime
   binaryTickOrigin = visible.tickOrigin
   const tickScale = meta.cpuFreq ? 1_000_000 / meta.cpuFreq : 1
   const taskIds = new Uint32Array(visible.taskIds)
@@ -1019,50 +1048,75 @@ watch(binaryStream.systemViewVisible, visible => {
   const startTicks = new BigUint64Array(visible.startTicks)
   const endTicks = new BigUint64Array(visible.endTicks)
   const nextIntervals: TaskInterval[] = []
+  const laneIds = new Map<string, number>()
   for (let index = 0; index < visible.intervalCount; index++) {
-    const context = ensureContext(contextTypes[index] || 1, taskIds[index])
+    const type = contextTypes[index] || 1
+    const key = `${type}:${taskIds[index]}`
+    let laneId = laneIds.get(key)
+    if (laneId === undefined) {
+      laneId = ensureContext(type, taskIds[index]).id
+      laneIds.set(key, laneId)
+    }
     const start = starts[index] * tickScale
     const end = ends[index] * tickScale
     nextIntervals.push({
-      taskId: context.id, start, end,
+      taskId: laneId, start, end,
       startTk: startTicks[index], endTk: endTicks[index],
     })
   }
 
-  for (const context of Object.values(taskStats)) {
-    context.runUs = 0
-    context.switches = 0
+  if (inspectingPaused) {
+    tlInstance?.setTickOrigin(binaryTickOrigin)
+    tlInstance?.setPrefilteredIntervals(nextIntervals.map(it => ({
+      tid: it.taskId, name: taskStats[it.taskId]?.name || hexId(it.taskId),
+      type: taskStats[it.taskId]?.type || 'Task', start: it.start, end: it.end,
+      startTk: it.startTk, endTk: it.endTk,
+    })))
+    tlInstance?.renderInspection()
+    if (pendingTimelineInspection) onTimelineViewChange()
+    return
   }
-  const summaries = visible.contexts || []
-  const totalTicks = summaries.reduce((sum, context) => sum + context.totalTicks, 0)
-  exactRuntimeRows.value = summaries.map(contextSummary => {
-    const context = ensureContext(contextSummary.type, contextSummary.id)
-    context.prio = contextSummary.priority
-    context.stackBase = contextSummary.stackBase
-    context.stackSize = contextSummary.stackSize
-    context.runUs = contextSummary.totalTicks * tickScale
-    context.switches = contextSummary.count
-    return {
-      ...context,
-      count: contextSummary.count,
-      minUs: contextSummary.minTicks * tickScale,
-      p25Us: contextSummary.p25Ticks * tickScale,
-      p50Us: contextSummary.p50Ticks * tickScale,
-      p75Us: contextSummary.p75Ticks * tickScale,
-      maxUs: contextSummary.maxTicks * tickScale,
-      totalUs: contextSummary.totalTicks * tickScale,
-      pct: totalTicks > 0 ? contextSummary.totalTicks / totalTicks * 100 : 0,
+
+  const now = performance.now()
+  const updateTables = now - lastTableUpdate >= TABLE_UPDATE_INTERVAL_MS
+  if (updateTables) {
+    for (const context of Object.values(taskStats)) {
+      context.runUs = 0
+      context.switches = 0
     }
-  }).sort((a, b) => b.totalUs - a.totalUs || a.name.localeCompare(b.name))
-  intervals.value = mergeVisibleIntervals(nextIntervals, visible.latestTime * tickScale)
+    const summaries = visible.contexts || []
+    const totalTicks = summaries.reduce((sum, context) => sum + context.totalTicks, 0)
+    exactRuntimeRows.value = summaries.map(contextSummary => {
+      const context = ensureContext(contextSummary.type, contextSummary.id)
+      context.prio = contextSummary.priority
+      context.stackBase = contextSummary.stackBase
+      context.stackSize = contextSummary.stackSize
+      context.runUs = contextSummary.totalTicks * tickScale
+      context.switches = contextSummary.count
+      return {
+        ...context,
+        count: contextSummary.count,
+        minUs: contextSummary.minTicks * tickScale,
+        p25Us: contextSummary.p25Ticks * tickScale,
+        p50Us: contextSummary.p50Ticks * tickScale,
+        p75Us: contextSummary.p75Ticks * tickScale,
+        maxUs: contextSummary.maxTicks * tickScale,
+        totalUs: contextSummary.totalTicks * tickScale,
+        pct: totalTicks > 0 ? contextSummary.totalTicks / totalTicks * 100 : 0,
+      }
+    }).sort((a, b) => b.totalUs - a.totalUs || a.name.localeCompare(b.name))
+  }
+  // The Worker owns retained history and returns a pixel-bounded selection.
+  // Re-merging/sorting old selections on the UI thread both duplicates its
+  // work and retains obsolete downsampled intervals when zooming.
+  intervals.value = nextIntervals
   lastT = visible.latestTime * tickScale
   tlInstance?.setTickOrigin(binaryTickOrigin)
   tlInstance?.setContexts?.(tlGetContexts(), { render: false })
   tlInstance?.setPrefilteredIntervals(tlGetIntervals())
   if (visibleRequestPending) renderScheduler?.invalidate('data')
 
-  const now = performance.now()
-  if (now - lastTableUpdate >= TABLE_UPDATE_INTERVAL_MS) {
+  if (updateTables) {
     lastTableUpdate = now
     eventList.value = visible.events.map(event => ({
       ...event,
@@ -1114,6 +1168,12 @@ function applyTargetOverflowStatus(status: Record<string, unknown>): void {
 }
 
 function applySessionStatus(status: Record<string, unknown>): void {
+  const channel = status.channel
+  if (typeof channel === 'number' && Number.isInteger(channel) && channel >= 0 && channel < 8
+    && channel !== systemviewChannel.value) {
+    systemviewChannel.value = channel
+    persistSystemviewChannel()
+  }
   const connectionGeneration = Number(status.connection_generation)
   const sessionGeneration = Number(status.session_generation)
   const autoRetryCount = Number(status.auto_retry_count)
@@ -1170,19 +1230,21 @@ function evtColor(k: string) {
 }
 function clearAll() {
   binaryStream.reset()
+  pendingTimelineInspection = false
+  timelineInspectionRequestId = 0
   visibleRequestId++
   visibleRequestInFlight = false
   visibleRequestPending = false
   eventList.value = []
+  lastVisibleRequestAt = Number.NEGATIVE_INFINITY
   analysisEvents = []
   analysisBufferCount.value = 0
   intervals.value = []
-  visibleIntervalCache.clear()
   exactRuntimeRows.value = []
   Object.keys(taskStats).forEach(k => delete taskStats[Number(k)])
   intervalState = { currentTaskId: null, currentStart: null }
   totalEventCount.value = 0
-  idleUs.value = 0; firstT = 0; lastT = 0; lastStreamSeq = 0
+  idleUs.value = 0; firstT = 0; lastT = 0
   latestBinaryTime = null
   resetTimelineRefreshPolicy()
   binaryTickOrigin = 0n
@@ -1264,14 +1326,12 @@ async function importLogFile(file: File) {
   cancelPendingConnect()
   const controller = new AbortController()
   importAbort = controller
-  disconnectStatus()
   binaryStream.stop()
   renderPaused.value = false
   tlInstance?.resumeRendering()
   renderScheduler?.start()
-  if (dash.state.value !== 'idle') {
-    await dash.stop()
-  }
+  // Replay belongs to this window. Other GUI/MCP clients keep their live capture.
+  dash.syncState(false)
   clearAll()
   replayFile = file
   replayLastTime = null
@@ -1430,6 +1490,7 @@ function returnToLive() {
   replayLastTime = null
   clearAll()
   refreshLogList()
+  void reconnectRunningTrace(operationGeneration)
 }
 
 function isAbortError(value: unknown): boolean {
@@ -1517,7 +1578,7 @@ async function onStart() {
   try {
     const started = await dash.start({
       addr: address,
-      channel: SYSTEMVIEW_CHANNEL,
+      channel: systemviewChannel.value,
       mode: 0,
       search_size: RTT_SEARCH_SIZE,
     })
@@ -1525,7 +1586,6 @@ async function onStart() {
     connectTimer = setTimeout(() => {
       connectTimer = null
       if (!operationIsActive(generation)) return
-      connectStatus()
       binaryStream.start()
     }, 500)
     await waitForSystemViewReady(generation)
@@ -1543,6 +1603,15 @@ function onPauseRender() {
 }
 function onResumeRender() {
   renderPaused.value = false
+  // Discard pending history inspection and return to fresh live data. Otherwise
+  // a paused zoom keeps querying an old range after it has left the ring.
+  visibleRequestId++
+  visibleRequestInFlight = false
+  visibleRequestPending = false
+  pendingTimelineInspection = false
+  timelineInspectionRequestId = 0
+  lastVisibleRequestAt = Number.NEGATIVE_INFINITY
+  if (!offlineMode.value) tlInstance?.setFollowMode(true)
   tlInstance?.resumeRendering()
   renderScheduler?.start()
   renderScheduler?.invalidate('data')
@@ -1550,7 +1619,6 @@ function onResumeRender() {
 async function onStop() {
   const generation = ++operationGeneration
   cancelPendingConnect()
-  disconnectStatus()
   binaryStream.stop()
   renderPaused.value = false
   tlInstance?.resumeRendering()
@@ -1569,9 +1637,10 @@ async function onStop() {
 .sv-health-card.sv-waiting b { white-space: normal; overflow: visible; }
 .alert-warn { color: var(--warn); padding: 8px; border: 1px solid var(--warn); border-radius: 4px; }
 .sv-toolbar { display: flex; align-items: center; gap: 12px; padding: 6px 0; flex-wrap: wrap; }
-.sv-address-row { display: grid; grid-template-columns: auto minmax(180px, 320px) auto minmax(0, 1fr); align-items: center; gap: 8px; padding: 4px 0; }
+.sv-address-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 4px 0; }
 .sv-address-row label { font-size: 12px; color: var(--muted); }
 .sv-address-row input { min-width: 0; height: 30px; padding: 0 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: inherit; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+.sv-address-row select { height: 30px; padding: 0 6px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: inherit; }
 .btn-search { height: 30px; display: inline-flex; align-items: center; gap: 5px; padding: 0 9px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: inherit; cursor: pointer; }
 .btn-search:disabled { opacity: .45; cursor: not-allowed; }
 .address-error { min-width: 0; color: var(--danger, #dc2626); font-size: 12px; overflow-wrap: anywhere; }

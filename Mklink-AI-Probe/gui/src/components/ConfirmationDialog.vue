@@ -2,7 +2,7 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { tr } from '../composables/useLanguage'
 
-defineProps<{ message: string }>()
+defineProps<{ message: string; title?: string; acceptLabel?: string; cancelLabel?: string; danger?: boolean }>()
 const emit = defineEmits<{ answer: [confirmed: boolean] }>()
 const cancel = ref<HTMLButtonElement | null>(null)
 const accept = ref<HTMLButtonElement | null>(null)
@@ -26,11 +26,11 @@ onBeforeUnmount(() => { if (previousFocus?.isConnected) previousFocus.focus() })
 <template>
   <div class="confirmation-backdrop" @keydown="keydown" @click.self="emit('answer', false)">
     <section role="alertdialog" aria-modal="true" aria-labelledby="confirmation-title" aria-describedby="confirmation-message" class="confirmation-dialog">
-      <h2 id="confirmation-title">{{ tr('请确认操作', 'Confirm operation') }}</h2>
+      <h2 id="confirmation-title">{{ title || tr('请确认操作', 'Confirm operation') }}</h2>
       <p id="confirmation-message">{{ message }}</p>
       <div class="confirmation-buttons">
-        <button ref="cancel" type="button" data-testid="confirmation-cancel" @click="emit('answer', false)">{{ tr('取消', 'Cancel') }}</button>
-        <button ref="accept" type="button" data-testid="confirmation-accept" class="danger" @click="emit('answer', true)">{{ tr('确认', 'Confirm') }}</button>
+        <button ref="cancel" type="button" data-testid="confirmation-cancel" @click="emit('answer', false)">{{ cancelLabel || tr('取消', 'Cancel') }}</button>
+        <button ref="accept" type="button" data-testid="confirmation-accept" :class="danger === false ? 'primary' : 'danger'" @click="emit('answer', true)">{{ acceptLabel || tr('确认', 'Confirm') }}</button>
       </div>
     </section>
   </div>
@@ -41,4 +41,5 @@ onBeforeUnmount(() => { if (previousFocus?.isConnected) previousFocus.focus() })
 .confirmation-dialog{box-sizing:border-box;width:min(520px,100%);padding:24px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--fg);box-shadow:0 20px 70px #0008;text-align:left}
 .confirmation-dialog h2{margin:0 0 14px;font-size:18px;color:inherit}.confirmation-dialog p{margin:0;line-height:1.7;font-size:14px;white-space:pre-wrap;color:inherit}
 .confirmation-buttons{display:flex;justify-content:flex-end;gap:12px;margin-top:22px}.confirmation-buttons button{min-width:84px;padding:9px 16px;border:1px solid var(--border);border-radius:5px;background:var(--input-bg);color:var(--fg);cursor:pointer;font-size:14px}.confirmation-buttons .danger{background:var(--danger);border-color:var(--danger);color:var(--on-solid)}.confirmation-buttons button:focus-visible{outline:3px solid var(--info);outline-offset:3px}
+.confirmation-buttons .primary{background:var(--accent);border-color:var(--accent);color:var(--on-solid)}
 </style>

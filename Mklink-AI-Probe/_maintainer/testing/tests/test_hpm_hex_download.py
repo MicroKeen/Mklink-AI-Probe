@@ -36,7 +36,7 @@ def test_hex_is_normalized_and_uses_dedicated_entry(tmp_path, monkeypatch):
             calls.append(command)
             if command == 'hpm.program_hex()':
                 return 'hpm.program_hex()\n-1\n'
-            if command.startswith('hpm.board'):
+            if command.startswith('hpm.flash_cfg'):
                 return '0\n'
             return 'source.hex loaded successfully.\n0\n'
     flash = MKLinkFlash(Bridge())
@@ -72,7 +72,7 @@ def test_configuration_failure_does_not_program(tmp_path, monkeypatch):
     flash._copy_to_microkeen = lambda *args: 'source.hex'
     with pytest.raises(FlashError, match='configuration failed'):
         flash.burn_hpm_hex(str(source(tmp_path)), board='hpm6e00evk')
-    assert calls == ['hpm.program_hex()', 'hpm.board("hpm6e00evk")']
+    assert calls == ['hpm.program_hex()', 'hpm.flash_cfg(0xfcf90001,0x00000007,0x00000000,0xf3000000)']
 
 
 @pytest.mark.parametrize('marker', ['HPM_HEX_FAIL phase=-5', 'HPM_BIN_FAIL storage busy'])

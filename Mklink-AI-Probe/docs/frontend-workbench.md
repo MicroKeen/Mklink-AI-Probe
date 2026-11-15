@@ -4,6 +4,10 @@
 
 本文描述开发分支中的实现和明确边界；自动测试、真实浏览器和真机证据由[本次验证报告](verification/agent-ui-workbench.md)分别汇总。存在接口不代表相应硬件操作已经验收。
 
+当前已整合 v0.5.0 正式源码及其 GUI 控制协议。自由面板仍是开发分支扩展，原版安装包没有本扩展；接入时检查 `gui_frontend_*` 能力。新会话按[发现与接入说明](../references/agent-ui.md)选择运行时及窗口，使用 `gui_snapshot.panels.workbench` 对应到语义页面；本轮证据见 [v0.5.0 整合验收](verification/v050-agent-ui-workbench.md)。
+
+原 SuperWatch 的 AXF/ELF 旁配置继续生效；命名子面板的显示状态按面板隔离，不接收或写回原视图的共享显示配置，也不替换原 `superwatch` GUI 控制器。CLI 语义调用复用已有 GUI 附着，不为界面操作隐式连接探针；设备操作仍经既有业务检查。
+
 ## 用户入口与共享边界
 
 在 Dashboard 打开“组合工作台”，添加 SuperWatch 波形、变量、RTT、串口或控制组件面板。每张卡片有稳定 ID，可拖动位置、拖动右下角改变尺寸，也可在配置中用数字输入位置和宽高。网格为 12 列，窄屏按顺序排列。信号路径留空表示跟随所有已选采集项；RTT 绑定通道，串口绑定已有端口。原 SuperWatch、RTT View 和串口助手入口继续保留。

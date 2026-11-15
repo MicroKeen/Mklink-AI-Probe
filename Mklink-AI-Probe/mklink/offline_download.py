@@ -450,11 +450,10 @@ def parse_offline_config(
 def _program_lines(config: OfflineDownloadConfig, indent: str) -> list[str]:
     if config.is_hpm:
         lines = []
-        if config.board:
-            setup_call = f'hpm.board("{config.board}")'
+        if config.hpm_flash_cfg:
+            setup_call = "hpm.flash_cfg({})".format(",".join(word.rstrip("uU") for word in config.hpm_flash_cfg))
         else:
-            cfg = config.hpm_flash_cfg or ()
-            setup_call = "hpm.flash_cfg({})".format(",".join(cfg))
+            setup_call = f'hpm.board("{config.board}")'
         lines.extend((
             f"{indent}if {setup_call} != 0:",
             f'{indent}    print("HPM flash configuration failed")',

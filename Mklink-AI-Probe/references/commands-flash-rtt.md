@@ -9,6 +9,12 @@
 
 在线烧录的“连接设置”和脱机烧录的时钟列表按目标接口切换。HPM 使用 JTAG，ARM 使用 SWD。选择下载器后优先显示该探针的已知档位；若 HPM 页面标为“配置候选”，连接该探针后刷新可核对其能力。当前值需要重新选择时，先选择有效档位再提交。
 
+未连接时选择命令串口后，仍可预设连接接口与时钟。在线和脱机 HPM 下载只选择器件，
+界面提供可编辑的四字 Flash 配置，按器件保存并供在线/脱机共用，支持 JSON 导入导出。
+已知器件预填参考板参数；外接 NOR 必须核对实际 Flash，不能只凭芯片型号确定配置。
+未映射器件可手动填齐四字参数。自定义 `hpm_flash_cfg` 优先于 `board`；已知板卡默认值也通过
+`hpm.flash_cfg` 应用。CLI/MCP 保留未知显式板名的旧接口兼容路径。
+
 ### RTT 通道预览与窗口适配
 
 Web/桌面 RTT View 点击“自动搜索”后，若已连接并识别芯片 ID，会只读解析该地址的 RTT 控制块，立即显示有效上行通道的 CH 复选框，无需先开始采集。无效或尚未初始化的控制块会显示错误，不自动启动或重试。双击通道面板周围、标题栏或下方空白处恢复自适应布局；按钮、输入框和终端文本的双击保留原行为。
@@ -88,21 +94,21 @@ CLI 退出仅解除自己的会话，不关闭 GUI 的连接，也不停止采�
 
 Keil 工程默认先调用 `UV4.exe -b <project> -t <target>` 编译，再调用 `UV4.exe -f <project> -t <target>` 下载。只有用户明确要求只下载并确认现有产物有效时才能跳过编译。IAR 先用 `IarBuild.exe` 编译，仅在项目已有可靠下载配置时使用 IDE 下载，否则进入 pyOCD。
 
-#### `python -m mklink flash [--port COM6] [--hex path.hex]`
-显式原生 MKLink 串口/FLM 烧录入口，用于用户指定、旧流程兼容或诊断，不是自动下载首选。`load.hex()` / `load.bin()` 内部按扇区边擦边写，无需单独擦除（独立擦除命令为全片擦除）。命令自动从 `.mklink/keil_project.json` 读取 HEX 路径和 MCU 配置。
+#### `python -m mklink flash --probe <ID> --firmware <HEX/BIN> --target-part <型号>`
+显式原生 MKLink 串口/FLM 烧录入口，用于用户指定、旧流程兼容或诊断，不是自动下载首选。通过共享后台提交任务；`load.hex()` / `load.bin()` 内部按扇区边擦边写，无需单独擦除（独立擦除命令为全片擦除）。
 
+无需初始化工程即可烧录，包括普通 CMake/CLion 项目。例如在目标工程目录运行：
+
+```powershell
+python -m mklink flash --probe <ID> --firmware build/Debug/firmware.hex --target-part STM32G071GBU6
 ```
-[AUTO] 从 project_info.json 自动获取 hex_path: path/to/build/firmware.hex
-[OK] IDCODE: 0x2BA01477
-[OK] FLM 加载成功
-开始烧录 firmware.hex ...
-[OK] 烧录成功 (3540ms)
-```
+
+`--firmware` 与 `--hex` 等价，显式文件相对当前工作目录解析。省略文件参数时，使用所选工程 `.mklink/project_info.json` 中唯一的 `hex_path` 或 `bin_path`；保存的相对路径按项目根目录解析。两者指向不同文件时必须显式选择，不能猜测。型号可以由 `--target-part` 指定，或读取工程中保存的 `device`。可用 `--project-root <目录>` 明确选择工程；固件路径来自该工程时也绑定同一工程，不采用其他 GUI 工程的目标。
 
 **烧录前提条件：**
-1. MICROKEEN 磁盘已插入（FLM 文件需在其 FLM 目录中）
-2. 已运行 `project-init`（或 `.mklink/` 配置已存在）
-3. HEX 文件已编译生成
+1. 已选择可连接的探针和正确目标。
+2. 明确固件路径与目标型号；`project-init` 可选。
+3. HEX/BIN 已编译生成，所选后端需要的算法或 HPM ROM 能力可用。
 
 自动解析 FLM 时依次使用发布包内置 Pack、发布包内置 DAPLink FLM、已安装 Pack、已登记的自定义 FLM。用户在命令或界面显式选择的算法覆盖自动顺序。HPM 目标始终使用 ROM API，禁止加载 FLM。
 
@@ -183,6 +189,24 @@ python -m mklink rtt --visualize
 
 Web RTT 终端模式只订阅终端文本，不运行收发视图的行/曲线解析；切换到收发模式后才按需解析。各通道及共享窗口按订阅独立处理，切换视图不重启设备采集。无法解析的数值行不影响原始 RTT 文本或后续采集，CLI、MCP 与 Web 共用数值解析规则。
 
+桌面/Web 的 RTT View 通道中，打开 **日志 → 开始记录** 可保存原始 RX/TX JSONL。
+停止记录只保存 JSONL，不自动转换。点击该通道日志区域的 **转换为 TXT** 后，
+后台以较低进程优先级在同一目录生成同名 UTF-8 TXT，界面显示转换状态。
+普通行仅带主机收发日期、时区、通道和 RX/TX，例如：
+`[2026-11-13 14:55:13.502167+08:00] CH0 RX msh >`。
+完整采集会话编号只在每个 TXT 分段首次输出或会话切换时，以 `# session=...`
+单独记录，不在每行重复；原始 JSONL 继续保留完整会话字段。
+跨数据块的 UTF-8 字符和文本行会拼接，时间取该行首块接收时间；分段间未完行会出现在后续分段。
+缺失字节和会话切换会保留标记，二进制、控制字节或无法按 UTF-8 解码的字节以转义形式保留。
+TXT 供直接阅读，JSONL 保留原始字节供回放；TXT 转换失败不改变 JSONL 的保存结果。
+转换仅在明确点击后运行，仍会占用 CPU 和磁盘资源。按钮针对最近一次记录，
+请在开始下一次记录前触发所需转换。已有 TXT 不会被覆盖。
+
+Skill/CLI 使用 `runtime call rtt_recording_status`、`rtt_recording_start`、
+`rtt_recording_stop`、`rtt_recording_export`；MCP 使用同名 `gui_call` 能力。
+开始传 `directory` 和 `channel`，停止传 `channel`；转换传状态返回的 `path` 和同一 `channel`。
+状态中的 `export_state`、`export_path`、`export_parts` 表示独立转换任务，与 SuperWatch 一致。
+
 **仪表盘功能：**
 - 实时折线图，每个变量独立曲线
 - 变量选择芯片，点击切换显示/隐藏
@@ -239,7 +263,11 @@ HPM5301 也可以在脱机界面显式选择 [USART ISP](hpm-usart-isp.md)，由
 "hpm_flash_cfg": ["0xfcf90002U", "0x00000005U", "0x00001000U", "0xf3000000U"]
 ```
 
-这 4 个参数依次对应 `hpm.flash_cfg(header,opt0,opt1,xpi_base_addr)`。不要再使用旧的 3 参数写法，因为下载算法里的 XPI 基址不应固定。
+这 4 个参数依次对应 `hpm.flash_cfg(header,opt0,opt1,xpi_base_addr)`。每项为 32 位十六进制字符串，可带 U 后缀。
+XPI 基址是控制器地址，不是 BIN 烧录地址。不要使用旧的 3 参数写法。
+GUI 导出的 JSON 包含 `schema_version`、`target_part`、`hpm_flash_cfg`；共享 MCP 将后两项放入
+`start_job(action="flash").arguments`，CLI 使用 `flash --hpm-flash-cfg <header> <opt0> <opt1> <xpi_base_addr>`，
+也可将配置加入工程 `project_info.json`。GUI 本地保存不会自动写入工程配置或同步其他电脑。
 
 MCP/AI 调用示例：
 
@@ -286,9 +314,20 @@ XPI 基址按芯片族选择：
 ### 配置管理
 
 #### `python -m mklink project-init`
-离线解析 Keil/IAR/HPM 工程，只保存精确器件、工程目标、固件/符号路径和内存布局等必要信息。新配置不写入猜测的 `mcu_key`、COM 口或 FLM 路径，不连接探针、不下载 Pack，不创建 RTT/工具链模板；重复初始化保留已有手动设置。算法是否支持在实际烧录时校验，不以初始化成功代表可安全烧录。
+可选的工程配置工具。无显式型号时离线导入 Keil/IAR/HPM 工程；普通 CMake/CLion、Makefile 或只有编译产物的目录可直接保存输入：
 
-端口默认连接时自动发现，可显式指定 Windows `COM6`、macOS `/dev/cu.*` 或 Linux `/dev/ttyACM*`。跨系统共享工程使用相对输出路径；不会把 Windows 绝对盘符猜测成 Mac 挂载目录。Mac + Parallels 使用与排障见 [macos-linux.md](macos-linux.md)。
+```powershell
+python -m mklink project-init --project-root D:/Projects/Blinky --target-part STM32G071GBU6 --firmware build/Debug/firmware.hex --elf build/Debug/firmware.elf
+python -m mklink flash --project-root D:/Projects/Blinky --probe <ID>
+```
+
+`--firmware`（别名 `--hex`）支持 HEX/BIN，`--elf`（别名 `--axf`）支持 ELF/AXF/OUT。初始化的相对文件路径以项目根目录为基准，保存为绝对路径；允许在编译前保存尚未生成的产物路径。项目目录必须已存在。已有通用配置可只更新文件路径，未传入的设置保留。
+
+只保存精确器件、工程目标、固件/符号路径和内存布局等必要信息。新配置不写入猜测的 `mcu_key`、COM 口或 FLM 路径，不连接探针、不下载 Pack，不创建 RTT/工具链模板；重复初始化保留已有连接、RTT 和工具链设置。无可导入工程且缺少型号时，提示补充 `--target-part` 并返回非零退出码；已有 JSON 损坏时不覆盖。算法是否支持在实际烧录时校验，不以初始化成功代表可安全烧录。
+
+显式型号与已保存型号不同，或旧 `config.json` 仍含 `mcu_key` 时，初始化会拒绝覆盖并保留原文件。先核对所选项目及旧目标设置；此命令不自动迁移另一个芯片的算法、内存布局或 RTT 地址。
+
+端口默认连接时自动发现，可显式指定 Windows `COM6`、macOS `/dev/cu.*` 或 Linux `/dev/ttyACM*`。移动工程后重新指定本机产物路径；不会把 Windows 绝对盘符猜测成 Mac 挂载目录。Mac + Parallels 使用与排障见 [macos-linux.md](macos-linux.md)。
 
 #### `python -m mklink project-info`
 显示当前项目配置状态（COM 口、MCU、IDE 类型、HEX/MAP 路径、RTT 配置等）。
@@ -301,12 +340,11 @@ XPI 基址按芯片族选择：
 
 ---
 
-## 自动配置检查
+## 按操作检查输入
 
-所有硬件操作命令（`flash`、`rtt`、`test`）执行前会自动检查 `.mklink/` 配置：
-- `config.json` — 可选连接覆盖（新工程只保存 SWD 时钟）
-- `project_info.json` — HEX/MAP/OUT 文件路径（IDE-agnostic）
-- `rtt_config.json` — 可选 RTT 配置，首次使用时解析地址
-- MICROKEEN 磁盘 FLM 文件（profile 指定时需要）
+`.mklink/` 用于保存可复用的默认值，不是所有硬件操作的统一前置条件：
+- `config.json` — 可选连接覆盖（新工程只保存 SWD 时钟）。
+- `project_info.json` — 精确型号、固件和符号路径等工程信息。
+- `rtt_config.json` — 可选 RTT 配置，地址可由当前符号或显式参数提供。
 
-如果配置缺失或无效，会提示运行 `python -m mklink project-init`。
+烧录缺型号时补充 `--target-part`，缺文件或有多个候选时补充 `--firmware`。初始化无法识别某种工程不表示不支持其 MCU；CMake/CLion 可使用上述显式通用配置。
