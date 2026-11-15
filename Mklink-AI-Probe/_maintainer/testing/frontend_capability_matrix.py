@@ -91,7 +91,9 @@ def inventory(project):
             pass
     visit(build_parser(), 'remote')
     async def tools():
-        return {name: tool.parameters for name, tool in (await build_server().get_tools()).items()}
+        from fastmcp import Client
+        async with Client(build_server()) as client:
+            return {tool.name: tool.inputSchema for tool in await client.list_tools()}
     mcp_schemas = asyncio.run(tools())
     mcp = {}
     for name in sorted(mcp_schemas):
