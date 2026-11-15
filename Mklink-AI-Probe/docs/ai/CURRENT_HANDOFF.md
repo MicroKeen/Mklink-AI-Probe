@@ -6,11 +6,11 @@
 
 - 更新时间：`2026-11-15`
 - 分支：`codex/v0.5.0-fixes`
-- HEAD：`8d532019`
-- 远端 HEAD：`8d532019`
-- 工作树：PR #82 已合入；原生包双渠道补发和清盘完成，本轮仅补齐交接记录。
-- 当前任务：Mac ARM/Intel、Linux x64 原生包由 8d532019 构建并通过CI原生启动/签名更新，已补发腾讯云/GitHub。版本和旧发布文件不变；清盘约 12.03 GiB，见[原生验收](../verification/v050-native-release.md)。
-- 状态：`V0.5.0 三平台发布及清理完成`
+- HEAD：`7610ab20`
+- 远端 HEAD：`7610ab20`
+- 工作树：V0.5.0 安装路径、脱机静默刷新、工程日志落点修复中；尚未覆盖或更新腾讯云。
+- 当前任务：修复旧 HKLM 安装目录遗漏及三秒识别闪动，补齐 Skill/上位机安装目录禁止写工程日志。先本机覆盖，再与固件会话验收 V2.9.5，全部通过后更新腾讯云，版本仍 0.5.0。见[修订验收](../verification/v050-install-path-offline-refresh.md)。
+- 状态：`V0.5.0 修订包验收中，发布待实测`
 
 ## 里程碑
 
@@ -26,14 +26,14 @@
 - **固件能力提醒与采集中写入**：同一V4/STM32F103RC实测V4.7.3与V4.7.4写入前后最大采样间隔0.195/0.208/0.192ms；RTT并行为1.562ms，各轮10次写入成功且无序号/读错。真实Web写入保持约15.9kHz，三端警告一致，状态检查无设备I/O，见[能力报告](../verification/v050-firmware-capabilities.md)。V2.9.4与云端V2.9.3不误报降级；版本缓存/提醒/跳转验收见[提醒报告](../verification/v050-firmware-update-notice.md)。客户端先行、MCP重载与重启失败互斥恢复见[更新顺序](../verification/v050-update-order.md)。专项用例有重叠，最终全量结果以发布交接为准。
 - **macOS 兼容性与跨平台回归**：最终原生包源8d532019；Mac ARM/Intel DMG与Linux AppImage/DEB的冻结后台、真实WebView/MCP操作、错误签名拒绝、有效更新与重启通过。USB各73项通过/1项Windows专属跳过。Windows Python7175/2跳过、GUI1291和生产构建通过；两渠道13附件及5平台索引验证完成。设施边界见[原生验收](../verification/v050-native-release.md)。
 - **SuperWatch 配置与手动日志转换**：手动转换 56 项、共享后台/流/边界 296 项、GUI 152 项通过，生产构建通过。冻结安装版实物记录 1,114,032 组，Excel 两页 1,048,575 / 65,457 行、4,456,128 个值与 JSONL 对应；RTT 505 行 TXT 对应，7 个原始文件哈希不变。GUI 手动触发、实际 CLI/MCP 重复请求复用任务且不停止采集。见[转换报告](../verification/v050-manual-recording-export.md)。符号旁配置原有软件/浏览器证据见[配置报告](../verification/v050-superwatch-profile.md)；前一安装候选已验证真实 AXF 重启恢复，本候选解析 6,718 个变量并保存四变量、500000 缓存与 1 µs 间隔。 TXT 精简追加：转换/记录器 37 项、Skill 69 项通过；既有 505 行时间和正文等价，63,996→40,304 字节，原始文件哈希不变。见[TXT 报告](../verification/v050-rtt-txt-readable.md)。
-- **V0.5.0 发布、安装与升级**：正式源1097f98e：Python7173通过/2跳过、GUI1291、Rust23、生产构建与CI通过。普通用户新装/卸载/覆盖exit0，3686载荷一致，6配置及USB名称/机器登记保留。原始0.4.3原生GitHub回退下载、签名、安装、重启0.5及二次无更新通过；Skill腾讯云/备用GitHub升级2680文件一致。原生/Web页面与四类回放通过，冻结59工具MCP/算法/SVD通过。双渠道11新文件全量SHA/HEAD/Range、索引及历史11文件COS归档通过；见[发布交接](../verification/v050-release-handoff.md)。前轮强制活动覆盖与实物见[安装验收](../verification/v050-installer-force-acceptance.md)，双V4/500ms恢复见[USB报告](../verification/v050-usb-hpm-overwrite.md)。
+- **V0.5.0 发布、安装与升级**：正式源1097f98e：Python7173通过/2跳过、GUI1291、Rust23、生产构建与CI通过。普通用户新装/卸载/覆盖exit0，3686载荷一致，6配置及USB名称/机器登记保留。原始0.4.3原生GitHub回退下载、签名、安装、重启0.5及二次无更新通过；Skill腾讯云/备用GitHub升级2680文件一致。原生/Web页面与四类回放通过，冻结59工具MCP/算法/SVD通过。双渠道11新文件全量SHA/HEAD/Range、索引及历史11文件COS归档通过；见[发布交接](../verification/v050-release-handoff.md)。前轮强制活动覆盖与实物见[安装验收](../verification/v050-installer-force-acceptance.md)，双V4/500ms恢复见[USB报告](../verification/v050-usb-hpm-overwrite.md)。 本轮修订：已定位跨安装范围漏读 HKLM 与后台轮询触发忙碌状态；此前发布测试使用 /D 或已有 HKCU，不能代表该迁移路径。本轮专项解析器/脱机轮询测试已过，完整软件、实际覆盖和固件协同验收进行中，见[报告](../verification/v050-install-path-offline-refresh.md)。
 - **V3 / V4 SuperWatch 恢复**：普通 V4 修复候选实物拔插跨 12.637 秒缺口原订阅恢复，V4.7.4 健康检查通过，223,728 组、零读错及队列丢弃，中位 43,486.6 组/秒。V3.6.10 实刷及拔插恢复通过，1,484,544 组，零队列丢弃、序号异常和时间倒退，恢复后中位 43,056.7 组/秒。旧 V3.6.8 缺采样能力，无同条件旧版基线。版本及未验范围见[恢复验证记录](../verification/v050-superwatch-swclk.md)。
 
 ## 架构决策
 
 - 采集或调试改动须按[上位机基线](../verification/v043-host-baseline.md)同条件核对数据完整性和性能。SystemView每次附着刷新INIT/任务列表，按实际通道，不猜选；RT-Thread模板锁覆盖可记录的高优先级IRQ，保留嵌套掩码。时间窗口仅控制可视跨度，连续跟随不补造事件；统计限频不影响精确检查，暂停显示仍可缩放且不暂停采集。用户显式重启所选MKLink时停止其采集、重启一次并退役会话/释放占用，其他探针与独立UART隔离，不自动重连或重放。 桌面与Web GUI操作共用gui_control/gui_action；先显式选择窗口和新鲜控件，路由/探针身份/代次变更后重读。页面回执仅说明指令执行，异步设备任务仍核对共享终态，unconfirmed不自动重放。GUI回放仅影响本窗口；RTT/串口历史TX不重发。SystemView状态只用原有1Hz轮询，不再占用长期HTTP SSE连接，数据仍走WebSocket。
 - 默认仅构建 Windows。用 PowerShell 7、UTF-8 和 `scripts/build_workspace.ps1`，构建根为 `F:/MKLink-Build`。
-- Windows NSIS默认currentUser；不自动命名USB端口，只有用户确认修改/恢复名称才调用UAC助手。按2026-11-14最终指令，覆盖安装直接强制结束当前用户MKLink桌面/共享后台/Skill/MCP及其WebView，含活动任务，不依赖旧版API，不杀AI宿主或无关Python；无权限时明确失败，不自动提权。旧机器级登记/受保护目录不自动迁移。损坏历史仍原样备份核验后初始化；有效未知结果不清空，权限/占用/链接异常跳过，不重放旧操作。
+- Windows NSIS默认currentUser；不自动命名USB端口，只有用户确认修改/恢复名称才调用UAC助手。按2026-11-14最终指令，覆盖安装直接强制结束当前用户MKLink桌面/共享后台/Skill/MCP及其WebView，含活动任务，不依赖旧版API，不杀AI宿主或无关Python；无权限时明确失败，不自动提权。覆盖安装先恢复有效的原机器级目录，尊重显式 /D 和目录页选择；机器登记/目录权限不更改，受保护目录无权限时明确失败而非另建用户副本。损坏历史仍原样备份核验后初始化；有效未知结果不清空，权限/占用/链接异常跳过，不重放旧操作。
 - 后续发布只到腾讯云和 MicroKeen/Mklink-AI-Probe GitHub，Gitee 与旧 GitHub 保留历史，不上传新附件/标签/索引。AI / Skill / 固件按腾讯云、GitHub 顺序回退，不并发查询；备用 Skill 文件须匹配所选版本、大小、SHA-256。上海服务器直供最新版，COS/Git 存历史；COS 189 GiB 告警、207.9 GiB 停止，无日期截止。见[下载策略](tencent-updates.md)。
 - 跨会话固件联测固定上位机提交并核对 mklink/runtime 模块导入路径；主工作区和全局 editable 入口不自动代表当前任务版本。
 - project-init 是可选离线配置工具；通用工程可显式传型号和文件，直接烧录不依赖初始化。型号或镜像不明确时要求补充输入，不猜测，也不自动迁移已有芯片配置。 ELF 可写范围合并 SHF_WRITE/ALLOC 节及 PF_W 的 PT_LOAD 段，使用 p_vaddr/p_memsz；不凭 AX 或 RAM 地址放宽，不把 Flash 装载镜像当 RAM。已知只读映射不走通用回退。 HPM 四字 Flash 配置按实际 NOR 设置，GUI 可编辑/按器件保存/JSON 导入导出；无默认值时手填，不沿用旧型号。GUI/Python 共用参考表，显式 hpm_flash_cfg 优先于 board，已知默认值也走 flash_cfg；未知显式板名保留旧入口。XPI 控制器基址不等于 BIN 地址，USART ISP 配置独立。JTAG 脱机 OTP 只生成已确认的 hpm_user_otp 配方，读取绑定身份与代次；修改、断开或换设备后重新确认，系统字段只读。

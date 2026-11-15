@@ -74,6 +74,8 @@ const { message: confirmationMessage, confirm: confirmRisk, answer: answerConfir
 const disk = ref<OfflineDiskStatus | null>(null)
 const diskProbe = ref('')
 const diskLoading = ref(false)
+let diskRequestInFlight = false
+let diskForceRefreshPending = false
 let requestedDiskProbe = ''
 let diskPollTimer: ReturnType<typeof setTimeout> | null = null
 let diskPollingEnabled = false
@@ -335,19 +337,26 @@ function targetAction(target: TargetRecord): string {
   return target.installed ? tr('加入算法', 'Add Algorithm') : tr('下载 Pack', 'Download Pack')
 }
 
-async function refreshDisk(): Promise<void> {
-  if (diskLoading.value || operationBusy.value) return
-  diskLoading.value = true
+async function refreshDisk(quiet = false, force = false): Promise<void> {
+  if (operationBusy.value) return
+  if (diskRequestInFlight) {
+    if (force) { diskForceRefreshPending = true; diskLoading.value = true }
+    return
+  }
+  diskRequestInFlight = true
+  diskLoading.value = !quiet || disk.value === null
   const revision = ++diskRequestRevision
+  const requestedProbe = requestedDiskProbe
   try {
-    let status = await offline.getStatus(requestedDiskProbe)
+    let status = await (force ? offline.getStatus(requestedProbe, true) : offline.getStatus(requestedProbe))
+    if (revision !== diskRequestRevision || operationBusy.value) return
     if (requestedDiskProbe && status.probes && !status.probes.some(probe => probe.probe_id === requestedDiskProbe)) {
       requestedDiskProbe = ''
       status = await offline.getStatus()
     }
     if (revision !== diskRequestRevision || operationBusy.value) return
     const previous = disk.value
-    disk.value = status
+    if (JSON.stringify(previous) !== JSON.stringify(status)) disk.value = status
     diskProbe.value = status.probe_id || ''
     if (previous?.probe_id && previous.probe_id !== status.probe_id) {
       preview.value = null
@@ -372,12 +381,20 @@ async function refreshDisk(): Promise<void> {
     notice.value = ''
     disk.value = { available: false, disk_path: null, python_dir: null, flm_dir: null, reason: message(value) }
     diskProbe.value = ''
-  } finally { diskLoading.value = false }
+  } finally {
+    diskRequestInFlight = false
+    diskLoading.value = false
+    if (diskForceRefreshPending) {
+      diskForceRefreshPending = false
+      void refreshDisk(false, true)
+    }
+  }
 }
 
 function selectDiskProbe(event: Event): void {
   requestedDiskProbe = (event.target as HTMLSelectElement).value
-  void refreshDisk()
+  diskRequestRevision++
+  void refreshDisk(false, true)
 }
 
 function startDiskPolling(): void {
@@ -385,7 +402,7 @@ function startDiskPolling(): void {
   diskPollingEnabled = true
   const generation = ++diskPollGeneration
   const run = async () => {
-    await refreshDisk()
+    await refreshDisk(true)
     if (diskPollingEnabled && generation === diskPollGeneration) diskPollTimer = setTimeout(run, 3000)
   }
   void run()
@@ -393,6 +410,7 @@ function startDiskPolling(): void {
 
 function stopDiskPolling(): void {
   diskPollingEnabled = false
+  diskForceRefreshPending = false
   diskPollGeneration++
   diskRequestRevision++
   if (diskPollTimer !== null) clearTimeout(diskPollTimer)
@@ -1083,7 +1101,7 @@ onBeforeUnmount(() => {
       <div><span class="status-label">{{ tr('U 盘', 'USB Drive') }}</span><b :class="disk?.available ? 'ok' : 'bad'">{{ disk?.available ? disk.disk_path : tr('未发现', 'Not found') }}</b></div>
       <div><span class="status-label">{{ tr('脚本', 'Script') }}</span><b>{{ effectiveScriptName }}</b></div>
       <div class="status-actions">
-        <button class="btn" data-testid="offline-refresh-probe" :disabled="operationBusy || diskLoading" @click="refreshDisk">{{ diskLoading ? tr('识别中…', 'Detecting…') : tr('刷新下载器', 'Refresh Probes') }}</button>
+        <button class="btn" data-testid="offline-refresh-probe" :disabled="operationBusy || diskLoading" @click="refreshDisk(false, true)">{{ diskLoading ? tr('识别中…', 'Detecting…') : tr('刷新下载器', 'Refresh Probes') }}</button>
       </div>
     </header>
 

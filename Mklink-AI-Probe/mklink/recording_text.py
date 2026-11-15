@@ -212,6 +212,8 @@ class ManualExport:
         created = False
         try:
             path = Path(recording['path'])
+            from mklink.work_files import capture_directory
+            capture_directory(path.resolve().parent)
             base = re.sub(r'-\d{4,}\.jsonl$', '', str(path))
             if base == str(path) or not recording['parts']:
                 raise ValueError('No closed recording parts available for conversion')

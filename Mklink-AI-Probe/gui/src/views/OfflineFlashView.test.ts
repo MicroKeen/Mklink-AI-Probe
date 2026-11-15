@@ -445,6 +445,56 @@ describe('OfflineFlashView', () => {
     } finally { wrapper.unmount(); vi.useRealTimers() }
   })
 
+  it('discards a poll for the previous probe when the user selects another device', async () => {
+    vi.useFakeTimers()
+    const probes = [{ probe_id: 'a', port: 'COM1' }, { probe_id: 'b', port: 'COM2' }]
+    const first = { available: true, probes, probe_id: 'a', model: 'V4', version: 'V4.7.4' }
+    offlineMocks.getStatus.mockResolvedValue(first)
+    const wrapper = mount(OfflineFlashView)
+    try {
+      await flushPromises()
+      let finish!: (value: unknown) => void
+      offlineMocks.getStatus.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+      await vi.advanceTimersByTimeAsync(3000)
+      await wrapper.get('[data-testid="offline-probe"]').setValue('b')
+      offlineMocks.getStatus.mockResolvedValue({ ...first, probe_id: 'b', model: 'V3', version: 'V3.7.0' })
+      finish({ ...first, probes: [probes[0]] })
+      await flushPromises()
+      expect(offlineMocks.getStatus).toHaveBeenLastCalledWith('b', true)
+      expect(wrapper.get<HTMLSelectElement>('[data-testid="offline-probe"]').element.value).toBe('b')
+      expect(wrapper.text()).toContain('V3.7.0')
+    } finally { wrapper.unmount(); vi.useRealTimers() }
+  })
+  it('polls quietly without overlapping requests and honors an explicit refresh queued during polling', async () => {
+    vi.useFakeTimers()
+    const status = { available: true, probe_id: 'probe-a', model: 'V4', version: 'V4.7.4' }
+    offlineMocks.getStatus.mockResolvedValue(status)
+    const wrapper = mount(OfflineFlashView)
+    try {
+      await flushPromises()
+      let finish!: (value: typeof status) => void
+      offlineMocks.getStatus.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+      await vi.advanceTimersByTimeAsync(3000)
+      expect(offlineMocks.getStatus).toHaveBeenCalledTimes(2)
+      const button = wrapper.get('[data-testid="offline-refresh-probe"]')
+      expect(button.text()).toBe('刷新下载器')
+      expect(button.attributes('disabled')).toBeUndefined()
+      expect(wrapper.get('[data-testid="offline-detected-model"]').text()).toContain('V4.7.4')
+      await vi.advanceTimersByTimeAsync(9000)
+      expect(offlineMocks.getStatus).toHaveBeenCalledTimes(2)
+      await button.trigger('click')
+      expect(button.text()).toBe('识别中…')
+      expect(offlineMocks.getStatus).toHaveBeenCalledTimes(2)
+      finish(status)
+      await flushPromises()
+      expect(offlineMocks.getStatus).toHaveBeenCalledTimes(3)
+      expect(offlineMocks.getStatus).toHaveBeenLastCalledWith('', true)
+      expect(button.text()).toBe('刷新下载器')
+      expect(offlineMocks.deploy).not.toHaveBeenCalled()
+      expect(offlineMocks.trigger).not.toHaveBeenCalled()
+    } finally { wrapper.unmount(); vi.useRealTimers() }
+  })
+
   it('requires an explicit choice among multiple probes and reads only that choice', async () => {
     const probes = [{ probe_id: 'a', port: 'COM1', alias: 'Bench A' }, { probe_id: 'b', port: 'COM2', alias: 'Bench B' }]
     offlineMocks.getStatus.mockImplementation(async probe => probe === 'b'
@@ -455,7 +505,7 @@ describe('OfflineFlashView', () => {
     expect(wrapper.get('[data-testid="offline-model"]').element).toHaveProperty('value', '')
     await wrapper.get('[data-testid="offline-probe"]').setValue('b')
     await flushPromises()
-    expect(offlineMocks.getStatus).toHaveBeenLastCalledWith('b')
+    expect(offlineMocks.getStatus).toHaveBeenLastCalledWith('b', true)
     expect(wrapper.get('[data-testid="offline-model"]').element).toHaveProperty('value', 'V2')
     expect(wrapper.get<HTMLInputElement>('[data-testid="offline-script-name"]').element.value).toBe('offline_download.py')
   })

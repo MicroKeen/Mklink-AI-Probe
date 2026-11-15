@@ -14,6 +14,8 @@ class TrafficRecorder:
         directory = Path(directory).expanduser()
         if not directory.is_absolute() or not directory.is_dir():
             raise ValueError('Choose an existing absolute directory on the backend computer')
+        from mklink.work_files import capture_directory
+        directory = capture_directory(directory)
         self._base = directory / (kind + '-' + datetime.now().strftime('%Y%m%d-%H%M%S-') + uuid.uuid4().hex[:12])
         self._kind, self._part_bytes, self._part_events = kind, part_bytes, part_events
         self._queue_limit, self._queued_bytes = queue_bytes, 0

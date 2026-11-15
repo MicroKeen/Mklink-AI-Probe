@@ -18,6 +18,8 @@ class SuperWatchRecorder:
         directory = Path(directory).expanduser()
         if not directory.is_absolute() or not directory.is_dir():
             raise ValueError('Choose an existing absolute directory on the backend computer')
+        from mklink.work_files import capture_directory
+        directory = capture_directory(directory)
         self._base = directory / ('superwatch-' + datetime.now().strftime('%Y%m%d-%H%M%S-') + uuid.uuid4().hex[:8])
         self._max_values = max_values
         self._queue_limit = queue_bytes

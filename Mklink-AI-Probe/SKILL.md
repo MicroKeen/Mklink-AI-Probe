@@ -21,8 +21,8 @@ description: 使用 MKLink/MicroLink 操作目标 MCU：固件烧录、内存与
 - **占用先查后台**：`runtime_status(probe=...)` 无需连接，查询会话、采集和任务。
   GUI 关闭不等于后台退出，AI 任务完成须 `detach`。占用/失败时读
   [控制权与恢复](references/runtime-recovery.md)。
-- 脚本、日志、报告写入用户指定的非系统盘目录，默认目标项目 `.mklink/`。
-  项目在系统盘或缺失先询问；不写 Skill、AI 客户端、桌面或系统临时目录。
+- 文件写入用户指定的非系统盘，默认目标项目 `.mklink/`；显式传绝对 `project_root`。
+  工程缺失/在系统盘先询问；不写 Skill/上位机安装目录。
   见[工作目录](references/work-files.md)，报告路径。
 
 ## 不可绕过的设备边界

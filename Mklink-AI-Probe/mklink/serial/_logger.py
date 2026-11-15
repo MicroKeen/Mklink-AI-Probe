@@ -37,6 +37,8 @@ class FileLogger:
         with self._lock:
             if self._file is not None:
                 raise RuntimeError('Log is already open')
+            from mklink.work_files import capture_directory
+            capture_directory(self._path.resolve().parent)
             self._file = open(self._path, "x" if exclusive else "w", encoding="utf-8", newline="")
             if self._format == "csv":
                 self._csv_header_written = False

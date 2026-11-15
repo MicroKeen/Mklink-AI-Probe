@@ -364,6 +364,9 @@ def build_server():
         Other target sessions are retired and must explicitly reconnect; GUI pages follow.
         Conflicting project/symbol settings still require explicit reconfiguration.
         The default scope connects the USB probe without requiring a target MCU.
+        For a new backend pass the target project's absolute project_root. Do not
+        use the Skill/desktop install directory as the project; captures belong
+        in the target project's .mklink/logs, with an explicit recording directory.
         Relay firmware_compatibility.warnings and operation firmware_warning to the user.
         device_status also returns firmware_update from a delayed cloud check of the
         cached handshake version. If status is available, relay current_version and

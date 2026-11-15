@@ -596,6 +596,10 @@ def create_offline_download_router(
 ) -> APIRouter:
     router = APIRouter(prefix="/api/offline-download", tags=["offline-download"])
     background_trigger_tasks: set[asyncio.Task] = set()
+    # Only presentation metadata is cached. Volume identity is still verified
+    # on each status check and independently before every deployment.
+    version_cache = {}
+    version_lock = asyncio.Lock()
     from mklink.hpm_isp import CAPABILITY_COMMAND, require_capability, script_metadata, trigger_result
 
     def _resources(isp_job=None):
@@ -808,7 +812,7 @@ def create_offline_download_router(
             raise HTTPException(422, str(error)) from error
 
     @router.get("/status")
-    async def status(request: Request, probe: str | None = None) -> object:
+    async def status(request: Request, probe: str | None = None, refresh: bool = False) -> object:
         from mklink.discovery import find_microkeen_disk
         runtime = getattr(request.app.state, 'shared_runtime', None)
         choices = {}
@@ -833,13 +837,27 @@ def create_offline_download_router(
             else:
                 disk = await asyncio.to_thread(find_microkeen_disk)
         except (ConnectionError, RuntimeError) as error:
+            version_cache.clear()
             return {"available": False, "disk_path": None, "python_dir": None,
                     "flm_dir": None, "reason": str(error), **choices}
         root = Path(disk) if disk else None
         # Read only the identity-verified application volume. Passive discovery
         # must not open CDC, interrupt an IDE, or connect/reset the target.
         from mklink.firmware_check import read_microkeen_version
-        version = await asyncio.to_thread(read_microkeen_version, root) if root else None
+        version = None
+        if root:
+            key = (choices.get('probe_id'), str(root))
+            async with version_lock:
+                cached = version_cache.get(key)
+                if refresh or cached is None or time.monotonic() >= cached[0]:
+                    version = await asyncio.to_thread(read_microkeen_version, root)
+                    if len(version_cache) >= 32:
+                        version_cache.clear()
+                    version_cache[key] = (time.monotonic() + (30 if version else 3), version)
+                else:
+                    version = cached[1]
+        else:
+            version_cache.clear()
         return {
             "model": f"V{version.major}" if version and version.major in (2, 3, 4) else None,
             "version": str(version) if version else None,
