@@ -264,31 +264,31 @@ onUnmounted(() => { disposed = true; clearTimeout(valueTimer); if (!providedStat
 </script>
 
 <style scoped>
-.control-panel { position:relative; display:flex; flex-direction:column; min-height:240px; padding:8px; gap:8px; }
-.component-toolbar, .control-widget > header, .component-editor > header { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
-.component-toolbar small { color:var(--muted); font-size:11px; }
+.control-panel { position:relative; display:flex; flex-direction:column; min-height:240px; padding:12px; gap:12px; }
+.component-toolbar, .control-widget > header, .component-editor > header { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.component-toolbar small { color:var(--muted); font-size:12px; }
 .component-grid { min-height:88px; }
 .control-widget { min-width:0; overflow:auto; border:1px solid var(--border); border-radius:6px; background:var(--surface); }
-.control-widget > header { padding:4px 6px; background:var(--bg); }
+.control-widget > header { padding:4px 8px; background:var(--bg); }
 .control-widget strong, .component-editor strong { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; font-size:12px; }
 .is-editing .grid-drag-handle { cursor:grab; }
 .control-widget header button { display:inline-flex; align-items:center; gap:4px; }
-.control-body > button { min-height:34px; text-align:left; padding:6px 10px; }
-.control-body [role=status] { margin:0; font-size:11px; color:var(--muted); }
-.control-body { padding:6px; display:flex; flex-direction:column; gap:6px; }
+.control-body > button { text-align:left; }
+.control-body [role=status] { margin:0; font-size:12px; color:var(--muted); }
+.control-body { padding:8px; display:flex; flex-direction:column; gap:6px; }
 .control-body output { font:600 18px var(--font-mono); white-space:pre-wrap; overflow-wrap:anywhere; }
 button, select, input, textarea { color:var(--fg); background:var(--input-bg); border:1px solid var(--border); border-radius:4px; padding:4px 6px; min-width:0; max-width:100%; box-sizing:border-box; }
 button { cursor:pointer; } button:disabled { opacity:.5; cursor:not-allowed; }
-.binding-error, [role=alert] { color:var(--danger); font-size:11px; overflow-wrap:anywhere; }
+.binding-error, [role=alert] { color:var(--danger); font-size:12px; overflow-wrap:anywhere; }
 .argument-field, .component-editor label { display:flex; flex-direction:column; gap:3px; font-size:12px; margin-bottom:6px; }
 .argument-field textarea { min-height:55px; resize:vertical; }
-.control-result { max-height:160px; overflow:auto; margin:0; white-space:pre-wrap; overflow-wrap:anywhere; font-size:11px; }
+.control-result { max-height:160px; overflow:auto; margin:0; white-space:pre-wrap; overflow-wrap:anywhere; font-size:12px; }
 .empty-controls { grid-column:1/-1; color:var(--muted); font-size:12px; }
 .component-editor { padding:0; }
 .component-editor textarea { min-height:65px; }.component-editor > button { margin-right:6px; }
 .component-geometry { display:flex; gap:6px; }.component-geometry label { flex:1; min-width:0; }
 .control-operation-log { border-top:1px solid var(--border); padding:12px 4px; font-size:12px; }
 .control-operation-log h4 { margin:0 0 8px; font-size:12px; color:var(--muted); }.control-operation-log summary { cursor:pointer; padding:6px 0; }
-.component-editor label { margin-bottom:14px; font-size:13px; }
+.component-editor label { margin-bottom:16px; font-size:14px; gap:8px; }
 @media(max-width:700px) { .component-grid { display:flex; flex-direction:column; height:auto!important; flex-shrink:0; gap:8px; }.component-grid > .grid-stack-item { position:relative!important; inset:auto!important; width:100%!important; height:120px!important; flex-shrink:0; }.control-widget { inset:0!important; }.component-grid :deep(.ui-resizable-handle) { display:none; } }
 </style>

@@ -127,13 +127,13 @@ defineExpose({ catalog, read, execute, restore })
 </script>
 
 <style scoped>
-.capability-panel { display:flex; flex-direction:column; gap:8px; padding:10px; min-width:0; overflow:auto; }
-label { display:flex; flex-direction:column; gap:4px; font-size:12px; } input,select,textarea { min-width:0; width:100%; box-sizing:border-box; color:var(--fg); background:var(--input-bg); border:1px solid var(--border); border-radius:4px; padding:6px; }
-textarea { min-height:70px; resize:vertical; } p { margin:0; font-size:12px; overflow-wrap:anywhere; }
-form { display:flex; flex-direction:column; gap:10px; } h3,h4 { margin:4px 0; } h3 { font-size:15px; } h4 { font-size:12px; color:var(--muted); }
-.operation-result,.operation-history { border-top:1px solid var(--border); padding-top:10px; }
+.capability-panel { display:flex; flex-direction:column; gap:12px; padding:12px; min-width:0; overflow:auto; }
+label { display:flex; flex-direction:column; gap:4px; font-size:14px; } input,select,textarea { min-width:0; width:100%; box-sizing:border-box; color:var(--fg); background:var(--input-bg); border:1px solid var(--border); border-radius:4px; padding:6px; }
+textarea { min-height:70px; resize:vertical; } p { margin:0; font-size:14px; overflow-wrap:anywhere; }
+form { display:flex; flex-direction:column; gap:10px; } h3,h4 { margin:4px 0; } h3 { font-size:15px; } h4 { font-size:14px; color:var(--muted); }
+.operation-result,.operation-history { border-top:1px solid var(--border); padding-top:12px; }
 .operation-status { padding:6px 8px; border-radius:5px; background:var(--input-bg); }
 .operation-status[data-state="failed"], [role="alert"] { color:var(--danger-color, #dc4555); }
-ol { list-style:none; margin:0; padding:0; max-height:180px; overflow:auto; } li { display:flex; flex-wrap:wrap; gap:8px; padding:5px 0; font-size:11px; } li p { flex-basis:100%; } time { color:var(--muted); } summary { cursor:pointer; }
+ol { list-style:none; margin:0; padding:0; max-height:180px; overflow:auto; } li { display:flex; flex-wrap:wrap; gap:8px; padding:5px 0; font-size:12px; } li p { flex-basis:100%; } time { color:var(--muted); } summary { cursor:pointer; }
 button { color:var(--fg); background:var(--input-bg); border:1px solid var(--border); border-radius:4px; padding:7px 10px; cursor:pointer; } button:disabled { opacity:.5; cursor:default; }
 </style>

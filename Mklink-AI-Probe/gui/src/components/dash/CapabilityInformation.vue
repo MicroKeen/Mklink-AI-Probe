@@ -23,6 +23,6 @@ const columns = computed(() => Array.isArray(props.value) && props.value.length 
   ? [...new Set(props.value.slice(0, 40).flatMap(row => Object.keys(row)))].slice(0, 12) : [])
 </script>
 <style scoped>
-.operation-information { overflow:auto; min-width:0; font-size:12px; } dl { display:grid; grid-template-columns:minmax(80px, 1fr) minmax(0, 3fr); gap:8px 12px; margin:0; }
-dt { color:var(--muted); } dd { margin:0; overflow-wrap:anywhere; } table { border-collapse:collapse; width:100%; } th,td { padding:7px; border-bottom:1px solid var(--border); text-align:left; overflow-wrap:anywhere; } p { margin:4px 0; } ul { padding-left:20px; } summary { cursor:pointer; }
+.operation-information { overflow:auto; min-width:0; font-size:13px; } dl { display:grid; grid-template-columns:minmax(80px, 1fr) minmax(0, 3fr); gap:8px 12px; margin:0; }
+dt { color:var(--muted); } dd { margin:0; overflow-wrap:anywhere; } table { border-collapse:collapse; width:100%; } th,td { padding:8px; border-bottom:1px solid var(--border); text-align:left; overflow-wrap:anywhere; } p { margin:4px 0; } ul { padding-left:20px; } summary { cursor:pointer; }
 </style>

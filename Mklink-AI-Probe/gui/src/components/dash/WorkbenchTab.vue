@@ -67,6 +67,7 @@ import { sameBinding } from '../../lib/workbenchBindings'
 import { useWatchWorkspace } from '../../composables/useWatchWorkspace'
 import WorkbenchPanel from './WorkbenchPanel.vue'
 import WorkbenchSettingsDialog from '../WorkbenchSettingsDialog.vue'
+import '../../assets/workbench.css'
 import { GripVertical, SlidersHorizontal, X, LayoutDashboard } from '@lucide/vue'
 import { useWorkbenchGrid } from '../../composables/useWorkbenchGrid'
 import { layoutEditingKey } from '../../lib/workbenchControls'
@@ -288,15 +289,15 @@ defineExpose({ catalog, read, execute, entries, load })
 <style scoped>
 .workbench { display:flex; flex-direction:column; min-height:500px; gap:12px; padding:12px; overflow:auto; }
 .workbench-toolbar,.workbench-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-.workbench-toolbar { justify-content:space-between; }.workbench-toolbar small { display:block; color:var(--muted); font-size:11px; margin-top:4px; }
+.workbench-toolbar { justify-content:space-between; }.workbench-toolbar small { display:block; color:var(--muted); font-size:12px; margin-top:4px; }
 .workbench-grid { min-height:350px; }
 .workbench-card { display:flex; flex-direction:column; min-width:0; min-height:0; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius,8px); overflow:hidden; }
-.workbench-card-header { display:flex; align-items:center; flex:none; gap:7px; padding:6px 10px; min-height:30px; background:var(--bg); border-bottom:1px solid var(--border); } .is-editing .workbench-card-header { cursor:grab; }
-.workbench-card-header strong { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; }.workbench-card-header button { display:inline-flex; align-items:center; justify-content:center; gap:5px; min-height:28px; min-width:28px; padding:4px 7px; background:transparent; color:var(--fg); border:1px solid var(--border); border-radius:4px; cursor:pointer; }
-.dock-tabs { display:flex; flex:none; gap:4px; padding:4px; overflow:auto; border-bottom:1px solid var(--border); }.dock-tabs button { border:1px solid var(--border); border-radius:4px; padding:4px 8px; color:var(--fg); background:var(--surface); white-space:nowrap; cursor:pointer; }.dock-tabs button[aria-selected=true] { border-color:var(--accent); color:var(--accent); }
-.panel-kind { color:var(--muted); font-size:10px; }.drag-handle { color:var(--muted); }
+.workbench-card-header { display:flex; align-items:center; flex:none; gap:8px; padding:8px 12px; min-height:44px; background:var(--bg); border-bottom:1px solid var(--border); } .is-editing .workbench-card-header { cursor:grab; }
+.workbench-card-header strong { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14px; }.workbench-card-header button { display:inline-flex; align-items:center; justify-content:center; gap:5px; min-height:28px; min-width:28px; padding:4px 7px; background:transparent; color:var(--fg); border:1px solid var(--border); border-radius:4px; cursor:pointer; }
+.dock-tabs { display:flex; flex:none; gap:4px; padding:8px 12px; overflow:auto; border-bottom:1px solid var(--border); }.dock-tabs button { border:1px solid var(--border); border-radius:4px; padding:4px 8px; color:var(--fg); background:var(--surface); white-space:nowrap; cursor:pointer; }.dock-tabs button[aria-selected=true] { border-color:var(--accent); color:var(--accent); }
+.panel-kind { color:var(--muted); font-size:12px; }.drag-handle { color:var(--muted); }
 .workbench-card-content { position:relative; flex:1; min-height:0; overflow:auto; display:flex; flex-direction:column; }.workbench-card-content :deep(.symbol-panel) { width:100%; min-width:0; max-width:none; flex:1; }.workbench-card-content :deep(.waveform-viewer) { flex:1; min-height:240px; }.workbench-card-content :deep(.rtt-channel-panel) { flex:1; min-height:0; }
-.panel-editor { padding:0; }.panel-editor label { display:flex; flex-direction:column; gap:3px; font-size:13px; margin-bottom:14px; }.panel-editor input { width:100%; min-width:0; box-sizing:border-box; }.geometry-fields { display:flex; gap:8px; }.geometry-fields label { flex:1; }.panel-editor button { margin-right:6px; }
+.panel-editor { padding:0; }.panel-editor label { display:flex; flex-direction:column; gap:8px; font-size:14px; margin-bottom:16px; }.panel-editor input { width:100%; min-width:0; box-sizing:border-box; }.geometry-fields { display:flex; gap:8px; }.geometry-fields label { flex:1; }.panel-editor button { margin-right:6px; }
 .workbench-error { color:var(--danger,#e76b6b); margin:0; }.workbench-notice { font-size:12px; color:var(--muted); margin:0; }.workbench-empty { grid-column:1/-1; color:var(--muted); padding:36px; text-align:center; }
 .workbench-actions > button { display:inline-flex; gap:6px; align-items:center; }
 .workbench-card :is(button,input,select):focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
