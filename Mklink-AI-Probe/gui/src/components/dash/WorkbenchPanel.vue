@@ -7,6 +7,7 @@
   <RttChannelPanel v-else-if="panel.type === 'rtt'" ref="surface" :panel-id="panel.id" :channel="panel.source.channel || 0"
     :running="rtt.running === true" :send-enabled="rtt.running === true && !rtt.runtime_error && rtt.down_buffers?.some((item: any) => item.channel === (panel.source.channel || 0) && item.active) === true" :session="rtt.session" :channel-status="rtt.channel_status?.[String(panel.source.channel || 0)]" />
   <ControlPanel v-else-if="panel.type === 'controls'" ref="surface" :panel-id="panel.id" :widgets="panel.widgets || []" :active="active" :commit-widgets="commitWidgets" @transfer="event => emit('transfer', event)" />
+  <CapabilityPanel v-else-if="panel.type === 'capability'" ref="surface" :panel-id="panel.id" />
   <SerialPortPanel v-else ref="surface" :panel-id="panel.id" :port="panel.source.port || ''" />
 </template>
 
@@ -19,6 +20,7 @@ import SymbolVariablePanel from './SymbolVariablePanel.vue'
 import RttChannelPanel from './RttChannelPanel.vue'
 import SerialPortPanel from './SerialPortPanel.vue'
 import ControlPanel from './ControlPanel.vue'
+import CapabilityPanel from './CapabilityPanel.vue'
 import { registerControlRenderer, type ControlWidget } from '../../lib/workbenchControls'
 import WorkbenchIndicator from './WorkbenchIndicator.vue'
 registerControlRenderer('indicator', markRaw(WorkbenchIndicator))

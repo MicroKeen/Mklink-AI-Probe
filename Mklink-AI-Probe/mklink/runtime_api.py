@@ -455,7 +455,11 @@ class RuntimeControl:
         if not isinstance(capability, str) or capability not in CAPABILITIES:
             raise HTTPException(422, 'Unsupported shared capability; no direct CDC fallback')
         self.validate_session(session_id, target=capability not in UART_CAPABILITIES)
-        arguments = body.get('arguments', {})
+        return session_id, capability, self.prepare_arguments(capability, body.get('arguments', {}))
+
+    def prepare_arguments(self, capability, arguments):
+        if not isinstance(capability, str) or capability not in CAPABILITIES:
+            raise HTTPException(422, 'Unsupported shared capability; no direct CDC fallback')
         argument_limit = (256 * 1024 if capability == 'gui_frontend_save_layout' else
                           64 * 1024 if capability in {'gui_frontend_call', 'gui_frontend_reply'} else
                           48 * 1024 if capability == 'flush_memory' else 16 * 1024)
@@ -463,15 +467,19 @@ class RuntimeControl:
             argument_limit = 1024 * 1024
         if not isinstance(arguments, dict) or len(json.dumps(arguments)) > argument_limit:
             raise HTTPException(422, f'Arguments must be an object of at most {argument_limit // 1024} KiB')
-        return session_id, capability, validate_arguments(capability, arguments)
+        return validate_arguments(capability, arguments)
 
-    async def invoke(self, method, path, arguments=None, *, session_id=None, sleep_notice=None):
+    async def invoke(self, method, path, arguments=None, *, session_id=None, sleep_notice=None, frontend_session=None, request_id=None):
         if (method == 'POST' and path == '/api/device/read-memory' and session_id
                 and callable(getattr(self.app.state, 'shared_memory_read', None))):
             from mklink.runtime_memory import MemoryCall
             return await MemoryCall(self, arguments, session_id, sleep_notice).run()
         import httpx
         headers = {"X-Auth-Token": self.info["token"]}
+        if frontend_session:
+            headers['X-MKLink-Frontend-Session'] = frontend_session
+        if request_id:
+            headers['X-MKLink-Request-Id'] = request_id
         if session_id:
             headers["X-MKLink-Session"] = session_id
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=self.app),
@@ -481,7 +489,11 @@ class RuntimeControl:
                                    'request_id': arguments['request_id']}}
                 headers['X-MKLink-Request-Id'] = arguments['request_id']
             else:
-                kwargs = {"params" if method == "GET" or path == '/api/symbols/reload-sources' else "json": arguments or {}}
+                query = method in ('GET', 'DELETE') or path == '/api/symbols/reload-sources'
+                kwargs = {"params" if query else "json": arguments or {}}
+                if path in ('/api/dash/rtt/traffic-recording/stop', '/api/dash/serial/traffic-recording/stop'):
+                    kwargs = {'params': {key: value for key, value in (arguments or {}).items() if key == 'channel'},
+                              'json': {key: value for key, value in (arguments or {}).items() if key != 'channel'}}
             response = await client.request(method, path, headers=headers, **kwargs)
         if response.status_code >= 400:
             raise HTTPException(response.status_code, response.json())

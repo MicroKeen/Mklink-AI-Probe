@@ -52,6 +52,32 @@ python -m mklink runtime call gui_frontend_read --runtime-id <后台ID> --argume
 不能伪造设备结果。设备读写、采集、发送、文件及供电仍走原业务权限与本次用户授权。
 GUI 附着不表示自动连接或授权硬件操作，前端回执也不代替后台任务终态。
 
+## 完整能力目录与能力面板
+
+先调用 `gui_frontend_capabilities` 获取当前后台的能力目录（名称、原入口、参数、契约版本和可用状态），
+不要把 MCP 包装函数名或 CLI 参数原样当作 HTTP 参数。自由面板的 `panel.add` 支持
+`{"type":"capability","title":"调试能力"}`。从新面板的实际动作目录取 `capability.select`，
+选择后回读 `selected`，再调用公布的 `mklink.<能力名>`，参数是 `arguments_json` 字符串。
+选择本身不执行；界面上的执行按钮和可绑定按钮/表单共用同一动作。
+
+例如先选择 `systemview_decode`，再用 `{"arguments_json":"{\"hex_bytes\":\"00000000000000000000\"}"}`
+执行离线解码。设备控制仍需明确目标及本次授权；`job_start`、`flash_job_start`、`offline_deploy`
+使用稳定 `request_id` 和原业务确认。任务的 `running/queued` 不等于成功，应使用 `job_status`
+或 `flash_job` 查询原 ID；结果为 `unknown` 时禁止重新提交。选择变化或参数契约变化会使旧绑定失效。
+
+单次面板参数上限 32768 字符，还受原能力字节上限约束；大文件沿用原上传/日志路径。
+面板显示与回执只摘要大结果，“保存结果 JSON”保存该次完整结果，不重新执行。
+布局只恢复能力选择，不保存输入草稿、执行结果，也不连接设备或开始采集。
+
+需要绘图时使用 `watch` 面板的 `waveform.replay.load`：实际记录优先传后端绝对 `path`；
+短 CSV/JSONL 可传 `filename` 和 `text`。回放不发送数据到探针。`recording.start/stop`
+及 `superwatch_recording_export` 复用原记录器；文件关闭和转换完成须分别检查。
+
+文件导入/下载、连续流、宿主安装配置、源码集成与远程站点管理不经任意 shell/URL 面板执行。
+沿用 `gui_control` 的原页面/原控件，或使用面板 Agent 请求，由当前会话读取可信上下文、
+调用原 CLI/工具，再通过 `gui_frontend_reply` 回写真实结果。此类入口尚不是全部可直接绑定的子面板动作。
+完整入口与覆盖边界由维护侧矩阵生成器核对；不能仅凭“目录已收录”宣称真机验收通过。
+
 宿主直接对话无需先在页面发问；页面 Agent 请求用 `gui_frontend_intents/intent`
 读取可信上下文，再按原 `request_id/revision` 用 `gui_frontend_reply` 回复。
 语音识别与工具调用由宿主提供，本产品不负责唤醒已结束的 Agent。

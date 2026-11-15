@@ -273,4 +273,6 @@ def install_frontend(app, control):
         return public_intent(storage(reply_intent, broker.target['project_root'], await body(request, 64 * 1024), broker.session_id, broker.clock()))
 
     app.router.routes.insert(0, Mount('/api/runtime/frontend', app=api))
+    from .frontend_capabilities import install_capability_panel
+    install_capability_panel(app, control, broker, body)
     return broker

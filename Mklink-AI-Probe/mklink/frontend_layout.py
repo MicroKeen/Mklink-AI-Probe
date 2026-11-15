@@ -13,7 +13,7 @@ from .watch_preferences import _LOCK, PreferencesConflict
 MAX_BYTES = 256 * 1024
 RESERVED_PANEL_IDS = frozenset({'dashboard', 'superwatch', 'workbench', 'SuperWatch', 'VOFA'})
 UNSAFE_PROPERTIES = frozenset({'__proto__', 'prototype', 'constructor'})
-PANEL_MINIMUMS = {'watch': (4, 4), 'variables': (3, 4), 'rtt': (3, 3), 'serial': (3, 3), 'controls': (4, 3)}
+PANEL_MINIMUMS = {'watch': (4, 4), 'variables': (3, 4), 'rtt': (3, 3), 'serial': (3, 3), 'controls': (4, 3), 'capability': (4, 4)}
 
 
 def validate_component_manifest(manifest):
@@ -137,7 +137,7 @@ def normalize_layout(value):
                 message='Invalid, reserved or duplicate panel ID')
         ids.add(panel['id'])
         require(isinstance(panel['title'], str) and len(panel['title']) <= 200)
-        require(panel['type'] in (('watch', 'variables', 'rtt', 'serial', 'controls') if version == 2
+        require(panel['type'] in (('watch', 'variables', 'rtt', 'serial', 'controls', 'capability') if version == 2
                                  else ('watch', 'variables', 'rtt', 'serial')), message='Unsupported panel type')
         require(panel['type'] == 'controls' or 'widgets' not in panel,
                 message='Only control panels may contain components')
@@ -156,6 +156,8 @@ def normalize_layout(value):
             keys(source, {'port'})
             require(isinstance(source['port'], str) and len(source['port']) <= 256
                     and not any(ord(c) < 32 for c in source['port']), message='Invalid UART port')
+        elif panel['type'] == 'capability':
+            keys(source, set())
         else:
             keys(source, set())
             require(isinstance(panel.get('widgets'), list) and len(panel['widgets']) <= 32,

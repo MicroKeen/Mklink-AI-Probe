@@ -2,12 +2,12 @@ import { interaction, objectSchema, type JsonObject } from './frontendControl'
 import type { WatchWorkspace } from '../composables/useWatchWorkspace'
 import { validateWidgets, type ControlWidget } from './workbenchControls'
 
-export type PanelType = 'watch' | 'variables' | 'rtt' | 'serial' | 'controls'
+export type PanelType = 'watch' | 'variables' | 'rtt' | 'serial' | 'controls' | 'capability'
 export interface WorkbenchPanel { id: string; type: PanelType; title: string; source: { signals?: string[]; channel?: number; port?: string }; x: number; y: number; w: number; h: number; view?: JsonObject; widgets?: ControlWidget[] }
 export interface DockGroup { id: string; panels: string[]; active: string }
 export interface WorkbenchLayout { version: 1 | 2; revision: number; panels: WorkbenchPanel[]; docks?: DockGroup[] }
-export const panelTypes: PanelType[] = ['watch', 'variables', 'rtt', 'serial', 'controls']
-export const panelMinimum = { watch: { w: 4, h: 4 }, variables: { w: 3, h: 4 }, rtt: { w: 3, h: 3 }, serial: { w: 3, h: 3 }, controls: { w: 4, h: 3 } }
+export const panelTypes: PanelType[] = ['watch', 'variables', 'rtt', 'serial', 'controls', 'capability']
+export const panelMinimum = { watch: { w: 4, h: 4 }, variables: { w: 3, h: 4 }, rtt: { w: 3, h: 3 }, serial: { w: 3, h: 3 }, controls: { w: 4, h: 3 }, capability: { w: 4, h: 4 } }
 const reservedIds = new Set(['dashboard', 'superwatch', 'workbench', 'SuperWatch', 'VOFA'])
 export const textSchema = { type: 'string', maxLength: 200 }
 export const signalsSchema = { type: 'array', items: { type: 'string', maxLength: 512 }, maxItems: 500 }
@@ -19,7 +19,7 @@ export const panelInputSchema = objectSchema({ type: { type: 'string', enum: pan
   signals: signalsSchema, channel: { type: 'integer', minimum: 0, maximum: 255 }, port: { type: 'string', maxLength: 256 } }, ['type', 'title'])
 
 export function panelSource(type: PanelType, args: JsonObject): WorkbenchPanel['source'] {
-  if (type === 'controls') return {}
+  if (type === 'controls' || type === 'capability') return {}
   if (type === 'watch' || type === 'variables') {
     const signals: string[] = args.signals || []
     if (signals.some(name => !name || /[\x00-\x1f]/.test(name)) || new Set(signals).size !== signals.length) throw new Error('Signal paths must be distinct and nonempty')
@@ -88,9 +88,9 @@ export function validateLayout(value: WorkbenchLayout): WorkbenchLayout {
     if (!panel || !/^[a-zA-Z0-9_-]{1,80}$/.test(panel.id) || ids.has(panel.id) || reservedIds.has(panel.id) || !panelTypes.includes(panel.type) || typeof panel.title !== 'string' || panel.title.length > 200) throw new Error('Invalid panel identity')
     ids.add(panel.id)
     const source = panel.source
-    if (value.version === 1 && panel.type === 'controls') throw new Error('Controls require layout version 2')
+    if (value.version === 1 && ['controls', 'capability'].includes(panel.type)) throw new Error('Controls and capabilities require layout version 2')
     const properties = panel.type === 'watch' || panel.type === 'variables' ? { signals: signalsSchema }
-      : panel.type === 'rtt' ? { channel: { type: 'integer', minimum: 0, maximum: 255 } } : panel.type === 'controls' ? {} : { port: { type: 'string', maxLength: 256 } }
+      : panel.type === 'rtt' ? { channel: { type: 'integer', minimum: 0, maximum: 255 } } : ['controls', 'capability'].includes(panel.type) ? {} : { port: { type: 'string', maxLength: 256 } }
     interaction.validateArgs(source, objectSchema(properties))
     panelSource(panel.type, source)
     const { x, y, w, h } = panel

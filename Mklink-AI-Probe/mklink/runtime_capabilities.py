@@ -8,6 +8,7 @@ CAPABILITIES = {
     'gui_windows': ('GET', '/api/runtime/control/windows'),
     'gui_present': ('POST', '/api/runtime/control/present'),
     'gui_frontend_pages': ('GET', '/api/runtime/frontend/pages'),
+    'gui_frontend_capabilities': ('GET', '/api/runtime/capabilities'),
     'gui_frontend_read': ('GET', '/api/runtime/frontend/read'),
     'gui_frontend_call': ('POST', '/api/runtime/frontend/call'),
     'gui_frontend_receipt': ('GET', '/api/runtime/frontend/receipt'),
@@ -210,7 +211,7 @@ def is_uart_path(path: str) -> bool:
 
 UART_CAPABILITIES = frozenset(name for name, (_, path) in CAPABILITIES.items() if is_uart_path(path)) | {
     'gui_windows', 'gui_present', 'gui_action', 'gui_snapshot', 'gui_frontend_pages', 'gui_frontend_read', 'gui_frontend_call', 'gui_frontend_receipt',
-    'gui_frontend_layout', 'gui_frontend_save_layout', 'gui_frontend_intents', 'gui_frontend_intent', 'gui_frontend_reply',
+    'gui_frontend_layout', 'gui_frontend_save_layout', 'gui_frontend_intents', 'gui_frontend_intent', 'gui_frontend_reply', 'gui_frontend_capabilities',
 }
 
 

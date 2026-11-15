@@ -64,7 +64,7 @@ const props = withDefaults(defineProps<{ deviceConnected: boolean; symbolLoaded:
 const controlState = createControlState()
 provide(controlStateKey, controlState)
 const emit = defineEmits<{ intent: [panelId: string] }>()
-const labels = { watch: 'SuperWatch', variables: tr('变量', 'Variables'), rtt: 'RTT', serial: tr('串口', 'Serial'), controls: tr('控制面板', 'Controls') }
+const labels = { watch: 'SuperWatch', variables: tr('变量', 'Variables'), rtt: 'RTT', serial: tr('串口', 'Serial'), controls: tr('控制面板', 'Controls'), capability: tr('MKLink 能力', 'MKLink capability') }
 const layout = ref<WorkbenchLayout>({ version: 2, revision: 0, panels: [], docks: [] })
 const restoreGeneration = ref(0)
 const loading = ref(false), saving = ref(false), error = ref(''), notice = ref(''), reloadPrompt = ref(false)
@@ -188,7 +188,7 @@ function configure(id: string, args: JsonObject) {
 }
 function applyEdit(panel: Panel) {
   try {
-    const args = { title: draft.title, ...(panel.type === 'rtt' ? { channel: draft.channel } : panel.type === 'serial' ? { port: draft.port } : panel.type === 'controls' ? {} : { signals: draft.signals.split(',').map(value => value.trim()).filter(Boolean) }) }
+    const args = { title: draft.title, ...(panel.type === 'rtt' ? { channel: draft.channel } : panel.type === 'serial' ? { port: draft.port } : ['controls', 'capability'].includes(panel.type) ? {} : { signals: draft.signals.split(',').map(value => value.trim()).filter(Boolean) }) }
     interaction.validateArgs({ ...args, type: panel.type }, panelInputSchema)
     change(layout => {
       moveWindow(layout, panel.id, { x: draft.x, y: draft.y, w: draft.w, h: draft.h })
