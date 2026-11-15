@@ -1,20 +1,20 @@
 {
   "schema": "mklink-firmware-v1",
-  "published_at": "2026-11-14T17:12:23.354909+00:00",
+  "published_at": "2026-11-15T15:33:21.620325+00:00",
   "firmwares": [
     {
-      "name": "MicroLink_V2.9.4.rbl",
+      "name": "MicroLink_V2.9.5.rbl",
       "family": "microlink",
       "model": "V2",
       "format": "rbl",
-      "version": "V2.9.4",
-      "size": 368944,
-      "sha256": "3751d7f3ca9438c40f2002ebb3a91cc596fc1b7c7d8b66a8ea5a53689d3c9ead",
-      "rbl_payload_bytes": 368848,
+      "version": "V2.9.5",
+      "size": 370124,
+      "sha256": "45dc34fc9dff29ed7904d33c74ae2fe850284d2c1624c176e18738004fbf1241",
+      "rbl_payload_bytes": 370028,
       "urls": {
-        "github": "https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/firmware-assets/MicroLink_V2.9.4.rbl"
+        "github": "https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/firmware-assets/MicroLink_V2.9.5.rbl"
       },
-      "build_id": "2026-11-13T16:05:31"
+      "build_id": "2026-11-15T21:39:19"
     }
   ]
 }
