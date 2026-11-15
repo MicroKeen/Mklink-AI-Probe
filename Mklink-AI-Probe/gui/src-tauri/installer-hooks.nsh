@@ -1,5 +1,6 @@
 !include "${__FILEDIR__}\installer-file-check.nsh"
 !include "${__FILEDIR__}\installer-metadata.nsh"
+!include "${__FILEDIR__}\installer-location.nsh"
 
 ; .onInit has restored the installed directory before MUI initializes its UI.
 ; Check before Tauri's maintenance page can launch an OLD uninstaller, whose
@@ -7,23 +8,25 @@
 ; the check for silent /UPDATE and the final directory selected by the user.
 !define MUI_CUSTOMFUNCTION_GUIINIT MklinkCheckBeforeMaintenance
 Function MklinkCheckBeforeMaintenance
+  Call MklinkResolveInstallLocation
   Push $0
-  Push $INSTDIR
-  ; This product key is also used by Tauri's RestorePreviousInstallLocation.
-  ReadRegStr $0 SHCTX "Software\microkeen\Mklink AI Probe" ""
-  ${If} $0 != ""
-    StrCpy $INSTDIR $0
+  ${If} ${FileExists} "$INSTDIR\mklink-ai-probe.exe"
     Call MklinkWaitForUpgradeFiles
   ${EndIf}
-  Pop $INSTDIR
   Pop $0
 FunctionEnd
 
 ; Installation stays in the current user's context. Device registry changes
 ; are performed only by an explicit Settings action through the elevated helper.
 Var MklinkLegacyInstallDir
+Var MklinkShortcutFindHandle
+Var MklinkShortcutName
 
 !macro NSIS_HOOK_PREINSTALL
+  ; GUIINIT is not called in silent mode. Resolve before replacing any files,
+  ; and refresh OUTDIR because Tauri set it before invoking this hook.
+  Call MklinkResolveInstallLocation
+  SetOutPath "$INSTDIR"
   Call MklinkWaitForUpgradeFiles
   Call MklinkCleanDistributionMetadata
   ; Tauri owns uninstall/reinstall. In /UPDATE mode it deliberately overwrites
@@ -31,10 +34,7 @@ Var MklinkLegacyInstallDir
   ; file extraction and deletes shortcuts which /UPDATE will not recreate.
   ; Keep other legacy files/registration; only our distribution metadata is
   ; removed above, before the new payload restores its current metadata.
-  StrCpy $MklinkLegacyInstallDir ""
-  ${If} $UpdateMode = 1
-    ReadRegStr $MklinkLegacyInstallDir HKCU "${MANUPRODUCTKEY}" ""
-  ${EndIf}
+  StrCpy $MklinkLegacyInstallDir $MklinkPreviousUserDir
 !macroend
 
 !macro MKLINK_RETARGET_LEGACY_SHORTCUT SHORTCUT
@@ -60,14 +60,21 @@ Var MklinkLegacyInstallDir
     DetailPrint "MKLink: task history checked; invalid records were backed up before initialization."
   ${EndIf}
 
-  ; Preserve existing current-user shortcuts when /UPDATE changes the location.
+  ; Preserve existing current-user shortcuts when repair changes the location.
   ; Only retarget shortcuts which still point to this product's previous path.
-  ${If} $UpdateMode = 1
-  ${AndIf} $MklinkLegacyInstallDir != ""
+  ${If} $MklinkLegacyInstallDir != ""
   ${AndIf} $MklinkLegacyInstallDir != $INSTDIR
     SetShellVarContext current
     !insertmacro MKLINK_RETARGET_LEGACY_SHORTCUT "$DESKTOP\${PRODUCTNAME}.lnk"
     !insertmacro MKLINK_RETARGET_LEGACY_SHORTCUT "$SMPROGRAMS\${PRODUCTNAME}.lnk"
+    ; Existing pins may still refer to the accidental per-user installation.
+    ; Tauri's shortcut helpers overwrite $0-$3. Keep enumeration in named vars.
+    FindFirst $MklinkShortcutFindHandle $MklinkShortcutName "$APPDATA\Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar\*.lnk"
+    ${DoWhile} $MklinkShortcutName != ""
+      !insertmacro MKLINK_RETARGET_LEGACY_SHORTCUT "$APPDATA\Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar\$MklinkShortcutName"
+      FindNext $MklinkShortcutFindHandle $MklinkShortcutName
+    ${Loop}
+    FindClose $MklinkShortcutFindHandle
     !insertmacro SetContext
   ${EndIf}
 

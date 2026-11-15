@@ -1322,11 +1322,15 @@ def _cli_modbus_poll(args):
 
 def _cli_modbus_monitor(args):
     from contextlib import nullcontext
+    from pathlib import Path
     from mklink.modbus._monitor import monitor_traffic, validate_monitor
     from mklink.modbus._session import validate_slave
     validate_slave(args.slave)
     validate_monitor(args.interval, args.output_format, args.count)
     # Fail on an invalid log destination before attaching or opening a UART.
+    if args.save:
+        from mklink.work_files import capture_directory
+        capture_directory(Path(args.save).expanduser().resolve().parent)
     with (open(args.save, 'w', encoding='utf-8') if args.save else nullcontext()) as output:
         with _modbus_shared_client(args) as client:
             monitor_traffic(client.call, slave=args.slave, interval=args.interval,

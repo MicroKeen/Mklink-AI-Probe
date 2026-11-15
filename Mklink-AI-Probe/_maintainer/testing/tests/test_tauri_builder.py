@@ -440,7 +440,8 @@ def test_tauri_bundle_installs_per_user_without_automatic_port_naming():
     assert "Exec" not in preinstall
     assert "UninstallString" not in hook
     assert "MKLINK_REMOVE_OLD_INSTALL" not in hook
-    assert 'ReadRegStr $MklinkLegacyInstallDir HKCU "${MANUPRODUCTKEY}" ""' in preinstall
+    assert 'Call MklinkResolveInstallLocation' in preinstall
+    assert 'StrCpy $MklinkLegacyInstallDir $MklinkPreviousUserDir' in preinstall
     assert 'MKLINK_RETARGET_LEGACY_SHORTCUT "$DESKTOP\\${PRODUCTNAME}.lnk"' in hook
     assert 'MKLINK_RETARGET_LEGACY_SHORTCUT "$SMPROGRAMS\\${PRODUCTNAME}.lnk"' in hook
     assert 'IsShortcutTarget "${SHORTCUT}" "$MklinkLegacyInstallDir\\${MAINBINARYNAME}.exe"' in hook

@@ -66,7 +66,7 @@ Function ${PREFIX}MklinkWaitForUpgradeFiles
   ${EndIf}
   DetailPrint "MKLink file is not writable: $MklinkBlockedFile (Windows error $MklinkFileError)"
   IfSilent blocked
-  MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "MKLink files remain in use or inaccessible. Check the directory permissions or other software holding the file, then Retry.$\r$\n$\r$\n文件仍被占用或目录无法写入，请检查目录权限或其他占用文件的软件后重试。$\r$\n$\r$\n$MklinkBlockedFile$\r$\nWindows error: $MklinkFileError" /SD IDCANCEL IDRETRY retry
+  MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "无法覆盖原安装目录。请关闭占用文件的软件后重试；如果旧目录需要管理员权限，请取消后以管理员身份运行此安装包。不会改装到其他目录。$\r$\n$\r$\nCannot replace the existing installation. Close software holding its files and retry. If the old directory requires administrator access, cancel and run this installer as administrator. No second installation will be created elsewhere.$\r$\n$\r$\n$MklinkBlockedFile$\r$\nWindows error: $MklinkFileError" /SD IDCANCEL IDRETRY retry
   blocked:
   SetErrorLevel 2
   Abort "MKLink files are still in use or inaccessible. No new payload was written."

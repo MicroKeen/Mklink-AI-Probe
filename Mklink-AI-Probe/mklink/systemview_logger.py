@@ -26,7 +26,8 @@ class SystemViewJsonlLogger:
         self._clock = clock or (lambda: datetime.now(timezone.utc))
         self.started_at = self._normalize_datetime(self._clock())
         stamp = self.started_at.strftime("%Y%m%d-%H%M%S")
-        log_dir = Path(project_root or ".") / ".mklink" / "logs" / "systemview"
+        from mklink.work_files import capture_directory
+        log_dir = capture_directory(Path(project_root or ".") / ".mklink" / "logs" / "systemview")
         log_dir.mkdir(parents=True, exist_ok=True)
 
         self.path, self._fh = self._open_unique_trace(log_dir, stamp)

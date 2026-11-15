@@ -2,6 +2,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useOfflineFlashApi } from './useOfflineFlashApi'
 
 describe('useOfflineFlashApi', () => {
+  it('bypasses display metadata caching only for an explicit refresh', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(() => Promise.resolve(new Response('{}'))))
+    await useOfflineFlashApi().getStatus('probe a')
+    expect(fetch).toHaveBeenLastCalledWith('/api/offline-download/status?probe=probe+a', expect.anything())
+    await useOfflineFlashApi().getStatus('probe a', true)
+    expect(fetch).toHaveBeenLastCalledWith('/api/offline-download/status?probe=probe+a&refresh=true', expect.anything())
+  })
   afterEach(() => {
     vi.unstubAllGlobals()
   })

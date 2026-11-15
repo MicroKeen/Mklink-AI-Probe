@@ -71,8 +71,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export function useOfflineFlashApi() {
-  function getStatus(probe = ''): Promise<OfflineDiskStatus> {
-    return request('/status' + (probe ? `?probe=${encodeURIComponent(probe)}` : ''))
+  function getStatus(probe = '', refresh = false): Promise<OfflineDiskStatus> {
+    const query = new URLSearchParams()
+    if (probe) query.set('probe', probe)
+    if (refresh) query.set('refresh', 'true')
+    return request('/status' + (query.size ? `?${query}` : ''))
   }
 
   function listAlgorithms(partNumber: string): Promise<OfflineAlgorithmCandidate[]> {
