@@ -19,7 +19,11 @@ Linux bundle marker selects AppImage or DEB using the same marker as Tauri's
 bundler. This does not patch any distributed binary.
 
 Dispatch `desktop-unix.yml` on the qualification branch with `target=all`,
-`qualification_run=<successful immutable v0.5.0 build run>` and `signatures`
+`qualification_run=<successful package build run>`,
+`qualification_source=<exact 40-character source commit>` and `signatures`
 containing the filename-to-public-signature JSON map. This skips rebuilding
 and calls `desktop-unix-qualification.yml`. Building or running this workflow
 does not publish assets or update indexes.
+
+Linux CI also captures backend-only py-spy stacks (without local variables) to
+diagnose event-loop stalls. Sampling does not patch the distributed payload.

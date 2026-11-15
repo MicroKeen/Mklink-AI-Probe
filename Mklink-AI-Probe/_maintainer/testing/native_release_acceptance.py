@@ -20,7 +20,8 @@ import threading
 import time
 import urllib.request
 
-SOURCE = "1097f98eb9025b38b16cd32095bced7dd65ecdcd"
+SOURCE = os.environ['NATIVE_SOURCE']
+assert len(SOURCE) == 40 and all(char in '0123456789abcdef' for char in SOURCE)
 REPO = "MicroKeen/Mklink-AI-Probe"
 ROOT = Path(__file__).resolve().parents[2]
 TARGET = os.environ["NATIVE_TARGET"]

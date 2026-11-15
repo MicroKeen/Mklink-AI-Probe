@@ -15,7 +15,11 @@ on:
           - macos-x64
           - all
       qualification_run:
-        description: Optional successful immutable V0.5.0 package run to qualify instead of rebuilding
+        description: Optional successful V0.5.0 package run to qualify instead of rebuilding
+        type: string
+        default: ''
+      qualification_source:
+        description: Exact 40-character source commit of the package run
         type: string
         default: ''
       signatures:
@@ -97,4 +101,5 @@ jobs:
     with:
       target: ${{ inputs.target }}
       source_run: ${{ inputs.qualification_run }}
+      source_commit: ${{ inputs.qualification_source }}
       signatures: ${{ inputs.signatures }}

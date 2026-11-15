@@ -9,6 +9,9 @@ on:
       source_run:
         required: true
         type: string
+      source_commit:
+        required: true
+        type: string
       signatures:
         required: true
         type: string
@@ -20,7 +23,11 @@ on:
         default: all
         options: [all, linux-x64, macos-arm64, macos-x64]
       source_run:
-        description: Successful desktop-unix run for the immutable v0.5.0 tag
+        description: Successful desktop-unix package run
+        required: true
+        type: string
+      source_commit:
+        description: Exact 40-character source commit of the package run
         required: true
         type: string
       signatures:
@@ -74,6 +81,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           SOURCE_RUN: ${{ inputs.source_run }}
+          NATIVE_SOURCE: ${{ inputs.source_commit }}
           PUBLIC_SIGNATURES: ${{ inputs.signatures }}
           NATIVE_TARGET: ${{ matrix.target }}
         run: ./scripts/build_workspace.ps1 -Action run -Executable python -ArgumentList @('_maintainer/testing/native_release_acceptance.py', 'download')
@@ -84,6 +92,7 @@ jobs:
       - name: Native package launch and signed update installation
         env:
           NATIVE_TARGET: ${{ matrix.target }}
+          NATIVE_SOURCE: ${{ inputs.source_commit }}
           WEBKIT_DISABLE_DMABUF_RENDERER: '1'
           NATIVE_PROFILE: '1'
         run: |
