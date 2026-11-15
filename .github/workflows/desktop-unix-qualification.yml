@@ -1,0 +1,97 @@
+name: Native signed update qualification
+run-name: Signed native V0.5.0 qualification (${{ inputs.source_run }})
+on:
+  workflow_call:
+    inputs:
+      source_run:
+        required: true
+        type: string
+      signatures:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      source_run:
+        description: Successful desktop-unix run for the immutable v0.5.0 tag
+        required: true
+        type: string
+      signatures:
+        description: JSON map of public Tauri updater signatures by payload filename
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: desktop-unix-qualification-${{ inputs.source_run }}
+  cancel-in-progress: false
+jobs:
+  qualify:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            target: aarch64-apple-darwin
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+          - runner: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: Mklink-AI-Probe
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Install Linux native dependencies
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev libusb-1.0-0-dev libudev-dev libfuse2 xvfb
+      - name: Install qualification dependencies
+        run: |
+          ./scripts/build_workspace.ps1 -Action run -Executable python -ArgumentList @('-m', 'pip', 'install', '.[gui,mcp]', 'pytest==8.4.2')
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          rustup update stable --no-self-update
+      - name: Install macOS USB library
+        if: runner.os == 'macOS'
+        run: brew install libusb
+      - name: Download exact immutable source artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN: ${{ inputs.source_run }}
+          PUBLIC_SIGNATURES: ${{ inputs.signatures }}
+          NATIVE_TARGET: ${{ matrix.target }}
+        run: ./scripts/build_workspace.ps1 -Action run -Executable python -ArgumentList @('_maintainer/testing/native_release_acceptance.py', 'download')
+      - name: Build the production updater library harness
+        run: |
+          Copy-Item gui/src-tauri/Cargo.lock _maintainer/testing/native_updater/Cargo.lock
+          ./scripts/build_workspace.ps1 -Action run -Executable cargo -ArgumentList @('build', '--release', '--manifest-path', '_maintainer/testing/native_updater/Cargo.toml')
+      - name: Native package launch and signed update installation
+        env:
+          NATIVE_TARGET: ${{ matrix.target }}
+          WEBKIT_DISABLE_DMABUF_RENDERER: '1'
+        run: |
+          if ($IsLinux) {
+            ./scripts/build_workspace.ps1 -Action run -Executable xvfb-run -ArgumentList @('-a', 'python', '_maintainer/testing/native_release_acceptance.py', 'qualify')
+          } else {
+            ./scripts/build_workspace.ps1 -Action run -Executable python -ArgumentList @('_maintainer/testing/native_release_acceptance.py', 'qualify')
+          }
+      - name: Upload native acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: mklink-signed-acceptance-${{ matrix.target }}-${{ github.sha }}
+          path: |
+            .build/artifacts/native-acceptance/*.json
+            .build/artifacts/native-acceptance/*.log
+          if-no-files-found: warn
+          retention-days: 30

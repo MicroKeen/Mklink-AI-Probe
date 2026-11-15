@@ -14,13 +14,23 @@ on:
           - macos-arm64
           - macos-x64
           - all
+      qualification_run:
+        description: Optional successful immutable V0.5.0 package run to qualify instead of rebuilding
+        type: string
+        default: ''
+      signatures:
+        description: Public updater signatures JSON for qualification only
+        type: string
+        default: '{}'
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: desktop-unix-${{ github.ref }}-${{ inputs.target }}
   cancel-in-progress: false
 jobs:
   package:
+    if: inputs.qualification_run == ''
     strategy:
       fail-fast: false
       matrix:
@@ -81,3 +91,9 @@ jobs:
             .build/reports
           if-no-files-found: warn
           retention-days: 30
+  qualify:
+    if: inputs.qualification_run != ''
+    uses: ./.github/workflows/desktop-unix-qualification.yml
+    with:
+      source_run: ${{ inputs.qualification_run }}
+      signatures: ${{ inputs.signatures }}
