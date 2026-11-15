@@ -1,17 +1,19 @@
 <template>
   <section class="control-panel" :data-control-panel="panelId">
-    <header class="component-toolbar">
+    <header v-if="layoutEditing" class="component-toolbar">
       <select v-model="newType" aria-label="组件类型"><option v-for="(definition, type) in controlTypes" :key="type" :value="type">{{ definition.title }}</option></select>
       <button type="button" @click="userAdd">＋ 添加组件</button>
-      <small>拖动组件排列；固定参数随布局保存，表单输入仅用于本次执行。</small>
+      <small>拖动标题排列，拖动边缘调整大小。</small>
     </header>
     <p v-if="error" role="alert">{{ errorText(error) }}</p>
-    <div ref="grid" class="component-grid" @dragover.prevent @drop.prevent="drop">
-      <article v-for="widget in localWidgets" :key="widget.id" class="control-widget" :data-component-id="widget.id" :style="{ gridColumn: `${widget.x + 1} / span ${widget.w}`, gridRow: `${widget.y + 1} / span ${widget.h}` }">
-        <header draggable="true" @dragstart.stop="drag($event, widget.id)">
+    <div ref="grid" class="component-grid grid-stack" :class="{ 'is-editing': layoutEditing }">
+      <article v-for="widget in orderedWidgets" :key="widget.id" class="grid-stack-item" :data-component-id="widget.id" :data-grid-id="widget.id">
+        <div class="grid-stack-item-content control-widget">
+        <header v-show="layoutEditing || controlTypes[widget.type]?.presentation !== 'button'" class="grid-drag-handle">
+          <GripVertical v-if="layoutEditing" :size="14" aria-hidden="true" />
           <strong>{{ widget.title }}</strong>
-          <button type="button" aria-label="配置组件" :aria-expanded="editing === widget.id" @click="userExecute('component.editor', { component_id: widget.id, open: editing !== widget.id })">⚙</button>
-          <button type="button" aria-label="删除组件" @click="userExecute('component.remove', { component_id: widget.id })">×</button>
+          <button v-if="layoutEditing" type="button" aria-label="配置组件" :aria-expanded="editing === widget.id" @click="userExecute('component.editor', { component_id: widget.id, open: editing !== widget.id })"><SlidersHorizontal :size="14" />配置</button>
+          <button v-if="layoutEditing" type="button" aria-label="删除组件" @click="userExecute('component.remove', { component_id: widget.id })"><X :size="14" /></button>
         </header>
         <div class="control-body">
           <small v-if="bindingError(widget)" class="binding-error">{{ bindingError(widget) }}</small>
@@ -34,15 +36,25 @@
           </form>
           <button v-else type="button" :disabled="Boolean(bindingError(widget)) || statuses[widget.id]?.status === 'running'" @click="userExecute('component.invoke', { component_id: widget.id })">{{ statuses[widget.id]?.status === 'running' ? '执行中…' : widget.title }}</button>
           <p v-if="statuses[widget.id]" :role="statuses[widget.id]?.status === 'failed' || statuses[widget.id]?.status === 'unknown' ? 'alert' : 'status'">{{ display(statuses[widget.id]?.status) }} {{ statuses[widget.id]?.message ? errorText(statuses[widget.id]?.message) : '' }}</p>
-          <CapabilityInformation v-if="results[widget.id] !== undefined" class="control-result" :value="results[widget.id]" />
+
+        </div>
         </div>
       </article>
       <p v-if="!localWidgets.length" class="empty-controls">添加动作按钮、参数表单或状态数值，然后绑定现有面板的能力。</p>
     </div>
-    <form v-if="editing" class="component-editor" @submit.prevent="applyEdit">
-      <header><strong>配置组件</strong><button type="button" aria-label="关闭组件配置" @click="userExecute('component.editor', { component_id: editing, open: false })">×</button></header>
+    <section v-if="localWidgets.some(widget => statuses[widget.id])" class="control-operation-log" aria-label="组件操作记录">
+      <h4>操作记录</h4>
+      <details v-for="widget in localWidgets.filter(widget => statuses[widget.id])" :key="widget.id">
+        <summary>{{ widget.title }} · {{ display(statuses[widget.id]?.status) }}</summary>
+        <p v-if="statuses[widget.id]?.message" role="alert">{{ errorText(statuses[widget.id]?.message) }}</p>
+        <CapabilityInformation v-if="results[widget.id] !== undefined" :value="results[widget.id]" />
+      </details>
+    </section>
+    <WorkbenchSettingsDialog v-if="editing" :title="'组件配置 · ' + editingWidget?.title" @close="editing = ''">
+    <form class="component-editor" @submit.prevent="applyEdit">
+      <p v-if="error" role="alert">{{ error }}</p>
       <label>标题<input v-model="draft.title" maxlength="200" /></label>
-      <div class="component-geometry"><label v-for="key in geometryKeys" :key="key">{{ key }}<input v-model.number="draft[key]" type="number" :min="key === 'x' || key === 'y' ? 0 : 1" :max="key === 'y' ? 200 : 12" /></label></div>
+      <div class="component-geometry"><label v-for="key in geometryKeys" :key="key">{{ geometryLabels[key] }}<input v-model.number="draft[key]" type="number" :min="key === 'x' || key === 'y' ? 0 : 1" :max="key === 'y' ? 200 : 12" /></label></div>
       <label>目标面板<select v-model="draft.panel_id" @change="draft.action = ''; draft.state_path = ''"><option value="">未绑定</option><option v-for="target in targets()" :key="target.id" :value="target.id">{{ target.title }} · {{ target.id }}</option></select></label>
       <label v-if="editingWidget && controlTypes[editingWidget.type]?.presentation === 'value'">公开状态字段<input v-model="draft.state_path" :list="panelId + '-state-fields'" placeholder="view.paused" maxlength="512" /><datalist :id="panelId + '-state-fields'"><option v-for="path in statePaths()" :key="path" :value="path" /></datalist></label>
       <template v-else>
@@ -53,10 +65,13 @@
           <input v-else :type="field.type === 'string' ? 'text' : 'number'" :min="field.minimum" :max="field.maximum" :step="field.type === 'integer' ? 1 : 'any'" :value="fixedFieldText(String(name))" :aria-label="`固定 ${name}`" @input="setFixedField(String(name), field, $event)" />
         </label>
       </template>
+      <label v-if="transferTargets().length">移到控制面板<select v-model="transferTarget"><option value="">选择面板</option><option v-for="target in transferTargets()" :key="target.id" :value="target.id">{{ target.title }}</option></select></label>
+      <button v-if="transferTargets().length" type="button" :disabled="!transferTarget" @click="emit('transfer', { sourcePanelId: panelId, widgetId: editing, targetPanelId: transferTarget, x: 0, y: 0 }); editing = ''">移动组件</button>
       <button type="submit">应用配置</button>
       <button type="button" @click="userExecute('component.unbind', { component_id: editing })">清除绑定</button>
       <button type="button" @click="userExecute('component.editor', { component_id: editing, open: false })">取消</button>
     </form>
+    </WorkbenchSettingsDialog>
   </section>
 </template>
 
@@ -64,20 +79,31 @@
 import { computed, inject, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { interaction, objectSchema, type JsonObject, type SemanticAction, type SemanticExecutionContext } from '../../lib/frontendControl'
 import { bindingHostKey, bindingAction, makeBinding, invokeBinding, parseArguments, readBoundValue, sameBinding, type ControlBinding } from '../../lib/workbenchBindings'
-import { controlTypes, controlGeometrySchema, controlIdSchema, controlStateKey, createControlState, createControl, placeControl, validateControls, type ControlWidget } from '../../lib/workbenchControls'
+import { controlTypes, controlGeometrySchema, controlIdSchema, controlStateKey, createControlState, createControl, validateControl, validateControls, layoutEditingKey, type ControlWidget } from '../../lib/workbenchControls'
 import CapabilityInformation from './CapabilityInformation.vue'
 import { display, label, errorText } from '../../lib/capabilityPresentation'
+import { useWorkbenchGrid } from '../../composables/useWorkbenchGrid'
+import { moveGrid } from '../../lib/gridLayout'
+import { GripVertical, SlidersHorizontal, X } from '@lucide/vue'
+import WorkbenchSettingsDialog from '../WorkbenchSettingsDialog.vue'
 
 const props = withDefaults(defineProps<{ panelId: string; widgets: ControlWidget[]; active?: boolean; commitWidgets?: (widgets: ControlWidget[]) => void }>(), { active: true })
 const emit = defineEmits<{ change: [widgets: ControlWidget[]]; transfer: [request: { sourcePanelId: string; widgetId: string; targetPanelId: string; x: number; y: number }] }>()
 const host = inject(bindingHostKey, null)
 const localWidgets = ref<ControlWidget[]>([]), newType = ref('button'), editing = ref(''), error = ref('')
+const orderedWidgets = computed(() => [...localWidgets.value].sort((a, b) => a.y - b.y || a.x - b.x))
 const grid = ref<HTMLElement | null>(null)
+const layoutEditing = inject(layoutEditingKey, ref(false))
+const transferTarget = ref('')
+const transferTargets = () => host?.targets().filter(target => target.type === 'controls' && target.id !== props.panelId) || []
+useWorkbenchGrid(grid, () => localWidgets.value.map(widget => ({ id: widget.id, x: widget.x, y: widget.y, w: widget.w, h: widget.h, minW: controlTypes[widget.type]!.minW, minH: controlTypes[widget.type]!.minH, maxW: 12, maxH: 12 })), layoutEditing,
+  positions => publish(localWidgets.value.map(widget => ({ ...widget, ...positions.find(item => item.id === widget.id) }))), cause => { error.value = String(cause) })
 const providedState = inject(controlStateKey, null)
 const transient = providedState || createControlState()
 const { statuses, results, values, drafts, operations } = transient
 const draft = reactive({ title: '', panel_id: '', action: '', state_path: '', args_json: '{}', x: 0, y: 0, w: 4, h: 1 })
 const geometryKeys = ['x', 'y', 'w', 'h'] as const
+const geometryLabels = { x: '列位置', y: '行位置', w: '宽度（列）', h: '高度（行）' }
 let valueTimer: ReturnType<typeof setTimeout> | undefined, disposed = false
 watch(() => props.widgets, widgets => { localWidgets.value = validateControls(widgets) }, { immediate: true, deep: true })
 const editingWidget = computed(() => localWidgets.value.find(widget => widget.id === editing.value))
@@ -128,6 +154,7 @@ function statePaths() {
   return paths
 }
 function edit(widget: ControlWidget) {
+  layoutEditing.value = true; transferTarget.value = ''
   editing.value = widget.id
   Object.assign(draft, { title: widget.title, panel_id: widget.binding.panel_id || '', action: widget.binding.action || '', state_path: widget.binding.state_path || '', args_json: JSON.stringify(widget.binding.args || {}, null, 2), x: widget.x, y: widget.y, w: widget.w, h: widget.h })
 }
@@ -149,20 +176,6 @@ function formArguments(widget: ControlWidget) {
     return args
 }
 function submitForm(widget: ControlWidget) { void userExecute('component.invoke', { component_id: widget.id }) }
-function drag(event: DragEvent, id: string) { event.dataTransfer?.setData('application/x-mklink-control', JSON.stringify({ panel_id: props.panelId, widget_id: id })) }
-function drop(event: DragEvent) {
-  const text = event.dataTransfer?.getData('application/x-mklink-control')
-  if (!text || !grid.value) return
-  try {
-    const data = JSON.parse(text), bounds = grid.value.getBoundingClientRect()
-    if (data.panel_id !== props.panelId) return
-    event.stopPropagation()
-    const x = Math.max(0, Math.min(11, Math.floor((event.clientX - bounds.left) / (bounds.width / 12))))
-    const y = Math.max(0, Math.min(200, Math.floor((event.clientY - bounds.top) / 88)))
-    const widget = find(data.widget_id)
-    void userExecute('component.move', { component_id: widget.id, x: Math.min(x, 12 - widget.w), y, w: widget.w, h: widget.h })
-  } catch (cause) { error.value = String(cause) }
-}
 const identity = { component_id: controlIdSchema }
 const bindingFields = { panel_id: controlIdSchema, action: { type: 'string', maxLength: 128 }, state_path: { type: 'string', maxLength: 512 }, args_json: { type: 'string', maxLength: 8192 } }
 function catalog(): SemanticAction[] {
@@ -230,8 +243,11 @@ async function execute(action: string, args: JsonObject = {}, context?: Semantic
   if (bindingChanged && ['running', 'unknown'].includes(statuses[widget.id]?.status || '')) throw new Error('The original operation is running or unknown; its binding cannot be replaced or cleared')
   const next = { ...widget, binding }
   for (const key of ['title', ...geometryKeys] as const) if (args[key] !== undefined) (next as any)[key] = args[key]
-  const placed = placeControl(localWidgets.value, next)
-  publish(localWidgets.value.map(item => item.id === widget.id ? placed : item))
+  validateControl(next)
+  const positions = moveGrid(localWidgets.value, next)
+  const widgets = localWidgets.value.map(item => ({ ...(item.id === widget.id ? next : item), ...positions.find(position => position.id === item.id) }))
+  publish(widgets)
+  const placed = widgets.find(item => item.id === widget.id)!
   if (bindingChanged) transient.clear(widget.id)
   if (controlTypes[placed.type]?.presentation === 'value' && placed.binding.panel_id) {
     try { values[widget.id] = readBoundValue(requiredHost(), placed.binding) } catch { delete values[widget.id] }
@@ -251,10 +267,14 @@ onUnmounted(() => { disposed = true; clearTimeout(valueTimer); if (!providedStat
 .control-panel { position:relative; display:flex; flex-direction:column; min-height:240px; padding:8px; gap:8px; }
 .component-toolbar, .control-widget > header, .component-editor > header { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
 .component-toolbar small { color:var(--muted); font-size:11px; }
-.component-grid { display:grid; grid-template-columns:repeat(12,minmax(0,1fr)); grid-auto-rows:80px; gap:8px; min-height:160px; }
+.component-grid { min-height:88px; }
 .control-widget { min-width:0; overflow:auto; border:1px solid var(--border); border-radius:6px; background:var(--surface); }
-.control-widget > header { padding:4px 6px; background:var(--bg); cursor:grab; }
+.control-widget > header { padding:4px 6px; background:var(--bg); }
 .control-widget strong, .component-editor strong { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; font-size:12px; }
+.is-editing .grid-drag-handle { cursor:grab; }
+.control-widget header button { display:inline-flex; align-items:center; gap:4px; }
+.control-body > button { min-height:34px; text-align:left; padding:6px 10px; }
+.control-body [role=status] { margin:0; font-size:11px; color:var(--muted); }
 .control-body { padding:6px; display:flex; flex-direction:column; gap:6px; }
 .control-body output { font:600 18px var(--font-mono); white-space:pre-wrap; overflow-wrap:anywhere; }
 button, select, input, textarea { color:var(--fg); background:var(--input-bg); border:1px solid var(--border); border-radius:4px; padding:4px 6px; min-width:0; max-width:100%; box-sizing:border-box; }
@@ -264,8 +284,11 @@ button { cursor:pointer; } button:disabled { opacity:.5; cursor:not-allowed; }
 .argument-field textarea { min-height:55px; resize:vertical; }
 .control-result { max-height:160px; overflow:auto; margin:0; white-space:pre-wrap; overflow-wrap:anywhere; font-size:11px; }
 .empty-controls { grid-column:1/-1; color:var(--muted); font-size:12px; }
-.component-editor { position:absolute; z-index:8; inset:45px 8px auto; max-height:calc(100% - 55px); overflow:auto; padding:10px; background:var(--surface); border:1px solid var(--border); border-radius:6px; box-shadow:0 8px 24px #0006; }
+.component-editor { padding:0; }
 .component-editor textarea { min-height:65px; }.component-editor > button { margin-right:6px; }
 .component-geometry { display:flex; gap:6px; }.component-geometry label { flex:1; min-width:0; }
-@media(max-width:700px) { .component-grid { display:flex; flex-direction:column; }.control-widget { min-height:80px; }.component-editor { position:relative; inset:auto; max-height:none; } }
+.control-operation-log { border-top:1px solid var(--border); padding:12px 4px; font-size:12px; }
+.control-operation-log h4 { margin:0 0 8px; font-size:12px; color:var(--muted); }.control-operation-log summary { cursor:pointer; padding:6px 0; }
+.component-editor label { margin-bottom:14px; font-size:13px; }
+@media(max-width:700px) { .component-grid { display:flex; flex-direction:column; height:auto!important; flex-shrink:0; gap:8px; }.component-grid > .grid-stack-item { position:relative!important; inset:auto!important; width:100%!important; height:120px!important; flex-shrink:0; }.control-widget { inset:0!important; }.component-grid :deep(.ui-resizable-handle) { display:none; } }
 </style>

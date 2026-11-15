@@ -1,6 +1,7 @@
 import { mount, flushPromises } from '@vue/test-utils'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { inject } from 'vue'
+import type { GridStack } from 'gridstack'
 import { controlStateKey, type ControlState } from '../../lib/workbenchControls'
 import WorkbenchTab from './WorkbenchTab.vue'
 
@@ -24,6 +25,50 @@ beforeEach(() => {
   }))
 })
 afterEach(() => vi.unstubAllGlobals())
+
+it('locks gestures by default and commits engine collisions without remounting business views', async () => {
+  const wrapper = mount(WorkbenchTab, { props: { deviceConnected: false, symbolLoaded: false } })
+  await flushPromises()
+  const a = await wrapper.vm.execute('panel.add', { type: 'watch', title: 'Wave' }) as any
+  const b = await wrapper.vm.execute('panel.add', { type: 'controls', title: 'Control' }) as any
+  await flushPromises()
+  const grid = (wrapper.get('.workbench-grid').element as HTMLElement & { gridstack: GridStack }).gridstack
+  const surface = wrapper.vm.entries()[0]!.surface
+  expect(grid.opts.disableDrag).toBe(true)
+  expect(wrapper.find('[aria-label="配置面板"]').exists()).toBe(false)
+  await wrapper.get('[aria-pressed="false"]').trigger('click')
+  expect(grid.opts.disableDrag).toBeFalsy()
+  expect(grid.opts.disableResize).toBeFalsy()
+  grid.update(grid.engine.nodes.find(node => node.id === b.id)!.el!, { x: 0, y: 0 })
+  await flushPromises()
+  const pointerLayout = JSON.parse(JSON.stringify(wrapper.vm.read().layout))
+  expect(pointerLayout.panels.find((panel: any) => panel.id === b.id).y).toBe(0)
+  expect(pointerLayout.panels.find((panel: any) => panel.id === a.id).y).toBe(4)
+  expect(wrapper.vm.entries()[0]!.surface).toBe(surface)
+  await wrapper.vm.execute('layout.save', {})
+  expect(saved.panels).toEqual(pointerLayout.panels.map((panel: any) => ({ ...panel, view: { paused: false } })))
+  await wrapper.vm.execute('panel.move', { panel_id: a.id, x: 0, y: 0, w: 6, h: 4 })
+  await flushPromises()
+  expect(grid.engine.nodes.find(node => node.id === a.id)?.y).toBe(0)
+  expect(grid.engine.nodes.find(node => node.id === b.id)?.y).toBe(4)
+  expect(wrapper.vm.entries()[0]!.surface).toBe(surface)
+  wrapper.unmount()
+})
+
+it('rolls back an out-of-range grid gesture and retains the last valid layout', async () => {
+  const wrapper = mount(WorkbenchTab, { props: { deviceConnected: false, symbolLoaded: false } })
+  await flushPromises()
+  await wrapper.vm.execute('panel.add', { type: 'watch', title: 'Wave' })
+  await flushPromises()
+  const before = JSON.stringify(wrapper.vm.read().layout)
+  const grid = (wrapper.get('.workbench-grid').element as HTMLElement & { gridstack: GridStack }).gridstack
+  grid.update(grid.engine.nodes[0]!.el!, { y: 201 })
+  await flushPromises()
+  expect(JSON.stringify(wrapper.vm.read().layout)).toBe(before)
+  expect(grid.engine.nodes[0]?.y).toBe(0)
+  expect(wrapper.get('[role="alert"]').text()).not.toBe('')
+  wrapper.unmount()
+})
 
 it('creates first-use cards from shared groups using reads only and leaves saved empty layouts empty', async () => {
   saved.revision = 0

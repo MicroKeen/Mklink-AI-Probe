@@ -1,6 +1,7 @@
 import { interaction, objectSchema, type JsonObject } from './frontendControl'
 import type { WatchWorkspace } from '../composables/useWatchWorkspace'
 import { validateWidgets, type ControlWidget } from './workbenchControls'
+import { moveGrid } from './gridLayout'
 
 export type PanelType = 'watch' | 'variables' | 'rtt' | 'serial' | 'controls' | 'capability'
 export interface WorkbenchPanel { id: string; type: PanelType; title: string; source: { signals?: string[]; channel?: number; port?: string }; x: number; y: number; w: number; h: number; view?: JsonObject; widgets?: ControlWidget[] }
@@ -162,8 +163,12 @@ export function moveWindow(layout: WorkbenchLayout, id: string, geometry: JsonOb
   const host = windowPanel(layout, id), minimum = windowMinimum(layout, id)
   const candidate = { ...host, ...geometry }
   if (candidate.w < minimum.w || candidate.h < minimum.h) throw new Error(`Window needs at least ${minimum.w} columns and ${minimum.h} rows`)
-  const next = placePanel(visibleWindows(layout), candidate)
-  Object.assign(host, next)
+  const { x, y, w, h } = candidate
+  interaction.validateArgs({ x, y, w, h }, objectSchema(geometrySchema))
+  if (x + w > 12) throw new Error('Panel extends beyond the twelve-column layout')
+  const windows = visibleWindows(layout), moved = moveGrid(windows, candidate)
+  if (moved.some(item => item.y > 200)) throw new Error('No room in the layout')
+  for (const item of moved) Object.assign(windows.find(panel => panel.id === item.id)!, item)
   return host
 }
 

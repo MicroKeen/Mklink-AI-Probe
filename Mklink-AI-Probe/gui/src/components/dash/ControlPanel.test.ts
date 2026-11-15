@@ -3,9 +3,10 @@ import { expect, it, vi } from 'vitest'
 import ControlPanel from './ControlPanel.vue'
 import { bindingHostKey, type BindingHost } from '../../lib/workbenchBindings'
 import { objectSchema } from '../../lib/frontendControl'
+import { GridStack } from 'gridstack'
 import { controlStateKey, createControlState, type ControlState, type ControlWidget } from '../../lib/workbenchControls'
 
-function fixture(commit?: (widgets: ControlWidget[]) => void, transient?: ControlState) {
+function fixture(commit?: (widgets: ControlWidget[]) => void, transient?: ControlState, attachTo?: HTMLElement) {
   const state = { paused: false, interval: 1 }
   const actions = [
     { name: 'waveform.pause', description: 'Pause this view', effect: 'view', args: objectSchema({ paused: { type: 'boolean' } }) },
@@ -13,9 +14,45 @@ function fixture(commit?: (widgets: ControlWidget[]) => void, transient?: Contro
   ]
   const invoke = vi.fn(async (_id: string, action: string, args: any) => { if (action === 'waveform.pause') state.paused = args.paused; else state.interval = args.interval; return { ...state } })
   const host: BindingHost = { targets: () => [{ id: 'wave', title: 'Wave A', type: 'watch', surface: { catalog: () => actions, read: () => ({ view: { ...state } }), execute: (action, args) => invoke('wave', action, args) } }], invoke }
-  const wrapper = mount(ControlPanel, { props: { panelId: 'controls', widgets: [], commitWidgets: commit }, global: { provide: { [bindingHostKey as symbol]: host, ...(transient ? { [controlStateKey as symbol]: transient } : {}) } } })
+  const wrapper = mount(ControlPanel, { attachTo, props: { panelId: 'controls', widgets: [], commitWidgets: commit }, global: { stubs: { teleport: true }, provide: { [bindingHostKey as symbol]: host, ...(transient ? { [controlStateKey as symbol]: transient } : {}) } } })
   return { wrapper, host, state, invoke, actions }
 }
+it('commits nested-grid changes dispatched on the parent grid', async () => {
+  const parent = document.createElement('div')
+  parent.className = 'grid-stack'
+  parent.innerHTML = '<div class="grid-stack-item" gs-w="12" gs-h="8"><div class="grid-stack-item-content"></div></div>'
+  document.body.append(parent)
+  const outer = GridStack.init({ column: 12, cellHeight: 88, float: true }, parent)
+  const { wrapper, invoke } = fixture(undefined, undefined, parent.querySelector<HTMLElement>('.grid-stack-item-content')!)
+  const a = await wrapper.vm.execute('component.add', { type: 'button', title: 'A' }) as ControlWidget
+  const b = await wrapper.vm.execute('component.add', { type: 'button', title: 'B' }) as ControlWidget
+  await flushPromises()
+  const grid = (wrapper.get('.component-grid').element as HTMLElement & { gridstack: GridStack }).gridstack
+  expect(grid.parentGridNode?.grid).toBe(outer)
+  grid.update(grid.engine.nodes.find(node => node.id === b.id)!.el!, { x: 0, y: 0 })
+  await flushPromises()
+  expect(wrapper.vm.read().widgets.find((widget: ControlWidget) => widget.id === b.id)?.y).toBe(0)
+  expect(wrapper.vm.read().widgets.find((widget: ControlWidget) => widget.id === a.id)?.y).toBe(1)
+  expect(invoke).not.toHaveBeenCalled()
+  wrapper.unmount(); outer.destroy(false); parent.remove()
+})
+it('uses grid collision placement for controls without losing drafts or invoking a binding', async () => {
+  const transient = createControlState()
+  const { wrapper, invoke } = fixture(undefined, transient)
+  const a = await wrapper.vm.execute('component.add', { type: 'form', title: 'Sampling' }) as ControlWidget
+  const b = await wrapper.vm.execute('component.add', { type: 'form', title: 'Other' }) as ControlWidget
+  transient.drafts[a.id] = { interval: '0.125' }
+  await wrapper.vm.execute('component.move', { component_id: b.id, x: 0, y: 0, w: b.w, h: b.h })
+  await flushPromises()
+  expect(wrapper.vm.read().widgets.find((widget: ControlWidget) => widget.id === b.id)?.y).toBe(0)
+  const grid = (wrapper.get('.component-grid').element as HTMLElement & { gridstack: GridStack }).gridstack
+  grid.update(grid.engine.nodes.find(node => node.id === a.id)!.el!, { x: 0, y: 0 })
+  await flushPromises()
+  expect(wrapper.vm.read().widgets.find((widget: ControlWidget) => widget.id === a.id)?.y).toBe(0)
+  expect(transient.drafts[a.id]).toEqual({ interval: '0.125' })
+  expect(invoke).not.toHaveBeenCalled()
+  wrapper.unmount()
+})
 it('configures fixed values with ordinary fields and preserves structured Agent arguments without a JSON editor', async () => {
   const { wrapper, actions, invoke } = fixture()
   actions.push({ name:'custom.run', description:'Run', effect:'device', args:objectSchema({ count:{ type:'integer' }, config:objectSchema({ limit:{ type:'integer' } }) }) })
@@ -154,7 +191,7 @@ it('preserves a running action when display settings change and rejects changing
 it('keeps transient form input and uncertain status when a component moves between windows', async () => {
   const transient = createControlState()
   const { wrapper: left, host, invoke } = fixture(undefined, transient)
-  const right = mount(ControlPanel, { props: { panelId: 'right', widgets: [] }, global: { provide: { [bindingHostKey as symbol]: host, [controlStateKey as symbol]: transient } } })
+  const right = mount(ControlPanel, { props: { panelId: 'right', widgets: [] }, global: { stubs: { teleport: true }, provide: { [bindingHostKey as symbol]: host, [controlStateKey as symbol]: transient } } })
   const widget = await left.vm.execute('component.add', { type: 'form', title: 'Sampling' }) as ControlWidget
   await left.vm.execute('component.bind', { component_id: widget.id, panel_id: 'wave', action: 'sample.interval', args_json: '{}' })
   await left.vm.execute('component.input', { component_id: widget.id, args_json: '{"interval":0.125}' })

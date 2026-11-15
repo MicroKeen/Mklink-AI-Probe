@@ -1,6 +1,13 @@
 import { expect, it } from 'vitest'
 import { display, formArguments, operationFields } from './capabilityPresentation'
 
+it('formats recording timestamps without reinterpreting ordinary numeric measurements', () => {
+  const timestamp = 1794730842.123
+  expect(display(timestamp, 'started_at')).toBe(new Date(timestamp * 1000).toLocaleString('zh-CN', { hour12: false }))
+  expect(display(timestamp, 'value')).toBe(String(timestamp))
+  expect(display(null, 'stopped_at')).toBe('—')
+})
+
 it('preserves zero, false, enum types and omitted defaults in form submissions', () => {
   const { fields, guided } = operationFields({ parameters: [{ name:'count', required:true, schema:{ type:'integer', minimum:0 } }], requestBody:{ content:{ 'application/json':{ schema:{ properties:{
     enabled:{ type:'boolean' }, mode:{ enum:[2, 4] }, names:{ type:'array', items:{ type:'string' } }, delay:{ anyOf:[{ type:'number' }, { type:'null' }] },

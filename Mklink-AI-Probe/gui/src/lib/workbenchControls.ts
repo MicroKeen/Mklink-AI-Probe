@@ -1,6 +1,6 @@
 import { interaction, objectSchema, type JsonObject } from './frontendControl'
 import { validateStatePath, type ControlBinding } from './workbenchBindings'
-import { markRaw, reactive, type Component, type InjectionKey } from 'vue'
+import { markRaw, reactive, type Component, type InjectionKey, type Ref } from 'vue'
 import manifest from '../../../mklink/frontend_components.json'
 
 export interface ControlDefinition { title: string; description: string; presentation: 'button' | 'form' | 'value'; minW: number; minH: number; defaultW: number; defaultH: number; renderer?: Component }
@@ -29,6 +29,7 @@ export interface ControlState {
   clear(id: string): void
 }
 export const controlStateKey: InjectionKey<ControlState> = Symbol('control-state')
+export const layoutEditingKey: InjectionKey<Ref<boolean>> = Symbol('layout-editing')
 export function createControlState(): ControlState {
   const state = reactive({ drafts: {}, values: {}, results: {}, statuses: {}, operations: {} }) as Omit<ControlState, 'clear'>
   return { ...state, clear(id: string) { delete state.drafts[id]; delete state.values[id]; delete state.results[id]; delete state.statuses[id]; delete state.operations[id] } }
