@@ -95,5 +95,6 @@ jobs:
     if: inputs.qualification_run != ''
     uses: ./.github/workflows/desktop-unix-qualification.yml
     with:
+      target: ${{ inputs.target }}
       source_run: ${{ inputs.qualification_run }}
       signatures: ${{ inputs.signatures }}
