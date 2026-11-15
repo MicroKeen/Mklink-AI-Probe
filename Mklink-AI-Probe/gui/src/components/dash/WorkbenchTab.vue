@@ -64,7 +64,7 @@ const props = withDefaults(defineProps<{ deviceConnected: boolean; symbolLoaded:
 const controlState = createControlState()
 provide(controlStateKey, controlState)
 const emit = defineEmits<{ intent: [panelId: string] }>()
-const labels = { watch: 'SuperWatch', variables: tr('变量', 'Variables'), rtt: 'RTT', serial: tr('串口', 'Serial'), controls: tr('控制面板', 'Controls'), capability: tr('MKLink 能力', 'MKLink capability') }
+const labels = { watch: 'SuperWatch', variables: tr('变量', 'Variables'), rtt: 'RTT', serial: tr('串口', 'Serial'), controls: tr('控制面板', 'Controls'), capability: tr('操作与信息', 'Actions and information') }
 const layout = ref<WorkbenchLayout>({ version: 2, revision: 0, panels: [], docks: [] })
 const restoreGeneration = ref(0)
 const loading = ref(false), saving = ref(false), error = ref(''), notice = ref(''), reloadPrompt = ref(false)

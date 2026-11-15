@@ -1,12 +1,13 @@
 <template>
   <div class="workbench-indicator">
-    <output :aria-label="widget.title"><span class="indicator-light" :class="{ active: value === true || typeof value === 'number' && value > 0 }" aria-hidden="true"></span>{{ value === undefined ? '—' : typeof value === 'object' ? JSON.stringify(value) : String(value) }}</output>
+    <output :aria-label="widget.title"><span class="indicator-light" :class="{ active: value === true || typeof value === 'number' && value > 0 }" aria-hidden="true"></span><CapabilityInformation :value="value" /></output>
     <button type="button" :disabled="busy" @click="emit('read')">{{ tr('刷新状态', 'Refresh status') }}</button>
   </div>
 </template>
 <script setup lang="ts">
 import { tr } from '../../composables/useLanguage'
 import type { ControlWidget } from '../../lib/workbenchControls'
+import CapabilityInformation from './CapabilityInformation.vue'
 defineProps<{ widget: ControlWidget; value?: unknown; busy?: boolean }>()
 const emit = defineEmits<{ read: [] }>()
 </script>

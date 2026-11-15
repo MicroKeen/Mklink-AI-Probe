@@ -16,6 +16,21 @@ function fixture(commit?: (widgets: ControlWidget[]) => void, transient?: Contro
   const wrapper = mount(ControlPanel, { props: { panelId: 'controls', widgets: [], commitWidgets: commit }, global: { provide: { [bindingHostKey as symbol]: host, ...(transient ? { [controlStateKey as symbol]: transient } : {}) } } })
   return { wrapper, host, state, invoke, actions }
 }
+it('configures fixed values with ordinary fields and preserves structured Agent arguments without a JSON editor', async () => {
+  const { wrapper, actions, invoke } = fixture()
+  actions.push({ name:'custom.run', description:'Run', effect:'device', args:objectSchema({ count:{ type:'integer' }, config:objectSchema({ limit:{ type:'integer' } }) }) })
+  const widget = await wrapper.vm.execute('component.add', { type:'form', title:'Run' }) as ControlWidget
+  await wrapper.vm.execute('component.bind', { component_id:widget.id, panel_id:'wave', action:'custom.run', args_json:'{"count":1,"config":{"limit":4}}' })
+  await wrapper.vm.execute('component.editor', { component_id:widget.id, open:true })
+  await wrapper.get('input[aria-label="固定 count"]').setValue('2')
+  expect(wrapper.find('textarea').exists()).toBe(false)
+  expect(wrapper.text()).not.toContain('JSON')
+  await wrapper.get('.component-editor').trigger('submit'); await flushPromises()
+  await wrapper.get('.control-body form').trigger('submit'); await flushPromises()
+  expect(invoke).toHaveBeenLastCalledWith('wave', 'custom.run', { count:2, config:{ limit:4 } }, undefined)
+  expect(wrapper.find('pre').exists()).toBe(false)
+  wrapper.unmount()
+})
 it('manual controls and Agent invocation dispatch the same declared business action', async () => {
   const { wrapper, invoke, state } = fixture()
   const widget = await wrapper.vm.execute('component.add', { type: 'button', title: 'Pause Wave' }) as ControlWidget

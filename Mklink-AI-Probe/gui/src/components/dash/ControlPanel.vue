@@ -5,7 +5,7 @@
       <button type="button" @click="userAdd">＋ 添加组件</button>
       <small>拖动组件排列；固定参数随布局保存，表单输入仅用于本次执行。</small>
     </header>
-    <p v-if="error" role="alert">{{ error }}</p>
+    <p v-if="error" role="alert">{{ errorText(error) }}</p>
     <div ref="grid" class="component-grid" @dragover.prevent @drop.prevent="drop">
       <article v-for="widget in localWidgets" :key="widget.id" class="control-widget" :data-component-id="widget.id" :style="{ gridColumn: `${widget.x + 1} / span ${widget.w}`, gridRow: `${widget.y + 1} / span ${widget.h}` }">
         <header draggable="true" @dragstart.stop="drag($event, widget.id)">
@@ -17,24 +17,24 @@
           <small v-if="bindingError(widget)" class="binding-error">{{ bindingError(widget) }}</small>
           <component v-if="controlTypes[widget.type]?.renderer" :is="controlTypes[widget.type]!.renderer" :widget="widget" :schema="actionFor(widget)?.args" :busy="statuses[widget.id]?.status === 'running'" :value="values[widget.id]" @read="userExecute('component.read', { component_id: widget.id })" @invoke="(args: JsonObject) => userExecute('component.invoke', { component_id: widget.id, args_json: JSON.stringify(args || {}) })" />
           <template v-else-if="controlTypes[widget.type]?.presentation === 'value'">
-            <output>{{ formatValue(values[widget.id]) }}</output>
+            <output><CapabilityInformation :value="values[widget.id]" /></output>
             <button type="button" :disabled="Boolean(bindingError(widget))" @click="userExecute('component.read', { component_id: widget.id })">刷新数值</button>
           </template>
           <form v-else-if="controlTypes[widget.type]?.presentation === 'form'" @submit.prevent="submitForm(widget)">
             <label v-for="(field, name) in actionFor(widget)?.args.properties || {}" :key="name" class="argument-field">
-              <span>{{ name }}{{ actionFor(widget)?.args.required?.includes(name) ? ' *' : '' }}</span>
-              <select v-if="field.enum || field.type === 'boolean'" :value="fieldText(widget, String(name))" :aria-label="String(name)" @change="setField(widget, String(name), $event)">
+              <span>{{ label(String(name)) }}{{ actionFor(widget)?.args.required?.includes(name) ? ' *' : '' }}</span>
+              <p v-if="structuredField(String(name), field)">此项由对话配置，保留已绑定的设置。</p>
+              <select v-else-if="field.enum || field.type === 'boolean'" :value="fieldText(widget, String(name))" :aria-label="String(name)" @change="setField(widget, String(name), $event)">
                 <option value="">使用固定参数 / 未设置</option>
-                <option v-for="value in field.enum || [true, false]" :key="String(value)" :value="String(value)">{{ value }}</option>
+                <option v-for="value in field.enum || [true, false]" :key="String(value)" :value="String(value)">{{ display(value) }}</option>
               </select>
-              <textarea v-else-if="field.type === 'object' || field.type === 'array'" :value="fieldText(widget, String(name))" :aria-label="String(name)" placeholder="JSON" @input="setField(widget, String(name), $event)" />
               <input v-else :type="field.type === 'string' ? 'text' : 'number'" :min="field.minimum" :max="field.maximum" :step="field.type === 'integer' ? 1 : 'any'" :maxlength="field.maxLength" :value="fieldText(widget, String(name))" :aria-label="String(name)" @input="setField(widget, String(name), $event)" />
             </label>
             <button type="submit" :disabled="Boolean(bindingError(widget)) || statuses[widget.id]?.status === 'running'">执行 {{ widget.title }}</button>
           </form>
           <button v-else type="button" :disabled="Boolean(bindingError(widget)) || statuses[widget.id]?.status === 'running'" @click="userExecute('component.invoke', { component_id: widget.id })">{{ statuses[widget.id]?.status === 'running' ? '执行中…' : widget.title }}</button>
-          <p v-if="statuses[widget.id]" :role="statuses[widget.id]?.status === 'failed' || statuses[widget.id]?.status === 'unknown' ? 'alert' : 'status'">{{ statuses[widget.id]?.status }} {{ statuses[widget.id]?.message }}</p>
-          <pre v-if="results[widget.id] !== undefined" class="control-result">{{ formatValue(results[widget.id]) }}</pre>
+          <p v-if="statuses[widget.id]" :role="statuses[widget.id]?.status === 'failed' || statuses[widget.id]?.status === 'unknown' ? 'alert' : 'status'">{{ display(statuses[widget.id]?.status) }} {{ statuses[widget.id]?.message ? errorText(statuses[widget.id]?.message) : '' }}</p>
+          <CapabilityInformation v-if="results[widget.id] !== undefined" class="control-result" :value="results[widget.id]" />
         </div>
       </article>
       <p v-if="!localWidgets.length" class="empty-controls">添加动作按钮、参数表单或状态数值，然后绑定现有面板的能力。</p>
@@ -47,7 +47,11 @@
       <label v-if="editingWidget && controlTypes[editingWidget.type]?.presentation === 'value'">公开状态字段<input v-model="draft.state_path" :list="panelId + '-state-fields'" placeholder="view.paused" maxlength="512" /><datalist :id="panelId + '-state-fields'"><option v-for="path in statePaths()" :key="path" :value="path" /></datalist></label>
       <template v-else>
         <label>业务动作<select v-model="draft.action"><option value="">选择已公布的动作</option><option v-for="action in draftActions()" :key="action.name" :value="action.name">{{ action.name }} · {{ action.description }}</option></select></label>
-        <label>固定参数 JSON（随布局保存）<textarea v-model="draft.args_json" maxlength="8192" /></label>
+        <label v-for="(field, name) in draftAction()?.args.properties || {}" :key="name">{{ label(String(name)) }}
+          <span v-if="structuredField(String(name), field)">通过对话配置此项</span>
+          <select v-else-if="field.enum || field.type === 'boolean'" :value="fixedFieldText(String(name))" :aria-label="`固定 ${name}`" @change="setFixedField(String(name), field, $event)"><option value="">未设置</option><option v-for="choice in field.enum || [true, false]" :key="String(choice)" :value="String(choice)">{{ display(choice) }}</option></select>
+          <input v-else :type="field.type === 'string' ? 'text' : 'number'" :min="field.minimum" :max="field.maximum" :step="field.type === 'integer' ? 1 : 'any'" :value="fixedFieldText(String(name))" :aria-label="`固定 ${name}`" @input="setFixedField(String(name), field, $event)" />
+        </label>
       </template>
       <button type="submit">应用配置</button>
       <button type="button" @click="userExecute('component.unbind', { component_id: editing })">清除绑定</button>
@@ -61,6 +65,8 @@ import { computed, inject, nextTick, onMounted, onUnmounted, reactive, ref, watc
 import { interaction, objectSchema, type JsonObject, type SemanticAction, type SemanticExecutionContext } from '../../lib/frontendControl'
 import { bindingHostKey, bindingAction, makeBinding, invokeBinding, parseArguments, readBoundValue, sameBinding, type ControlBinding } from '../../lib/workbenchBindings'
 import { controlTypes, controlGeometrySchema, controlIdSchema, controlStateKey, createControlState, createControl, placeControl, validateControls, type ControlWidget } from '../../lib/workbenchControls'
+import CapabilityInformation from './CapabilityInformation.vue'
+import { display, label, errorText } from '../../lib/capabilityPresentation'
 
 const props = withDefaults(defineProps<{ panelId: string; widgets: ControlWidget[]; active?: boolean; commitWidgets?: (widgets: ControlWidget[]) => void }>(), { active: true })
 const emit = defineEmits<{ change: [widgets: ControlWidget[]]; transfer: [request: { sourcePanelId: string; widgetId: string; targetPanelId: string; x: number; y: number }] }>()
@@ -98,6 +104,15 @@ function refreshValues(schedule = true) {
 }
 watch(() => props.active, active => { if (active !== false) refreshValues(false) })
 function draftActions() { return targets().find(target => target.id === draft.panel_id)?.surface.catalog().filter(action => !action.name.startsWith('component.')) || [] }
+function draftAction() { return draftActions().find(action => action.name === draft.action) }
+function structuredField(name: string, field: JsonObject) { return name.endsWith('_json') || field.type === 'object' || field.type === 'array' }
+function fixedFieldText(name: string) { const value = parseArguments(draft.args_json)[name]; return value === undefined ? '' : String(value) }
+function setFixedField(name: string, field: JsonObject, event: Event) {
+  const value = (event.target as HTMLInputElement).value, args = parseArguments(draft.args_json)
+  if (value === '' && field.type !== 'string') delete args[name]
+  else args[name] = field.type === 'boolean' ? value === 'true' : field.type === 'number' || field.type === 'integer' ? Number(value) : value
+  draft.args_json = JSON.stringify(args)
+}
 function statePaths() {
   const target = targets().find(item => item.id === draft.panel_id), paths: string[] = []
   function visit(value: unknown, prefix = '', depth = 0) {
