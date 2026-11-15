@@ -7,11 +7,58 @@ import time
 import pytest
 
 from test_shared_runtime import runtime, attach
+from test_online_flash_api import services
 
 
 def bind(control):
     control.info['probe_id'] = 'usb-fixture'
     return [{'probe_id': 'usb-fixture', 'port': 'COM9'}]
+
+
+@pytest.mark.parametrize('switch_during_discovery', [False, True])
+def test_online_probe_inventory_does_not_block_gui_lease(runtime, services, monkeypatch, switch_during_discovery):
+    import httpx
+    from mklink.remote.online_flash_api import create_online_flash_router
+
+    client, control, _, _, app = runtime
+    app.include_router(create_online_flash_router(services))
+    session = client.post('/_runtime/attach', json={'scope': 'uart'}).json()['session_id']
+    rows = bind(control)
+    rows[0]['serial_number'] = 'mk'
+    entered, release = threading.Event(), threading.Event()
+
+    def inventory():
+        entered.set()
+        release.wait(4)
+        return rows
+
+    monkeypatch.setattr('mklink.probes.inventory', inventory)
+
+    async def enumerate_probes():
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://127.0.0.1:8765') as http:
+            return await http.get('/api/online-flash/probes', headers={'X-Auth-Token': 'test-secret'})
+
+    pending = client.portal.start_task_soon(enumerate_probes)
+    try:
+        assert entered.wait(2)
+        started = time.monotonic()
+        response = client.post('/_runtime/heartbeat', json={'session_id': session})
+        assert response.status_code == 200
+        assert time.monotonic() - started < 1
+        assert not pending.done()
+        if switch_during_discovery:
+            async def switch():
+                app.state.mklink_state['device_generation'] = 1
+            client.portal.call(switch)
+    finally:
+        release.set()
+    response = pending.result(3)
+    if switch_during_discovery:
+        assert response.status_code == 409
+        assert 'changed during discovery' in response.json()['detail']
+        return
+    assert response.status_code == 200
+    assert [row['unique_id'] for row in response.json()] == ['mk']
 
 
 def test_slow_identity_admission_keeps_heartbeat_responsive(runtime, monkeypatch):

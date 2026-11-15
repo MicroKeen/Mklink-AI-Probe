@@ -1606,14 +1606,19 @@ def create_online_flash_router(services: OnlineFlashServices) -> APIRouter:
         control = getattr(request.app.state, 'shared_runtime', None)
         serial = None
         clocks = {}
+        identity = control.identity_stamp() if control is not None else None
         if control is not None:
-            presence = control.presence()
+            # OS serial/USB enumeration can exceed the shared lease on Linux
+            # and macOS. Keep heartbeat and GUI traffic responsive while it runs.
+            presence = await _blocking(control.presence)
             if presence['status'] == 'present':
                 from mklink.capture_clock import cached_flash_clocks
                 device = getattr(request.app.state, 'mklink_state', {}).get('device')
                 serial = presence['probe']['serial_number'].casefold()
                 clocks = cached_flash_clocks(device, presence['probe'].get('port'))
         records = await _blocking(_enumerate_probes, services.probe_provider)
+        if control is not None and identity != control.identity_stamp():
+            raise HTTPException(409, 'Device connection changed during discovery; refresh probes')
         if serial is not None:
             records = [record for record in records if record.unique_id.casefold() == serial]
         rows = _json_primitive(records)
