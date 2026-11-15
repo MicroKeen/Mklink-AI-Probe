@@ -14,7 +14,8 @@ from test_online_flash_api import app, services, request
 
 @pytest.mark.parametrize('presence', ['unselected', 'missing'])
 def test_online_probe_list_available_without_target_connection(app, presence):
-    app.state.shared_runtime = SimpleNamespace(presence=lambda: {'status': presence})
+    app.state.shared_runtime = SimpleNamespace(
+        presence=lambda: {'status': presence}, identity_stamp=lambda: ('fixture',))
     response = request(app, 'GET', '/api/online-flash/probes')
     assert response.status_code == 200
     assert [row['unique_id'] for row in response.json()] == ['mk']
@@ -29,7 +30,8 @@ def test_online_clock_choices_use_only_the_selected_ports_interface_cache(app, p
     bridge = SimpleNamespace(_firmware_capabilities=caps)
     app.state.mklink_state = {'device': SimpleNamespace(connected=True, port=port, _bridge=bridge)}
     app.state.shared_runtime = SimpleNamespace(presence=lambda: {
-        'status': 'present', 'probe': {'port': 'COM1', 'serial_number': 'MK'}})
+        'status': 'present', 'probe': {'port': 'COM1', 'serial_number': 'MK'}},
+        identity_stamp=lambda: ('fixture', port))
     row, = request(app, 'GET', '/api/online-flash/probes').json()
     if port == 'COM2':
         assert 'flash_clocks_hz' not in row
