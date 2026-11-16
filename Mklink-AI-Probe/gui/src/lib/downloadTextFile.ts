@@ -37,24 +37,32 @@ export async function saveBlobFile(filename: string, blob: Blob): Promise<boolea
         }>
       }>
     }).showSaveFilePicker
-    if (picker) {
+    // Downloads/exports may finish after the click's transient activation has
+    // expired (or originate from gui_control). The browser's normal download
+    // path does not require opening a privileged file picker at that point.
+    if (picker && navigator.userActivation?.isActive !== false) {
+      let handle: Awaited<ReturnType<NonNullable<typeof picker>>>
       try {
         const extension = filename.match(/\.([A-Za-z0-9]+)$/)?.[1]?.toLowerCase() || 'bin'
-        const handle = await picker({
+        handle = await picker.call(window, {
           suggestedName: filename,
           types: [{
             description: 'MKLink Data',
             accept: { 'application/octet-stream': [`.${extension}`] },
           }],
         })
-        const writable = await handle.createWritable()
-        await writable.write(blob)
-        await writable.close()
-        return true
       } catch (error) {
         if (error instanceof DOMException && error.name === 'AbortError') return false
-        throw error
+        // Only picker permission/activation denial can fall back. A write
+        // failure after selecting a file must be reported, never saved twice.
+        if (!(error instanceof DOMException && error.name === 'SecurityError')) throw error
+        downloadBlobFile(filename, blob)
+        return true
       }
+      const writable = await handle.createWritable()
+      await writable.write(blob)
+      await writable.close()
+      return true
     }
     downloadBlobFile(filename, blob)
     return true

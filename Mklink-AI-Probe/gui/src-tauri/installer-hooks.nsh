@@ -8,6 +8,7 @@
 ; the check for silent /UPDATE and the final directory selected by the user.
 !define MUI_CUSTOMFUNCTION_GUIINIT MklinkCheckBeforeMaintenance
 Function MklinkCheckBeforeMaintenance
+  Call MklinkCheckElevationUser
   Call MklinkResolveInstallLocation
   Push $0
   ${If} ${FileExists} "$INSTDIR\mklink-ai-probe.exe"
@@ -16,13 +17,14 @@ Function MklinkCheckBeforeMaintenance
   Pop $0
 FunctionEnd
 
-; Installation stays in the current user's context. Device registry changes
-; are performed only by an explicit Settings action through the elevated helper.
+; Fresh installs stay unelevated. Protected legacy upgrades can request UAC
+; for the same user; device registry changes remain an explicit Settings action.
 Var MklinkLegacyInstallDir
 Var MklinkShortcutFindHandle
 Var MklinkShortcutName
 
 !macro NSIS_HOOK_PREINSTALL
+  Call MklinkCheckElevationUser
   ; GUIINIT is not called in silent mode. Resolve before replacing any files,
   ; and refresh OUTDIR because Tauri set it before invoking this hook.
   Call MklinkResolveInstallLocation
@@ -48,7 +50,7 @@ Var MklinkShortcutName
 !macroend
 
 !macro NSIS_HOOK_POSTINSTALL
-  ; The new frozen helper uses ordinary user permissions, never opens hardware,
+  ; The frozen helper inherits setup's same-user token, never opens hardware,
   ; and archives invalid job journals only after acquiring runtime owner locks.
   ; Valid history and all project/user settings are retained.
   nsExec::ExecToStack '"$INSTDIR\mklink-sidecar.exe" --internal-install-history-maintenance'

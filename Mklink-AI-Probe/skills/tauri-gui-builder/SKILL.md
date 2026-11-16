@@ -43,6 +43,12 @@ Skill/MCP processes before replacement, including legacy versions without a
 shutdown API. This intentionally ends active MKLink tasks. It must preserve
 unrelated Python/AI clients and other users' processes. Verify legacy process
 cleanup and configuration preservation during actual overwrite qualification.
+Fresh/current-user installs remain `asInvoker`. If a legacy installation or
+its process requires administrator access, setup requests Windows UAC and
+continues in the selected directory with the same Windows account. Verify
+both consent and cancellation, original-path retention, child exit status and
+no extra per-user copy. Different-account elevation is refused before payload
+replacement to avoid moving user settings/shortcuts into an administrator profile.
 
 The 0.2.0 release sidecar and public Skill ZIP must contain the repository-local
 algorithm assets under `_maintainer/local/builtin_flm`. This directory is
