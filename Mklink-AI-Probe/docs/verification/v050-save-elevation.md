@@ -43,6 +43,18 @@
 
 用户已有 V0.5.0 时仍需重新下载并手动覆盖；同版本修订不会伪造更高版本号。覆盖后重新加载 Skill/MCP 宿主进程。普通新安装不提权；受保护旧目录需要同账户 UAC，不改变目录权限。
 
-本轮自动审批拒绝了 `fresh-install`、`payload`、`skill-check` 三个本地测试目录的清理命令，原因仅返回 `blocked by policy`；未改用其他方式删除，目录保留供手工处理。
+发布阶段自动审批曾以 `blocked by policy` 拒绝 `fresh-install`、`payload`、`skill-check` 清理。用户随后明确授权收尾清理，经重新盘点和路径校验后，本轮使用原生 PowerShell 删除成功；这三处目录已不再残留。
+
+## 收尾清理与下一会话
+
+- 2026-11-16 收尾清理删除 4,187,319,287 字节（3.90 GiB），其中安装测试副本/中间包/重复下载等 3,074,987,459 字节，测试运行目录 1,112,331,828 字节。F 盘盘点时余量 16.53 GiB。
+- 核对并移除 5,233 个指向本轮 `runs` 内的测试符号链接，只删除链接本身；再经工作区清理入口和普通 PowerShell 清理无链接的运行内容。链接目标在解除链接时保持，最终无测试链接残留。没有改 ACL、提权或终止残留进程。
+- 最新及上一版正式安装包、Skill、签名、manifest 和校验清单共 10 个文件保留，清理前后 SHA-256 一致。重复文件逐一与保留原件核对大小/哈希后删除；截图、日志、结果 JSON、主工作区生成资产 stash、可复用缓存和其他任务工作区保留。
+- 当前用户无修改权限的 `F:/MKLink-Build/artifacts/v050-save-elevation-20261116/protected legacy 中文 install` 保留（约 326.6 MiB）。Windows 拒绝删除以下三个测试 EXE，共 143,760 字节；不改权限、不换手段重试，交维护者手动处理：
+  - `F:/MKLink-Build/runs/run-20261116-104634-db54d3bf/pytest/test_preserves_directory_flags0/relaunch.exe`
+  - `F:/MKLink-Build/runs/run-20261116-104634-db54d3bf/pytest/test_preserves_directory_flags1/relaunch.exe`
+  - `F:/MKLink-Build/runs/run-20261116-104634-db54d3bf/pytest/test_preserves_directory_flags2/relaunch.exe`
+- 清理清单和逐项证据：`F:/MKLink-Build/reports/cleanup-v050-20261116-summary.json`、`cleanup-v050-20261116-artifacts-result.json`、`cleanup-v050-20261116-links-result.json`、`cleanup-v050-20261116-runs-result.json`。手动处理路径另列于同目录 `cleanup-v050-20261116-manual-paths.txt`。
+- 用户指定下一会话开始 0.5.1 修复：先 `git fetch microkeen`，核对 main、工作树和本交接 PR #87；从届时最新 `microkeen/main` 创建 `codex/v0.5.1-fixes`，不延续 0.5.0 修复分支。本轮不创建 0.5.1 分支、不修改当前 V0.5.0 版本或发布信息。
 
 本机证据根目录：`F:/MKLink-Build/artifacts/v050-save-elevation-20261116`。浏览器测试文件是合成载荷，禁止刷写或发布。

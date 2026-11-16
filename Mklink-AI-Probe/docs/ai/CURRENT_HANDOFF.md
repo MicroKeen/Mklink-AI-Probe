@@ -6,11 +6,11 @@
 
 - 更新时间：`2026-11-16`
 - 分支：`codex/v050-save-elevation-publication`
-- HEAD：`a38557b9`
-- 远端 HEAD：`a38557b9`
-- 工作树：PR #86 已合并；main 发布源 a38557b9。Windows/Skill 同版本修订双渠道上线，当前任务分支仅补充发布证据与交接，交接提交以 Git 为准。
-- 当前任务：PR #86 精确头 f278a821 三项 CI 全过后合并 main a38557b9。最终签名安装包普通用户无 /D 覆盖 D 盘、3687 文件及六设置保留，冻结 MCP/Web/慢下载通过；腾讯云与 GitHub 五文件完整回读、索引及回退验证通过，release 5539a7b5。版本说明、其他平台与固件不变；详见[报告](../verification/v050-save-elevation.md)。
-- 状态：`V0.5.0 同版本修订已发布并公开回读验证`
+- HEAD：`ca3a2612`
+- 远端 HEAD：`ca3a2612`
+- 工作树：发布源 main a38557b9；本分支仅补充 PR #87 的发布/清理交接，最终文档提交以 Git 为准。正式包及版本未变；下一会话新建0.5.1分支。
+- 当前任务：PR #86 main a38557b9 的 Windows/Skill 已双渠道上线，release 5539a7b5；安装与公开回读通过。收尾释放3.90 GiB、移除5233测试链接，10个正式文件哈希保持；少量手动残留见[报告](../verification/v050-save-elevation.md)。
+- 状态：`V0.5.0 已发布；清理和交接完成，下一轮 0.5.1`
 
 ## 里程碑
 
@@ -52,7 +52,7 @@
 
 ## 下一动作
 
-1. 本轮 Windows/Skill 修订已双渠道上线，版本及说明仍为 V0.5.0。已有 0.5.0 用户重新下载手动覆盖，重载 Skill/MCP；其他平台/固件不变。若继续修复，从实际 microkeen/main 开始，保留已发布附件及验证证据。
+1. 下一会话先 git fetch microkeen，核对 main、工作树及 PR #87 的最新交接；从届时最新 microkeen/main 新建 codex/v0.5.1-fixes，不复用0.5.0修复分支。本轮保持V0.5.0，不提前创建分支或改版本。
 2. 客户可直接运行新版覆盖安装器，自动结束当前用户旧MKLink与Skill/MCP，不要求手动先关旧版；活动任务会结束。安装后AI宿主需重新加载被结束的MCP。损坏历史备份保留，仍失败时收集installation-history-report.json、history-backups和诊断包，区分权限/占用/格式；不手工删除有效未知结果，不重放烧录。
 3. 客户SystemView先核对实际CH、目标IRQ锁及元数据。1µs三路溢出先采集0x40 CH2设备时间戳/长度/序号与主机单调到达时间，低频读0x10错误和0x14批次耗时；诊断开销保持一致，再判断背压、重试或调度，不直接假定80ms停读或给CH2固定优先级。多视图假离线已完成修复与安装版六窗口复验。保留目标构建快照供AXF源码路径使用，原工程重编后再清理；见[静态补充](../verification/v050-systemview-loss-reboot.md)。
 4. 有Linux/Mac实物后补验真实USB、Gatekeeper首次安装和交互式提权；不能把本轮CI结果当作这些硬件/系统验收。
@@ -71,4 +71,4 @@
 
 ## 延续协议
 
-- 正式 Windows/Skill 来源 main a38557b9、release 5539a7b5；D盘已覆盖最终签名包，测试GUI已关闭。腾讯云/GitHub替换与回读、云端临时入口/副本清理完成，详细证据、构建stash及被自动审批拒绝的本地清理路径见[报告](../verification/v050-save-elevation.md)。保留历史附件；合成浏览器固件禁止刷写或发布。
+- 正式 Windows/Skill 来源 main a38557b9、release 5539a7b5，D盘已覆盖最终签名包，GUI已关闭。PR #87 为本轮交接文档，尚未合并；新会话读取其最新记录。垃圾清理释放3.90 GiB，保留正式包/证据/缓存/生成资产stash；三个拒绝删除的测试EXE及受保护测试目录的手动路径见[报告](../verification/v050-save-elevation.md)。下次从最新main创建codex/v0.5.1-fixes；合成固件禁止刷写或发布。
