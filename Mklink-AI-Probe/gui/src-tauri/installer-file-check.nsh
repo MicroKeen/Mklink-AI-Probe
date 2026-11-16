@@ -4,6 +4,7 @@
 Var MklinkBlockedFile
 Var MklinkFileError
 Var MklinkPrepareMessage
+!include "${__FILEDIR__}\installer-elevation.nsh"
 !ifndef MKLINK_PREPARE_SCRIPT
   !define MKLINK_PREPARE_SCRIPT "${__FILEDIR__}\installer-prepare.ps1"
 !endif
@@ -45,6 +46,9 @@ Function ${PREFIX}MklinkWaitForUpgradeFiles
     nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\mklink-installer-prepare.ps1" -InstallDir "$INSTDIR"'
     Pop $0
     Pop $MklinkPrepareMessage
+    ${If} $0 == 5
+      Call MklinkTryElevatedInstall
+    ${EndIf}
     ${If} $0 != 0
       DetailPrint "$MklinkPrepareMessage"
       IfSilent blocked
@@ -58,12 +62,20 @@ Function ${PREFIX}MklinkWaitForUpgradeFiles
   ${If} $MklinkBlockedFile == ""
     Goto ready
   ${EndIf}
+  !if "${PREFIX}" == ""
+    ${If} $MklinkFileError == 5
+      Call MklinkTryElevatedInstall
+      ; Retrying an access check cannot repair a permissions problem.
+      Goto inaccessible
+    ${EndIf}
+  !endif
   ; Tolerate delayed DLL release and short antivirus scans after termination.
   ${If} $0 < 60
     IntOp $0 $0 + 1
     Sleep 250
     Goto inspect
   ${EndIf}
+  inaccessible:
   DetailPrint "MKLink file is not writable: $MklinkBlockedFile (Windows error $MklinkFileError)"
   IfSilent blocked
   MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "无法覆盖原安装目录。请关闭占用文件的软件后重试；如果旧目录需要管理员权限，请取消后以管理员身份运行此安装包。不会改装到其他目录。$\r$\n$\r$\nCannot replace the existing installation. Close software holding its files and retry. If the old directory requires administrator access, cancel and run this installer as administrator. No second installation will be created elsewhere.$\r$\n$\r$\n$MklinkBlockedFile$\r$\nWindows error: $MklinkFileError" /SD IDCANCEL IDRETRY retry

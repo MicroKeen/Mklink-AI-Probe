@@ -74,6 +74,12 @@ if ($MyInvocation.InvocationName -ne '.') {
         exit 0
     } catch {
         Write-Output ('Cannot close the previous MKLink process: ' + $_.Exception.Message)
+        $failure = $_.Exception
+        while ($failure) {
+            if ($failure -is [UnauthorizedAccessException] -or
+                ($failure -is [ComponentModel.Win32Exception] -and $failure.NativeErrorCode -eq 5)) { exit 5 }
+            $failure = $failure.InnerException
+        }
         exit 2
     }
 }

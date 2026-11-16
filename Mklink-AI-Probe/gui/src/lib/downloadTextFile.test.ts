@@ -4,11 +4,13 @@ import { downloadTextFile, saveBlobFile, timestampedLogName } from './downloadTe
 describe('downloadTextFile', () => {
   afterEach(() => {
     delete (window as Window & { showSaveFilePicker?: unknown }).showSaveFilePicker
+    delete (navigator as unknown as { userActivation?: unknown }).userActivation
     vi.doUnmock('@tauri-apps/api/core')
     vi.doUnmock('@tauri-apps/plugin-dialog')
     vi.unstubAllGlobals()
     vi.restoreAllMocks()
     vi.resetModules()
+    vi.useRealTimers()
   })
 
   it('downloads a UTF-8 text file and releases the object URL', () => {
@@ -78,6 +80,42 @@ describe('downloadTextFile', () => {
       path: 'C:\\captures\\superwatch.csv',
       contents: Array.from(new TextEncoder().encode('time,value\n0,1')),
     })
+  })
+
+  it.each(['expired', 'denied'])('downloads asynchronously prepared bytes when activation is %s', async reason => {
+    const picker = vi.fn().mockRejectedValue(new DOMException('User gesture required', 'SecurityError'))
+    Object.defineProperty(window, 'showSaveFilePicker', { value: picker, configurable: true })
+    Object.defineProperty(navigator, 'userActivation', { value: { isActive: reason !== 'expired' }, configurable: true })
+    const createObjectURL = vi.fn().mockReturnValue('blob:firmware')
+    vi.stubGlobal('URL', { createObjectURL, revokeObjectURL: vi.fn() })
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      expect(this.download).toBe('MicroLink_V4.7.4.uf2')
+      expect(this.href).toBe('blob:firmware')
+    })
+    const blob = new Blob([new Uint8Array([0, 255, 128, 64])])
+    await expect(saveBlobFile('MicroLink_V4.7.4.uf2', blob)).resolves.toBe(true)
+    expect(createObjectURL).toHaveBeenCalledWith(blob)
+    expect(click).toHaveBeenCalledOnce()
+    expect(picker).toHaveBeenCalledTimes(reason === 'expired' ? 0 : 1)
+  })
+
+  it('does not download again when the user cancels the picker', async () => {
+    Object.defineProperty(window, 'showSaveFilePicker', {
+      value: vi.fn().mockRejectedValue(new DOMException('Cancelled', 'AbortError')), configurable: true,
+    })
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click')
+    await expect(saveBlobFile('firmware.uf2', new Blob())).resolves.toBe(false)
+    expect(click).not.toHaveBeenCalled()
+  })
+
+  it.each(['SecurityError', 'NotAllowedError'])('reports %s writing the chosen file without a second download', async name => {
+    const failure = new DOMException('Write denied', name)
+    Object.defineProperty(window, 'showSaveFilePicker', {
+      value: vi.fn().mockResolvedValue({ createWritable: vi.fn().mockRejectedValue(failure) }), configurable: true,
+    })
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click')
+    await expect(saveBlobFile('firmware.uf2', new Blob())).rejects.toBe(failure)
+    expect(click).not.toHaveBeenCalled()
   })
   it('saves PNG bytes with the native PNG filter', async () => {
     const save = vi.fn().mockResolvedValue('D:/captures/chart.png')
