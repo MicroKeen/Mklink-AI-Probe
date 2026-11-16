@@ -50,7 +50,7 @@ Var MklinkShortcutName
 !macroend
 
 !macro NSIS_HOOK_POSTINSTALL
-  ; The new frozen helper uses ordinary user permissions, never opens hardware,
+  ; The frozen helper inherits setup's same-user token, never opens hardware,
   ; and archives invalid job journals only after acquiring runtime owner locks.
   ; Valid history and all project/user settings are retained.
   nsExec::ExecToStack '"$INSTDIR\mklink-sidecar.exe" --internal-install-history-maintenance'
