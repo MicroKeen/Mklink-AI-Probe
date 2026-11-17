@@ -4,12 +4,12 @@
 
 ## 当前断点
 
-- 更新时间：`2026-11-16`
+- 更新时间：`2026-11-17`
 - 分支：`codex/v050-save-elevation-publication`
-- HEAD：`ca3a2612`
-- 远端 HEAD：`ca3a2612`
-- 工作树：发布源 main a38557b9；本分支仅补充 PR #87 的发布/清理交接，最终文档提交以 Git 为准。正式包及版本未变；下一会话新建0.5.1分支。
-- 当前任务：PR #86 main a38557b9 的 Windows/Skill 已双渠道上线，release 5539a7b5；安装与公开回读通过。收尾释放3.90 GiB、移除5233测试链接，10个正式文件哈希保持；少量手动残留见[报告](../verification/v050-save-elevation.md)。
+- HEAD：`48fc268c`
+- 远端 HEAD：`48fc268c`
+- 工作树：发布源 main a38557b9；本分支仅补充 PR #87 交接，最终文档提交以 Git 为准。C盘旧工作树受当前会话保护尚未归档；下次从E盘主仓库接手。
+- 当前任务：V0.5.0 Windows/Skill 修订已双渠道上线；F盘清理3.90 GiB见[发布报告](../verification/v050-save-elevation.md)。11月17日清理C盘Codex缓存360.71 MiB，记录非C盘工作树约定，见[存储交接](../verification/v050-codex-storage-cleanup.md)。
 - 状态：`V0.5.0 已发布；清理和交接完成，下一轮 0.5.1`
 
 ## 里程碑
@@ -32,7 +32,7 @@
 ## 架构决策
 
 - 采集或调试改动须按[上位机基线](../verification/v043-host-baseline.md)同条件核对数据完整性和性能。SystemView每次附着刷新INIT/任务列表，按实际通道，不猜选；RT-Thread模板锁覆盖可记录的高优先级IRQ，保留嵌套掩码。时间窗口仅控制可视跨度，连续跟随不补造事件；统计限频不影响精确检查，暂停显示仍可缩放且不暂停采集。用户显式重启所选MKLink时停止其采集、重启一次并退役会话/释放占用，其他探针与独立UART隔离，不自动重连或重放。 桌面与Web GUI操作共用gui_control/gui_action；先显式选择窗口和新鲜控件，路由/探针身份/代次变更后重读。页面回执仅说明指令执行，异步设备任务仍核对共享终态，unconfirmed不自动重放。GUI回放仅影响本窗口；RTT/串口历史TX不重发。SystemView状态只用原有1Hz轮询，不再占用长期HTTP SSE连接，数据仍走WebSocket。
-- 默认仅构建 Windows。用 PowerShell 7、UTF-8 和 `scripts/build_workspace.ps1`，构建根为 `F:/MKLink-Build`。
+- 默认仅构建 Windows，PowerShell 7、UTF-8；构建测试用 scripts/build_workspace.ps1，根为 F:/MKLink-Build。主仓库在 E:/software/HPM5300/Mklink-AI-Probe，新工作树优先 E:/Codex-Worktrees，禁止新建到C盘；工具默认C盘时不得继续。Codex默认目录未改，用户选择先清理并记录约定。
 - Windows NSIS默认currentUser；不自动命名USB端口，只有用户确认修改/恢复名称才调用UAC助手。按2026-11-14最终指令，覆盖安装直接强制结束当前用户MKLink桌面/共享后台/Skill/MCP及其WebView，含活动任务，不依赖旧版API，不杀AI宿主或无关Python；受保护旧目录或同用户进程访问拒绝时请求同账户UAC；不同账户拒绝，取消不写入，不循环提权。覆盖安装先恢复有效的原机器级目录，尊重显式 /D 和目录页选择；机器登记/目录权限不更改，受保护目录提权后仍使用原路径，失败时不另建用户副本。损坏历史仍原样备份核验后初始化；有效未知结果不清空，权限/占用/链接异常跳过，不重放旧操作。
 - 后续发布只到腾讯云和 MicroKeen/Mklink-AI-Probe GitHub，Gitee 与旧 GitHub 保留历史，不上传新附件/标签/索引。AI / Skill / 固件按腾讯云、GitHub 顺序回退，不并发查询；备用 Skill 文件须匹配所选版本、大小、SHA-256。上海服务器直供最新版，COS/Git 存历史；COS 189 GiB 告警、207.9 GiB 停止，无日期截止。见[下载策略](tencent-updates.md)。
 - 跨会话固件联测固定上位机提交并核对 mklink/runtime 模块导入路径；主工作区和全局 editable 入口不自动代表当前任务版本。
@@ -52,7 +52,7 @@
 
 ## 下一动作
 
-1. 下一会话先 git fetch microkeen，核对 main、工作树及 PR #87 的最新交接；从届时最新 microkeen/main 新建 codex/v0.5.1-fixes，不复用0.5.0修复分支。本轮保持V0.5.0，不提前创建分支或改版本。
+1. 下一会话从E盘主仓库接手，git fetch microkeen并核对PR #87最新交接，从最新microkeen/main创建codex/v0.5.1-fixes；不复用C盘旧工作树，不提前改V0.5.0版本。新工作树须确认位于E:/Codex-Worktrees；工具默认C盘时先调整位置。
 2. 客户可直接运行新版覆盖安装器，自动结束当前用户旧MKLink与Skill/MCP，不要求手动先关旧版；活动任务会结束。安装后AI宿主需重新加载被结束的MCP。损坏历史备份保留，仍失败时收集installation-history-report.json、history-backups和诊断包，区分权限/占用/格式；不手工删除有效未知结果，不重放烧录。
 3. 客户SystemView先核对实际CH、目标IRQ锁及元数据。1µs三路溢出先采集0x40 CH2设备时间戳/长度/序号与主机单调到达时间，低频读0x10错误和0x14批次耗时；诊断开销保持一致，再判断背压、重试或调度，不直接假定80ms停读或给CH2固定优先级。多视图假离线已完成修复与安装版六窗口复验。保留目标构建快照供AXF源码路径使用，原工程重编后再清理；见[静态补充](../verification/v050-systemview-loss-reboot.md)。
 4. 有Linux/Mac实物后补验真实USB、Gatekeeper首次安装和交互式提权；不能把本轮CI结果当作这些硬件/系统验收。
@@ -71,4 +71,4 @@
 
 ## 延续协议
 
-- 正式 Windows/Skill 来源 main a38557b9、release 5539a7b5，D盘已覆盖最终签名包，GUI已关闭。PR #87 为本轮交接文档，尚未合并；新会话读取其最新记录。垃圾清理释放3.90 GiB，保留正式包/证据/缓存/生成资产stash；三个拒绝删除的测试EXE及受保护测试目录的手动路径见[报告](../verification/v050-save-elevation.md)。下次从最新main创建codex/v0.5.1-fixes；合成固件禁止刷写或发布。
+- 正式包源 main a38557b9、release 5539a7b5；PR #87交接尚未合并。正式包、证据及stash保留，合成固件禁止刷写。F盘手动残留见[发布报告](../verification/v050-save-elevation.md)；C盘工作树保护、旧临时仓库未推送提交和清理明细见[存储交接](../verification/v050-codex-storage-cleanup.md)。下次从E盘最新main创建codex/v0.5.1-fixes。
