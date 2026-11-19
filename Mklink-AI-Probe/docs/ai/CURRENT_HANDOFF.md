@@ -6,11 +6,11 @@
 
 - 更新时间：`2026-11-19`
 - 分支：`codex/v0.5.1-fixes`
-- HEAD：`c4b250f3`
-- 远端 HEAD：`c4b250f3`
-- 工作树：E 盘主工作区，分支起点 a38557b9；上位机写入 c4b250f3，桌面资源 e7d1c57a。后续交接提交以 Git 为准。
-- 当前任务：通用 OTP ROM v1、HPMLink V4.7.5 与实板单次提交见[写入验收](../verification/v051-hpm-jtag-otp-write.md)。
-- 状态：`V0.5.0 本地读写候选已安装；HPM6E80 JTAG 读取通过，首次写入结果未确认`
+- HEAD：`77791d86`
+- 远端 HEAD：`77791d86`
+- 工作树：E 盘主工作区，分支起点 a38557b9，本地 V0.5.0 安装包构建自 77791d86。交接提交以 Git 为准。
+- 当前任务：安装版 MCP 已逐字核对桌面显示，详见[实板验收](../verification/v051-hpm-jtag-otp-write.md)。
+- 状态：`V0.5.0 修复版已覆盖安装，HPM6E80 的 JTAG 读取及只读 ROM 诊断通过，永久写入暂停。`
 
 ## 里程碑
 
@@ -22,7 +22,7 @@
 
 - **慢下载保存与受保护安装目录**：公共保存及按需同用户 UAC 修复：Python7195/2跳过、GUI1299；真实 Chrome/Skill 四型号慢下载、实际 UAC 取消/同意、普通安装通过。PR #86 main a38557b9 最终签名包无 /D 覆盖 3687 文件一致，设置保留；冻结 MCP/Web 通过。腾讯云/GitHub 五文件完整回读、HEAD/Range/回退和索引通过；release 5539a7b5，见[报告](https://github.com/MicroKeen/Mklink-AI-Probe/blob/7371497486182ad103f1306c470be07f00096a86/Mklink-AI-Probe/docs/verification/v050-save-elevation.md)。
 - **GUI共享控制、回放与多窗口健康**：ba3a334b实现桌面/Web共享控制及回放，修复SystemView冗余SSE耗尽连接池。安装版6窗口72/72正常，645064事件/9任务，解析及目标/主机丢弃0，见[完整验收](../verification/v050-gui-control.md)；IRQ锁、采集中重启见[前轮](../verification/v050-systemview-loss-reboot.md)，历史/显示优化见[刷新报告](../verification/v050-systemview-refresh.md)。
-- **HPM Flash 配置、连接设置与脱机 OTP**：全系列读取及 HPM6E80 实板 256 值对照见[读取验收](../verification/v051-hpm-jtag-otp.md)。写入候选 445 项 Python、85 项 GUI 通过，安装到原 D 盘目录；仅一次提交 rc=-10/issued=1，独立回读仍为 0，见[写入验收](../verification/v051-hpm-jtag-otp-write.md)。
+- **HPM Flash 配置、连接设置与脱机 OTP**：目录覆盖 41 个型号，见[读取验收](../verification/v051-hpm-jtag-otp.md)。HPM6E80 桌面 MCP 核对 256 个显示值，ROM 读芯片标识通过。首次编程 rc=-10，Word 72 仍为 0，见[读写验收](../verification/v051-hpm-jtag-otp-write.md)。
 - **ELF 解析与完整 UART 波特率**：ELF 可写范围合并 PT_LOAD，客户 ELF 的结构体成员恢复，400 项解析/共享关联及真实浏览器通过，未操作客户板，见[ELF 报告](../verification/v050-elf-load-segments.md)。串口助手/Modbus 按 UART、RS485 独立声明使用 34 档至 10M，870 后端/25 GUI/69 Skill 及双 V4 实读通过，未发高速载荷，见[波特率报告](../verification/v050-uart-baud.md)。两项已随 ad00c962 普通用户覆盖并复验，见[覆盖报告](../verification/v050-elf-baud-overwrite.md)。
 - **固件能力提醒与采集中写入**：同一V4/STM32F103RC实测V4.7.3与V4.7.4写入前后最大采样间隔0.195/0.208/0.192ms；RTT并行为1.562ms，各轮10次写入成功且无序号/读错。真实Web写入保持约15.9kHz，三端警告一致，状态检查无设备I/O，见[能力报告](../verification/v050-firmware-capabilities.md)。V2.9.4与云端V2.9.3不误报降级；版本缓存/提醒/跳转验收见[提醒报告](../verification/v050-firmware-update-notice.md)。客户端先行、MCP重载与重启失败互斥恢复见[更新顺序](../verification/v050-update-order.md)。专项用例有重叠，最终全量结果以发布交接为准。 V3/V4拔插恢复既有实物证据见[恢复报告](../verification/v050-superwatch-swclk.md)。
 - **macOS 兼容性与跨平台回归**：最终原生包源8d532019；Mac ARM/Intel DMG与Linux AppImage/DEB的冻结后台、真实WebView/MCP操作、错误签名拒绝、有效更新与重启通过。USB各73项通过/1项Windows专属跳过。Windows Python7175/2跳过、GUI1291和生产构建通过；两渠道13附件及5平台索引验证完成。设施边界见[原生验收](../verification/v050-native-release.md)。
@@ -48,11 +48,11 @@
 - **普通 V4**：沿用V4.7.4 / STM32F103RC及此前IRQ锁/CH2 8KiB目标；本轮没有刷写、供电或应用变更。ba3a334b安装版SWD10MHz，四变量1ms+RTT CH0/1+Trace CH2，645064事件/9任务且无解析/目标/主机丢弃。RTT没有文本载荷，UART/RS485未接；采集停止、断开、测试窗口关闭，下次重新核对占用。
 - **普通 V3**：固件会话已回读 V3.6.10 / 2026-11-10T14:14:14，原 STM32F103 的一次 SWCLK 拔插恢复通过；测试结束时后台退出、设备释放。下次仍需重新核对占用。
 - **普通 V2**：固件V2.9.5 / 2026-11-15T21:39:19，测试源码56f5fdf5、合并main866fc5ff，未重编。固件会话备用V2+STM32F103RE完成47/49命令、34档UART189回环及复位/烧录/采集/Keil联测，原512KiB恢复一致。YMODEM对端、Modbus从站、USB12Mbps、H7双核、深度低功耗和SWD拔插未完整验收；原故障V2取消恢复。11月16日上位机用当前V2+STM32F103拍公众号：匹配AXF后四路1kHz记录10135组、Excel与回放通过；未刷写，设备已释放，GUI留在回放。
-- **HPMLink V4**：HPM6E80，JTAG 30 MHz；用户授权更新到 V4.7.5 开发固件（2026-11-19 14:36:54）。Word 72 一次 0→1 授权已用，读回熔丝和影子均为 0。重新操作前确认板卡、占用和授权。
+- **HPMLink V4**：HPM6E80，JTAG 30 MHz，V4.7.5 开发固件（2026-11-19 15:00:56）。单次编程授权已用，用户暂停永久写入。只读 ROM 调用返回 0x10206141，Word 72 熔丝、影子均为 0，未锁定。
 
 ## 下一动作
 
-1. 固件会话定位 OTP ROM rc=-10。先无熔丝编程复验 ROM 返回链路，永久写入须另一次明确授权；其他型号按已核对的板卡配置开展实物验收。版本 V0.5.0，PR #88 待审。
+1. 永久写入已暂停。HPM6E80 首次编程失败的原因待查，其他型号按已核实配置开展实物验收。产品版本 V0.5.0，PR #88 待审。
 2. 客户可直接运行新版覆盖安装器，自动结束当前用户旧MKLink与Skill/MCP，不要求手动先关旧版；活动任务会结束。安装后AI宿主需重新加载被结束的MCP。损坏历史备份保留，仍失败时收集installation-history-report.json、history-backups和诊断包，区分权限/占用/格式；不手工删除有效未知结果，不重放烧录。
 3. 客户SystemView先核对实际CH、目标IRQ锁及元数据。1µs三路溢出先采集0x40 CH2设备时间戳/长度/序号与主机单调到达时间，低频读0x10错误和0x14批次耗时；诊断开销保持一致，再判断背压、重试或调度，不直接假定80ms停读或给CH2固定优先级。多视图假离线已完成修复与安装版六窗口复验。保留目标构建快照供AXF源码路径使用，原工程重编后再清理；见[静态补充](../verification/v050-systemview-loss-reboot.md)。
 4. 有Linux/Mac实物后补验真实USB、Gatekeeper首次安装和交互式提权；不能把本轮CI结果当作这些硬件/系统验收。
