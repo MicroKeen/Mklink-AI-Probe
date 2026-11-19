@@ -2,10 +2,13 @@
 from dataclasses import dataclass
 import hashlib
 import json
+import os
+from pathlib import Path
 import re
 import secrets
 
 from .hpm_config import HPM_ROM_TARGETS
+from .hpm_otp import _u32
 from .hpm_otp_profiles import validate_change
 
 
@@ -37,12 +40,58 @@ PROFILES = {
                           0x011BF000, 0xF4104008, 0x10000, 3000, 3600),
 }
 
+# SDK 1.13 hpm_misc.h, hpm_soc_ip.h and hart-0 flash_xip.ld. These are
+# geometry limits, not chip/revision discriminators or authorization to burn.
+# (SBA alias of local ILM address 0, usable bytes, PCFG LDO2P5 register).
+ILM_AND_LDO = {
+    'HPM51': (0x011A0000, 0x40000, 0xF4104008),
+    'HPM53': (0x01040000, 0x20000, 0xF4104008),
+    'HPM5E': (0x011C0000, 0x20000, 0xF4104008),
+    'HPM62': (0x01040000, 0x20000, 0xF40C4008),
+    'HPM63': (0x01040000, 0x20000, 0xF40C4008),
+    'HPM64': (0x01000000, 0x40000, 0xF40C4008),
+    'HPM67': (0x01000000, 0x40000, 0xF40C4008),
+    'HPM68': (0x01180000, 0x40000, 0xF4104008),
+    'HPM6E': (0x01180000, 0x40000, 0xF4104008),
+    'HPM6P': (0x011C0000, 0x20000, 0xF4104008),
+}
+
+
+def _qualified_profile(path, part):
+    """An explicitly selected operator file supplies independently qualified facts."""
+    from .hpm_jtag_otp import otp_base
+    path = Path(path)
+    if not path.is_absolute() or path.stat().st_size > 65536:
+        raise ValueError('Invalid absolute HPM OTP qualification file')
+    catalog = json.loads(path.read_text(encoding='utf-8-sig'))
+    if not isinstance(catalog, dict) or catalog.get('schema') != 1 or not isinstance(catalog.get('parts'), dict):
+        raise ValueError('Invalid HPM OTP qualification schema')
+    row = catalog['parts'].get(part)
+    if row is None:
+        return None
+    required = {'chip_id', 'driver_version', 'scratch_offset', 'min_mv', 'max_mv', 'user_words', 'evidence'}
+    if (not isinstance(row, dict) or set(row) != required or row['user_words'] != [69, 79]
+            or not isinstance(row['evidence'], str) or not row['evidence'].strip()):
+        raise ValueError('HPM OTP profile requires confirmed application words 69..79 and reference evidence')
+    chip, version, offset, minimum, maximum = (
+        _u32(row[key], key) for key in ('chip_id','driver_version','scratch_offset','min_mv','max_mv'))
+    alias, size, ldo = ILM_AND_LDO[part[:5]]
+    if (chip in (0, 0xffffffff, 0x20150407) or version in (0, 0xffffffff)
+            or offset % 16 or offset + 4096 > size or not 3000 <= minimum <= maximum <= 3600):
+        raise ValueError('Invalid HPM OTP chip, ROM ABI, ILM window or 3.3 V supply limits')
+    return RomProfile(chip, otp_base(part), version, offset, alias + offset, ldo, 0x10000, minimum, maximum)
+
 
 def profile_for(part, model):
     name = part.strip().upper()
-    if model == 'V4' and name in HPM_ROM_TARGETS:
-        return PROFILES.get(name[:7])
-    return None
+    if model != 'V4' or name not in HPM_ROM_TARGETS or name.endswith('00'):
+        return None
+    known = PROFILES.get(name[:7])
+    # HPM5301 retains its established write/lock protocol.
+    if known or name.startswith('HPM5301'):
+        return known
+    path = os.environ.get('MKLINK_HPM_OTP_QUALIFICATIONS')
+    return _qualified_profile(path, name[:7]) if path else None
 
 
 def supported(bridge):
@@ -105,15 +154,16 @@ def run(device, part, model, word, expected, desired, *, commit=False, target_id
     uid = device.read_memory(profile.otp_base + 0x420, 16)
     if len(uid) != 16 or uid in (bytes(16), b'\xff' * 16, bytes.fromhex('07041520') * 4):
         raise ValueError('Cannot bind a programming plan to this target UID')
-    identity = hashlib.sha256(uid).hexdigest()
-    if commit and target_identity != identity:
-        raise ValueError('Target UID changed since preview; read again')
+    fingerprint = hashlib.sha256(uid).hexdigest()
+    if commit and (not isinstance(target_identity, dict) or target_identity.get('uid') != fingerprint
+                   or target_identity.get('profile') != profile.encode()):
+        raise ValueError('Target UID or OTP profile changed since preview; read again')
     for line in profile_lines(profile):
         bridge.send_command(line, timeout=5)
     echo = bridge.send_command('print("MKLINK_OTP_PROFILE",mkotp)', timeout=5)
     if re.findall(r'(?m)^\s*MKLINK_OTP_PROFILE\s+([0-9a-f]+)\s*$', echo) != [profile.encode()]:
         raise ValueError('Probe did not accept the complete OTP profile')
-    nonce = secrets.randbelow(0x7fffffff) + 1
+    nonce = target_identity['request_id'] if commit else secrets.randbelow(0x7fffffff) + 1
     command = word_call(nonce, change['word'], change['expected'], change['desired'], commit)
     reply = bridge.send_command(command, timeout=12)
     record = _result(reply, nonce, profile, change, commit)
@@ -124,6 +174,7 @@ def run(device, part, model, word, expected, desired, *, commit=False, target_id
     for mode in (False, True):
         call = word_call(nonce, change['word'], change['expected'], change['desired'], mode)
         script.extend([f'if {call} != 0:', "    raise Exception('Stop; read back before retrying')"])
-    return dict(change, target_identity=identity, verified=commit, after=record['after'] if commit else None,
+    return dict(change, target_identity=dict(uid=fingerprint, profile=profile.encode(), request_id=nonce),
+                verified=commit, after=record['after'] if commit else None,
                 voltage_mv=record['mv'], irreversible=True, target_reset_required=True,
                 script='\n'.join(script))

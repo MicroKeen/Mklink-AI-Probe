@@ -35,6 +35,11 @@ def _profile(part: str, model: str):
         ]
         legacy = part in ("HPM5301", "HPM5301XEGX")
         from .hpm_jtag_otp_rom import profile_for
+        try:
+            write_api = "legacy" if legacy else "rom_v1" if profile_for(part, model) else None
+            write_error = None
+        except (OSError, ValueError) as exc:
+            write_api, write_error = None, str(exc)
         if not legacy:
             rows = [
                 ("HARD_LOCK", "永久写保护位图", 0, 0, 32, "每位对应四个 OTP Word。"),
@@ -63,7 +68,7 @@ def _profile(part: str, model: str):
             fields=fields,
             source=f"HPM SDK / {part}",
             otp_word_count=128,
-            jtag_otp_write_api="legacy" if legacy else "rom_v1" if profile_for(part, model) else None,
+            jtag_otp_write_api=write_api, jtag_otp_write_error=write_error,
             reason="JTAG 可读取 Word 0–127，并分别显示熔丝值与影子值。",
             security=None,
         ), None

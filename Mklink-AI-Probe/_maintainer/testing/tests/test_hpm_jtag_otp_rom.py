@@ -48,6 +48,7 @@ def test_profile_and_bound_single_word():
     assert d.current == 0
     result = rom.run(*args, commit=True, target_identity=plan['target_identity'])
     assert result['verified'] and result['after'] == 1
+    assert result['target_identity'] == plan['target_identity']
 
 
 @pytest.mark.parametrize('part,w,old,new', [('HPM6E00',72,0,1), ('HPM6E84',72,0,1), ('HPM6E80',0,0,1),
@@ -66,6 +67,26 @@ def test_old_firmware_stops_without_legacy_fallback():
     with pytest.raises(ValueError, match='OTP ROM API v1'):
         rom.run(d, 'HPM6E80', 'V4', 72, 0, 1)
     assert d._bridge.send_command.call_count == 1
+
+
+@pytest.mark.parametrize('part', ['HPM5151', 'HPM5361', 'HPM5E31', 'HPM6280', 'HPM6360', 'HPM6450',
+                                  'HPM6750', 'HPM6880', 'HPM6E84', 'HPM6P81'])
+def test_qualified_part_uses_its_sdk_geometry(tmp_path, monkeypatch, part):
+    from mklink.hpm_jtag_otp import otp_base
+    path = tmp_path/'qualified.json'
+    monkeypatch.setenv('MKLINK_HPM_OTP_QUALIFICATIONS', str(path))
+    # Synthetic identities only. They do not qualify a physical board.
+    row = dict(chip_id=17, driver_version=1, scratch_offset=0x1000, min_mv=3100,
+               max_mv=3500, user_words=[69,79], evidence='simulated board')
+    path.write_text(json.dumps({'schema':1,'parts':{part:row}}))
+    profile = rom.profile_for(part,'V4')
+    assert profile.otp_base == otp_base(part)
+    assert profile.ram_bus == rom.ILM_AND_LDO[part[:5]][0] + 0x1000
+    assert rom.profile_for(part,'V3') is None
+    row['scratch_offset'] = 2**31
+    path.write_text(json.dumps({'schema':1,'parts':{part:row}}))
+    with pytest.raises(ValueError, match='ILM'):
+        rom.profile_for(part,'V4')
 
 
 @pytest.mark.parametrize('bad', [dict(id=2),dict(issued=1),dict(mv=2900),dict(valid=8),dict(rc=-7),

@@ -4098,7 +4098,6 @@ def create_app(
             try:
                 device = _state["device"]
                 part = part_number.strip().upper()
-                generic = hpm_jtag_otp_rom.profile_for(part, model) is not None
                 if action != "program":
                     jtag_otp_plans.clear()
                 if action == "read":
@@ -4106,7 +4105,8 @@ def create_app(
                         from mklink.device_configuration import read_configuration
                         return await run_in_threadpool(read_configuration, device, part_number, model, True)
                     return await run_in_threadpool(hpm_otp.snapshot, device, part_number, model)
-                if generic and action in ("plan", "program"):
+                if (action in ("plan", "program")
+                        and (plan_id is not None or hpm_jtag_otp_rom.profile_for(part, model) is not None)):
                     runtime = getattr(app.state, "shared_runtime", None)
                     if runtime is None:
                         raise ValueError("Select a shared probe runtime before configuring OTP")

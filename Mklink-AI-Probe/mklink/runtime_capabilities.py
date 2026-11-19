@@ -215,10 +215,7 @@ def validate_arguments(capability, arguments):
             raise HTTPException(422, 'Offline deployment requires config, stable request_id and confirm=true')
     if capability.startswith('hpm_otp_jtag_'):
         action = capability.removeprefix('hpm_otp_jtag_')
-        from .hpm_jtag_otp_rom import profile_for
-        part = arguments.get('part_number')
-        token_commit = (action == 'program' and isinstance(part, str)
-                        and profile_for(part, arguments.get('model', 'V4')) is not None)
+        token_commit = action == 'program' and 'plan_id' in arguments
         allowed = {'part_number', 'model'}
         if token_commit:
             allowed.add('plan_id')
