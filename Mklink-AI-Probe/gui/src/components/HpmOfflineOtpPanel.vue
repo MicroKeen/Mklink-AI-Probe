@@ -6,6 +6,7 @@ import { API_BASE } from '../lib/runtimeEndpoint'
 import { customOtpEntries, otpCsv, otpHex as hex, parseOtpCsv, type OtpEntry } from '../lib/otpConfiguration'
 import { saveTextFile } from '../lib/downloadTextFile'
 import HpmOtpGrid from './HpmOtpGrid.vue'
+import HpmUserOtpPanel from './HpmUserOtpPanel.vue'
 import { hpmJtagOtpProfile, otpFieldValue } from '../lib/hpmOtpProfiles'
 import DeviceConfigurationPanel from './DeviceConfigurationPanel.vue'
 import type { HpmOfflineOtp } from '../types/offlineFlash'
@@ -24,7 +25,9 @@ let revision = 0, disposed = false
 const unavailable = computed(() => props.disabled || busy.value || importing.value)
 const readAllowed = computed(() => deviceStatus.value.connected && (!props.probeId || props.probeId === deviceStatus.value.probe_id))
 const profile = computed(() => hpmJtagOtpProfile(props.partNumber))
-const canWrite = computed(() => ['HPM5301', 'HPM5301XEGX'].includes(props.partNumber.toUpperCase()))
+const legacyWrite = computed(() => ['HPM5301', 'HPM5301XEGX'].includes(props.partNumber.toUpperCase()))
+const genericWrite = ref(false)
+const canWrite = computed(() => legacyWrite.value || genericWrite.value)
 const readEntries = computed(() => rows.value.map(row => ({ ...row, value: row.current })))
 const selectedEntry = computed(() => rows.value.find(item => item.word === selected.value))
 const selectedFields = computed(() => profile.value?.words[selected.value]?.fields || [])
@@ -41,7 +44,7 @@ const hasDraft = computed(() => pending.value.length > 0 || locks.value.length >
 const valid = computed(() => canWrite.value && !editing.value && (pending.value.length > 0 || locks.value.length > 0)
   && pending.value.every(item => {
     const expected = u32(item.expected), current = rows.value.find(row => row.word === item.word)
-    return expected !== null && ((expected & item.value) >>> 0) === expected
+    return expected !== null && (!genericWrite.value || expected !== item.value) && ((expected & item.value) >>> 0) === expected
       && (!current || (current.current === expected && current.locked === false))
   }) && (!locks.value.length || (u32(expectedHardLock.value) !== null
     && (!rows.value.length || u32(expectedHardLock.value) === hardLock.value))))
@@ -50,7 +53,7 @@ watch([pending, locks, expectedHardLock, confirmed, valid, hasDraft], () => emit
   words: pending.value.map(item => ({ word: item.word, expected: hex(u32(item.expected)!), desired: hex(item.value) })),
   locks: [...locks.value], expected_hard_lock: locks.value.length ? hex(u32(expectedHardLock.value)!) : '', confirm_irreversible: true,
 } : undefined, hasDraft.value), { deep: true })
-function clearSnapshot() { rows.value = []; hardLock.value = null; readAt.value = ''; confirmed.value = false }
+function clearSnapshot() { rows.value = []; hardLock.value = null; readAt.value = ''; confirmed.value = false; genericWrite.value = false }
 watch([() => props.partNumber, () => props.probeId, () => deviceStatus.value.probe_id, () => deviceStatus.value.device_generation, () => deviceStatus.value.connected], () => {
   revision++; clearSnapshot(); pending.value = []; locks.value = []; expectedHardLock.value = ''; editing.value = false; error.value = ''; view.value = 'read'
 })
@@ -75,6 +78,7 @@ async function refresh() {
       throw new Error(tr('共享后台未返回完整 JTAG OTP 快照，请检查上位机版本。', 'Incomplete JTAG OTP snapshot. Check the host version.'))
     }
     rows.value = body.words; hardLock.value = body.hard_lock; readAt.value = body.read_at
+    genericWrite.value = body.jtag_otp_write_api === 'rom_v1'
     pending.value = pending.value.map(item => ({ ...item, expected: expectedHex(item.word) }))
     expectedHardLock.value = body.hard_lock == null ? '' : hex(body.hard_lock)
   } catch (cause) { if (!disposed && revision === current) error.value = cause instanceof Error ? cause.message : String(cause) }
@@ -141,9 +145,11 @@ async function exportFile() {
           </template>
           <div>{{ tr('影子值', 'Shadow') }} {{ selectedEntry.shadow === null ? '—' : hex(selectedEntry.shadow) }} · {{ tr('写保护', 'Write protection') }} {{ selectedEntry.locked === null ? tr('未知', 'Unknown') : selectedEntry.locked ? tr('是', 'Yes') : tr('否', 'No') }}</div>
         </div>
-        <details v-if="canWrite && active !== false && readAllowed" class="system-fields"><summary>{{ tr('系统字段（只读）', 'System fields (read-only)') }}</summary><DeviceConfigurationPanel expanded hide-user-otp :part-number="partNumber" model="V4" :unlock-before-download="false" :lock-after-download="false" /></details>
+        <details v-if="legacyWrite && active !== false && readAllowed" class="system-fields"><summary>{{ tr('系统字段（只读）', 'System fields (read-only)') }}</summary><DeviceConfigurationPanel expanded hide-user-otp :part-number="partNumber" model="V4" :unlock-before-download="false" :lock-after-download="false" /></details>
       </template>
       <template v-else>
+        <details v-if="genericWrite && readAllowed && active !== false" class="system-fields"><summary>{{ tr('直接写入当前芯片', 'Program connected target') }}</summary><HpmUserOtpPanel :part-number="partNumber" model="V4" generic :probe-id="probeId || deviceStatus.probe_id" :generation="deviceStatus.device_generation" /></details>
+        <p v-if="genericWrite" class="hint">{{ tr('写入需要下载器支持 JTAG OTP ROM v1，目标为稳定的 3.3 V 供电。', 'Programming requires probe JTAG OTP ROM v1 and a stable 3.3 V target supply.') }}</p>
         <div class="actions edit-actions"><button class="btn" :disabled="unavailable" data-testid="offline-otp-add" @click="addDialog()">{{ tr('添加 Words', 'Add Words') }}</button><button class="btn" :disabled="unavailable || !hasDraft" data-testid="offline-otp-clear" @click="pending = []; locks = []; editing = false">{{ tr('移除所有', 'Remove all') }}</button><span>{{ tr('点击字可编辑', 'Click a word to edit') }}</span></div>
         <HpmOtpGrid v-if="pending.length" :entries="pending" :columns="columns" :selected="selected" :disabled="unavailable" @select="selected = $event; addDialog($event)" />
         <p v-else-if="!editing" class="empty">{{ tr('添加 Words 或导入 CSV / TXT 配置。', 'Add Words or import a CSV / TXT configuration.') }}</p>
@@ -157,7 +163,7 @@ async function exportFile() {
         <section class="preview">
           <h4>{{ tr('随镜像部署的 OTP 配置', 'OTP configuration deployed with images') }}</h4>
           <table v-if="pending.length"><thead><tr><th>Word</th><th>{{ tr('预期旧值', 'Expected value') }}</th><th>{{ tr('目标值', 'Desired value') }}</th><th /></tr></thead><tbody><tr v-for="item in pending" :key="item.word"><td>{{ item.word }}</td><td><input v-model="item.expected" :disabled="unavailable" :aria-label="`OTP expected ${item.word}`" :placeholder="tr('读取或手动填写', 'Read or enter explicitly')"></td><td>{{ hex(item.value) }}</td><td><button class="btn" :disabled="unavailable" :aria-label="`Remove Word ${item.word}`" @click="pending = pending.filter(row => row.word !== item.word)">{{ tr('移除', 'Remove') }}</button></td></tr></tbody></table>
-          <details><summary>{{ tr('永久写保护', 'Permanent write protection') }}</summary><p>{{ tr('锁定最后执行，之后整个组无法再次写入。请先确定组内所有数据。', 'Locks run last and prevent further programming of the entire group. Finalize all data in the group first.') }}</p><label v-for="group in [18, 19]" :key="group" class="confirmation"><input v-model="locks" type="checkbox" :value="group" :disabled="unavailable">Word {{ group * 4 }}–{{ group * 4 + 3 }}</label><label v-if="locks.length">{{ tr('预期 HARD_LOCK（从待烧芯片读取，不要猜测）', 'Expected HARD_LOCK (read from the chip; do not guess)') }}<input v-model="expectedHardLock" :disabled="unavailable" aria-label="Offline OTP hard lock"></label></details>
+          <details v-if="legacyWrite"><summary>{{ tr('永久写保护', 'Permanent write protection') }}</summary><p>{{ tr('锁定最后执行，之后整个组无法再次写入。请先确定组内所有数据。', 'Locks run last and prevent further programming of the entire group. Finalize all data in the group first.') }}</p><label v-for="group in [18, 19]" :key="group" class="confirmation"><input v-model="locks" type="checkbox" :value="group" :disabled="unavailable">Word {{ group * 4 }}–{{ group * 4 + 3 }}</label><label v-if="locks.length">{{ tr('预期 HARD_LOCK（从待烧芯片读取，不要猜测）', 'Expected HARD_LOCK (read from the chip; do not guess)') }}<input v-model="expectedHardLock" :disabled="unavailable" aria-label="Offline OTP hard lock"></label></details>
           <p>{{ tr('先检查芯片和旧值，再下载并逐字节校验全部固件，最后写入用户数据、回读并永久锁定。失败即停止；旧下载器固件须先升级。', 'Check the chip and expected values, then program and byte-verify every image, write and read back user data, and apply permanent locks last. Stop on failure. Older probe firmware requires an upgrade.') }}</p>
           <p v-if="hasDraft && !valid" role="status">{{ tr('请完成编辑，检查预期旧值、目标值和保护锁。', 'Finish editing and check expected values, desired values and locks.') }}</p>
           <label class="confirmation"><input v-model="confirmed" type="checkbox" :disabled="unavailable || !valid" data-testid="offline-otp-confirm">{{ tr('确认部署并触发后永久写入以上配置', 'Confirm permanent programming of this configuration when deployed and triggered') }}</label>

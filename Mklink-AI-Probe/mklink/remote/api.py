@@ -4079,12 +4079,16 @@ def create_app(
             except (ValueError, RuntimeError, OSError, DeviceError) as error:
                 raise HTTPException(status_code=422, detail=str(error)) from error
 
+    from mklink.remote.hpm_isp_otp_plans import OtpBinding, OtpPlans
+    jtag_otp_plans = OtpPlans()
+
     @app.post("/api/device/configuration/hpm-user-otp/{action}")
     async def hpm_user_otp(action: str, part_number: str = Body(...), model: str = Body("V4"),
-                           word: int = Body(69, strict=True), expected: int | str = Body(0),
-                           desired: int | str = Body(0), confirm_irreversible: bool = Body(False, strict=True),
+                           word: int | None = Body(None, strict=True), expected: int | str | None = Body(None),
+                           desired: int | str | None = Body(None), confirm_irreversible: bool = Body(False, strict=True),
+                           plan_id: str | None = Body(None, max_length=64),
                            extended: bool = Body(False, strict=True)):
-        from mklink import hpm_otp
+        from mklink import hpm_otp, hpm_jtag_otp_rom
         from mklink.device import DeviceError
         if action not in ("read", "plan", "program", "lock-plan", "lock-program"):
             raise HTTPException(status_code=422, detail="Unsupported OTP action")
@@ -4093,11 +4097,35 @@ def create_app(
         async with async_target_debug_lease(_state, "hpm-user-otp"):
             try:
                 device = _state["device"]
+                part = part_number.strip().upper()
+                generic = hpm_jtag_otp_rom.profile_for(part, model) is not None
+                if action != "program":
+                    jtag_otp_plans.clear()
                 if action == "read":
                     if extended or part_number.strip().upper() not in ("HPM5301", "HPM5301XEGX"):
                         from mklink.device_configuration import read_configuration
                         return await run_in_threadpool(read_configuration, device, part_number, model, True)
                     return await run_in_threadpool(hpm_otp.snapshot, device, part_number, model)
+                if generic and action in ("plan", "program"):
+                    runtime = getattr(app.state, "shared_runtime", None)
+                    if runtime is None:
+                        raise ValueError("Select a shared probe runtime before configuring OTP")
+                    binding = OtpBinding(runtime.info["probe_id"], device.port.casefold(),
+                                         _state.get("device_generation", 0), part)
+                    if action == "plan":
+                        change = await run_in_threadpool(hpm_jtag_otp_rom.run, device, part, model,
+                                                        word, expected, desired)
+                        preview = jtag_otp_plans.remember(binding, change)
+                        del preview["target_identity"]
+                        return preview
+                    if not confirm_irreversible or not plan_id or any(v is not None for v in (word, expected, desired)):
+                        raise ValueError("Submit only the confirmed JTAG OTP plan_id")
+                    change = jtag_otp_plans.consume(plan_id, binding)
+                    result = await run_in_threadpool(hpm_jtag_otp_rom.run, device, part, model,
+                                                     change["word"], change["expected"], change["desired"],
+                                                     commit=True, target_identity=change["target_identity"])
+                    del result["target_identity"]
+                    return result
                 if action == "lock-plan":
                     return await run_in_threadpool(hpm_otp.lock_plan, device, word, expected, part_number, model)
                 if action == "lock-program":

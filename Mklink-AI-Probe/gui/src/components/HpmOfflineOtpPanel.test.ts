@@ -115,3 +115,15 @@ it('shows HPM6E80 JTAG words and ISP field definitions without a write workflow'
   expect(w.find('[aria-label="Word 127"]').exists()).toBe(true)
   expect(w.find('[data-testid=offline-otp-write-view]').exists()).toBe(false)
 })
+
+it('offers the HPM6E80 host profile after reading and keeps group locking disabled', async () => {
+  status.value.connected = true
+  const w = panel()
+  await w.setProps({ partNumber: 'HPM6E80', active: true })
+  fetchMock.mockResolvedValue({ok: true, json: async () => ({ ...snapshot(), jtag_otp_write_api: 'rom_v1' })})
+  await w.get('[data-testid=offline-otp-read]').trigger('click')
+  await flushPromises()
+  await w.get('[data-testid=offline-otp-write-view]').trigger('click')
+  expect(w.find('[data-testid=hpm-user-otp]').exists()).toBe(true)
+  expect(w.find('input[type=checkbox][value="18"]').exists()).toBe(false)
+})

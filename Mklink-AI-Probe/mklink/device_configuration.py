@@ -34,6 +34,7 @@ def _profile(part: str, model: str):
             ("USB_PID", "芯片 ROM USB 产品标识", 68, 0, 16, "16位产品标识，与VID配合使用。不是串口号；修改不会直接改变应用程序自己定义的USB设备信息。当前只读。"),
         ]
         legacy = part in ("HPM5301", "HPM5301XEGX")
+        from .hpm_jtag_otp_rom import profile_for
         if not legacy:
             rows = [
                 ("HARD_LOCK", "永久写保护位图", 0, 0, 32, "每位对应四个 OTP Word。"),
@@ -62,6 +63,7 @@ def _profile(part: str, model: str):
             fields=fields,
             source=f"HPM SDK / {part}",
             otp_word_count=128,
+            jtag_otp_write_api="legacy" if legacy else "rom_v1" if profile_for(part, model) else None,
             reason="JTAG 可读取 Word 0–127，并分别显示熔丝值与影子值。",
             security=None,
         ), None
