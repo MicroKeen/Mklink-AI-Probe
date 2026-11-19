@@ -100,6 +100,16 @@ def test_invalid_preflight_evidence(bad):
         rom._result('HPM_OTP_ROM '+json.dumps(record)+'\n0\n', 1, p, dict(word=72,expected=0,desired=1,delta=1), False)
 
 
+def test_uncertain_commit_keeps_physical_readback_and_never_reports_success():
+    p = rom.PROFILES['HPM6E80']
+    record = dict(v=1,id=1,word=72,commit=1,rc=-10,issued=1,valid=31,chip=p.chip_id,mv=3227,
+                  before=0,delta=1,after=0,rom_status=0)
+    with pytest.raises(ValueError, match='issued=1, physical_after=0x00000000') as error:
+        rom._result('HPM_OTP_ROM '+json.dumps(record)+'\n-10\n',1,p,
+                    dict(word=72,expected=0,desired=1,delta=1),True)
+    assert 'rom_status' not in str(error.value)
+
+
 def test_offline_compiles_the_same_guarded_profile_and_rejects_permanent_lock():
     cfg = dict(words=[dict(word=72, expected=0, desired=1)], confirm_irreversible=True)
     plan = resolve(cfg, 'HPM6E80', 'V4')

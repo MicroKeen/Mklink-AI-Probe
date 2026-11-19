@@ -117,11 +117,20 @@ def _result(reply, request_id, profile, change, commit):
     record = json.loads(lines[0])
     required = ('v','id','word','commit','rc','issued','valid','chip','mv','before','delta','after','rom_status')
     if (not isinstance(record, dict) or any(type(record.get(k)) is not int for k in required)
+            or record['issued'] not in (0, 1) or not 0 <= record['valid'] <= 63
+            or any(not 0 <= record[k] <= 0xffffffff for k in ('chip','mv','before','delta','after','rom_status'))
             or (record['v'], record['id'], record['word'], record['commit'], record['rc'])
             != (1, request_id, change['word'], int(commit), int(status[0]))):
         raise ValueError('Uncorrelated OTP result; read again, do not retry programming')
     if record['rc'] != 0:
-        raise ValueError(f"OTP ROM rejected operation (rc={record['rc']}, issued={record['issued']}); read again before continuing")
+        details = f"rc={record['rc']}, issued={record['issued']}"
+        if record['issued'] == 1:
+            if record['valid'] & 16:
+                details += f", physical_after=0x{record['after']:08X}"
+            if record['valid'] & 32:
+                details += f", rom_status={record['rom_status']}"
+            raise ValueError(f"OTP 写入请求已发出，结果未确认（{details}）。请重新读取熔丝，不要重试。")
+        raise ValueError(f"OTP ROM preflight/setup failed ({details}); no programming request issued")
     flags = 63 if commit else 15
     if (record['issued'] != int(commit) or record['valid'] & flags != flags
             or record['chip'] != profile.chip_id or record['before'] != change['expected']
