@@ -39,7 +39,8 @@ SystemView 显示动作：`systemview.window`（seconds=0.5/1/2/5/10/30/60）、
    value=...)` 设置输入/选择框。复选框传布尔值；下拉选项须来自实际 options。
 4. `control.click` 调用原有按钮/菜单处理程序。页面、设备代次、控件内容变化会拒绝旧
    控件；重新读取后按当前意图决定，不能自动重放烧录、写入、发送或升级操作。
-5. 再取 snapshot/controls，并查询对应共享任务的终态。`applied` 仅确认前端已执行
+5. 在 JTAG 或 UART ISP 的 OTP 读视图，点击标签为 `Word N` 的单元格并重新获取 controls。选中控件的 `description` 包含界面当前显示的熔丝值、影子值和锁状态。换选单元格只读取窗口中已有的结果。
+6. 再取 snapshot/controls，并查询对应共享任务的终态。`applied` 仅确认前端已执行
    指令，不代表异步设备操作、文件解析或烧录成功。unconfirmed 不自动重试。
 
 这条路径包含配置、在线/脱机烧录、OTP 配方、串口/Modbus 表单、日志、显示偏好、

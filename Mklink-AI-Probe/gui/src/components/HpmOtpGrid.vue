@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { otpHex } from '../lib/otpConfiguration'
 import { otpFieldValue, type OtpWord } from '../lib/hpmOtpProfiles'
 import { tr } from '../composables/useLanguage'
-const props = defineProps<{ entries: { word: number; value: number | null; locked?: boolean | null; shadow?: number | null }[]; columns: number; selected: number; disabled?: boolean; definitions?: OtpWord[] }>()
+const props = defineProps<{ entries: { word: number; value: number | null; locked?: boolean | null; shadow?: number | null }[]; columns: number; selected: number; disabled?: boolean; readback?: boolean; definitions?: OtpWord[] }>()
 defineEmits<{ select: [word: number] }>()
 const groups = computed(() => {
   const rows = new Map<number, typeof props.entries>()
@@ -25,7 +25,8 @@ function tooltip(item: typeof props.entries[number]) {
   <div class="grid-scroll"><table class="otp-grid">
     <thead><tr><th>Word</th><th v-for="n in columns" :key="n">{{ n - 1 }}</th></tr></thead>
     <tbody><tr v-for="group in groups" :key="group.start"><th>{{ group.start }}:{{ group.start + columns - 1 }}</th>
-      <td v-for="(cell, i) in group.cells" :key="i"><button v-if="cell" type="button" :disabled="disabled" :class="[{ selected: selected === cell.word }, definitions?.find(word => word.word === cell.word)?.category]" :aria-label="`Word ${cell.word}`" :aria-pressed="selected === cell.word" :title="tooltip(cell)" @click="$emit('select', cell.word)">{{ cell.value === null ? '—' : otpHex(cell.value) }}</button><span v-else class="missing">—</span></td>
+      <td v-for="(cell, i) in group.cells" :key="i"><button v-if="cell" type="button" :disabled="disabled" :class="[{ selected: selected === cell.word }, definitions?.find(word => word.word === cell.word)?.category]" :aria-label="`Word ${cell.word}`" :aria-pressed="selected === cell.word"
+        :aria-description="readback && selected === cell.word ? tooltip(cell) : undefined" :title="tooltip(cell)" @click="$emit('select', cell.word)">{{ cell.value === null ? '—' : otpHex(cell.value) }}</button><span v-else class="missing">—</span></td>
     </tr></tbody>
   </table></div>
 </template>

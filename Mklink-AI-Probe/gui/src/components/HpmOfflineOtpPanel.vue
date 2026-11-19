@@ -138,7 +138,7 @@ async function exportFile() {
       <template v-if="view === 'read'">
         <p v-if="!readAllowed" class="hint">{{ tr('请先在配置页连接所选下载器，再刷新 OTP。', 'Connect the selected probe in Configuration before refreshing OTP.') }}</p>
         <p v-else-if="!rows.length && !error" class="hint">{{ busy ? tr('正在读取 OTP…', 'Reading OTP…') : tr('点击刷新以读取所选芯片的 OTP。', 'Refresh to read OTP from the selected target.') }}</p>
-        <HpmOtpGrid v-if="rows.length" :entries="readEntries" :columns="columns" :selected="selected" :definitions="profile?.words" @select="selected = $event" />
+        <HpmOtpGrid v-if="rows.length" readback :entries="readEntries" :columns="columns" :selected="selected" :definitions="profile?.words" @select="selected = $event" />
         <div v-if="selectedEntry" class="word-detail">Word {{ selected }} · {{ selectedEntry.current === null ? '—' : hex(selectedEntry.current) }}
           <template v-if="selectedEntry.current !== null"> · {{ selectedEntry.current.toString(2).padStart(32, '0') }}
             <div v-for="field in selectedFields" :key="field.name">{{ field.name }}: 0x{{ otpFieldValue(selectedEntry.current, field) }}</div>

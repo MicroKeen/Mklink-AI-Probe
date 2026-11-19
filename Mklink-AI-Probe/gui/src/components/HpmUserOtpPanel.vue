@@ -84,7 +84,7 @@ async function request(action: 'read' | 'plan' | 'program') {
     <button class="btn" :disabled="busy" data-testid="otp-read" @click="request('read')">{{ tr('读取用户 OTP', 'Read User OTP') }}</button>
     <p v-if="error" role="alert" class="error">{{ error }}</p><p v-if="result" role="status">{{ result }}</p>
     <div class="otp-grid-heading"><b>OTP Readable Words {{ tr('表', 'Table') }}</b><label>{{ tr('列数', 'Columns') }} <select v-model.number="columns" aria-label="JTAG OTP columns"><option :value="4">4</option><option :value="8">8</option></select></label></div>
-    <HpmOtpGrid :entries="rows.map(item => ({ ...item, value: item.current }))" :columns="columns" :selected="selected" :disabled="busy" @select="selected = $event" />
+    <HpmOtpGrid readback :entries="rows.map(item => ({ ...item, value: item.current }))" :columns="columns" :selected="selected" :disabled="busy" @select="selected = $event" />
     <div class="inputs">
       <label>{{ tr('操作', 'Operation') }} <select v-model="operation" :disabled="busy" aria-label="OTP operation"><option value="data">{{ tr('用户数据', 'User data') }}</option><option v-if="!generic" value="lock">{{ tr('永久写保护', 'Permanent write protection') }}</option></select></label>
       <template v-if="operation === 'data'">
