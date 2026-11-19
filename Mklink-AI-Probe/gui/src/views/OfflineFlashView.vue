@@ -4,7 +4,7 @@ import { useHpmFlashConfig } from "../composables/useHpmFlashConfig"
 import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
 import { consumerTarget, saveConsumerTarget, TARGET_SELECTION_CHANGED, PACKS_CHANGED } from '../lib/targetSelection'
 import { selectDownloadProbe } from '../lib/downloadProbe'
-import { hpmOtpProfile } from '../lib/hpmOtpProfiles'
+import { hpmJtagOtpProfile, hpmOtpProfile } from '../lib/hpmOtpProfiles'
 import { hpmIspOutput, hpmIspConnection, type IspConnection } from '../lib/hpmIspOutput'
 import ConfirmationDialog from '../components/ConfirmationDialog.vue'
 import DeviceConfigurationPanel from '../components/DeviceConfigurationPanel.vue'
@@ -1217,7 +1217,7 @@ onBeforeUnmount(() => {
         :key="`${model}:${targetPart}:${diskProbe}`" deployment :active="workspaceTab === 'configuration'" :part-number="targetPart" :snapshot="otpSnapshot" :plan="otpPlan" :result="otpResult" :busy="otpReading" :disabled="operationBusy || triggerUncertain"
         :error="otpError" @read="readIspOtp" @prepare="prepareIspOtp" @program="programIspOtp" @invalidate="clearOtpPlan" @configuration="setIspOfflineOtp" />
       <p v-else-if="ispMode" class="muted">{{ tr('当前型号尚未开放 UART OTP 配置。', 'UART OTP configuration is not available for this target.') }}</p>
-      <HpmOfflineOtpPanel v-else-if="model === 'V4' && ['HPM5301','HPM5301XEGX'].includes(targetPart.toUpperCase())"
+      <HpmOfflineOtpPanel v-else-if="model === 'V4' && hpmJtagOtpProfile(targetPart)"
         :key="`${model}:${targetPart}:${diskProbe}`" :active="workspaceTab === 'configuration'" :part-number="targetPart" :probe-id="diskProbe"
         :disabled="operationBusy || triggerUncertain" @change="setHpmOfflineOtp" />
       <DeviceConfigurationPanel v-else-if="workspaceTab === 'configuration' && !ispMode" expanded v-model:changes="optionByteChanges" :has-firmware="firmwares.length > 0" :part-number="targetPart" :model="model" :unlock-before-download="unlockBeforeDownload" :lock-after-download="lockAfterDownload" />

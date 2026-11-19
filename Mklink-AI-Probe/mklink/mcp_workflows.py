@@ -96,7 +96,8 @@ def register_workflow_tools(server, client):
                 arguments: dict) -> dict:
         """Use existing GUI HPM OTP guards; explicit irreversible approval for writes.
 
-        JTAG supports HPM5301 user words 69..79 and lock groups 18/19. Read/plan
+        JTAG read with extended=true returns family OTP words 0..127. JTAG writes
+        support HPM5301 user words 69..79 and lock groups 18/19. Read/plan
         first; program requires exact word/expected/desired and confirm_irreversible.
         ISP supports read/plan/program/batch-plan/batch-program. A successful plan
         returns an expiring, single-use plan_id bound to probe/generation/part.

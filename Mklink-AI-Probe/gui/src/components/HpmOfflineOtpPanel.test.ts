@@ -8,7 +8,7 @@ const status = ref({ connected: false, probe_id: 'usb-a', device_generation: 1 }
 vi.mock('../composables/useMklinkApi', () => ({ useMklinkApi: () => ({ deviceStatus: status }) }))
 const fetchMock = vi.fn()
 const wrappers: ReturnType<typeof mount>[] = []
-const snapshot = () => ({ words: Array.from({ length: 11 }, (_, i) => ({ word: i + 69, current: 0, shadow: 0, locked: false })), hard_lock: 0 })
+const snapshot = () => ({ source: 'jtag_otp', words: Array.from({ length: 128 }, (_, word) => ({ word, current: 0, shadow: 0, locked: false })), hard_lock: 0 })
 function panel() {
   const w = mount(HpmOfflineOtpPanel, { props: { partNumber: 'HPM5301', probeId: 'usb-a' }, global: { stubs: { DeviceConfigurationPanel: true } } })
   wrappers.push(w); return w
@@ -44,7 +44,7 @@ it('reads the selected current generation and retains a draft across ordinary st
   fetchMock.mockResolvedValue({ ok: true, json: async () => snapshot() })
   const w = panel()
   await w.get('[data-testid=offline-otp-read]').trigger('click'); await flushPromises()
-  expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/hpm-user-otp/read'), expect.objectContaining({ headers: expect.objectContaining({ 'X-MKLink-Probe': 'usb-a', 'X-MKLink-Device-Generation': '1' }) }))
+  expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/configuration/read'), expect.objectContaining({ body: JSON.stringify({ part_number: 'HPM5301', model: 'V4', otp_words: true }), headers: expect.objectContaining({ 'X-MKLink-Probe': 'usb-a', 'X-MKLink-Device-Generation': '1' }) }))
   await add(w)
   expect(w.get<HTMLInputElement>('[aria-label="OTP expected 69"]').element.value).toBe('0x00000000')
   await w.get('[data-testid=offline-otp-confirm]').setValue(true)
@@ -72,7 +72,7 @@ it('does not read another probe and discards a response after device switching',
 
 it('rejects words outside the qualified user area and disables confirmation for locked words', async () => {
   status.value.connected = true
-  const data = snapshot(); data.words[0]!.locked = true
+  const data = snapshot(); data.words[69]!.locked = true
   fetchMock.mockResolvedValue({ ok: true, json: async () => data })
   const w = panel(); await w.get('[data-testid=offline-otp-read]').trigger('click'); await flushPromises()
   await add(w)
@@ -97,4 +97,21 @@ it('requires an explicit HARD_LOCK value and reconfirmation for permanent groups
   await w.get('input[type=checkbox][value="19"]').setValue(true)
   expect(w.emitted('change')!.at(-1)).toEqual([undefined, true])
   expect(fetchMock).not.toHaveBeenCalled()
+})
+
+it('shows HPM6E80 JTAG words and ISP field definitions without a write workflow', async () => {
+  status.value.connected = true
+  const w = panel()
+  await w.setProps({partNumber: 'HPM6E80'})
+  const data = snapshot()
+  data.words[64]!.current = 0x80000000
+  fetchMock.mockResolvedValue({ok: true, json: async () => data})
+  await w.get('[data-testid=offline-otp-read]').trigger('click')
+  await flushPromises()
+  await w.get('[aria-label="JTAG OTP columns"]').setValue('8')
+  await w.get('[aria-label="Word 64"]').trigger('click')
+  expect(w.get('.word-detail').text()).toContain('CHIP_ID')
+  expect(w.get('.word-detail').text()).toContain('0x80000000')
+  expect(w.find('[aria-label="Word 127"]').exists()).toBe(true)
+  expect(w.find('[data-testid=offline-otp-write-view]').exists()).toBe(false)
 })

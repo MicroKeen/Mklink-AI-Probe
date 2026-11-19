@@ -180,6 +180,8 @@ MCP 的 `systemview_decode(hex_bytes=...)` 和 `systemview_analyze_events(events
 离线生成字段说明和已支持的配置脚本，无需连接下载器，生成不会执行脚本。
 `read_configuration(part_number=..., model="V4")` 通过已连接的共享后台读取受限配置快照，
 须先停止 CDC 采集；保留芯片身份、容量与字段范围校验，不改变保护状态或写入 OTP。
+HPM V4 的 JTAG 完整读视图使用 `otp_words=True`，CLI 对应
+`python -m mklink configuration read --chip HPM6E80 --model V4 --otp-words`。操作多台探针时用 `--probe` 选择目标。
 
 配置页“连接设备”的接口/时钟统一管理 RTT、SystemView、SuperWatch 与普通内存访问。
 SWD/JTAG 分别保存，默认 10 MHz；选择接口只保存配置，不切换物理调试模式。

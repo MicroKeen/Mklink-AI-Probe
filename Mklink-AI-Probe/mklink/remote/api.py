@@ -4062,7 +4062,9 @@ def create_app(
             raise HTTPException(status_code=422, detail=str(error)) from error
 
     @app.post("/api/device/configuration/read")
-    async def configuration_read(part_number: str = Body(...), model: str = Body("V4")):
+    async def configuration_read(part_number: str = Body(...), model: str = Body("V4"),
+                                 otp_words: bool = Body(False, strict=True)):
+        from mklink.device import DeviceError
         from mklink.device_configuration import read_configuration
 
         if not _state["device"] or not _state["device"].connected:
@@ -4072,16 +4074,18 @@ def create_app(
         async with async_target_debug_lease(_state, "configuration-read"):
             try:
                 return await run_in_threadpool(
-                    read_configuration, _state["device"], part_number, model
+                    read_configuration, _state["device"], part_number, model, otp_words
                 )
-            except (ValueError, RuntimeError, OSError) as error:
+            except (ValueError, RuntimeError, OSError, DeviceError) as error:
                 raise HTTPException(status_code=422, detail=str(error)) from error
 
     @app.post("/api/device/configuration/hpm-user-otp/{action}")
     async def hpm_user_otp(action: str, part_number: str = Body(...), model: str = Body("V4"),
                            word: int = Body(69, strict=True), expected: int | str = Body(0),
-                           desired: int | str = Body(0), confirm_irreversible: bool = Body(False, strict=True)):
+                           desired: int | str = Body(0), confirm_irreversible: bool = Body(False, strict=True),
+                           extended: bool = Body(False, strict=True)):
         from mklink import hpm_otp
+        from mklink.device import DeviceError
         if action not in ("read", "plan", "program", "lock-plan", "lock-program"):
             raise HTTPException(status_code=422, detail="Unsupported OTP action")
         if not _state["device"] or not _state["device"].connected:
@@ -4090,6 +4094,9 @@ def create_app(
             try:
                 device = _state["device"]
                 if action == "read":
+                    if extended or part_number.strip().upper() not in ("HPM5301", "HPM5301XEGX"):
+                        from mklink.device_configuration import read_configuration
+                        return await run_in_threadpool(read_configuration, device, part_number, model, True)
                     return await run_in_threadpool(hpm_otp.snapshot, device, part_number, model)
                 if action == "lock-plan":
                     return await run_in_threadpool(hpm_otp.lock_plan, device, word, expected, part_number, model)
@@ -4100,7 +4107,7 @@ def create_app(
                     return await run_in_threadpool(hpm_otp.plan, device, word, expected, desired, part_number, model)
                 return await run_in_threadpool(hpm_otp.program, device, word, expected, desired,
                                                confirm_irreversible, part_number, model)
-            except (ValueError, RuntimeError, OSError) as error:
+            except (ValueError, RuntimeError, OSError, DeviceError) as error:
                 raise HTTPException(status_code=422, detail=str(error)) from error
 
     @app.post("/api/device/read-register")

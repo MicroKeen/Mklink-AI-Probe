@@ -262,13 +262,16 @@ def build_server():
         return query_probe('power_read', info=info, probe=probe)
 
     @server.tool()
-    def read_configuration(part_number: str, model: str = "V4") -> dict:
-        """Read bounded public option-byte/OTP fields via the connected shared backend.
+    def read_configuration(part_number: str, model: str = "V4", otp_words: bool = False) -> dict:
+        """Read configuration fields or request HPM JTAG words 0..127 with otp_words=True.
 
         Requires explicit connect and idle CDC. Validates the target identity;
         never changes protection, writes OTP or stops another client's capture.
         """
-        return client().call('read_configuration', {'part_number': part_number, 'model': model})
+        arguments = {'part_number': part_number, 'model': model}
+        if otp_words:
+            arguments['otp_words'] = True
+        return client().call('read_configuration', arguments)
 
     @server.tool()
     def measure_dump_memory(regions: list[dict], duration: float = 3.0,

@@ -1,12 +1,12 @@
 """Read-only option-byte/OTP inspection shared by CLI, MCP and Web.
 
 Writing remains owned by the existing validated offline security recipes.
-No arbitrary addresses or secret OTP words are accepted by this interface.
+Full HPM JTAG word snapshots require an explicit request.
 """
 
 from __future__ import annotations
-import re
 from datetime import datetime, timezone
+from . import hpm_jtag_otp
 
 
 def _profile(part: str, model: str):
@@ -15,7 +15,7 @@ def _profile(part: str, model: str):
     part = part.strip().upper()
     if model not in ("V2", "V3", "V4"):
         raise ValueError("Select a V2/V3/V4 probe model")
-    if part in ("HPM5301", "HPM5301XEGX"):
+    if hpm_jtag_otp.otp_base(part) is not None:
         if model != "V4":
             return dict(
                 part_number=part, model=model, kind="otp", supported=False,
@@ -33,6 +33,12 @@ def _profile(part: str, model: str):
             ("USB_VID", "芯片 ROM USB 厂商标识", 68, 16, 16, "16位厂商标识，与PID配合使用。属于目标芯片ROM USB配置，不是修改MKLink下载器或应用USB描述符。当前只读。"),
             ("USB_PID", "芯片 ROM USB 产品标识", 68, 0, 16, "16位产品标识，与VID配合使用。不是串口号；修改不会直接改变应用程序自己定义的USB设备信息。当前只读。"),
         ]
+        legacy = part in ("HPM5301", "HPM5301XEGX")
+        if not legacy:
+            rows = [
+                ("HARD_LOCK", "永久写保护位图", 0, 0, 32, "每位对应四个 OTP Word。"),
+                ("CHIP_ID", "芯片标识", 64, 0, 32, "读取所选系列的芯片标识。"),
+            ]
         fields = [
             dict(
                 id=id,
@@ -54,16 +60,15 @@ def _profile(part: str, model: str):
             supported=True,
             read_supported=True,
             fields=fields,
-            source="HPM SDK 1.11.0 / HPM5301",
-            reason="安全配置只读；熔丝值与影子值分别显示。V4 HPMLink 可在下方单独配置已验证型号的用户 OTP。",
+            source=f"HPM SDK / {part}",
+            otp_word_count=128,
+            reason="JTAG 可读取 Word 0–127，并分别显示熔丝值与影子值。",
             security=None,
         ), None
     if part.startswith('HPM'):
-        # HPM OTP is never an ARM option-byte recipe. Wider family operations
-        # use the ROM UART profile API; keep the existing JTAG support explicit.
         return dict(part_number=part, model=model, kind='otp', supported=False,
                     read_supported=False, fields=[], source='', security=None,
-                    reason='此型号的 OTP 配置请选择 USART ISP 下载类型。'), None
+                    reason='此型号尚无 JTAG OTP 寄存器映射。'), None
     capability = offline_security_capability(model, part)
     recipe = (
         _offline_profile(part, str(capability["family"]))
@@ -122,10 +127,12 @@ def describe_configuration(part_number: str, model: str = "V4") -> dict:
     return _profile(part_number, model)[0]
 
 
-def read_configuration(device, part_number: str, model: str = "V4") -> dict:
+def read_configuration(device, part_number: str, model: str = "V4", otp_words: bool = False) -> dict:
     result, cfg = _profile(part_number, model)
     if not result["read_supported"]:
         raise ValueError(result["reason"])
+    if otp_words and result["kind"] != "otp":
+        raise ValueError("Full OTP word reads require an HPM target")
 
     def word(address):
         data = device.read_memory(address, 4)
@@ -135,24 +142,20 @@ def read_configuration(device, part_number: str, model: str = "V4") -> dict:
 
     name = device.mcu_name.upper()
     if result["kind"] == "otp":
-        if device.idcode != 0x1000563D or (name and not re.search(r"\bHPM5301\b", name)):
-            raise ValueError("Connected target does not match the HPM5301 description")
-        # A cached MCU name and readable TAP ID do not prove SBA access.
-        # SECURE hardware can return a fixed word for every protected address.
-        if word(0xF3050500) != 0x11705142:
-            raise ValueError("HPM5301 CHIP_ID is unreadable or does not match; debug access may be protected. No OTP snapshot is valid.")
-        snapshots = {}
-        for index in sorted({field["word"] for field in result["fields"]}):
-            # Read only the explicit public configuration words, never a bulk OTP dump.
-            snapshots[index] = (
-                word(0xF3050400 + index * 4),
-                word(0xF3050000 + index * 4),
-            )
+        part = result["part_number"]
+        chip_id = hpm_jtag_otp.check_target(device, part, word, check_read_lock=otp_words)
+        if otp_words:
+            result.update(hpm_jtag_otp.read_words(device, part, chip_id))
+            snapshots = {r["word"]: (r["current"], r["shadow"]) for r in result["words"]}
+        else:
+            base = hpm_jtag_otp.otp_base(part)
+            snapshots = {i: (word(base + 0x400 + i * 4), word(base + i * 4))
+                         for i in sorted({f["word"] for f in result["fields"]})}
         for field in result["fields"]:
             raw, shadow = snapshots[field["word"]]
             mask = (1 << field["bit_width"]) - 1
-            field["current"] = (raw >> field["bit_offset"]) & mask
-            field["shadow"] = (shadow >> field["bit_offset"]) & mask
+            field["current"] = None if raw is None else (raw >> field["bit_offset"]) & mask
+            field["shadow"] = None if shadow is None else (shadow >> field["bit_offset"]) & mask
     else:
         if "HPM" in name:
             raise ValueError(

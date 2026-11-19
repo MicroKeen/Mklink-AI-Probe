@@ -244,7 +244,10 @@ def run(args):
         elif args.command == 'break':
             result = client.call('breakpoints', debug_arguments)
         elif args.command == 'configuration':
-            result = client.call('read_configuration', {'part_number': args.chip, 'model': args.model})
+            arguments = {'part_number': args.chip, 'model': args.model}
+            if args.otp_words:
+                arguments['otp_words'] = True
+            result = client.call('read_configuration', arguments)
         elif args.command == 'peripherals':
             arguments = (selectors if args.action == 'select' else {'q': args.query} if args.action == 'list'
                          else {'names': args.names})
