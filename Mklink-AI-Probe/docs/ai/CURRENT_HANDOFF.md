@@ -8,7 +8,7 @@
 - 分支：`codex/v0.5.1-fixes`
 - HEAD：`357b2674`
 - 远端 HEAD：`357b2674`
-- 工作树：E 盘主工作区，分支起点 a38557b9，Windows 本地安装包和跨平台 Skill 构建自 357b2674，上一轮 macOS ARM64 DMG 来自 eb463758。交接提交以 Git 为准。
+- 工作树：E 盘主工作区，分支起点 a38557b9，Windows 本地安装包和跨平台 Skill 构建自 357b2674，上一轮 macOS ARM64 DMG 来自 eb463758。本机已清除 0.4.3 全用户产品及卸载登记，桌面保留公共入口。本地静默覆盖使用 /S /UPDATE，保留已有快捷方式。交接提交以 Git 为准。
 - 当前任务：Windows 命令行及桌面共享采集和 macOS 原生启动验收见[共享报告](../verification/v050-desktop-rtt-sharing.md)。前轮 HPM6E80 只读实板证据见[OTP 验收](../verification/v051-hpm-jtag-otp-write.md)。
 - 状态：`V0.5.0 已在 HPM6E80 实板验证 GUI、CLI、MCP 共享 RTT 文本与波形。HPM6E80 永久写入仍暂停。`
 
