@@ -138,6 +138,18 @@ def create_proxy(info, *, port, instance_id, transport=None):
             app.state.shutdown()
         return {"status": "shutting_down", "shared_runtime_stopped": False}
 
+    @app.post('/api/desktop/open-existing')
+    def open_existing(body: dict):
+        from mklink.runtime import RuntimeErrorResponse
+        from mklink.runtime_gui import open_existing_probe_window
+        probe = body.get('probe')
+        if not isinstance(probe, str) or not 1 <= len(probe) <= 128:
+            return JSONResponse({'detail': 'Select a probe first'}, status_code=422)
+        try:
+            return open_existing_probe_window(probe)
+        except RuntimeErrorResponse as exc:
+            return JSONResponse({'detail': str(exc)}, status_code=exc.status_code or 409)
+
     @app.post('/api/runtime/control/view')
     async def desktop_view(body: dict):
         nonlocal view_registered

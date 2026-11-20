@@ -479,7 +479,38 @@ def test_pack_paths_prefer_environment_override(monkeypatch, tmp_path):
     assert PackPaths().root == configured
 
 
+@pytest.mark.parametrize(("system", "subdir"), [
+    ("Darwin", "Library/Application Support/Mklink AI Probe/pyocd"),
+    ("Linux", ".local/share/mklink-ai-probe/pyocd"),
+])
+def test_pack_paths_use_native_user_data(monkeypatch, tmp_path, system, subdir):
+    monkeypatch.setattr("platform.system", lambda: system)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.delenv("MKLINK_PYOCD_HOME", raising=False)
+    monkeypatch.delenv("XDG_DATA_HOME", raising=False)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "wine"))
+    (tmp_path / "AppData").write_text("inaccessible legacy tree")
+    assert PackPaths().root == tmp_path / subdir
+    if system == "Linux":
+        monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
+        assert PackPaths().root == tmp_path / "xdg/mklink-ai-probe/pyocd"
+
+
+def test_mac_pack_paths_preserve_an_existing_catalog(monkeypatch, tmp_path):
+    monkeypatch.setattr("platform.system", lambda: "Darwin")
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.delenv("MKLINK_PYOCD_HOME", raising=False)
+    legacy = tmp_path / "AppData/Local/MKLink/pyocd"
+    legacy.mkdir(parents=True)
+    (legacy / "state.json").write_text("{}")
+    assert PackPaths().root == legacy
+    native = tmp_path / "Library/Application Support/Mklink AI Probe/pyocd"
+    native.mkdir(parents=True)
+    assert PackPaths().root == native
+
+
 def test_pack_paths_use_local_app_data_default(monkeypatch, tmp_path):
+    monkeypatch.setattr("platform.system", lambda: "Windows")
     local_app_data = tmp_path / "local"
     monkeypatch.delenv("MKLINK_PYOCD_HOME", raising=False)
     monkeypatch.setenv("LOCALAPPDATA", str(local_app_data))
@@ -488,6 +519,7 @@ def test_pack_paths_use_local_app_data_default(monkeypatch, tmp_path):
 
 
 def test_pack_paths_have_explicit_fallback_without_local_app_data(monkeypatch):
+    monkeypatch.setattr("platform.system", lambda: "Windows")
     monkeypatch.delenv("MKLINK_PYOCD_HOME", raising=False)
     monkeypatch.delenv("LOCALAPPDATA", raising=False)
 

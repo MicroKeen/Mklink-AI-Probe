@@ -40,6 +40,14 @@ def main():
     workspace = work / "empty-project"
     workspace.mkdir(parents=True)
     if platform.system() == "Darwin":
+        # Reproduce the customer's inaccessible Windows-style cache ancestor
+        # without admin privileges or changes to the runner's real home.
+        home = work / "mac-home"
+        home.mkdir()
+        (home / "AppData").write_text("not a directory")
+        env["HOME"] = str(home)
+        env.pop("LOCALAPPDATA", None)
+        env.pop("MKLINK_PYOCD_HOME", None)
         mount = work / "mounted"
         mount.mkdir()
         subprocess.run(["hdiutil", "attach", "-nobrowse", "-mountpoint", str(mount), str(next(output.glob("*.dmg")))], check=True)

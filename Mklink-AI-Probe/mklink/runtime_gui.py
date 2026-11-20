@@ -12,6 +12,37 @@ def public_runtime(info):
     return {key: info.get(key) for key in ('runtime_id', 'instance_id', 'probe_id', 'project_root')}
 
 
+def open_existing_probe_window(probe_id):
+    """Open a browser view of an existing owner without claiming the target."""
+    from mklink.probes import select_probe
+    if select_probe(probe_id)['probe_id'] != probe_id:
+        raise runtime.RuntimeErrorResponse('Select the exact probe again')
+    info = runtime.discover(probe_id)
+    if not info or info.get('probe_id') != probe_id:
+        raise runtime.RuntimeErrorResponse('The existing probe backend is no longer available')
+    client = runtime.RuntimeClient(info=info, name='Open existing desktop connection')
+    try:
+        client.connect(scope='uart', existing_only=True)
+        health = runtime.request(info, 'GET', '/_runtime/status')
+        if health.get('instance_id') != info['instance_id'] or health.get('probe_id') != probe_id:
+            raise runtime.RuntimeErrorResponse('The selected probe changed. Refresh the device list.')
+        url, _ = _gui_link(client)
+        try:
+            opened = webbrowser.open_new_tab(url)
+        except Exception:
+            opened = False  # Browser errors can contain the ticket.
+        if not opened:
+            raise runtime.RuntimeErrorResponse('Could not open the system browser')
+        return {'browser_requested': True}
+    finally:
+        client.close()
+
+
+def _gui_link(client):
+    link = runtime.request(client.info, 'POST', '/_runtime/gui-link', {'session_id': client.session_id})
+    return f"http://127.0.0.1:{client.info['port']}/_runtime/open#{link['ticket']}", link['expires_in']
+
+
 def select_gui_runtime(*, current=None, probe=None, runtime_id=None, project_root=None):
     """Resolve one existing backend before considering a new unbound window."""
     selected = None
@@ -90,9 +121,8 @@ class GuiLaunch:
         if not result['gui_launch_supported']:
             raise runtime.RuntimeErrorResponse('This backend lacks GUI launch links; update and explicitly restart it, or open its installed GUI. No second backend was started')
         if self.pending is None or self.pending['expires'] <= time.monotonic():
-            link = runtime.request(client.info, 'POST', '/_runtime/gui-link', {'session_id': client.session_id})
-            self.pending = {'url': f"{result['url']}_runtime/open#{link['ticket']}",
-                            'expires': time.monotonic() + link['expires_in'], 'attempted': False}
+            url, ttl = _gui_link(client)
+            self.pending = {'url': url, 'expires': time.monotonic() + ttl, 'attempted': False}
         pending = self.pending
         if open_browser and not pending['attempted']:
             pending['attempted'] = True

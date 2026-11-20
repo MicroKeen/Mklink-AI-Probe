@@ -32,6 +32,7 @@ const mocks = vi.hoisted(() => {
       uploadFileSource: vi.fn(),
       probeFirmwareCheck: vi.fn(),
       upgradeProbeFirmware: vi.fn(),
+      openExistingProbe: vi.fn(),
       downloadProbeFirmware: vi.fn(),
     },
     toastError: vi.fn(),
@@ -195,7 +196,11 @@ describe('ConfigView', () => {
     await flushPromises()
     expect(mocks.api.disconnectDevice).not.toHaveBeenCalled()
     expect(wrapper.get('[data-testid="connected-port"]').text()).toContain('TEST_PORT_A')
-    expect(mocks.toastError).toHaveBeenCalledWith(expect.stringContaining('另一客户端'))
+    expect(mocks.toastWarn).toHaveBeenCalledWith(expect.stringContaining('已有连接'))
+    await wrapper.get('[data-testid="open-existing-probe"]').trigger('click')
+    expect(mocks.api.openExistingProbe).toHaveBeenCalledWith('usb-b')
+    expect(mocks.api.connectDevice).toHaveBeenCalledTimes(1)
+    expect(mocks.api.disconnectDevice).not.toHaveBeenCalled()
     expect(mocks.deviceStatus.connected).toBe(true)
     wrapper.unmount()
   })
