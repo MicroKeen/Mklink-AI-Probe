@@ -5,16 +5,16 @@
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.5.1-fixes",
-    "head": "eb463758",
-    "remote_head": "eb463758",
-    "working_tree": "E 盘主工作区，分支起点 a38557b9，Windows 本地安装包构建自 77791d86，macOS ARM64 候选包构建自 eb463758。交接提交以 Git 为准。"
+    "head": "357b2674",
+    "remote_head": "357b2674",
+    "working_tree": "E 盘主工作区，分支起点 a38557b9，Windows 本地安装包和跨平台 Skill 构建自 357b2674，上一轮 macOS ARM64 DMG 来自 eb463758。交接提交以 Git 为准。"
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "V0.5.0 macOS ARM64 候选包原生验收通过，Windows RTT 多客户端已复验。HPM6E80 永久写入仍暂停。",
-    "current_task": "修复 macOS 本地服务启动和桌面打开已有探针连接，见[共享问题验收](../verification/v050-desktop-rtt-sharing.md)。前轮 HPM6E80 只读实板证据见[OTP 验收](../verification/v051-hpm-jtag-otp-write.md)。"
+    "status": "V0.5.0 CLI 支持 RTT 文本和波形同时读取，后台按流保护 GUI 订阅。HPM6E80 永久写入仍暂停。",
+    "current_task": "Windows 命令行及桌面共享采集和 macOS 原生启动验收见[共享报告](../verification/v050-desktop-rtt-sharing.md)。前轮 HPM6E80 只读实板证据见[OTP 验收](../verification/v051-hpm-jtag-otp-write.md)。"
   },
   "milestones": [
     {
@@ -40,7 +40,7 @@
     },
     {
       "area": "GUI共享控制、回放与多窗口健康",
-      "result": "ba3a334b实现桌面/Web共享控制及回放，修复SystemView冗余SSE耗尽连接池。安装版6窗口72/72正常，645064事件/9任务，解析及目标/主机丢弃0，见[完整验收](../verification/v050-gui-control.md)；IRQ锁、采集中重启见[前轮](../verification/v050-systemview-loss-reboot.md)，历史/显示优化见[刷新报告](../verification/v050-systemview-refresh.md)。 桌面遇到已连接探针时可打开原后台。Windows 两个实时订阅者与两次独立 CLI 读取各得到相同 650 字节；默认 CLI 返回波形历史，普通日志用 rtt_read_channel。"
+      "result": "ba3a334b实现桌面/Web共享控制及回放，修复SystemView冗余SSE耗尽连接池。安装版6窗口72/72正常，645064事件/9任务，解析及目标/主机丢弃0，见[完整验收](../verification/v050-gui-control.md)；IRQ锁、采集中重启见[前轮](../verification/v050-systemview-loss-reboot.md)，历史/显示优化见[刷新报告](../verification/v050-systemview-refresh.md)。 桌面遇到已连接探针时可打开原后台。CLI 自动跟随各通道文本与波形，GUI 与两客户端 0.8/5 秒重叠窗口、CLI 先启动后 GUI 接入、945000 字节逐一比对通过。真实 stdio MCP 与 Edge 同读，MCP 退出后 GUI 继续收数。Windows 已覆盖安装，系统 CLI 和本机 Skill 已同步，相关回归 845 通过、1 跳过。串口/Modbus、RTT、SystemView、SuperWatch 与 VOFA 按流保护 GUI 订阅。"
     },
     {
       "area": "HPM Flash 配置、连接设置与脱机 OTP",

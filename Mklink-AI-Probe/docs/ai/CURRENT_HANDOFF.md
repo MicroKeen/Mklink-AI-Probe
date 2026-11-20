@@ -6,11 +6,11 @@
 
 - 更新时间：`2026-11-20`
 - 分支：`codex/v0.5.1-fixes`
-- HEAD：`eb463758`
-- 远端 HEAD：`eb463758`
-- 工作树：E 盘主工作区，分支起点 a38557b9，Windows 本地安装包构建自 77791d86，macOS ARM64 候选包构建自 eb463758。交接提交以 Git 为准。
-- 当前任务：修复 macOS 本地服务启动和桌面打开已有探针连接，见[共享问题验收](../verification/v050-desktop-rtt-sharing.md)。前轮 HPM6E80 只读实板证据见[OTP 验收](../verification/v051-hpm-jtag-otp-write.md)。
-- 状态：`V0.5.0 macOS ARM64 候选包原生验收通过，Windows RTT 多客户端已复验。HPM6E80 永久写入仍暂停。`
+- HEAD：`357b2674`
+- 远端 HEAD：`357b2674`
+- 工作树：E 盘主工作区，分支起点 a38557b9，Windows 本地安装包和跨平台 Skill 构建自 357b2674，上一轮 macOS ARM64 DMG 来自 eb463758。交接提交以 Git 为准。
+- 当前任务：Windows 命令行及桌面共享采集和 macOS 原生启动验收见[共享报告](../verification/v050-desktop-rtt-sharing.md)。前轮 HPM6E80 只读实板证据见[OTP 验收](../verification/v051-hpm-jtag-otp-write.md)。
+- 状态：`V0.5.0 CLI 支持 RTT 文本和波形同时读取，后台按流保护 GUI 订阅。HPM6E80 永久写入仍暂停。`
 
 ## 里程碑
 
@@ -21,7 +21,7 @@
 ## 验证证据
 
 - **慢下载保存与受保护安装目录**：公共保存及按需同用户 UAC 修复：Python7195/2跳过、GUI1299；真实 Chrome/Skill 四型号慢下载、实际 UAC 取消/同意、普通安装通过。PR #86 main a38557b9 最终签名包无 /D 覆盖 3687 文件一致，设置保留；冻结 MCP/Web 通过。腾讯云/GitHub 五文件完整回读、HEAD/Range/回退和索引通过；release 5539a7b5，见[报告](https://github.com/MicroKeen/Mklink-AI-Probe/blob/7371497486182ad103f1306c470be07f00096a86/Mklink-AI-Probe/docs/verification/v050-save-elevation.md)。
-- **GUI共享控制、回放与多窗口健康**：ba3a334b实现桌面/Web共享控制及回放，修复SystemView冗余SSE耗尽连接池。安装版6窗口72/72正常，645064事件/9任务，解析及目标/主机丢弃0，见[完整验收](../verification/v050-gui-control.md)；IRQ锁、采集中重启见[前轮](../verification/v050-systemview-loss-reboot.md)，历史/显示优化见[刷新报告](../verification/v050-systemview-refresh.md)。 桌面遇到已连接探针时可打开原后台。Windows 两个实时订阅者与两次独立 CLI 读取各得到相同 650 字节；默认 CLI 返回波形历史，普通日志用 rtt_read_channel。
+- **GUI共享控制、回放与多窗口健康**：ba3a334b实现桌面/Web共享控制及回放，修复SystemView冗余SSE耗尽连接池。安装版6窗口72/72正常，645064事件/9任务，解析及目标/主机丢弃0，见[完整验收](../verification/v050-gui-control.md)；IRQ锁、采集中重启见[前轮](../verification/v050-systemview-loss-reboot.md)，历史/显示优化见[刷新报告](../verification/v050-systemview-refresh.md)。 桌面遇到已连接探针时可打开原后台。CLI 自动跟随各通道文本与波形，GUI 与两客户端 0.8/5 秒重叠窗口、CLI 先启动后 GUI 接入、945000 字节逐一比对通过。真实 stdio MCP 与 Edge 同读，MCP 退出后 GUI 继续收数。Windows 已覆盖安装，系统 CLI 和本机 Skill 已同步，相关回归 845 通过、1 跳过。串口/Modbus、RTT、SystemView、SuperWatch 与 VOFA 按流保护 GUI 订阅。
 - **HPM Flash 配置、连接设置与脱机 OTP**：目录覆盖 41 个型号，见[读取验收](../verification/v051-hpm-jtag-otp.md)。HPM6E80 桌面 MCP 核对 256 个显示值，ROM 读芯片标识通过。首次编程 rc=-10，Word 72 仍为 0，见[读写验收](../verification/v051-hpm-jtag-otp-write.md)。
 - **ELF 解析与完整 UART 波特率**：ELF 可写范围合并 PT_LOAD，客户 ELF 的结构体成员恢复，400 项解析/共享关联及真实浏览器通过，未操作客户板，见[ELF 报告](../verification/v050-elf-load-segments.md)。串口助手/Modbus 按 UART、RS485 独立声明使用 34 档至 10M，870 后端/25 GUI/69 Skill 及双 V4 实读通过，未发高速载荷，见[波特率报告](../verification/v050-uart-baud.md)。两项已随 ad00c962 普通用户覆盖并复验，见[覆盖报告](../verification/v050-elf-baud-overwrite.md)。
 - **固件能力提醒与采集中写入**：同一V4/STM32F103RC实测V4.7.3与V4.7.4写入前后最大采样间隔0.195/0.208/0.192ms；RTT并行为1.562ms，各轮10次写入成功且无序号/读错。真实Web写入保持约15.9kHz，三端警告一致，状态检查无设备I/O，见[能力报告](../verification/v050-firmware-capabilities.md)。V2.9.4与云端V2.9.3不误报降级；版本缓存/提醒/跳转验收见[提醒报告](../verification/v050-firmware-update-notice.md)。客户端先行、MCP重载与重启失败互斥恢复见[更新顺序](../verification/v050-update-order.md)。专项用例有重叠，最终全量结果以发布交接为准。 V3/V4拔插恢复既有实物证据见[恢复报告](../verification/v050-superwatch-swclk.md)。
