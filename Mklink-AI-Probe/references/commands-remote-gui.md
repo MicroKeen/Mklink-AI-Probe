@@ -34,6 +34,7 @@ AI 需要可见窗口时优先用 MCP `gui_open`，确认页面接入后在同�
 需要后台采集时直接使用共享 MCP/SDK 的正常会话并在完成后 detach。
 局域网设备操作使用“远程服务”页面或独立 Agent，参见[直连远程调试](commands-remote.md)。
 桌面内部 `desktop-proxy` 仅转发共享后台，不直接连接下载器。
+原生桌面选择已由本机其他后台连接的探针时，点击“在浏览器打开已有连接”即可进入该探针的原后台。原窗口和正在进行的采集可以继续使用。
 
 配置页依次为本地设备、文件来源、固件升级和后台管理；本机别名在后台管理中修改，仅影响本机，不写下载器固件。
 固件升级支持自动与手动两条路径：MicroLink V2 将校验后的 RBL 复制到同一下载器的
@@ -133,7 +134,7 @@ Windows 标准 NSIS 安装包采用 currentUser 安装，不自动修改设备�
 | 启动/查询/停止任务 | `POST /jobs`、`GET /jobs/active`、`GET /jobs/{job_id}`、`POST /jobs/{job_id}/stop` |
 | 重放式任务事件 | `GET /jobs/{job_id}/events?after={sequence}` (SSE) |
 
-Pack 索引、已安装 Pack 和临时上传均位于用户数据根目录，Windows 默认为 `%LOCALAPPDATA%\MKLink\pyocd`；可在启动服务前设置 `MKLINK_PYOCD_HOME` 覆盖。可复用已下载的 Pack 缓存。更新索引和下载 Pack 继承服务进程的 `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` 环境；断网时可用最后一份有效索引和已安装 Pack。
+Pack 索引、已安装 Pack 和临时上传均位于用户数据目录。Windows 默认使用 `%LOCALAPPDATA%\MKLink\pyocd`，macOS 默认使用 `~/Library/Application Support/Mklink AI Probe/pyocd`，Linux 默认使用 XDG 数据目录下的 `mklink-ai-probe/pyocd`。可在启动服务前设置 `MKLINK_PYOCD_HOME` 覆盖。升级时可继续使用已有索引或状态记录的可写旧缓存。更新索引和下载 Pack 继承服务进程的 `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` 环境，断网时可用最后一份有效索引和已安装 Pack。
 
 在线烧录会申请 `TARGET_DEBUG` 资源。0.3.1 后台自动暂停 RTT、SystemView、VOFA、SuperWatch，任务结束后按原参数恢复；暂停或恢复失败会报告，其他在途硬件任务仍返回冲突。`POST /jobs/{job_id}/stop` 只设置协作式取消：运行中的底层操作返回后才完成停止、释放资源和恢复采集。页面显示“停止中”时不要立即开启新任务或拔除探针。
 

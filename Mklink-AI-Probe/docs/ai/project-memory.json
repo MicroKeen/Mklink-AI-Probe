@@ -1,20 +1,20 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-19",
+  "updated_at": "2026-11-20",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.5.1-fixes",
-    "head": "77791d86",
-    "remote_head": "77791d86",
-    "working_tree": "E 盘主工作区，分支起点 a38557b9，本地 V0.5.0 安装包构建自 77791d86。交接提交以 Git 为准。"
+    "head": "eb463758",
+    "remote_head": "eb463758",
+    "working_tree": "E 盘主工作区，分支起点 a38557b9，Windows 本地安装包构建自 77791d86，macOS ARM64 候选包构建自 eb463758。交接提交以 Git 为准。"
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "V0.5.0 修复版已覆盖安装，HPM6E80 的 JTAG 读取及只读 ROM 诊断通过，永久写入暂停。",
-    "current_task": "安装版 MCP 已逐字核对桌面显示，详见[实板验收](../verification/v051-hpm-jtag-otp-write.md)。"
+    "status": "V0.5.0 macOS ARM64 候选包原生验收通过，Windows RTT 多客户端已复验。HPM6E80 永久写入仍暂停。",
+    "current_task": "修复 macOS 本地服务启动和桌面打开已有探针连接，见[共享问题验收](../verification/v050-desktop-rtt-sharing.md)。前轮 HPM6E80 只读实板证据见[OTP 验收](../verification/v051-hpm-jtag-otp-write.md)。"
   },
   "milestones": [
     {
@@ -40,7 +40,7 @@
     },
     {
       "area": "GUI共享控制、回放与多窗口健康",
-      "result": "ba3a334b实现桌面/Web共享控制及回放，修复SystemView冗余SSE耗尽连接池。安装版6窗口72/72正常，645064事件/9任务，解析及目标/主机丢弃0，见[完整验收](../verification/v050-gui-control.md)；IRQ锁、采集中重启见[前轮](../verification/v050-systemview-loss-reboot.md)，历史/显示优化见[刷新报告](../verification/v050-systemview-refresh.md)。"
+      "result": "ba3a334b实现桌面/Web共享控制及回放，修复SystemView冗余SSE耗尽连接池。安装版6窗口72/72正常，645064事件/9任务，解析及目标/主机丢弃0，见[完整验收](../verification/v050-gui-control.md)；IRQ锁、采集中重启见[前轮](../verification/v050-systemview-loss-reboot.md)，历史/显示优化见[刷新报告](../verification/v050-systemview-refresh.md)。 桌面遇到已连接探针时可打开原后台。Windows 两个实时订阅者与两次独立 CLI 读取各得到相同 650 字节；默认 CLI 返回波形历史，普通日志用 rtt_read_channel。"
     },
     {
       "area": "HPM Flash 配置、连接设置与脱机 OTP",
