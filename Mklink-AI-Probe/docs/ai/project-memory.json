@@ -1,26 +1,26 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-16",
+  "updated_at": "2026-11-20",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
-    "branch": "codex/v050-download-install-permissions",
-    "head": "5bbc035b",
-    "remote_head": "4ff4b9db",
-    "working_tree": "PR #86 两处修复及生产GUI资产已提交；真实安装/冻结/Skill验收通过，待证据提交和明确合并授权。腾讯云未替换，版本说明不变。"
+    "branch": "codex/v0.5.1-fixes",
+    "head": "357b2674",
+    "remote_head": "357b2674",
+    "working_tree": "E 盘主工作区，分支起点 a38557b9，Windows 本地安装包和跨平台 Skill 构建自 357b2674，上一轮 macOS ARM64 DMG 来自 eb463758。本机已清除 0.4.3 全用户产品及卸载登记，桌面保留公共入口。本地静默覆盖使用 /S /UPDATE，保留已有快捷方式。交接提交以 Git 为准。"
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "本机验收通过，待PR合并授权及最终发布",
-    "current_task": "实现4ff4b9db、资产5bbc035b：Python7195/2跳过、GUI1299及实现三项CI通过；真实Chrome/Skill包四型号慢下载通过。实际UAC取消/同意、普通安装、D盘无/D覆盖3687文件一致，六设置/HKLM/USB名称保留；安装版冻结MCP/Web及正常关闭通过，详见[报告](../verification/v050-save-elevation.md)。"
+    "status": "V0.5.0 已在 HPM6E80 实板验证 GUI、CLI、MCP 共享 RTT 文本与波形。HPM6E80 永久写入仍暂停。",
+    "current_task": "Windows 命令行及桌面共享采集和 macOS 原生启动验收见[共享报告](../verification/v050-desktop-rtt-sharing.md)。前轮 HPM6E80 只读实板证据见[OTP 验收](../verification/v051-hpm-jtag-otp-write.md)。"
   },
   "milestones": [
     {
       "name": "MKLink 0.5.0",
       "status": "正式",
-      "notes": "2026-11-15 双渠道正式发布；[PR #79](https://github.com/MicroKeen/Mklink-AI-Probe/pull/79) 与 v0.5.0 为1097f98e；Windows/Skill/Site Agent、MicroLink V2.9.4/V3.7.0/V4.7.4、HPMLink V4.7.4 首发。Mac ARM/Intel、Linux x64 补发源8d532019，支持签名更新。随后PR #84 main ed5d55aa的Windows/Skill修订r20261115与V2.9.5已双渠道上线。已有0.5.0用户手动覆盖；先更新客户端、重载MCP，再更新对应固件。原标签和其他原件保留。"
+      "notes": "2026-11-15 双渠道正式发布；[PR #79](https://github.com/MicroKeen/Mklink-AI-Probe/pull/79) 与 v0.5.0 为1097f98e；Windows/Skill/Site Agent、MicroLink V2.9.4/V3.7.0/V4.7.4、HPMLink V4.7.4 首发。Mac ARM/Intel、Linux x64 补发源8d532019，支持签名更新。随后PR #84 main ed5d55aa的Windows/Skill修订r20261115与V2.9.5已双渠道上线。2026-11-16 PR #86 main a38557b9 的慢下载保存/按需UAC修订已替换腾讯云Windows与Skill，并新增GitHub备用附件，release 5539a7b5。已有0.5.0用户手动覆盖；先更新客户端、重载MCP，再更新对应固件。原标签和其他原件保留。"
     },
     {
       "name": "0.5.0 上位机开发基线",
@@ -36,15 +36,15 @@
   "verification": [
     {
       "area": "慢下载保存与受保护安装目录",
-      "result": "公共保存与按需同用户UAC修复：Python7195/2跳过、GUI1299；真实Chrome和完整Skill包内GUI四型号6.5秒慢下载通过。实际取消/同意UAC、普通安装、D盘无/D覆盖3687文件一致，六设置/HKLM/USB名称保留；冻结MCP/Web及正常关闭通过。未替换云端，见[报告](../verification/v050-save-elevation.md)。"
+      "result": "公共保存及按需同用户 UAC 修复：Python7195/2跳过、GUI1299；真实 Chrome/Skill 四型号慢下载、实际 UAC 取消/同意、普通安装通过。PR #86 main a38557b9 最终签名包无 /D 覆盖 3687 文件一致，设置保留；冻结 MCP/Web 通过。腾讯云/GitHub 五文件完整回读、HEAD/Range/回退和索引通过；release 5539a7b5，见[报告](https://github.com/MicroKeen/Mklink-AI-Probe/blob/7371497486182ad103f1306c470be07f00096a86/Mklink-AI-Probe/docs/verification/v050-save-elevation.md)。"
     },
     {
       "area": "GUI共享控制、回放与多窗口健康",
-      "result": "ba3a334b实现5主页面/4配置分区/8仪表盘标签控制、原生/Web回放、显式选窗、身份/代次失效保护；移除SystemView冗余状态SSE修复连接池耗尽。安装版6窗口72/72正常，645064事件/9任务，解析及目标/主机丢弃0；普通用户覆盖3686文件一致。软件/安装/Skill验证见[完整验收](../verification/v050-gui-control.md)，IRQ锁与采集中重启见[前轮](../verification/v050-systemview-loss-reboot.md)，历史与显示优化见[刷新报告](../verification/v050-systemview-refresh.md)。"
+      "result": "ba3a334b实现桌面/Web共享控制及回放，修复SystemView冗余SSE耗尽连接池。安装版6窗口72/72正常，645064事件/9任务，解析及目标/主机丢弃0，见[完整验收](../verification/v050-gui-control.md)；IRQ锁、采集中重启见[前轮](../verification/v050-systemview-loss-reboot.md)，历史/显示优化见[刷新报告](../verification/v050-systemview-refresh.md)。 桌面可复用探针后台。Windows/CLI/Skill 已同步。多窗口、Ctrl+C、945000 字节对照及六条流的读取者保护见共享报告。回归845通过、1跳过。"
     },
     {
       "area": "HPM Flash 配置、连接设置与脱机 OTP",
-      "result": "HPM 四字配置与接口/OTP 源码验证见[Flash 配置](../verification/v050-hpm-flash-config.md)及[前轮](../verification/v050-hpm-interface-otp.md)。现已包含在 db81241d 安装包；真实生产浏览器指定串口可选接口/时钟、配置导入/跨页复用、OTP 读取与4/8列/写确认保护通过。HPMLink V4.7.4 / HPM5301 在线校验、脱机和 52988 字节完整回读一致，见[最终覆盖](../verification/v050-usb-hpm-overwrite.md)。未做 OTP 永久编程或其他 NOR 验收。"
+      "result": "目录覆盖 41 个型号，见[读取验收](../verification/v051-hpm-jtag-otp.md)。HPM6E80 桌面 MCP 核对 256 个显示值，ROM 读芯片标识通过。首次编程 rc=-10，Word 72 仍为 0，见[读写验收](../verification/v051-hpm-jtag-otp-write.md)。"
     },
     {
       "area": "ELF 解析与完整 UART 波特率",
@@ -64,12 +64,12 @@
     },
     {
       "area": "V0.5.0 发布、安装与升级",
-      "result": "正式源1097f98e的Windows/Skill、四类GUI回放、冻结MCP/算法/SVD、普通用户安装、旧版签名更新和双渠道发布通过，见[首发交接](../verification/v050-release-handoff.md)。前轮强制活动覆盖与实物见[安装验收](../verification/v050-installer-force-acceptance.md)，双V4/500ms恢复见[USB报告](../verification/v050-usb-hpm-overwrite.md)。本轮main ed5d55aa普通用户无/D覆盖3687文件一致、六设置保留、无C盘副本；原生/Web轮询5/4次忙碌闪动0。Python7190/2跳过、GUI1294与生产构建通过；完整Skill包内验证，全局未替换。六文件腾讯/Git完整回读、HEAD/Range、原标签/其他平台保持通过。release ff005bff、firmware 83c650a2；旧六文件COS归档核验后移除Lighthouse副本288027675字节；临时传输入口清理，见[修订发布](../verification/v050-revision-release.md)。"
+      "result": "首发源1097f98e的安装、四类回放、冻结MCP与双渠道发布见[首发交接](../verification/v050-release-handoff.md)；PR #84 main ed5d55aa的安装路径、脱机静默刷新与工程日志修订，及V2.9.5双渠道发布/归档见[修订发布](../verification/v050-revision-release.md)。本轮最新Windows/Skill修订见本页首项；原标签与其他平台保留。"
     }
   ],
   "decisions": [
     "采集或调试改动须按[上位机基线](../verification/v043-host-baseline.md)同条件核对数据完整性和性能。SystemView每次附着刷新INIT/任务列表，按实际通道，不猜选；RT-Thread模板锁覆盖可记录的高优先级IRQ，保留嵌套掩码。时间窗口仅控制可视跨度，连续跟随不补造事件；统计限频不影响精确检查，暂停显示仍可缩放且不暂停采集。用户显式重启所选MKLink时停止其采集、重启一次并退役会话/释放占用，其他探针与独立UART隔离，不自动重连或重放。 桌面与Web GUI操作共用gui_control/gui_action；先显式选择窗口和新鲜控件，路由/探针身份/代次变更后重读。页面回执仅说明指令执行，异步设备任务仍核对共享终态，unconfirmed不自动重放。GUI回放仅影响本窗口；RTT/串口历史TX不重发。SystemView状态只用原有1Hz轮询，不再占用长期HTTP SSE连接，数据仍走WebSocket。",
-    "默认仅构建 Windows。用 PowerShell 7、UTF-8 和 `scripts/build_workspace.ps1`，构建根为 `F:/MKLink-Build`。",
+    "默认仅构建 Windows，PowerShell 7、UTF-8；构建测试用 scripts/build_workspace.ps1，根为 F:/MKLink-Build。主仓库在 E:/software/HPM5300/Mklink-AI-Probe，新工作树优先 E:/Codex-Worktrees，禁止新建到C盘；工具默认C盘时不得继续。Codex默认目录未改，用户选择先清理并记录约定。",
     "Windows NSIS默认currentUser；不自动命名USB端口，只有用户确认修改/恢复名称才调用UAC助手。按2026-11-14最终指令，覆盖安装直接强制结束当前用户MKLink桌面/共享后台/Skill/MCP及其WebView，含活动任务，不依赖旧版API，不杀AI宿主或无关Python；受保护旧目录或同用户进程访问拒绝时请求同账户UAC；不同账户拒绝，取消不写入，不循环提权。覆盖安装先恢复有效的原机器级目录，尊重显式 /D 和目录页选择；机器登记/目录权限不更改，受保护目录提权后仍使用原路径，失败时不另建用户副本。损坏历史仍原样备份核验后初始化；有效未知结果不清空，权限/占用/链接异常跳过，不重放旧操作。",
     "后续发布只到腾讯云和 MicroKeen/Mklink-AI-Probe GitHub，Gitee 与旧 GitHub 保留历史，不上传新附件/标签/索引。AI / Skill / 固件按腾讯云、GitHub 顺序回退，不并发查询；备用 Skill 文件须匹配所选版本、大小、SHA-256。上海服务器直供最新版，COS/Git 存历史；COS 189 GiB 告警、207.9 GiB 停止，无日期截止。见[下载策略](tencent-updates.md)。",
     "跨会话固件联测固定上位机提交并核对 mklink/runtime 模块导入路径；主工作区和全局 editable 入口不自动代表当前任务版本。",
@@ -80,11 +80,11 @@
     "缺固件能力按已有文本/HELLO 缓存判断，版本号不替代协商；Web/CLI/SDK/MCP 共用 firmware_compatibility 和 firmware_warning。未知型号或未协商状态不猜测；status 5/6、超时、目标及硬件限制不误报升级可解决。SuperWatch 运行或暂停时缺 MUX 写能力则提示升级并保留采集，不自动停流写入；地址限制提示显式停止。未知写结果不重放，不自动升级固件。 串口助手与 Modbus 共用完整 34 档预设（300～10M）；已识别 UART / RS485 分别按自身固件声明限制选择。列表刷新只用缓存，显式查询走物理探针共享所有者且不停止采集；缺声明提示升级，第三方预设不保证支持。已有连接的自定义速率只读保留。 固件云端提醒复用有序握手缓存，后台延迟 3 秒检查、成功缓存 6 小时/失败 15 分钟；无产品标识默认 MicroLink，显式 HPMLink 独立匹配。不能解析时直接提示升级但不猜版本/镜像。弹窗仅跳转，不停止采集或刷写，同窗口/设备/版本去重；能力协商保留。 更新顺序推荐客户端先行，重载 MCP/空闲旧后台后再重连检查固件；应用内更新保留空闲预约，外部覆盖安装按用户最终要求强制结束旧进程；重启失败暂缓固件。Skill 首次异步检查并主动提醒，未连接固件待查，不自动安装。"
   ],
   "hardware": {
-    "操作前": "重新核对下载器型号、目标和占用。固件变更由指定会话协调，升降级按本次授权执行。VCC、OTP 操作分别确认。",
+    "操作前": "上板前重新核对下载器、型号、目标与占用；固件、VCC、OTP 编程依各自授权执行。",
     "普通 V4": "沿用V4.7.4 / STM32F103RC及此前IRQ锁/CH2 8KiB目标；本轮没有刷写、供电或应用变更。ba3a334b安装版SWD10MHz，四变量1ms+RTT CH0/1+Trace CH2，645064事件/9任务且无解析/目标/主机丢弃。RTT没有文本载荷，UART/RS485未接；采集停止、断开、测试窗口关闭，下次重新核对占用。",
     "普通 V3": "固件会话已回读 V3.6.10 / 2026-11-10T14:14:14，原 STM32F103 的一次 SWCLK 拔插恢复通过；测试结束时后台退出、设备释放。下次仍需重新核对占用。",
     "普通 V2": "固件V2.9.5 / 2026-11-15T21:39:19，测试源码56f5fdf5、合并main866fc5ff，未重编。固件会话备用V2+STM32F103RE完成47/49命令、34档UART189回环及复位/烧录/采集/Keil联测，原512KiB恢复一致。YMODEM对端、Modbus从站、USB12Mbps、H7双核、深度低功耗和SWD拔插未完整验收；原故障V2取消恢复。11月16日上位机用当前V2+STM32F103拍公众号：匹配AXF后四路1kHz记录10135组、Excel与回放通过；未刷写，设备已释放，GUI留在回放。",
-    "HPMLink V4": "固件会话本轮交回V4.7.4 / 2026-11-14 11:35:00，HPM5301；上位机本轮未占用或改目标。前轮db81241d JTAG10MHz/flash_cfg在线脱机与52988字节回读证据见[覆盖报告](../verification/v050-usb-hpm-overwrite.md)。固件会话RS485互测是单独证据，10Mbps大帧边界仍保留；下一轮重新核对接线/固件/占用。"
+    "HPMLink V4": "HPM6E80、V4.7.5（11月19日15:00:56）。OTP 30 MHz，ROM 返回0x10206141，Word 72 熔丝/影子均0且未锁，授权已用，暂停永久写入。11月20日授权烧录 hello_world，RTT 10 MHz、0x012841D0，75秒150条三端一致，MCP退出后GUI继续。"
   },
   "known_limits": [
     "普通读取 P95 和间隔读取稳定低于 1 ms、最大采样间隔 20 µs、40 µs 翻转零漏采仍是未达目标。",
@@ -97,13 +97,13 @@
     "ELF与34档波特率已在Windows候选包含；客户ELF仅离线解析/配置，未操作客户板。本轮没有高速串口/Modbus物理验收；固件会话RS485双V4测试不等同本轮/客户快速应答验证，10Mbps大帧丢包边界仍保留，第三方驱动可拒绝高档位。"
   ],
   "next_actions": [
-    "PR #86 本机门禁已通过；证据和生产资产提交后核对最终CI，按AGENTS取得明确合并授权，从干净main构建签名包。用户要求同版本替换腾讯云Windows与Skill，版本号和版本说明不改；GitHub备用需取得同步授权，其他平台/固件保持，公开读回通过前不宣告发布。",
+    "永久写入已暂停。HPM6E80 首次编程失败的原因待查，其他型号按已核实配置开展实物验收。产品版本 V0.5.0，PR #88 待审。",
     "客户可直接运行新版覆盖安装器，自动结束当前用户旧MKLink与Skill/MCP，不要求手动先关旧版；活动任务会结束。安装后AI宿主需重新加载被结束的MCP。损坏历史备份保留，仍失败时收集installation-history-report.json、history-backups和诊断包，区分权限/占用/格式；不手工删除有效未知结果，不重放烧录。",
     "客户SystemView先核对实际CH、目标IRQ锁及元数据。1µs三路溢出先采集0x40 CH2设备时间戳/长度/序号与主机单调到达时间，低频读0x10错误和0x14批次耗时；诊断开销保持一致，再判断背压、重试或调度，不直接假定80ms停读或给CH2固定优先级。多视图假离线已完成修复与安装版六窗口复验。保留目标构建快照供AXF源码路径使用，原工程重编后再清理；见[静态补充](../verification/v050-systemview-loss-reboot.md)。",
     "有Linux/Mac实物后补验真实USB、Gatekeeper首次安装和交互式提权；不能把本轮CI结果当作这些硬件/系统验收。",
     "固件会话继续维护 STOP 状态码补丁；客户信息齐备并获得明确实物安排后再做同条件 STOP/唤醒验证，不自动抢占调试器或刷写设备。"
   ],
   "continuation_protocol": [
-    "当前正式线上仍为main ed5d55aa的r20261115。本轮修复实现4ff4b9db、GUI资产5bbc035b；本机候选验收通过，合成浏览器载荷不得刷写或发布。腾讯云Chrome会话已登录，仅做只读核查。当前D盘为本机修复候选，测试GUI已正常关闭；最终main包尚未构建。"
+    "PR #87（73714974）的发布报告和存储交接列有 F 盘受保护安装测试目录、三个 relaunch.exe、C 盘旧工作树及未推送临时副本。保留这些目录、证据和 stash。合成固件禁止刷写。"
   ]
 }

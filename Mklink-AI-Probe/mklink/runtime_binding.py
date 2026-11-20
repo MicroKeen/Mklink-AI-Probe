@@ -45,7 +45,8 @@ class RuntimeBinding:
             except RuntimeErrorResponse as error:
                 message = 'This probe is in use by another backend; select a different probe or disconnect it there before switching'
                 raise RuntimeErrorResponse(message, status_code=409,
-                                           detail={'reason': 'probe_in_use', 'message': message}) from error
+                                           detail={'reason': 'probe_in_use', 'probe_id': probe_id,
+                                                   'message': message}) from error
         def commit():
             nonlocal committed
             from mklink.probes import rebind_runtime

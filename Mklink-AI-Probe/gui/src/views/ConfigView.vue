@@ -40,6 +40,7 @@ const {
   uploadFileSource,
   connectDevice,
   disconnectDevice,
+  openExistingProbe,
   parseAxf,
   findRtt,
   probeFirmwareCheck,
@@ -82,6 +83,8 @@ const savingClock = ref(false)
 const connecting = ref(false)
 const disconnecting = ref(false)
 const connectionOwners = ref<string[] | null>(null)
+const occupiedProbe = ref('')
+const openingExisting = ref(false)
 const browsingFiles = ref(false)
 const parsingSymbols = ref(false)
 let symbolParseGeneration = 0
@@ -175,6 +178,7 @@ async function saveLocalConfig() {
 }
 
 async function selectLocalPort() {
+  occupiedProbe.value = ''
   localPortTouched = true
   localPortExplicit.value = Boolean(localPort.value.trim())
   selectedProbeId.value = selectedProbe.value?.probe_id || ''
@@ -185,6 +189,7 @@ async function selectLocalPort() {
 async function connectLocal() {
   if (connecting.value || disconnecting.value || savingLocal.value || savingClock.value) return
   connectionOwners.value = null
+  occupiedProbe.value = ''
   localPortTouched = true
   connecting.value = true
   try {
@@ -225,12 +230,27 @@ async function connectLocal() {
       config.value = { ...config.value, com_port: '' }
     }
     const reason = String(error.detail?.reason || '')
+    if (IS_TAURI && reason === 'probe_in_use') occupiedProbe.value = error.detail?.probe_id || selectedProbeId.value
     if (sharedRuntime.value && (reason.startsWith('probe_') || ['missing', 'port_changed'].includes(reason))) {
       await refreshPorts()
     }
-    toast.error(tr('连接失败: ', 'Connection failed: ') + probeSelectionError(error))
+    if (occupiedProbe.value) toast.warn(tr('另一后台已连接此下载器，可打开已有连接。', 'Another backend is connected to this probe. Open its existing connection.'))
+    else toast.error(tr('连接失败: ', 'Connection failed: ') + probeSelectionError(error))
   } finally {
     connecting.value = false
+  }
+}
+
+async function openOccupiedProbe() {
+  if (!occupiedProbe.value || openingExisting.value) return
+  openingExisting.value = true
+  try {
+    await openExistingProbe(occupiedProbe.value)
+    toast.success(tr('已请求浏览器打开已有连接', 'Requested the existing connection in your browser'))
+  } catch (error) {
+    toast.error(String(error))
+  } finally {
+    openingExisting.value = false
   }
 }
 
@@ -585,6 +605,10 @@ onUnmounted(() => {
           >
             <Usb :size="15" aria-hidden="true" />
             {{ connecting ? tr('连接中...', 'Connecting...') : switchingProbe && deviceStatus.connected ? tr('切换下载器', 'Switch Probe') : tr('连接设备', 'Connect Device') }}
+          </button>
+          <button v-if="occupiedProbe" class="btn" type="button" data-testid="open-existing-probe"
+            :disabled="openingExisting || connecting" @click="openOccupiedProbe">
+            {{ tr('在浏览器打开已有连接', 'Open existing connection in browser') }}
           </button>
           <button
             class="btn icon-command"

@@ -215,12 +215,17 @@ def validate_arguments(capability, arguments):
             raise HTTPException(422, 'Offline deployment requires config, stable request_id and confirm=true')
     if capability.startswith('hpm_otp_jtag_'):
         action = capability.removeprefix('hpm_otp_jtag_')
+        token_commit = action == 'program' and 'plan_id' in arguments
         allowed = {'part_number', 'model'}
-        if action != 'read':
+        if token_commit:
+            allowed.add('plan_id')
+            if not isinstance(arguments.get('plan_id'), str) or not arguments['plan_id']:
+                raise HTTPException(422, 'Submit the reviewed JTAG OTP plan_id')
+        if action != 'read' and not token_commit:
             allowed |= {'word', 'expected'}
             if not {'word', 'expected'} <= arguments.keys():
                 raise HTTPException(422, 'OTP requires an explicit word and expected original value')
-        if action in ('plan', 'program'):
+        if action in ('plan', 'program') and not token_commit:
             allowed.add('desired')
             if 'desired' not in arguments:
                 raise HTTPException(422, 'OTP requires an explicit desired value')

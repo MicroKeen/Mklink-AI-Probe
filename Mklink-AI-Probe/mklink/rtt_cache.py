@@ -21,6 +21,11 @@ class RttChannelCache:
         with self._lock:
             return list(self._data)
 
+    def positions(self):
+        """Snapshot all channel offsets and their capture identity under one lock."""
+        with self._lock:
+            return self.session, dict(self._ends)
+
     def append(self, channel, data):
         with self._lock:
             buf = self._data[channel]

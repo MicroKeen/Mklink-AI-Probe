@@ -9,6 +9,30 @@ from mklink import runtime, runtime_gui, runtime_mcp
 from test_shared_runtime import runtime as backend, attach, call
 
 
+@pytest.mark.parametrize("changed", [False, True])
+def test_open_existing_probe_uses_owners_gui_ticket_without_target_attach(monkeypatch, tmp_path, changed):
+    owner = info(tmp_path, probe="usb-a")
+    adapter = Mock(info=owner, session_id="view-lease")
+    monkeypatch.setattr("mklink.probes.select_probe", lambda probe: {"probe_id": probe})
+    monkeypatch.setattr(runtime, "discover", lambda probe: owner)
+    monkeypatch.setattr(runtime, "RuntimeClient", lambda **kw: adapter)
+    request = Mock(side_effect=[{**owner, "probe_id": "usb-b" if changed else "usb-a"},
+                                {"ticket": "gui-once", "expires_in": 60}])
+    monkeypatch.setattr(runtime, "request", request)
+    launch = Mock(return_value=True)
+    monkeypatch.setattr(runtime_gui.webbrowser, "open_new_tab", launch)
+    if changed:
+        with pytest.raises(runtime.RuntimeErrorResponse, match="changed"):
+            runtime_gui.open_existing_probe_window("usb-a")
+        launch.assert_not_called()
+        assert request.call_count == 1
+    else:
+        assert runtime_gui.open_existing_probe_window("usb-a") == {"browser_requested": True}
+        launch.assert_called_once_with("http://127.0.0.1:8765/_runtime/open#gui-once")
+    adapter.connect.assert_called_once_with(scope="uart", existing_only=True)
+    adapter.close.assert_called_once()
+
+
 def info(root, key='a', probe='lobby'):
     return dict(runtime_id='local-' + key * 24, instance_id=key, probe_id=probe,
                 project_root=str(root), port=8765, token='long-lived-secret')

@@ -77,6 +77,8 @@ class GuiBridge:
             raise RequestValidationError('Remote GUI connection limit reached')
         self.active += 1
         headers = {'X-Auth-Token': self.info['token']}
+        if mode == 'ws' or path.endswith('/stream'):
+            headers['X-MKLink-View-Owner'] = 'remote-gui'
         if self.probe_id:
             headers['X-MKLink-Probe'] = self.probe_id
         headers['X-MKLink-Device-Generation'] = str(self.device_generation)

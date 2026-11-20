@@ -188,6 +188,48 @@ def test_stream_owner_cannot_stop_other_subscriber(runtime):
     assert calls == ["start", "stop"]
 
 
+@pytest.mark.parametrize('name,header,protected', [
+    ('rtt-terminal-3', {'origin': 'http://127.0.0.1:8765'}, True),
+    ('rtt-7', {'X-MKLink-View-Owner': 'desktop'}, True),
+    ('rtt', {'X-MKLink-View-Owner': 'remote-gui'}, True),
+    ('systemview', {'origin': 'http://127.0.0.1:8765'}, False),
+])
+def test_cli_owner_leaves_the_stream_running_for_a_gui_reader(runtime, name, header, protected):
+    from mklink.remote.stream_api import STREAM_TYPES, create_stream_registry, create_stream_router
+    client, control, calls, _, app = runtime
+    app.include_router(create_stream_router(create_stream_registry(), STREAM_TYPES, None))
+    owner = attach(client)
+    assert call(client, owner, 'rtt_start').status_code == 200
+    with client.websocket_connect('ws://127.0.0.1:8765/ws/streams/'+name, headers=header) as socket:
+        socket.receive_bytes()
+        response = call(client, owner, 'rtt_stop')
+        assert response.status_code == (409 if protected else 200)
+        if protected:
+            assert calls == ['start']
+    if protected:
+        assert call(client, owner, 'rtt_stop').status_code == 200
+    assert calls == ['start', 'stop']
+
+
+@pytest.mark.parametrize('stream', ['rtt', 'superwatch', 'systemview', 'vofa', 'serial', 'modbus'])
+def test_gui_event_stream_protects_only_its_own_acquisition(runtime, stream):
+    from fastapi import HTTPException
+    from mklink.runtime_api import RuntimeGate
+    client, control, _, _, _ = runtime
+    owner = attach(client)
+    async def exercise():
+        control.acquisition_started(stream, owner)
+        async def streaming(scope, receive, send):
+            with pytest.raises(HTTPException, match='GUI is reading'):
+                control.require_acquisition_control(stream, owner)
+        scope = {'type': 'http', 'method': 'GET', 'path': f'/api/dash/{stream}/stream',
+                 'headers': [(b'host', b'127.0.0.1:8765'), (b'x-auth-token', b'test-secret'),
+                             (b'x-mklink-view-owner', b'desktop')]}
+        await RuntimeGate(streaming, control=control)(scope, None, None)
+        control.require_acquisition_control(stream, owner)
+    client.portal.call(exercise)
+
+
 @pytest.mark.parametrize('window_exit', ['release', 'expired', 'websocket'])
 def test_closed_gui_capture_can_be_recovered_by_sole_ai(runtime, window_exit):
     import time

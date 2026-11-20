@@ -244,7 +244,10 @@ def run(args):
         elif args.command == 'break':
             result = client.call('breakpoints', debug_arguments)
         elif args.command == 'configuration':
-            result = client.call('read_configuration', {'part_number': args.chip, 'model': args.model})
+            arguments = {'part_number': args.chip, 'model': args.model}
+            if args.otp_words:
+                arguments['otp_words'] = True
+            result = client.call('read_configuration', arguments)
         elif args.command == 'peripherals':
             arguments = (selectors if args.action == 'select' else {'q': args.query} if args.action == 'list'
                          else {'names': args.names})
@@ -320,9 +323,11 @@ def run(args):
             if stream == 'rtt':
                 selected = getattr(args, 'channels', None)
                 address = getattr(args, 'addr', None)
-                if selected:
+                if selected and (len(set(selected)) != len(selected) or any(not 0 <= ch <= 7 for ch in selected)):
+                    raise ValueError('RTT channels must be unique and in 0..7')
+                if selected and not running:
                     options.update(channels=selected, channel=selected[0])
-                if address:
+                if address and not running:
                     options['addr'] = address
             if stream == 'vofa':
                 if running and (vofa_channels is not None or args.period is not None):
@@ -350,6 +355,15 @@ def run(args):
                 owned_stream = stream
             if getattr(args, 'visualize', False) and not getattr(args, 'no_browser', False):
                 webbrowser.open(browser_url(client.info))
+            if stream == 'rtt':
+                from mklink.rtt_cli import collect
+                from websockets.exceptions import WebSocketException
+                try:
+                    result = collect(client, started, selected, address, duration)
+                except (WebSocketException, RuntimeError) as exc:
+                    raise SystemExit(str(exc)) from exc
+                print(json.dumps(result, ensure_ascii=False, indent=2))
+                return
             deadline = time.monotonic()+duration if duration else None
             print(json.dumps({'capture': stream, 'shared': True, **started}, ensure_ascii=False), flush=True)
             try:
@@ -362,8 +376,6 @@ def run(args):
             except KeyboardInterrupt:
                 pass
             result = client.call(stream+('_values' if stream == 'superwatch' else '_history'))
-            if stream == 'rtt' and getattr(args, 'channels', None):
-                result = {'channels': [client.call('rtt_read_channel', {'channel': ch}) for ch in args.channels]}
             if stream == 'vofa':
                 if result.get('error') or not result.get('completed_samples'):
                     raise RuntimeErrorResponse(result.get('error') or 'VOFA returned no complete samples')

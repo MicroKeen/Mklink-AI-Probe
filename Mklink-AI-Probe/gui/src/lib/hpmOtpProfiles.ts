@@ -28,6 +28,43 @@ export function hpmOtpProfile(part: string): { name: string; words: OtpWord[] } 
 export function otpFieldValue(value: number, field: OtpField): string {
   return field.offsets.map(offset => ((BigInt(value) >> BigInt(offset)) & ((1n << BigInt(field.width)) - 1n)).toString(16).toUpperCase()).join(' / ')
 }
+
+// HPM5100 has an SDK OTP table but no Manufacturing Tool UART ISP template.
+// Tuples are word, bit offset, field width, name (SDK 1.13.0 hpm_otp_table.h).
+const sdk51 = Array.from({ length: 128 }, (_, word): OtpWord => ({
+  word, category: 'GENERAL', name: '', fields: [],
+}))
+const fields51: [number, number, number, string][] = [
+  [0, 0, 32, 'HARD_LOCK'], [1, 0, 4, 'LIFECYCLE_A'], [1, 28, 4, 'LIFECYCLE_B'],
+  [1, 8, 8, 'PUK_REVOKE'], [1, 16, 1, 'JTAG_DISABLE'], [1, 17, 1, 'DEBUG_DISABLE'],
+  [1, 19, 1, 'TCU_DISABLE'], [2, 16, 16, 'MONO_EPOCH'], [3, 0, 32, 'SW_VER'],
+  [8, 0, 128, 'DIE_TRACE'], [12, 0, 128, 'DEBUG_KEY'], [21, 0, 12, 'TSNS_BASE'],
+  [21, 12, 12, 'TSNS_SLOPE'], [21, 24, 1, 'TSNS_BASE_EN'], [21, 25, 1, 'TSNS_SLOPE_EN'],
+  [64, 0, 32, 'CHIP_ID'],
+  [65, 0, 48, 'MAC0'], [66, 16, 48, 'MAC1'], [68, 0, 16, 'USB_PID'], [68, 16, 16, 'USB_VID'],
+  [80, 0, 256, 'PUBLIC_KEY_HASH'], [88, 0, 128, 'UUID'], [96, 0, 128, 'EXIP0_KEY'],
+  [100, 0, 128, 'EXIP1_KEY'], [104, 0, 256, 'USER_KEY'], [112, 0, 256, 'MASTER_KEY'],
+]
+for (const [start, shift, bits, name] of fields51) {
+  let category = 'GENERAL'
+  if (name.endsWith('_KEY')) category = 'SECRET'
+  else if (start <= 3 || name === 'PUBLIC_KEY_HASH') category = 'SECURE'
+  else if (['CHIP_ID', 'DIE_TRACE', 'UUID', 'MAC0', 'MAC1', 'USB_PID', 'USB_VID'].includes(name)) category = 'IDENTIFY'
+  let word = start, offset = shift, remaining = bits
+  while (remaining > 0) {
+    const width = Math.min(32 - offset, remaining)
+    const definition = sdk51[word++]!
+    definition.category = category
+    definition.fields.push({ name, offsets: [offset], width, kind: 'none', options: [] })
+    remaining -= width
+    offset = 0
+  }
+}
+export function hpmJtagOtpProfile(part: string) {
+  const normalized = part.trim().toUpperCase()
+  if (!/^HPM[A-Z0-9]{4,8}$/.test(normalized)) return null
+  return normalized.startsWith('HPM51') ? { name: 'HPM5100', words: sdk51 } : hpmOtpProfile(normalized)
+}
 // Set precisely the reviewed field, preserving every other bit in the word.
 // Repeated offsets (LIFE_CYCLE) must receive the same value.
 export function applyOtpFields(base: OtpEntry[], edits: { word: number; field: OtpField; value: string }[]): OtpEntry[] {
