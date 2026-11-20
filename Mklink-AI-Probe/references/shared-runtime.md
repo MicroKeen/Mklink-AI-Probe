@@ -618,9 +618,9 @@ V2.9.0 或配套 V3/V4 固件报告 `MUX_TARGET=1` 后，GUI/CLI/MCP 自动使�
   256 字节，失败或结果未知时不得整条重发。已被 RTT 环形缓冲接受不等于目标应用
   已处理，目标协议仍应自行确认。
 - CLI `python -m mklink rtt --probe <设备> --channels 0 1 --addr <RTT地址> --duration 3`
-  创建有限采集。已有采集时，`mklink rtt --duration 5` 默认返回解析出的波形点，纯文本日志可能显示为空。保持 GUI 运行，使用
-  `mklink runtime call rtt_read_channel --probe <设备> --arguments '{"channel":0,"cursor":0}'`
-  读取通道 0 缓存的原始字节。接续读取时传回上一页的 `session` 和 `cursor`。共享 Python SDK 使用相同的 `call()` 能力。
+  创建有限采集。GUI 已在采集时，`mklink rtt --duration 5` 读取接下来五秒内所有活动通道的文本和波形。可指定任意非负时长，`0` 持续到 Ctrl+C。`--channels` 可选择已有通道。CLI 自动维护各通道的读取位置，多个窗口可以同时读取。
+  大流量会先输出 `rtt_chunk`，末条结果的 `channels` 包含剩余文本和字节、总接收量、丢失计数与最近的波形点。已有脚本仍可通过 `rtt_read_channel` 显式分页。
+- CLI/MCP 已启动采集且 GUI 正在订阅同一条实时流时，普通停止请求会提示保留采集。结束客户端可用 detach。保护按探针和实际打开的流生效。
 - 配套固件协商增量 RTT（bit 7）后，RTT、SystemView、SuperWatch 可并行，
   RTT/SystemView 须同一控制块；同通道一次读取再扇出。缺少能力时不回退独占流。
   内存/变量读写、批量内存读取可同时发命令。下载由后台自动暂停恢复；

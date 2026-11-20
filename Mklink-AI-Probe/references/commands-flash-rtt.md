@@ -116,8 +116,9 @@ python -m mklink flash --probe <ID> --firmware build/Debug/firmware.hex --target
 
 #### `python -m mklink rtt --probe <设备ID或别名> --duration 10`
 
-通过共享后台捕获 RTT，GUI 已打开时仍可使用。已有采集仅订阅，省略 addr/channels
-等重配参数；CLI 结束不停止 GUI 的采集。未运行时才指定目标实际地址及通道，例如：
+GUI 正在采集时可直接运行 `mklink rtt --duration 5`。默认读取本次观察期间所有活动通道，可用 `--channels 1 3` 选择其中几个。每个通道分别返回文本、原始字节和波形点。时长支持小数秒，设为 `0` 会持续输出直到 Ctrl+C。单台探针可以省略 `--probe`。
+
+首次采集也可指定目标地址和通道。
 
 ```powershell
 python -m mklink rtt --probe "电机板" --addr 0x20000e24 --channels 0 1 --duration 10

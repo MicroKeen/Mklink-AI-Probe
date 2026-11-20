@@ -181,6 +181,8 @@ def create_proxy(info, *, port, instance_id, transport=None):
     async def forward(request: Request, path: str):
         headers = {key: value for key, value in request.headers.items() if key.lower() not in HOP_HEADERS}
         headers["X-Auth-Token"] = info["token"]
+        if path.startswith('api/dash/') and path.endswith('/stream'):
+            headers["X-MKLink-View-Owner"] = view_id
         url = httpx.URL(f"http://127.0.0.1:{info['port']}/{path}").copy_with(query=request.url.query.encode())
         upstream = app.state.client.build_request(request.method, url, headers=headers, content=request.stream())
         try:
