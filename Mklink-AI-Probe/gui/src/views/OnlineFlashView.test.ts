@@ -125,12 +125,15 @@ describe('online flash navigation and workspace', () => {
       },
     })
 
-    const labels = wrapper.findAll('.nav-tab').map(tab => tab.text())
-    expect(labels).toEqual(['配置', '仪表盘', '在线烧录', '脱机烧录', '远程服务'])
+    try {
+      const labels = wrapper.findAll('.nav-tab').map(tab => tab.text())
+      expect(labels).toEqual(['配置', '仪表盘', '在线烧录', '脱机烧录', '远程服务'])
 
-    await wrapper.findAll('.nav-tab')[3].trigger('click')
-    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('offline-flash'))
-    wrapper.unmount()
+      await wrapper.findAll('.nav-tab')[3].trigger('click')
+      await vi.dynamicImportSettled()
+      await flushPromises()
+      expect(router.currentRoute.value.name).toBe('offline-flash')
+    } finally { wrapper.unmount() }
   })
 
   it('removes the legacy dashboard 脱机烧录 tab', async () => {

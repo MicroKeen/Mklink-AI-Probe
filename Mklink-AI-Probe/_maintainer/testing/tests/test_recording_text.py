@@ -174,7 +174,7 @@ def test_rtt_long_lines_and_session_restart_are_bounded(tmp_path):
     recorder.stop()
     status = exported(recorder)
     assert status['export_state'] == 'completed'
-    text = Path(status['export_path']).read_text()
+    text = Path(status['export_path']).read_text(encoding='utf-8')
     lines = [line for line in text.splitlines() if not line.startswith('#')]
     assert max(map(len, lines)) < 17000
     assert 'CH0 RX new session' in lines[-1]

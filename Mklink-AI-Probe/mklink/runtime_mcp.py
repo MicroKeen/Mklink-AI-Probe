@@ -142,7 +142,7 @@ def build_server():
 
         First gui_open or connect, then windows; with multiple windows specify window_id.
         navigate accepts config/dashboard/online-flash/offline-flash/remote-service;
-        dashboard tabs: rtt/superwatch/hardfault/memory/serial/modbus/systemview/symbols.
+        dashboard tabs: rtt/superwatch/hardfault/memory/serial/modbus/systemview/symbols/workbench.
         config sections: local/files/firmware/runtime. Navigate before panel actions.
         snapshot asks the actual window for current page, backend health and display state.
         systemview.window seconds: .5/1/2/5/10/30/60. Pause/resume affect display only.
@@ -651,6 +651,17 @@ def build_server():
         gui_windows lists presentation-capable windows; gui_present({window_id, tab})
         switches an existing window only when showing results is useful. Routine collection
         stays in the background. Only displayed confirms navigation; never auto-replay.
+        After gui_open, gui_frontend_* uses the existing hardware-free GUI attachment.
+        gui_snapshot.panels.workbench identifies that window's semantic page and target.
+        gui_frontend_pages discovers live agent-frontend/1 page identities and their target.
+        gui_frontend_read({page_id}) reads the real catalog, strict action schemas and state revision.
+        gui_frontend_call accepts that protocol's session_id/page_id/command_id/expect_revision,
+        deadline (Unix milliseconds within 30 seconds), action and args. Preserve the command ID:
+        queued/accepted are not completion; query gui_frontend_receipt({command_id}) and read the
+        page again. An unknown outcome must never be automatically replayed, even after reconnect.
+        gui_frontend_layout/save_layout manage project display only, with optimistic revision checks.
+        gui_frontend_intents/intent read persistent user requests; gui_frontend_reply accepts
+        request_id, the request's current revision and reply. Replies do not execute user intents.
         ping lists names. rtt_history/status and superwatch_snapshot/status reuse GUI acquisition.
         rtt_recording_export takes path from rtt_recording_status and channel (0..7) to manually
         convert closed RTT JSONL parts to TXT. Read export_state/export_path for progress/result.
@@ -661,7 +672,8 @@ def build_server():
         plus optional profile/auto_reply_rules, executed once by the backend. serial_status.automation
         reports the validated profile/rules; borrowers subscribe with {} and compare explicit settings,
         never replace them. Shared arguments including automation remain limited to 16 KiB;
-        flush_memory allows 48 KiB of JSON for at most 12 KiB of decoded writes.
+        flush_memory allows 48 KiB of JSON for at most 12 KiB of decoded writes;
+        gui_frontend_call/reply allow 64 KiB, gui_frontend_save_layout allows 256 KiB.
         serial_status also returns session/latest_frames, one parsed RX snapshot per port from
         the backend parser: per-port seq, timestamp, size, a 256-byte hex_preview/truncated flag,
         crc_valid and fields (value/raw/unit). This is latest state, not lossless frame history.

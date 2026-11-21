@@ -225,7 +225,7 @@ describe('App version footer', () => {
     expect(source).toContain('@media (max-width: 1120px)')
     expect(source).toContain('grid-template-columns: auto minmax(0, 1fr)')
     expect(source).toContain('.header-right .status-bar')
-    expect(source).toContain('width: max-content')
+    expect(source).toMatch(/\.header-right \.status-bar\s*\{[^}]*max-width:\s*100%[^}]*flex-wrap:\s*wrap/s)
     expect(source).toMatch(/\.nav-tab\s*\{[^}]*white-space:\s*nowrap/s)
     expect(source).toMatch(/@media \(max-width: 1120px\)[\s\S]*\.store-menu-panel\s*\{[^}]*position:\s*fixed[^}]*top:\s*46px[^}]*right:\s*8px/s)
   })

@@ -63,7 +63,7 @@
       </button>
       <button
         type="button" class="serial-extensions-toggle" :class="{ active: extensionsOpen }"
-        :aria-expanded="extensionsOpen" aria-controls="serial-extensions"
+        :aria-expanded="extensionsOpen" :aria-controls="guiId('serial-extensions')"
         @click="extensionsOpen = !extensionsOpen"
       >
         <SlidersHorizontal :size="14" />{{ tr('扩展功能', 'Extensions') }}
@@ -80,7 +80,7 @@
       @primary="refreshPorts"
     />
 
-    <div v-show="extensionsOpen" id="serial-extensions" class="serial-extensions">
+    <div v-show="extensionsOpen" :id="guiId('serial-extensions')" class="serial-extensions">
     <SerialAutomationPanel
       :model-value="automation" :locked="running || starting || stopping"
       :port="portName" :frame="latestFrames[portName]" @update:model-value="editAutomation"
@@ -109,7 +109,7 @@
         ><SquareTerminal :size="14" /><span>{{ tr('终端', 'Terminal') }}</span></button>
       </div>
       <LogDisplayControls
-        v-if="viewMode === 'log'" id-prefix="serial"
+        v-if="viewMode === 'log'" :id-prefix="guiId('serial')"
         v-model:mode="logDisplayMode" v-model:show-timestamp="showLogTimestamp"
       />
       <div class="serial-metrics">
@@ -171,13 +171,17 @@
     </div>
 
     <RttTransmitBar
-      id-prefix="serial" :enabled="transmitEnabled" :settings="transmitSettings"
+      :id-prefix="guiId('serial')" :enabled="transmitEnabled" :settings="transmitSettings"
       :send="sendSerial" @settings-change="persistTransmitSettings"
     />
   </div>
 </template>
 
 <script setup lang="ts">
+import { frontendFetch as fetch } from '../../lib/frontendControl'
+
+import { useGuiId } from '../../lib/guiAutomation'
+const guiId = useGuiId()
 import TrafficLogControls from './TrafficLogControls.vue'
 import { trafficBytes, TrafficTextDecoder, type TrafficFrame } from '../../lib/trafficReplay'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
@@ -923,6 +927,17 @@ onUnmounted(() => {
   if (ymodemTimer !== null) clearTimeout(ymodemTimer)
   if (terminalInputTimer !== null) clearTimeout(terminalInputTimer)
   terminalInput = ''
+})
+// Restoring a layout never opens a port, resumes transmission or loads a file.
+defineExpose({
+  catalog: () => [],
+  read: () => ({ running: running.value, replaying: replaying.value, view: { mode: viewMode.value, format: logDisplayMode.value, timestamps: showLogTimestamp.value, extensions: extensionsOpen.value } }),
+  restore: (view: Record<string, unknown>) => {
+    if (view.mode === 'log' || view.mode === 'terminal') viewMode.value = view.mode
+    if (view.format === 'text' || view.format === 'hex') logDisplayMode.value = view.format
+    if (typeof view.timestamps === 'boolean') showLogTimestamp.value = view.timestamps
+    if (typeof view.extensions === 'boolean') extensionsOpen.value = view.extensions
+  },
 })
 </script>
 

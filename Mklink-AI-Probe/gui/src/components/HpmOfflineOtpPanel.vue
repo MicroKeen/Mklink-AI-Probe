@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { frontendFetch as fetch } from '../lib/frontendControl'
+
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { tr } from '../composables/useLanguage'
 import { useMklinkApi } from '../composables/useMklinkApi'

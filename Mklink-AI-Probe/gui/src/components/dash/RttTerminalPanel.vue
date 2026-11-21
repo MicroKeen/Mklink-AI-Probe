@@ -8,6 +8,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { invoke, isTauri } from '@tauri-apps/api/core'
+import { writeClipboard } from '../../lib/writeClipboard'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
@@ -87,38 +88,6 @@ function activate(): void {
   })
 }
 
-function legacyCopy(text: string): boolean {
-  const input = document.createElement('textarea')
-  input.value = text
-  input.setAttribute('readonly', '')
-  input.style.position = 'fixed'
-  input.style.opacity = '0'
-  document.body.appendChild(input)
-  input.select()
-  try {
-    return document.execCommand('copy')
-  } finally {
-    input.remove()
-    terminal?.focus()
-  }
-}
-
-async function writeClipboard(text: string): Promise<void> {
-  if (isTauri()) {
-    try {
-      await invoke('clipboard_write_text', { text })
-      return
-    } catch { /* WebView clipboard is the fallback for a transient native failure */ }
-  }
-  if (navigator.clipboard?.writeText) {
-    try {
-      await navigator.clipboard.writeText(text)
-      return
-    } catch { /* fall through for insecure contexts or denied permission */ }
-  }
-  if (!legacyCopy(text)) throw new Error('Clipboard write is unavailable')
-}
-
 async function readTauriClipboard(): Promise<string> {
   try {
     return await invoke<string>('clipboard_read_text')
@@ -148,7 +117,7 @@ function handleShortcut(event: KeyboardEvent): boolean {
     const selection = terminal?.getSelection() ?? ''
     if (!selection) return true
     event.preventDefault()
-    void writeClipboard(selection).catch(() => undefined)
+    void writeClipboard(selection, focus).catch(() => undefined)
     return false
   }
   if (key === 'v') {

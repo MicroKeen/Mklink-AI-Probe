@@ -5,8 +5,8 @@
   <span v-if="status.export_state && status.export_state !== 'pending'" class="record-result" data-testid="record-export-status" :title="status.export_path">{{ status.export_state === 'completed' ? tr('转换完成', 'Export ready') : status.export_state === 'failed' ? tr('转换失败', 'Export failed') : tr('转换中', 'Converting') }}{{ status.export_parts ? ` · ${status.export_parts} ${tr('段', 'parts')}` : '' }}</span>
   <span v-if="status.export_error" role="alert" class="record-error">{{ status.export_error }}</span>
   <span v-if="error || status.error" role="alert" class="record-error">{{ error || status.error }}</span>
-  <Teleport to="body">
-    <dialog ref="dialog" class="record-dialog" @keydown.stop>
+  <Teleport :to="guiScope?.ownerDocument?.().body || 'body'">
+    <dialog ref="dialog" class="record-dialog" :data-gui-panel-owner="guiScope?.id" @keydown.stop>
       <form @submit.prevent="start">
         <h3>{{ tr('保存 ', 'Save ') + name + tr(' 日志', ' log') }}</h3>
         <p>{{ tr('可先开启记录，再开始采集。日志写入后台电脑的所选目录，停止采集也会完成保存。', 'You can enable recording before acquisition. Logs are saved on the backend computer; stopping acquisition also completes recording.') }}</p>
@@ -23,11 +23,19 @@
 </template>
 
 <script setup lang="ts">
+import { frontendFetch as fetch } from '../../lib/frontendControl'
+
+import type { SemanticExecutionContext } from '../../lib/frontendControl'
+
+import { inject } from 'vue'
+import { guiPanelScopeKey } from '../../lib/guiAutomation'
+const guiScope = inject(guiPanelScopeKey, null)
 import { ref, onMounted, onUnmounted } from 'vue'
 import { isTauri } from '@tauri-apps/api/core'
 import { API_BASE, IS_REMOTE } from '../../lib/runtimeEndpoint'
 import { pickDirectory } from '../../lib/filePicker'
 import { language } from '../../composables/useLanguage'
+import { domainAction, requireDomain, type DomainArgs } from '../../lib/domainActions'
 const props = withDefaults(defineProps<{ endpoint?: string; name?: string; channel?: number; disabled?: boolean }>(), {
   endpoint: '/api/dash/superwatch/recording', name: 'SuperWatch', channel: 0, disabled: false,
 })
@@ -42,8 +50,8 @@ const dialog = ref<HTMLDialogElement>()
 const dirs = ref<Array<{ name: string; path: string }>>([]), drives = ref<string[]>([]), parent = ref('')
 const busy = ref(false), error = ref('')
 let timer: ReturnType<typeof setTimeout> | undefined, disposed = false, browseGeneration = 0, statusGeneration = 0
-async function request(path: string, body?: unknown) {
-  const response = await fetch(`${API_BASE}${path}`, body === undefined ? undefined : {
+async function request(path: string, body?: unknown, context?: SemanticExecutionContext) {
+  const response = await (context?.fetch || fetch)(`${API_BASE}${path}`, body === undefined ? undefined : {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
   })
   const data = await response.json()
@@ -93,21 +101,21 @@ async function showPicker() {
   } catch (caught) { error.value = String(caught) }
   finally { busy.value = false }
 }
-async function start() {
+async function start(strict: unknown = false, context?: SemanticExecutionContext) {
   statusGeneration++
   busy.value = true; error.value = ''
   try {
-    update(await request(route('start'), { directory: directory.value, ...(props.name === 'SuperWatch' ? {} : { channel: props.channel }) }))
+    update(await request(route('start'), { directory: directory.value, ...(props.name === 'SuperWatch' ? {} : { channel: props.channel }) }, context))
     localStorage.setItem(storageKey, directory.value)
     dialog.value?.close()
-  } catch (caught) { error.value = String(caught) }
+  } catch (caught) { error.value = String(caught); if (strict === true) throw caught }
   finally { busy.value = false }
 }
-async function stop() {
+async function stop(strict: unknown = false, context?: SemanticExecutionContext) {
   statusGeneration++
   busy.value = true; error.value = ''
-  try { update(await request(route('stop'), {})) }
-  catch (caught) { error.value = String(caught) }
+  try { update(await request(route('stop'), {}, context)) }
+  catch (caught) { error.value = String(caught); if (strict === true) throw caught }
   finally { busy.value = false }
 }
 async function convert() {
@@ -119,6 +127,27 @@ async function convert() {
 }
 onMounted(poll)
 onUnmounted(() => { disposed = true; clearTimeout(timer) })
+function catalog() {
+  return [
+    domainAction('recording.refresh', 'Read backend recording progress'),
+    domainAction('recording.start', 'Start recording into a backend-accessible directory', { directory: { type: 'string', maxLength: 4096 } }, ['directory'], 'file'),
+    domainAction('recording.stop', 'Stop and finalize the current recording', {}, [], 'file'),
+  ]
+}
+function read() { return { active: status.value.active, state: status.value.state, path: status.value.path, busy: busy.value, error: error.value || status.value.error, directory: directory.value } }
+async function execute(action: string, args: DomainArgs = {}, context?: SemanticExecutionContext) {
+  requireDomain(!disposed && !busy.value, 'Recording controls are unavailable or busy')
+  if (action === 'recording.refresh') { update(await request(route('status'))); return { ...read(), progress: { ...status.value } } }
+  else if (action === 'recording.start') {
+    requireDomain(typeof args.directory === 'string' && args.directory.trim(), 'Recording directory cannot be empty')
+    requireDomain(!props.disabled, 'Recording is unavailable while replaying')
+    requireDomain(!status.value.active, 'Recording is already active')
+    directory.value = args.directory; await start(true, context)
+  } else if (action === 'recording.stop') await stop(true, context)
+  else throw new Error(`Unknown recording action: ${action}`)
+  return read()
+}
+defineExpose({ catalog, read, execute })
 </script>
 
 <style scoped>

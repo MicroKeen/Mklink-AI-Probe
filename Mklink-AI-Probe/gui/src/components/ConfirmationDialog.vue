@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useGuiId } from '../lib/guiAutomation'
+const guiId = useGuiId()
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { tr } from '../composables/useLanguage'
 
@@ -25,9 +27,9 @@ onBeforeUnmount(() => { if (previousFocus?.isConnected) previousFocus.focus() })
 
 <template>
   <div class="confirmation-backdrop" @keydown="keydown" @click.self="emit('answer', false)">
-    <section role="alertdialog" aria-modal="true" aria-labelledby="confirmation-title" aria-describedby="confirmation-message" class="confirmation-dialog">
-      <h2 id="confirmation-title">{{ title || tr('请确认操作', 'Confirm operation') }}</h2>
-      <p id="confirmation-message">{{ message }}</p>
+    <section role="alertdialog" aria-modal="true" :aria-labelledby="guiId('confirmation-title')" :aria-describedby="guiId('confirmation-message')" class="confirmation-dialog">
+      <h2 :id="guiId('confirmation-title')">{{ title || tr('请确认操作', 'Confirm operation') }}</h2>
+      <p :id="guiId('confirmation-message')">{{ message }}</p>
       <div class="confirmation-buttons">
         <button ref="cancel" type="button" data-testid="confirmation-cancel" @click="emit('answer', false)">{{ cancelLabel || tr('取消', 'Cancel') }}</button>
         <button ref="accept" type="button" data-testid="confirmation-accept" :class="danger === false ? 'primary' : 'danger'" @click="emit('answer', true)">{{ acceptLabel || tr('确认', 'Confirm') }}</button>

@@ -27,3 +27,21 @@ describe('GUI control addressing', () => {
     expect(document.querySelector('input')!.checked).toBe(true)
   })
 })
+
+it('addresses only the owning panel modal and keeps background controls blocked', () => {
+  document.body.innerHTML = '<section data-gui-panel-id="one"><button>Background one</button></section><section data-gui-panel-id="two"><button>Background two</button></section><dialog open data-gui-panel-owner="one"><button>Confirm</button><input type="file"></dialog>'
+  const one = document.querySelector<HTMLElement>('[data-gui-panel-id="one"]')!
+  const two = document.querySelector<HTMLElement>('[data-gui-panel-id="two"]')!
+  const controls = listGuiControls(0, one)
+  expect(controls.controls.map(control => control.label)).toEqual(['Confirm', 'INPUT'])
+  expect(controls.controls[1]?.file_picker).toBe(true)
+  expect(listGuiControls(0, two).total).toBe(0)
+  expect(() => guiControl(controls.controls[0]!.id, two)).toThrow('outside')
+  document.querySelector('dialog')!.removeAttribute('open')
+  expect(listGuiControls(0, one).controls.map(control => control.label)).toEqual(['Background one'])
+})
+
+it('names a nested select by its label without including changing option text', () => {
+  document.body.innerHTML = '<label>Port <select><option>COM2</option><option>COM3</option></select></label>'
+  expect(listGuiControls().controls[0]?.label).toBe('Port')
+})

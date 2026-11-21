@@ -131,6 +131,21 @@ function desktopSettings(overrides: Partial<DesktopSettings> = {}): DesktopSetti
 }
 
 describe('SystemViewTab asynchronous lifecycle', () => {
+  it('does not subscribe or render a hidden view, and detaches only its consumer when hidden', async () => {
+    mocks.dash.getStatus.mockResolvedValue({ running: true })
+    const wrapper = mount(SystemViewTab, { props: { deviceConnected: true, active: false } })
+    await flushPromises()
+    expect(mocks.binary.start).not.toHaveBeenCalled()
+    mocks.scheduler.render?.(new Set(['data']))
+    expect(mocks.timeline.renderFrame).not.toHaveBeenCalled()
+    await wrapper.setProps({ active: true }); await flushPromises()
+    expect(mocks.binary.start).toHaveBeenCalledOnce()
+    await wrapper.setProps({ active: false })
+    expect(mocks.binary.stop).toHaveBeenCalled()
+    expect(mocks.dash.stop).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.timeline.getViewRange.mockReturnValue(null)

@@ -106,6 +106,8 @@
 </template>
 
 <script setup lang="ts">
+import { frontendFetch as fetch } from '../../lib/frontendControl'
+
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useUartBaudrates } from '../../composables/useUartBaudrates'
 import { useMklinkApi } from '../../composables/useMklinkApi'

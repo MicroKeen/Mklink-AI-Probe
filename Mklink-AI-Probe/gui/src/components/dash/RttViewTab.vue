@@ -11,9 +11,9 @@
       @secondary="loadSymbolFile"
     />
       <div class="rtt-config-row">
-        <label for="rtt-address">{{ tr('RTT 地址', 'RTT Address') }}</label>
+        <label :for="guiId('rtt-address')">{{ tr('RTT 地址', 'RTT Address') }}</label>
         <input
-          id="rtt-address" v-model="rttAddress" data-testid="rtt-address"
+          :id="guiId('rtt-address')" v-model="rttAddress" class="rtt-address" data-testid="rtt-address"
           type="text" spellcheck="false" placeholder="0x20000000" @input="onAddressInput"
         >
         <button data-testid="rtt-search" type="button" class="btn-search" :title="addressSource" @click="searchRttAddress">
@@ -38,7 +38,7 @@
         />
       </div>
       <div ref="channelGrid" class="rtt-channel-grid" :class="{ 'auto-fit': autoFit, multiple: activeChannels.filter(ch => !hiddenChannels.has(ch)).length > 1 }">
-        <RttChannelPanel v-for="ch in activeChannels" :key="ch" :channel="ch"
+        <RttChannelPanel v-for="ch in activeChannels" :key="ch" :ref="el => setChannelSurface(ch, el)" :channel="ch" :panel-id="panelId ? `${panelId}-rtt-${ch}` : undefined"
           v-show="!hiddenChannels.has(ch)"
           :running="statusRunning && !runtimeError" :session="captureSession" :channel-status="channelStatus[String(ch)]"
           :send-enabled="!stopping && !runtimeError && downBuffers.some(b => b.channel === ch && b.active)" />
@@ -47,6 +47,13 @@
 </template>
 
 <script setup lang="ts">
+import { frontendFetch as fetch } from '../../lib/frontendControl'
+
+import type { SemanticExecutionContext } from '../../lib/frontendControl'
+
+import type { SemanticSurface, JsonObject } from '../../lib/frontendControl'
+import { useGuiId } from '../../lib/guiAutomation'
+const guiId = useGuiId()
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { trackedSymbolPending, reloadTrackedSymbolSource } from '../../lib/trackedSymbolSource'
 import { Search } from '@lucide/vue'
@@ -63,7 +70,32 @@ import RttChannelPanel from './RttChannelPanel.vue'
 import { tr } from '../../composables/useLanguage'
 import { API_BASE } from '../../lib/runtimeEndpoint'
 import { useToast } from '../../composables/useToast'
-const props = defineProps<{ deviceConnected: boolean }>()
+const props = defineProps<{ deviceConnected: boolean; panelId?: string }>()
+const channelSurfaces = new Map<number, SemanticSurface>()
+let restoredChannels: JsonObject = {}
+function setChannelSurface(channel: number, surface: unknown) {
+  if (!surface) { channelSurfaces.delete(channel); return }
+  if (channelSurfaces.get(channel) === surface) return
+  channelSurfaces.set(channel, surface as SemanticSurface)
+  if (restoredChannels[channel]) (surface as SemanticSurface).restore?.(restoredChannels[channel])
+}
+defineExpose({
+  catalog: () => [...channelSurfaces].flatMap(([channel, surface]) => surface.catalog().map(action => ({ ...action, name: `channel.${channel}.${action.name}` }))),
+  read: () => ({ running: statusRunning.value, error: runtimeError.value || actionError.value, view: {
+    hidden: [...hiddenChannels.value], channels: Object.fromEntries([...channelSurfaces].map(([channel, surface]) => [channel, surface.read().view])),
+  }, channels: Object.fromEntries([...channelSurfaces].map(([channel, surface]) => [channel, surface.read()])) }),
+  execute: (name: string, args: JsonObject, context?: SemanticExecutionContext) => {
+    const match = /^channel\.(\d+)\.(.+)$/.exec(name)
+    const surface = match && channelSurfaces.get(Number(match[1]))
+    if (!surface) throw new Error('RTT channel is not available')
+    return surface.execute(match![2]!, args, context)
+  },
+  restore: (view: JsonObject) => {
+    if (Array.isArray(view.hidden)) hiddenChannels.value = new Set(view.hidden.filter((channel: unknown) => Number.isInteger(channel) && Number(channel) >= 0 && Number(channel) < 256))
+    restoredChannels = view.channels && typeof view.channels === 'object' ? view.channels : {}
+    for (const [channel, surface] of channelSurfaces) if (restoredChannels[channel]) surface.restore?.(restoredChannels[channel])
+  },
+})
 const dash = useDashboard('rtt')
 const toast = useToast()
 const { findRtt } = useMklinkApi()
@@ -399,7 +431,7 @@ onUnmounted(() => {
 .rtt-view-tab { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden; }
 .rtt-config-row { display: flex; align-items: center; gap: 10px; min-height: 38px; flex-shrink: 0; padding: 2px 0 7px; border-bottom: 1px solid var(--border-subtle); overflow-x: auto; }
 .rtt-config-row label { font-size: 12px; color: var(--muted); white-space: nowrap; }
-#rtt-address { width: 136px; min-width: 110px; height: 30px; padding: 0 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: inherit; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+.rtt-address { width: 136px; min-width: 110px; height: 30px; padding: 0 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: inherit; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
 .rtt-channel-options { display: flex; align-items: center; gap: 10px; }
 .rtt-channel-options label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
 .rtt-channel-options input { accent-color: var(--accent); }

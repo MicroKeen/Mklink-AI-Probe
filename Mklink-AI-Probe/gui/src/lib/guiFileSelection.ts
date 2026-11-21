@@ -8,8 +8,8 @@ let pendingDirectory: string | null = null
 export function takeGuiDirectory(): string | null {
   const directory = pendingDirectory; pendingDirectory = null; return directory
 }
-export function selectGuiDirectory(id: string, path: string) {
-  const el = guiControl(id)
+export function selectGuiDirectory(id: string, path: string, root?: HTMLElement) {
+  const el = guiControl(id, root)
   if (!el.hasAttribute('data-gui-directory-picker')) throw new Error('Choose a declared directory picker')
   pendingDirectory = path
   try { el.click(); if (pendingDirectory) throw new Error('Directory picker did not accept the supplied path') }
@@ -20,9 +20,9 @@ export function takeGuiFile(): File | string | null {
   pendingFile = null
   return file
 }
-export function selectGuiFile(id: string, file: GuiFile, current: () => boolean) {
+export function selectGuiFile(id: string, file: GuiFile, current: () => boolean, root?: HTMLElement) {
   if (guiFileState.state === 'loading') throw new Error('A file import is pending')
-  const el = guiControl(id)
+  const el = guiControl(id, root)
   if (!(el instanceof HTMLInputElement && el.type === 'file') && !el.hasAttribute('data-gui-file-picker')) {
     throw new Error('Choose a file input or a declared file picker')
   }
@@ -34,7 +34,7 @@ export function selectGuiFile(id: string, file: GuiFile, current: () => boolean)
       if (!response.ok) throw new Error('File delivery failed or expired')
       const blob = await response.blob()
       if (blob.size !== file.size) throw new Error('File changed during delivery')
-      if (!current() || guiControl(id) !== el) throw new Error('Page/target/control changed during import')
+      if (!current() || guiControl(id, root) !== el) throw new Error('Page/target/control changed during import')
       const selected = new File([blob], file.name)
       if (el instanceof HTMLInputElement) {
         const extensions = el.accept.split(',').filter(x => x.startsWith('.'))

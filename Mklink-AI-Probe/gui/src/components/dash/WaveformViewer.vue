@@ -4,11 +4,14 @@
     class="waveform-viewer"
     :class="{ 'superwatch-desktop': props.mode === 'SuperWatch' }"
   ></div>
-  <Teleport v-if="recordHost" :to="recordHost"><SuperWatchRecording @state="updateRecordingLabel" /></Teleport>
+  <Teleport v-if="recordHost" :to="recordHost"><SuperWatchRecording ref="recordingControl" @state="updateRecordingLabel" /></Teleport>
   <Teleport v-if="actionsHost" :to="actionsHost"><slot name="actions" /></Teleport>
 </template>
 
 <script setup lang="ts">
+import type { SemanticExecutionContext } from '../../lib/frontendControl'
+import { mountDetailsMenu } from '../../lib/detailsMenu'
+
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { useBinaryStream } from '../../composables/useBinaryStream'
 import { RenderScheduler } from '../../lib/stream/renderScheduler'
@@ -17,18 +20,22 @@ import '../../assets/rtt_viewer.css'
 import i18nUrl from '../../assets/rtt_i18n.js?url'
 import viewerUrl from '../../assets/rtt_viewer.js?url'
 import { DESKTOP_SETTINGS_STORAGE_KEY } from '../../lib/desktopSettings'
-import { signalFormula } from '../../lib/signalFormula'
+import { signalFormula, compileSignalFormula } from '../../lib/signalFormula'
 import { language } from '../../composables/useLanguage'
 import { API_BASE } from '../../lib/runtimeEndpoint'
 import { useGuiPanel } from '../../lib/guiAutomation'
 import { saveTextFile, saveImageFile } from '../../lib/downloadTextFile'
-import { mountReplayButton } from '../../../../mklink/static/superwatch_replay.js'
+import { mountReplayButton, type ReplayControl } from '../../../../mklink/static/superwatch_replay.js'
 import '../../../../mklink/static/superwatch_replay.css'
 import SuperWatchRecording from './SuperWatchRecording.vue'
+import { createNumericSamples } from '../../lib/numericValue'
 
 const props = defineProps<{
   mode: 'SuperWatch' | 'VOFA'
   deviceConnected: boolean
+  panelId?: string
+  signals?: string[]
+  viewState?: Record<string, unknown>
   hiddenChannels?: ReadonlySet<string>
   arraySnapshotPath?: string | null
 }>()
@@ -39,10 +46,16 @@ const emit = defineEmits<{
   'visibility-change': [path: string, visible: boolean]
 }>()
 
+const viewerKey = props.panelId || props.mode
+const getViewer = () => (window as any).__waveformViewers?.[viewerKey]
+const recordingControl = ref<any>()
+const viewError = ref('')
 const container = ref<HTMLDivElement>()
+let disposeLogMenu: (() => void) | undefined
+let mountedContainer: HTMLDivElement | undefined
 const recordHost = ref<HTMLElement>()
 const actionsHost = ref<HTMLElement>()
-if (props.mode === 'SuperWatch') {
+if (props.mode === 'SuperWatch' && !props.panelId) {
   const getViewer = () => {
     const viewer = (window as any).__waveformViewers?.SuperWatch
     if (!viewer?.getDisplayState) throw new Error('SuperWatch display is not ready')
@@ -65,6 +78,12 @@ const binary = useBinaryStream(
   props.mode === 'VOFA' ? 'vofa' : 'superwatch',
   { capacity: props.mode === 'VOFA' ? 10000 : 50000, channelCount: 1 },
 )
+const numericSamples = createNumericSamples()
+function readValues() {
+  return numericSamples.read(vofaChannels.map(channel => String(channel.name)), props.deviceConnected && binary.state.value.phase === 'connected', !!getViewer()?.isReplaying?.())
+}
+watch(() => props.deviceConnected, () => numericSamples.reset(), { flush: 'sync' })
+watch(() => binary.state.value.phase, phase => { if (phase !== 'connected') numericSamples.reset() }, { flush: 'sync' })
 let vofaChannels: Array<Record<string, unknown>> = []
 let vofaChannelSignature: string | null = null
 let pendingBatch: Extract<WorkerOutput, { type: 'waveform-batch' }> | null = null
@@ -81,14 +100,32 @@ let latestVofaStatus: Record<string, unknown> | null = null
 let arraySnapshotTimer: ReturnType<typeof setTimeout> | null = null
 let arraySnapshotGeneration = 0
 let disposed = false
-let disposeReplay: (() => void) | null = null
+let disposeReplay: ReplayControl | null = null
+let pendingView = props.viewState
+const replayFileRequests = new Set<AbortController>()
+async function loadReplayFile(path: string, context?: { fetch: typeof fetch }): Promise<File> {
+  const controller = new AbortController()
+  replayFileRequests.add(controller)
+  try {
+    const response = await (context?.fetch || fetch)(`${API_BASE}/api/runtime/frontend/replay-file`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path }), signal: controller.signal,
+    })
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}))
+      throw new Error(error.detail?.message || error.detail || response.statusText)
+    }
+    const blob = await response.blob()
+    if (disposed) throw new Error('Waveform panel is closed')
+    return new File([blob], path.split(/[\\/]/).pop() || 'capture.csv', { type: blob.type })
+  } finally { replayFileRequests.delete(controller) }
+}
 function requestLatestVisibleRange(interactive = false): void {
   if (visibleRequestInFlight !== null) {
     visibleRangePending = true
     visibleRangePendingInteractive ||= interactive
     return
   }
-  const viewer = (window as any).__waveformViewers?.[props.mode]
+  const viewer = getViewer()
   if (viewer?.isReplaying?.()) return
   const range = viewer?.getBinaryVisibleRange?.()
   if (!range) return
@@ -142,19 +179,20 @@ function applyVofaChannels(channels: readonly Record<string, unknown>[]): void {
   if (disposed) return
   const signature = channelSignature(channels)
   if (signature === vofaChannelSignature) return
+  numericSamples.reset()
   vofaChannelSignature = signature
   vofaChannels = channels.map(channel => ({ ...channel }))
   resetVisibleRangeRequests()
   pendingBatch = null
   if (props.mode === 'VOFA') binary.configure(Math.max(1, channels.length))
-  const viewer = (window as any).__waveformViewers?.[props.mode]
+  const viewer = getViewer()
   viewer?.configureBinaryChannels?.(vofaChannels)
   applyHiddenChannels()
 }
 
 function applyHiddenChannels(): void {
   const names = [...(props.hiddenChannels ?? [])].sort()
-  const viewer = (window as any).__waveformViewers?.[props.mode]
+  const viewer = getViewer()
   if (viewer?.isReplaying?.()) viewer.setReplayHiddenChannels?.(names)
   else viewer?.setHiddenChannels?.(names)
 }
@@ -164,6 +202,7 @@ function onVisibility(event: Event) {
   emit('visibility-change', path, visible)
 }
 function onReplay(event: Event) {
+  numericSamples.reset()
   const detail = (event as CustomEvent).detail
   emit('replay-channels', detail.channels)
   emit('latest-values', detail.values)
@@ -183,9 +222,9 @@ async function pollArraySnapshot(generation: number): Promise<void> {
     const response = await fetch(`${API_BASE}/api/dash/superwatch/array-snapshot`)
     const payload = await response.json().catch(() => ({}))
     if (response.ok && payload?.snapshot?.name === props.arraySnapshotPath) {
-      ;(window as any).__waveformViewers?.SuperWatch?.setArraySnapshot?.(payload.snapshot)
+      ;getViewer()?.setArraySnapshot?.(payload.snapshot)
     } else {
-      ;(window as any).__waveformViewers?.SuperWatch?.setArraySnapshot?.(null)
+      ;getViewer()?.setArraySnapshot?.(null)
     }
   } catch {
     // The binary stream remains independent when the optional snapshot poll fails.
@@ -201,7 +240,7 @@ async function pollArraySnapshot(generation: number): Promise<void> {
 function startArraySnapshotPolling(): void {
   stopArraySnapshotPolling()
   if (props.mode !== 'SuperWatch' || !props.arraySnapshotPath || !props.deviceConnected) {
-    ;(window as any).__waveformViewers?.SuperWatch?.setArraySnapshot?.(null)
+    ;getViewer()?.setArraySnapshot?.(null)
     return
   }
   const generation = arraySnapshotGeneration
@@ -215,11 +254,12 @@ function onVofaChannels(event: Event): void {
 }
 
 function resetVofaSession(): void {
+  numericSamples.reset()
   if (disposed) return
   resetVisibleRangeRequests()
   pendingBatch = null
   binary.reset()
-  ;(window as any).__waveformViewers?.[props.mode]?.resetBinaryStream?.()
+  ;getViewer()?.resetBinaryStream?.()
 }
 
 function stopVofaStatusPolling(): void {
@@ -243,7 +283,7 @@ async function pollVofaStatus(generation: number, startTransport: boolean): Prom
       const channels = props.mode === 'VOFA' ? status.channels : status.items
       applyVofaChannels(Array.isArray(channels) ? channels : [])
     }
-    ;(window as any).__waveformViewers?.[props.mode]?.updateAcquisitionStatus?.(status)
+    ;getViewer()?.updateAcquisitionStatus?.(status)
   }
   if (startTransport) binary.start()
   statusPollTimer = setTimeout(() => {
@@ -281,7 +321,7 @@ function onVofaStreamState(event: Event): void {
 
 watch(() => binary.waveformBatch.value, batch => {
   if (!batch) return
-  if ((window as any).__waveformViewers?.[props.mode]?.isReplaying?.()) return
+  if (getViewer()?.isReplaying?.()) return
   pendingBatch = batch
   if (
     props.mode === 'SuperWatch'
@@ -297,9 +337,10 @@ watch(() => binary.waveformBatch.value, batch => {
       const value = values[offset + channel]
       if (name && Number.isFinite(value)) latest[name] = value
     }
+    numericSamples.accept(batch.sequence, latest)
     emit('latest-values', latest)
   }
-  const viewer = (window as any).__waveformViewers?.[props.mode]
+  const viewer = getViewer()
   if (viewer?.acceptBinaryBatch) {
     viewer.acceptBinaryBatch(batch, vofaChannels)
     pendingBatch = null
@@ -312,7 +353,7 @@ watch(() => binary.waveformBatch.value, batch => {
 
 watch(() => binary.waveformSummary?.value, summary => {
   if (!summary || props.mode !== 'SuperWatch') return
-  if ((window as any).__waveformViewers?.SuperWatch?.isReplaying?.()) return
+  if (getViewer()?.isReplaying?.()) return
   const values = new Float32Array(summary.latestValues)
   if (summary.channelCount === vofaChannels.length && values.length === summary.channelCount) {
     const latest: Record<string, number> = {}
@@ -320,23 +361,24 @@ watch(() => binary.waveformSummary?.value, summary => {
       const name = String(vofaChannels[channel]?.name ?? '')
       if (name && Number.isFinite(values[channel])) latest[name] = values[channel]
     }
+    if (summary.collectedItemCount > 0) numericSamples.accept(summary.sequence, latest)
     emit('latest-values', latest)
   }
-  ;(window as any).__waveformViewers?.SuperWatch?.acceptBinarySummary?.(summary, vofaChannels)
+  ;getViewer()?.acceptBinarySummary?.(summary, vofaChannels)
   vofaScheduler?.recordCollection(summary.collectedItemCount)
   vofaScheduler?.invalidate('data')
-})
+}, { flush: 'sync' })
 
 watch(() => binary.historySnapshot?.value, snapshot => {
   if (!snapshot || props.mode !== 'SuperWatch') return
-  ;(window as any).__waveformViewers?.SuperWatch?.exportBinaryHistorySnapshot?.(snapshot)
+  ;getViewer()?.exportBinaryHistorySnapshot?.(snapshot)
 })
 
 watch(() => binary.envelope.value, envelope => {
   if (!envelope || envelope.requestId !== visibleRequestInFlight) return
   visibleRequestInFlight = null
   const renderWhilePaused = interactiveVisibleRequests.delete(envelope.requestId)
-  ;(window as any).__waveformViewers?.[props.mode]?.renderBinaryEnvelope?.(
+  ;getViewer()?.renderBinaryEnvelope?.(
     envelope, renderWhilePaused,
   )
   if (visibleRangePending) {
@@ -347,8 +389,9 @@ watch(() => binary.envelope.value, envelope => {
 
 watch(() => binary.superwatchMetadata.value, metadata => {
   if (!metadata || props.mode !== 'SuperWatch') return
+  numericSamples.reset()
   applyVofaChannels(metadata.channels)
-})
+}, { flush: 'sync' })
 
 watch([
   () => binary.state.value,
@@ -360,7 +403,7 @@ watch([
     resetVofaSession()
   }
   previousTransportPhase = state.phase
-  ;(window as any).__waveformViewers?.[props.mode]?.updateBinaryHealth?.({
+  ;getViewer()?.updateBinaryHealth?.({
     phase: state.phase,
     reconnectDelayMs: state.reconnectDelayMs,
     bufferedSamples: telemetry?.bufferedSamples ?? 0,
@@ -374,6 +417,7 @@ watch([
 onMounted(() => {
   if (!container.value) return
   const el = container.value
+  mountedContainer = el
   el.addEventListener('mklink:replay', onReplay)
   el.addEventListener('mklink:visibility', onVisibility)
 
@@ -386,7 +430,7 @@ onMounted(() => {
   if (props.mode === 'SuperWatch') {
     compactSuperwatchControls(el)
     recordHost.value = el.querySelector('.watch-log-menu') as HTMLElement
-    disposeReplay = mountReplayButton(el.querySelector('.watch-log-menu') as HTMLElement, { language: language.value })
+    disposeReplay = mountReplayButton(el.querySelector('.watch-log-menu') as HTMLElement, { language: language.value, viewer: getViewer, loadFile: loadReplayFile })
   }
 
   // 2. Inject CONFIG + load scripts
@@ -399,28 +443,36 @@ onMounted(() => {
     vofaScheduler?.start()
     startVofaStatusPolling(true)
     startArraySnapshotPolling()
-    const viewer = (window as any).__waveformViewers?.[props.mode]
+    const viewer = getViewer()
     attachSuperwatchRequesters(viewer)
   }
 })
 
 watch(() => props.deviceConnected, (val) => {
   const viewers = (window as any).__waveformViewers
-  if (viewers?.[props.mode]?.setDeviceConnected) viewers[props.mode].setDeviceConnected(val)
+  if (viewers?.[viewerKey]?.setDeviceConnected) viewers[viewerKey].setDeviceConnected(val)
 })
 
 watch(() => props.hiddenChannels, applyHiddenChannels)
+watch(() => props.signals, names => getViewer()?.setSignals?.(names), { deep: true })
 watch([() => props.arraySnapshotPath, () => props.deviceConnected], startArraySnapshotPolling)
 
 watch(language, value => {
-  ;(window as any).setLang?.(value)
+  getViewer()?.setLanguage?.(value)
 })
 
 onUnmounted(() => {
-  container.value?.removeEventListener('mklink:replay', onReplay)
-  container.value?.removeEventListener('mklink:visibility', onVisibility)
+  const el = mountedContainer
+  el?.querySelectorAll('script').forEach(script => {
+    if ((script as any).__mklinkContext) (script as any).__mklinkContext.cancelled = true
+  })
+  el?.removeEventListener('mklink:replay', onReplay)
+  el?.removeEventListener('mklink:visibility', onVisibility)
   disposeReplay?.()
+  disposeLogMenu?.()
   disposed = true
+  replayFileRequests.forEach(controller => controller.abort())
+  replayFileRequests.clear()
   stopVofaStatusPolling()
   stopArraySnapshotPolling()
   binary.stop()
@@ -430,12 +482,12 @@ onUnmounted(() => {
   // Close EventSource if running
   try {
     const viewers = (window as any).__waveformViewers
-    viewers?.[props.mode]?.dispose?.()
-    if (viewers) delete viewers[props.mode]
+    viewers?.[viewerKey]?.dispose?.()
+    if (viewers) delete viewers[viewerKey]
   } catch { /* ignore */ }
   // Clear DOM
-  if (container.value) container.value.innerHTML = ''
-  if ((window as any).__MKLINK_SAVE_FILE__) delete (window as any).__MKLINK_SAVE_FILE__
+  if (el) el.innerHTML = ''
+  mountedContainer = undefined
 })
 
 function compactSuperwatchControls(el: HTMLElement): void {
@@ -456,6 +508,7 @@ function compactSuperwatchControls(el: HTMLElement): void {
   logs.innerHTML = '<summary data-i18n="logs">日志</summary><div class="watch-log-menu"></div>'
   el.querySelector('#btn-export-csv')?.remove()
   actions.append(logs)
+  disposeLogMenu = mountDetailsMenu(logs, logs.querySelector('.watch-log-menu')!)
   const trigger = el.querySelector('#trigger-toolbar')!
   const dialog = document.createElement('dialog')
   dialog.className = 'watch-trigger-dialog'
@@ -702,67 +755,96 @@ function buildTemplate(mode: string): string {
 
 function injectScripts(el: HTMLDivElement, mode: string) {
   ;(window as any).__mklinkSignalFormula = signalFormula
-  const minPoints = mode === 'SuperWatch' ? 50000 : 2
-  const maxPoints = mode === 'SuperWatch' ? 50000 : 10000
-  // 1. Set CONFIG globally
-  const configScript = document.createElement('script')
-  configScript.textContent = `
-    var CONFIG = {
-      minPoints: ${minPoints},
-      maxPoints: ${maxPoints},
-      title: "MKLink ${mode}",
-      mode: "${mode}",
-      lang: ${JSON.stringify(language.value)},
-      apiBase: ${JSON.stringify(API_BASE)},
-      viewerSettingsKey: ${JSON.stringify(DESKTOP_SETTINGS_STORAGE_KEY + '.waveform.' + mode)},
-      deviceConnected: ${props.deviceConnected}
-    };
-  `
-  el.appendChild(configScript)
-
-  // 2. Load i18n script
+  ;(window as any).__mklinkCompileSignalFormula = compileSignalFormula
+  const config = {
+    minPoints: mode === 'SuperWatch' ? 50000 : 2,
+    maxPoints: mode === 'SuperWatch' ? 50000 : 10000,
+    title: `MKLink ${mode}`, mode, panelId: viewerKey,
+    lang: language.value, apiBase: API_BASE,
+    viewerSettingsKey: DESKTOP_SETTINGS_STORAGE_KEY + '.waveform.' + viewerKey,
+    deviceConnected: props.deviceConnected,
+  }
   const i18nScript = document.createElement('script')
   i18nScript.src = i18nUrl
   i18nScript.onload = () => {
     if (disposed) return
-    // DOMContentLoaded already fired, call applyI18n manually
-    if (typeof (window as any).setLang === 'function') {
-      ;(window as any).setLang(language.value)
-    }
-    // 3. Load main viewer script after i18n
-    loadViewerScript(el)
+    loadViewerScript(el, config)
   }
   el.appendChild(i18nScript)
 }
 
-function loadViewerScript(el: HTMLDivElement) {
+function loadViewerScript(el: HTMLDivElement, config: Record<string, unknown>) {
   const viewerScript = document.createElement('script')
+  ;(viewerScript as any).__mklinkContext = { root: el, config }
   viewerScript.src = viewerUrl
-  viewerScript.onload = () => {
+  viewerScript.onload = async () => {
     if (disposed) return
-    // Store es reference for cleanup (var es leaks to window in classic scripts)
-    const viewers = (window as any).__waveformViewers
-    if (viewers && !viewers[props.mode]) {
-      viewers[props.mode] = { es: (window as any).es }
-    } else if (viewers?.[props.mode]) {
-      viewers[props.mode].es = (window as any).es
-    }
-    if (viewers?.[props.mode]) {
-      // Device status can arrive while the classic viewer script is loading.
-      // Replay the current prop instead of retaining the initial CONFIG value.
-      viewers[props.mode].setDeviceConnected?.(props.deviceConnected)
-      attachSuperwatchRequesters(viewers[props.mode])
-      viewers[props.mode].configureBinaryChannels?.(vofaChannels)
+    const viewer = getViewer()
+    if (viewer) {
+      viewer.setDeviceConnected?.(props.deviceConnected)
+      attachSuperwatchRequesters(viewer)
+      viewer.configureBinaryChannels?.(vofaChannels)
+      viewer.setSignals?.(props.signals)
       applyHiddenChannels()
-      if (latestVofaStatus) viewers[props.mode].updateAcquisitionStatus?.(latestVofaStatus)
-      if (pendingBatch) {
-        viewers[props.mode].acceptBinaryBatch?.(pendingBatch, vofaChannels)
-        pendingBatch = null
+      if (latestVofaStatus) viewer.updateAcquisitionStatus?.(latestVofaStatus)
+      if (pendingBatch) { viewer.acceptBinaryBatch?.(pendingBatch, vofaChannels); pendingBatch = null }
+      if (pendingView) {
+        try { await viewer.restore?.(pendingView) } catch (error) { viewError.value = String(error) }
+        pendingView = undefined
       }
     }
   }
   el.appendChild(viewerScript)
 }
+
+function catalog() {
+  return [...(getViewer()?.catalog?.() || []), ...(disposeReplay?.catalog() || []), ...(recordingControl.value?.catalog?.() || [])]
+}
+function read() {
+  const replay = disposeReplay?.read()
+  // Playback position is available in the action result; omit its live clock from
+  // the normal configuration snapshot used for optimistic action revisions.
+  return { ...(getViewer()?.read?.() || { panelId: viewerKey, ready: false }),
+    error: viewError.value || undefined,
+    replay: replay && { loaded: replay.loaded, playing: replay.playing, speed: replay.speed, filename: replay.filename, duration: replay.duration },
+    recording: recordingControl.value?.read?.() }
+}
+function validate(action: string, args: Record<string, unknown> = {}) {
+  if (action.startsWith('recording.')) return recordingControl.value?.validate?.(action, args) || { valid: true }
+  if (action.startsWith('waveform.replay.')) {
+    if (!disposeReplay) throw new Error('Replay controls are not ready')
+    return disposeReplay.validate(action, args)
+  }
+  if (!getViewer()?.validate) throw new Error('Waveform panel is not ready')
+  return getViewer().validate(action, args)
+}
+async function execute(action: string, args: Record<string, unknown> = {}, context?: SemanticExecutionContext) {
+  validate(action, args)
+  if (action.startsWith('recording.')) {
+    if (!recordingControl.value?.execute) throw new Error('Recording controls are not ready')
+    return await recordingControl.value.execute(action, args, context)
+  }
+  if (action.startsWith('waveform.replay.')) return await disposeReplay!.execute(action, args, context)
+  return await getViewer().execute(action, args, context)
+}
+async function restore(view: Record<string, unknown>) {
+  if (getViewer()?.restore) {
+    try { const result = await getViewer().restore(view); viewError.value = ''; return result }
+    catch (error) { viewError.value = String(error); throw error }
+  }
+  pendingView = view
+  return { pending: true }
+}
+function loadProfile(value: Record<string, unknown>, path: string) {
+  if (!getViewer()?.setProfilePreferences) throw new Error('Waveform panel is not ready')
+  getViewer().setProfilePreferences(value, path)
+}
+function exportProfile() {
+  if (!getViewer()?.exportProfilePreferences) throw new Error('Waveform panel is not ready')
+  return getViewer().exportProfilePreferences()
+}
+defineExpose({ catalog, read, readValues, validate, execute, restore, loadProfile, exportProfile })
+
 </script>
 
 <style scoped>

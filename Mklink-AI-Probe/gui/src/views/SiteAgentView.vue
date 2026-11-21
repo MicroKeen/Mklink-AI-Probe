@@ -121,6 +121,8 @@
 </template>
 
 <script setup lang="ts">
+import { frontendFetch as fetch } from '../lib/frontendControl'
+
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { API_BASE, IS_TAURI } from '../lib/runtimeEndpoint'

@@ -1,0 +1,1 @@
+import{A as e,I as t,T as n,Z as r,j as i}from"./vue-runtime-3WpXCy8-.js";var a=Symbol(`confirmation`);function o(){return n(a,async()=>!1)}function s(){let n=r(null),o;function s(e){let t=o;o=void 0,n.value=null,t?.(e)}let c=e=>o?Promise.resolve(!1):(n.value=e,new Promise(e=>{o=e}));return t(a,c),e(()=>s(!1)),i(()=>s(!1)),{message:n,confirm:c,answer:s}}export{o as n,s as t};

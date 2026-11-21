@@ -1,0 +1,1 @@
+function e(e,t,n={},r=[],i=`view`){return{name:e,description:t,args:{type:`object`,properties:n,required:r,additionalProperties:!1},effect:i}}var t={type:`string`,maxLength:512},n={type:`array`,items:t,maxItems:500},r={type:`boolean`};function i(e,t){if(!e)throw Error(t)}export{i as a,n as i,e as n,t as r,r as t};

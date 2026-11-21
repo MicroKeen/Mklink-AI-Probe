@@ -1,3 +1,4 @@
+function createViewerI18n(CONFIG, document) {
 // ============================================================
 // i18n: Bilingual support (zh/en), default Chinese
 // ============================================================
@@ -335,7 +336,7 @@ function setLang(lang) {
 }
 
 // Language toggle button
-document.addEventListener('DOMContentLoaded', function() {
+function initializeI18n() {
   applyI18n();
   var langBtn = document.getElementById('btn-lang-toggle');
   if (langBtn) {
@@ -343,4 +344,8 @@ document.addEventListener('DOMContentLoaded', function() {
       setLang(currentLang === 'zh' ? 'en' : 'zh');
     });
   }
-});
+}
+initializeI18n();
+return { t: t, setLang: setLang };
+}
+window.__mklinkCreateViewerI18n = createViewerI18n;

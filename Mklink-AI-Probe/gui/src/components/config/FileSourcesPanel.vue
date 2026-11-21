@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useGuiId } from '../../lib/guiAutomation'
+const guiId = useGuiId()
 import { computed } from 'vue'
 import { FolderOpen, ScanSearch } from '@lucide/vue'
 import { isSameFileSourcePath, isSymbolFilePath } from '../../lib/desktopSettings'
@@ -49,10 +51,10 @@ const parserBackend = computed(() => {
 </script>
 
 <template>
-  <section class="card source-panel" aria-labelledby="file-sources-title">
+  <section class="card source-panel" :aria-labelledby="guiId('file-sources-title')">
     <header class="panel-header">
       <div>
-        <h2 id="file-sources-title">{{ tr('文件来源', 'File Sources') }}</h2>
+        <h2 :id="guiId('file-sources-title')">{{ tr('文件来源', 'File Sources') }}</h2>
         <span
           data-testid="symbol-source-state"
           :class="['badge', symbolStatus.loaded && !sourcePending ? 'badge-ok' : 'badge-warn']"
@@ -77,7 +79,7 @@ const parserBackend = computed(() => {
     </div>
 
     <div class="source-row">
-      <label for="symbol-path">AXF / ELF</label>
+      <label :for="guiId('symbol-path')">AXF / ELF</label>
       <div class="path-control">
         <SymbolPathHistoryInput
           :path="symbolPath"

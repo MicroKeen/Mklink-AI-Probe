@@ -18,6 +18,10 @@ describe('SuperWatch section height allocation', () => {
     const result = fitWatchSections(200, { signals: false, pinned: false, all: false }, { signals: 300, pinned: 200 })
     expect(result.sizes).toEqual({ signals: 80, pinned: 76, all: 180 })
   })
+  it('allows a standalone split to grow past the card while keeping the catalog reachable by scrolling', () => {
+    const result = fitWatchSections(362, { signals: false, pinned: false, all: false }, { signals: 450, pinned: 150 }, true)
+    expect(result.sizes).toEqual({ signals: 450, pinned: 150, all: 180 })
+  })
   it('reclaims folded space and leaves a divider only between open sections', () => {
     expect(fitWatchSections(700, { signals: true, pinned: true, all: false }, { signals: 250, pinned: 200 }))
       .toEqual({ sizes: { signals: 34, pinned: 34, all: 632 }, resizable: [] })

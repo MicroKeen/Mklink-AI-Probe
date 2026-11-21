@@ -85,7 +85,7 @@ def test_binary_symbol_search_hides_native_tools_on_windows(monkeypatch, tmp_pat
         calls.append((command, kwargs))
         return SimpleNamespace(stdout="20001A40 B _SEGGER_RTT\n", stderr="")
 
-    monkeypatch.setattr(rtt_addr.os, "name", "nt")
+    monkeypatch.setattr(rtt_addr, "os", SimpleNamespace(name="nt"))
     monkeypatch.setattr(
         rtt_addr,
         "list_elf_symbols",
@@ -109,7 +109,7 @@ def test_binary_symbol_search_uses_portable_flags_off_windows(monkeypatch, tmp_p
         calls.append((command, kwargs))
         return SimpleNamespace(stdout="", stderr="")
 
-    monkeypatch.setattr(rtt_addr.os, "name", "posix")
+    monkeypatch.setattr(rtt_addr, "os", SimpleNamespace(name="posix"))
     monkeypatch.setattr(
         rtt_addr,
         "list_elf_symbols",

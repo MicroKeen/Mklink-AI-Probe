@@ -4,7 +4,8 @@ from mklink import runtime_cli
 from mklink.runtime import RuntimeErrorResponse
 
 
-def test_gui_call_attaches_existing_selected_runtime_without_hardware(monkeypatch, capsys):
+@pytest.mark.parametrize('capability', ['gui_windows', 'gui_frontend_pages', 'gui_frontend_read', 'gui_frontend_call', 'gui_frontend_receipt', 'gui_frontend_reply'])
+def test_gui_call_attaches_existing_selected_runtime_without_hardware(monkeypatch, capsys, capability):
     import json, sys
     from mklink import cli
     calls = []
@@ -17,10 +18,10 @@ def test_gui_call_attaches_existing_selected_runtime_without_hardware(monkeypatc
         def call(self, name, body): calls.append((name, body)); return {'windows': []}
         def close(self): calls.append(('detach', {}))
     monkeypatch.setattr('mklink.runtime.RuntimeClient', Client)
-    monkeypatch.setattr(sys, 'argv', ['mklink', 'runtime', 'call', 'gui_windows', '--runtime-id', 'chosen'])
+    monkeypatch.setattr(sys, 'argv', ['mklink', 'runtime', 'call', capability, '--runtime-id', 'chosen'])
     cli.main()
     assert json.loads(capsys.readouterr().out) == {'windows': []}
-    assert calls == [('attach', {'scope': 'uart', 'existing_only': True}), ('gui_windows', {}), ('detach', {})]
+    assert calls == [('attach', {'scope': 'uart', 'existing_only': True}), (capability, {}), ('detach', {})]
 
 
 @pytest.mark.parametrize('action,kwargs', [

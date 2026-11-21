@@ -60,6 +60,7 @@ async function handleRestart() {
 
 <style scoped>
 .status-bar {
+  white-space: nowrap;
   display: flex;
   align-items: center;
   gap: 6px;

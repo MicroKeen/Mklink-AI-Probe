@@ -535,6 +535,8 @@ def test_sidecar_collects_pyocd_plugins_metadata_and_hid_binary(builder, monkeyp
     assert ["--collect-all", "elftools"] in pairs
     assert ["--collect-all", "fastmcp"] in pairs
     assert ["--recursive-copy-metadata", "fastmcp"] in pairs
+    assert ["--collect-data", "docket"] in pairs
+    assert ["--collect-all", "burner_redis"] in pairs
     assert ["--collect-all", "pyocd"] in pairs
     assert ["--copy-metadata", "pyocd"] in pairs
     assert ["--collect-all", "cmsis_pack_manager"] in pairs

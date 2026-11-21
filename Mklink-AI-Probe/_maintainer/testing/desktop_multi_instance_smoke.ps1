@@ -89,7 +89,7 @@ try {
             SecondPort = $infos[1].port
             KeptRunning = $true
             PreferredPortOwner = (
-                Get-NetTCPConnection -State Listen -LocalPort 8765
+                Get-NetTCPConnection -State Listen -LocalPort 8765 -ErrorAction SilentlyContinue
             ).OwningProcess
         }
         return
@@ -112,8 +112,11 @@ try {
 
     Close-DesktopWindow $started[1]
     foreach ($info in $infos) {
-        $listener = Get-NetTCPConnection -State Listen -LocalPort $info.port -ErrorAction SilentlyContinue
-        if ($listener) { throw "Desktop proxy port $($info.port) still listens after window close" }
+        # Windows can retain a PID 0 TCP table row after the socket has closed.
+        $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, $info.port)
+        try { $listener.Start() }
+        catch { throw "Desktop proxy port $($info.port) cannot be rebound after window close: $_" }
+        finally { $listener.Stop() }
     }
 
     [pscustomobject]@{
@@ -125,7 +128,7 @@ try {
         FirstExitMode = $(if ($CrashFirst) { 'crash' } else { 'normal' })
         SecondNormalExit = $true
         PreferredPortOwner = (
-            Get-NetTCPConnection -State Listen -LocalPort 8765
+            Get-NetTCPConnection -State Listen -LocalPort 8765 -ErrorAction SilentlyContinue
         ).OwningProcess
     }
 }

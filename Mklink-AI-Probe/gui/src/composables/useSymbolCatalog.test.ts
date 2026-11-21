@@ -61,6 +61,31 @@ async function freshCatalog() {
 }
 
 describe('useSymbolCatalog', () => {
+  it.each([false, true])('keeps the symbol write request owner across awaits (response lost: %s)', async lost => {
+    const symbols = await freshCatalog()
+    const { withFrontendTarget } = await import('../lib/frontendControl')
+    const transport = vi.fn(async (url: string) => {
+      if (url.endsWith('/write')) {
+        if (lost) throw new TypeError('Write response lost')
+        return jsonResponse({ path: 'gain', generation: 1, value: 1.3, verified: true })
+      }
+      if (url.endsWith('/workspace')) return jsonResponse({ detail: 'Unrelated save failed' }, 500)
+      return jsonResponse(firstPage)
+    })
+    vi.stubGlobal('fetch', transport)
+    await symbols.ensureLoaded()
+    const pending = withFrontendTarget('session', { instance_id: 'instance', probe_id: 'probe', device_generation: 4, project_root: 'project' }, async context => {
+      await Promise.resolve()
+      const value = await symbols.writeSymbol('gain', 1.3, context)
+      await fetch('/api/dash/superwatch/workspace', { method: 'PUT' })
+      return value
+    })
+    if (lost) await expect(pending).rejects.toMatchObject({ unknown: true })
+    else await expect(pending).resolves.toMatchObject({ value: 1.3, verified: true })
+    const call = (transport.mock.calls as unknown as [string, RequestInit][]).find(([url]) => url.endsWith('/write'))!
+    expect(new Headers(call[1].headers).get('X-MKLink-Device-Generation')).toBe('4')
+    expect(transport.mock.calls.filter(([url]) => url.endsWith('/write'))).toHaveLength(1)
+  })
   it('discards an old device response and reloads even when the next ELF generation matches', async () => {
     vi.resetModules()
     const { useSymbolCatalog, resetDeviceSymbolCatalog } = await import('./useSymbolCatalog')

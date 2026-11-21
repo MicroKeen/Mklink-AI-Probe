@@ -9,7 +9,7 @@ const minimum = { signals: 80, pinned: 76, all: 180 }
 const keys: Section[] = ['signals', 'pinned', 'all']
 const storageKey = DESKTOP_SETTINGS_STORAGE_KEY + '.superwatch-section-sizes'
 
-export function fitWatchSections(height: number, folded: SectionFolds, preferred: Record<ResizableSection, number>) {
+export function fitWatchSections(height: number, folded: SectionFolds, preferred: Record<ResizableSection, number>, scrollable = false) {
   const open = keys.filter(key => !folded[key])
   const last = open.at(-1)
   const resizable = open.filter(key => key !== last) as ResizableSection[]
@@ -17,30 +17,32 @@ export function fitWatchSections(height: number, folded: SectionFolds, preferred
   const budget = Math.max(0, height - resizable.length * 6 - keys.reduce((sum, key) => sum + sizes[key], 0))
   const extra = (key: ResizableSection) => Math.max(0, preferred[key] - minimum[key])
   const requested = resizable.reduce((sum, key) => sum + extra(key), 0)
-  const scale = requested ? Math.min(1, budget / requested) : 1
+  // A standalone variable card can scroll the other sections below its viewport.
+  const scale = scrollable ? 1 : requested ? Math.min(1, budget / requested) : 1
   for (const key of resizable) sizes[key] += Math.floor(extra(key) * scale)
-  if (last) sizes[last] += budget - resizable.reduce((sum, key) => sum + Math.floor(extra(key) * scale), 0)
+  if (last) sizes[last] += Math.max(0, budget - resizable.reduce((sum, key) => sum + Math.floor(extra(key) * scale), 0))
   return { sizes, resizable }
 }
 
-export function useWatchSectionSizes(region: Ref<HTMLElement | null>, folded: SectionFolds) {
+export function useWatchSectionSizes(region: Ref<HTMLElement | null>, folded: SectionFolds, panelId = '', scrollable = false) {
+  const instanceStorageKey = storageKey + (panelId ? '.' + panelId : '')
   const preferred = reactive({ ...defaults })
   const height = ref(600)
   try {
-    const saved = JSON.parse(localStorage.getItem(storageKey) || '{}')
+    const saved = JSON.parse(localStorage.getItem(instanceStorageKey) || '{}')
     for (const key of ['signals', 'pinned'] as const) {
       if (Number.isFinite(saved?.[key])) preferred[key] = Math.max(minimum[key], Math.min(4000, saved[key]))
     }
   } catch { /* Client preferences must not block shared data. */ }
-  const layout = computed(() => fitWatchSections(height.value, folded, preferred))
+  const layout = computed(() => fitWatchSections(height.value, folded, preferred, scrollable))
   const style = (key: Section) => ({ flex: `0 0 ${layout.value.sizes[key]}px` })
   const canResize = (key: ResizableSection) => layout.value.resizable.includes(key)
-  const maxSize = (key: ResizableSection) => minimum[key] + Math.max(0,
+  const maxSize = (key: ResizableSection) => scrollable ? 4000 : minimum[key] + Math.max(0,
     height.value - layout.value.resizable.length * 6
       - keys.reduce((sum, item) => sum + (item === key ? minimum[item] : folded[item] ? 34
         : layout.value.resizable.includes(item as ResizableSection) ? layout.value.sizes[item] : minimum[item]), 0))
   function save() {
-    try { localStorage.setItem(storageKey, JSON.stringify(preferred)) } catch { /* Best effort. */ }
+    try { localStorage.setItem(instanceStorageKey, JSON.stringify(preferred)) } catch { /* Best effort. */ }
   }
   function setSize(key: ResizableSection, size: number) {
     preferred[key] = Math.round(Math.max(minimum[key], Math.min(maxSize(key), size)))
@@ -53,25 +55,28 @@ export function useWatchSectionSizes(region: Ref<HTMLElement | null>, folded: Se
   function move(event: PointerEvent) {
     if (drag && event.pointerId === drag.pointer) setSize(drag.key, drag.size + event.clientY - drag.y)
   }
+  let dragWindow: Window | null = null
   function stop() {
     if (drag) save()
     drag = undefined
-    window.removeEventListener('pointermove', move)
-    window.removeEventListener('pointerup', stop)
-    window.removeEventListener('pointercancel', stop)
-    window.removeEventListener('blur', stop)
+    dragWindow?.removeEventListener('pointermove', move)
+    dragWindow?.removeEventListener('pointerup', stop)
+    dragWindow?.removeEventListener('pointercancel', stop)
+    dragWindow?.removeEventListener('blur', stop)
+    dragWindow = null
   }
   function start(event: PointerEvent, key: ResizableSection) {
     if (event.button !== 0 || !canResize(key)) return
     stop()
     // Start from the visible sizes after a viewport shrink, not hidden old pixels.
     adoptVisibleSizes()
+    dragWindow = (event.currentTarget as HTMLElement).ownerDocument.defaultView
     drag = { key, y: event.clientY, size: layout.value.sizes[key], pointer: event.pointerId }
     ;(event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId)
-    window.addEventListener('pointermove', move)
-    window.addEventListener('pointerup', stop)
-    window.addEventListener('pointercancel', stop)
-    window.addEventListener('blur', stop)
+    dragWindow?.addEventListener('pointermove', move)
+    dragWindow?.addEventListener('pointerup', stop)
+    dragWindow?.addEventListener('pointercancel', stop)
+    dragWindow?.addEventListener('blur', stop)
   }
   function keyboard(event: KeyboardEvent, key: ResizableSection) {
     if (!canResize(key)) return
@@ -85,6 +90,10 @@ export function useWatchSectionSizes(region: Ref<HTMLElement | null>, folded: Se
     save()
   }
   function reset() { Object.assign(preferred, defaults); save() }
+  function resize(key: ResizableSection, size: number) { setSize(key, size); save() }
+  function restore(sizes: Partial<Record<ResizableSection, number>>) {
+    for (const key of ['signals', 'pinned'] as const) if (Number.isFinite(sizes[key])) preferred[key] = Math.max(minimum[key], Math.min(4000, sizes[key]!))
+  }
   let observer: ResizeObserver | undefined
   onMounted(() => {
     observer = new ResizeObserver(() => { if (region.value?.clientHeight) height.value = region.value.clientHeight })
@@ -94,5 +103,5 @@ export function useWatchSectionSizes(region: Ref<HTMLElement | null>, folded: Se
     }
   })
   onUnmounted(() => { stop(); observer?.disconnect() })
-  return { layout, style, canResize, maxSize, minimum, start, keyboard, reset }
+  return { layout, style, canResize, maxSize, minimum, start, keyboard, reset, preferred, resize, restore }
 }

@@ -1,3 +1,5 @@
 # Also applies when Skill packaging archives HEAD:Mklink-AI-Probe as its root.
 # Vendor digests cover original XML bytes, including line endings.
 mklink/hpm_svd/*.xml -text whitespace=cr-at-eol
+# Keep the upstream tslib copyright notice byte-for-byte in source and production.
+gui/**/licenses/tslib/CopyrightNotice.txt -text whitespace=cr-at-eol,-blank-at-eof

@@ -1,7 +1,12 @@
 <script setup lang="ts">
+import { frontendFetch as fetch } from '../../lib/frontendControl'
+
+import { useGuiId } from '../../lib/guiAutomation'
+const guiId = useGuiId()
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { API_BASE } from '../../lib/runtimeEndpoint'
 import { tr } from '../../composables/useLanguage'
+import { applyConnectionClock } from '../../lib/connectionClock'
 
 interface ClockStatus {
   connected: boolean
@@ -96,34 +101,18 @@ async function apply() {
   const mode = selectedInterface.value
   try {
     const applyToProbe = matchingInterface.value
-    const response = await fetch(`${API_BASE}${applyToProbe ? '/api/device/debug-speed' : '/api/config'}`, {
-      method: applyToProbe ? 'POST' : 'PUT',
-      headers: { 'Content-Type': 'application/json',
-        ...(status.value?.device_generation !== undefined
-          ? { 'X-MKLink-Device-Generation': String(status.value.device_generation) } : {}) },
-      body: JSON.stringify(applyToProbe ? { interface: mode, clock_hz: requested, save: true } : { clock_interface: mode, clock_hz: requested }),
-    })
-    const payload = await response.json()
-    if (!response.ok) {
-      const detail = payload.detail
-      if (Array.isArray(detail?.busy) && detail.busy.length) throw new Error(tr(
-        '此固件暂不支持采集中改频率。请先停止采集，再应用时钟；原任务保持运行。',
-        'This firmware cannot change the clock during acquisition. Stop acquisition, then apply; existing captures remain running.',
-      ))
-      throw new Error(typeof detail === 'string' ? detail : detail?.message || response.statusText)
-    }
+    await applyConnectionClock(status.value, mode, requested, applyToProbe)
     if (disposed || current !== revision) return
-    if (applyToProbe
-      ? payload.interface !== mode || payload.configured_hz !== requested || !['configured', 'applied', 'acknowledged'].includes(payload.apply_state)
-      : payload.clock_interface !== mode || Number(payload[`${mode.toLowerCase()}_clock`]) !== requested) {
-      throw new Error(tr('下载器未确认所选时钟，请核对当前状态。', 'The probe did not confirm the selected clock; check its current status.'))
-    }
     dirty.value = false
     if (previousMigration?.from_hz === 4_000_000 && requested === previousMigration.to_hz) {
       message.value = tr('旧 4 MHz 配置已迁移到 2 MHz。', 'The old 4 MHz configuration was migrated to 2 MHz.')
     }
   } catch (error) {
-    if (!disposed && current === revision) message.value = error instanceof Error ? error.message : String(error)
+    const detail = (error as { detail?: { busy?: unknown[] } }).detail
+    if (!disposed && current === revision) message.value = detail?.busy?.length ? tr(
+      '此固件暂不支持采集中改频率。请先停止采集，再应用时钟；原任务保持运行。',
+      'This firmware cannot change the clock during acquisition. Stop acquisition, then apply; existing captures remain running.',
+    ) : error instanceof Error ? error.message : String(error)
   } finally {
     if (!disposed && current === revision) {
       busy.value = false
@@ -180,11 +169,11 @@ onUnmounted(() => { disposed = true; revision++; clearTimeout(timer); emit('busy
 <template>
   <div class="connection-clock" data-testid="connection-clock">
     <div class="form-row clock-row">
-      <label class="form-label" for="connection-clock-interface">{{ tr('接口 / 时钟', 'Interface / Clock') }}</label>
-      <select id="connection-clock-interface" v-model="selectedInterface" class="form-select interface-select" :aria-label="tr('时钟接口', 'Clock interface')" :disabled="busy || disabled || !status" @change="selectInterface">
+      <label class="form-label" :for="guiId('connection-clock-interface')">{{ tr('接口 / 时钟', 'Interface / Clock') }}</label>
+      <select :id="guiId('connection-clock-interface')" v-model="selectedInterface" class="form-select interface-select" :aria-label="tr('时钟接口', 'Clock interface')" :disabled="busy || disabled || !status" @change="selectInterface">
         <option value="SWD">SWD</option><option value="JTAG">JTAG</option>
       </select>
-      <select id="connection-clock-hz" v-model="selected" class="form-select" data-testid="swd-clock" :aria-label="tr('时钟频率', 'Clock frequency')" :disabled="busy || disabled || !status" @change="selectClock">
+      <select :id="guiId('connection-clock-hz')" v-model="selected" class="form-select" data-testid="swd-clock" :aria-label="tr('时钟频率', 'Clock frequency')" :disabled="busy || disabled || !status" @change="selectClock">
         <option v-if="legacyChoice" :value="selected" disabled>{{ frequency(Number(selected)) }} · {{ tr('旧配置，请重新选择', 'Previous setting; select a supported clock') }}</option>
         <option v-for="hz in clocks" :key="hz" :value="String(hz)">{{ frequency(hz) }}</option>
       </select>

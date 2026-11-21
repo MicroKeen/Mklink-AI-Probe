@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useGuiId } from '../lib/guiAutomation'
+const guiId = useGuiId()
 import { probeSelectionError } from '../lib/probeSelectionError'
 import { computed, inject, ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -50,14 +52,16 @@ const toast = useToast()
 const { message: confirmationMessage, confirm: confirmPortNaming, answer: answerConfirmation } = provideConfirmation()
 const symbolCatalog = useSymbolCatalog()
 
-const activeSection = ref<ConfigSection>('local')
+const props = defineProps<{ embedded?: boolean; section?: ConfigSection }>()
+const activeSection = ref<ConfigSection>(props.section || 'local')
 const route = useRoute()
 const router = useRouter()
 watch(() => route?.query.section, section => {
+  if (props.embedded) return
   if (typeof section === 'string' && ['local', 'files', 'firmware', 'runtime'].includes(section)) activeSection.value = section as ConfigSection
 }, { immediate: true })
 watch(activeSection, section => {
-  if (route?.query.section !== section) {
+  if (!props.embedded && route?.query.section !== section) {
     void router.replace({ query: { ...route?.query, section } })
   }
 })
@@ -530,10 +534,10 @@ onUnmounted(() => {
         v-else-if="activeSection === 'local'"
         class="card local-panel"
         data-testid="local-device-panel"
-        aria-labelledby="local-device-title"
+        :aria-labelledby="guiId('local-device-title')"
       >
         <header class="panel-header">
-          <h2 id="local-device-title">{{ tr('本地设备', 'Local Device') }}</h2>
+          <h2 :id="guiId('local-device-title')">{{ tr('本地设备', 'Local Device') }}</h2>
           <span :class="['badge', deviceStatus.connected ? 'badge-ok' : 'badge-err']">
             {{ deviceStatus.connected ? tr('已连接', 'Connected') : tr('未连接', 'Disconnected') }}
           </span>
@@ -542,8 +546,8 @@ onUnmounted(() => {
           {{ tr('当前串口：', 'Connected port: ') }}{{ deviceStatus.port }}
         </div>
         <div class="form-row">
-          <label class="form-label" for="local-port">{{ tr('串口', 'Serial Port') }}</label>
-          <select id="local-port" v-model="localPort" class="form-select" data-testid="local-port" :disabled="savingLocal || savingClock || connecting || disconnecting" @change="selectLocalPort">
+          <label class="form-label" :for="guiId('local-port')">{{ tr('串口', 'Serial Port') }}</label>
+          <select :id="guiId('local-port')" v-model="localPort" class="form-select" data-testid="local-port" :disabled="savingLocal || savingClock || connecting || disconnecting" @change="selectLocalPort">
             <option value="">{{ tr('自动搜索', 'Auto Search') }}</option>
             <option v-for="port in portOptions" :key="port.value" :value="port.value">
               {{ port.label }}

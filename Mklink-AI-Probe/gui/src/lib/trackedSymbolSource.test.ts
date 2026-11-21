@@ -34,7 +34,7 @@ describe('browser symbol tracking', () => {
     expect(loadDesktopSettings(window.localStorage)).toMatchObject({ symbolPath: '/cache/old.axf', rttAddress: '0x20000020' })
     expect(await reloadTrackedSymbolSource()).toBe(true)
     expect(actions.upload).toHaveBeenCalledOnce()
-    expect(actions.reload).toHaveBeenCalledWith('/cache/new.axf', '/cache/old.axf')
+    expect(actions.reload).toHaveBeenCalledWith('/cache/new.axf', '/cache/old.axf', undefined)
     expect(loadDesktopSettings(window.localStorage)).toMatchObject({ symbolPath: '/cache/new.axf', rttAddress: '0x20000040' })
     expect(trackedSymbolPending.value).toBe(0)
     await vi.advanceTimersByTimeAsync(2000)
