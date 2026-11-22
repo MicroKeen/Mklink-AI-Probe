@@ -25,7 +25,7 @@ defineProps<{ update?: WorkbenchFeedback; rejection?: WorkbenchFeedback; focused
 <style scoped>
 .agent-update {
   flex: none;
-  color: var(--info);
+  color: var(--accent);
   font-size: 12px;
   font-weight: 500;
   white-space: nowrap;
@@ -41,7 +41,7 @@ defineProps<{ update?: WorkbenchFeedback; rejection?: WorkbenchFeedback; focused
   position: absolute;
   inset: 0;
   z-index: -1;
-  background: var(--info-bg);
+  background: var(--accent-bg);
 }
 @media (prefers-reduced-motion: no-preference) {
   .agent-update, .agent-header-wash { animation: update-once 1500ms ease-out both; }

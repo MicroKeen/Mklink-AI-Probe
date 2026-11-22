@@ -592,7 +592,7 @@ defineExpose({ catalog, read, execute, entries, load })
 .workbench { display:flex; flex-direction:column; min-height:0; flex:1; gap:8px; padding:12px; overflow:hidden; }
 .workbench-toolbar,.workbench-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .workbench-toolbar { justify-content:space-between; }.workbench-toolbar small { display:block; color:var(--muted); font-size:12px; margin-top:4px; }
-.locate-update { flex:none; background:none; border:0; color:var(--info); text-decoration:underline; cursor:pointer; }
+.locate-update { flex:none; background:none; border:0; color:var(--accent); text-decoration:underline; cursor:pointer; }
 .workbench-card-header,.float-heading { position:relative; isolation:isolate; }
 .panel-heading-text { flex:1 1 4em; min-width:0; display:flex; align-items:baseline; overflow:hidden; gap:8px; }
 .workbench-viewport { min-height:0; flex:1; overflow:auto; scrollbar-gutter:stable; }

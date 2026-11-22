@@ -14,7 +14,7 @@
   },
   "current_session": {
     "status": "图表更新和拒绝反馈已实页复核，等待用户确认效果后推送。",
-    "current_task": "核对[图表与拒绝反馈实测](../verification/flexible-panel-agent-feedback-20261122.md)。Agent 更新时仅目标卡标题栏短暂使用主题信息色；旧布局请求在标题下以主题警告色显示原因，并保留当前视图。整仓 Python 与 Windows 原生覆盖安装仍待最终验收。"
+    "current_task": "核对[图表与拒绝反馈实测](../verification/flexible-panel-agent-feedback-20261122.md)。Agent 更新时仅目标卡标题栏短暂使用工作台暖橙强调色；旧布局请求在标题下以主题警告色显示原因，并保留当前视图。整仓 Python 与 Windows 原生覆盖安装仍待最终验收。"
   },
   "milestones": [
     {
