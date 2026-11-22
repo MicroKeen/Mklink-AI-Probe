@@ -78,6 +78,48 @@ def test_delivery_requires_receipt_and_idempotency_preserves_original(broker):
     assert broker.call(command(broker, command_id='second', expect_revision=2))['status'] == 'queued'
 
 
+def test_refusal_feedback_survives_a_lost_response_and_is_private_to_its_page(broker):
+    current = report(broker, 2)
+    other = report(broker, page_id='another_page')
+    broker.exchange({'report': current, 'receipts': []})
+    broker.exchange({'report': other, 'receipts': []})
+    refused = command(broker, args={'panel_id': 'wave_one', 'open': False, 'text': 'private draft'})
+    for _ in range(2):
+        assert_error('STALE_REVISION', broker.call, refused)
+    assert_error('NOT_FOUND', broker.read_receipt, refused['command_id'])
+    assert broker.exchange({'report': other, 'receipts': []}) == {'command': None}
+    expected = {'seq': 1, 'command_id': refused['command_id'], 'action': refused['action'],
+                'target_panel': 'wave_one', 'open': False, 'status': 'rejected', 'code': 'STALE_REVISION'}
+    for _ in range(2):
+        assert broker.exchange({'report': current, 'receipts': []}) == {'command': None, 'feedback': [expected]}
+    assert broker.exchange({'report': current, 'receipts': [], 'feedback_ack': 1}) == {'command': None}
+    assert broker.exchange({'report': current, 'receipts': []}) == {'command': None}
+
+
+def test_ack_from_before_page_reclamation_does_not_hide_a_new_refusal(broker):
+    current = report(broker, 2)
+    broker.exchange({'report': current, 'receipts': []})
+    assert_error('STALE_REVISION', broker.call, command(broker))
+    previous_ack = broker.exchange({'report': current, 'receipts': []})['feedback'][0]['seq']
+    broker.clock = lambda: 116000
+    broker.reclaim_pages()
+    broker.exchange({'report': current, 'receipts': []})
+    assert_error('STALE_REVISION', broker.call, command(broker, command_id='new_request'))
+    feedback = broker.exchange({'report': current, 'receipts': [], 'feedback_ack': previous_ack})['feedback']
+    assert [item['command_id'] for item in feedback] == ['new_request']
+
+
+def test_rejection_history_is_bounded_and_wrong_targets_cannot_post_notices(broker):
+    body = {'report': report(broker), 'receipts': []}
+    assert_error('WRONG_TARGET', broker.call, command(broker, session_id='obsolete'))
+    assert broker.exchange(body) == {'command': None}
+    for i in range(40):
+        assert_error('UNKNOWN_ACTION', broker.call, command(broker, command_id=f'bad_{i}', action='missing'))
+    events = broker.exchange(body)['feedback']
+    assert [event['seq'] for event in events] == list(range(9, 41))
+    assert broker.commands == {}
+
+
 def test_page_reconnect_never_replays_unconfirmed_command(broker):
     broker.call(command(broker))
     broker.clock = lambda: 116000

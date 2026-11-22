@@ -44,3 +44,29 @@ it('retains the original page when an intent exchange overtakes a periodic repor
     expect(publishedRevision).toBe(1)
   } finally { stop() }
 })
+
+it('acknowledges a refusal in the original window and ignores redelivery', async () => {
+  vi.useFakeTimers()
+  const feedback = vi.fn()
+  const exchanges: any[] = []
+  const event = { seq: 17, command_id: 'outdated', action: 'enlarge', target_panel: 'chart',
+    open: false, status: 'rejected', code: 'STALE_REVISION' }
+  vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+    if (url.endsWith('/pages')) return Response.json({ protocol: 'agent-frontend/1', session_id: 'one',
+      target: { instance_id: 'instance', probe_id: 'lobby', device_generation: 1, project_root: 'project' } })
+    exchanges.push(JSON.parse(String(init?.body)))
+    return Response.json({ command: null, feedback: [event] })
+  }))
+  const stop = connectFrontend({
+    adapter: { title: 'One window', catalog: () => ({}), actions: {}, read: () => ({}), execute: vi.fn() },
+    ready: vi.fn(), reset: vi.fn(), error: vi.fn(), busy: vi.fn(), feedback,
+  })
+  try {
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(500)
+    await flushPromises()
+    expect(exchanges[0]).not.toHaveProperty('feedback_ack')
+    expect(exchanges[1].feedback_ack).toBe(17)
+    expect(feedback.mock.calls).toEqual([[event]])
+  } finally { stop() }
+})

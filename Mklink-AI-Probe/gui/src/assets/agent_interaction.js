@@ -51,7 +51,7 @@
     }
     checkSchema(schema); checkValue(args, schema);
   }
-  function create({ session_id, page_id, adapter }) {
+  function create({ session_id, page_id, adapter, onReceipt }) {
     ensure(id(session_id) && id(page_id), 'INVALID_INPUT', 'Invalid page identity');
     let revision = 0, fingerprint, disposed = false, active = null;
     const records = new Map();
@@ -81,6 +81,13 @@
         let state;
         try { state = read(); } catch { status = 'unknown'; code = 'STATE_UNAVAILABLE'; }
         record.receipt = { command_id:command.command_id, action:command.action, status, ...(code ? { code } : {}), ...(message ? { message: String(message).slice(0, 2000) } : {}), ...(result !== undefined ? { result: clone(result) } : {}), ...(state ? { state } : {}) };
+        // Observers run after the outcome is fixed and cannot change the receipt.
+        if (onReceipt && !disposed && status !== 'accepted') {
+          try {
+            onReceipt({ command_id: command.command_id, action: command.action, status, code,
+              target_panel: command.args.panel_id, open: command.args.open });
+          } catch { /* Presentation is independent from command execution. */ }
+        }
         return clone(record.receipt);
       }
       try {

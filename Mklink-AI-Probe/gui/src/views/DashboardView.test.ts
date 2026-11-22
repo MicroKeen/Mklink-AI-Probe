@@ -8,7 +8,7 @@ const routerMock = vi.hoisted(() => ({
   query: {} as Record<string, string>,
 }))
 vi.mock('../composables/useFrontendWorkbench', () => ({ useFrontendWorkbench: () => ({
-  connected: { value: false }, error: { value: '' }, busy: { value: false }, sessionEpoch: { value: 0 },
+  connected: { value: false }, error: { value: '' }, busy: { value: false }, feedback: { value: null }, sessionEpoch: { value: 0 },
   entries: () => [], submitIntent: vi.fn(),
 }) }))
 const apiMock = vi.hoisted(() => ({

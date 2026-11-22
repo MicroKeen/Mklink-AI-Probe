@@ -23,7 +23,7 @@ const filter = ref('all'), query = ref(''), confirmClear = ref(false)
 const visibleEntries = computed(() => [...activity.state.entries].reverse().filter(entry =>
   (filter.value === 'all' || filter.value === 'conversation' && ['question', 'answer'].includes(entry.kind) || entry.kind === filter.value) &&
   `${entry.title} ${entry.text} ${entry.source}`.toLowerCase().includes(query.value.toLowerCase())))
-function statusLabel(status: string) { return ({ info: tr('信息', 'Info'), warn: tr('注意', 'Warning'), dispatched: tr('已提交，结果见原面板', 'Dispatched; inspect original panel'), waiting: tr('等待答复', 'Awaiting reply'), replied: tr('已答复', 'Answered') } as Record<string, string>)[status] || display(status) }
+function statusLabel(status: string) { return ({ rejected: tr('已拒绝', 'Declined'), applied: tr('已应用', 'Applied'), info: tr('信息', 'Info'), warn: tr('注意', 'Warning'), dispatched: tr('已提交，结果见原面板', 'Dispatched; inspect original panel'), waiting: tr('等待答复', 'Awaiting reply'), replied: tr('已答复', 'Answered') } as Record<string, string>)[status] || display(status) }
 function clear() { activity.clear(); confirmClear.value = false }
 async function exportLog() { return saveTextFile('mklink-operations.txt', visibleEntries.value.map(entry => `${entry.time} ${entry.source} ${entry.title} ${statusLabel(entry.status)}\n${entry.text}`).join('\n\n')) }
 function catalog() { return [

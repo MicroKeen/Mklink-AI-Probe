@@ -13,6 +13,7 @@ html[data-theme] {
   --of-text: var(--fg);
   --of-muted: var(--muted);
   --of-accent: var(--info);
+  --agent-feedback-ink: #6843a1;
   --of-danger: var(--danger);
   --of-danger-bg: var(--danger-bg);
   --of-ok: var(--success);
@@ -33,6 +34,7 @@ html[data-theme] {
   --accent-bg: #f3ece6;
 }
 html[data-theme="dark"] {
+  --agent-feedback-ink: #d1b3ff;
   --on-solid: #17191e;
   --bg: #11151b;
   --surface: #1a2029;

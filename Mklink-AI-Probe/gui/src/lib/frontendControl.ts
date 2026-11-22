@@ -21,8 +21,16 @@ export interface FrontendRuntime {
   invalidate(): void
   dispose(): void
 }
+export interface FrontendFeedback {
+  command_id: string
+  action: string
+  status: string
+  code?: string
+  target_panel?: string
+  open?: boolean
+}
 interface InteractionApi {
-  create(options: { session_id: string; page_id: string; adapter: JsonObject }): FrontendRuntime
+  create(options: { session_id: string; page_id: string; adapter: JsonObject; onReceipt?: (event: FrontendFeedback) => void }): FrontendRuntime
   validateArgs(args: unknown, schema: JsonObject): void
 }
 export const interaction = (globalThis as unknown as { AgentInteraction: InteractionApi }).AgentInteraction
@@ -104,6 +112,7 @@ export function connectFrontend(options: {
   reset(): void
   error(message: string): void
   busy(value: boolean): void
+  feedback?(event: FrontendFeedback): void
 }) {
   let runtime: FrontendRuntime | null = null
   let target: FrontendTarget | null = null
@@ -111,6 +120,7 @@ export function connectFrontend(options: {
   let stopped = false
   const sent = new Map<string, string>()
   let iteration = 0
+  let feedbackAck = 0
   async function tick() {
     try {
       // Re-discover periodically even while idle, including backend restarts/project switches.
@@ -124,7 +134,8 @@ export function connectFrontend(options: {
         if (!runtime) {
           target = discovery.target
           const session = discovery.session_id
-          runtime = interaction.create({ session_id: session, page_id: crypto.randomUUID(), adapter: {
+          feedbackAck = 0
+          runtime = interaction.create({ session_id: session, page_id: crypto.randomUUID(), onReceipt: options.feedback, adapter: {
             ...options.adapter,
             get actions() { return options.adapter.actions },
             execute: async (action: string, args: JsonObject) => {
@@ -138,10 +149,17 @@ export function connectFrontend(options: {
       }
       const current = runtime!
       const receipts = current.receipts().filter(receipt => sent.get(receipt.command_id) !== JSON.stringify(receipt))
-      const exchange = await frontendRequest('exchange', { report: current.report(), receipts })
+      const exchange = await frontendRequest('exchange', { report: current.report(), receipts, ...(feedbackAck ? { feedback_ack: feedbackAck } : {}) })
       if (stopped || current !== runtime) return
       for (const receipt of receipts) sent.set(receipt.command_id, JSON.stringify(receipt))
       if (exchange.command) current.execute(exchange.command)
+      // Process the command against the reported revision before appending UI history.
+      for (const event of exchange.feedback || []) {
+        if (event.seq > feedbackAck) {
+          options.feedback?.(event)
+          feedbackAck = event.seq
+        }
+      }
       options.error('')
     } catch (error) {
       options.error(String(error))

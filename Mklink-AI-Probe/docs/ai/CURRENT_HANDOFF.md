@@ -8,9 +8,9 @@
 - 分支：`codex/flexible-panels-reviewed`
 - HEAD：`codex/flexible-panels-reviewed^{commit}`
 - 远端 HEAD：`a38557b9`
-- 工作树：灵活面板、5383308c 的流投递修复与本轮 GUI 质检合为一个本地候选。用 git rev-parse codex/flexible-panels-reviewed 取实际 SHA。旧候选 b6db10ba 可复现；#80 保留原远端状态。
-- 当前任务：灵活面板帮助支持中英文说明和复制给 Agent。共享弹窗关闭图标已居中，补充了实际剪贴板、焦点返回、几何命中和公开 MCP 接入验证。本地可进入草稿评审，完整合并验收尚有 Windows 与原生覆盖安装缺口，见[帮助与送审复核](../verification/flexible-panel-help-review-20261122.md)。
-- 状态：`灵活面板完成实页和真机复核，已整理为单个本地提交`
+- 工作树：灵活面板候选 664495f1 之后，本地追加 Agent 图表更新与拒绝提示修复。当前提交用 git rev-parse codex/flexible-panels-reviewed 查询。远端 #80 仍指向 732562e4。
+- 当前任务：核对[图表与拒绝反馈实测](../verification/flexible-panel-agent-feedback-20261122.md)。Agent 更新显示目标卡高亮及中文记录，旧布局请求显示拒绝原因并保留当前视图。整仓 Python 与 Windows 原生覆盖安装仍待最终验收。
+- 状态：`图表更新和拒绝反馈已实页复核，等待用户确认效果后推送。`
 
 ## 里程碑
 

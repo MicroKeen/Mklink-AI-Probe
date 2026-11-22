@@ -15,7 +15,7 @@ from fastapi import FastAPI, HTTPException, Request
 from starlette.routing import Mount
 from starlette.concurrency import run_in_threadpool
 
-from .frontend_contract import (PROTOCOL, bounded_json, identifier, keys, require,
+from .frontend_contract import (PROTOCOL, bounded_json, identifier, integer, keys, require,
                                 validate_args, validate_command, validate_report, validate_state)
 from .frontend_layout import load_layout, save_layout, search_layouts, load_named_layout, save_named_layout
 from .watch_preferences import PreferencesConflict
@@ -24,7 +24,8 @@ TERMINAL = frozenset({'applied', 'completed', 'rejected', 'failed'})
 
 
 def _prepare_exchange(body):
-    keys(body, {'report', 'receipts'})
+    keys(body, {'report', 'receipts', 'feedback_ack'}, {'report', 'receipts'})
+    require(integer(body.get('feedback_ack', 0)))
     report = body['report']
     validate_report(report)
     require(isinstance(body['receipts'], list) and len(body['receipts']) <= 500)
@@ -52,6 +53,7 @@ class FrontendBroker:
         self.clock = clock or (lambda: int(time.time() * 1000))
         self.pages = {}
         self.commands = {}
+        self.feedback_sequence = 0
 
     def reclaim_pages(self):
         expired = {key for key, page in self.pages.items() if not self.online(page)}
@@ -122,6 +124,32 @@ class FrontendBroker:
             return {**self.receipt(old), 'duplicate': True}
         page = self.pages.get(command['page_id'])
         require(self.online(page), 'PAGE_OFFLINE', 'Select a live page', 409)
+        try:
+            self._check_admission(page, command)
+        except HTTPException as exc:
+            # Only this authenticated, online page may see its refused attempt.
+            # Keep presentation data separate from executable commands and receipts.
+            notices = page.setdefault('notices', [])
+            command_id = command['command_id']
+            if not any(item['command_id'] == command_id for item in notices):
+                # A resumed tab may still acknowledge notices from a reclaimed page.
+                self.feedback_sequence += 1
+                notice = {'seq': self.feedback_sequence, 'command_id': command_id, 'action': command['action'],
+                          'status': 'rejected', 'code': exc.detail['code']}
+                args = command['args']
+                if identifier(args.get('panel_id')):
+                    notice['target_panel'] = args['panel_id']
+                if type(args.get('open')) is bool:
+                    notice['open'] = args['open']
+                notices.append(notice)
+                del notices[:-32]
+            raise
+        record = {'command': copy.deepcopy(command),
+                  'receipt': {'command_id': command['command_id'], 'action': command['action'], 'status': 'queued'}}
+        self.commands[command['command_id']] = record
+        return copy.deepcopy(record['receipt'])
+
+    def _check_admission(self, page, command):
         require(self.clock() < command['deadline'] <= self.clock() + 30000, 'EXPIRED', 'Deadline must be within the next 30 seconds', 409)
         require(page['report']['state']['revision'] == command['expect_revision'], 'STALE_REVISION', 'Read the current page state', 409)
         require(command['action'] in page['report']['actions'], 'UNKNOWN_ACTION', 'Action is not advertised')
@@ -129,10 +157,6 @@ class FrontendBroker:
         require(not any(record['command']['page_id'] == command['page_id'] and self._current_receipt(record)['status'] not in TERMINAL
                         for record in self.commands.values()), 'BUSY', 'Previous action is still running or its result is unknown', 409)
         require(len(self.commands) < 500, 'SESSION_LIMIT', 'Command history is full; restart the runtime before sending more commands', 429)
-        record = {'command': copy.deepcopy(command),
-                  'receipt': {'command_id': command['command_id'], 'action': command['action'], 'status': 'queued'}}
-        self.commands[command['command_id']] = record
-        return copy.deepcopy(record['receipt'])
 
     def exchange(self, body):
         # In-process callers retain ownership of their input.
@@ -164,7 +188,8 @@ class FrontendBroker:
             if record['command']['page_id'] == report['page_id']:
                 self._current_receipt(record)
         self.reclaim_pages()
-        self.pages[report['page_id']] = {'report': report, 'seen': self.clock()}
+        page = self.pages.setdefault(report['page_id'], {})
+        page.update(report=report, seen=self.clock())
         for receipt in body['receipts']:
             record = self.commands[receipt['command_id']]
             if record['receipt']['status'] not in TERMINAL:
@@ -173,7 +198,13 @@ class FrontendBroker:
                     record['receipt'] = receipt
         pending = next((record['command'] for record in self.commands.values()
                         if record['command']['page_id'] == report['page_id'] and self._current_receipt(record)['status'] == 'queued'), None)
-        return {'command': copy.deepcopy(pending)}
+        response = {'command': copy.deepcopy(pending)}
+        if page.get('notices'):
+            ack = body.get('feedback_ack', 0)
+            page['notices'] = [notice for notice in page['notices'] if notice['seq'] > ack]
+            if page['notices']:
+                response['feedback'] = copy.deepcopy(page['notices'])
+        return response
 
     def submit_intent(self, body, on_loop=lambda fn: fn()):
         from .frontend_intents import find_intent, save_intent, validate_request

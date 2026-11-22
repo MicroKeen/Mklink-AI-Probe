@@ -1,9 +1,10 @@
+import { flushPromises } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
-import { frontendFetch, frontendRequest, interaction, objectSchema, withFrontendTarget } from './frontendControl'
+import { frontendFetch, frontendRequest, interaction, objectSchema, withFrontendTarget, type FrontendFeedback } from './frontendControl'
 
-function fixture(execute = vi.fn((): unknown => ({ saved: true }))) {
+function fixture(execute = vi.fn((): unknown => ({ saved: true })), onReceipt?: (event: FrontendFeedback) => void) {
   let value = 0
-  const runtime = interaction.create({ session_id: 'session', page_id: 'page', adapter: {
+  const runtime = interaction.create({ session_id: 'session', page_id: 'page', onReceipt, adapter: {
     title: 'Test', catalog: () => ({ panels: [{ id: 'panel' }] }),
     actions: { set: { inputSchema: objectSchema({ value: { type: 'integer', minimum: 0, maximum: 10 } }) } },
     read: () => ({ value }), execute,
@@ -125,4 +126,21 @@ describe('frontend semantic receipts', () => {
       expect(retry).not.toHaveBeenCalled()
     } finally { window.fetch = original }
   })
+})
+
+it('presents terminal outcomes once and isolates a failed presentation from the command', async () => {
+  const notify = vi.fn(() => { throw new Error('Unavailable presentation') })
+  const execution = vi.fn(async () => ({ saved: true }))
+  const test = fixture(execution, notify)
+  const command = test.command()
+  expect(test.runtime.execute(command).status).toBe('accepted')
+  expect(notify).not.toHaveBeenCalled()
+  await flushPromises()
+  expect(test.runtime.execute(command).status).toBe('completed')
+  expect(notify.mock.calls).toHaveLength(1)
+  expect(notify).toHaveBeenCalledWith(expect.objectContaining({ command_id: 'command', status: 'completed' }))
+  const stale = { ...command, command_id: 'stale' }
+  expect(test.runtime.execute(stale).status).toBe('rejected')
+  expect(notify).toHaveBeenLastCalledWith(expect.objectContaining({ command_id: 'stale', status: 'rejected', code: 'STALE_REVISION' }))
+  expect(execution).toHaveBeenCalledTimes(1)
 })

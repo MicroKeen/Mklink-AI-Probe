@@ -1,5 +1,5 @@
 import { ref, onMounted, onUnmounted, nextTick, provide, type Ref } from 'vue'
-import { connectFrontend, frontendRequest, objectSchema, interaction, withFrontendTarget, type SemanticExecutionContext, type FrontendRuntime, type FrontendTarget, type SemanticSurface, type JsonObject } from '../lib/frontendControl'
+import { connectFrontend, frontendRequest, objectSchema, interaction, withFrontendTarget, type SemanticExecutionContext, type FrontendFeedback, type FrontendRuntime, type FrontendTarget, type SemanticSurface, type JsonObject } from '../lib/frontendControl'
 import { bindingHostKey } from '../lib/workbenchBindings'
 import { applyConnectionClock, readConnectionClock } from '../lib/connectionClock'
 import { IS_REMOTE } from '../lib/runtimeEndpoint'
@@ -8,6 +8,13 @@ import { tr } from './useLanguage'
 import { createWorkbenchActivity, workbenchActivityKey } from '../lib/workbenchActivity'
 
 interface PanelEntry { id: string; title: string; type: string; source?: unknown; surface?: SemanticSurface | null }
+export interface WorkbenchFeedback {
+  id: string
+  target: string
+  title: string
+  detail: string
+  rejected: boolean
+}
 interface WorkbenchSurface extends SemanticSurface { entries(): PanelEntry[] }
 
 export async function recoverPendingIntent(pending: JsonObject, request = frontendRequest): Promise<JsonObject> {
@@ -83,6 +90,55 @@ export function useFrontendWorkbench(tab: Ref<string>, superwatch: Ref<SemanticS
     }
     return mapped
   }
+  const feedback = ref<WorkbenchFeedback | null>(null)
+  let feedbackTimer: ReturnType<typeof setTimeout> | undefined
+  function clearFeedback() {
+    clearTimeout(feedbackTimer)
+    feedback.value = null
+  }
+  function presentFeedback(event: FrontendFeedback) {
+    const rejected = event.status === 'rejected'
+    if (!rejected && event.status !== 'completed' && event.status !== 'applied') return
+    const entry = actions()[event.action]
+    if (!rejected && entry?.name !== 'content.set') return
+
+    const panel = entry?.panel.id === 'workbench' && typeof event.target_panel === 'string'
+      ? entries().find(item => item.id === event.target_panel) || entry.panel
+      : entry?.panel
+    const target = panel?.id || ''
+    const label = panel?.title || tr('当前页面', 'this page')
+    const id = 'agent:' + event.status + ':' + event.command_id
+    if (activity.state.entries.some(item => item.id === id)) return
+    let title: string
+    let detail = ''
+    if (rejected) {
+      const declinedActions: Record<string, string> = {
+        'panel.enlarge': event.open === false ? tr('已拒绝退出专注', 'Leaving focused view was declined') : tr('已拒绝进入专注', 'Entering focused view was declined'),
+        'panel.split': tr('已拒绝调整分栏', 'Split adjustment declined'),
+        'panel.remove': tr('已拒绝关闭面板', 'Closing the panel was declined'),
+        'layout.save': tr('已拒绝保存布局', 'Saving the layout was declined'),
+        'content.set': panel?.type === 'chart' ? tr('已拒绝更新图表', 'Chart update declined') : tr('已拒绝更新内容', 'Content update declined'),
+      }
+      title = declinedActions[entry?.name || ''] || tr('已拒绝 Agent 操作', 'Agent action declined')
+      const reasons: Record<string, string> = {
+        STALE_REVISION: entry?.panel.id === 'workbench' ? tr('布局已变化', 'The layout has changed') : tr('页面状态已变化', 'The page state has changed'),
+        EXPIRED: tr('请求已过期', 'The request expired'),
+        BUSY: tr('上一项操作尚未结束', 'A previous operation is still pending'),
+        INVALID_INPUT: tr('参数与当前操作不匹配', 'The parameters do not match this action'),
+        UNKNOWN_ACTION: tr('此操作已不可用', 'This action is no longer available'),
+        SESSION_LIMIT: tr('当前会话的操作记录已满', 'The session history is full'),
+      }
+      const reason = reasons[event.code || ''] || tr('当前请求未通过校验', 'The request did not pass validation')
+      detail = tr('「' + label + '」 · ' + reason + '，本次操作未执行。', '“' + label + '” · ' + reason + '. The action was not performed.')
+    } else {
+      title = panel?.type === 'chart' ? tr('Agent 已更新「' + label + '」的图表', 'Agent updated the chart in “' + label + '”')
+        : tr('Agent 已更新「' + label + '」的内容', 'Agent updated the content in “' + label + '”')
+    }
+    activity.append({ id, kind: rejected ? 'error' : 'operation', source: 'Agent', title: title.slice(0, 200), text: detail, status: event.status })
+    clearFeedback()
+    feedback.value = { id, target, title, detail, rejected }
+    feedbackTimer = setTimeout(clearFeedback, rejected ? 8000 : 4500)
+  }
   function resolveAction(panelId: string, name: string, args: JsonObject) {
     const panel = entries().find(panel => panel.id === panelId)
     const action = panel?.surface?.catalog().find(action => action.name === name)
@@ -91,14 +147,14 @@ export function useFrontendWorkbench(tab: Ref<string>, superwatch: Ref<SemanticS
     panel.surface.validate?.(name, args)
     return panel.surface
   }
-  async function runSurface(panelId: string, name: string, args: JsonObject, context?: SemanticExecutionContext) {
+  async function runSurface(panelId: string, name: string, args: JsonObject, context?: SemanticExecutionContext, agent = false) {
     const surface = resolveAction(panelId, name, args)
     const source = entries().find(entry => entry.id === panelId)?.title || panelId
     const title = (surface.catalog().find(action => action.name === name)?.description || name).slice(0, 200)
     const quiet = ['view.controls', 'view.read', 'log.read'].includes(name)
     try {
       const result = await surface.execute(name, args, context) as JsonObject | undefined
-      if (!quiet) activity.append({ kind: 'operation', source, title: (typeof result?.operation === 'string' ? result.operation : title).slice(0, 200), text: '', status: typeof result?.status === 'string' ? result.status.slice(0, 100) : result?.job_id || result?.runtime_job_id ? 'submitted' : 'completed' })
+      if (!quiet && !(agent && name === 'content.set')) activity.append({ kind: 'operation', source, title: (typeof result?.operation === 'string' ? result.operation : title).slice(0, 200), text: '', status: typeof result?.status === 'string' ? result.status.slice(0, 100) : result?.job_id || result?.runtime_job_id ? 'submitted' : 'completed' })
       return result
     } catch (cause) {
       activity.append({ kind: 'error', source, title, text: String(cause).slice(0, 4000), status: (cause as { unknown?: boolean }).unknown ? 'unknown' : 'failed' })
@@ -124,19 +180,20 @@ export function useFrontendWorkbench(tab: Ref<string>, superwatch: Ref<SemanticS
     execute: async (id: string, args: JsonObject, context?: SemanticExecutionContext) => {
       const entry = actions()[id]
       if (!entry) throw new Error('Panel or action no longer exists')
-      return runSurface(entry.panel.id, entry.name, args, context)
+      return runSurface(entry.panel.id, entry.name, args, context, true)
     },
   }
   onMounted(() => {
     stop = connectFrontend({ adapter,
       ready: (value, binding) => { runtime.value = value; target.value = binding; connected.value = true; activity.bind(`${value.report().session_id}:${binding.probe_id}:${binding.device_generation}`) },
-      reset: () => { runtime.value = null; target.value = null; connected.value = false; sessionEpoch.value++; activity.bind('') },
+      feedback: presentFeedback,
+      reset: () => { clearFeedback(); runtime.value = null; target.value = null; connected.value = false; sessionEpoch.value++; activity.bind('') },
       error: message => { error.value = message; connected.value = !message && runtime.value !== null },
       busy: value => { busy.value = value },
     })
     void pollConversations()
   })
-  onUnmounted(() => { conversationDisposed = true; clearTimeout(conversationTimer); stop?.() })
+  onUnmounted(() => { clearFeedback(); conversationDisposed = true; clearTimeout(conversationTimer); stop?.() })
   function recordReply(result: JsonObject) {
     if (result.status === 'replied' && typeof result.reply === 'string') activity.append({ id: 'reply:' + result.request_id, kind: 'answer', source: 'Agent', title: tr('Agent 答复', 'Agent reply'), text: result.reply.slice(0, 16000), status: 'replied', requestId: result.request_id })
   }
@@ -177,5 +234,5 @@ export function useFrontendWorkbench(tab: Ref<string>, superwatch: Ref<SemanticS
       throw Object.assign(cause as Error, { pending: !status || status >= 500 ? payload : undefined })
     }
   }
-  return { connected, error, busy, sessionEpoch, runtime, target, entries, submitIntent }
+  return { connected, error, busy, feedback, sessionEpoch, runtime, target, entries, submitIntent }
 }

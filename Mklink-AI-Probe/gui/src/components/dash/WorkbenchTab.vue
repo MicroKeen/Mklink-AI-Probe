@@ -23,6 +23,11 @@
         <button class="btn btn-secondary" :disabled="loading || saving" data-testid="load-layout" @click="libraryMode = 'load'">{{ tr('加载布局', 'Load layout') }}</button>
       </div>
     </header>
+    <div v-if="agentFeedback" :key="agentFeedback.id" class="agent-notice" :class="{ declined: agentFeedback.rejected }"
+      :role="agentFeedback.rejected ? 'alert' : 'status'" data-testid="agent-feedback">
+      <component :is="agentFeedback.rejected ? CircleAlert : Sparkles" :size="18" aria-hidden="true" />
+      <div><strong>{{ agentFeedback.title }}</strong><span v-if="agentFeedback.detail">{{ agentFeedback.detail }}</span></div>
+    </div>
     <WorkbenchHelpDialog v-if="helpOpen" @close="helpOpen = false" />
     <WorkbenchSettingsDialog v-if="closing" :title="tr('关闭面板？', 'Close panel?')" @close="closing = ''">
       <p>{{ tr('关闭“' + find(closing).title + '”？稍后可从“最近关闭”恢复。', 'Close “' + find(closing).title + '”? You can restore it from Recently closed.') }}</p>
@@ -47,7 +52,8 @@
     <div ref="viewport" class="workbench-viewport">
     <div ref="grid" class="workbench-grid grid-stack" :aria-busy="loading">
       <article :class="{ 'reading-card': reading === panel.id }" v-for="panel in orderedPanels" :key="restoreGeneration + ':' + panel.id + ':' + JSON.stringify(panel.source)" v-show="!dockFor(layout, panel.id) || dockFor(layout, panel.id)?.active === panel.id" class="grid-stack-item" @dragover="rowOver($event)" @drop="rowDrop($event, panel.id)" :data-panel-id="panel.id" :style="{ '--panel-height': windowPanel(layout, panel.id).h * gridRowHeight + 'px' }" :data-grid-id="(!dockFor(layout, panel.id) || dockFor(layout, panel.id)?.active === panel.id) ? windowPanel(layout, panel.id).id : undefined">
-        <div class="grid-stack-item-content workbench-card">
+        <div class="grid-stack-item-content workbench-card" :data-agent-target="panel.id"
+          :class="{ 'agent-updated': agentFeedback?.target === panel.id && !agentFeedback.rejected }">
         <header tabindex="0" aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown" class="workbench-card-header grid-drag-handle" :title="reading ? undefined : tr('拖动标题移动面板；Alt + 上下键调整顺序', 'Drag the title to move; Alt + Up or Down to reorder')" @keydown.alt.up.self.prevent="shiftRow(panel.id, -1)" @keydown.alt.down.self.prevent="shiftRow(panel.id, 1)">
           <button v-if="layoutEditing && !reading" class="dock-grip" type="button" draggable="true" :aria-label="tr('吸附到面板', 'Snap to panel')" :title="tr('拖到另一面板分栏或合并标签，点击可选目标', 'Drag onto another panel to split or group tabs, or click to choose')"
             @click="edit(panel)" @dragstart.stop="startSnap($event, panel.id)" @dragend="snapSource = ''"><GripVertical :size="15" /></button><strong :title="panel.title" :draggable="narrow && !reading" @dragstart="rowStart($event, panel.id)" @dragend="rowSource = ''">{{ panel.title }}</strong>
@@ -115,13 +121,14 @@ import WorkbenchLayoutDialog from './WorkbenchLayoutDialog.vue'
 import WorkbenchSettingsDialog from '../WorkbenchSettingsDialog.vue'
 import WorkbenchHelpDialog from './WorkbenchHelpDialog.vue'
 import '../../assets/workbench.css'
-import { Maximize2, GripVertical, SlidersHorizontal, X, LayoutDashboard } from '@lucide/vue'
+import type { WorkbenchFeedback } from '../../composables/useFrontendWorkbench'
+import { CircleAlert, Sparkles, Maximize2, GripVertical, SlidersHorizontal, X, LayoutDashboard } from '@lucide/vue'
 import { geometryKeys, geometryLabels, gridRowHeight, useWorkbenchGrid } from '../../composables/useWorkbenchGrid'
 import { layoutEditingKey } from '../../lib/workbenchControls'
 import { toolTypes, toolLabel, remoteTools, type WorkbenchTool } from '../../lib/workbenchTools'
 import { inject } from 'vue'
 import { createWorkbenchActivity, workbenchActivityKey } from '../../lib/workbenchActivity'
-const props = withDefaults(defineProps<{ deviceConnected: boolean; symbolLoaded: boolean; symbolError?: string; active?: boolean }>(), { active: true })
+const props = withDefaults(defineProps<{ deviceConnected: boolean; symbolLoaded: boolean; symbolError?: string; active?: boolean; agentFeedback?: WorkbenchFeedback | null }>(), { active: true })
 const { current: floating, open: openFloat, close: returnFloat, supported: floatSupported } = usePanelFloat()
 const floatHint = computed(() => floatSupported ? tr('在其他应用上方查看这个面板', 'View this panel above other apps') : tr('当前环境不支持系统级画中画，可用专注查看', 'System picture-in-picture unavailable; use enlarged view'))
 const helpOpen = ref(false)
@@ -556,6 +563,22 @@ defineExpose({ catalog, read, execute, entries, load })
 .workbench { display:flex; flex-direction:column; min-height:0; flex:1; gap:8px; padding:12px; overflow:hidden; }
 .workbench-toolbar,.workbench-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .workbench-toolbar { justify-content:space-between; }.workbench-toolbar small { display:block; color:var(--muted); font-size:12px; margin-top:4px; }
+.agent-notice {
+  display:flex; align-items:center; gap:9px; flex:none; padding:7px 11px;
+  color:var(--agent-feedback-ink); background:color-mix(in srgb, var(--agent-feedback-ink) 8%, var(--surface));
+  border-inline-start:3px solid currentColor; border-radius:4px; pointer-events:none;
+}
+.agent-notice.declined { color:var(--warn); background:var(--warn-bg); }
+.agent-notice svg { flex:none; }
+.agent-notice > div { min-width:0; display:flex; align-items:baseline; flex-wrap:wrap; gap:2px 10px; overflow-wrap:anywhere; }
+.agent-notice strong { font-size:13px; }
+.agent-notice span { font-size:12px; color:var(--fg); }
+.workbench-card.agent-updated { outline:2px solid var(--agent-feedback-ink); outline-offset:-2px; }
+.workbench-card.agent-updated > .workbench-card-header { background:color-mix(in srgb, var(--agent-feedback-ink) 10%, var(--bg)); }
+@media (prefers-reduced-motion:no-preference) {
+  .workbench-card.agent-updated { animation:agent-update-in .2s ease-out; }
+  @keyframes agent-update-in { from { outline-color:transparent; } }
+}
 .workbench-viewport { min-height:0; flex:1; overflow:auto; scrollbar-gutter:stable; }
 .workbench-grid { min-height:350px; }
 .workbench-locator { display:flex; align-items:center; gap:8px; min-width:0; max-width:100%; }
