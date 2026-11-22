@@ -13,7 +13,11 @@ export interface WorkbenchFeedback {
   target: string
   title: string
   detail: string
-  rejected: boolean
+  declinedExit?: boolean
+}
+export interface PanelFeedback {
+  updates: Map<string, WorkbenchFeedback>
+  rejections: Map<string, WorkbenchFeedback>
 }
 interface WorkbenchSurface extends SemanticSurface { entries(): PanelEntry[] }
 
@@ -90,11 +94,13 @@ export function useFrontendWorkbench(tab: Ref<string>, superwatch: Ref<SemanticS
     }
     return mapped
   }
-  const feedback = ref<WorkbenchFeedback | null>(null)
-  let feedbackTimer: ReturnType<typeof setTimeout> | undefined
+  const feedback = ref<PanelFeedback>({ updates: new Map(), rejections: new Map() })
+  const feedbackTimers = new Map<string, ReturnType<typeof setTimeout>>()
   function clearFeedback() {
-    clearTimeout(feedbackTimer)
-    feedback.value = null
+    for (const timer of feedbackTimers.values()) clearTimeout(timer)
+    feedbackTimers.clear()
+    feedback.value.updates.clear()
+    feedback.value.rejections.clear()
   }
   function presentFeedback(event: FrontendFeedback) {
     const rejected = event.status === 'rejected'
@@ -105,12 +111,13 @@ export function useFrontendWorkbench(tab: Ref<string>, superwatch: Ref<SemanticS
     const panel = entry?.panel.id === 'workbench' && typeof event.target_panel === 'string'
       ? entries().find(item => item.id === event.target_panel) || entry.panel
       : entry?.panel
-    const target = panel?.id || ''
+    const target = panel && workbench.value?.entries().some(item => item.id === panel.id) ? panel.id : ''
     const label = panel?.title || tr('当前页面', 'this page')
     const id = 'agent:' + event.status + ':' + event.command_id
     if (activity.state.entries.some(item => item.id === id)) return
     let title: string
     let detail = ''
+    const declinedExit = entry?.name === 'panel.enlarge' && event.open === false
     if (rejected) {
       const declinedActions: Record<string, string> = {
         'panel.enlarge': event.open === false ? tr('已拒绝退出专注', 'Leaving focused view was declined') : tr('已拒绝进入专注', 'Entering focused view was declined'),
@@ -128,16 +135,21 @@ export function useFrontendWorkbench(tab: Ref<string>, superwatch: Ref<SemanticS
         UNKNOWN_ACTION: tr('此操作已不可用', 'This action is no longer available'),
         SESSION_LIMIT: tr('当前会话的操作记录已满', 'The session history is full'),
       }
-      const reason = reasons[event.code || ''] || tr('当前请求未通过校验', 'The request did not pass validation')
-      detail = tr('「' + label + '」 · ' + reason + '，本次操作未执行。', '“' + label + '” · ' + reason + '. The action was not performed.')
+      detail = reasons[event.code || ''] || tr('当前请求未通过校验', 'The request did not pass validation')
     } else {
       title = panel?.type === 'chart' ? tr('Agent 已更新「' + label + '」的图表', 'Agent updated the chart in “' + label + '”')
         : tr('Agent 已更新「' + label + '」的内容', 'Agent updated the content in “' + label + '”')
     }
-    activity.append({ id, kind: rejected ? 'error' : 'operation', source: 'Agent', title: title.slice(0, 200), text: detail, status: event.status })
-    clearFeedback()
-    feedback.value = { id, target, title, detail, rejected }
-    feedbackTimer = setTimeout(clearFeedback, rejected ? 8000 : 4500)
+    const logDetail = rejected ? tr('「' + label + '」 · ' + detail + '，本次操作未执行。', '“' + label + '” · ' + detail + '. The action was not performed.') : ''
+    activity.append({ id, kind: rejected ? 'error' : 'operation', source: 'Agent', title: title.slice(0, 200), text: logDetail, status: event.status })
+    const messages = rejected ? feedback.value.rejections : feedback.value.updates
+    const timerKey = (rejected ? 'rejection:' : 'update:') + target
+    clearTimeout(feedbackTimers.get(timerKey))
+    messages.set(target, { id, target, title, detail, declinedExit })
+    feedbackTimers.set(timerKey, setTimeout(() => {
+      messages.delete(target)
+      feedbackTimers.delete(timerKey)
+    }, rejected ? 8000 : 1500))
   }
   function resolveAction(panelId: string, name: string, args: JsonObject) {
     const panel = entries().find(panel => panel.id === panelId)

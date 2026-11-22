@@ -8,8 +8,8 @@
 - 分支：`codex/flexible-panels-reviewed`
 - HEAD：`codex/flexible-panels-reviewed^{commit}`
 - 远端 HEAD：`a38557b9`
-- 工作树：灵活面板候选 664495f1 之后，本地追加 Agent 图表更新与拒绝提示修复。当前提交用 git rev-parse codex/flexible-panels-reviewed 查询。远端 #80 仍指向 732562e4。
-- 当前任务：核对[图表与拒绝反馈实测](../verification/flexible-panel-agent-feedback-20261122.md)。Agent 更新显示目标卡高亮及中文记录，旧布局请求显示拒绝原因并保留当前视图。整仓 Python 与 Windows 原生覆盖安装仍待最终验收。
+- 工作树：灵活面板候选 664495f1 之后，本地追加 Agent 图表更新与拒绝提示修复，并按工作台现有调色板复核深浅主题。当前提交用 git rev-parse codex/flexible-panels-reviewed 查询。远端 #80 仍指向 732562e4。
+- 当前任务：核对[图表与拒绝反馈实测](../verification/flexible-panel-agent-feedback-20261122.md)。Agent 更新时仅目标卡标题栏短暂使用主题信息色；旧布局请求在标题下以主题警告色显示原因，并保留当前视图。整仓 Python 与 Windows 原生覆盖安装仍待最终验收。
 - 状态：`图表更新和拒绝反馈已实页复核，等待用户确认效果后推送。`
 
 ## 里程碑

@@ -6,6 +6,7 @@
           <option disabled value="">{{ tr('定位面板…', 'Go to panel…') }}</option>
           <option v-for="panel in orderedPanels" :key="panel.id" :value="panel.id">{{ locatorLabel(panel) }}</option>
         </select>
+        <button v-if="locateTarget && layout.panels.some(panel => panel.id === locateTarget)" type="button" class="locate-update" @click="jump(locateTarget); clearLocator()">{{ tr('定位到图表', 'Go to updated chart') }}</button>
         <button type="button" class="btn btn-secondary help-button" aria-haspopup="dialog" data-testid="workbench-help" @click="helpOpen = true">{{ tr('帮助', 'Help') }}</button>
       </div>
       <div v-if="reading" class="workbench-actions reading-actions">
@@ -23,11 +24,7 @@
         <button class="btn btn-secondary" :disabled="loading || saving" data-testid="load-layout" @click="libraryMode = 'load'">{{ tr('加载布局', 'Load layout') }}</button>
       </div>
     </header>
-    <div v-if="agentFeedback" :key="agentFeedback.id" class="agent-notice" :class="{ declined: agentFeedback.rejected }"
-      :role="agentFeedback.rejected ? 'alert' : 'status'" data-testid="agent-feedback">
-      <component :is="agentFeedback.rejected ? CircleAlert : Sparkles" :size="18" aria-hidden="true" />
-      <div><strong>{{ agentFeedback.title }}</strong><span v-if="agentFeedback.detail">{{ agentFeedback.detail }}</span></div>
-    </div>
+    <WorkbenchAgentFeedback :rejection="agentFeedback?.rejections.get('')" />
     <WorkbenchHelpDialog v-if="helpOpen" @close="helpOpen = false" />
     <WorkbenchSettingsDialog v-if="closing" :title="tr('关闭面板？', 'Close panel?')" @close="closing = ''">
       <p>{{ tr('关闭“' + find(closing).title + '”？稍后可从“最近关闭”恢复。', 'Close “' + find(closing).title + '”? You can restore it from Recently closed.') }}</p>
@@ -52,11 +49,13 @@
     <div ref="viewport" class="workbench-viewport">
     <div ref="grid" class="workbench-grid grid-stack" :aria-busy="loading">
       <article :class="{ 'reading-card': reading === panel.id }" v-for="panel in orderedPanels" :key="restoreGeneration + ':' + panel.id + ':' + JSON.stringify(panel.source)" v-show="!dockFor(layout, panel.id) || dockFor(layout, panel.id)?.active === panel.id" class="grid-stack-item" @dragover="rowOver($event)" @drop="rowDrop($event, panel.id)" :data-panel-id="panel.id" :style="{ '--panel-height': windowPanel(layout, panel.id).h * gridRowHeight + 'px' }" :data-grid-id="(!dockFor(layout, panel.id) || dockFor(layout, panel.id)?.active === panel.id) ? windowPanel(layout, panel.id).id : undefined">
-        <div class="grid-stack-item-content workbench-card" :data-agent-target="panel.id"
-          :class="{ 'agent-updated': agentFeedback?.target === panel.id && !agentFeedback.rejected }">
+        <div class="grid-stack-item-content workbench-card" :data-agent-target="panel.id">
         <header tabindex="0" aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown" class="workbench-card-header grid-drag-handle" :title="reading ? undefined : tr('拖动标题移动面板；Alt + 上下键调整顺序', 'Drag the title to move; Alt + Up or Down to reorder')" @keydown.alt.up.self.prevent="shiftRow(panel.id, -1)" @keydown.alt.down.self.prevent="shiftRow(panel.id, 1)">
           <button v-if="layoutEditing && !reading" class="dock-grip" type="button" draggable="true" :aria-label="tr('吸附到面板', 'Snap to panel')" :title="tr('拖到另一面板分栏或合并标签，点击可选目标', 'Drag onto another panel to split or group tabs, or click to choose')"
-            @click="edit(panel)" @dragstart.stop="startSnap($event, panel.id)" @dragend="snapSource = ''"><GripVertical :size="15" /></button><strong :title="panel.title" :draggable="narrow && !reading" @dragstart="rowStart($event, panel.id)" @dragend="rowSource = ''">{{ panel.title }}</strong>
+            @click="edit(panel)" @dragstart.stop="startSnap($event, panel.id)" @dragend="snapSource = ''"><GripVertical :size="15" /></button>
+          <div class="panel-heading-text"><strong :title="panel.title" :draggable="narrow && !reading" @dragstart="rowStart($event, panel.id)" @dragend="rowSource = ''">{{ panel.title }}</strong>
+            <WorkbenchAgentFeedback v-if="floating?.id !== panel.id" :update="agentFeedback?.updates.get(panel.id)" />
+          </div>
           <span v-if="panel.title !== (panel.source.tool ? toolLabel(panel.source.tool) : labels[panel.type])" class="panel-kind">{{ panel.source.tool ? toolLabel(panel.source.tool) : labels[panel.type] }}</span>
           <div class="workbench-header-actions">
             <button type="button" :aria-label="tr('请求 Agent 分析', 'Ask Agent')" @click="emit('intent', panel.id)">Agent</button>
@@ -65,6 +64,7 @@
             <button type="button" :title="tr('关闭面板', 'Close panel')" :aria-label="tr('关闭面板', 'Close panel')" @click="closing = panel.id"><X :size="16" /></button>
           </div>
         </header>
+        <WorkbenchAgentFeedback v-if="floating?.id !== panel.id" :rejection="agentFeedback?.rejections.get(panel.id)" :focused="reading === panel.id" />
         <div v-if="dockFor(layout, panel.id)" class="dock-tabs" role="tablist" :aria-label="tr('停靠窗口', 'Docked window')">
           <button v-for="id in dockFor(layout, panel.id)!.panels" :key="id" role="tab" :aria-selected="id === panel.id" :tabindex="id === panel.id ? 0 : -1" @click="selectTab(id)" @keydown="tabKey($event, id)">{{ find(id).title }}</button>
           <button v-if="layoutEditing" type="button" :aria-label="tr('分离当前面板', 'Undock current panel')" @click="undock(panel.id)">↗</button>
@@ -89,7 +89,10 @@
         </div>
         <button v-if="floating?.id === panel.id" type="button" class="float-placeholder btn btn-secondary" @click="returnFloat">{{ tr('正在浮窗中显示 · 收回', 'Showing in floating window · Return') }}</button>
         <Teleport :to="floating?.id === panel.id ? floating.mount : 'body'" :disabled="floating?.id !== panel.id">
-        <header v-if="floating?.id === panel.id" class="float-heading"><strong>{{ panel.title }}</strong><button type="button" class="btn btn-secondary" @click="returnFloat">{{ tr('返回布局', 'Back to layout') }}</button></header>
+        <header v-if="floating?.id === panel.id" class="float-heading">
+          <div class="panel-heading-text"><strong>{{ panel.title }}</strong><WorkbenchAgentFeedback :update="agentFeedback?.updates.get(panel.id)" /></div>
+          <button type="button" class="btn btn-secondary" @click="returnFloat">{{ tr('返回布局', 'Back to layout') }}</button></header>
+        <WorkbenchAgentFeedback v-if="floating?.id === panel.id" :rejection="agentFeedback?.rejections.get(panel.id)" :focused="reading === panel.id" />
         <div class="workbench-card-content" @dragover.prevent @drop="dropControl($event, panel.id)">
           <WorkbenchPanel :ref="value => register(panel.id, value)" :panel="panel" :active="floating?.id === panel.id || (active !== false && (!dockFor(layout, panel.id) || dockFor(layout, panel.id)?.active === panel.id))" :device-connected="deviceConnected" :symbol-loaded="symbolLoaded" :symbol-error="symbolError" :latest-values="latestValues" :rtt="rtt" :snapshot-path="snapshotPath" :commit-widgets="widgets => setWidgets(panel.id, widgets)" @view-interaction="watchView(panel.id)" @values="values => Object.assign(latestValues, values)" @snapshot="setSnapshotPath" @transfer="transfer => userTransfer(transfer.widgetId, transfer.targetPanelId)" />
         </div>
@@ -121,14 +124,15 @@ import WorkbenchLayoutDialog from './WorkbenchLayoutDialog.vue'
 import WorkbenchSettingsDialog from '../WorkbenchSettingsDialog.vue'
 import WorkbenchHelpDialog from './WorkbenchHelpDialog.vue'
 import '../../assets/workbench.css'
-import type { WorkbenchFeedback } from '../../composables/useFrontendWorkbench'
-import { CircleAlert, Sparkles, Maximize2, GripVertical, SlidersHorizontal, X, LayoutDashboard } from '@lucide/vue'
+import WorkbenchAgentFeedback from './WorkbenchAgentFeedback.vue'
+import type { PanelFeedback } from '../../composables/useFrontendWorkbench'
+import { Maximize2, GripVertical, SlidersHorizontal, X, LayoutDashboard } from '@lucide/vue'
 import { geometryKeys, geometryLabels, gridRowHeight, useWorkbenchGrid } from '../../composables/useWorkbenchGrid'
 import { layoutEditingKey } from '../../lib/workbenchControls'
 import { toolTypes, toolLabel, remoteTools, type WorkbenchTool } from '../../lib/workbenchTools'
 import { inject } from 'vue'
 import { createWorkbenchActivity, workbenchActivityKey } from '../../lib/workbenchActivity'
-const props = withDefaults(defineProps<{ deviceConnected: boolean; symbolLoaded: boolean; symbolError?: string; active?: boolean; agentFeedback?: WorkbenchFeedback | null }>(), { active: true })
+const props = withDefaults(defineProps<{ deviceConnected: boolean; symbolLoaded: boolean; symbolError?: string; active?: boolean; agentFeedback?: PanelFeedback }>(), { active: true })
 const { current: floating, open: openFloat, close: returnFloat, supported: floatSupported } = usePanelFloat()
 const floatHint = computed(() => floatSupported ? tr('在其他应用上方查看这个面板', 'View this panel above other apps') : tr('当前环境不支持系统级画中画，可用专注查看', 'System picture-in-picture unavailable; use enlarged view'))
 const helpOpen = ref(false)
@@ -247,6 +251,31 @@ function tabKey(event: KeyboardEvent, id: string) {
   selectTab(tabs[positions[event.key]!]!)
 }
 function card(id: string) { return grid.value?.querySelector<HTMLElement>('article[data-panel-id="' + CSS.escape(id) + '"]') }
+const locateTarget = ref('')
+let locateTimer: ReturnType<typeof setTimeout> | undefined
+let locateObserver: IntersectionObserver | undefined
+function clearLocator() {
+  clearTimeout(locateTimer)
+  locateObserver?.disconnect()
+  locateTarget.value = ''
+}
+watch(() => Array.from(props.agentFeedback?.updates.values() ?? []), (updates, previous) => {
+  const latest = updates.filter(item => !previous.some(old => old.id === item.id)).pop()
+  if (!latest) return
+  clearLocator()
+  const id = latest.target
+  if (floating.value?.id === id || !layout.value.panels.some(panel => panel.id === id && panel.type === 'chart')) return
+  const header = card(id)?.querySelector('header')
+  if (!header || !viewport.value || typeof IntersectionObserver === 'undefined') return
+  locateObserver = new IntersectionObserver(([entry]) => {
+    if (!entry) return
+    if (entry.isIntersecting && entry.intersectionRect.height > 0) clearLocator()
+    else locateTarget.value = id
+  }, { root: viewport.value })
+  locateObserver.observe(header)
+  locateTimer = setTimeout(clearLocator, 8000)
+}, { flush: 'post' })
+onUnmounted(clearLocator)
 function jump(id: string) {
   focus(id)
   void nextTick(() => {
@@ -563,22 +592,9 @@ defineExpose({ catalog, read, execute, entries, load })
 .workbench { display:flex; flex-direction:column; min-height:0; flex:1; gap:8px; padding:12px; overflow:hidden; }
 .workbench-toolbar,.workbench-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .workbench-toolbar { justify-content:space-between; }.workbench-toolbar small { display:block; color:var(--muted); font-size:12px; margin-top:4px; }
-.agent-notice {
-  display:flex; align-items:center; gap:9px; flex:none; padding:7px 11px;
-  color:var(--agent-feedback-ink); background:color-mix(in srgb, var(--agent-feedback-ink) 8%, var(--surface));
-  border-inline-start:3px solid currentColor; border-radius:4px; pointer-events:none;
-}
-.agent-notice.declined { color:var(--warn); background:var(--warn-bg); }
-.agent-notice svg { flex:none; }
-.agent-notice > div { min-width:0; display:flex; align-items:baseline; flex-wrap:wrap; gap:2px 10px; overflow-wrap:anywhere; }
-.agent-notice strong { font-size:13px; }
-.agent-notice span { font-size:12px; color:var(--fg); }
-.workbench-card.agent-updated { outline:2px solid var(--agent-feedback-ink); outline-offset:-2px; }
-.workbench-card.agent-updated > .workbench-card-header { background:color-mix(in srgb, var(--agent-feedback-ink) 10%, var(--bg)); }
-@media (prefers-reduced-motion:no-preference) {
-  .workbench-card.agent-updated { animation:agent-update-in .2s ease-out; }
-  @keyframes agent-update-in { from { outline-color:transparent; } }
-}
+.locate-update { flex:none; background:none; border:0; color:var(--info); text-decoration:underline; cursor:pointer; }
+.workbench-card-header,.float-heading { position:relative; isolation:isolate; }
+.panel-heading-text { flex:1 1 4em; min-width:0; display:flex; align-items:baseline; overflow:hidden; gap:8px; }
 .workbench-viewport { min-height:0; flex:1; overflow:auto; scrollbar-gutter:stable; }
 .workbench-grid { min-height:350px; }
 .workbench-locator { display:flex; align-items:center; gap:8px; min-width:0; max-width:100%; }
@@ -608,7 +624,7 @@ defineExpose({ catalog, read, execute, entries, load })
 .workbench-card { display:flex; flex-direction:column; min-width:0; min-height:0; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius,8px); overflow:hidden; }
 .workbench-card-header { display:flex; flex-wrap:wrap; align-items:center; flex:none; gap:8px; padding:8px 12px; min-height:44px; background:var(--bg); border-bottom:1px solid var(--border); } .workbench:not(.is-reading) .workbench-card-header { cursor:grab; }.workbench:not(.is-reading) .workbench-card-header:active { cursor:grabbing; }
 .workbench-header-actions { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
-.workbench-card-header strong { flex:1 1 4em; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14px; }.workbench-card-header button { display:inline-flex; align-items:center; justify-content:center; gap:5px; min-height:28px; min-width:28px; padding:4px 7px; background:transparent; color:var(--fg); border:1px solid var(--border); border-radius:4px; cursor:pointer; }
+.panel-heading-text > strong { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14px; }.workbench-card-header button { display:inline-flex; align-items:center; justify-content:center; gap:5px; min-height:28px; min-width:28px; padding:4px 7px; background:transparent; color:var(--fg); border:1px solid var(--border); border-radius:4px; cursor:pointer; }
 .dock-tabs { display:flex; flex:none; gap:4px; padding:8px 12px; overflow:auto; border-bottom:1px solid var(--border); }.dock-tabs button { border:1px solid var(--border); border-radius:4px; padding:4px 8px; color:var(--fg); background:var(--surface); white-space:nowrap; cursor:pointer; }.dock-tabs button[aria-selected=true] { border-color:var(--accent); color:var(--accent); }
 .panel-kind { color:var(--muted); font-size:12px; }.drag-handle { color:var(--muted); }
 .workbench-card-content { position:relative; flex:1; min-height:0; overflow:auto; display:flex; flex-direction:column; }.workbench-card-content :deep(.symbol-panel) { width:100%; min-width:0; max-width:none; flex:1; }.workbench-card-content :deep(.waveform-viewer) { flex:1; min-height:240px; }.workbench-card-content :deep(.rtt-channel-panel) { flex:1; min-height:0; }

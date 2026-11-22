@@ -368,3 +368,28 @@ it('keeps changes made during a save pending, including after a rejected save', 
     expect(wrapper.vm.entries()[0]?.title).toBe('After request')
   } finally { wrapper.unmount() }
 })
+
+it('places each Agent message at its owning panel without moving keyboard focus', async () => {
+  const wrapper = mount(WorkbenchTab, { props: { deviceConnected: false, symbolLoaded: false }, attachTo: document.body })
+  try {
+    await flushPromises()
+    const chart = await wrapper.vm.execute('panel.add', { type: 'chart', title: 'Results' }) as { id: string }
+    const other = await wrapper.vm.execute('panel.add', { type: 'chart', title: 'Other' }) as { id: string }
+    const article = wrapper.get(`[data-panel-id="${chart.id}"]`)
+    const button = wrapper.get(`[data-panel-id="${other.id}"] button`).element as HTMLButtonElement
+    button.focus()
+    const update = { id: 'done', target: chart.id, title: 'Updated Results', detail: '' }
+    const rejection = { ...update, id: 'declined', title: 'Update declined', detail: 'The layout changed' }
+    await wrapper.setProps({ agentFeedback: {
+      updates: new Map([[chart.id, update]]), rejections: new Map([[chart.id, rejection]]),
+    } })
+    expect(article.get('header [role="status"]').attributes('aria-label')).toBe('Updated Results')
+    expect(article.get('header + [role="alert"]').text()).toContain('Update declined')
+    expect(wrapper.findAll('[data-testid="agent-update"]')).toHaveLength(1)
+    expect(wrapper.findAll('[data-testid="agent-rejection"]')).toHaveLength(1)
+    expect(document.activeElement).toBe(button)
+    await wrapper.setProps({ agentFeedback: { updates: new Map(), rejections: new Map([['', { ...rejection, target: '' }]]) } })
+    expect(wrapper.get('.workbench-toolbar + [role="alert"]').text()).toContain('Update declined')
+    expect(article.find('[role="alert"]').exists()).toBe(false)
+  } finally { wrapper.unmount() }
+})
