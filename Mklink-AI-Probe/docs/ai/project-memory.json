@@ -1,20 +1,20 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-20",
+  "updated_at": "2026-11-23",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.5.1-fixes",
-    "head": "357b2674",
-    "remote_head": "357b2674",
-    "working_tree": "E 盘主工作区，分支起点 a38557b9，Windows 本地安装包和跨平台 Skill 构建自 357b2674，上一轮 macOS ARM64 DMG 来自 eb463758。本机已清除 0.4.3 全用户产品及卸载登记，桌面保留公共入口。本地静默覆盖使用 /S /UPDATE，保留已有快捷方式。交接提交以 Git 为准。"
+    "head": "e8334000",
+    "remote_head": "e8334000",
+    "working_tree": "E 盘，分支起点 a38557b9。上轮 Windows/Skill 357b2674、Mac ARM64 eb463758。本机已清除 0.4.3 全用户登记，仅留公共桌面入口。静默覆盖用 /S /UPDATE 保留快捷方式。交接提交以 Git 为准。"
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "V0.5.0 已在 HPM6E80 实板验证 GUI、CLI、MCP 共享 RTT 文本与波形。HPM6E80 永久写入仍暂停。",
-    "current_task": "Windows 命令行及桌面共享采集和 macOS 原生启动验收见[共享报告](../verification/v050-desktop-rtt-sharing.md)。前轮 HPM6E80 只读实板证据见[OTP 验收](../verification/v051-hpm-jtag-otp-write.md)。"
+    "status": "V0.5.0 修复固件目录检查与店铺菜单，候选未发布。HPM6E80 永久写入仍暂停。",
+    "current_task": "本轮见[固件检查与菜单验收](../verification/v050-firmware-catalog-stores.md)。前轮 HPM6E80 实测见[共享 RTT](../verification/v050-desktop-rtt-sharing.md)和[只读 OTP](../verification/v051-hpm-jtag-otp-write.md)。"
   },
   "milestones": [
     {

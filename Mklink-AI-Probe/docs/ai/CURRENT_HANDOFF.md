@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-11-20`
+- 更新时间：`2026-11-23`
 - 分支：`codex/v0.5.1-fixes`
-- HEAD：`357b2674`
-- 远端 HEAD：`357b2674`
-- 工作树：E 盘主工作区，分支起点 a38557b9，Windows 本地安装包和跨平台 Skill 构建自 357b2674，上一轮 macOS ARM64 DMG 来自 eb463758。本机已清除 0.4.3 全用户产品及卸载登记，桌面保留公共入口。本地静默覆盖使用 /S /UPDATE，保留已有快捷方式。交接提交以 Git 为准。
-- 当前任务：Windows 命令行及桌面共享采集和 macOS 原生启动验收见[共享报告](../verification/v050-desktop-rtt-sharing.md)。前轮 HPM6E80 只读实板证据见[OTP 验收](../verification/v051-hpm-jtag-otp-write.md)。
-- 状态：`V0.5.0 已在 HPM6E80 实板验证 GUI、CLI、MCP 共享 RTT 文本与波形。HPM6E80 永久写入仍暂停。`
+- HEAD：`e8334000`
+- 远端 HEAD：`e8334000`
+- 工作树：E 盘，分支起点 a38557b9。上轮 Windows/Skill 357b2674、Mac ARM64 eb463758。本机已清除 0.4.3 全用户登记，仅留公共桌面入口。静默覆盖用 /S /UPDATE 保留快捷方式。交接提交以 Git 为准。
+- 当前任务：本轮见[固件检查与菜单验收](../verification/v050-firmware-catalog-stores.md)。前轮 HPM6E80 实测见[共享 RTT](../verification/v050-desktop-rtt-sharing.md)和[只读 OTP](../verification/v051-hpm-jtag-otp-write.md)。
+- 状态：`V0.5.0 修复固件目录检查与店铺菜单，候选未发布。HPM6E80 永久写入仍暂停。`
 
 ## 里程碑
 
