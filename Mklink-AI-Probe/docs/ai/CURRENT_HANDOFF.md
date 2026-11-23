@@ -5,12 +5,12 @@
 ## 当前断点
 
 - 更新时间：`2026-11-23`
-- 分支：`codex/flexible-panels-reviewed`
-- HEAD：`e8334000`
-- 远端 HEAD：`e8334000`
-- 工作树：E 盘主工作区，#87 和 #88 已合入 main。#89 同步后重新构建生产 GUI，保留面板控件标识及 OTP 字段说明。
-- 当前任务：整合[灵活面板与操作反馈](../verification/flexible-panel-agent-feedback-20261122.md)、[共享 RTT](../verification/v050-desktop-rtt-sharing.md)、[固件目录与菜单](../verification/v050-firmware-catalog-stores.md)。
-- 状态：`V0.5.1 整合验收中，HPM6E80 永久 OTP 写入仍暂停。`
+- 分支：`codex/v0.5.1-release`
+- HEAD：`8073bbfb`
+- 远端 HEAD：`8073bbfb`
+- 工作树：E 盘主工作区。#87、#88 已合入 main，#85 的重复报告已核对并关闭。#89 整合提交 8073bbfb 已通过全量软件回归。
+- 当前任务：制作 V0.5.1 Windows、完整 Skill 和 macOS 安装包，核对[简要更新说明](../releases/v0.5.1.md)和真实覆盖安装。
+- 状态：`V0.5.1 本地打包验收中。HPM6E80 永久写入仍暂停。`
 
 ## 里程碑
 
@@ -52,7 +52,7 @@
 
 ## 下一动作
 
-1. 在同一源码上验证双窗、CLI 与 MCP 同通道采集和覆盖安装。HPM6E80 首次写入原因待查，永久写入暂停。
+1. 核对安装目录及快捷方式、默认界面和共享采集，再完成 #89 及版本 PR 的合并。已发版本及更新索引见原发布记录。
 2. 客户可直接运行新版覆盖安装器，自动结束当前用户旧MKLink与Skill/MCP，不要求手动先关旧版；活动任务会结束。安装后AI宿主需重新加载被结束的MCP。损坏历史备份保留，仍失败时收集installation-history-report.json、history-backups和诊断包，区分权限/占用/格式；不手工删除有效未知结果，不重放烧录。
 3. 客户SystemView先核对实际CH、目标IRQ锁及元数据。1µs三路溢出先采集0x40 CH2设备时间戳/长度/序号与主机单调到达时间，低频读0x10错误和0x14批次耗时；诊断开销保持一致，再判断背压、重试或调度，不直接假定80ms停读或给CH2固定优先级。多视图假离线已完成修复与安装版六窗口复验。保留目标构建快照供AXF源码路径使用，原工程重编后再清理；见[静态补充](../verification/v050-systemview-loss-reboot.md)。
 4. 有Linux/Mac实物后补验真实USB、Gatekeeper首次安装和交互式提权；不能把本轮CI结果当作这些硬件/系统验收。

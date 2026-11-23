@@ -9,6 +9,23 @@ export interface ReleaseHistoryEntry {
 
 export const releaseHistory: ReleaseHistoryEntry[] = [
   {
+    version: '0.5.1', date: '2026-11-23',
+    summary: '共享 RTT 采集与灵活面板',
+    summaryEn: 'Shared RTT capture and flexible panels',
+    changes: [
+      "桌面、CLI 和 MCP 可同时读取同一 RTT 通道的文本和波形。重开桌面可接回已有连接。",
+      "灵活面板可组合变量、波形、RTT、串口和图表。Agent 更新图表或操作被拒绝时，可在对应卡片查看反馈。",
+      "HPM 系列支持通过 JTAG 查看 OTP 熔丝值、影子值和锁状态。HPM6E80 已实板验证读取。",
+      "修复 macOS 本地后台启动和固件检查。固件检查标明在线或内置目录，点击其他位置会收起淘宝店铺菜单。",
+    ],
+    changesEn: [
+      "Desktop, CLI and MCP can read text and waveforms from the same RTT channel. Reopened windows can reattach to an existing connection.",
+      "Combine variables, waveforms, RTT, serial data and charts in flexible panels. The affected card shows chart updates and rejected actions.",
+      "Read HPM OTP fuse values, shadow values and lock status over JTAG. Reads were verified on HPM6E80 hardware.",
+      "Fixed macOS backend startup and firmware checks. The app identifies the online or bundled firmware catalog and closes the store menu when you click elsewhere.",
+    ],
+  },
+  {
     version: '0.5.0', date: '2026-11-13',
     summary: '完善采集、设备兼容与更新体验',
     summaryEn: 'Improve capture, device compatibility and updates',
