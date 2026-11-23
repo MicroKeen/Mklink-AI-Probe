@@ -8,7 +8,7 @@
 - 分支：`codex/v0.5.1-fixes`
 - HEAD：`e8334000`
 - 远端 HEAD：`e8334000`
-- 工作树：E 盘，分支起点 a38557b9。上轮 Windows/Skill 357b2674、Mac ARM64 eb463758。本机已清除 0.4.3 全用户登记，仅留公共桌面入口。静默覆盖用 /S /UPDATE 保留快捷方式。交接提交以 Git 为准。
+- 工作树：E 盘，已同步合入 #87 的 main 864be90c。发布与缓存证据见[存储交接](../verification/v050-codex-storage-cleanup.md)。上轮 Windows/Skill 357b2674、Mac ARM64 eb463758。本机已清除 0.4.3 全用户登记，仅留公共桌面入口。静默覆盖用 /S /UPDATE 保留快捷方式。交接提交以 Git 为准。
 - 当前任务：本轮见[固件检查与菜单验收](../verification/v050-firmware-catalog-stores.md)。前轮 HPM6E80 实测见[共享 RTT](../verification/v050-desktop-rtt-sharing.md)和[只读 OTP](../verification/v051-hpm-jtag-otp-write.md)。
 - 状态：`V0.5.0 修复固件目录检查与店铺菜单，候选未发布。HPM6E80 永久写入仍暂停。`
 
