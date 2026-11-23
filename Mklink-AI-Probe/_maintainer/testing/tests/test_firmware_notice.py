@@ -208,7 +208,9 @@ def test_cloud_advice_does_not_misrepresent_bundled_catalog(monkeypatch):
     monkeypatch.setattr(fc, '_remote_firmwares_from_source', lambda *a, **k: None)
     monkeypatch.setattr(fc, 'bundled_firmwares', lambda: [firmware()])
     assert fc._remote_firmwares(include_bundled=False) is None
-    assert fc._remote_firmwares()[0].version_str == 'V4.7.4'
+    candidate, = fc._remote_firmwares()
+    assert candidate.version_str == 'V4.7.4'
+    assert candidate.catalog_source == 'bundled'
 
 
 def test_web_cli_mcp_share_notice_without_hardware_admission(tmp_path, monkeypatch):

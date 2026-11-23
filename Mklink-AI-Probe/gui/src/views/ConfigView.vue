@@ -425,14 +425,24 @@ async function recheckFirmware() {
     firmwareCheck.value = result
     if (result.error) throw new Error(result.error)
     const latest = result.recommended_uf2?.version
-    firmwareCheckStatus.value = result.status === 'ok'
-      ? tr('当前固件已满足要求', 'The installed firmware meets the requirements')
-      : result.status === 'upgrade_required'
-        ? tr('发现可用固件，请点击“升级到最新固件”', 'Firmware is available. Click Update to Latest Firmware')
-        : result.status === 'revision_unknown'
-          ? tr('版本号相同，但尚未确认已安装的修订', 'The version matches, but the installed build is unconfirmed')
-          : result.instructions || tr('未能读取当前固件版本，请检查下载器连接后重试。', 'Could not read the installed firmware version. Check the probe connection and try again.')
-    if (latest) firmwareCheckStatus.value += tr(`；可用固件：${latest}`, `; available firmware: ${latest}`)
+    const catalog = result.recommended_uf2?.catalog_source
+    const fallback = catalog === 'bundled' || catalog === 'local'
+    if (result.installed_newer) {
+      firmwareCheckStatus.value = tr('当前固件比目录中的版本或构建更新，将保留已安装固件', 'The installed firmware is newer than the catalog version or build and will be kept')
+    } else if (result.status === 'ok') {
+      firmwareCheckStatus.value = fallback
+        ? tr('当前固件已满足本地目录要求', 'The installed firmware meets the local catalog requirements')
+        : tr('当前固件已满足要求', 'The installed firmware meets the requirements')
+    } else if (result.status === 'upgrade_required') {
+      firmwareCheckStatus.value = tr('发现可用固件，请点击“升级到最新固件”', 'Firmware is available. Click Update to Latest Firmware')
+    } else if (result.status === 'revision_unknown') {
+      firmwareCheckStatus.value = tr('版本号相同，但尚未确认已安装的修订', 'The version matches, but the installed build is unconfirmed')
+    } else {
+      firmwareCheckStatus.value = result.instructions || tr('未能读取当前固件版本，请检查下载器连接后重试。', 'Could not read the installed firmware version. Check the probe connection and try again.')
+    }
+    if (latest) firmwareCheckStatus.value += fallback
+      ? tr(`；本地目录版本：${latest}。尚未从云端确认最新版本，请检查网络后重新检查。`, `; local catalog: ${latest}. The latest online version is unconfirmed. Check the network and try again.`)
+      : tr(`；在线目录版本：${latest}`, `; online catalog: ${latest}`)
   } catch (error: any) {
     firmwareCheckStatus.value = tr('检查固件失败：', 'Firmware check failed: ') + (error?.message || String(error))
     toast.error(firmwareCheckStatus.value)
@@ -464,7 +474,9 @@ async function upgradeFirmware() {
       )
       toast.success(firmwareUpgradeStatus.value)
     } else if (result.status === 'up_to_date') {
-      firmwareUpgradeStatus.value = tr('当前已是最新固件', 'The probe firmware is already up to date')
+      firmwareUpgradeStatus.value = result.catalog_source === 'bundled' || result.catalog_source === 'local'
+        ? tr('已安装本地目录中的固件修订，尚未从云端确认最新版本。', 'The local catalog build is installed. The latest online version is unconfirmed.')
+        : tr('当前已是最新固件', 'The probe firmware is already up to date')
       toast.success(firmwareUpgradeStatus.value)
     } else {
       firmwareUpgradeStatus.value = result.message || tr('未完成自动升级，请按提示手动升级', 'Automatic update did not complete; follow the manual update instructions')
@@ -684,7 +696,7 @@ onUnmounted(() => {
           <p v-if="firmwareCheckStatus" role="status" data-testid="firmware-check-status">{{ firmwareCheckStatus }}</p>
           <p v-if="firmwareCheck?.status === 'revision_unknown'" data-testid="firmware-revision-unknown">{{ tr('版本号相同，但尚未确认已安装的修订。可以重新安装最新修复包。', 'The version matches, but the installed build is unconfirmed. You can reinstall the latest repair package.') }}</p>
           <p v-if="firmwareCheck?.current_build_id" data-testid="firmware-build-id">{{ tr('当前构建：', 'Installed build: ') }}{{ firmwareCheck.current_build_id }}</p>
-          <p v-if="firmwareCheck?.recommended_uf2?.build_id" data-testid="firmware-recommended-build">{{ tr('可用构建：', 'Available build: ') }}{{ firmwareCheck.recommended_uf2.build_id }}</p>
+          <p v-if="firmwareCheck?.recommended_uf2?.build_id" data-testid="firmware-recommended-build">{{ tr('目录构建：', 'Catalog build: ') }}{{ firmwareCheck.recommended_uf2.build_id }}</p>
           <p v-if="clientPending" data-testid="firmware-update-order">{{ tr('上位机正在检查或已有更新，建议先完成上位机更新并重启，再检查固件。暂不更新上位机时仍可手动升级固件。', 'The app is checking for updates or has an update available. Update and restart the app before rechecking firmware. If postponing the app update, you can still update firmware manually.') }}</p>
           <p v-if="clientInstalling">{{ tr('上位机正在安装更新，请重启后再升级固件。', 'The app update is installing. Update firmware after restarting.') }}</p>
           <button class="btn" type="button" data-testid="upgrade-firmware" :disabled="firmwareUpgrading || firmwareChecking || clientInstalling" @click="upgradeFirmware">

@@ -2,55 +2,55 @@
   "schema": "mklink-firmware-v1",
   "firmwares": [
     {
-      "name": "MicroLink_V2.9.3.rbl",
+      "name": "MicroLink_V2.9.5.rbl",
       "family": "microlink",
       "model": "V2",
-      "version": "V2.9.3",
-      "size": 366268,
-      "sha256": "08ab4061834af5256b6f258c3fa0be5bedeb53c302791064b35733148c9bcbd5",
-      "build_id": "2026-11-01T19:34:48",
+      "version": "V2.9.5",
+      "size": 370124,
+      "sha256": "45dc34fc9dff29ed7904d33c74ae2fe850284d2c1624c176e18738004fbf1241",
+      "build_id": "2026-11-15T21:39:19",
       "urls": {
-        "tencent": "https://download.microkeenai.com/mklink/firmware/releases/20261102/MicroLink_V2.9.3.rbl",
-        "github": "https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/firmware-assets/MicroLink_V2.9.3.rbl"
+        "tencent": "https://download.microkeenai.com/mklink/firmware/releases/20261115/MicroLink_V2.9.5.rbl",
+        "github": "https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/firmware-assets/MicroLink_V2.9.5.rbl"
       }
     },
     {
-      "name": "MicroLink_V3.6.8.uf2",
+      "name": "MicroLink_V3.7.0.uf2",
       "family": "microlink",
       "model": "V3",
-      "version": "V3.6.8",
-      "size": 826368,
-      "sha256": "44b1aff26e1d0330fb5d657f1c11412dd5f2ef25010c440dbc782c9e9142c56c",
-      "build_id": "2026-11-01T21:53:19",
+      "version": "V3.7.0",
+      "size": 851968,
+      "sha256": "c41cdb180f2365d6a5929b1ee595de80aa3ed3a1759d20aa2bafc32c35e723f3",
+      "build_id": "2026-11-13T15:18:58",
       "urls": {
-        "tencent": "https://download.microkeenai.com/mklink/firmware/releases/20261102/MicroLink_V3.6.8.uf2",
-        "github": "https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/firmware-assets/MicroLink_V3.6.8.uf2"
+        "tencent": "https://download.microkeenai.com/mklink/firmware/releases/20261115/MicroLink_V3.7.0.uf2",
+        "github": "https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/firmware-assets/MicroLink_V3.7.0.uf2"
       }
     },
     {
-      "name": "MicroLink_V4.7.2.uf2",
+      "name": "MicroLink_V4.7.4.uf2",
       "family": "microlink",
       "model": "V4",
-      "version": "V4.7.2",
-      "size": 1540096,
-      "sha256": "79a72f682e56cbeac830f5ba4d91adf4ba3ece183fd427b1198b40f08b76db86",
-      "build_id": "2026-11-01T21:06:26",
+      "version": "V4.7.4",
+      "size": 1649664,
+      "sha256": "82d86c9f5de1611ee101f8ccd349deb8ee73b065340cb3a4958ac4c69f886917",
+      "build_id": "2026-11-14T11:33:15",
       "urls": {
-        "tencent": "https://download.microkeenai.com/mklink/firmware/releases/20261102/MicroLink_V4.7.2.uf2",
-        "github": "https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/firmware-assets/MicroLink_V4.7.2.uf2"
+        "tencent": "https://download.microkeenai.com/mklink/firmware/releases/20261115/MicroLink_V4.7.4.uf2",
+        "github": "https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/firmware-assets/MicroLink_V4.7.4.uf2"
       }
     },
     {
-      "name": "HPMLink_V4.7.2.uf2",
+      "name": "HPMLink_V4.7.4.uf2",
       "family": "hpmlink",
       "model": "V4",
-      "version": "V4.7.2",
-      "size": 1617920,
-      "sha256": "f06af5979cec580e9d6d48050d3705e825c6a7851d978be249acbac830e0117c",
-      "build_id": "2026-11-01T22:37:10",
+      "version": "V4.7.4",
+      "size": 1650176,
+      "sha256": "a3c6f34c4179d54a46f28bc3e28b30a4da8d0622903d424ec3831a9d873f136b",
+      "build_id": "2026-11-14T11:35:00",
       "urls": {
-        "tencent": "https://download.microkeenai.com/mklink/firmware/releases/20261102/HPMLink_V4.7.2.uf2",
-        "github": "https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/firmware-assets/HPMLink_V4.7.2.uf2"
+        "tencent": "https://download.microkeenai.com/mklink/firmware/releases/20261115/HPMLink_V4.7.4.uf2",
+        "github": "https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/firmware-assets/HPMLink_V4.7.4.uf2"
       }
     }
   ]

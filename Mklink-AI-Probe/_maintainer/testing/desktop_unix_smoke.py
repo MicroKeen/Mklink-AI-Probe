@@ -120,6 +120,19 @@ def main():
             for asset in assets:
                 assert len(get("/" + asset.lstrip("./"))) > 0
             elapsed = time.monotonic() - started
+            firmware = None
+            if platform.system() == "Darwin":
+                subprocess.run(["swift", str(Path(__file__).with_name("macos_store_menu.swift").resolve()), origin],
+                               check=True, timeout=120)
+                url = origin + "/api/probe/firmware-download?model=V4&family=microlink"
+                with opener.open(url, timeout=100) as response:
+                    catalog = response.headers["X-MKLink-Firmware-Catalog-Source"]
+                    assert catalog in {"tencent", "github"}, catalog
+                    data = response.read()
+                    assert data and data[:4] == bytes.fromhex("5546320a")
+                    firmware = {"catalog": catalog, "version": response.headers["X-MKLink-Firmware-Version"],
+                                "source": response.headers["X-MKLink-Firmware-Source"],
+                                "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
             request = urllib.request.Request(origin + "/api/desktop/shutdown", data=json.dumps({"instance_id": "unix-package-smoke"}).encode(), headers={"Content-Type": "application/json"}, method="POST")
             with opener.open(request, timeout=15) as response:
                 assert response.status == 200
@@ -130,6 +143,8 @@ def main():
                 process.terminate()
                 process.wait(timeout=15)
     report = {"target": target, "frozen_cli": "passed", "frozen_mcp": "passed", "backend_health": health,
+              "firmware_download": firmware,
+              "store_menu_webkit": "passed" if platform.system() == "Darwin" else None,
               "production_web_assets": len(assets), "startup_seconds": round(elapsed, 3), "graceful_shutdown": "passed",
               "package_contents": "DMG mounted/copied" if platform.system() == "Darwin" else "DEB and AppImage extracted",
               "updater_payload": "app.tar.gz matches DMG executables and preserves executable permissions" if platform.system() == "Darwin" else "DEB and AppImage payloads use installer-specific updater keys",

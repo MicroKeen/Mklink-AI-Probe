@@ -931,6 +931,22 @@ describe('ConfigView', () => {
     wrapper.unmount()
   })
 
+  it('identifies fallback firmware metadata when an installed build is newer', async () => {
+    mocks.api.probeFirmwareCheck.mockResolvedValueOnce({
+      status: 'ok', current_version: 'V4.7.3', installed_newer: true,
+      recommended_uf2: { version: 'V4.7.2', catalog_source: 'bundled' },
+    })
+    const wrapper = await mountView()
+    await wrapper.get('[data-testid="config-section-firmware"]').trigger('click')
+    await wrapper.get('[data-testid="check-firmware"]').trigger('click')
+    await flushPromises()
+    const text = wrapper.get('[data-testid="firmware-check-status"]').text()
+    expect(text).toContain('本地目录版本：V4.7.2')
+    expect(text).toContain('尚未从云端确认')
+    expect(text).not.toContain('可用固件')
+    wrapper.unmount()
+  })
+
   it('uses an explicit local selection for firmware actions without connecting the target', async () => {
     sharedRuntime.value = true
     const wrapper = await mountView()

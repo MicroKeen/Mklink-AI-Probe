@@ -820,6 +820,7 @@ def create_app(
             "X-MKLink-Firmware-Name",
             "X-MKLink-Firmware-Version",
             "X-MKLink-Firmware-Source",
+            "X-MKLink-Firmware-Catalog-Source",
             "X-MKLink-Firmware-Family",
             "X-MKLink-Submission",
         ],
@@ -2292,6 +2293,7 @@ def create_app(
                 "X-MKLink-Firmware-Name": candidate.name,
                 "X-MKLink-Firmware-Version": candidate.version_str,
                 "X-MKLink-Firmware-Source": source,
+                "X-MKLink-Firmware-Catalog-Source": candidate.catalog_source,
                 "X-MKLink-Firmware-Family": candidate.family,
             },
         )

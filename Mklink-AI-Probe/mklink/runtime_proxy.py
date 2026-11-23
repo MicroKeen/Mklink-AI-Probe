@@ -111,6 +111,7 @@ def create_proxy(info, *, port, instance_id, transport=None):
                            'X-MKLink-Submission', 'Content-Disposition',
                            'X-MKLink-Firmware-Name', 'X-MKLink-Firmware-Version',
                            'X-MKLink-Firmware-Source', 'X-MKLink-Firmware-Family',
+                           'X-MKLink-Firmware-Catalog-Source',
                        ])
 
     @app.middleware("http")

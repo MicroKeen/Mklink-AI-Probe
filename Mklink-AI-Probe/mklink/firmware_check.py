@@ -12,12 +12,15 @@ import json
 from pathlib import Path
 import re
 import shutil
+import ssl
 import tempfile
 import time
 from typing import Callable, Literal
 import os
 from urllib.error import URLError
 from urllib.request import Request, urlopen
+
+import certifi
 
 # 固件文件名格式：MicroLink_V3.3.1.uf2 / HPMLink_V4.3.7.uf2
 _FIRMWARE_FILE_RE = re.compile(
@@ -96,6 +99,7 @@ class FirmwareInfo:
     size: int | None = None
     sha256: str | None = None
     build_id: str | None = None
+    catalog_source: Literal["tencent", "github", "bundled", "local"] = "local"
 
     @property
     def version_str(self) -> str:
@@ -225,6 +229,12 @@ def _firmware_order(info: FirmwareInfo) -> tuple:
     return (info.version, info.build_id or "")
 
 
+def _installed_is_newer(current: Version, build: str | None, candidate: FirmwareInfo) -> bool:
+    return current > candidate.version or (
+        current == candidate.version and bool(build and candidate.build_id and build > candidate.build_id)
+    )
+
+
 def _probe_disk():
     from mklink.discovery import find_microkeen_disk
 
@@ -324,6 +334,15 @@ def _parse_manifest(payload: object) -> list[FirmwareInfo]:
     return entries
 
 
+def _open_firmware_url(request: Request, *, timeout: float):
+    # A frozen macOS backend can run without the build machine's OpenSSL CA
+    # directory. Keep system roots and respect explicitly configured CA paths.
+    context = ssl.create_default_context()
+    if not (os.environ.get("SSL_CERT_FILE") or os.environ.get("SSL_CERT_DIR")):
+        context.load_verify_locations(cafile=certifi.where())
+    return urlopen(request, timeout=timeout, context=context)
+
+
 def _remote_firmwares_from_source(
     source: Literal["tencent", "github"], *, timeout: float = 8.0, v2: bool = False,
 ) -> list[FirmwareInfo] | None:
@@ -334,7 +353,7 @@ def _remote_firmwares_from_source(
             headers={"Accept": "application/json", "User-Agent": "mklink-ai-probe",
                      "Cache-Control": "no-cache", "Pragma": "no-cache"},
         )
-        with urlopen(request, timeout=timeout) as response:
+        with _open_firmware_url(request, timeout=timeout) as response:
             payload = json.loads(response.read().decode("utf-8"))
         entries = _parse_manifest(payload)
         if any((entry.model == 'V2') != v2 for entry in entries):
@@ -394,7 +413,7 @@ def _remote_firmwares(*, timeout: float = 8.0, v2: bool = False,
     if all(entries is None for _, entries in results) and not pinned:
         return None
     latest = {}
-    for source, entries in [*results, ('tencent', pinned)]:
+    for source, entries in [*results, ('bundled', pinned)]:
         for info in entries or []:
             key = (info.family, info.model)
             previous = latest.get(key)
@@ -404,6 +423,7 @@ def _remote_firmwares(*, timeout: float = 8.0, v2: bool = False,
             if info.download_urls and source in info.download_urls:
                 info.download_source = source
                 info.download_url = info.download_urls[source]
+            info.catalog_source = source
             latest[key] = info
     return list(latest.values())
 
@@ -437,7 +457,7 @@ def _materialize_firmware(info: FirmwareInfo) -> tuple[Path, bool, str]:
                 attempted_sources.append(source)
             try:
                 request = Request(url, headers={"User-Agent": "mklink-ai-probe"})
-                with urlopen(request, timeout=30) as response, destination.open("wb") as output:
+                with _open_firmware_url(request, timeout=30) as response, destination.open("wb") as output:
                     shutil.copyfileobj(response, output, length=1024 * 1024)
                 _validate_downloaded_firmware(destination, info)
                 return destination, True, source
@@ -578,13 +598,13 @@ def upgrade_probe_firmware(
             "family": family,
         }
     current_build = read_microkeen_build_id(disk)
-    if candidate.version < current or (candidate.version == current and candidate.build_id
-                                      and current_build and current_build > candidate.build_id):
+    if _installed_is_newer(current, current_build, candidate):
         return {"status": "downgrade_blocked", "current_version": str(current),
                 "latest_version": candidate.version_str, "firmware": candidate.name,
                 "message": "当前固件版本或构建日期更新，已阻止降级。"}
     if _installed_build_matches(disk, candidate):
-        return {"status": "up_to_date", "current_version": str(current), "latest_version": candidate.version_str, "firmware": candidate.name}
+        return {"status": "up_to_date", "current_version": str(current), "latest_version": candidate.version_str,
+                "firmware": candidate.name, "catalog_source": candidate.catalog_source}
     manual_details = {
         "current_version": str(current),
         "latest_version": candidate.version_str,
@@ -865,6 +885,8 @@ class CheckResult:
             "firmware_dir": str(self.firmware_dir) if self.firmware_dir else None,
             "instructions": self.instructions,
             "current_build_id": self.current_build_id,
+            "installed_newer": bool(self.current_version and self.recommended_uf2 and
+                                    _installed_is_newer(self.current_version, self.current_build_id, self.recommended_uf2)),
         }
 
 
@@ -876,6 +898,7 @@ def _firmware_to_dict(f: FirmwareInfo) -> dict:
         "family": f.family,
         "path": str(f.path),
         "source": f.download_source or "local",
+        "catalog_source": f.catalog_source,
         "format": f.format,
         "build_id": f.build_id,
         "sha256": f.sha256,
