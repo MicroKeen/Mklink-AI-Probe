@@ -279,6 +279,10 @@ def validate_arguments(capability, arguments):
         action = capability.removeprefix('hpm_otp_jtag_')
         token_commit = action == 'program' and 'plan_id' in arguments
         allowed = {'part_number', 'model'}
+        if action == 'read':
+            allowed.add('extended')
+            if 'extended' in arguments and type(arguments['extended']) is not bool:
+                raise HTTPException(422, 'Set extended to true or false for JTAG OTP reads')
         if token_commit:
             allowed.add('plan_id')
             if not isinstance(arguments.get('plan_id'), str) or not arguments['plan_id']:

@@ -15,7 +15,7 @@ on:
           - macos-x64
           - all
       qualification_run:
-        description: Optional successful V0.5.0 package run to qualify instead of rebuilding
+        description: Optional successful package run to qualify instead of rebuilding
         type: string
         default: ''
       qualification_source:

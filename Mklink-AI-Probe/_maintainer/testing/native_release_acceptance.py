@@ -1,4 +1,4 @@
-"""Native V0.5.0 acceptance against immutable artifacts; never opens hardware.
+"""Native release acceptance against immutable artifacts; never opens hardware.
 
 The updater library uses a synthetic old-version AppHandle. This exercises real
 signature verification and installation, not an actual old client's WebView.
@@ -55,7 +55,9 @@ def download():
     assert len(manifests) == 1
     manifest_path = manifests[0]
     data = json.loads(manifest_path.read_text())
-    assert data['source_commit'] == SOURCE and data['target'] == TARGET and data['version'] == '0.5.0'
+    config_path = f'repos/{REPO}/contents/Mklink-AI-Probe/gui/src-tauri/tauri.conf.json?ref={SOURCE}'
+    config = json.loads(subprocess.check_output(['gh', 'api', '-H', 'Accept: application/vnd.github.raw+json', config_path]))
+    assert data['source_commit'] == SOURCE and data['target'] == TARGET and data['version'] == config['version']
     for item in data['files']:
         file = manifest_path.parent / item['name']
         assert file.stat().st_size == item['size'] and digest(file) == item['sha256']
@@ -217,7 +219,7 @@ def qualify():
                 for key, name in manifest['updater_platforms'].items():
                     signature = (packages / (name + '.sig')).read_text().strip()
                     platforms[key] = {'url': f'{origin}/{name}', 'signature': 'invalid' if self.bad else signature}
-                body = json.dumps({'version': '0.5.0', 'platforms': platforms}).encode()
+                body = json.dumps({'version': manifest['version'], 'platforms': platforms}).encode()
                 self.send_response(200)
                 self.send_header('Content-Type', 'application/json')
                 self.send_header('Content-Length', str(len(body)))
@@ -248,7 +250,7 @@ def qualify():
                 helpers.mkdir()
                 (helpers / 'sudo').symlink_to(shutil.which('sudo'))
                 env['PATH'] = str(helpers)
-        for mode, version in [('bad-signature', '0.4.3'), ('install', '0.4.3'), ('current', '0.5.0')]:
+        for mode, version in [('bad-signature', '0.4.3'), ('install', '0.4.3'), ('current', manifest['version'])]:
             Handler.bad = mode == 'bad-signature'
             try:
                 result = run(tool, config, origin, executable, version, filename, mode,

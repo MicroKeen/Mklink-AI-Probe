@@ -1,5 +1,5 @@
 name: Native signed update qualification
-run-name: Signed native V0.5.0 qualification (${{ inputs.source_run }})
+run-name: Signed native package qualification (${{ inputs.source_run }})
 on:
   workflow_call:
     inputs:
