@@ -11,6 +11,7 @@ def test_native_firmware_download_exposes_exact_name_and_metadata():
         'X-MKLink-Firmware-Name': 'MicroLink_V2.9.2.rbl',
         'X-MKLink-Firmware-Version': 'V2.9.2',
         'X-MKLink-Firmware-Source': 'tencent',
+        'X-MKLink-Firmware-Catalog-Source': 'bundled',
         'X-MKLink-Firmware-Family': 'microlink',
     }
     def handle(request):

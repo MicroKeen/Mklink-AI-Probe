@@ -96,12 +96,13 @@ def register_workflow_tools(server, client):
                 arguments: dict) -> dict:
         """Use existing GUI HPM OTP guards; explicit irreversible approval for writes.
 
-        JTAG supports HPM5301 user words 69..79 and lock groups 18/19. Read/plan
-        first; program requires exact word/expected/desired and confirm_irreversible.
-        ISP supports read/plan/program/batch-plan/batch-program. A successful plan
-        returns an expiring, single-use plan_id bound to probe/generation/part.
-        Program consumes that ID once, even on failure; never auto-retry OTP.
-        Extended family profiles use extended=true and batch operations only.
+        JTAG read with extended=true returns words 0..127. For a qualified ROM v1
+        part such as HPM6E80, plan one word with expected/desired. Program takes
+        the same part, the single-use plan_id and confirm_irreversible=true.
+        Legacy HPM5301 uses word/expected/desired and supports lock groups 18/19.
+        ISP supports read, plan/program and batch-plan/batch-program. Extended ISP
+        profiles use extended=true and batch operations for programming.
+        A submitted plan_id is consumed even on failure. Never auto-retry OTP.
         Stop acquisition first. See references/probe-workflows.md for arguments.
         """
         supported = {'jtag': {'read', 'plan', 'program', 'lock-plan', 'lock-program'},

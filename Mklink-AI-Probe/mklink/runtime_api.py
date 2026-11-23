@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections import Counter
 from contextvars import ContextVar
 from dataclasses import dataclass, field, replace
 import hmac
@@ -16,6 +17,10 @@ from starlette.routing import Mount
 
 from mklink.runtime import PROTOCOL, VERSION
 from mklink.runtime_capabilities import CAPABILITIES, STREAMS, LIFECYCLE_CAPABILITIES, UART_CAPABILITIES, is_uart_path, validate_arguments
+from mklink.remote.stream_api import STREAM_TYPES
+
+GUI_STREAM_PATHS = {f'/api/dash/{name}/stream': name for name in (*STREAMS, 'serial', 'modbus')}
+GUI_STREAM_PATHS.update({f'/ws/streams/{name}': name.split('-')[0] for name in STREAM_TYPES})
 
 RESOURCE_RELEASE_PATHS = frozenset({'/api/resources/release-all', '/api/resources/release'})
 UART_EXCLUSIVE_PATHS = RESOURCE_RELEASE_PATHS | {'/api/probe/firmware-upgrade'}
@@ -93,6 +98,7 @@ class RuntimeControl:
         self.shutdown = None
         self.stopping = False
         self.views = {}
+        self.gui_stream_readers = Counter()
         self.current_operation = None
         self.last_operation = None
         self.uart_operations: dict[asyncio.Task, str] = {}
@@ -133,6 +139,8 @@ class RuntimeControl:
         recover = False
         if session_id:
             session = self.validate_session(session_id, target=stream in STREAMS)
+            if self.gui_stream_readers[stream]:
+                raise HTTPException(409, 'A GUI is reading this acquisition; detach to keep it running')
             owner = self.created_streams.get(stream)
             # An explicit control command may recover an abandoned acquisition.
             # GUI ownership lasts while a window/remote operator is present,
@@ -589,6 +597,13 @@ class RuntimeGate:
                         "/api/dash/superwatch/inspect", "/api/probe/firmware-check"}
         ) and not path.startswith(("/api/browser-session/", "/api/runtime/"))
         if not hardware or (method == 'POST' and path in LOCAL_IMAGE_INSPECTION_PATHS | LOCAL_RECORDING_EXPORT_PATHS):
+            stream = GUI_STREAM_PATHS.get(path)
+            if stream and (origin or headers.get(b'cookie') or headers.get(b'x-mklink-view-owner')):
+                c.gui_stream_readers[stream] += 1
+                try:
+                    return await self.app(scope, receive, send)
+                finally:
+                    c.gui_stream_readers[stream] -= 1
             return await self.app(scope, receive, send)
         session_id = headers.get(b"x-mklink-session", b"").decode()
         expected_probe = headers.get(b'x-mklink-probe', b'').decode()

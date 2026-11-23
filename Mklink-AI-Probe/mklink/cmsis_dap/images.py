@@ -89,7 +89,6 @@ class ImageInspector:
             self._owns_snapshot_root = True
         else:
             self._snapshot_root = Path(snapshot_root).expanduser().resolve()
-            self._snapshot_root.mkdir(parents=True, exist_ok=True)
             self._owns_snapshot_root = False
         self._max_file_size = max_file_size
         self._max_hex_decoded_size = max_hex_decoded_size
@@ -121,6 +120,11 @@ class ImageInspector:
         require_flash_coverage: bool,
     ) -> ImageInspection:
         source_path = self._validated_source_path(file_path)
+        try:
+            self._snapshot_root.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            raise FlashError(FlashErrorCode.FILE_FORMAT_ERROR,
+                             "Unable to create the firmware snapshot directory. Check MKLINK_PYOCD_HOME and directory permissions.") from exc
         image_format = source_path.suffix.lower().lstrip(".")
         if image_format == "bin":
             if not self._is_nonnegative_int(base_address):

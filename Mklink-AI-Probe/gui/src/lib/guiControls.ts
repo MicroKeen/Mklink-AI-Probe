@@ -41,6 +41,7 @@ function describe(el: HTMLElement) {
   const field = el instanceof HTMLInputElement || el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement
   const secret = el instanceof HTMLInputElement && el.type === 'password'
   return { id, label: guiControlLabel(el), test_id: el.dataset.testid || null, tag: el.tagName.toLowerCase(),
+    description: secret ? undefined : el.getAttribute('aria-description')?.slice(0, 256),
     type: el instanceof HTMLInputElement ? el.type : null, disabled: el.matches(':disabled') || el.getAttribute('aria-disabled') === 'true',
     file_picker: el.hasAttribute('data-gui-file-picker') || (el instanceof HTMLInputElement && el.type === 'file'),
     directory_picker: el.hasAttribute('data-gui-directory-picker'),

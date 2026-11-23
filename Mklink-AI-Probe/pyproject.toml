@@ -8,6 +8,7 @@ version = "0.5.0"
 description = "Mklink AI Probe - Embedded Debug Toolkit"
 requires-python = ">=3.9"
 dependencies = [
+    "certifi",
     "pyserial",
     "pymodbus>=3.0",
     "pyelftools==0.32",

@@ -2087,6 +2087,7 @@ def main():
     config_parser.add_argument("action", choices=("describe", "read", "generate"))
     config_parser.add_argument("--set", action="append", default=[], metavar="FIELD=VALUE")
     config_parser.add_argument("--chip", required=True)
+    config_parser.add_argument("--otp-words", action="store_true", help="Read HPM JTAG OTP words 0..127")
     config_parser.add_argument("--model", choices=("V2", "V3", "V4"), default="V4")
     config_parser.add_argument("--port")
     config_parser.add_argument("--project-root", default=None)

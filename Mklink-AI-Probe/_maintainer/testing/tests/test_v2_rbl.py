@@ -64,7 +64,7 @@ def manifest(name, data):
 def test_v2_download_uses_separate_index_and_rbl_temp_suffix(monkeypatch):
     payload = manifest('MicroLink_V2.9.0.rbl', rbl())
     urls = []
-    def get(request, timeout):
+    def get(request, timeout, *, context):
         urls.append(request.full_url)
         return io.BytesIO(rbl() if request.full_url.endswith('.rbl') else json.dumps(payload).encode())
     monkeypatch.setattr(fc, 'urlopen', get)

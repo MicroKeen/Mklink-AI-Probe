@@ -440,6 +440,9 @@ export function useMklinkApi(context?: SemanticExecutionContext) {
     downloadProbeFirmware,
     connectDevice,
     disconnectDevice,
+    openExistingProbe: (probe: string) => api<{browser_requested: boolean}>('/api/desktop/open-existing', {
+      method: 'POST', body: JSON.stringify({ probe }),
+    }),
     setDebugSpeed,
     refreshStatus,
     flashDevice,

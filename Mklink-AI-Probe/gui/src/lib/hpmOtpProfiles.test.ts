@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyOtpFields, hpmOtpProfile, otpFieldValue } from './hpmOtpProfiles'
+import { applyOtpFields, hpmJtagOtpProfile, hpmOtpProfile, otpFieldValue } from './hpmOtpProfiles'
 import { customOtpEntries, parseOtpCsv } from './otpConfiguration'
 
 describe('official HPM OTP field maps', () => {
@@ -16,6 +16,14 @@ describe('official HPM OTP field maps', () => {
     expect(hpmOtpProfile('HPM5100')).toBeNull()
     expect(hpmOtpProfile('HPM5301')!.words[104]!.fields).toHaveLength(0)
     expect(hpmOtpProfile('HPM6750')!.words[104]!.fields[0]!.name).toContain('EXIP1_KEK')
+  })
+  it('uses the SDK field map for HPM51 JTAG and the existing ISP fields for HPM6E80', () => {
+    const sdk = hpmJtagOtpProfile('HPM5151IN8')!
+    expect(sdk.words).toHaveLength(128)
+    expect(sdk.words[66]!.fields.map(f => [f.name, f.offsets, f.width])).toEqual([
+      ['MAC0', [0], 16], ['MAC1', [16], 16],
+    ])
+    expect(hpmJtagOtpProfile('HPM6E80IGN')!.words).toBe(hpmOtpProfile('HPM6E80')!.words)
   })
   it('updates both lifecycle nibbles and preserves other security bits', () => {
     const field = hpmOtpProfile('HPM5301')!.words[1]!.fields.find(item => item.name === 'LIFE_CYCLE')!

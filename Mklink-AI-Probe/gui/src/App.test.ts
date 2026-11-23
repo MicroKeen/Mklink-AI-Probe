@@ -180,6 +180,21 @@ describe('App version footer', () => {
     wrapper.unmount()
   })
 
+  it('dismisses the store menu on outside clicks, store selection, and Escape', async () => {
+    const wrapper = mountApp()
+    const menu = wrapper.get('[data-testid="taobao-menu"]').element as HTMLDetailsElement
+    menu.open = true
+    document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    expect(menu.open).toBe(false)
+    menu.open = true
+    await wrapper.get('[data-testid="official-store-link"]').trigger('click')
+    expect(menu.open).toBe(false)
+    menu.open = true
+    await wrapper.get('[data-testid="taobao-link"]').trigger('keydown', { key: 'Escape' })
+    expect(menu.open).toBe(false)
+    wrapper.unmount()
+  })
+
   it('checks for desktop updates when the application starts', () => {
     checkForUpdates.mockClear()
     const wrapper = mountApp()

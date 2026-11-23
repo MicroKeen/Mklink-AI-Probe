@@ -16,9 +16,9 @@
           target="_blank"
           rel="noopener noreferrer"
         >{{ tr('官方网站', 'Website') }}</a>
-        <details class="store-menu" data-testid="taobao-menu">
+        <details ref="storeMenu" class="store-menu" data-testid="taobao-menu" @keydown.esc="dismissStoreWithKeyboard">
           <summary class="external-link" data-testid="taobao-link">{{ tr('淘宝店铺', 'Stores') }}</summary>
-          <div class="store-menu-panel">
+          <div class="store-menu-panel" @click="closeStoreMenu">
             <a
               class="store-menu-item"
               data-testid="official-store-link"
@@ -224,11 +224,29 @@ watch(backendState, state => {
   }
 }, { immediate: true })
 
+const storeMenu = ref<HTMLDetailsElement | null>(null)
+function closeStoreMenu() {
+  if (storeMenu.value?.open) storeMenu.value.open = false
+}
+function closeStoreFromOutside(event: Event) {
+  if (storeMenu.value?.open && !event.composedPath().includes(storeMenu.value)) closeStoreMenu()
+}
+function dismissStoreWithKeyboard(event: KeyboardEvent) {
+  if (!storeMenu.value?.open) return
+  event.preventDefault()
+  closeStoreMenu()
+  storeMenu.value.querySelector('summary')?.focus()
+}
+
 onMounted(() => {
+  document.addEventListener('click', closeStoreFromOutside, true)
+  document.addEventListener('focusin', closeStoreFromOutside, true)
   startHealthPolling(5000)
   void checkForUpdates()
 })
 onUnmounted(() => {
+  document.removeEventListener('click', closeStoreFromOutside, true)
+  document.removeEventListener('focusin', closeStoreFromOutside, true)
   if (statusPollingStarted) stopStatusPolling()
   stopHealthPolling()
   stopWindowLease()

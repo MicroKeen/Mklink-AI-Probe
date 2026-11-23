@@ -110,16 +110,20 @@ def test_device_status_cli_reuses_backend_and_only_detaches(adapter, monkeypatch
     assert json.loads(capsys.readouterr().out) == {'state': 'running'}
 
 
-def test_configuration_read_cli_uses_shared_backend_and_adopts_project(adapter, monkeypatch, capsys):
+@pytest.mark.parametrize("chip, flags", [("STM32F103RET6", []), ("HPM6E80", ["--otp-words"])])
+def test_configuration_read_cli_uses_shared_backend_and_adopts_project(adapter, monkeypatch, capsys, chip, flags):
     import sys
     from mklink import cli
     def forbidden(**kwargs):
         raise AssertionError('Configuration CLI opened target directly')
     monkeypatch.setattr('mklink.device.connect', forbidden)
-    monkeypatch.setattr(sys, 'argv', ['mklink', 'configuration', 'read', '--chip', 'STM32F103RET6', '--probe', 'board'])
+    monkeypatch.setattr(sys, 'argv', ['mklink', 'configuration', 'read', '--chip', chip, '--probe', 'board', *flags])
     cli.main()
     assert adapter[0][1]['probe'] == 'board' and adapter[0][1]['project_root'] is None
-    assert adapter[1] == ('read_configuration', {'part_number': 'STM32F103RET6', 'model': 'V4'})
+    arguments = {'part_number': chip, 'model': 'V4'}
+    if flags:
+        arguments['otp_words'] = True
+    assert adapter[1] == ('read_configuration', arguments)
     assert adapter[-1] == ('detach', None)
     assert 'sample' in capsys.readouterr().out
 
