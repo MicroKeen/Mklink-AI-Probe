@@ -1,3 +1,4 @@
+import type { SemanticExecutionContext } from '../lib/frontendControl'
 import { computed, readonly, ref } from 'vue'
 import { useMklinkApi } from './useMklinkApi'
 import { useSymbolCatalog } from './useSymbolCatalog'
@@ -56,13 +57,13 @@ export function useDashboardSetup() {
     }
   }
 
-  async function quickConnect(): Promise<boolean> {
+  async function quickConnect(context?: SemanticExecutionContext): Promise<boolean> {
     if (api.deviceStatus.value.connected || connecting.value) return true
     connecting.value = true
     connectionError.value = ''
     try {
       const path = symbolPath.value.trim()
-      await api.connectDevice({
+      await (context ? useMklinkApi(context) : api).connectDevice({
         restore_last: true,
         ...(isSymbolFilePath(path) ? { axf: path } : {}),
       })
@@ -105,12 +106,12 @@ export function useDashboardSetup() {
     connectionError.value = ''
   }
 
-  async function parseSelectedSymbols(): Promise<boolean> {
+  async function parseSelectedSymbols(context?: SemanticExecutionContext): Promise<boolean> {
     const path = symbolPath.value.trim()
     if (!isSymbolFilePath(path)) return false
     loadingSymbols.value = true
     try {
-      const result = await api.parseAxf(path) as AxlStatus
+      const result = await (context ? useMklinkApi(context) : api).parseAxf(path) as AxlStatus
       if (!result.loaded) throw new Error(result.error || tr('AXF / ELF 解析失败', 'AXF / ELF parsing failed'))
       if (!isSameFileSourcePath(path, result.axf_path)) {
         throw new Error(tr('后端未切换到所选符号文件', 'The backend did not switch to the selected symbol file'))

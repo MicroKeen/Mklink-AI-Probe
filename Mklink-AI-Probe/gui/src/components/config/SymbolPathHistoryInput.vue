@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useGuiId } from '../../lib/guiAutomation'
+const guiId = useGuiId()
 import { computed, nextTick, ref } from 'vue'
 import { Clock3, X } from '@lucide/vue'
 import { tr } from '../../composables/useLanguage'
@@ -65,12 +67,12 @@ function dismiss() {
 <template>
   <div ref="root" class="history-input" @focusout="leave" @keydown.esc.stop="dismiss"
     @keydown.down="move($event, 1)" @keydown.up="move($event, -1)">
-    <input ref="input" id="symbol-path" class="form-input path-input" data-testid="symbol-path"
+    <input ref="input" :id="guiId('symbol-path')" class="form-input path-input" data-testid="symbol-path"
       :value="displayPath?.trim() || path" :disabled="disabled" autocomplete="off"
       :placeholder="tr('.axf 或 .elf 文件路径', '.axf or .elf file path')"
-      :aria-expanded="expanded" aria-controls="symbol-path-history"
+      :aria-expanded="expanded" :aria-controls="guiId('symbol-path-history')"
       @focus="showHistory" @click="showHistory" @input="edit" @change="commit" />
-    <div v-if="expanded" id="symbol-path-history" class="history-menu" role="group"
+    <div v-if="expanded" :id="guiId('symbol-path-history')" class="history-menu" role="group"
       :aria-label="tr('最近使用的文件', 'Recent files')">
       <div class="history-heading"><Clock3 :size="13" aria-hidden="true" />{{ tr('最近使用的文件', 'Recent files') }}</div>
       <div v-for="path in visible" :key="path" class="history-row">

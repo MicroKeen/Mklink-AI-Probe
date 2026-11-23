@@ -1,3 +1,4 @@
+import { frontendFetch as fetch } from '../lib/frontendControl'
 import { ref, shallowRef, readonly } from 'vue'
 import { API_BASE } from '../lib/runtimeEndpoint'
 import { tr } from './useLanguage'

@@ -20,9 +20,9 @@
     />
     <template v-if="deviceConnected || offlineMode">
       <div v-if="deviceConnected && !offlineMode" class="sv-address-row">
-        <label for="systemview-rtt-address">{{ tr('RTT 地址', 'RTT Address') }}</label>
+        <label :for="guiId('systemview-rtt-address')">{{ tr('RTT 地址', 'RTT Address') }}</label>
         <input
-          id="systemview-rtt-address" v-model="rttAddress" data-testid="systemview-rtt-address"
+          :id="guiId('systemview-rtt-address')" v-model="rttAddress" data-testid="systemview-rtt-address"
           type="text" spellcheck="false" placeholder="0x20000000" @input="onAddressInput"
         >
         <button
@@ -32,8 +32,8 @@
           <Search :size="15" />
           <span>{{ searching ? tr('搜索中', 'Searching') : tr('自动搜索', 'Auto Search') }}</span>
         </button>
-        <label for="systemview-channel">{{ tr('通道', 'Channel') }}</label>
-        <select id="systemview-channel" v-model.number="systemviewChannel" data-testid="systemview-channel"
+        <label :for="guiId('systemview-channel')">{{ tr('通道', 'Channel') }}</label>
+        <select :id="guiId('systemview-channel')" v-model.number="systemviewChannel" data-testid="systemview-channel"
           :disabled="starting || dash.state.value === 'running' || dash.state.value === 'paused'"
           @change="persistSystemviewChannel">
           <option v-for="channel in 8" :key="channel - 1" :value="channel - 1">CH {{ channel - 1 }}</option>
@@ -302,6 +302,10 @@
 </template>
 
 <script setup lang="ts">
+import { frontendFetch as fetch } from '../../lib/frontendControl'
+
+import { useGuiId } from '../../lib/guiAutomation'
+const guiId = useGuiId()
 import { CAPTURE_START_TIMEOUT_MS } from '../../lib/captureStartup'
 import { ref, shallowRef, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { Circle, Pause, Play, RotateCcw, Search, Square } from '@lucide/vue'
@@ -338,7 +342,7 @@ import { language, tr } from '../../composables/useLanguage'
 import { API_BASE, IS_REMOTE } from '../../lib/runtimeEndpoint'
 import { useGuiPanel } from '../../lib/guiAutomation'
 
-const props = defineProps<{ deviceConnected: boolean }>()
+const props = withDefaults(defineProps<{ deviceConnected: boolean; active?: boolean }>(), { active: true })
 
 const dash = useDashboard('systemview')
 const binaryStream = useBinaryStream('systemview', { capacity: 300_000, channelCount: 1 })
@@ -670,6 +674,7 @@ onMounted(() => {
     // The timeline itself interpolates toward the newest follow range. Keep
     // this repaint loop independent from worker delivery so the ruler moves
     // every frame instead of jumping once per data batch.
+    if (!props.active) return
     const renderStarted = performance.now()
     tlInstance?.renderFrame(renderStarted)
     const nextFrameRate = observeTimelineFrameRate(
@@ -719,7 +724,7 @@ onMounted(() => {
     }
     requestTimelineVisibleRange(start, end, tlCanvas.value?.clientWidth || 800)
   }, undefined, undefined, { frameRate: TIMELINE_STARTUP_FRAME_RATE, continuous: true })
-  renderScheduler.start()
+  if (props.active) renderScheduler.start()
   void pollExternalTrace()
 })
 onUnmounted(() => {
@@ -956,7 +961,7 @@ function ingestEvents(events: any[], countEvents = true) {
 let externalTraceTimer: ReturnType<typeof setTimeout> | null = null
 async function pollExternalTrace() {
   if (!mounted) return
-  if (!starting.value && !searching.value && !offlineMode.value) await reconnectRunningTrace(operationGeneration)
+  if (props.active && !starting.value && !searching.value && !offlineMode.value) await reconnectRunningTrace(operationGeneration)
   if (mounted) externalTraceTimer = setTimeout(pollExternalTrace, 1000)
 }
 
@@ -964,7 +969,7 @@ async function reconnectRunningTrace(generation: number) {
   if (offlineMode.value) return
   try {
     const status = await dash.getStatus()
-    if (!operationIsActive(generation)) return
+    if (!operationIsActive(generation) || !props.active) return
     if (status?.running) {
       if (dash.state.value !== 'running') {
         dash.syncState(true)
@@ -979,6 +984,11 @@ async function reconnectRunningTrace(generation: number) {
     // Best effort: opening the tab should not surface a stale-status error.
   }
 }
+
+watch(() => props.active, active => {
+  if (!active) { binaryStream.stop(); renderScheduler?.stop() }
+  else { renderScheduler?.start(); if (!offlineMode.value) { dash.syncState(false); void reconnectRunningTrace(operationGeneration) } }
+})
 
 // The existing status poll also detects starts/stops from other clients. A second
 // HTTP/1 SSE per window exhausts the browser connection pool at six windows,
@@ -1629,6 +1639,11 @@ async function onStop() {
   meta.recording = false
   await refreshLogList()
 }
+defineExpose({
+  catalog: () => [],
+  read: () => ({ view: { windowSeconds: windowUs.value / 1e6 } }),
+  restore: (view: Record<string, unknown>) => { if ([0.5, 1, 2, 5, 10, 30, 60].includes(Number(view.windowSeconds))) windowUs.value = Number(view.windowSeconds) * 1e6 },
+})
 </script>
 
 <style scoped>

@@ -177,6 +177,7 @@ def test_public_skill_archive_excludes_repository_maintenance(
         ["git", "show", f"{source_commit}:./.claude-plugin/plugin.json"],
         cwd=release_module.REPO_ROOT,
         text=True,
+        encoding="utf-8",
     ))
     version = source_plugin["version"]
     archive_path = tmp_path / "public-skill.zip"

@@ -1,3 +1,5 @@
+import { frontendFetch as fetch } from '../lib/frontendControl'
+import type { SemanticExecutionContext } from '../lib/frontendControl'
 import { matchesSignal } from '../lib/signalSearch'
 import { readonly, ref, shallowRef } from 'vue'
 import type {
@@ -60,9 +62,9 @@ function errorMessage(payload: unknown, fallback: string): string {
   return fallback
 }
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
+async function request<T>(path: string, options?: RequestInit, context?: SemanticExecutionContext): Promise<T> {
   const epoch = deviceEpoch
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await (context?.fetch || fetch)(`${API_BASE}${path}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
@@ -265,14 +267,14 @@ async function refreshStatus(): Promise<SymbolCatalogStatus> {
   return status
 }
 
-async function reparse(): Promise<SymbolRebindSummary> {
+async function reparse(context?: SemanticExecutionContext): Promise<SymbolRebindSummary> {
   const epoch = deviceEpoch
   reparsing.value = true
   error.value = null
   try {
     const response = await request<Partial<SymbolRebindSummary>>('/api/symbols/reparse', {
       method: 'POST',
-    })
+    }, context)
     const nextCatalog = await fetchCatalog()
     publishCatalog(nextCatalog)
     return {
@@ -292,6 +294,7 @@ async function applyCLayout(
   variable: string,
   definition: string,
   pack: number | null,
+  context?: SemanticExecutionContext,
 ): Promise<SymbolCLayoutResult> {
   const epoch = deviceEpoch
   applyingLayout.value = true
@@ -300,7 +303,7 @@ async function applyCLayout(
     const response = await request<SymbolCLayoutResult>('/api/symbols/c-layout', {
       method: 'POST',
       body: JSON.stringify({ variable, definition, pack }),
-    })
+    }, context)
     publishCatalog(await fetchCatalog())
     return response
   } catch (cause) {
@@ -311,13 +314,13 @@ async function applyCLayout(
   }
 }
 
-async function writeSymbol(path: string, value: unknown): Promise<SuperWatchWriteResult> {
+async function writeSymbol(path: string, value: unknown, context?: SemanticExecutionContext): Promise<SuperWatchWriteResult> {
   if (stale.value) throw new Error(tr('AXF 已变化，请重新解析符号后再写入', 'AXF changed. Reparse symbols before writing.'))
   if (generation.value <= 0) throw new Error(tr('符号表尚未加载', 'Symbol table is not loaded'))
   return request<SuperWatchWriteResult>('/api/dash/superwatch/write', {
     method: 'POST',
     body: JSON.stringify({ path, generation: generation.value, value }),
-  })
+  }, context)
 }
 
 export function useSymbolCatalog() {

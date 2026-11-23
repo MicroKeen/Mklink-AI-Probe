@@ -1,3 +1,4 @@
+import type { SemanticExecutionContext } from './frontendControl'
 import { ref } from 'vue'
 import { fileContentStamp } from './fileContent'
 import { symbolFileHandle } from './filePicker'
@@ -9,16 +10,16 @@ export const trackedSymbolError = ref('')
 export const trackedSymbolPending = ref(0)
 let revision = 0
 let cancel: (() => void) | undefined
-let reload: (() => Promise<void>) | undefined
+let reload: ((context?: SemanticExecutionContext) => Promise<void>) | undefined
 
 interface SymbolTrackingActions {
-  upload(file: File): Promise<UploadedFileSource>
-  reload(path: string, expectedPath: string): Promise<{ state?: string; rtt_addr?: string }>
+  upload(file: File, context?: SemanticExecutionContext): Promise<UploadedFileSource>
+  reload(path: string, expectedPath: string, context?: SemanticExecutionContext): Promise<{ state?: string; rtt_addr?: string }>
 }
 
-export async function reloadTrackedSymbolSource(): Promise<boolean> {
+export async function reloadTrackedSymbolSource(context?: SemanticExecutionContext): Promise<boolean> {
   if (!trackedSymbolPending.value || !reload) return false
-  await reload()
+  await reload(context)
   return true
 }
 
@@ -47,15 +48,15 @@ export function trackSymbolSource(file: File, source: UploadedFileSource, action
   }
   cancel = () => { stopped = true; if (timer !== undefined) clearTimeout(timer) }
   trackedSymbolPath.value = path
-  reload = async () => {
+  reload = async context => {
     if (busy) throw new Error('Symbol reload is already in progress')
     if (!current() || !pending) { clear(); throw new Error('The selected symbol source changed') }
     busy = true
     const selected = pending
     try {
-      const uploaded = await actions.upload(selected.file)
+      const uploaded = await actions.upload(selected.file, context)
       if (!current()) throw new Error('The selected symbol source changed')
-      const result = await actions.reload(uploaded.path, path)
+      const result = await actions.reload(uploaded.path, path, context)
       if (result.state !== 'applied') throw new Error('Symbols were not reloaded')
       if (!current()) return
       const settings = loadDesktopSettings(window.localStorage)

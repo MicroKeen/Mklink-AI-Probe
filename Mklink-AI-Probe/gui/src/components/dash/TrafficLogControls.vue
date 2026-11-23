@@ -1,6 +1,6 @@
 <template>
   <div class="traffic-log-controls" :class="{ compact }">
-    <details>
+    <details ref="menuDetails">
       <summary>{{ tr('日志', 'Logs') }}{{ recording ? tr(' · 记录中', ' · Recording') : '' }}</summary>
       <div class="log-actions">
         <SuperWatchRecording :name="kind === 'rtt' ? 'RTT' : 'Serial'" :endpoint="`/api/dash/${kind}/traffic-recording`" :channel="channel" :disabled="!!log" @state="recording = ['recording','stopping'].includes($event)" />
@@ -22,12 +22,17 @@
   </div>
 </template>
 <script setup lang="ts">
-import { computed, onUnmounted, ref, shallowRef } from 'vue'
+import { computed, onMounted, onUnmounted, ref, shallowRef } from 'vue'
+import { mountDetailsMenu } from '../../lib/detailsMenu'
 import SuperWatchRecording from './SuperWatchRecording.vue'
 import { tr } from '../../composables/useLanguage'
 import { parseTrafficLog, TRAFFIC_FILE_LIMIT, type TrafficFrame, type TrafficLog } from '../../lib/trafficReplay'
 import { useGuiPanel } from '../../lib/guiAutomation'
 const props = withDefaults(defineProps<{ kind: 'rtt' | 'serial'; channel?: number; compact?: boolean }>(), { channel: 0 })
+const menuDetails = ref<HTMLDetailsElement>()
+let disposeMenu: (() => void) | undefined
+onMounted(() => { if (menuDetails.value) disposeMenu = mountDetailsMenu(menuDetails.value, menuDetails.value.querySelector('.log-actions')!) })
+onUnmounted(() => disposeMenu?.())
 const emit = defineEmits<{ state: [active: boolean]; reset: []; batch: [frames: TrafficFrame[]] }>()
 const picker = ref<HTMLInputElement>(), log = shallowRef<TrafficLog | null>(null), filename = ref(''), source = ref('')
 const frames = computed(() => log.value?.frames.filter(frame => frame.source === source.value) || [])
@@ -96,5 +101,7 @@ details { position: relative; } summary { cursor: pointer; color: var(--accent);
 .replay-controls span { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .replay-controls input { flex: 1; min-width: 80px; }
 button, select { color: inherit; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 4px 7px; font: inherit; }
+.log-actions { color: var(--fg); }
+.log-actions :deep(button) { height: var(--control-height, 30px); padding: 0 8px; white-space: nowrap; }
 [role=alert], .warning { color: #efa45d; }
 </style>

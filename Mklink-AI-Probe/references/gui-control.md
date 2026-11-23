@@ -21,7 +21,7 @@ backend、connected、device_generation、visibility、focused、panels 和 aler
 | 页面 | 子页 |
 |---|---|
 | config | section=local/files/firmware/runtime |
-| dashboard | tab=rtt/superwatch/hardfault/memory/serial/modbus/systemview/symbols |
+| dashboard | tab=rtt/superwatch/hardfault/memory/serial/modbus/systemview/symbols/workbench |
 | online-flash / offline-flash / remote-service | 无必填子页 |
 
 `focus` 请求前台；浏览器可能拒绝，核对 focused，不能仅凭调用成功宣称已置顶。

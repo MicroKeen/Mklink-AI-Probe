@@ -294,6 +294,8 @@ def build_sidecar(force=False):
             # at runtime; static import analysis alone misses the frozen entry.
             "--collect-all", "fastmcp",
             "--recursive-copy-metadata", "fastmcp",
+            "--collect-data", "docket",
+            "--collect-all", "burner_redis",
             "--collect-all", "elftools",
             "--collect-all", "pyocd",
             "--copy-metadata", "pyocd",

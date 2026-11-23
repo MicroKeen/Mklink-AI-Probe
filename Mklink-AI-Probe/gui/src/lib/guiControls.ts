@@ -5,22 +5,31 @@ const signatures = new Map<string, string>()
 const prefix = crypto.randomUUID()
 let sequence = 0
 const selector = 'button,input,select,textarea,summary,a[href],[role="button"],[contenteditable="true"]'
-function visible(el: HTMLElement): boolean {
-  if (el instanceof HTMLInputElement && el.type === 'file') return !!el.parentElement && visible(el.parentElement)
+export function guiPanelRoots(root: HTMLElement): HTMLElement[] {
+  const owner = root.dataset.guiPanelId
+  return [root, ...(owner ? [...root.ownerDocument.querySelectorAll<HTMLElement>('[data-gui-panel-owner]')].filter(node => node.dataset.guiPanelOwner === owner && !root.contains(node)) : [])]
+}
+function visible(el: HTMLElement, scoped = false): boolean {
+  if (el instanceof HTMLInputElement && el.type === 'file') return !!el.parentElement && visible(el.parentElement, scoped)
+  const modal = scoped ? el.ownerDocument.querySelector('dialog[open], [role="alertdialog"][aria-modal="true"]') : null
+  if (modal && !modal.contains(el)) return false
   for (let node: HTMLElement | null = el; node; node = node.parentElement) {
     const style = getComputedStyle(node)
-    if (node.hidden || style.display === 'none' || style.visibility === 'hidden' || node.hasAttribute('inert')) return false
+    if (node.hidden || style.display === 'none' || style.visibility === 'hidden' || (node.hasAttribute('inert') && !(scoped && node.dataset.frontendBusy === 'true'))) return false
     if (node instanceof HTMLDetailsElement && !node.open && el !== node.querySelector('summary')) return false
+    if (node instanceof HTMLDialogElement && !node.open) return false
   }
   return el.isConnected
 }
-function label(el: HTMLElement) {
+export function guiControlLabel(el: HTMLElement) {
   const input = el as HTMLInputElement
-  return (el.getAttribute('aria-label') || input.labels?.[0]?.textContent || el.getAttribute('title') ||
+  const caption = input.labels?.[0]?.cloneNode(true) as HTMLElement | undefined
+  caption?.querySelectorAll('input,select,textarea,button,svg').forEach(child => child.remove())
+  return (el.getAttribute('aria-label') || caption?.textContent || el.getAttribute('title') ||
     el.getAttribute('placeholder') || el.textContent || el.id || el.tagName).trim().slice(0, 160)
 }
 function signature(el: HTMLElement) {
-  return JSON.stringify([label(el), el.getAttribute('type'), el.getAttribute('data-testid'),
+  return JSON.stringify([guiControlLabel(el), el.getAttribute('type'), el.getAttribute('data-testid'),
     el instanceof HTMLInputElement || el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement ? el.value : null,
     el instanceof HTMLInputElement ? el.checked : null])
 }
@@ -31,7 +40,7 @@ function describe(el: HTMLElement) {
   signatures.set(id, signature(el))
   const field = el instanceof HTMLInputElement || el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement
   const secret = el instanceof HTMLInputElement && el.type === 'password'
-  return { id, label: label(el), test_id: el.dataset.testid || null, tag: el.tagName.toLowerCase(),
+  return { id, label: guiControlLabel(el), test_id: el.dataset.testid || null, tag: el.tagName.toLowerCase(),
     description: secret ? undefined : el.getAttribute('aria-description')?.slice(0, 256),
     type: el instanceof HTMLInputElement ? el.type : null, disabled: el.matches(':disabled') || el.getAttribute('aria-disabled') === 'true',
     file_picker: el.hasAttribute('data-gui-file-picker') || (el instanceof HTMLInputElement && el.type === 'file'),
@@ -43,22 +52,22 @@ function describe(el: HTMLElement) {
     options_total: el instanceof HTMLSelectElement ? el.options.length : undefined,
     context: el.closest('[data-channel]')?.getAttribute('data-channel') || null }
 }
-export function listGuiControls(offset = 0) {
-  const active = [...document.querySelectorAll<HTMLElement>(selector)].filter(visible)
+export function listGuiControls(offset = 0, root?: HTMLElement) {
+  const active = (root ? guiPanelRoots(root).flatMap(node => [...node.querySelectorAll<HTMLElement>(selector)]) : [...document.querySelectorAll<HTMLElement>(selector)]).filter(el => visible(el, !!root))
   for (const [key, value] of controls) if (!value.isConnected) { controls.delete(key); signatures.delete(key) }
   const page = active.slice(offset, offset + 50).map(describe)
   while (page.length > 1 && JSON.stringify(page).length > 18_000) page.pop()
   return { total: active.length, offset, next_offset: offset + page.length < active.length ? offset + page.length : null, controls: page }
 }
-export function guiControl(id: string) {
+export function guiControl(id: string, root?: HTMLElement) {
   const el = controls.get(id)
-  if (!el || !visible(el)) throw new Error('Control is stale or hidden; read controls again')
+  if (!el || (root && !guiPanelRoots(root).some(node => node.contains(el))) || !visible(el, !!root)) throw new Error('Control is stale, hidden or outside this panel; read controls again')
   if (signatures.get(id) !== signature(el)) throw new Error('Control changed; read controls again')
   if (el.matches(':disabled') || el.getAttribute('aria-disabled') === 'true') throw new Error('Control is disabled')
   return el
 }
-export function interactGuiControl(id: string, action: string, value?: unknown) {
-  const el = guiControl(id)
+export function interactGuiControl(id: string, action: string, value?: unknown, root?: HTMLElement) {
+  const el = guiControl(id, root)
   if (action === 'control.click') {
     if (el instanceof HTMLInputElement && el.type === 'file') throw new Error('Use file.select with a file path')
     if (el instanceof HTMLAnchorElement) throw new Error('External links/downloads use their dedicated API')

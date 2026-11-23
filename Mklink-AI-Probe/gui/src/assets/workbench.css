@@ -1,0 +1,94 @@
+/* Shared dimensions for workbench chrome and its teleported settings forms. */
+.workbench, .workbench-settings-dialog {
+  --wb-control-height: 32px;
+  --wb-compact-height: 28px;
+}
+
+/* Darker light-theme accents keep small engineering labels readable. */
+html[data-theme=light]:not([data-edition=eternal]) :is(.workbench, .workbench-settings-dialog) {
+  --accent: #b24e2f;
+  --accent-light: #a6492c;
+  --warn: #806114;
+  --info: #246da8;
+  --chart-text: #69685f;
+  --dim: #69685f;
+}
+
+:is(.workbench .workbench-actions, .workbench .component-toolbar, .workbench .capability-panel, .workbench .control-body, .workbench .workbench-log, .workbench .workbench-information, .workbench-settings-dialog)
+  :where(button, select, input:not([type=checkbox]):not([type=radio]):not([type=range])) {
+  box-sizing: border-box;
+  height: var(--wb-control-height);
+  min-height: var(--wb-control-height);
+  min-width: 0;
+  max-width: 100%;
+  padding: 0 var(--wb-control-padding-inline, 12px);
+  font: 400 14px/20px var(--font-body);
+  border-radius: 6px;
+  vertical-align: middle;
+}
+
+.workbench .workbench-actions select {
+  color: var(--fg);
+  background: var(--input-bg);
+  border: 1px solid var(--dim);
+}
+
+:is(.workbench .workbench-actions, .workbench .component-toolbar, .workbench .capability-panel, .workbench .control-body, .workbench .workbench-log, .workbench .workbench-information, .workbench-settings-dialog)
+  :where(select, input:not([type=checkbox]):not([type=radio]):not([type=range]), textarea) {
+  border-color: var(--dim);
+}
+
+:is(.workbench, .workbench-settings-dialog) select { text-overflow: ellipsis; }
+.workbench .workbench-actions > button { justify-content: center; }
+.workbench .workbench-actions > * { flex-shrink: 0; }
+.workbench .workbench-actions { max-width: 100%; }
+.workbench-settings-dialog > header button { --wb-control-padding-inline: 0px; }
+
+.workbench .workbench-card-header button,
+.workbench .control-widget > header button {
+  height: var(--wb-compact-height);
+  min-height: var(--wb-compact-height);
+  min-width: var(--wb-compact-height);
+  padding: 0 8px;
+  font: 400 12px/18px var(--font-body);
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.workbench .control-widget > header { flex-wrap: nowrap; }
+.workbench .control-widget .control-body > button { flex-shrink: 0; }
+.workbench .component-grid.is-editing .control-body { padding: 6px 8px; }
+.workbench .component-grid.is-editing .control-body > button {
+  height: var(--wb-compact-height);
+  min-height: var(--wb-compact-height);
+}
+
+/* Keep plot controls compact, with the same inset as panel headers and forms. */
+.workbench .waveform-viewer .watch-toolbar-row { padding: 4px 8px; }
+.workbench .waveform-viewer .sw-replay-inline {
+  padding: 8px 12px;
+  flex-wrap: wrap;
+  color: var(--fg);
+}
+.workbench .waveform-viewer :is(.watch-toolbar-row, .sw-replay-inline) :is(button, select, input:not([type=range]), summary) {
+  box-sizing: border-box;
+  height: var(--wb-compact-height);
+  min-height: var(--wb-compact-height);
+  padding: 0 8px;
+  font: 400 12px/18px var(--font-body);
+}
+.workbench .waveform-viewer .sw-replay-inline select {
+  color: var(--fg);
+  background: var(--input-bg);
+  border-color: var(--border);
+}
+.workbench .waveform-viewer .watch-log-controls summary { line-height: calc(var(--wb-compact-height) - 2px); }
+.workbench .waveform-viewer .sw-replay-name { min-width: 0; }
+.workbench .waveform-viewer .sw-replay-inline label { display: inline-flex; align-items: center; gap: 4px; }
+
+@media (max-width: 700px) {
+  .workbench .panel-kind { display: none; }
+  .workbench-settings-dialog form :is(.geometry-fields, .component-geometry) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.workbench .waveform-viewer .ctrl-btn.active { color: var(--on-solid); }

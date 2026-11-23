@@ -1,5 +1,5 @@
 /** Explicit per-window display operations. Hardware stays on the shared API. */
-import { nextTick, onUnmounted } from 'vue'
+import { inject, nextTick, onUnmounted, type InjectionKey } from 'vue'
 import type { Router } from 'vue-router'
 import { IS_TAURI } from './runtimeEndpoint'
 import { listGuiControls, interactGuiControl } from './guiControls'
@@ -7,9 +7,22 @@ import { guiFileState, selectGuiFile, selectGuiDirectory, type GuiFile } from '.
 
 export type GuiCommand = { action: string; page?: string; tab?: string; section?: string; seconds?: number;
   control_id?: string; value?: unknown; offset?: number; expected_context?: string; file?: GuiFile; path?: string }
-type Panel = { snapshot: () => unknown; actions: Record<string, (command: GuiCommand) => void | Promise<void>> }
+export type GuiPanel = { snapshot: () => unknown; actions: Record<string, (command: GuiCommand) => void | Promise<void>> }
+export interface GuiPanelScope { id: string; ownerDocument?: () => Document; panels: Map<string, GuiPanel> }
+export const guiPanelScopeKey: InjectionKey<GuiPanelScope> = Symbol('gui-panel-scope')
+export function useGuiId() {
+  const scope = inject(guiPanelScopeKey, null)
+  return (name: string) => scope ? `${scope.id}-${name}` : name
+}
+type Panel = GuiPanel
 const panels = new Map<string, Panel>()
 export function useGuiPanel(name: string, panel: Panel) {
+  const scope = inject(guiPanelScopeKey, null)
+  if (scope) {
+    scope.panels.set(name, panel)
+    onUnmounted(() => { if (scope.panels.get(name) === panel) scope.panels.delete(name) })
+    return
+  }
   panels.set(name, panel)
   onUnmounted(() => { if (panels.get(name) === panel) panels.delete(name) })
 }
@@ -46,7 +59,7 @@ export function createGuiAutomation(router: Router, status: () => Record<string,
     if (command.action === 'navigate') {
       const page = command.page || 'dashboard'
       const pages = ['config', 'dashboard', 'online-flash', 'offline-flash', 'remote-service']
-      const tabs = ['rtt', 'superwatch', 'hardfault', 'memory', 'serial', 'modbus', 'systemview', 'symbols']
+      const tabs = ['rtt', 'superwatch', 'hardfault', 'memory', 'serial', 'modbus', 'systemview', 'symbols', 'workbench']
       if (!pages.includes(page) || (command.tab && (page !== 'dashboard' || !tabs.includes(command.tab))) ||
           (command.section && (page !== 'config' || !['local', 'files', 'firmware', 'runtime'].includes(command.section)))) throw new Error('Unsupported destination')
       await router.push({ name: page, query: page === 'dashboard' ? { tab: command.tab || 'rtt' }

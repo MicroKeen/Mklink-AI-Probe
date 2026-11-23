@@ -1508,6 +1508,7 @@ tr.watch-child-row td[data-col="value"] {
 .waveform-viewer.superwatch-desktop .watch-toolbar-row #control-toolbar { border:0; padding:4px; flex:0 1 auto; min-width:0; max-height:none; overflow:visible; flex-wrap:wrap; gap:6px; }
 .waveform-viewer.superwatch-desktop .watch-toolbar-row .header-actions { display:flex; align-items:center; flex:0 1 auto; flex-wrap:wrap; gap:5px; padding:4px; }
 .watch-extra-actions { display:inline-flex; }
+.watch-log-menu { color:var(--fg); }
 .watch-toolbar-row .buffer-unit, .watch-toolbar-row #buffer-memory-estimate, .watch-toolbar-row .ctrl-sep { display:none; }
 .watch-toolbar-row #buffer-input { width:82px; }
 .watch-toolbar-row #interval-input { width:94px; }

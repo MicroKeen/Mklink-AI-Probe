@@ -430,11 +430,12 @@ body {
     min-width: 0;
     margin-left: 0;
     padding-bottom: 6px;
-    overflow-x: auto;
-    scrollbar-width: thin;
+    flex-wrap: wrap;
+    row-gap: 4px;
   }
   .header-right .status-bar {
-    width: max-content;
+    max-width: 100%;
+    flex-wrap: wrap;
   }
 }
 .app-main {

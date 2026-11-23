@@ -41,7 +41,7 @@ def test_create_save_and_restore_names_against_new_catalog(tmp_path):
     assert fresh.status()['missing'] == ['missing']
     assert rebound._interval == .000001 and not rebound.running
     assert fresh.section('viewer')['viewer']['bufferPoints'] == 500000
-    assert 'address' not in path.read_text()
+    assert 'address' not in path.read_text(encoding='utf-8')
 
 
 def test_file_isolation_and_stale_window_cannot_overwrite(tmp_path):
@@ -171,7 +171,7 @@ def test_queued_display_write_preserves_latest_interval(tmp_path):
                                   {**initial['viewer'], 'bufferPoints': 100000}, initial['revision'])
             store.save('viewer', {**initial['viewer'], 'interval': .00001})
         assert pending.result()['viewer']['interval'] == .00001
-    assert json.loads(store.path.read_text())['viewer']['interval'] == .00001
+    assert json.loads(store.path.read_text(encoding='utf-8'))['viewer']['interval'] == .00001
 
 
 def test_array_range_is_rebound_without_saved_addresses(tmp_path):
@@ -193,4 +193,4 @@ def test_array_range_is_rebound_without_saved_addresses(tmp_path):
     store.activate(str(axf), sw)
     restored = sw.get_array_snapshot()['snapshot']
     assert restored['name'] == 'wave' and restored['start_index'] == 2 and restored['count'] == 4
-    assert not sw.running and 'address' not in store.path.read_text()
+    assert not sw.running and 'address' not in store.path.read_text(encoding='utf-8')

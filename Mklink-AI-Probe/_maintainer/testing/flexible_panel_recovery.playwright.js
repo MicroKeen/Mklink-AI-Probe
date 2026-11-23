@@ -1,0 +1,57 @@
+// Run against a disposable copy of an official GUI project with a variable card.
+async page => {
+  const w = page.getByTestId('workbench'), id = 'legacy_variables'
+  const v = w.locator('article[data-panel-id="' + id + '"]'), save = w.getByTestId('save-layout')
+  const edit = w.locator('.workbench-actions button[aria-pressed]')
+  const title = v.locator('.workbench-card-header strong'), header = v.locator('.workbench-card-header')
+  const geometry = () => v.evaluate(el => ['x','y','w','h'].map(k => Number(el.getAttribute('gs-' + k) || 0)))
+  const locate = () => w.locator('.workbench-locator select').selectOption(id)
+  const clean = () => page.waitForFunction(() => document.querySelector('[data-testid="save-layout"]')?.disabled === true)
+  const dirty = () => page.waitForFunction(() => document.querySelector('[data-testid="save-layout"]')?.disabled === false)
+  async function persist() { await dirty(); await save.click(); await clean() }
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.reload(); await locate(); await clean()
+  if (await edit.getAttribute('aria-pressed') !== 'false') throw Error('Expected normal mode')
+  await header.evaluate(el => el.scrollIntoView({ block: 'start' }))
+  const initial = await geometry(), box = await title.boundingBox()
+  const column = (await w.locator('.workbench-grid').boundingBox()).width / 12
+  const mx = box.x + 20, my = box.y + box.height / 2
+  await page.mouse.move(mx, my); await page.mouse.down()
+  await page.mouse.move(mx + (initial[0] > 0 ? -6 : 6) * column, my + 2, { steps: 36 })
+  await page.mouse.up(); await dirty()
+  const moved = await geometry()
+  if (initial.join() === moved.join()) throw Error('Title drag did not change geometry')
+  await persist(); await page.reload(); await v.waitFor(); await clean()
+  if ((await geometry()).join() !== moved.join()) throw Error('Saved move did not survive reload')
+  await locate()
+  const toggle = v.getByTestId('toggle-signals-section')
+  await toggle.click(); await dirty(); await toggle.click(); await clean()
+  await edit.click(); await v.locator('.workbench-card-header button[aria-expanded]').click()
+  const dialog = page.locator('dialog[open]'), name = 'Recovery fixture'
+  await dialog.locator('.panel-editor input').first().fill(name)
+  await dialog.locator('.panel-editor button[type=submit]').click()
+  await edit.click(); await dirty(); await persist()
+  const originalCount = await w.locator('article[data-panel-id]').count()
+  const close = v.getByRole('button', { name: /关闭面板|Close panel/ })
+  await close.click(); await page.keyboard.press('Escape'); await clean()
+  if (!await close.evaluate(el => el === document.activeElement)) throw Error('Close cancel lost focus')
+  await close.click(); await page.getByTestId('confirm-close-panel').click(); await v.waitFor({ state:'detached' })
+  if (await w.locator('article[data-panel-id]').count() !== originalCount - 1) throw Error('Unexpected panel removed')
+  await persist(); await page.reload(); await w.getByTestId('recently-closed').waitFor(); await clean()
+  await w.getByTestId('recently-closed').click()
+  await page.locator('[data-reopen-id="' + id + '"]').click(); await v.waitFor(); await dirty()
+  if ((await title.innerText()) !== name || (await geometry()).join() !== moved.join()) throw Error('Reopened configuration or geometry changed')
+  await persist()
+  await page.setViewportSize({ width: 390, height: 1000 })
+  await locate()
+  const order = () => w.locator('article[data-grid-id]').evaluateAll(nodes => nodes.map(n => n.dataset.panelId))
+  const before = await order()
+  const idx = before.indexOf(id), target = before[idx > 0 ? idx - 1 : idx + 1]
+  const other = w.locator('article[data-panel-id="' + target + '"] .workbench-card-header')
+  await title.dragTo(other)
+  await dirty()
+  if ((await order()).indexOf(id) === idx) throw Error('Narrow title drag did not reorder the card')
+  await header.press(idx > 0 ? 'Alt+ArrowDown' : 'Alt+ArrowUp')
+  if ((await order()).indexOf(id) !== idx) throw Error('Keyboard reordering failed')
+  return { initial, moved, persisted: true, configReverted: true, cancelReturnedFocus: true, reopenedAfterReload: true, narrowReordered: true }
+}

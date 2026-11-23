@@ -1,3 +1,4 @@
+import { frontendFetch as fetch } from '../lib/frontendControl'
 import type {
   CustomFlmRecord,
   FlashAlgorithmRecord,

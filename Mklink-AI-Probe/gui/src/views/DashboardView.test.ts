@@ -7,6 +7,10 @@ import { setLanguage } from '../composables/useLanguage'
 const routerMock = vi.hoisted(() => ({
   query: {} as Record<string, string>,
 }))
+vi.mock('../composables/useFrontendWorkbench', () => ({ useFrontendWorkbench: () => ({
+  connected: { value: false }, error: { value: '' }, busy: { value: false }, feedback: { value: null }, sessionEpoch: { value: 0 },
+  entries: () => [], submitIntent: vi.fn(),
+}) }))
 const apiMock = vi.hoisted(() => ({
   deviceStatus: {
     __v_isRef: true,
@@ -275,7 +279,7 @@ describe('DashboardView layout classes', () => {
     wrapper.unmount()
   })
 
-  it('uses the required dashboard tab order and keeps Symbols last', () => {
+  it('uses the required dashboard tab order and keeps Flexible Panels last', () => {
     const wrapper = shallowMount(DashboardView, {
       global: {
         stubs: {
@@ -301,6 +305,7 @@ describe('DashboardView layout classes', () => {
       'Modbus',
       'RTOS Trace',
       '符号表',
+      '灵活面板',
     ])
     wrapper.unmount()
   })
@@ -331,8 +336,28 @@ describe('DashboardView layout classes', () => {
       'Modbus',
       'RTOS Trace',
       'Symbols',
+      'Flexible Panels',
     ])
     wrapper.unmount()
+  })
+
+  it('reveals an off-screen dashboard selection within its own tab strip', async () => {
+    const wrapper = shallowMount(DashboardView)
+    try {
+      const bar = wrapper.get('.tabs-bar').element as HTMLElement
+      const buttons = wrapper.findAll('.tab-btn')
+      const last = buttons[buttons.length - 1]!
+      Object.defineProperties(bar, { clientWidth: { value: 300 }, scrollWidth: { value: 800 } })
+      vi.spyOn(bar, 'getBoundingClientRect').mockReturnValue(new DOMRect(20, 50, 300, 32))
+      vi.spyOn(last.element, 'getBoundingClientRect').mockReturnValue(new DOMRect(735, 50, 85, 32))
+      await last.trigger('click')
+      expect(bar.scrollLeft).toBe(500)
+      vi.spyOn(buttons[0]!.element, 'getBoundingClientRect').mockReturnValue(new DOMRect(-480, 50, 85, 32))
+      await buttons[0]!.trigger('click')
+      expect(bar.scrollLeft).toBe(0)
+    } finally {
+      wrapper.unmount()
+    }
   })
 
   it('does not expose the MCU family label or Debug Control', () => {

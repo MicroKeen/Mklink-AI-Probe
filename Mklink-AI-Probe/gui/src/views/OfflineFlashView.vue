@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { frontendFetch as fetch } from '../lib/frontendControl'
+
+import { useGuiId } from '../lib/guiAutomation'
+const guiId = useGuiId()
 import HpmFlashConfigPanel from "../components/HpmFlashConfigPanel.vue"
 import { useHpmFlashConfig } from "../composables/useHpmFlashConfig"
 import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
@@ -1125,11 +1129,11 @@ onBeforeUnmount(() => {
         <div class="field-title">{{ tr('芯片型号', 'Chip model') }}</div>
         <div ref="targetSearchBox" class="target-combobox" @focusout="targetSearchFocusOut">
           <div class="target-search">
-            <input v-model="targetQuery" class="form-input" data-testid="offline-target-search" type="search" role="combobox" aria-autocomplete="list" aria-controls="offline-target-suggestions" :aria-expanded="targetSuggestionsOpen" :aria-activedescendant="targetSuggestionsOpen && activeTargetSuggestion >= 0 ? `offline-target-option-${activeTargetSuggestion}` : undefined" :placeholder="tr('搜索型号 / 厂商 / 系列', 'Search model / vendor / family / series')" @input="scheduleTargetSearch" @focus="targetSearchFocus" @keydown="targetSearchKeydown">
+            <input v-model="targetQuery" class="form-input" data-testid="offline-target-search" type="search" role="combobox" aria-autocomplete="list" :aria-controls="guiId('offline-target-suggestions')" :aria-expanded="targetSuggestionsOpen" :aria-activedescendant="targetSuggestionsOpen && activeTargetSuggestion >= 0 ? guiId(`offline-target-option-${activeTargetSuggestion}`) : undefined" :placeholder="tr('搜索型号 / 厂商 / 系列', 'Search model / vendor / family / series')" @input="scheduleTargetSearch" @focus="targetSearchFocus" @keydown="targetSearchKeydown">
             <button class="btn" :disabled="targetBusy" @click="searchTargets(true)">{{ targetBusy ? tr('搜索中…', 'Searching…') : tr('搜索器件', 'Search Targets') }}</button>
           </div>
-          <div v-show="targetSuggestionsOpen && targets.length" id="offline-target-suggestions" class="target-results" role="listbox">
-            <button v-for="(target, index) in targets" :id="`offline-target-option-${index}`" :key="target.part_number" class="target-result" :class="{ active: index === activeTargetSuggestion || targetPart === target.part_number }" type="button" role="option" :aria-selected="targetPart === target.part_number" :disabled="targetBusy" @mouseenter="activeTargetSuggestion = index" @click="addTargetAlgorithms(target)">
+          <div v-show="targetSuggestionsOpen && targets.length" :id="guiId('offline-target-suggestions')" class="target-results" role="listbox">
+            <button v-for="(target, index) in targets" :id="guiId(`offline-target-option-${index}`)" :key="target.part_number" class="target-result" :class="{ active: index === activeTargetSuggestion || targetPart === target.part_number }" type="button" role="option" :aria-selected="targetPart === target.part_number" :disabled="targetBusy" @mouseenter="activeTargetSuggestion = index" @click="addTargetAlgorithms(target)">
               <span><b>{{ target.part_number }}</b><small>{{ target.vendor }} · {{ target.pack_id || tr('内置', 'Built-in') }}</small></span>
               <em>{{ targetAction(target) }}</em>
             </button>
@@ -1166,10 +1170,10 @@ onBeforeUnmount(() => {
       </aside>
       <main class="programming-workspace">
     <div class="workspace-tabs" role="tablist" :aria-label="tr('烧录工作区', 'Programming workspace')">
-      <button id="offline-image-tab" role="tab" :aria-selected="workspaceTab === 'image'" aria-controls="offline-image-panel" :disabled="operationBusy" data-testid="offline-image-tab" @click="workspaceTab = 'image'; clearOtpPlan()">{{ tr('镜像烧写', 'Image programming') }}</button>
-      <button id="offline-configuration-tab" role="tab" :aria-selected="workspaceTab === 'configuration'" aria-controls="offline-configuration-panel" :disabled="operationBusy" data-testid="offline-configuration-tab" @click="workspaceTab = 'configuration'">{{ hpmMode ? tr('OTP 操作', 'OTP operations') : tr('选项字配置', 'Option bytes') }}</button>
+      <button :id="guiId('offline-image-tab')" role="tab" :aria-selected="workspaceTab === 'image'" :aria-controls="guiId('offline-image-panel')" :disabled="operationBusy" data-testid="offline-image-tab" @click="workspaceTab = 'image'; clearOtpPlan()">{{ tr('镜像烧写', 'Image programming') }}</button>
+      <button :id="guiId('offline-configuration-tab')" role="tab" :aria-selected="workspaceTab === 'configuration'" :aria-controls="guiId('offline-configuration-panel')" :disabled="operationBusy" data-testid="offline-configuration-tab" @click="workspaceTab = 'configuration'">{{ hpmMode ? tr('OTP 操作', 'OTP operations') : tr('选项字配置', 'Option bytes') }}</button>
     </div>
-        <div v-show="workspaceTab === 'image'" id="offline-image-panel" role="tabpanel" aria-labelledby="offline-image-tab" class="image-workspace" :class="{ 'rom-workspace': hpmMode }">
+        <div v-show="workspaceTab === 'image'" :id="guiId('offline-image-panel')" role="tabpanel" :aria-labelledby="guiId('offline-image-tab')" class="image-workspace" :class="{ 'rom-workspace': hpmMode }">
           <section v-if="!hpmMode" class="work-panel algorithm-panel">
             <div class="panel-heading"><h2>{{ tr('下载算法', 'Flash algorithm') }}</h2><button v-if="!hpmMode" class="btn btn-sm" type="button" data-testid="offline-add-flm" :disabled="operationBusy" @click="browseManualFlm">{{ tr('添加本地 FLM', 'Add Local FLM') }}</button></div>
         <div class="algorithm-list">
@@ -1212,7 +1216,7 @@ onBeforeUnmount(() => {
 
 
         </div>
-        <section v-show="workspaceTab === 'configuration'" id="offline-configuration-panel" role="tabpanel" aria-labelledby="offline-configuration-tab" class="configuration-workspace">
+        <section v-show="workspaceTab === 'configuration'" :id="guiId('offline-configuration-panel')" role="tabpanel" :aria-labelledby="guiId('offline-configuration-tab')" class="configuration-workspace">
       <HpmIspOtpPanel v-if="ispMode && model === 'V4' && hpmOtpProfile(targetPart)"
         :key="`${model}:${targetPart}:${diskProbe}`" deployment :active="workspaceTab === 'configuration'" :part-number="targetPart" :snapshot="otpSnapshot" :plan="otpPlan" :result="otpResult" :busy="otpReading" :disabled="operationBusy || triggerUncertain"
         :error="otpError" @read="readIspOtp" @prepare="prepareIspOtp" @program="programIspOtp" @invalidate="clearOtpPlan" @configuration="setIspOfflineOtp" />
@@ -1234,10 +1238,10 @@ onBeforeUnmount(() => {
             <em v-else-if="securityCapability" :class="securityCapability.supported ? 'ok' : 'bad'">{{ securityCapability.supported ? (securityCapability.apply_method === 'ctrl-ap' ? tr('CTRL-AP 恢复', 'CTRL-AP recovery') : tr('加锁/解锁已验证', 'Lock/unlock validated')) : tr('加锁/解锁未支持', 'Lock/unlock unsupported') }}</em>
           </summary>
           <label class="security-option">
-            <input data-testid="offline-erase-all" type="checkbox" aria-describedby="offline-erase-all-hint" :checked="eraseAllBeforeDownload" :disabled="hpmMode || !firmwares.length" @change="toggleEraseAll">
+            <input data-testid="offline-erase-all" type="checkbox" :aria-describedby="guiId('offline-erase-all-hint')" :checked="eraseAllBeforeDownload" :disabled="hpmMode || !firmwares.length" @change="toggleEraseAll">
             <span>{{ tr('下载前全片擦除（第一个固件对应的 Flash）', 'Chip erase before download (Flash selected by first firmware)') }}</span>
           </label>
-          <p v-if="!hpmMode" id="offline-erase-all-hint" class="security-reason" :class="{ 'erase-all-warning': eraseAllBeforeDownload }" data-testid="offline-erase-all-hint">{{ tr('默认按扇区擦除，通常无需勾选全片擦除。全片擦除会显著增加烧录时间。', 'Sector erase is used by default; chip erase is usually unnecessary. Chip erase significantly increases programming time.') }}</p>
+          <p v-if="!hpmMode" :id="guiId('offline-erase-all-hint')" class="security-reason" :class="{ 'erase-all-warning': eraseAllBeforeDownload }" data-testid="offline-erase-all-hint">{{ tr('默认按扇区擦除，通常无需勾选全片擦除。全片擦除会显著增加烧录时间。', 'Sector erase is used by default; chip erase is usually unnecessary. Chip erase significantly increases programming time.') }}</p>
           <label class="security-option">
             <input data-testid="offline-unlock" type="checkbox" :checked="unlockBeforeDownload" :disabled="!securityCapability?.unlock_supported" @change="toggleUnlock">
             <span>{{ tr('下载前解锁（永久擦除全部 Flash）', 'Unlock before download (permanently erases all Flash)') }}</span>

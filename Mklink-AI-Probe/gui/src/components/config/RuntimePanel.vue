@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { frontendFetch as fetch } from '../../lib/frontendControl'
+
 import { onMounted, onUnmounted, ref } from 'vue'
 import { API_BASE } from '../../lib/runtimeEndpoint'
 import { tr } from '../../composables/useLanguage'

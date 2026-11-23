@@ -1676,6 +1676,35 @@ def test_health_reports_builtin_elf_capability():
     assert body["builtin_elf_available"] is True
 
 
+def test_slow_elf_diagnostics_do_not_block_another_health_request(monkeypatch):
+    from mklink import elf_backend
+
+    entered, release, expired = threading.Event(), threading.Event(), threading.Event()
+    original = elf_backend.elf_status
+
+    def diagnostics(**kwargs):
+        if not entered.is_set():
+            entered.set()
+            if not release.wait(2):
+                expired.set()
+        return original(**kwargs)
+
+    monkeypatch.setattr(elf_backend, 'elf_status', diagnostics)
+    with TestClient(create_app(auth_token=None, project_root='.')) as client:
+        responses = {}
+        first = threading.Thread(target=_request, args=(client, '/api/health', responses, 'first'))
+        first.start()
+        try:
+            assert entered.wait(2)
+            second = client.get('/api/health')
+            assert not expired.is_set(), 'ELF diagnostics serialized independent heartbeats'
+        finally:
+            release.set()
+            first.join(3)
+        assert responses['first'].json() == second.json()
+        assert second.json()['status'] == 'ok'
+
+
 def test_web_app_shell_is_not_cached_but_hashed_assets_are_immutable():
     app = create_app(auth_token=None, project_root=".")
 
@@ -1727,6 +1756,20 @@ def test_web_assets_ignore_unsafe_system_mime(tmp_path, monkeypatch, prefix, suf
     assert response.text == "/* test asset */"
 
 
+def vite_asset_references(source):
+    # Lazy preload tables contain path strings. Workers can use a bare name in new URL().
+    asset = r'''["'`]([\w./-]+\.(?:js|css))["'`]'''
+    paths = {name for name in re.findall(asset, source) if "/" in name}
+    paths.update(re.findall(r"(?:\bnew\s+URL\(\s*|\bimport\s*\(?\s*|\bfrom\s*)" + asset, source))
+    return paths
+
+
+def test_asset_references_distinguish_worker_urls_from_browser_labels():
+    source = """const deps=['./chunk.js','./theme.css'];new URL('worker.js',import.meta.url);
+    import('missing.js'); import 'side.js'; export {x} from 'module.js'; userAgent.indexOf('Node.js');"""
+    assert vite_asset_references(source) == {'./chunk.js', './theme.css', 'worker.js', 'missing.js', 'side.js', 'module.js'}
+
+
 def test_built_web_asset_graph_uses_fresh_cache_namespace():
     import mklink.remote.api as api
 
@@ -1741,9 +1784,8 @@ def test_built_web_asset_graph_uses_fresh_cache_namespace():
         # Vite emits imports, lazy preload entries and worker URLs relative to
         # the referring module when base='./'. Resolve each at its own URL.
         script_url = "/" + script.relative_to(dist).as_posix()
-        paths.update(urlsplit(urljoin(script_url, reference)).path for reference in re.findall(
-            r'''["'`]([\w./-]+\.(?:js|css))["'`]''', script.read_text(encoding="utf-8"),
-        ))
+        paths.update(urlsplit(urljoin(script_url, reference)).path
+                     for reference in vite_asset_references(script.read_text(encoding="utf-8")))
 
     assert paths
     assert any(path.endswith(".css") for path in paths)

@@ -85,7 +85,7 @@ function deferred<T>() {
   return { promise, resolve }
 }
 
-async function mountView() {
+async function mountView(props: { embedded?: boolean; section?: 'local' | 'files' | 'firmware' | 'runtime' } = {}) {
   const { default: ConfigView } = await import('./ConfigView.vue')
   const router = createRouter({ history: createMemoryHistory(), routes: [
     { path: '/config', name: 'config', component: { template: '<div />' } },
@@ -93,6 +93,7 @@ async function mountView() {
   await router.push('/config')
   await router.isReady()
   const wrapper = mount(ConfigView, {
+    props,
     global: {
       plugins: [router],
       stubs: {
@@ -1090,4 +1091,16 @@ describe('ConfigView', () => {
     expect(mocks.toastSuccess).not.toHaveBeenCalled()
     wrapper.unmount()
   })
+})
+
+it('keeps embedded configuration sections independent of the dashboard route and each other', async () => {
+  const files = await mountView({ embedded: true, section: 'files' })
+  const firmware = await mountView({ embedded: true, section: 'firmware' })
+  await files.get('[data-testid="config-section-local"]').trigger('click')
+  await flushPromises()
+  expect(files.vm.$route.fullPath).toBe('/config')
+  expect(firmware.get('[data-testid="config-section-firmware"]').classes()).toContain('active')
+  await files.vm.$router.replace('/config?section=firmware'); await flushPromises()
+  expect(files.get('[data-testid="config-section-local"]').classes()).toContain('active')
+  files.unmount(); firmware.unmount()
 })

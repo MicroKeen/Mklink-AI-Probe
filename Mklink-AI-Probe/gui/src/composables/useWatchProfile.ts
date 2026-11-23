@@ -1,3 +1,4 @@
+import type { SemanticExecutionContext } from '../lib/frontendControl'
 import { ref, shallowRef } from 'vue'
 import { API_BASE } from '../lib/runtimeEndpoint'
 
@@ -34,7 +35,7 @@ async function load() {
   finally { loading = false }
 }
 
-function save(section: 'viewer' | 'layout', value: Record<string, unknown>): Promise<void> {
+function save(section: 'viewer' | 'layout', value: Record<string, unknown>, context?: SemanticExecutionContext): Promise<void> {
   const current = profile.value
   if (!current?.path || current.available === false) return Promise.resolve()
   const snapshot = JSON.parse(JSON.stringify(value))
@@ -43,7 +44,7 @@ function save(section: 'viewer' | 'layout', value: Record<string, unknown>): Pro
   const operation = queue.then(async () => {
     if (profile.value?.path !== current.path) throw new Error('AXF/ELF changed before settings were saved; reload settings')
     const body = JSON.stringify({ section, value: snapshot, revision: profile.value[section].revision })
-    const response = await fetch(API_BASE + '/api/dash/superwatch/profile', {
+    const response = await (context?.fetch || fetch)(API_BASE + '/api/dash/superwatch/profile', {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body, keepalive: new TextEncoder().encode(body).length < 60000,
     })

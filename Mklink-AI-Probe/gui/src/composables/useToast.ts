@@ -1,4 +1,5 @@
-import { ref } from 'vue'
+import { ref, inject, getCurrentInstance } from 'vue'
+import { workbenchActivityKey, activitySourceKey } from '../lib/workbenchActivity'
 
 export interface Toast {
   id: number
@@ -11,9 +12,12 @@ const toasts = ref<Toast[]>([])
 let nextId = 0
 
 export function useToast() {
+  const activity = getCurrentInstance() ? inject(workbenchActivityKey, null) : null
+  const source = getCurrentInstance() ? inject(activitySourceKey, '') : ''
   function show(type: Toast['type'], message: string, duration = 4000) {
     const id = nextId++
     toasts.value.push({ id, type, message, duration })
+    if (activity && source) activity.append({ kind: type === 'error' ? 'error' : 'note', source, title: message.slice(0, 200), text: message.length > 200 ? message.slice(0, 4000) : '', status: type === 'error' ? 'failed' : type === 'success' ? 'completed' : type })
     if (duration > 0) {
       setTimeout(() => dismiss(id), duration)
     }

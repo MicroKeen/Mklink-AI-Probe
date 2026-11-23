@@ -32,6 +32,8 @@ export default defineConfig({
     // Let Vite rewrite the entire graph; HTML-only URL rewriting misses preloads.
     // Bump this epoch only when asset response semantics change, not each build.
     assetsDir: 'assets/mime-v1',
+    // Keep Vue initialization out of entry/chart shared-helper cycles on cold load.
+    rolldownOptions: { output: { codeSplitting: { groups: [{ name: 'vue-runtime', test: /node_modules[\\/](?:@vue[\\/]|vue[\\/])/ }] } } },
   },
   define: {
     __APP_VERSION__: JSON.stringify(tauriConfig.version || '0.0.0'),
@@ -53,7 +55,7 @@ export default defineConfig({
   clearScreen: false,
   server: {
     // Replay shares its parser/Worker with the packaged standalone CLI page.
-    fs: { allow: [projectRoot, fileURLToPath(new URL('../mklink/static', import.meta.url))] },
+    fs: { allow: [projectRoot, fileURLToPath(new URL('../mklink/static', import.meta.url)), fileURLToPath(new URL('../mklink/frontend_components.json', import.meta.url))] },
     port: 5173,
     strictPort: true,
     host: host || false,

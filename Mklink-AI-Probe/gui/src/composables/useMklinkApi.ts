@@ -1,3 +1,5 @@
+import { frontendFetch as fetch } from '../lib/frontendControl'
+import type { SemanticExecutionContext } from '../lib/frontendControl'
 import { ref, readonly } from 'vue'
 import { tr } from './useLanguage'
 import { flushWatchProfile, useWatchProfile } from './useWatchProfile'
@@ -29,12 +31,12 @@ import { sharedRuntime } from './useBackendHealth'
 import { trackSymbolSource } from '../lib/trackedSymbolSource'
 import { resetDeviceSymbolCatalog } from './useSymbolCatalog'
 
-async function api<T>(path: string, options?: RequestInit): Promise<T> {
+async function apiRequest<T>(path: string, options?: RequestInit, context?: SemanticExecutionContext): Promise<T> {
   const headers = new Headers(options?.headers)
   if (!(options?.body instanceof FormData) && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json')
   }
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await (context?.fetch || fetch)(`${API_BASE}${path}`, {
     ...options,
     headers,
   })
@@ -65,7 +67,8 @@ const deviceStatus = ref<DeviceStatus>({
 let statusInterval: ReturnType<typeof setInterval> | null = null
 let statusRequest = 0
 
-export function useMklinkApi() {
+export function useMklinkApi(context?: SemanticExecutionContext) {
+  const api = <T>(path: string, options?: RequestInit) => apiRequest<T>(path, options, context)
   async function exclusiveJob(action: string, args: object = {}) {
     interface Job { job_id: string; state: string; result: unknown; error?: string }
     const requestId = crypto.randomUUID()
@@ -119,14 +122,14 @@ export function useMklinkApi() {
     body.append('file', file)
     const uploaded = await api<UploadedFileSource>(`/api/files/${kind}`, { method: 'POST', body })
     if (kind === 'symbol') trackSymbolSource(file, uploaded, {
-      upload: next => {
+      upload: (next, operation) => {
         const data = new FormData()
         data.append('file', next)
-        return api<UploadedFileSource>('/api/files/symbol', { method: 'POST', body: data })
+        return apiRequest<UploadedFileSource>('/api/files/symbol', { method: 'POST', body: data }, operation)
       },
-      reload: async (path, expectedPath) => {
+      reload: async (path, expectedPath, operation) => {
         await flushWatchProfile()
-        const result = await api<{ state?: string; rtt_addr?: string }>(`/api/symbols/reload-sources?${new URLSearchParams({ source_path: path, expected_axf: expectedPath })}`, { method: 'POST' })
+        const result = await apiRequest<{ state?: string; rtt_addr?: string }>(`/api/symbols/reload-sources?${new URLSearchParams({ source_path: path, expected_axf: expectedPath })}`, { method: 'POST' }, operation)
         await useWatchProfile().load()
         return result
       },

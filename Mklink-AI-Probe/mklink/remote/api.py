@@ -4368,7 +4368,7 @@ def create_app(
     # ===================================================================
 
     @app.get("/api/health")
-    async def health():
+    def health():
         dev = _state["device"]
         from mklink.elf_backend import elf_status
 

@@ -91,6 +91,18 @@ def test_detach_never_closes_gui_device(runtime):
     assert len(control.sessions) == 1
 
 
+def test_status_exposes_runtime_selector_without_private_credentials(runtime):
+    client, control, calls, _, _ = runtime
+    control.info['runtime_id'] = 'local-test-runtime'
+    for path in ('/_runtime/status', '/api/runtime/control/status'):
+        result = client.get(path)
+        assert result.status_code == 200
+        assert result.json()['runtime_id'] == 'local-test-runtime'
+        assert result.json()['instance_id'] == 'test-instance'
+        assert 'test-secret' not in result.text
+    assert calls == []
+
+
 @pytest.mark.parametrize('path', ['/api/dash/superwatch/recording/export', '/api/dash/rtt/traffic-recording/export'])
 def test_manual_recording_conversion_does_not_reserve_hardware(runtime, path):
     client, control, calls, managers, app = runtime

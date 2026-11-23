@@ -4,10 +4,10 @@
       <h3>RTT {{ channel }}</h3>
       <div v-show="!collapsed" class="rtt-panel-tools">
         <div class="rtt-primary-tools">
-          <label class="encoding-control" :for="`rtt-encoding-${channel}`">
+          <label class="encoding-control" :for="encodingId">
             <span>{{ tr('编码', 'Encoding') }}</span>
             <select
-              :id="`rtt-encoding-${channel}`" v-model="rttEncoding" data-testid="rtt-encoding"
+              :id="encodingId" v-model="rttEncoding" data-testid="rtt-encoding"
               :disabled="!running && !replaying" @change="onEncodingChange"
             >
               <option value="utf-8">UTF-8</option>
@@ -42,12 +42,12 @@
         </div>
         <div class="rtt-secondary-tools">
           <LogDisplayControls
-            v-if="viewMode === 'log'" :id-prefix="`rtt-${channel}`"
+            v-if="viewMode === 'log'" :id-prefix="instanceId"
             v-model:mode="logDisplayMode" v-model:show-timestamp="showLogTimestamp"
           />
           <div v-if="viewMode === 'log'" class="format-help">
             <button
-              data-testid="rtt-format-help" type="button" class="icon-action"
+              ref="formatHelpTrigger" data-testid="rtt-format-help" type="button" class="icon-action"
               :title="tr('数据格式说明', 'Data format help')"
               :aria-label="tr('数据格式说明', 'Data format help')"
               :aria-expanded="formatHelpOpen"
@@ -55,7 +55,7 @@
             >
               <Info :size="15" aria-hidden="true" />
             </button>
-            <div v-if="formatHelpOpen" class="format-help-popover" role="note">
+            <div v-if="formatHelpOpen" ref="formatHelpPopup" class="format-help-popover" role="note">
               <strong>{{ tr('数据格式', 'Data format') }}</strong>
               <span>{{ tr('每行输出同一组数值，例如', 'Output one value set per line, for example') }}</span>
               <code>temp=25.3,speed=1200</code>
@@ -108,7 +108,7 @@
         />
       </div>
       <RttRawView ref="rawView" v-show="viewMode === 'hex'" :channel="channel" :running="running && !replaying && viewMode === 'hex'" :paused="renderPaused" />
-      <RttTransmitBar :id-prefix="`rtt-channel-${channel}`"
+      <RttTransmitBar :id-prefix="transmitId"
         :enabled="transmitEnabled" :settings="settings" :send="sendRtt"
         @settings-change="persistSettings"
       />
@@ -117,7 +117,12 @@
   </section>
 </template>
 <script setup lang="ts">
+import { frontendFetch as fetch } from '../../lib/frontendControl'
+
+import type { SemanticExecutionContext } from '../../lib/frontendControl'
+
 import TrafficLogControls from './TrafficLogControls.vue'
+import { mountAnchoredPopover } from '../../lib/detailsMenu'
 import { trafficBytes, TrafficTextDecoder, type TrafficFrame } from '../../lib/trafficReplay'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Eye, EyeOff, Info, ScrollText, SquareTerminal, Trash2 } from '@lucide/vue'
@@ -132,6 +137,8 @@ import RttTerminalPanel from './RttTerminalPanel.vue'
 import VirtualLogPanel, { type VirtualLogInput } from './VirtualLogPanel.vue'
 import { language, tr } from '../../composables/useLanguage'
 import { API_BASE } from '../../lib/runtimeEndpoint'
+import { domainAction, boolArg, requireDomain, type DomainArgs } from '../../lib/domainActions'
+import { encodeRttTransmit } from '../../lib/rttTransmit'
 const replaying = ref(false)
 const trafficControls = ref<InstanceType<typeof TrafficLogControls>>()
 let replayDecoder = new TrafficTextDecoder()
@@ -166,7 +173,10 @@ function appendReplay(frames: TrafficFrame[]) {
   logPanel.value?.append(entries)
   if (terminal) terminalPanel.value?.write(terminal)
 }
-const props = defineProps<{ channel: number, running: boolean, sendEnabled: boolean, session?: string, channelStatus?: { numeric_channels?: string[], encoding?: string } }>()
+const props = defineProps<{ panelId?: string, channel: number, running: boolean, sendEnabled: boolean, session?: string, channelStatus?: { numeric_channels?: string[], encoding?: string } }>()
+const instanceId = computed(() => props.panelId || `rtt-${props.channel}`)
+const encodingId = computed(() => props.panelId ? `${instanceId.value}-encoding` : `rtt-encoding-${props.channel}`)
+const transmitId = computed(() => props.panelId ? `${instanceId.value}-transmit` : `rtt-channel-${props.channel}`)
 const logBinary = useBinaryStream(`rtt-${props.channel}`, { capacity: 25000, channelCount: 1 })
 const terminalBinary = useBinaryStream(`rtt-terminal-${props.channel}`, { capacity: 64 * 1024, channelCount: 1 })
 const { writeRtt } = useMklinkApi()
@@ -184,6 +194,17 @@ const viewMode = ref<'log' | 'terminal' | 'hex'>('terminal')
 const logDisplayMode = ref<LogDisplayMode>('text')
 const showLogTimestamp = ref(true)
 const formatHelpOpen = ref(false)
+const formatHelpTrigger = ref<HTMLElement>(), formatHelpPopup = ref<HTMLElement>()
+let helpPopover: ReturnType<typeof mountAnchoredPopover> | undefined
+watch(formatHelpOpen, async open => {
+  helpPopover?.dispose(); helpPopover = undefined
+  if (!open) return
+  await nextTick()
+  if (!formatHelpOpen.value || !formatHelpTrigger.value || !formatHelpPopup.value) return
+  helpPopover = mountAnchoredPopover(formatHelpTrigger.value, formatHelpPopup.value, () => { formatHelpOpen.value = false })
+  helpPopover.show()
+})
+onUnmounted(() => helpPopover?.dispose())
 const hasChartData = ref(false)
 const renderPaused = ref(false)
 const collapsed = ref(false)
@@ -220,9 +241,9 @@ let terminalSendChain = Promise.resolve()
 
 
 function persistSettings(next: DesktopSettings) { settings.value = next }
-async function sendRtt(payload: Uint8Array): Promise<void> {
+async function sendRtt(payload: Uint8Array, context?: SemanticExecutionContext): Promise<void> {
   if (replaying.value) throw new Error('Exit replay before sending')
-  const result = await writeRtt(payload, props.channel)
+  const result = await (context ? useMklinkApi(context).writeRtt : writeRtt)(payload, props.channel)
   const sent = result.sent_bytes
   if (!Number.isInteger(sent) || sent < 0 || sent > payload.length) throw new Error(tr('发送结果未确认', 'Send result was not confirmed'))
   const accepted = payload.slice(0, sent)
@@ -236,14 +257,14 @@ async function sendRtt(payload: Uint8Array): Promise<void> {
   }
   if (sent !== payload.length) throw new Error(tr(`仅发送 ${sent}/${payload.length} 字节`, `Sent only ${sent}/${payload.length} bytes`))
 }
-async function onEncodingChange() {
+async function onEncodingChange(strict: unknown = false, context?: SemanticExecutionContext) {
   if (replaying.value) { trafficControls.value?.redraw(); return }
   try {
-    const response = await fetch(`${API_BASE}/api/dash/rtt/encoding`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({channel: props.channel, encoding: rttEncoding.value}) })
+    const response = await (context?.fetch || fetch)(`${API_BASE}/api/dash/rtt/encoding`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({channel: props.channel, encoding: rttEncoding.value}) })
     if (!response.ok) throw new Error((await response.json()).detail || 'RTT encoding failed')
     settings.value = { ...settings.value, rttEncoding: rttEncoding.value }
     runtimeError.value = null
-  } catch (error) { runtimeError.value = String(error) }
+  } catch (error) { runtimeError.value = String(error); if (strict === true) throw error }
 }
 const scheduler = new RenderScheduler(() => {
   if (viewMode.value !== 'log') return
@@ -640,8 +661,48 @@ function clearVisibleOutput(): void {
   else if (viewMode.value === 'terminal') { terminalPanel.value?.clear(); pausedTerminal = '' }
   else { logPanel.value?.clear(); pausedLines = [] }
 }
-
-
+function catalog() {
+  return [
+    domainAction('rtt.view.set', 'Set this RTT panel mode, chart and display preferences', { mode: { type: 'string', enum: ['log', 'terminal', 'hex'] }, chart: boolArg, collapsed: boolArg, timestamps: boolArg, format: { type: 'string', enum: ['text', 'hex'] } }),
+    domainAction('rtt.pause', 'Pause or resume this display while shared RTT acquisition continues', { paused: boolArg }, ['paused']),
+    domainAction('rtt.clear', 'Clear only this panel displayed output'),
+    domainAction('rtt.chart.reset', 'Reset this panel chart viewport'),
+    domainAction('rtt.chart.range', 'Set this panel chart viewport', { start: { type: 'number' }, end: { type: 'number' }, min: { type: 'number' }, max: { type: 'number' } }, ['start', 'end']),
+    domainAction('rtt.encoding', 'Set the shared decoder encoding for this RTT channel', { encoding: { type: 'string', enum: ['utf-8', 'gb2312', 'gbk', 'gb18030', 'big5'] } }, ['encoding'], 'device'),
+    domainAction('rtt.send', 'Send once to this channel, reporting partial writes as failures', { data: { type: 'string', maxLength: 65536 }, mode: { type: 'string', enum: ['text', 'hex'] }, lineEnding: { type: 'string', enum: ['', '\r', '\n', '\r\n'] } }, ['data'], 'device'),
+  ]
+}
+function read() {
+  const view = { mode: viewMode.value, chart: chartEnabled.value, collapsed: collapsed.value, timestamps: showLogTimestamp.value, format: logDisplayMode.value, paused: renderPaused.value, range: manualTimeline ? visibleRange : null, yRange: manualYRange }
+  return { view, channel: props.channel, running: props.running, sendEnabled: transmitEnabled.value, replaying: replaying.value, encoding: rttEncoding.value, numericChannels: numericChannelNames.value.slice(0, 500), error: runtimeError.value }
+}
+function restore(view: DomainArgs) {
+  if (['log', 'terminal', 'hex'].includes(view.mode)) setViewMode(view.mode)
+  if (typeof view.chart === 'boolean' && chartEnabled.value !== view.chart) toggleChart()
+  if (typeof view.collapsed === 'boolean') collapsed.value = view.collapsed
+  if (typeof view.timestamps === 'boolean') showLogTimestamp.value = view.timestamps
+  if (view.format === 'text' || view.format === 'hex') logDisplayMode.value = view.format
+  if (typeof view.paused === 'boolean' && !replaying.value) { if (view.paused) onPauseRender(); else onResumeRender() }
+  if (Number.isFinite(view.range?.start) && Number.isFinite(view.range?.end) && view.range.end > view.range.start) { visibleRange = { start: view.range.start, end: view.range.end }; manualTimeline = true }
+  if (Number.isFinite(view.yRange?.min) && Number.isFinite(view.yRange?.max) && view.yRange.max > view.yRange.min) manualYRange = { min: view.yRange.min, max: view.yRange.max }
+}
+async function execute(action: string, args: DomainArgs = {}, context?: SemanticExecutionContext) {
+  if (action === 'rtt.view.set') restore(args)
+  else if (action === 'rtt.pause') { requireDomain(!replaying.value, 'Pause replay using replay controls'); if (args.paused) onPauseRender(); else onResumeRender() }
+  else if (action === 'rtt.clear') clearVisibleOutput()
+  else if (action === 'rtt.chart.reset') resetChartViewport()
+  else if (action === 'rtt.chart.range') {
+    requireDomain(args.end > args.start, 'Chart end must be after start')
+    requireDomain((args.min === undefined && args.max === undefined) || (Number.isFinite(args.min) && args.max > args.min), 'Provide a valid min and max together')
+    visibleRange = constrainTimeRange(args.start, args.end); manualTimeline = true
+    if (args.min !== undefined) manualYRange = { min: args.min, max: args.max }
+    scheduler.invalidate('resize')
+  } else if (action === 'rtt.encoding') { requireDomain(props.running || replaying.value, 'RTT is not running'); rttEncoding.value = args.encoding; await onEncodingChange(true, context) }
+  else if (action === 'rtt.send') { requireDomain(transmitEnabled.value, 'RTT channel is not writable'); await sendRtt(encodeRttTransmit(args.data, args.mode || 'text', args.lineEnding || ''), context) }
+  else throw new Error(`Unknown RTT action: ${action}`)
+  return read()
+}
+defineExpose({ catalog, read, execute, restore })
 
 onMounted(() => {
   window.addEventListener('mousemove', onChartMouseMove)
@@ -675,7 +736,7 @@ header h3 { flex: 0 0 auto; margin: 0 4px 0 0; font-size: 14px; }
 .view-mode-switch { display: inline-flex; height: 26px; overflow: hidden; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); }
 .view-mode-switch button { display: inline-flex; align-items: center; gap: 4px; padding: 0 7px; border: 0; border-right: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; font: inherit; font-size: 11px; }
 .view-mode-switch button:last-child { border-right: 0; }
-.view-mode-switch button.active { background: var(--accent); color: #fff; }
+.view-mode-switch button.active { background: var(--accent); color: var(--on-solid); }
 .stream-metrics { display: inline-flex; align-items: center; min-width: 0; color: var(--muted); font-family: var(--font-mono); font-size: 11px; white-space: nowrap; }
 .stream-metrics span + span::before { margin: 0 6px; color: var(--dim); content: '\00b7'; }
 .rtt-secondary-tools :deep(.log-display-controls) { gap: 5px; }
@@ -698,6 +759,5 @@ header h3 { flex: 0 0 auto; margin: 0 4px 0 0; font-size: 14px; }
 @media (max-width: 720px) {
   .rtt-address-row { grid-template-columns: auto minmax(0, 1fr) auto; }
   .address-error, .address-source { grid-column: 1 / -1; }
-  .format-help-popover { right: -70px; }
 }
 </style>

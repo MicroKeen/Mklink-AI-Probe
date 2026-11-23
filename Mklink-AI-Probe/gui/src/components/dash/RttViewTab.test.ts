@@ -143,6 +143,20 @@ describe('RttViewTab binary migration', () => {
     }
   }
 
+  it('exposes each actual RTT channel to the Agent and restores only this panel display', async () => {
+    const wrapper = mount(RttViewTab, { props: { deviceConnected: false, panelId: 'rtt_full' } })
+    await flushPromises()
+    expect(wrapper.vm.catalog().some(action => action.name === 'channel.0.rtt.view.set')).toBe(true)
+    await wrapper.vm.execute('channel.0.rtt.view.set', { mode: 'hex', chart: true })
+    expect(wrapper.vm.read().channels[0].view.mode).toBe('hex')
+    wrapper.vm.restore({ hidden: [0], channels: { 0: { mode: 'log', chart: false } } })
+    expect(wrapper.vm.read().channels[0].view.mode).toBe('log')
+    expect(wrapper.vm.read().view.hidden).toEqual([0])
+    expect(mocks.dash.start).not.toHaveBeenCalled()
+    expect(mocks.api.writeRtt).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
   it('reads channels immediately after search and retains the preview across idle polling', async () => {
     vi.useFakeTimers()
     vi.mocked(fetch).mockImplementation(async (url) => ({ ok: true, json: async () =>
@@ -455,8 +469,13 @@ describe('RttViewTab binary migration', () => {
     expect(wrapper.find('.rtt-format-note').exists()).toBe(false)
     expect(wrapper.find('.format-help-popover').exists()).toBe(false)
 
+    vi.spyOn(wrapper.get('[data-testid="rtt-format-help"]').element, 'getBoundingClientRect').mockReturnValue({ x: 100, y: 100, left: 100, right: 126, top: 100, bottom: 126, width: 26, height: 26 } as DOMRect)
     await wrapper.get('[data-testid="rtt-format-help"]').trigger('click')
     expect(wrapper.get('.format-help-popover').text()).toContain('temp=25.3,speed=1200')
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+    await nextTick()
+    expect(wrapper.find('.format-help-popover').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="rtt-format-help"]').attributes('aria-expanded')).toBe('false')
     wrapper.unmount()
   })
 
@@ -942,6 +961,7 @@ describe('RttViewTab binary migration', () => {
     await nextTick()
 
     expect(wrapper.find('.format-help-popover').exists()).toBe(false)
+    vi.spyOn(wrapper.get('[data-testid="rtt-format-help"]').element, 'getBoundingClientRect').mockReturnValue({ x: 100, y: 100, left: 100, right: 126, top: 100, bottom: 126, width: 26, height: 26 } as DOMRect)
     await wrapper.get('[data-testid="rtt-format-help"]').trigger('click')
     expect(wrapper.get('.format-help-popover').text()).toContain('数据格式')
     expect(wrapper.get('.format-help-popover').text()).toContain('temp=25.3,speed=1200')
