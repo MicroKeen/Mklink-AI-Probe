@@ -134,6 +134,28 @@ def test_mcp_probe_workflow_reaches_backend_and_respects_capture(shared, monkeyp
     assert not control.operation_lock.locked()
 
 
+def test_shared_jtag_otp_extended_read(shared):
+    client, _, _, _, app = shared
+    received = []
+
+    @app.post('/api/device/configuration/hpm-user-otp/read')
+    async def read(body: dict):
+        received.append(body)
+        return {'ok': True}
+
+    session = attach(client)
+    target = {'part_number': 'HPM6E80', 'model': 'V4'}
+    for flags in ({}, {'extended': False}, {'extended': True}):
+        args = {**target, **flags}
+        assert call(client, session, 'hpm_otp_jtag_read', args).status_code == 200
+        assert received[-1] == args
+    for value in ('true', 1, None):
+        assert call(client, session, 'hpm_otp_jtag_read', {**target, 'extended': value}).status_code == 422
+    plan = {**target, 'word': 72, 'expected': 0, 'desired': 1, 'extended': True}
+    assert call(client, session, 'hpm_otp_jtag_plan', plan).status_code == 422
+    assert len(received) == 3
+
+
 def test_offline_mcp_deploy_form_and_jtag_otp_validation(shared, monkeypatch, tmp_path):
     client, control, _, _, app = shared
     seen = []
