@@ -698,11 +698,11 @@ def _register_variable_tools(mcp: Any) -> None:
 
     @mcp.tool()
     @_exclusive_hardware_tool
-    def read_configuration(part_number: str, model: str = "V4") -> dict:
-        """Read a bounded public configuration snapshot; never program OTP or change protection."""
+    def read_configuration(part_number: str, model: str = "V4", otp_words: bool = False) -> dict:
+        """Read configuration fields, or request HPM JTAG words 0..127 with otp_words=True."""
         from .device_configuration import read_configuration as read
 
-        return read(_connected_device(), part_number, model)
+        return read(_connected_device(), part_number, model, otp_words)
 
     from mklink.mcp_peripheral import register_peripheral_offline_tools
     register_peripheral_offline_tools(mcp)

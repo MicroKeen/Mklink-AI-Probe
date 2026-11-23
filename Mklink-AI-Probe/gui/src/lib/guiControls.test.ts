@@ -17,6 +17,13 @@ describe('GUI control addressing', () => {
     expect(() => interactGuiControl(start.id, 'control.click')).toThrow('changed')
     expect(() => guiControl(page.controls.find(c => c.disabled)!.id)).toThrow('disabled')
   })
+  it('reports bounded descriptions for visible controls and omits password descriptions', () => {
+    document.body.innerHTML = '<button aria-label="Word 72"></button><input type="password" aria-description="private">'
+    document.querySelector('button')!.setAttribute('aria-description', 'a'.repeat(300))
+    const [word, password] = listGuiControls().controls
+    expect(word?.description).toHaveLength(256)
+    expect(password?.description).toBeUndefined()
+  })
   it('preserves select and checkbox semantics and rejects unsupported choices', () => {
     document.body.innerHTML = '<select><option value="1">one</option><option disabled value="2">two</option><option value="3">three</option></select><input type="checkbox">'
     const [select, checkbox] = listGuiControls().controls

@@ -17,6 +17,7 @@ interface ConfigurationField {
   shadow: number | null
 }
 interface Configuration {
+  jtag_otp_write_api?: string
   kind: string
   read_supported: boolean
   reason: string
@@ -97,7 +98,8 @@ function display(value: number | string | null, width = 32): string {
   return value
 }
 watch(() => [props.partNumber, props.model], () => void load(), { immediate: true })
-watch([() => deviceStatus.value.connected, () => deviceStatus.value.port, () => deviceStatus.value.idcode], () => {
+watch([() => deviceStatus.value.connected, () => deviceStatus.value.port, () => deviceStatus.value.idcode,
+  () => deviceStatus.value.probe_id, () => deviceStatus.value.device_generation], () => {
   // A replacement chip can have the same part and IDCODE. A connection change
   // invalidates all target snapshots and destroys the child OTP write plan.
   emit('update:changes', {})
@@ -121,7 +123,7 @@ onBeforeUnmount(cancel)
     <p v-if="error" class="configuration-error" role="alert">{{ error }}</p>
     <template v-if="configuration">
       <p v-if="!hideUserOtp || configuration.kind !== 'otp' || !configuration.read_supported">{{ configuration.reason }}</p>
-      <HpmDeviceConfiguration v-if="configuration.kind === 'otp'" :part-number="partNumber" :model="model" :fields="configuration.fields" :read-at="configuration.read_at" :hide-user-otp="hideUserOtp" />
+      <HpmDeviceConfiguration v-if="configuration.kind === 'otp'" :part-number="partNumber" :model="model" :fields="configuration.fields" :read-at="configuration.read_at" :hide-user-otp="hideUserOtp" :write-api="configuration.jtag_otp_write_api" :probe-id="deviceStatus.probe_id" :generation="deviceStatus.device_generation" />
       <template v-else>
       <p v-if="configuration.read_at" data-testid="configuration-timestamp">{{ tr('读取快照', 'Snapshot') }} · {{ configuration.read_at }}</p>
       <div v-if="configuration.fields.length" class="configuration-table">

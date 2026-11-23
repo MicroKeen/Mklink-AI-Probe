@@ -111,6 +111,7 @@ def create_proxy(info, *, port, instance_id, transport=None):
                            'X-MKLink-Submission', 'Content-Disposition',
                            'X-MKLink-Firmware-Name', 'X-MKLink-Firmware-Version',
                            'X-MKLink-Firmware-Source', 'X-MKLink-Firmware-Family',
+                           'X-MKLink-Firmware-Catalog-Source',
                        ])
 
     @app.middleware("http")
@@ -137,6 +138,18 @@ def create_proxy(info, *, port, instance_id, transport=None):
         if app.state.shutdown:
             app.state.shutdown()
         return {"status": "shutting_down", "shared_runtime_stopped": False}
+
+    @app.post('/api/desktop/open-existing')
+    def open_existing(body: dict):
+        from mklink.runtime import RuntimeErrorResponse
+        from mklink.runtime_gui import open_existing_probe_window
+        probe = body.get('probe')
+        if not isinstance(probe, str) or not 1 <= len(probe) <= 128:
+            return JSONResponse({'detail': 'Select a probe first'}, status_code=422)
+        try:
+            return open_existing_probe_window(probe)
+        except RuntimeErrorResponse as exc:
+            return JSONResponse({'detail': str(exc)}, status_code=exc.status_code or 409)
 
     @app.post('/api/runtime/control/view')
     async def desktop_view(body: dict):
@@ -169,6 +182,8 @@ def create_proxy(info, *, port, instance_id, transport=None):
     async def forward(request: Request, path: str):
         headers = {key: value for key, value in request.headers.items() if key.lower() not in HOP_HEADERS}
         headers["X-Auth-Token"] = info["token"]
+        if path.startswith('api/dash/') and path.endswith('/stream'):
+            headers["X-MKLink-View-Owner"] = view_id
         url = httpx.URL(f"http://127.0.0.1:{info['port']}/{path}").copy_with(query=request.url.query.encode())
         upstream = app.state.client.build_request(request.method, url, headers=headers, content=request.stream())
         try:

@@ -431,6 +431,7 @@ export interface ProjectHistory {
 
 // 探针自身固件版本检查
 export interface FirmwareInfo {
+  catalog_source?: 'tencent' | 'github' | 'bundled' | 'local'
   name: string
   version: string
   model: 'V2' | 'V3' | 'V4'
@@ -451,6 +452,7 @@ export type ProbeFirmwareCheckStatus =
   | 'skipped'
 
 export interface ProbeFirmwareCheck {
+  installed_newer?: boolean
   status: ProbeFirmwareCheckStatus
   error?: string
   current_version: string | null
@@ -472,6 +474,7 @@ export type ProbeFirmwareUpgradeStatus =
   | 'no_firmware'
 
 export interface ProbeFirmwareUpgrade {
+  catalog_source?: FirmwareInfo['catalog_source']
   status: ProbeFirmwareUpgradeStatus
   current_version?: string
   latest_version?: string

@@ -76,10 +76,75 @@ def test_short_read_and_unknown_chip_are_not_zero_snapshots():
     dev.read_memory = lambda *_: b"\x00\x00"
     with pytest.raises(RuntimeError, match="incomplete"):
         read_configuration(dev, "HPM5301")
-    for chip in ("HPM6200", "HPM5301INVALID", "UNSUPPORTED"):
+    for chip in ("HPM9900", "HPM5301INVALID", "UNSUPPORTED"):
         assert not describe_configuration(chip)["read_supported"]
     with pytest.raises(ValueError):
         describe_configuration("HPM5301", "V1")
+
+
+@pytest.mark.parametrize("part,base", [
+    ("HPM6E80", 0xF3158000), ("HPM6P81", 0xF3158000), ("HPM5E31", 0xF3158000),
+    ("HPM6450", 0xF40C8000), ("HPM6750", 0xF40C8000), ("HPM6360", 0xF40C8000),
+    ("HPM6280", 0xF40C8000), ("HPM6880", 0xF3050000), ("HPM5301xEGx", 0xF3050000),
+    ("HPM5151", 0xF00EC000),
+])
+def test_jtag_word_snapshot_uses_family_banks_and_respects_access_locks(part, base):
+    import struct
+    dev = HpmDevice()
+    dev.mcu_name = ""
+    chip_id = 0x11705142 if part.startswith("HPM53") else 0x12345
+    image = {base + 0x500: chip_id, base + 0x400: 1 << 1,
+             base + 0x600: 3 << 8, base + 0x200: 3 << 10,
+             base + 0x5fc: 0x87654321, base + 0x1fc: 0xabcdef00}
+    def read(address, size):
+        assert base <= address < address + size <= base + 0x620
+        for blocked in (base + 0x410, base + 20):
+            assert not address <= blocked < address + size
+        return b''.join(struct.pack('<I', image.get(a, 0)) for a in range(address, address + size, 4))
+    dev.read_memory = read
+    result = read_configuration(dev, part, otp_words=True)
+    rows = result['words']
+    assert [r['word'] for r in rows] == list(range(128))
+    assert rows[4]['current'] is None and rows[4]['shadow'] == 0
+    assert rows[5]['shadow'] is None and rows[5]['current'] == 0
+    assert rows[6]['locked'] and not rows[8]['locked']
+    assert (rows[127]['current'], rows[127]['shadow']) == (0x87654321, 0xabcdef00)
+    assert result['chip_id'] == chip_id and result['source'] == 'jtag_otp'
+
+
+def test_jtag_denied_identity_is_never_read():
+    dev = HpmDevice()
+    dev.mcu_name = ''
+    def read(address, size):
+        assert (address, size) == (0xF3158610, 4)
+        return (3).to_bytes(4, 'little')
+    dev.read_memory = read
+    with pytest.raises(ValueError, match='read-locked'):
+        read_configuration(dev, 'HPM6E80', otp_words=True)
+
+
+@pytest.mark.parametrize("fault", ["identity", "locks", "short"])
+def test_jtag_full_snapshot_rejects_changed_target_or_partial_reply(fault):
+    dev = HpmDevice()
+    dev.mcu_name = ''
+    initial_id = 0x12345
+    def read(address, size):
+        if address == 0xF3158500:
+            return initial_id.to_bytes(4, 'little')
+        if address == 0xF3158600:
+            changed = fault == 'locks' and address in dev.reads
+            dev.reads.append(address)
+            return int(changed).to_bytes(size, 'little')
+        if address == 0xF3158400:
+            if fault == 'short':
+                return bytes(size - 1)
+            words = bytearray(size)
+            words[256:260] = (initial_id + (fault == 'identity')).to_bytes(4, 'little')
+            return bytes(words)
+        return bytes(size)
+    dev.read_memory = read
+    with pytest.raises((RuntimeError, ValueError), match='changed|incomplete'):
+        read_configuration(dev, 'HPM6E80', otp_words=True)
 
 
 @pytest.mark.parametrize(

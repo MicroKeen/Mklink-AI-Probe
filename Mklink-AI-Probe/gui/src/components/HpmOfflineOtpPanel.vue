@@ -6,13 +6,15 @@ import { API_BASE } from '../lib/runtimeEndpoint'
 import { customOtpEntries, otpCsv, otpHex as hex, parseOtpCsv, type OtpEntry } from '../lib/otpConfiguration'
 import { saveTextFile } from '../lib/downloadTextFile'
 import HpmOtpGrid from './HpmOtpGrid.vue'
+import HpmUserOtpPanel from './HpmUserOtpPanel.vue'
+import { hpmJtagOtpProfile, otpFieldValue } from '../lib/hpmOtpProfiles'
 import DeviceConfigurationPanel from './DeviceConfigurationPanel.vue'
 import type { HpmOfflineOtp } from '../types/offlineFlash'
 
 const props = withDefaults(defineProps<{ partNumber?: string; probeId?: string; active?: boolean; disabled?: boolean }>(), { partNumber: 'HPM5301' })
 const emit = defineEmits<{ change: [value: HpmOfflineOtp | undefined, pending: boolean] }>()
 const { deviceStatus } = useMklinkApi()
-interface Word { word: number; current: number; shadow: number; locked: boolean }
+interface Word { word: number; current: number | null; shadow: number | null; locked: boolean | null }
 interface Draft extends OtpEntry { expected: string }
 const view = ref<'read' | 'write'>('read'), columns = ref(4), selected = ref(69)
 const rows = ref<Word[]>([]), hardLock = ref<number | null>(null), readAt = ref('')
@@ -22,32 +24,38 @@ const busy = ref(false), importing = ref(false), saving = ref(false), error = re
 let revision = 0, disposed = false
 const unavailable = computed(() => props.disabled || busy.value || importing.value)
 const readAllowed = computed(() => deviceStatus.value.connected && (!props.probeId || props.probeId === deviceStatus.value.probe_id))
-const readEntries = computed(() => Array.from({ length: 11 }, (_, index) => {
-  const word = index + 69, row = rows.value.find(item => item.word === word)
-  return { word, value: row?.current ?? null, shadow: row?.shadow ?? null, locked: row?.locked ?? null }
-}))
+const profile = computed(() => hpmJtagOtpProfile(props.partNumber))
+const legacyWrite = computed(() => ['HPM5301', 'HPM5301XEGX'].includes(props.partNumber.toUpperCase()))
+const genericWrite = ref(false)
+const canWrite = computed(() => legacyWrite.value || genericWrite.value)
+const readEntries = computed(() => rows.value.map(row => ({ ...row, value: row.current })))
 const selectedEntry = computed(() => rows.value.find(item => item.word === selected.value))
+const selectedFields = computed(() => profile.value?.words[selected.value]?.fields || [])
+function expectedHex(word: number) {
+  const current = rows.value[word]?.current
+  return current == null ? '' : hex(current)
+}
 function u32(text: string): number | null {
   if (!/^(?:0x[\da-f]{1,8}|\d+)$/i.test(text.trim())) return null
   const value = Number(text.trim())
   return Number.isSafeInteger(value) && value >= 0 && value <= 0xffffffff ? value : null
 }
 const hasDraft = computed(() => pending.value.length > 0 || locks.value.length > 0 || editing.value)
-const valid = computed(() => !editing.value && (pending.value.length > 0 || locks.value.length > 0)
+const valid = computed(() => canWrite.value && !editing.value && (pending.value.length > 0 || locks.value.length > 0)
   && pending.value.every(item => {
     const expected = u32(item.expected), current = rows.value.find(row => row.word === item.word)
-    return expected !== null && ((expected & item.value) >>> 0) === expected
-      && (!current || (current.current === expected && !current.locked))
+    return expected !== null && (!genericWrite.value || expected !== item.value) && ((expected & item.value) >>> 0) === expected
+      && (!current || (current.current === expected && current.locked === false))
   }) && (!locks.value.length || (u32(expectedHardLock.value) !== null
-    && (hardLock.value === null || u32(expectedHardLock.value) === hardLock.value))))
+    && (!rows.value.length || u32(expectedHardLock.value) === hardLock.value))))
 watch([pending, locks, expectedHardLock, editing, rows, hardLock], () => { confirmed.value = false }, { deep: true, flush: 'sync' })
 watch([pending, locks, expectedHardLock, confirmed, valid, hasDraft], () => emit('change', valid.value && confirmed.value ? {
   words: pending.value.map(item => ({ word: item.word, expected: hex(u32(item.expected)!), desired: hex(item.value) })),
   locks: [...locks.value], expected_hard_lock: locks.value.length ? hex(u32(expectedHardLock.value)!) : '', confirm_irreversible: true,
 } : undefined, hasDraft.value), { deep: true })
-function clearSnapshot() { rows.value = []; hardLock.value = null; readAt.value = ''; confirmed.value = false }
+function clearSnapshot() { rows.value = []; hardLock.value = null; readAt.value = ''; confirmed.value = false; genericWrite.value = false }
 watch([() => props.partNumber, () => props.probeId, () => deviceStatus.value.probe_id, () => deviceStatus.value.device_generation, () => deviceStatus.value.connected], () => {
-  revision++; clearSnapshot(); pending.value = []; locks.value = []; expectedHardLock.value = ''; editing.value = false; error.value = ''
+  revision++; clearSnapshot(); pending.value = []; locks.value = []; expectedHardLock.value = ''; editing.value = false; error.value = ''; view.value = 'read'
 })
 onBeforeUnmount(() => { disposed = true; revision++ })
 async function refresh() {
@@ -55,25 +63,31 @@ async function refresh() {
   const current = ++revision
   clearSnapshot(); busy.value = true; error.value = ''
   try {
-    const response = await fetch(`${API_BASE}/api/device/configuration/hpm-user-otp/read`, {
+    const probe = props.probeId || deviceStatus.value.probe_id
+    const response = await fetch(`${API_BASE}/api/device/configuration/read`, {
       method: 'POST', headers: { 'Content-Type': 'application/json',
-        ...(props.probeId ? { 'X-MKLink-Probe': props.probeId } : {}),
+        ...(probe ? { 'X-MKLink-Probe': probe } : {}),
         ...(deviceStatus.value.device_generation !== undefined ? { 'X-MKLink-Device-Generation': String(deviceStatus.value.device_generation) } : {}) },
-      body: JSON.stringify({ part_number: props.partNumber, model: 'V4' }),
+      body: JSON.stringify({ part_number: props.partNumber, model: 'V4', otp_words: true }),
     })
     const body = await response.json()
     if (!response.ok) throw new Error(typeof body.detail === 'string' ? body.detail : body.detail?.message || `HTTP ${response.status}`)
     if (disposed || revision !== current) return
-    rows.value = body.words; hardLock.value = body.hard_lock; readAt.value = new Date().toLocaleString()
-    pending.value = pending.value.map(item => ({ ...item, expected: hex(rows.value.find(row => row.word === item.word)!.current) }))
-    expectedHardLock.value = hex(body.hard_lock)
+    if (body.source !== 'jtag_otp' || !Array.isArray(body.words) || body.words.length !== 128 ||
+        !body.words.every((row: Word, i: number) => row.word === i)) {
+      throw new Error(tr('共享后台未返回完整 JTAG OTP 快照，请检查上位机版本。', 'Incomplete JTAG OTP snapshot. Check the host version.'))
+    }
+    rows.value = body.words; hardLock.value = body.hard_lock; readAt.value = body.read_at
+    genericWrite.value = body.jtag_otp_write_api === 'rom_v1'
+    pending.value = pending.value.map(item => ({ ...item, expected: expectedHex(item.word) }))
+    expectedHardLock.value = body.hard_lock == null ? '' : hex(body.hard_lock)
   } catch (cause) { if (!disposed && revision === current) error.value = cause instanceof Error ? cause.message : String(cause) }
   finally { busy.value = false }
 }
 function merge(entries: OtpEntry[]) {
   pending.value = [...pending.value.filter(item => !entries.some(entry => entry.word === item.word)), ...entries.map(item => ({
     ...item, expected: pending.value.find(row => row.word === item.word)?.expected
-      ?? (rows.value.some(row => row.word === item.word) ? hex(rows.value.find(row => row.word === item.word)!.current) : ''),
+      ?? expectedHex(item.word),
   }))].sort((a, b) => a.word - b.word)
 }
 function addDialog(word = 69) {
@@ -103,7 +117,7 @@ async function importFile(event: Event) {
 async function exportFile() {
   if (saving.value) return
   saving.value = true; error.value = ''
-  try { await saveTextFile(`${props.partNumber}-JTAG-OTP-${view.value}.csv`, otpCsv(view.value === 'read' ? rows.value.map(row => ({ word: row.word, value: row.current })) : pending.value)) }
+  try { await saveTextFile(`${props.partNumber}-JTAG-OTP-${view.value}.csv`, otpCsv(view.value === 'read' ? rows.value.flatMap(row => row.current === null ? [] : [{ word: row.word, value: row.current }]) : pending.value)) }
   catch (cause) { error.value = String(cause) }
   finally { saving.value = false }
 }
@@ -111,23 +125,31 @@ async function exportFile() {
 
 <template>
   <section class="otp-workspace" data-testid="offline-otp" :aria-busy="busy">
-    <header><h2>{{ tr('OTP 读写', 'OTP Read / Write') }}</h2><small>{{ tr('所选型号', 'Selected target') }} {{ partNumber }} · JTAG · {{ tr('用户区', 'User area') }} Word 69–79</small></header>
+    <header><h2>{{ canWrite ? tr('OTP 读写', 'OTP Read / Write') : tr('OTP 读取', 'Read OTP') }}</h2><small>{{ tr('所选型号', 'Selected target') }} {{ partNumber }} · JTAG · Word 0–127</small></header>
     <div class="toolbar">
       <div class="actions" role="group" :aria-label="tr('OTP 视图', 'OTP view')">
         <button class="btn" :aria-pressed="view === 'read'" data-testid="offline-otp-read-view" @click="view = 'read'">{{ tr('读视图', 'Read view') }}</button>
-        <button class="btn" :aria-pressed="view === 'write'" data-testid="offline-otp-write-view" @click="view = 'write'">{{ tr('写视图', 'Write view') }} <span v-if="pending.length">{{ pending.length }}</span></button>
+        <button v-if="canWrite" class="btn" :aria-pressed="view === 'write'" data-testid="offline-otp-write-view" @click="view = 'write'">{{ tr('写视图', 'Write view') }} <span v-if="pending.length">{{ pending.length }}</span></button>
       </div>
       <div class="actions"><button v-if="view === 'write'" class="btn" :disabled="unavailable" @click="fileInput?.click()">{{ tr('导入', 'Import') }}</button><button class="btn" :disabled="saving || !(view === 'read' ? rows.length : pending.length)" @click="exportFile">{{ tr('导出', 'Export') }}</button><button class="btn" :disabled="unavailable || !readAllowed" data-testid="offline-otp-read" @click="refresh">{{ busy ? tr('读取中…', 'Reading…') : tr('刷新', 'Refresh') }}</button></div>
     </div>
     <div class="workspace">
       <div class="table-heading"><h3>OTP {{ view === 'read' ? 'Readable' : 'Writable' }} Words {{ tr('表', 'Table') }}</h3><label>{{ tr('列数', 'Columns') }} <select v-model.number="columns" aria-label="JTAG OTP columns"><option :value="4">4</option><option :value="8">8</option></select></label></div>
       <template v-if="view === 'read'">
-        <p v-if="!readAllowed" class="hint">{{ tr('请先在配置页连接所选下载器，再刷新 OTP。离线配方也可手动填写预期旧值。', 'Connect the selected probe in Configuration before refreshing OTP. Expected values can also be entered manually for an offline recipe.') }}</p>
-        <HpmOtpGrid :entries="readEntries" :columns="columns" :selected="selected" @select="selected = $event" />
-        <p v-if="selectedEntry" class="word-detail">Word {{ selected }} · {{ hex(selectedEntry.current) }} · {{ selectedEntry.current.toString(2).padStart(32, '0') }}<br>{{ tr('影子值', 'Shadow') }} {{ hex(selectedEntry.shadow) }} · {{ tr('锁定', 'Locked') }} {{ selectedEntry.locked ? tr('是', 'Yes') : tr('否', 'No') }}</p>
-        <details v-if="active !== false && readAllowed" class="system-fields"><summary>{{ tr('系统字段（只读）', 'System fields (read-only)') }}</summary><DeviceConfigurationPanel expanded hide-user-otp :part-number="partNumber" model="V4" :unlock-before-download="false" :lock-after-download="false" /></details>
+        <p v-if="!readAllowed" class="hint">{{ tr('请先在配置页连接所选下载器，再刷新 OTP。', 'Connect the selected probe in Configuration before refreshing OTP.') }}</p>
+        <p v-else-if="!rows.length && !error" class="hint">{{ busy ? tr('正在读取 OTP…', 'Reading OTP…') : tr('点击刷新以读取所选芯片的 OTP。', 'Refresh to read OTP from the selected target.') }}</p>
+        <HpmOtpGrid v-if="rows.length" readback :entries="readEntries" :columns="columns" :selected="selected" :definitions="profile?.words" @select="selected = $event" />
+        <div v-if="selectedEntry" class="word-detail">Word {{ selected }} · {{ selectedEntry.current === null ? '—' : hex(selectedEntry.current) }}
+          <template v-if="selectedEntry.current !== null"> · {{ selectedEntry.current.toString(2).padStart(32, '0') }}
+            <div v-for="field in selectedFields" :key="field.name">{{ field.name }}: 0x{{ otpFieldValue(selectedEntry.current, field) }}</div>
+          </template>
+          <div>{{ tr('影子值', 'Shadow') }} {{ selectedEntry.shadow === null ? '—' : hex(selectedEntry.shadow) }} · {{ tr('写保护', 'Write protection') }} {{ selectedEntry.locked === null ? tr('未知', 'Unknown') : selectedEntry.locked ? tr('是', 'Yes') : tr('否', 'No') }}</div>
+        </div>
+        <details v-if="legacyWrite && active !== false && readAllowed" class="system-fields"><summary>{{ tr('系统字段（只读）', 'System fields (read-only)') }}</summary><DeviceConfigurationPanel expanded hide-user-otp :part-number="partNumber" model="V4" :unlock-before-download="false" :lock-after-download="false" /></details>
       </template>
       <template v-else>
+        <details v-if="genericWrite && readAllowed && active !== false" class="system-fields"><summary>{{ tr('直接写入当前芯片', 'Program connected target') }}</summary><HpmUserOtpPanel :part-number="partNumber" model="V4" generic :probe-id="probeId || deviceStatus.probe_id" :generation="deviceStatus.device_generation" /></details>
+        <p v-if="genericWrite" class="hint">{{ tr('写入需要下载器支持 JTAG OTP ROM v1，目标为稳定的 3.3 V 供电。', 'Programming requires probe JTAG OTP ROM v1 and a stable 3.3 V target supply.') }}</p>
         <div class="actions edit-actions"><button class="btn" :disabled="unavailable" data-testid="offline-otp-add" @click="addDialog()">{{ tr('添加 Words', 'Add Words') }}</button><button class="btn" :disabled="unavailable || !hasDraft" data-testid="offline-otp-clear" @click="pending = []; locks = []; editing = false">{{ tr('移除所有', 'Remove all') }}</button><span>{{ tr('点击字可编辑', 'Click a word to edit') }}</span></div>
         <HpmOtpGrid v-if="pending.length" :entries="pending" :columns="columns" :selected="selected" :disabled="unavailable" @select="selected = $event; addDialog($event)" />
         <p v-else-if="!editing" class="empty">{{ tr('添加 Words 或导入 CSV / TXT 配置。', 'Add Words or import a CSV / TXT configuration.') }}</p>
@@ -141,14 +163,15 @@ async function exportFile() {
         <section class="preview">
           <h4>{{ tr('随镜像部署的 OTP 配置', 'OTP configuration deployed with images') }}</h4>
           <table v-if="pending.length"><thead><tr><th>Word</th><th>{{ tr('预期旧值', 'Expected value') }}</th><th>{{ tr('目标值', 'Desired value') }}</th><th /></tr></thead><tbody><tr v-for="item in pending" :key="item.word"><td>{{ item.word }}</td><td><input v-model="item.expected" :disabled="unavailable" :aria-label="`OTP expected ${item.word}`" :placeholder="tr('读取或手动填写', 'Read or enter explicitly')"></td><td>{{ hex(item.value) }}</td><td><button class="btn" :disabled="unavailable" :aria-label="`Remove Word ${item.word}`" @click="pending = pending.filter(row => row.word !== item.word)">{{ tr('移除', 'Remove') }}</button></td></tr></tbody></table>
-          <details><summary>{{ tr('永久写保护', 'Permanent write protection') }}</summary><p>{{ tr('锁定最后执行，之后整个组无法再次写入。请先确定组内所有数据。', 'Locks run last and prevent further programming of the entire group. Finalize all data in the group first.') }}</p><label v-for="group in [18, 19]" :key="group" class="confirmation"><input v-model="locks" type="checkbox" :value="group" :disabled="unavailable">Word {{ group * 4 }}–{{ group * 4 + 3 }}</label><label v-if="locks.length">{{ tr('预期 HARD_LOCK（从待烧芯片读取，不要猜测）', 'Expected HARD_LOCK (read from the chip; do not guess)') }}<input v-model="expectedHardLock" :disabled="unavailable" aria-label="Offline OTP hard lock"></label></details>
+          <details v-if="legacyWrite"><summary>{{ tr('永久写保护', 'Permanent write protection') }}</summary><p>{{ tr('锁定最后执行，之后整个组无法再次写入。请先确定组内所有数据。', 'Locks run last and prevent further programming of the entire group. Finalize all data in the group first.') }}</p><label v-for="group in [18, 19]" :key="group" class="confirmation"><input v-model="locks" type="checkbox" :value="group" :disabled="unavailable">Word {{ group * 4 }}–{{ group * 4 + 3 }}</label><label v-if="locks.length">{{ tr('预期 HARD_LOCK（从待烧芯片读取，不要猜测）', 'Expected HARD_LOCK (read from the chip; do not guess)') }}<input v-model="expectedHardLock" :disabled="unavailable" aria-label="Offline OTP hard lock"></label></details>
           <p>{{ tr('先检查芯片和旧值，再下载并逐字节校验全部固件，最后写入用户数据、回读并永久锁定。失败即停止；旧下载器固件须先升级。', 'Check the chip and expected values, then program and byte-verify every image, write and read back user data, and apply permanent locks last. Stop on failure. Older probe firmware requires an upgrade.') }}</p>
           <p v-if="hasDraft && !valid" role="status">{{ tr('请完成编辑，检查预期旧值、目标值和保护锁。', 'Finish editing and check expected values, desired values and locks.') }}</p>
           <label class="confirmation"><input v-model="confirmed" type="checkbox" :disabled="unavailable || !valid" data-testid="offline-otp-confirm">{{ tr('确认部署并触发后永久写入以上配置', 'Confirm permanent programming of this configuration when deployed and triggered') }}</label>
         </section>
       </template>
     </div>
-    <footer><p v-if="error" role="alert" class="error">{{ error }}</p><p v-if="hardLock !== null" class="identity">HARD_LOCK {{ hex(hardLock) }} · {{ readAt }}</p><small>{{ tr('— 表示未读取。配方应用于每一轮芯片；失败或换板后请回读确认，不能自动重试。', '— means unread. The recipe applies to every chip in the run; read back after failure or changing boards. Never retry automatically.') }}</small></footer>
+    <footer><p v-if="error" role="alert" class="error">{{ error }}</p><p v-if="readAt" class="identity">HARD_LOCK {{ hardLock === null ? '—' : hex(hardLock) }} · {{ readAt }}</p><small>{{ tr('— 表示尚未读取或该字禁止访问。', '— indicates an unread or access-disabled word.') }}
+      <template v-if="view === 'write'">{{ tr('配方应用于每一轮芯片；失败或换板后请回读确认。', 'The recipe applies to every chip in the run. Read back after failure or changing boards.') }}</template></small></footer>
     <input ref="fileInput" type="file" accept=".csv,.txt" class="file-input" aria-label="OTP CSV file" @change="importFile">
   </section>
 </template>

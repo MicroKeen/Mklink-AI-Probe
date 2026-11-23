@@ -2,6 +2,7 @@
 from dataclasses import replace
 import hashlib
 import io
+import ssl
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -106,7 +107,7 @@ def test_tencent_priority_and_bad_download_falls_back_without_changing_bytes(mon
     assert selected.build_id == old.build_id
     selected.download_source = 'tencent'; selected.download_url = newer.download_urls['tencent']
     requested = []
-    def get(request, timeout):
+    def get(request, timeout, **kwargs):
         requested.append(request.full_url)
         return io.BytesIO(uf2(b'old content') if 'cos.test' in request.full_url else info.path.read_bytes())
     monkeypatch.setattr(fc, 'urlopen', get)
@@ -121,7 +122,18 @@ def test_tencent_priority_and_bad_download_falls_back_without_changing_bytes(mon
 def test_packaged_catalog_pins_all_four_delivery_products():
     entries = fc.bundled_firmwares()
     assert {(i.family,i.model,i.version_str) for i in entries} == {
-        ('microlink','V2','V2.9.3'),('microlink','V3','V3.6.8'),
-        ('microlink','V4','V4.7.2'),('hpmlink','V4','V4.7.2')}
+        ('microlink','V2','V2.9.5'),('microlink','V3','V3.7.0'),
+        ('microlink','V4','V4.7.4'),('hpmlink','V4','V4.7.4')}
     assert all(i.sha256 and i.size and i.build_id and 'github' in i.download_urls for i in entries)
     assert all(i.download_urls['github'].startswith('https://github.com/MicroKeen/Mklink-AI-Probe/') for i in entries)
+
+
+def test_frozen_https_has_verified_roots_without_host_ca_files(monkeypatch):
+    for name in ('SSL_CERT_FILE', 'SSL_CERT_DIR'):
+        monkeypatch.delenv(name, raising=False)
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    monkeypatch.setattr(ssl, 'create_default_context', lambda: context)
+    monkeypatch.setattr(fc, 'urlopen', lambda request, *, timeout, context: context)
+    checked = fc._open_firmware_url(fc.Request('https://example.test'), timeout=1)
+    assert checked.check_hostname and checked.verify_mode == ssl.CERT_REQUIRED
+    assert checked.cert_store_stats()['x509_ca'] > 0

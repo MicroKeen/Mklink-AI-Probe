@@ -109,7 +109,7 @@ def test_materialize_manifest_firmware_validates_and_falls_back(monkeypatch):
     })[0]
     requested = []
 
-    def download(request, timeout):
+    def download(request, timeout, **kwargs):
         requested.append(request.full_url)
         if "tencent" in request.full_url:
             raise URLError("unavailable")
@@ -357,7 +357,7 @@ def test_materialize_firmware_does_not_query_gitee_when_github_succeeds(monkeypa
         "_remote_firmware_from_source",
         lambda model, source, **kwargs: (_ for _ in ()).throw(AssertionError("Gitee must stay lazy")),
     )
-    monkeypatch.setattr(fc, "urlopen", lambda request, timeout: io.BytesIO(b"github-uf2"))
+    monkeypatch.setattr(fc, "urlopen", lambda request, **kwargs: io.BytesIO(b"github-uf2"))
 
     path, temporary, source = fc._materialize_firmware(github)
     try:
@@ -465,6 +465,7 @@ def test_firmware_download_endpoint_returns_binary_and_source(monkeypatch, tmp_p
     assert response.headers["x-mklink-firmware-name"] == firmware.name
     assert response.headers["x-mklink-firmware-version"] == "V3.3.7"
     assert response.headers["x-mklink-firmware-source"] == "gitee"
+    assert response.headers["x-mklink-firmware-catalog-source"] == "local"
     assert response.headers["x-mklink-firmware-family"] == "microlink"
 
 

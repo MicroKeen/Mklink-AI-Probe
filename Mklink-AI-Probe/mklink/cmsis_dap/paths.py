@@ -3,6 +3,7 @@
 from dataclasses import dataclass, field
 import os
 from pathlib import Path
+import platform
 
 
 def _default_root() -> Path:
@@ -10,11 +11,23 @@ def _default_root() -> Path:
     if configured:
         return Path(configured)
 
-    local_app_data = os.environ.get("LOCALAPPDATA")
-    if local_app_data:
-        return Path(local_app_data) / "MKLink" / "pyocd"
+    legacy = Path.home() / "AppData" / "Local" / "MKLink" / "pyocd"
+    if platform.system() == "Windows":
+        local = os.environ.get("LOCALAPPDATA")
+        return Path(local) / "MKLink" / "pyocd" if local else legacy
 
-    return Path.home() / "AppData" / "Local" / "MKLink" / "pyocd"
+    from mklink.web_entry import platform_data_dir
+    native = platform_data_dir().parent / "pyocd"
+    # Keep an established, writable catalog on upgrade. An unrelated AppData
+    # directory (or an empty snapshot directory) does not select the old path.
+    try:
+        if not native.exists() and os.access(legacy, os.W_OK | os.X_OK):
+            markers = ("state.json", "index/index.json", "index/aliases.json", "custom-flm/registry.json")
+            if any((legacy / entry).is_file() for entry in markers):
+                return legacy
+    except OSError:
+        pass  # An inaccessible legacy directory must not block the local service.
+    return native
 
 
 @dataclass(frozen=True)

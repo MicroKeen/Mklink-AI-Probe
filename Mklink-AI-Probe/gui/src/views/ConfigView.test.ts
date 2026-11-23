@@ -32,6 +32,7 @@ const mocks = vi.hoisted(() => {
       uploadFileSource: vi.fn(),
       probeFirmwareCheck: vi.fn(),
       upgradeProbeFirmware: vi.fn(),
+      openExistingProbe: vi.fn(),
       downloadProbeFirmware: vi.fn(),
     },
     toastError: vi.fn(),
@@ -195,7 +196,11 @@ describe('ConfigView', () => {
     await flushPromises()
     expect(mocks.api.disconnectDevice).not.toHaveBeenCalled()
     expect(wrapper.get('[data-testid="connected-port"]').text()).toContain('TEST_PORT_A')
-    expect(mocks.toastError).toHaveBeenCalledWith(expect.stringContaining('另一客户端'))
+    expect(mocks.toastWarn).toHaveBeenCalledWith(expect.stringContaining('已有连接'))
+    await wrapper.get('[data-testid="open-existing-probe"]').trigger('click')
+    expect(mocks.api.openExistingProbe).toHaveBeenCalledWith('usb-b')
+    expect(mocks.api.connectDevice).toHaveBeenCalledTimes(1)
+    expect(mocks.api.disconnectDevice).not.toHaveBeenCalled()
     expect(mocks.deviceStatus.connected).toBe(true)
     wrapper.unmount()
   })
@@ -923,6 +928,22 @@ describe('ConfigView', () => {
     await flushPromises()
     expect(wrapper.get('[data-testid="firmware-check-status"]').text()).toContain('Probe unavailable')
     expect(mocks.toastError).toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('identifies fallback firmware metadata when an installed build is newer', async () => {
+    mocks.api.probeFirmwareCheck.mockResolvedValueOnce({
+      status: 'ok', current_version: 'V4.7.3', installed_newer: true,
+      recommended_uf2: { version: 'V4.7.2', catalog_source: 'bundled' },
+    })
+    const wrapper = await mountView()
+    await wrapper.get('[data-testid="config-section-firmware"]').trigger('click')
+    await wrapper.get('[data-testid="check-firmware"]').trigger('click')
+    await flushPromises()
+    const text = wrapper.get('[data-testid="firmware-check-status"]').text()
+    expect(text).toContain('本地目录版本：V4.7.2')
+    expect(text).toContain('尚未从云端确认')
+    expect(text).not.toContain('可用固件')
     wrapper.unmount()
   })
 

@@ -180,6 +180,8 @@ MCP 的 `systemview_decode(hex_bytes=...)` 和 `systemview_analyze_events(events
 离线生成字段说明和已支持的配置脚本，无需连接下载器，生成不会执行脚本。
 `read_configuration(part_number=..., model="V4")` 通过已连接的共享后台读取受限配置快照，
 须先停止 CDC 采集；保留芯片身份、容量与字段范围校验，不改变保护状态或写入 OTP。
+HPM V4 的 JTAG 完整读视图使用 `otp_words=True`，CLI 对应
+`python -m mklink configuration read --chip HPM6E80 --model V4 --otp-words`。操作多台探针时用 `--probe` 选择目标。
 
 配置页“连接设备”的接口/时钟统一管理 RTT、SystemView、SuperWatch 与普通内存访问。
 SWD/JTAG 分别保存，默认 10 MHz；选择接口只保存配置，不切换物理调试模式。
@@ -616,8 +618,9 @@ V2.9.0 或配套 V3/V4 固件报告 `MUX_TARGET=1` 后，GUI/CLI/MCP 自动使�
   256 字节，失败或结果未知时不得整条重发。已被 RTT 环形缓冲接受不等于目标应用
   已处理，目标协议仍应自行确认。
 - CLI `python -m mklink rtt --probe <设备> --channels 0 1 --addr <RTT地址> --duration 3`
-  创建有限采集；读取已有采集可用 `runtime call rtt_read_channel --probe <设备>
-  --arguments '{"channel":1}'`。共享 Python SDK 使用相同的 `call()` 能力。
+  创建有限采集。GUI 已在采集时，`mklink rtt --duration 5` 读取接下来五秒内所有活动通道的文本和波形。可指定任意非负时长，`0` 持续到 Ctrl+C。`--channels` 可选择已有通道。CLI 自动维护各通道的读取位置，多个窗口可以同时读取。
+  大流量会先输出 `rtt_chunk`，末条结果的 `channels` 包含剩余文本和字节、总接收量、丢失计数与最近的波形点。已有脚本仍可通过 `rtt_read_channel` 显式分页。
+- CLI/MCP 已启动采集且 GUI 正在订阅同一条实时流时，普通停止请求会提示保留采集。结束客户端可用 detach。保护按探针和实际打开的流生效。
 - 配套固件协商增量 RTT（bit 7）后，RTT、SystemView、SuperWatch 可并行，
   RTT/SystemView 须同一控制块；同通道一次读取再扇出。缺少能力时不回退独占流。
   内存/变量读写、批量内存读取可同时发命令。下载由后台自动暂停恢复；

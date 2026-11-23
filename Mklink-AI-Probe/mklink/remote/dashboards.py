@@ -404,6 +404,9 @@ class RttChannelDecoder:
         self._flush_numeric_batch()
         self._flush_terminal_batch()
 
+    def get_history(self) -> list[dict]:
+        return list(self._history)
+
 
 class _CaptureStartup:
     """One worker generation's actual hardware-start result, not thread creation."""
@@ -788,9 +791,6 @@ class RttStreamManager(RttChannelDecoder):
             raise ValueError("RTT channel is not active")
         return decoder.set_encoding(encoding)
 
-    def get_history(self) -> list[dict]:
-        return list(self._history)
-
     def read_channel(self, channel=0, cursor=0, session=None):
         return self._channel_cache.read(channel, cursor, session)
 
@@ -840,6 +840,7 @@ class RttStreamManager(RttChannelDecoder):
         from mklink.mux import MuxTransport
         transport = getattr(getattr(device, '_bridge', None), '_mux', None)
         transport_stats = transport.stats() if isinstance(transport, MuxTransport) else None
+        session, positions = self._channel_cache.positions()
         return {
             "running": self.running,
             "progress_state": ('error' if self._error else 'streaming' if self.running and control_block_addr
@@ -851,7 +852,9 @@ class RttStreamManager(RttChannelDecoder):
             "stats": self._stats,
             "error": self._error,
             "history_size": len(self._history),
-            "channels": self._channel_cache.channels,
+            "channels": list(positions),
+            "primary_channel": start_info.get("channel", next(iter(positions), None)),
+            "channel_cursors": positions,
             "channel_status": {str(ch): {"numeric_channels": list(d._numeric_channels),
                 "encoding": d._line_assembler.encoding, "stats": dict(d._stats),
                 "line_parser": d._line_assembler.status()} for ch, d in self._channel_decoders.items()},
@@ -862,7 +865,7 @@ class RttStreamManager(RttChannelDecoder):
             "line_parser": self._line_assembler.status(),
             "down_buffers": down_buffers,
             "up_buffers": [dict(item) for item in start_info.get('up_buffers', []) if isinstance(item, dict)],
-            "session": self._capture_session,
+            "session": session or None,
             "control_block_addr": control_block_addr,
             "startup_timings_ms": dict(start_info.get("startup_timings_ms", {})),
             "down_buffer_source": down_buffer_source,
