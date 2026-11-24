@@ -25,7 +25,9 @@ def file_error(action, error, path=None):
     elif isinstance(error, FileExistsError):
         help_text = '同名文件已存在。已有文件受到保护，请保留或重命名它，再重试。'
     elif isinstance(error, PermissionError) or getattr(error, 'errno', None) == errno.EROFS:
-        help_text = '访问被拒绝。请核对此路径的访问权限；保存或替换文件时还需检查只读属性。'
+        help_text = '访问被拒绝。请核对该路径的访问权限和文件的只读属性。'
+        if sys.platform == 'win32' and win is None:
+            help_text += 'Windows 也可能因程序独占文件而返回此错误，请关闭使用该文件的程序后重试。'
     elif isinstance(error, FileNotFoundError):
         help_text = '路径不存在。请确认工程目录可访问，并检查文件是否已移动。'
     elif getattr(error, 'errno', None) in (errno.ENOSPC, getattr(errno, 'EDQUOT', -1)) or win in (39, 112):

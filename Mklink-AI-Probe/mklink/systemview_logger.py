@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
+from mklink.systemview_analyzer import ExecutionSlices
 from mklink.work_files import open_log_file
 
 
@@ -36,7 +37,7 @@ class SystemViewJsonlLogger:
         self.summary_path = self.path.with_name(f"{self.path.stem}-summary.txt")
         self._seq = 0
         self._closed = False
-        self._pending_task_start: dict[int, float] = {}
+        self._execution = ExecutionSlices()
         self._task_stats: dict[int, dict] = {}
 
         session = {
@@ -85,6 +86,7 @@ class SystemViewJsonlLogger:
             "started_at": self.started_at.isoformat(),
             "ended_at": ended_at.isoformat(),
             **(summary or {}),
+            "events": self._seq,
             "top_tasks": self._top_tasks(),
         }
         try:
@@ -111,6 +113,9 @@ class SystemViewJsonlLogger:
         )
 
     def _update_task_stats(self, event: dict) -> None:
+        interval = self._execution.observe(event)
+        if interval and interval['tid'] is not None:
+            self._task_stats[interval['tid']]['run_time'] += interval['end'] - interval['start']
         task_id = event.get("task_id")
         if not isinstance(task_id, int):
             return
@@ -126,16 +131,8 @@ class SystemViewJsonlLogger:
         if event.get("task_name") and not stats["task_name"]:
             stats["task_name"] = event["task_name"]
 
-        timestamp = self._event_time(event)
-        if timestamp is None:
-            return
         if event.get("kind") == "task_start_exec":
-            self._pending_task_start[task_id] = timestamp
             stats["schedules"] += 1
-        elif event.get("kind") == "task_stop_exec":
-            start = self._pending_task_start.pop(task_id, None)
-            if start is not None and timestamp >= start:
-                stats["run_time"] += timestamp - start
 
     def _top_tasks(self) -> list[dict]:
         return sorted(
@@ -156,6 +153,7 @@ class SystemViewJsonlLogger:
             f"started_at: {summary.get('started_at', '')}",
             f"ended_at: {summary.get('ended_at', '')}",
             f"events: {summary.get('events', 0)}",
+            *([f"stream_events: {summary['stream_events']}"] if 'stream_events' in summary else []),
             f"dropped_bytes: {summary.get('dropped_bytes', 0)}",
             f"dropped_packets: {summary.get('dropped_packets', 0)}",
             f"cpu_freq: {summary.get('cpu_freq', 0)}",
@@ -176,16 +174,6 @@ class SystemViewJsonlLogger:
                 stream.close()
                 self.summary_path.unlink(missing_ok=True)
                 raise
-
-    @staticmethod
-    def _event_time(event: dict) -> float | None:
-        value = event.get("t_us")
-        if isinstance(value, (int, float)):
-            return float(value)
-        value = event.get("t_ticks")
-        if isinstance(value, (int, float)):
-            return float(value)
-        return None
 
     @staticmethod
     def _normalize_datetime(value: datetime) -> datetime:

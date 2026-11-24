@@ -1557,7 +1557,7 @@ class SystemViewStreamManager:
                 return
             try:
                 self._recording.close({
-                    "events": self._stats.get("events", 0),
+                    "stream_events": self._stats.get("events", 0),
                     "bytes": self._stats.get("bytes", 0),
                     "history_size": len(self._history),
                     "cpu_freq": _positive_int(getattr(self._parser, "cpu_freq", 0)),

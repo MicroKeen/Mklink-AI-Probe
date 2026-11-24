@@ -101,3 +101,19 @@ def test_competing_poll_allows_one_display_write_without_replaying_hardware():
         assert writes == ['saved']
 
     asyncio.run(exercise())
+
+
+def test_trace_summary_counts_only_saved_events_and_handles_implicit_switches(tmp_path):
+    import json
+    from mklink.systemview_logger import SystemViewJsonlLogger
+    logger = SystemViewJsonlLogger(str(tmp_path), {})
+    logger.write_events([{'kind': 'task_start_exec', 'task_id': 1, 't_us': 10},
+                         {'kind': 'isr_enter', 't_us': 11}])
+    logger.write_events([{'kind': 'isr_exit', 't_us': 20},
+                         {'kind': 'task_start_exec', 'task_id': 2, 't_us': 22},
+                         {'kind': 'trace_stop', 't_us': 27}])
+    logger.close({'stream_events': 513})
+    footer = json.loads(logger.path.read_text(encoding='utf-8').splitlines()[-1])
+    assert (footer['events'], footer['stream_events']) == (5, 513)
+    assert {t['task_id']: t['run_time'] for t in footer['top_tasks']} == {1: 3, 2: 5}
+    assert 'events: 5\n' in logger.summary_path.read_text(encoding='utf-8')

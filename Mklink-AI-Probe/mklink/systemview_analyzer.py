@@ -29,54 +29,55 @@ def _t(e: dict) -> float:
     return float(e.get("t_ticks") or 0)
 
 
-def _execution_intervals(events: list[dict]) -> list[dict]:
-    """Completed task execution slices, including implicit FreeRTOS switches.
+class ExecutionSlices:
+    """Track completed execution slices across batches and nested interrupts."""
 
-    Match the live timeline: ISR entry suspends a task, ISR exit resumes it,
-    scheduler/idle discard that context, and overflow abandons an open slice.
-    Do not extrapolate the final unfinished slice beyond the recorded events.
-    """
-    current = None
-    suspended = []
+    def __init__(self):
+        self.current = None
+        self.suspended = []
+
+    def observe(self, event):
+        kind, tid, t = event.get('kind'), event.get('task_id'), _t(event)
+        previous = self.current
+        if kind == 'task_start_exec' and isinstance(tid, int):
+            self.suspended.clear()
+            self.current = (tid, t)
+        elif kind in ('task_stop_exec', 'task_stop_ready') and previous and tid == previous[0]:
+            self.current = None
+        elif kind == 'isr_enter':
+            self.suspended.append(previous)
+            self.current = None
+        elif kind == 'isr_exit':
+            resume = self.suspended.pop() if self.suspended else None
+            if resume is not None:
+                self.current = (resume[0], t)
+            return None
+        elif kind in ('isr_to_scheduler', 'idle', 'trace_stop', 'overflow'):
+            self.suspended.clear()
+            self.current = (None, t) if kind == 'idle' else None
+            if kind == 'overflow':
+                return None
+        else:
+            return None
+        if previous and t >= previous[1]:
+            return {'tid': previous[0], 'start': previous[1], 'end': t}
+        return None
+
+
+def _execution_intervals(events: list[dict]) -> list[dict]:
+    """Completed slices only. An unfinished final slice is never extrapolated."""
+    tracker = ExecutionSlices()
     names = {}
     intervals = []
-
-    def close(t):
-        nonlocal current
-        if current is not None:
-            tid, start = current
-            if t >= start:
-                intervals.append({'tid': tid, 'start': start, 'end': t})
-        current = None
-
     for event in events:
-        kind, tid, t = event.get('kind'), event.get('task_id'), _t(event)
+        tid = event.get('task_id')
         if isinstance(tid, int):
-            name = event.get('task_name') or (event.get('name') if kind == 'task_info' else None)
+            name = event.get('task_name') or (event.get('name') if event.get('kind') == 'task_info' else None)
             if name:
                 names[tid] = name
-        if kind == 'task_start_exec' and isinstance(tid, int):
-            close(t)
-            suspended.clear()
-            current = (tid, t)
-        elif kind in ('task_stop_exec', 'task_stop_ready'):
-            if current is not None and tid == current[0]:
-                close(t)
-        elif kind == 'isr_enter':
-            suspended.append(current)
-            close(t)
-        elif kind == 'isr_exit':
-            resume = suspended.pop() if suspended else None
-            if resume is not None:
-                current = (resume[0], t)
-        elif kind in ('isr_to_scheduler', 'idle', 'trace_stop'):
-            close(t)
-            suspended.clear()
-            if kind == 'idle':
-                current = (None, t)
-        elif kind == 'overflow':
-            current = None
-            suspended.clear()
+        span = tracker.observe(event)
+        if span:
+            intervals.append(span)
     for interval in intervals:
         tid = interval['tid']
         interval['name'] = 'Idle' if tid is None else names.get(tid, f"0x{tid:X}")
