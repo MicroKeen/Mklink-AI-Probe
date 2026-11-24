@@ -31,7 +31,7 @@
       v-if="symbolError || catalog.error.value"
       kind="error"
       :message="tr('符号文件解析失败：', 'Symbol parsing failed: ') + (symbolError || catalog.error.value)"
-      :primary-label="tr('重新选择', 'Choose Another File')"
+      :primary-label="filePickerInToolbar ? '' : tr('重新选择', 'Choose Another File')"
       :secondary-label="hasSymbolSource ? tr('重试解析', 'Retry Parsing') : ''"
       :busy="loadingSymbols"
       @primary="loadSymbolFile"
@@ -40,8 +40,8 @@
     <SetupHint
       v-else-if="!symbolLoaded"
       kind="symbols"
-      :message="hasSymbolSource ? tr('已选择 AXF / ELF，解析后即可浏览变量。', 'An AXF / ELF file is selected. Parse it to browse variables.') : tr('SuperWatch 需要 AXF / ELF 中的变量和类型信息。', 'SuperWatch needs variable and type information from an AXF / ELF file.')"
-      :primary-label="hasSymbolSource ? tr('解析已选文件', 'Parse Selected File') : tr('加载 AXF / ELF', 'Load AXF / ELF')"
+      :message="hasSymbolSource ? tr('已选择 AXF / ELF，解析后即可浏览变量。', 'An AXF / ELF file is selected. Parse it to browse variables.') : tr('打开板上程序对应的 AXF / ELF，即可选择要观测的变量。', 'Open the AXF / ELF for the running firmware to choose variables to watch.')"
+      :primary-label="hasSymbolSource ? tr('解析已选文件', 'Parse Selected File') : filePickerInToolbar ? '' : tr('加载 AXF / ELF', 'Load AXF / ELF')"
       :busy="loadingSymbols"
       @primary="hasSymbolSource ? parseSelectedSymbols() : loadSymbolFile()"
     />
@@ -399,6 +399,7 @@ import { useBinaryStream } from '../../composables/useBinaryStream'
 
 const props = withDefaults(defineProps<{
   deviceConnected: boolean
+  filePickerInToolbar?: boolean
   symbolLoaded?: boolean
   symbolError?: string
   latestValues: Record<string, number | boolean>

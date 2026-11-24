@@ -1029,7 +1029,7 @@ def create_app(
         await activate_watch_profile(device)
         return result
 
-    async def _load_symbol_file(axf=None, elf_backend=None, *, error_status=500):
+    async def _load_symbol_file(axf=None, elf_backend=None, *, error_status=500, preserve_capture=False):
         # Explicit file loading owns admission and drains capture workers before
         # rebinding addresses. It never resumes acquisition on the new layout.
         runtime = getattr(app.state, 'shared_runtime', None)
@@ -1040,8 +1040,15 @@ def create_app(
         async with _dashboard_start_lock(_state):
             async with _async_target_lock():
                 from mklink.remote.dashboards import BRIDGE_DASHBOARD_TYPES
+                managers = get_managers()
+                if preserve_capture:
+                    active = [name for name in BRIDGE_DASHBOARD_TYPES if _dashboard_worker_alive(managers[name])]
+                    if active:
+                        raise HTTPException(409, '正在采集 ' + ', '.join(sorted(active))
+                                            + '。请先停止对应采集，再打开 AXF / ELF。'
+                                            ' Stop the listed captures before opening another symbol file.')
                 for name in BRIDGE_DASHBOARD_TYPES:
-                    manager = get_managers()[name]
+                    manager = managers[name]
                     if _dashboard_worker_alive(manager):
                         await run_in_threadpool(stop_dashboard_manager, _state, name, manager)
                         if _dashboard_worker_alive(manager):
@@ -2317,9 +2324,10 @@ def create_app(
     async def parse_axf(
         axf: str | None = Body(default=None, embed=True),
         elf_backend: str | None = Body(default=None, embed=True),
+        preserve_capture: bool = Body(default=False, embed=True),
     ):
         """手动触发 AXF/ELF 符号表解析。"""
-        return await _load_symbol_file(axf, elf_backend)
+        return await _load_symbol_file(axf, elf_backend, preserve_capture=preserve_capture)
 
     @app.post("/api/device/flash")
     async def flash_device(body: dict = Body(...)):

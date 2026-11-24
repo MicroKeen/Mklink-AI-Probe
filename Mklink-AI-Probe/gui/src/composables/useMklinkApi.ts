@@ -111,11 +111,17 @@ export function useMklinkApi(context?: SemanticExecutionContext) {
   async function uploadFileSource(
     kind: FileSourceKind,
     file: File,
+    track = true,
   ): Promise<UploadedFileSource> {
     const body = new FormData()
     body.append('file', file)
     const uploaded = await api<UploadedFileSource>(`/api/files/${kind}`, { method: 'POST', body })
-    if (kind === 'symbol') trackSymbolSource(file, uploaded, {
+    if (kind === 'symbol' && track) trackUploadedSymbol(file, uploaded)
+    return uploaded
+  }
+
+  function trackUploadedSymbol(file: File, uploaded: UploadedFileSource) {
+    trackSymbolSource(file, uploaded, {
       upload: (next, operation) => {
         const data = new FormData()
         data.append('file', next)
@@ -128,7 +134,6 @@ export function useMklinkApi(context?: SemanticExecutionContext) {
         return result
       },
     })
-    return uploaded
   }
 
   async function getConfigStatus(): Promise<ConfigStatus> {
@@ -291,13 +296,14 @@ export function useMklinkApi(context?: SemanticExecutionContext) {
     }
   }
 
-  async function parseAxf(axf?: string, elfBackend?: 'builtin' | 'external') {
+  async function parseAxf(axf?: string, elfBackend?: 'builtin' | 'external', preserveCapture = false) {
     await flushWatchProfile()
     const result = await api('/api/device/parse-axf', {
       method: 'POST',
       body: JSON.stringify({
         ...(axf ? { axf } : {}),
         ...(elfBackend ? { elf_backend: elfBackend } : {}),
+        ...(preserveCapture ? { preserve_capture: true } : {}),
       }),
     })
     await refreshStatus()
@@ -424,6 +430,7 @@ export function useMklinkApi(context?: SemanticExecutionContext) {
     getConfig,
     updateConfig,
     uploadFileSource,
+    trackUploadedSymbol,
     getConfigStatus,
     getProjectInfo,
     getRttConfig,

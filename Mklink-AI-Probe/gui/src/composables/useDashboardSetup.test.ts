@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { loadSymbolPathHistory } from '../lib/symbolPathHistory'
 import { loadDesktopSettings, saveDesktopSettings } from '../lib/desktopSettings'
 
 class MemoryStorage implements Storage {
@@ -24,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   disconnectDevice: vi.fn(),
   parseAxf: vi.fn(),
   findRtt: vi.fn(),
+  trackUploadedSymbol: vi.fn(),
   uploadFileSource: vi.fn(),
   ensureLoaded: vi.fn(),
   pickSymbolFile: vi.fn(),
@@ -36,6 +38,7 @@ vi.mock('./useMklinkApi', () => ({
     disconnectDevice: mocks.disconnectDevice,
     parseAxf: mocks.parseAxf,
     findRtt: mocks.findRtt,
+    trackUploadedSymbol: mocks.trackUploadedSymbol,
     uploadFileSource: mocks.uploadFileSource,
   }),
 }))
@@ -105,10 +108,33 @@ describe('useDashboardSetup', () => {
 
     expect(result).toBe(true)
     expect(loadDesktopSettings(storage).symbolPath).toBe('C:\\firmware\\app.axf')
-    expect(mocks.parseAxf).toHaveBeenCalledWith('C:\\firmware\\app.axf')
+    expect(mocks.parseAxf).toHaveBeenCalledWith('C:\\firmware\\app.axf', undefined, true)
     expect(mocks.findRtt).toHaveBeenCalledWith('C:\\firmware\\app.axf')
     expect(mocks.ensureLoaded).toHaveBeenCalledWith(true)
     expect(loadDesktopSettings(storage).rttAddress).toBe('0x20001A40')
+  })
+
+  it('reopens the original project when a browser file matches the desktop source', async () => {
+    const path = 'D:\\build\\app.axf'
+    const file = new File(['symbols'], 'app.axf')
+    mocks.pickSymbolFile.mockResolvedValue(file)
+    mocks.uploadFileSource.mockResolvedValue({ source_kind: 'local', path, name: file.name })
+    mocks.parseAxf.mockResolvedValue({ loaded: true, axf_path: path })
+
+    expect(await useDashboardSetup().loadSymbolFile()).toBe(true)
+    expect(mocks.parseAxf).toHaveBeenCalledWith(path, undefined, true)
+    expect(loadSymbolPathHistory(storage)).toContain(path)
+  })
+
+  it('keeps the active source and address when capture prevents switching files', async () => {
+    saveDesktopSettings(storage, { ...loadDesktopSettings(storage), symbolPath: 'D:/app.axf', rttAddress: '0x20001234' })
+    mocks.pickSymbolFile.mockResolvedValue(new File(['other'], 'next.axf'))
+    mocks.uploadFileSource.mockResolvedValue({ source_kind: 'local', path: 'D:/next.axf' })
+    mocks.parseAxf.mockRejectedValueOnce(new Error('正在采集 rtt'))
+    expect(await useDashboardSetup().loadSymbolFile()).toBe(false)
+    expect(loadDesktopSettings(storage)).toMatchObject({ symbolPath: 'D:/app.axf', rttAddress: '0x20001234' })
+    expect(loadSymbolPathHistory(storage)).not.toContain('D:/next.axf')
+    expect(mocks.trackUploadedSymbol).not.toHaveBeenCalled()
   })
 
   it('clears a stale RTT address as soon as a different AXF is selected offline', async () => {
@@ -124,7 +150,7 @@ describe('useDashboardSetup', () => {
     const result = await useDashboardSetup().loadSymbolFile()
 
     expect(result).toBe(true)
-    expect(mocks.parseAxf).toHaveBeenCalledWith('D:\\build\\next.axf')
+    expect(mocks.parseAxf).toHaveBeenCalledWith('D:\\build\\next.axf', undefined, true)
     expect(mocks.findRtt).not.toHaveBeenCalled()
     expect(loadDesktopSettings(storage)).toMatchObject({
       symbolPath: 'D:\\build\\next.axf',

@@ -5,12 +5,16 @@
       kind="device"
       :message="tr('RTT 实时采集需要连接 MKLink 设备。', 'Live RTT capture requires an MKLink device connection.')"
       :primary-label="tr('连接设备', 'Connect Device')"
-      :secondary-label="!hasAddressFileSource ? tr('加载 AXF / ELF', 'Load AXF / ELF') : ''"
       :busy="connecting || loadingSymbols"
       @primary="quickConnect"
-      @secondary="loadSymbolFile"
     />
       <div class="rtt-config-row">
+        <button type="button" class="btn-search" data-testid="rtt-open-symbol" data-gui-file-picker
+          :disabled="IS_REMOTE || loadingSymbols || reloadingSources"
+          :title="tr('选择板上程序对应的 AXF/ELF，自动查找 RTT 地址', 'Open the AXF/ELF for the running firmware to find its RTT address')"
+          @click="loadSymbolFile">
+          <FolderOpen :size="15" aria-hidden="true" />{{ tr('打开 AXF / ELF', 'Open AXF / ELF') }}
+        </button>
         <label :for="guiId('rtt-address')">{{ tr('RTT 地址', 'RTT Address') }}</label>
         <input
           :id="guiId('rtt-address')" v-model="rttAddress" class="rtt-address" data-testid="rtt-address"
@@ -56,19 +60,19 @@ import { useGuiId } from '../../lib/guiAutomation'
 const guiId = useGuiId()
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { trackedSymbolPending, reloadTrackedSymbolSource } from '../../lib/trackedSymbolSource'
-import { Search } from '@lucide/vue'
+import { FolderOpen, Search } from '@lucide/vue'
 import { CAPTURE_START_TIMEOUT_MS } from '../../lib/captureStartup'
 import { useDashboard } from '../../composables/useDashboard'
 import { useMklinkApi } from '../../composables/useMklinkApi'
 import { flushWatchProfile } from '../../composables/useWatchProfile'
 import { useDashboardSetup } from '../../composables/useDashboardSetup'
-import { DESKTOP_SETTINGS_CHANGED_EVENT, isSameFileSourcePath, isSymbolFilePath, loadDesktopSettings, saveDesktopSettings, type DesktopSettings } from '../../lib/desktopSettings'
+import { DESKTOP_SETTINGS_CHANGED_EVENT, isSameFileSourcePath, loadDesktopSettings, saveDesktopSettings, type DesktopSettings } from '../../lib/desktopSettings'
 import { cancelRttAddressRefresh } from '../../lib/rttSymbolAddress'
 import ControlToolbar from './ControlToolbar.vue'
 import SetupHint from './SetupHint.vue'
 import RttChannelPanel from './RttChannelPanel.vue'
 import { tr } from '../../composables/useLanguage'
-import { API_BASE } from '../../lib/runtimeEndpoint'
+import { API_BASE, IS_REMOTE } from '../../lib/runtimeEndpoint'
 import { useToast } from '../../composables/useToast'
 const props = defineProps<{ deviceConnected: boolean; panelId?: string }>()
 const channelSurfaces = new Map<number, SemanticSurface>()
@@ -107,7 +111,6 @@ const {
 } = useDashboardSetup()
 const desktopStorage = localStorage
 const settings = ref<DesktopSettings>(loadDesktopSettings(desktopStorage))
-const hasAddressFileSource = computed(() => isSymbolFilePath(settings.value.symbolPath))
 const rttAddress = ref(settings.value.rttAddress)
 const addressError = ref('')
 const addressSource = ref('')
