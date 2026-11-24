@@ -123,6 +123,24 @@ function ymodemStatus(overrides: Record<string, unknown> = {}) {
 }
 
 describe('SerialMonitorTab', () => {
+  it('distinguishes identical USB product names and keeps a manually selected system port on refresh', async () => {
+    const system = '/dev/cu.debug-console'
+    const uart = '/dev/cu.usbmodem501', rs485 = '/dev/cu.usbmodem403'
+    mocks.listUartPorts.mockResolvedValue([
+      { device: system, description: 'n/a' },
+      { device: rs485, description: 'MicroKeenV4 CMSIS-DAP', uart_kind: 'mklink_rs485' },
+      { device: uart, description: 'MicroKeenV4 CMSIS-DAP', uart_kind: 'mklink_uart' },
+    ])
+    const wrapper = mount(SerialMonitorTab)
+    await vi.waitFor(() => expect(wrapper.get('select').element.value).toBe(uart))
+    expect(wrapper.get('select').findAll('option').map(option => option.text()))
+      .toEqual([`MKLink UART (TTL) · ${uart}`, `MKLink RS485 · ${rs485}`, system])
+    await wrapper.get('select').setValue(system)
+    await wrapper.get('button[title="刷新串口"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('select').element.value).toBe(system)
+    wrapper.unmount()
+  })
   it('clears a failed start message when another client creates a new session', async () => {
     let status: any = { running: false, ports: {}, config: [] }
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => (

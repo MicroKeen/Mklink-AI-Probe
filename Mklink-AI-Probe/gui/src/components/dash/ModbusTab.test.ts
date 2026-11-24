@@ -36,6 +36,21 @@ describe('ModbusTab prerequisites', () => {
     }])
   })
 
+  it('prefers the identified RS485 interface when opening a fresh Modbus profile', async () => {
+    const rs485 = '/dev/cu.usbmodem709'
+    mocks.listUartPorts.mockResolvedValue([
+      { device: '/dev/cu.debug-console', description: 'n/a' },
+      { device: '/dev/cu.usbmodem703', description: 'MicroKeenV4 CMSIS-DAP', uart_kind: 'mklink_uart' },
+      { device: rs485, description: 'MicroKeenV4 CMSIS-DAP', uart_kind: 'mklink_rs485' },
+    ])
+    const wrapper = mount(ModbusTab)
+    await flushPromises()
+    const select = wrapper.get<HTMLSelectElement>('[data-testid="modbus-port"]')
+    expect(select.element.value).toBe(rs485)
+    expect(select.get('option').text()).toBe(`MKLink RS485 · ${rs485}`)
+    wrapper.unmount()
+  })
+
   it.each([7, 22, 23])('renders a shared FC%d diagnostic without inventing a register value', async fc => {
     let stream: { onmessage?: (event: { data: string }) => void } = {}
     vi.stubGlobal('EventSource', class {
