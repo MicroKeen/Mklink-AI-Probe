@@ -40,7 +40,7 @@
     },
     {
       "area": "GUI共享控制、回放与多窗口健康",
-      "result": "ba3a334b实现桌面/Web共享控制及回放，修复SystemView冗余SSE耗尽连接池。安装版6窗口72/72正常，645064事件/9任务，解析及目标/主机丢弃0，见[完整验收](../verification/v050-gui-control.md)；IRQ锁、采集中重启见[前轮](../verification/v050-systemview-loss-reboot.md)，历史/显示优化见[刷新报告](../verification/v050-systemview-refresh.md)。 桌面可复用探针后台。Windows/CLI/Skill 已同步。多窗口、Ctrl+C、945000 字节对照及六条流的读取者保护见共享报告。回归845通过、1跳过。 0.5.1 后续修复 bb6fbee8 已装入 Windows 桌面。使用测试通道在 Edge 和已安装 WebView2 中验证公式编辑保留当前曲线色，只有显式改色才保存；离线通道可保留自动配色。Windows 安装包与校验表位于 F:/MKLink-Build/artifacts/v051-bb6fbee8，macOS/Linux 安装包按要求留待发布前重建。"
+      "result": "ba3a334b实现桌面/Web共享控制及回放，修复SystemView冗余SSE耗尽连接池。安装版6窗口72/72正常，645064事件/9任务，解析及目标/主机丢弃0，见[完整验收](../verification/v050-gui-control.md)；IRQ锁、采集中重启见[前轮](../verification/v050-systemview-loss-reboot.md)，历史/显示优化见[刷新报告](../verification/v050-systemview-refresh.md)。 桌面可复用探针后台。Windows/CLI/Skill 已同步。多窗口、Ctrl+C、945000 字节对照及六条流的读取者保护见共享报告。回归845通过、1跳过。 0.5.1 后续修复 bb6fbee8 已装入 Windows 桌面。使用测试通道在 Edge 和已安装 WebView2 中验证公式编辑保留当前曲线色，只有显式改色才保存；离线通道可保留自动配色。Windows 修订 784c03c4 延续该修复。普通 SuperWatch 与灵活面板均按视口固定时间网格，悬浮读数自动避让边界；信号可直接拖入分组，曲线同步换组。两种视图均已用模拟波形在 Edge 及已安装 WebView2 复验，Windows 安装包与校验表位于 F:/MKLink-Build/artifacts/v051-784c03c4。macOS/Linux 留待发布前重建。"
     },
     {
       "area": "HPM Flash 配置、连接设置与脱机 OTP",
