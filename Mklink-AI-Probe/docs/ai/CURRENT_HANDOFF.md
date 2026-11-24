@@ -5,11 +5,11 @@
 ## 当前断点
 
 - 更新时间：`2026-11-24`
-- 分支：`main`
-- HEAD：`80504c21`
-- 远端 HEAD：`80504c21`
-- 工作树：E 盘主工作区。#87、#88、#89 和版本 PR #90 已合入。此记录以 0.5.1 安装包的主线源码为基线。
-- 当前任务：Windows、完整 Skill 和两种架构的 macOS 安装包均已核对。见[版本说明](../releases/v0.5.1.md)、[产物校验与 HPM6E80 实板验收](../verification/v051-integration.md)。
+- 分支：`codex/watch-formula-color`
+- HEAD：`abfad223`
+- 远端 HEAD：`abfad223`
+- 工作树：E盘主工作区，主线80504c21。HEAD为PR #92的Windows包源码。
+- 当前任务：[Windows采集与导出](../verification/v051-superwatch-export-profile.md)、[跨平台基线](../verification/v051-integration.md)。
 - 状态：`0.5.1 已打包，Windows 已覆盖安装；正式渠道仍为 0.5.0。`
 
 ## 里程碑
@@ -26,7 +26,7 @@
 - **ELF 解析与完整 UART 波特率**：ELF 可写范围合并 PT_LOAD，客户 ELF 的结构体成员恢复，400 项解析/共享关联及真实浏览器通过，未操作客户板，见[ELF 报告](../verification/v050-elf-load-segments.md)。串口助手/Modbus 按 UART、RS485 独立声明使用 34 档至 10M，870 后端/25 GUI/69 Skill 及双 V4 实读通过，未发高速载荷，见[波特率报告](../verification/v050-uart-baud.md)。两项已随 ad00c962 普通用户覆盖并复验，见[覆盖报告](../verification/v050-elf-baud-overwrite.md)。
 - **固件能力提醒与采集中写入**：同一V4/STM32F103RC实测V4.7.3与V4.7.4写入前后最大采样间隔0.195/0.208/0.192ms；RTT并行为1.562ms，各轮10次写入成功且无序号/读错。真实Web写入保持约15.9kHz，三端警告一致，状态检查无设备I/O，见[能力报告](../verification/v050-firmware-capabilities.md)。V2.9.4与云端V2.9.3不误报降级；版本缓存/提醒/跳转验收见[提醒报告](../verification/v050-firmware-update-notice.md)。客户端先行、MCP重载与重启失败互斥恢复见[更新顺序](../verification/v050-update-order.md)。专项用例有重叠，最终全量结果以发布交接为准。 V3/V4拔插恢复既有实物证据见[恢复报告](../verification/v050-superwatch-swclk.md)。
 - **macOS 兼容性与跨平台回归**：最终原生包源8d532019；Mac ARM/Intel DMG与Linux AppImage/DEB的冻结后台、真实WebView/MCP操作、错误签名拒绝、有效更新与重启通过。USB各73项通过/1项Windows专属跳过。Windows Python7175/2跳过、GUI1291和生产构建通过；两渠道13附件及5平台索引验证完成。设施边界见[原生验收](../verification/v050-native-release.md)。
-- **SuperWatch 配置与手动日志转换**：手动转换56项、共享后台/流/边界296项、GUI152项及生产构建通过。冻结安装版记录1,114,032组，Excel两页及4,456,128个值与JSONL对应；RTT505行TXT对应，七个原件哈希不变。GUI/CLI/MCP重复请求复用转换任务且不停止采集，见[转换报告](../verification/v050-manual-recording-export.md)。AXF旁配置重启恢复、6,718变量/四选择/500000缓存/1µs间隔验证见[配置报告](../verification/v050-superwatch-profile.md)。TXT精简37项、Skill69项通过；505行时间正文等价，63,996→40,304字节，见[TXT报告](../verification/v050-rtt-txt-readable.md)。
+- **SuperWatch 配置与手动日志转换**：Excel 1,114,032组/4,456,128值、RTT 505行，对照[转换](../verification/v050-manual-recording-export.md)、[配置](../verification/v050-superwatch-profile.md)及[TXT](../verification/v050-rtt-txt-readable.md)。0.5.1修正Excel临时文件、Web配置复用、RTT导出与SystemView工程日志，见[Windows验收](../verification/v051-superwatch-export-profile.md)。
 - **V0.5.0 发布、安装与升级**：首发源1097f98e的安装、四类回放、冻结MCP与双渠道发布见[首发交接](../verification/v050-release-handoff.md)；PR #84 main ed5d55aa的安装路径、脱机静默刷新与工程日志修订，及V2.9.5双渠道发布/归档见[修订发布](../verification/v050-revision-release.md)。本轮最新Windows/Skill修订见本页首项；原标签与其他平台保留。
 
 ## 架构决策
@@ -64,7 +64,7 @@
 - 公网远程中继继续延期。独立 [S3 PR #65](https://github.com/MicroKeen/Mklink-AI-Probe/pull/65) 仍开放。其他硬件的[历史未验范围](known-limits-20261030.md)按需查阅。
 - 转换入口针对后台最近一次记录，应在开启下一次记录前触发；没有历史文件选择器或全局转换并发上限。Excel 约 15 位有效数字，原始 JSONL 不变。转换仍消耗 CPU/磁盘，本轮未做完整真机性能 A/B；冻结 Excel 父进程退出后仍运行的时间窗口未直接观测，详见报告。 RTT TXT 精简已包含在 V0.5.0 / 3a3fb298 安装包。
 - Mac/Linux 实物 USB、Gatekeeper/Finder 首次安装、交互式提权及历史原生客户端升级未验；维护者接受CI原生验证。合成旧版本AppHandle的真实签名安装与最终包窗口操作已通过，见[原生验收](../verification/v050-native-release.md)。
-- 客户旧版长停流未复现；14b86cd0同固件安装前后短测SW单独约15.793kHz、RTT共存约13.816kHz，40次写入无序号/读错，但不能证明所有负载零退化。普通HTTP读取P95含代理约4.463/4.921ms。未完成外部调试器共存、全部性能目标、8通道字节全量或长期压力。用户确认UART/RS485未接，本轮串口/Modbus未验。正式0.4.3→0.5.0签名自动更新和重启已验；覆盖安装按明确要求会中断活动任务，普通用户无法结束管理员进程或突破目录权限。
+- 客户旧版长停流未复现；14b86cd0同固件安装前后短测SW单独约15.793kHz、RTT共存约13.816kHz，40次写入无序号/读错，但不能证明所有负载零退化。普通HTTP读取P95含代理约4.463/4.921ms。未完成外部调试器共存、全部性能目标、8通道字节全量或长期压力。用户确认UART/RS485未接，本轮串口/Modbus未验。正式0.4.3→0.5.0签名自动更新和重启已验；覆盖安装按明确要求会中断活动任务，普通用户无法结束管理员进程或突破目录权限。 HPM6750客户截图：0x16为块读，状态5及调试rc=-4须先对照已知Flash/RAM；缓存和RTT分流待客户板与对应ELF核实。
 - STOP 案例中，V4 源码确认 0x17 重连失败会误报 6；固件会话提供修正为 5 的独立补丁和离线证据，尚未应用或刷写。客户固件版本、完整芯片型号与电气条件未齐备；持续 STOP 的调试访问不保证可唤醒，status 5 可能包含恢复未确认。
 - STM32F103RC旧锁导致的SystemView解析丢字节/异常ISR已修复；客户丢名需芯片、RTOS、通道和原始流。1µs四变量SW+RTT+Trace约60秒仍有5次目标溢出/895丢包，MUX/主机队列0。固件静态复核未见固定80ms停顿，但USB背压/内部重试/调度无最大服务间隔保证；现有快照无法归因，不自动降采样。多视图假离线已定位并修复，见GUI控制验收；长期低延迟/恒定60FPS、HPM/FreeRTOS实物和全部性能门禁未验。
 - ELF与34档波特率已在Windows候选包含；客户ELF仅离线解析/配置，未操作客户板。本轮没有高速串口/Modbus物理验收；固件会话RS485双V4测试不等同本轮/客户快速应答验证，10Mbps大帧丢包边界仍保留，第三方驱动可拒绝高档位。
