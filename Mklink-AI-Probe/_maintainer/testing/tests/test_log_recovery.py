@@ -74,3 +74,30 @@ def test_desktop_trace_belongs_to_user_project(tmp_path):
     assert capture_project(fallback, None, str(output)) == output
     with pytest.raises(ValueError, match='日志位置'):
         capture_project(fallback)
+
+
+def test_competing_poll_allows_one_display_write_without_replaying_hardware():
+    import asyncio
+    from types import SimpleNamespace
+    from fastapi import HTTPException
+    from mklink.runtime_api import RuntimeControl
+
+    async def exercise():
+        control = RuntimeControl(SimpleNamespace(state=SimpleNamespace()), {})
+        writes = []
+
+        async def apply():
+            writes.append('saved')
+
+        await control.operation_lock.acquire()
+        waiting = asyncio.create_task(control.run_operation('/api/dash/superwatch/workspace', apply))
+        await asyncio.sleep(.01)
+        assert not waiting.done() and not writes
+        with pytest.raises(HTTPException) as busy:
+            await control.run_operation('/api/device/write-memory', apply)
+        assert busy.value.status_code == 409
+        control.operation_lock.release()
+        await waiting
+        assert writes == ['saved']
+
+    asyncio.run(exercise())

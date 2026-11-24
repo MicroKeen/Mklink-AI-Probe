@@ -37,6 +37,9 @@ LOCAL_RECORDING_EXPORT_PATHS = frozenset({
     '/api/dash/superwatch/recording/export',
     '/api/dash/rtt/traffic-recording/export',
 })
+WATCH_DISPLAY_PATHS = frozenset({
+    '/api/dash/superwatch/profile', '/api/dash/superwatch/pins', '/api/dash/superwatch/workspace',
+})
 active_operation = ContextVar('mklink_runtime_operation', default=None)
 
 
@@ -353,6 +356,14 @@ class RuntimeControl:
         if active and not stop_acquisition:
             raise HTTPException(409, {'busy': active, 'hint': 'Stop acquisition explicitly before changing symbols'})
 
+    async def wait_for_shared_slot(self):
+        """Let a short GUI operation finish before a non-destructive request."""
+        deadline = time.monotonic() + 2
+        while self.operation_lock.locked() and not (self.stopping or self.lifecycle_pending or self.job_busy()):
+            if time.monotonic() >= deadline:
+                break
+            await asyncio.sleep(.025)
+
     async def run_operation(self, name, operation, *, session_id=None, configuration=False, online_stop=False):
         """Shared admission for HTTP adapters and internal application work.
 
@@ -387,6 +398,14 @@ class RuntimeControl:
                 return await settle(task)
             finally:
                 self.uart_operations.pop(task, None)
+        if name in WATCH_DISPLAY_PATHS:
+            # A desktop poll may hold admission when a user clicks Apply. Wait
+            # before dispatch, keeping session, revision and lifecycle checks.
+            await self.wait_for_shared_slot()
+            if self.operation_lock.locked():
+                raise HTTPException(409, '正在处理设备操作，显示设置尚未保存。请稍后重新应用。')
+            if self.stopping:
+                raise HTTPException(503, '后台正在关闭，请重新连接后保存显示设置。')
         if self.lifecycle_pending and not own_job and not online_stop:
             raise HTTPException(409, 'Device connection is changing; wait for completion')
         if self.operation_lock.locked() or (self.job_busy() and not own_job and not online_stop):
@@ -908,10 +927,14 @@ fetch('/_runtime/login', {method:'POST', headers:{'Content-Type':'application/js
                 raise HTTPException(422, 'UART-only attachment does not accept target connection settings')
             return attached(body, scope, {'attached': True})
         async with control.attach_lock:
-            if control.lifecycle_pending or control.operation_lock.locked() or control.job_busy():
+            if getattr(state.get("device"), "connected", False):
+                await control.wait_for_shared_slot()
+            if control.stopping or control.lifecycle_pending or control.operation_lock.locked() or control.job_busy():
                 raise HTTPException(409, 'Wait for the active operation before attaching a client')
             presence = await control.require_identity_async(reconnect=True)
-            if control.lifecycle_pending or control.operation_lock.locked() or control.job_busy():
+            if getattr(state.get("device"), "connected", False):
+                await control.wait_for_shared_slot()
+            if control.stopping or control.lifecycle_pending or control.operation_lock.locked() or control.job_busy():
                 raise HTTPException(409, 'Wait for the active operation before attaching a client')
             dev = state.get("device")
             port_changed = presence and presence['status'] == 'port_changed'
@@ -976,9 +999,12 @@ fetch('/_runtime/login', {method:'POST', headers:{'Content-Type':'application/js
         session_id, capability, arguments = control.prepare_call(body)
         stream, action = LIFECYCLE_CAPABILITIES.get(capability, (None, None))
         if action == 'start':
-            if stream in STREAMS and control.operation_lock.locked():
-                raise HTTPException(409, "Acquisition is changing; wait for the current operation before subscribing")
             from mklink.remote.dashboards import get_managers
+            if stream in STREAMS and control.operation_lock.locked():
+                if not arguments and get_managers()[stream].running:
+                    await control.wait_for_shared_slot()
+                if control.operation_lock.locked() or control.lifecycle_pending or control.stopping:
+                    raise HTTPException(409, "Acquisition is changing; wait for the current operation before subscribing")
             from mklink.remote.api import _dashboard_start_lock
             start_lock = _dashboard_start_lock(state, stream)
             if start_lock.locked():

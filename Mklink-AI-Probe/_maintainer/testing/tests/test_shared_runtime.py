@@ -82,6 +82,30 @@ def call(client, session, capability, arguments=None):
     return client.post("/_runtime/call", json={"session_id": session, "capability": capability, "arguments": arguments or {}})
 
 
+def test_cli_joins_gui_capture_during_short_device_poll(runtime):
+    client, control, calls, managers, _ = runtime
+    managers['rtt'].running = True
+
+    def during_poll(request):
+        entered = threading.Event()
+
+        async def poll():
+            async with control.operation_lock:
+                entered.set()
+                await asyncio.sleep(.12)
+
+        worker = client.portal.start_task_soon(poll)
+        assert entered.wait(2)
+        result = request()
+        worker.result(timeout=2)
+        return result
+
+    session = during_poll(lambda: attach(client))
+    response = during_poll(lambda: call(client, session, 'rtt_start'))
+    assert response.status_code == 200 and response.json()['reused']
+    assert 'start' not in calls
+
+
 def test_detach_never_closes_gui_device(runtime):
     client, control, calls, _, _ = runtime
     first, second = attach(client), attach(client)
