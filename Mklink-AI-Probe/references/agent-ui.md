@@ -46,6 +46,12 @@ python -m mklink runtime call gui_frontend_pages --runtime-id <后台ID>
 python -m mklink runtime call gui_frontend_read --runtime-id <后台ID> --arguments '{"page_id":"页面ID"}'
 ```
 
+## 组合已有视图进行演示
+
+按用户要判断的问题选择少量面板。调参时，将 SuperWatch 变量波形与对应 RTT 通道左右并排，可以一边看实际响应，一边看状态切换或故障日志。需要盯一个当前数值时，可在控制面板添加数字卡，从 `component.sources` 返回的波形信号中选择。定位任务卡顿时，可把 SystemView 与相关变量波形并排；对照事件时注明各自时间基准。
+
+先读当前工作台布局、`dirty`、面板 ID 和数据绑定。已有匹配面板就聚焦或分栏；缺一块时用当前目录公布的 `panel.add` 补上，再按 `panel.split` 的参数分栏。空白演示窗口也可从“RTT 与变量波形”等内置模板开始。保留用户已有面板和未保存的编辑，只有用户希望保留演示布局时才保存，新的组合可另存为命名布局。核对最终可见的面板、变量、通道和新样本，AI 从同一后台解读同期数据。
+
 ## 布局保存、加载与模板
 
 灵活面板位于 Dashboard 标签最右侧。“保存布局”写入目标工程 `.mklink/frontend_layout.json`，用于下次打开；“另存为…”保存命名副本；“加载布局”按名称搜索并选择。

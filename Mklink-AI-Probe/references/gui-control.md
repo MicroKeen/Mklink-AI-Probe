@@ -14,6 +14,8 @@ GUI 接口负责窗口、页面、表单、显示、回放及结果核对，不�
 backend、connected、device_generation、visibility、focused、panels 和 alerts。
 这是窗口状态，不是后台状态的代替品，也不证明像素布局或恒定帧率。
 
+单项演示优先使用已有页面和控件，例如通过文件来源加载符号、从 SuperWatch 看变量、从 RTT 看日志、从 SystemView 看任务与中断。需要同时观察两种现象时，用[灵活面板](agent-ui.md#组合已有视图进行演示)复用这些视图。优先使用 GUI 已提供的曲线、仪表、回放和导出；只有用户要求单独交付其他界面或现有能力确实不足时，再讨论额外实现。
+
 ## 边展示边分析
 
 1. 用户想看曲线、比较信号、观察调参效果或监看 RTT 时，先按工程和探针选定后台。复用其可见桌面或浏览器窗口；还没有窗口时调用 `gui_open` 打开，等返回 `ready`。使用 `gui_control(action="navigate", window_id=..., page="dashboard", tab="superwatch")` 展示变量，用 `tab="rtt"` 展示 RTT 文本与波形。用户正在使用灵活面板时，可复用其中匹配的视图。

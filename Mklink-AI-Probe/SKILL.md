@@ -17,10 +17,7 @@ description: 使用 MKLink/MicroLink 操作目标 MCU：固件烧录、内存与
   **GUI 共用连接**：`connect(probe=...)` 复用工程/符号；`gui_call` 调用共享能力。
   RTT 已运行时无参数 `rtt_start()` 订阅，用 `rtt_read_channel` 读取。
   不发送旧 `RTTView.start/stop`，不另开串口；缺能力不退回独占。
-  GUI 见[操作](references/gui-control.md)；灵活面板/连续对话见[接入](references/agent-ui.md)。
-- **看实时波形或 RTT 日志**：做曲线分析、观察调参效果或监看 RTT 时，主动打开或复用用户可见的
-  MKLink GUI，切到对应仪表盘。AI 同时从同一后台读取样本或同通道日志，结合窗口中的实时变化解释。
-  用户指定只在后台分析时按其要求执行；需要静态图片时使用 GUI 的导出。见[实时展示](references/gui-control.md#边展示边分析)。
+- **给用户看效果**：优先用上位机现有页面演示。看曲线、调参或监看 RTT 时主动打开可见 GUI，AI 同时分析同一采集流。多项对照用[灵活面板](references/agent-ui.md)并排展示，复用现有视图与控件。用户只要后台分析或静态导出时按其要求执行。见[实时展示](references/gui-control.md#边展示边分析)。
 - **占用先查后台**：`runtime_status(probe=...)` 无需连接，查询会话、采集和任务。
   GUI 关闭不等于后台退出，AI 任务完成须 `detach`。占用/失败时读
   [控制权与恢复](references/runtime-recovery.md)。
@@ -78,7 +75,6 @@ description: 使用 MKLink/MicroLink 操作目标 MCU：固件烧录、内存与
 
 | 本次任务 | 只在需要时读取 |
 |---|---|
-| 固件下载后端 | [下载优先级](references/firmware-download-priority.md) |
 | 烧录、项目初始化、RTT 集成/捕获 | [烧录与 RTT](references/commands-flash-rtt.md) |
 | 固定 RTT 地址 | [RTT 静态模式](references/rtt-static-mode.md) |
 | RTOS 跟踪 | [SystemView](references/systemview-rtthread.md) |
@@ -90,8 +86,6 @@ description: 使用 MKLink/MicroLink 操作目标 MCU：固件烧录、内存与
 | UART、串口 profile | [串口](references/commands-serial.md) |
 | VPN/局域网 Site Agent | [直连远程](references/commands-remote.md) |
 | Web/桌面应用 | [本地 Web GUI/API](references/commands-remote-gui.md) |
-| GUI 与 AI 共存、多下载器、设备别名 | [共享后台](references/shared-runtime.md) |
-| 安装/FLM/MCP | [安装与更新](references/install.md) |
 | U 盘/桌面 HTML 快速入口 | [Web 入口](references/web-entry.md) |
 | Windows USB 端口名称 | [端口命名](references/windows-port-names.md) |
 | 编排/排障 | [工作流](references/workflows.md) |

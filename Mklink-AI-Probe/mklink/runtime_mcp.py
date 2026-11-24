@@ -82,7 +82,7 @@ def build_server():
                            "batch_read_max_total_bytes": BATCH_READ_MAX_TOTAL_BYTES,
                            "rtt_mux_channels": 8, "rtt_channel_cache_bytes": 65536,
                            "mux_watch_regions": 15, "mux_watch_region_bytes": 128},
-                "guidance": "For live waveform analysis or RTT monitoring, open or reuse a visible GUI and analyze the same shared stream; confirm its window, then connect to the explicit probe on that same backend. Otherwise connect directly. Disconnect stops shared target acquisition; detach only leaves this AI session."}
+                "guidance": "Demonstrate using existing MKLink views; use Workbench for related panels. For live waveforms or RTT, show the GUI and analyze the same shared stream; confirm its window, then connect to the explicit probe on that same backend. Otherwise connect directly. Disconnect stops shared target acquisition; detach only leaves this AI session."}
 
     @server.tool()
     def gui_open(action: Literal['open', 'status'] = 'open', probe: str | None = None,
