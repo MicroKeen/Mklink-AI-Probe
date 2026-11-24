@@ -124,6 +124,7 @@ function ymodemStatus(overrides: Record<string, unknown> = {}) {
 
 describe('SerialMonitorTab', () => {
   it('distinguishes identical USB product names and keeps a manually selected system port on refresh', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ running: false, config: [], ports: {}, stats: {} })))
     const system = '/dev/cu.debug-console'
     const uart = '/dev/cu.usbmodem501', rs485 = '/dev/cu.usbmodem403'
     mocks.listUartPorts.mockResolvedValue([
