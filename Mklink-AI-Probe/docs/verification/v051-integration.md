@@ -25,3 +25,11 @@ HPMLink V4.7.5、用户确认的 HPM6E80、SDK 1.12.1 的 `hpm6e00evk` hello_wor
 三个窗口独立启动，原始字节和独立实时订阅按偏移对齐，丢失为 0。stdio MCP 复用同一会话读回 200 字节，退出后桌面继续收到后续序号。CH1 和 CH2 在本次程序中没有载荷。操作未刷写应用或探针固件。
 
 验收还发现完整 JTAG OTP 读取通过 MCP 调用时返回 422。共享后台的参数校验漏掉只读标志 `extended`。修正后实板经 stdio MCP 返回 Word 0–127 和熔丝、影子、锁定字段。回归覆盖省略标志、布尔真/假、无效类型和更改类调用的拒绝。HPM6E80 永久写入继续暂停，详见[硬件记录](v051-hpm-jtag-otp-write.md)。
+
+## 桌面关闭到托盘和串口角色
+
+V0.5.1 测试包源码为 `e41a6560`。点主窗口关闭按钮会保留已有窗口、代理和采集，从托盘的 Show MKLink 恢复，从 Exit 明确退出。macOS 用菜单栏图标，也支持从 Dock 恢复及用 ⌘Q 退出。串口助手优先 UART（TTL），Modbus 优先 RS485；两处保留设备路径和已选择的有效端口。
+
+Windows 从候选 NSIS 提取原始程序启动两个独立实例，分别隐藏、恢复并通过托盘退出，按实例核对后台身份及退出后的端口释放。另一轮通过虚拟串口对在窗口隐藏期间发送 204 字节，后台收到 204 字节，恢复后串口仍开着。Edge 使用 macOS 端口测试数据验证两处默认选择、角色标签及手动选中系统端口后刷新。全部 1,467 项 GUI 测试和 43 项相关后端回归通过。Windows 安装包 SHA-256 为 `c2658a8cb01bdb41f93e9df26cd81dbbadd95f44cbb870e0cb5e58807d36d776`。
+
+macOS 仅构建 Apple Silicon。[原生验收](https://github.com/MicroKeen/Mklink-AI-Probe/actions/runs/45411912491)覆盖挂载 DMG、应用临时签名校验、内置 CLI/MCP、后台健康及 WebKit 菜单测试。下载后按 GitHub 产物摘要与 DMG 清单交叉核验，确认主程序和后端均为 ARM64 Mach-O。DMG 大小 168,857,688 字节，SHA-256 为 `f83629fa6b65aa7b6ec7e07f369c5ba6395aa7425152bdf44aa47d941c1d6604`。此包未经 Apple 公证。客户 Mac 的菜单栏交互与物理串口尚待现场验证。
