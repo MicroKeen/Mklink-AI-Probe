@@ -18,6 +18,9 @@ description: 使用 MKLink/MicroLink 操作目标 MCU：固件烧录、内存与
   RTT 已运行时无参数 `rtt_start()` 订阅，用 `rtt_read_channel` 读取。
   不发送旧 `RTTView.start/stop`，不另开串口；缺能力不退回独占。
   GUI 见[操作](references/gui-control.md)；灵活面板/连续对话见[接入](references/agent-ui.md)。
+- **看实时波形或 RTT 日志**：做曲线分析、观察调参效果或监看 RTT 时，主动打开或复用用户可见的
+  MKLink GUI，切到对应仪表盘。AI 同时从同一后台读取样本或同通道日志，结合窗口中的实时变化解释。
+  用户指定只在后台分析时按其要求执行；需要静态图片时使用 GUI 的导出。见[实时展示](references/gui-control.md#边展示边分析)。
 - **占用先查后台**：`runtime_status(probe=...)` 无需连接，查询会话、采集和任务。
   GUI 关闭不等于后台退出，AI 任务完成须 `detach`。占用/失败时读
   [控制权与恢复](references/runtime-recovery.md)。

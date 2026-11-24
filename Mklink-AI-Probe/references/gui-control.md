@@ -1,6 +1,6 @@
 # GUI 操作与验收
 
-用户要求展示或操作桌面/Web GUI 时使用本页。两者共用同一协议，无需鼠标坐标或
+实时曲线分析、RTT 监看以及桌面/Web GUI 操作使用本页。两者共用同一协议，无需鼠标坐标或
 Computer Use。设备采集、烧录、内存、符号、串口和 Modbus 优先使用已有共享能力；
 GUI 接口负责窗口、页面、表单、显示、回放及结果核对，不另开设备连接。
 
@@ -13,6 +13,12 @@ GUI 接口负责窗口、页面、表单、显示、回放及结果核对，不�
 `gui_control(action="snapshot", window_id=...)` 从该页面实时取得 page、tab、section、
 backend、connected、device_generation、visibility、focused、panels 和 alerts。
 这是窗口状态，不是后台状态的代替品，也不证明像素布局或恒定帧率。
+
+## 边展示边分析
+
+1. 用户想看曲线、比较信号、观察调参效果或监看 RTT 时，先按工程和探针选定后台。复用其可见桌面或浏览器窗口；还没有窗口时调用 `gui_open` 打开，等返回 `ready`。使用 `gui_control(action="navigate", window_id=..., page="dashboard", tab="superwatch")` 展示变量，用 `tab="rtt"` 展示 RTT 文本与波形。用户正在使用灵活面板时，可复用其中匹配的视图。
+2. 用窗口快照核对实际页面、可见性和实时/回放状态。按任务配置变量或 RTT 通道，已有采集直接订阅。SuperWatch 用 `superwatch(action="values")` 读取已采样值，比较递增的 `sample.sequence`；RTT 用 `rtt_read_channel` 读取同一通道，为 AI 单独延续返回的 `session` 和 `cursor`。用户可以在 GUI 看实时变化，AI 用同期数值、时间或日志行解释观察结果。
+3. 后台已运行但窗口未接入、暂停、处于回放或尚无新数据时，说明实际状态，核对数据源再判断。完成分析后用 `detach` 退出 AI 会话，保留用户继续查看的窗口及共享采集。用户另有停止、只在后台分析或导出图片的要求时按其要求执行；静态图片可用 GUI 的 PNG 导出。
 
 ## 导航与显示
 

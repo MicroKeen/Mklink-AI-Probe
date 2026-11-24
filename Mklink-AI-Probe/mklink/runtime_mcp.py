@@ -82,7 +82,7 @@ def build_server():
                            "batch_read_max_total_bytes": BATCH_READ_MAX_TOTAL_BYTES,
                            "rtt_mux_channels": 8, "rtt_channel_cache_bytes": 65536,
                            "mux_watch_regions": 15, "mux_watch_region_bytes": 128},
-                "guidance": "Use gui_open when a visible GUI is requested; confirm its window, then connect to the explicit probe on that same backend. Otherwise connect directly. Disconnect stops shared target acquisition; detach only leaves this AI session."}
+                "guidance": "For live waveform analysis or RTT monitoring, open or reuse a visible GUI and analyze the same shared stream; confirm its window, then connect to the explicit probe on that same backend. Otherwise connect directly. Disconnect stops shared target acquisition; detach only leaves this AI session."}
 
     @server.tool()
     def gui_open(action: Literal['open', 'status'] = 'open', probe: str | None = None,
@@ -90,7 +90,7 @@ def build_server():
                  window_id: str | None = None, open_browser: StrictBool = True) -> dict:
         """Open/reuse MKLink on the MCP computer; never connects hardware or starts capture.
 
-        Call only when the user requests a visible GUI. Reuses this MCP's backend,
+        Use for live waveform analysis, RTT monitoring, or a requested visible GUI. Reuses this MCP's backend,
         the probe's existing backend, or a unique unbound GUI. Multiple choices return
         select_runtime/select_window; choose explicitly, never take the first entry.
         New backends require an existing project_root. Existing project/symbols stay intact.
@@ -654,8 +654,7 @@ def build_server():
 
         gui_control is the typed entry for navigation, fresh window snapshots and display controls.
         gui_windows lists presentation-capable windows; gui_present({window_id, tab})
-        switches an existing window only when showing results is useful. Routine collection
-        stays in the background. Only displayed confirms navigation; never auto-replay.
+        presents live waveforms or RTT while this client analyzes the same shared stream. Only displayed confirms navigation; never auto-replay.
         After gui_open, gui_frontend_* uses the existing hardware-free GUI attachment.
         gui_snapshot.panels.workbench identifies that window's semantic page and target.
         gui_frontend_pages discovers live agent-frontend/1 page identities and their target.
