@@ -90,3 +90,5 @@
 | AI 的独立订阅 | 同一后台的 SuperWatch 序号从 6,056 增至 6,888；同期从 RTT 通道 0 取得 106 字节，其中包含 `RTT seq=16507`，丢失计数为 0。 |
 
 临时布局未保存。构建根目录下 `reports/v051-sampling-checkboxes-20261124/project/board-214329/results.json` 保存了 GUI 和 MCP 的原始观测结果。
+
+修订 `9430789f` 将实时展示的判断扩展到任意调试问题。只要实板波形或事件日志有助于回答问题、区分原因或验证结论，Skill 就会主动选择对应的现有视图。Skill 与 MCP 共 133 项回归通过，本机覆盖更新后逐项核对 2,736 个文件。完整 Skill ZIP 的 SHA-256 为 `ac78df151a3bad6b881fda8849888dcd382329b085d8cc2bc0deda3cb9686c93`。

@@ -5,9 +5,9 @@
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/watch-formula-color",
-    "head": "57f3dae3",
-    "remote_head": "57f3dae3",
-    "working_tree": "E盘主工作区，主线80504c21。PR #92：Windows包0f31be89；Skill包57f3dae3。"
+    "head": "9430789f",
+    "remote_head": "9430789f",
+    "working_tree": "E盘主工作区，主线80504c21。PR #92：Windows包0f31be89；Skill包9430789f。"
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
@@ -60,7 +60,7 @@
     },
     {
       "area": "SuperWatch 配置与手动日志转换",
-      "result": "Excel 1,114,032组/4,456,128值、RTT 505行，对照[转换](../verification/v050-manual-recording-export.md)、[配置](../verification/v050-superwatch-profile.md)及[TXT](../verification/v050-rtt-txt-readable.md)。0.5.1修复日志导出，仪表盘可直接打开AXF，分组勾选控制采集；Skill用灵活面板同步展示实板曲线和RTT，见[Windows验收](../verification/v051-superwatch-export-profile.md)。"
+      "result": "Excel 1,114,032组/4,456,128值、RTT 505行，对照[转换](../verification/v050-manual-recording-export.md)、[配置](../verification/v050-superwatch-profile.md)及[TXT](../verification/v050-rtt-txt-readable.md)。0.5.1修复导出，仪表盘可打开AXF，分组勾选控制采集；波形或日志有助判断时Skill主动展示，见[Windows验收](../verification/v051-superwatch-export-profile.md)。"
     },
     {
       "area": "V0.5.0 发布、安装与升级",
