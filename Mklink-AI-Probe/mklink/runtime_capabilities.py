@@ -71,6 +71,8 @@ CAPABILITIES = {
     'superwatch_pins_save': ('PUT', '/api/dash/superwatch/pins'),
     'superwatch_save_pins': ('PUT', '/api/dash/superwatch/pins'),
     'superwatch_save_workspace': ('PUT', '/api/dash/superwatch/workspace'),
+    'systemview_recording_start': ('POST', '/api/dash/systemview/recording/start'),
+    'systemview_recording_stop': ('POST', '/api/dash/systemview/recording/stop'),
     'superwatch_recording_status': ('GET', '/api/dash/superwatch/recording/status'),
     'superwatch_recording_start': ('POST', '/api/dash/superwatch/recording/start'),
     'superwatch_recording_stop': ('POST', '/api/dash/superwatch/recording/stop'),

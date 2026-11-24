@@ -1,3 +1,4 @@
+import { requestError } from '../lib/requestError'
 import { frontendFetch as fetch } from '../lib/frontendControl'
 import type {
   OfflineAlgorithmCandidate,
@@ -52,7 +53,7 @@ export class OfflineFlashApiError extends Error {
 
 async function responseError(response: Response): Promise<Error> {
   const payload = await response.json().catch(() => null)
-  return new OfflineFlashApiError(detailMessage(payload?.detail, response.statusText || `HTTP ${response.status}`),
+  return new OfflineFlashApiError(requestError(detailMessage(payload?.detail, ''), response.status, 'Offline Flash'),
     response.headers.get('X-MKLink-Submission') === 'not-started')
 }
 

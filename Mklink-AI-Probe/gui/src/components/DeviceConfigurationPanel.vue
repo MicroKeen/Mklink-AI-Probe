@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { requestError } from '../lib/requestError'
 import { frontendFetch as fetch } from '../lib/frontendControl'
 
 import { computed, onActivated, onBeforeUnmount, onDeactivated, ref, watch } from 'vue'
@@ -83,7 +84,7 @@ async function load(read = false) {
         body: JSON.stringify({ part_number: props.partNumber, model: props.model }) } : {}),
     })
     const body = await response.json()
-    if (!response.ok) throw new Error(typeof body.detail === 'string' ? body.detail : body.detail?.message || `HTTP ${response.status}`)
+    if (!response.ok) throw new Error(requestError(body.detail, response.status, 'MKLink'))
     if (revision === requestRevision) configuration.value = body
   } catch (e) {
     if (revision === requestRevision) error.value = e instanceof Error ? e.message : String(e)

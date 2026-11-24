@@ -31,7 +31,7 @@ export function trackSymbolSource(file: File, source: UploadedFileSource, action
   trackedSymbolPending.value = 0
   reload = undefined
   const handle = symbolFileHandle(file)
-  if (!handle) return
+  if (!handle || source.source_kind === 'local') return
   let stopped = false
   let busy = false
   let timer: ReturnType<typeof setTimeout> | undefined

@@ -9,6 +9,7 @@
 </template>
 
 <script setup lang="ts">
+import { requestError } from '../../lib/requestError'
 import type { SemanticExecutionContext } from '../../lib/frontendControl'
 import { mountDetailsMenu } from '../../lib/detailsMenu'
 
@@ -112,7 +113,7 @@ async function loadReplayFile(path: string, context?: { fetch: typeof fetch }): 
     })
     if (!response.ok) {
       const error = await response.json().catch(() => ({}))
-      throw new Error(error.detail?.message || error.detail || response.statusText)
+      throw new Error(requestError(error.detail, response.status, 'SuperWatch'))
     }
     const blob = await response.blob()
     if (disposed) throw new Error('Waveform panel is closed')

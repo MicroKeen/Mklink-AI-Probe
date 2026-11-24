@@ -325,7 +325,7 @@ async function selectedFilePath(
   if (!selected) return null
   if (typeof selected === 'string') return { path: selected, displayPath: selected }
   const uploaded = await uploadFileSource(kind, selected)
-  return { path: uploaded.path, displayPath: uploaded.name || selected.name }
+  return { path: uploaded.path, displayPath: uploaded.source_kind === 'local' ? uploaded.path : uploaded.name || selected.name }
 }
 
 async function browseSymbolFile() {

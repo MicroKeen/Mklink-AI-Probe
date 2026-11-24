@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { requestError } from '../lib/requestError'
 import { frontendFetch as fetch } from '../lib/frontendControl'
 
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
@@ -44,7 +45,7 @@ async function request(action: 'read' | 'plan' | 'program') {
       body: JSON.stringify({ part_number: props.partNumber, model: props.model, ...args }),
     })
     const body = await response.json()
-    if (!response.ok) throw new Error(typeof body.detail === 'string' ? body.detail : body.detail?.message || `HTTP ${response.status}`)
+    if (!response.ok) throw new Error(requestError(body.detail, response.status, 'OTP'))
     if (requestRevision !== revision) return
     if (action === 'read') { rows.value = body.words.filter((item: Word) => item.word >= 69 && item.word <= 79 && item.current != null && item.locked !== null); hardLock.value = body.hard_lock ?? null }
     else if (action === 'plan') {

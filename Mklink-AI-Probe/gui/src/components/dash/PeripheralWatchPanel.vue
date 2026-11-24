@@ -34,6 +34,7 @@
 </template>
 
 <script setup lang="ts">
+import { requestError } from '../../lib/requestError'
 import { frontendFetch as fetch } from '../../lib/frontendControl'
 
 import type { SemanticExecutionContext } from '../../lib/frontendControl'
@@ -200,7 +201,7 @@ async function request(path: string, body?: object, context?: SemanticExecutionC
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
   } : undefined)
   const payload = await response.json()
-  if (!response.ok || payload.error || payload.item?.error) throw new Error(payload.error || payload.item?.error || payload.detail?.message || payload.detail || response.statusText)
+  if (!response.ok || payload.error || payload.item?.error) throw new Error(requestError(payload.error || payload.item?.error || payload.detail, response.status, 'SuperWatch'))
   return payload
 }
 

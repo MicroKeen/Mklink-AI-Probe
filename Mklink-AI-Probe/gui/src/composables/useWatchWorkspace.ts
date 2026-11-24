@@ -1,3 +1,4 @@
+import { requestError } from '../lib/requestError'
 import { ref } from 'vue'
 import { API_BASE } from '../lib/runtimeEndpoint'
 export interface Section { id: string; name: string; collapsed: boolean; height: number }
@@ -18,7 +19,7 @@ function publish() {
 async function request(options?: RequestInit) {
   const response = await fetch(`${API_BASE}/api/dash/superwatch/workspace`, options)
   const data = await response.json()
-  if (!response.ok) throw new Error(data.detail || response.statusText)
+  if (!response.ok) throw new Error(requestError(data.detail, response.status, 'SuperWatch'))
   if (data.workspace?.version !== 2 || !Array.isArray(data.workspace.groups) || !Array.isArray(data.workspace.panes) || !data.workspace.panes.length || !data.workspace.signals || typeof data.revision !== 'string') throw new Error('Invalid workspace response')
   return data
 }

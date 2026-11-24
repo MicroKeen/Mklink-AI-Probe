@@ -33,13 +33,19 @@ def _safe(text):
 
 
 def _rows(path):
-    with path.open('r', encoding='utf-8') as stream:
+    from mklink.work_files import open_log_file
+    with open_log_file(path, 'r', encoding='utf-8') as stream:
+        line_no = 0
         while line := stream.readline(MAX_LINE + 1):
+            line_no += 1
             if len(line) > MAX_LINE:
-                raise ValueError(f'Recording line exceeds TXT conversion limit: {path.name}')
-            row = json.loads(line)
+                raise ValueError(f'原始日志 {path.name} 第 {line_no} 行超过转换长度限制。')
+            try:
+                row = json.loads(line)
+            except ValueError as exc:
+                raise ValueError(f'原始日志 {path.name} 第 {line_no} 行不是完整的 JSON 记录：{exc}') from exc
             if not isinstance(row, dict):
-                raise ValueError(f'Invalid recording row: {path.name}')
+                raise ValueError(f'Invalid recording row: {path.name}，第 {line_no} 行应为采样对象。')
             yield row
 
 
@@ -142,12 +148,16 @@ def export_text(manifest_path):
     """Stream closed JSONL parts; results/errors are separate from capture status."""
     manifest_path = Path(manifest_path)
     job = json.loads(manifest_path.read_text(encoding='utf-8'))
+    from mklink.work_files import file_error, open_log_file
+    target = manifest_path
+    partial = None
     try:
         traffic = _RttText() if job['kind'] == 'rtt' else None
         for index in range(1, job['parts'] + 1):
             source = Path(job['base'] + f'-{index:04d}.jsonl')
-            target = source.with_suffix('.txt')
-            with target.open('x', encoding='utf-8', newline='\n', buffering=65536) as output:
+            target = Path(job.get('output_base', job['base']) + f'-{index:04d}.txt')
+            with open_log_file(target, 'x', encoding='utf-8', newline='\n', buffering=65536) as output:
+                partial = target
                 output.write(f"# MKLink {job['kind']} readable log — {source.name}\n"
                              f"# Recording started: {_date(job['started_at'])}\n"
                              f"# Source: {'complete' if job['complete'] else 'INCOMPLETE: ' + _safe(job['source_error'])}\n")
@@ -171,11 +181,17 @@ def export_text(manifest_path):
                 if traffic and index == job['parts']:
                     traffic.finish(output)
                 output.write('# TXT part complete; use JSONL for lossless replay.\n')
+            partial = None
             job.update(export_parts=index, export_path=str(target))
             _save_status(manifest_path, job)
         job.update(export_state='completed')
     except Exception as exc:
-        job.update(export_state='failed', export_error=str(exc) or type(exc).__name__)
+        if partial is not None:
+            try:
+                partial.unlink()
+            except OSError:
+                pass
+        job.update(export_state='failed', export_error=file_error('转换 TXT', exc, target))
     _save_status(manifest_path, job)
     return 0 if job['export_state'] == 'completed' else 1
 
@@ -187,7 +203,7 @@ class ManualExport:
         self._lock = threading.Lock()
         self._status = dict(export_state='pending', export_path='', export_parts=0, export_error='',
                             export_format='xlsx' if kind == 'superwatch' else 'txt')
-        self._started = False
+        self._attempt = 0
         self._manifest = None
 
     def status(self):
@@ -195,7 +211,7 @@ class ManualExport:
             if self._manifest is not None and self._status['export_state'] == 'generating':
                 try:
                     job = json.loads(self._manifest.read_text(encoding='utf-8'))
-                    self._status.update({key: value for key, value in job.items() if key.startswith('export_')})
+                    self._status.update({key: value for key, value in job.items() if key.startswith('export_') and key not in ('export_state', 'export_error')})
                 except (OSError, ValueError):
                     pass
             return dict(self._status)
@@ -204,10 +220,13 @@ class ManualExport:
         if recording.get('active') or recording.get('state') not in ('completed', 'failed'):
             raise RuntimeError('Stop recording and wait for it to finish before converting')
         with self._lock:
-            if self._started:
+            if self._status['export_state'] in ('generating', 'completed'):
                 return
-            self._started = True
-            self._status['export_state'] = 'generating'
+            self._attempt += 1
+            self._manifest = None
+            self._status.update(export_state='generating', export_error='', export_path='', export_parts=0)
+            initial = dict(self._status)
+            attempt = self._attempt
         manifest = job = None
         created = False
         try:
@@ -217,8 +236,11 @@ class ManualExport:
             base = re.sub(r'-\d{4,}\.jsonl$', '', str(path))
             if base == str(path) or not recording['parts']:
                 raise ValueError('No closed recording parts available for conversion')
-            manifest = Path(base + '-export.json')
-            job = dict(self._status, kind=self.kind, base=base, parts=recording['parts'],
+            # An explicit retry has its own output names. Previously completed
+            # parts and files belonging to the user are never replaced.
+            output_base = base if attempt == 1 else f'{base}-retry-{attempt}'
+            manifest = Path(output_base + '-export.json')
+            job = dict(initial, output_base=output_base, kind=self.kind, base=base, parts=recording['parts'],
                        started_at=recording['started_at'], complete=recording['state'] == 'completed',
                        source_error=recording.get('error', ''))
             with manifest.open('x', encoding='utf-8') as stream:
@@ -248,7 +270,9 @@ class ManualExport:
             threading.Thread(target=self._wait, args=(process, manifest, job),
                              name='recording-export-result', daemon=True).start()
         except Exception as exc:
-            self._failed(exc, manifest if created else None, job)
+            from mklink.work_files import file_error
+            self._failed(RuntimeError(file_error('启动日志转换', exc, recording.get('path'))),
+                         manifest if created else None, job)
 
     def _failed(self, exc, manifest, job):
         with self._lock:

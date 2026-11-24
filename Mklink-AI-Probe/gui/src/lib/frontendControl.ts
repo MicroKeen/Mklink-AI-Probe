@@ -1,3 +1,4 @@
+import { requestError } from './requestError'
 import '../assets/agent_interaction.js'
 import { API_BASE } from './runtimeEndpoint'
 
@@ -41,7 +42,7 @@ export async function frontendRequest(path: string, body?: unknown, method = bod
     method, signal: AbortSignal.timeout(5000), ...(body === undefined ? {} : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
   })
   const payload = await response.json()
-  if (!response.ok) throw Object.assign(new Error(typeof payload.detail === 'string' ? payload.detail : payload.detail?.message || response.statusText), { status: response.status, code: payload.detail?.code })
+  if (!response.ok) throw Object.assign(new Error(requestError(payload.detail, response.status, path)), { status: response.status, code: payload.detail?.code })
   return payload
 }
 

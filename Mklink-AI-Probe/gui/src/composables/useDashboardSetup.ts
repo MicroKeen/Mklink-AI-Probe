@@ -138,7 +138,7 @@ export function useDashboardSetup() {
         ? { path: selected, displayPath: selected }
         : await api.uploadFileSource('symbol', selected).then(uploaded => ({
           path: uploaded.path,
-          displayPath: uploaded.name || selected.name,
+          displayPath: uploaded.source_kind === 'local' ? uploaded.path : uploaded.name || selected.name,
         }))
       const settings = loadDesktopSettings(window.localStorage)
       saveDesktopSettings(window.localStorage, {

@@ -1,5 +1,6 @@
 import { frontendFetch as fetch } from '../lib/frontendControl'
 import type { SemanticExecutionContext } from '../lib/frontendControl'
+import { requestError } from '../lib/requestError'
 import { ref, readonly } from 'vue'
 import { tr } from './useLanguage'
 import { flushWatchProfile, useWatchProfile } from './useWatchProfile'
@@ -42,14 +43,7 @@ async function apiRequest<T>(path: string, options?: RequestInit, context?: Sema
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    let msg = res.statusText
-    if (err) {
-      const d = err.detail
-      if (typeof d === 'string') msg = d
-      else if (Array.isArray(d)) msg = d.map((e: any) => e.msg || String(e)).join('; ')
-      else if (d && typeof d === 'object' && 'message' in d) msg = String(d.message)
-      else if (d) msg = JSON.stringify(d)
-    }
+    const msg = requestError(err?.detail ?? err, res.status, path)
     throw Object.assign(new Error(msg), { status: res.status, detail: err?.detail })
   }
   return res.json()
@@ -84,7 +78,7 @@ export function useMklinkApi(context?: SemanticExecutionContext) {
     } catch (error) {
       throw new Error(`${String(error)} · Request ${requestId}. Check backend jobs before starting again.`)
     }
-    if (job.state !== 'succeeded') throw new Error(`${job.state}: ${job.error || JSON.stringify(job.result)} · ${job.job_id}`)
+    if (job.state !== 'succeeded') throw new Error(`${job.state}: ${requestError(job.error || job.result, 0, action)} · ${job.job_id}`)
     return job.result
   }
   async function listPorts(): Promise<PortInfo[]> {
@@ -212,7 +206,7 @@ export function useMklinkApi(context?: SemanticExecutionContext) {
     const res = await fetch(`${API_BASE}/api/probe/firmware-download?${query.toString()}`)
     if (!res.ok) {
       const error = await res.json().catch(() => null)
-      throw new Error(typeof error?.detail === 'string' ? error.detail : res.statusText)
+      throw new Error(requestError(error?.detail, res.status, 'MKLink'))
     }
     const filename = res.headers.get('X-MKLink-Firmware-Name')
       || /filename="([^"]+)"/i.exec(res.headers.get('Content-Disposition') || '')?.[1]

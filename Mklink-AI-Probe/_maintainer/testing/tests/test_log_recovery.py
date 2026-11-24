@@ -1,0 +1,60 @@
+from pathlib import Path
+from unittest.mock import patch
+
+import pytest
+
+from mklink.mux import MuxTargetError
+from mklink.remote.dashboards import SystemViewStreamManager
+from mklink.symbol_sources import AmbiguousSymbolSource, match_upload, remember_source
+
+
+def test_symbol_profile_matches_content_and_isolates_projects(tmp_path):
+    from io import BytesIO
+    from types import SimpleNamespace
+    from mklink.remote.api import _store_uploaded_file_source
+    def uploaded(data):
+        return _store_uploaded_file_source(SimpleNamespace(filename='app.axf', file=BytesIO(data)),
+                                           tmp_path, ('.axf',))
+    def register(directory):
+        directory.mkdir()
+        elf = directory / 'app.axf'
+        elf.write_bytes(b'build-1')
+        remember_source(tmp_path, elf)
+        return elf
+    first = register(tmp_path/'one')
+    assert match_upload(tmp_path, uploaded(b'build-1'))['path'] == str(first)
+    assert match_upload(tmp_path, uploaded(b'build-2')) == uploaded(b'build-2')
+    second = register(tmp_path/'two')
+    with pytest.raises(AmbiguousSymbolSource, match='多个'):
+        match_upload(tmp_path, uploaded(b'build-1'))
+    first.write_bytes(b'build-2')
+    assert match_upload(tmp_path, uploaded(b'build-1'))['path'] == str(second)
+    assert match_upload(tmp_path, uploaded(b'build-2'))['path'] == str(first)
+
+
+def test_trace_summary_can_retry_without_touching_jsonl(tmp_path):
+    from types import SimpleNamespace
+    mgr = SystemViewStreamManager()
+    mgr._parser = mgr._create_parser()
+    mgr._running = True
+    mgr._recording_device = SimpleNamespace(_project_root=str(tmp_path))
+    started = mgr.start_recording()
+    trace = Path(started['recording_path'])
+    assert not started['recording_summary_path']
+    logger = mgr._recording
+    with patch.object(logger, '_write_text_summary', side_effect=PermissionError(13, 'access denied', str(logger.summary_path))):
+        failed = mgr.stop_recording()
+    raw = trace.read_bytes()
+    assert failed['summary_pending'] and 'JSONL 已保存' in failed['recording_error']
+    assert not failed['recording_summary_path'] and not failed['recording']
+    done = mgr.stop_recording()
+    assert not done['summary_pending'] and not done['recording_error'] and mgr.running
+    assert trace.read_bytes() == raw
+    assert Path(done['recording_summary_path']).is_file()
+
+
+def test_read_error_includes_operation_address_length_and_recovery():
+    import struct
+    error = MuxTargetError(5, 0x16, struct.pack('<IH', 0x010bd198, 24))
+    for word in ['0x010BD198', '24', '供电', 'opcode 0x16', 'status 5']:
+        assert word in str(error)

@@ -501,6 +501,7 @@ export interface ProbeFirmwareDownload {
 export type FileSourceKind = 'symbol' | 'map' | 'svd'
 
 export interface UploadedFileSource {
+  source_kind?: 'local'
   path: string
   name: string
   size: number

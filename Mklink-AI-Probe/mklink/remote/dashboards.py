@@ -933,6 +933,7 @@ class SystemViewStreamManager:
         self._last_name_resolution = 0.0
         self._cpu_freq_source = ""
         self._recording_lock = threading.RLock()
+        self._pending_summary = None
         self._recording = None
         self._recording_path = ""
         self._recording_summary_path = ""
@@ -1022,6 +1023,7 @@ class SystemViewStreamManager:
         self._cpu_freq_source = ""
         with self._recording_lock:
             self._recording = None
+            self._pending_summary = None
             self._recording_path = ""
             self._recording_summary_path = ""
             self._recording_error = ""
@@ -1479,11 +1481,13 @@ class SystemViewStreamManager:
                 }
                 self._recording = SystemViewJsonlLogger(project_root, meta)
                 self._recording_path = str(self._recording.path)
-                self._recording_summary_path = str(self._recording.summary_path)
+                self._recording_summary_path = ""
+                self._pending_summary = None
                 self._recording_error = ""
             except Exception as e:
                 self._recording = None
-                self._recording_error = str(e)
+                from mklink.work_files import file_error
+                self._recording_error = file_error('创建 SystemView 工程日志', e, project_root)
 
     def start_recording(self) -> dict:
         if not self.running:
@@ -1502,7 +1506,19 @@ class SystemViewStreamManager:
             return self.get_status()
 
     def stop_recording(self) -> dict:
-        self._close_recording()
+        with self._recording_lock:
+            if self._recording is None and self._pending_summary is not None:
+                logger = self._pending_summary
+                try:
+                    logger.finish_summary()
+                    self._recording_summary_path = str(logger.summary_path)
+                    self._pending_summary = None
+                    self._recording_error = ""
+                except OSError as exc:
+                    from mklink.work_files import file_error
+                    self._recording_error = file_error('保存 SystemView 摘要', exc, logger.summary_path)
+            else:
+                self._close_recording()
         return self.get_status()
 
     def _record_events(self, events: list[dict]) -> None:
@@ -1514,9 +1530,10 @@ class SystemViewStreamManager:
             try:
                 self._recording.write_events(events)
             except Exception as e:
-                self._recording_error = str(e)
+                from mklink.work_files import file_error
+                self._recording_error = file_error('写入 SystemView 事件，记录已中断', e, self._recording.path)
                 try:
-                    self._recording.close({"events": self._stats.get("events", 0)})
+                    self._recording.abort()
                 except Exception:
                     pass
                 self._recording = None
@@ -1536,8 +1553,14 @@ class SystemViewStreamManager:
                     "dropped_packets": getattr(self._parser, "dropped_packets", 0),
                     **self._target_overflow_status(),
                 })
+                self._recording_summary_path = str(self._recording.summary_path)
             except Exception as e:
-                self._recording_error = str(e)
+                from mklink.work_files import file_error
+                if self._recording.pending_summary is not None:
+                    self._pending_summary = self._recording
+                    self._recording_error = file_error('JSONL 已保存，写入 SystemView 摘要', e, self._recording.summary_path)
+                else:
+                    self._recording_error = file_error('完成 SystemView JSONL 记录', e, self._recording.path)
             finally:
                 self._recording = None
 
@@ -1587,6 +1610,7 @@ class SystemViewStreamManager:
                 "recording_path": self._recording_path,
                 "recording_summary_path": self._recording_summary_path,
                 "recording_error": self._recording_error,
+                "summary_pending": self._pending_summary is not None,
             }
         return {
             "synced": p.synced,
@@ -1608,6 +1632,7 @@ class SystemViewStreamManager:
             "recording_path": self._recording_path,
             "recording_summary_path": self._recording_summary_path,
             "recording_error": self._recording_error,
+            "summary_pending": self._pending_summary is not None,
         }
 
     def _unknown_task_ids(self, events: list[dict], *, allow_partial=False) -> set[int]:

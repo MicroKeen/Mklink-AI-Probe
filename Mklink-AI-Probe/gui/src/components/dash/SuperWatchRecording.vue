@@ -1,7 +1,7 @@
 <template>
   <button class="panel-btn" data-testid="sw-record-toggle" :data-gui-directory-picker="!status.active && isTauri() ? '' : undefined" :class="{ active: status.active }" :disabled="busy || (disabled && !status.active)" @click="status.active ? stop() : showPicker()">{{ status.active ? tr('停止记录', 'Stop recording') : tr('开始记录', 'Start recording') }}</button>
   <span v-if="status.path" class="record-result" :title="status.path">{{ status.active ? (status.samples ? tr('记录中', 'Recording') : tr('等待数据', 'Waiting for data')) : tr('已保存', 'Saved') }} · {{ status.samples || 0 }} {{ tr('条', 'samples') }}</span>
-  <button v-if="name !== 'Serial' && status.path" class="panel-btn" data-testid="record-convert" :disabled="busy || status.active || status.export_state === 'generating' || status.export_state === 'completed' || status.export_state === 'failed'" @click="convert">{{ name === 'SuperWatch' ? tr('转换为 Excel', 'Convert to Excel') : tr('转换为 TXT', 'Convert to TXT') }}</button>
+  <button v-if="name !== 'Serial' && status.path" class="panel-btn" data-testid="record-convert" :disabled="busy || status.active || status.export_state === 'generating' || status.export_state === 'completed'" @click="convert">{{ status.export_state === 'failed' ? tr('重新转换', 'Retry export') : name === 'SuperWatch' ? tr('转换为 Excel', 'Convert to Excel') : tr('转换为 TXT', 'Convert to TXT') }}</button>
   <span v-if="status.export_state && status.export_state !== 'pending'" class="record-result" data-testid="record-export-status" :title="status.export_path">{{ status.export_state === 'completed' ? tr('转换完成', 'Export ready') : status.export_state === 'failed' ? tr('转换失败', 'Export failed') : tr('转换中', 'Converting') }}{{ status.export_parts ? ` · ${status.export_parts} ${tr('段', 'parts')}` : '' }}</span>
   <span v-if="status.export_error" role="alert" class="record-error">{{ status.export_error }}</span>
   <span v-if="error || status.error" role="alert" class="record-error">{{ error || status.error }}</span>
@@ -23,6 +23,7 @@
 </template>
 
 <script setup lang="ts">
+import { requestError } from '../../lib/requestError'
 import { frontendFetch as fetch } from '../../lib/frontendControl'
 
 import type { SemanticExecutionContext } from '../../lib/frontendControl'
@@ -58,7 +59,7 @@ async function request(path: string, body?: unknown, context?: SemanticExecution
   if (!response.ok) {
     const detail = data.detail
     const message = typeof detail === 'string' ? detail : detail?.message
-    throw new Error(typeof message === 'string' && message ? message : `HTTP ${response.status}`)
+    throw new Error(requestError(detail ?? message, response.status, props.name))
   }
   return data
 }

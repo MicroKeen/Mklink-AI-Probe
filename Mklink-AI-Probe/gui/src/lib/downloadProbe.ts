@@ -1,3 +1,4 @@
+import { requestError } from './requestError'
 import { API_BASE } from './runtimeEndpoint'
 import { ref, watch, type Ref } from 'vue'
 
@@ -24,7 +25,7 @@ export async function selectDownloadProbe(probe: string, cmsisDap = false): Prom
     })
     if (!response.ok) {
       const payload = await response.json().catch(() => null)
-      throw new Error(payload?.detail?.message || payload?.detail || response.statusText)
+      throw new Error(requestError(payload?.detail, response.status, 'MKLink'))
     }
     const selected = await response.json()
     selectedGeneration = selected.device_generation

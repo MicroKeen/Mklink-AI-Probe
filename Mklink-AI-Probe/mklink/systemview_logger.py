@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
+from mklink.work_files import open_log_file
+
 
 class SystemViewJsonlLogger:
     """Write a SystemView capture as line-delimited JSON.
@@ -44,8 +46,13 @@ class SystemViewJsonlLogger:
             "unit": "us+tk",
             **(session_meta or {}),
         }
-        self._write_record(session)
-        self._fh.flush()
+        self.pending_summary = None
+        try:
+            self._write_record(session)
+            self._fh.flush()
+        except BaseException:
+            self.abort()
+            raise
 
     @staticmethod
     def _open_unique_trace(log_dir: Path, stamp: str):
@@ -80,11 +87,22 @@ class SystemViewJsonlLogger:
             **(summary or {}),
             "top_tasks": self._top_tasks(),
         }
-        self._write_record(merged_summary)
-        self._fh.flush()
-        self._fh.close()
+        try:
+            self._write_record(merged_summary)
+            self._fh.flush()
+        finally:
+            self.abort()
+        self.pending_summary = merged_summary
+        self.finish_summary()
+
+    def abort(self):
         self._closed = True
-        self._write_text_summary(merged_summary)
+        self._fh.close()
+
+    def finish_summary(self):
+        if self.pending_summary is not None:
+            self._write_text_summary(self.pending_summary)
+            self.pending_summary = None
 
     def _write_record(self, record: dict) -> None:
         self._fh.write(
@@ -150,7 +168,14 @@ class SystemViewJsonlLogger:
             lines.append(
                 f"- {name}: run_time={task.get('run_time', 0)} schedules={task.get('schedules', 0)}"
             )
-        self.summary_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        with open_log_file(self.summary_path, 'x', encoding='utf-8') as stream:
+            try:
+                stream.write("\n".join(lines) + "\n")
+                stream.flush()
+            except OSError:
+                stream.close()
+                self.summary_path.unlink(missing_ok=True)
+                raise
 
     @staticmethod
     def _event_time(event: dict) -> float | None:

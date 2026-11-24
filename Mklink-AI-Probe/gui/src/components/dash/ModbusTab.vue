@@ -106,6 +106,7 @@
 </template>
 
 <script setup lang="ts">
+import { requestError } from '../../lib/requestError'
 import { frontendFetch as fetch } from '../../lib/frontendControl'
 
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
@@ -156,7 +157,7 @@ watch(settings, value => { if (typeof localStorage !== 'undefined') localStorage
 async function api(path: string, body?: unknown) {
   const response = await fetch(`${API_BASE}${path}`, body === undefined ? undefined : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
   const payload = await response.json().catch(() => null)
-  if (!response.ok) { const detail = payload?.detail; throw new Error(typeof detail === 'string' ? detail : detail?.conflict || response.statusText) }
+  if (!response.ok) { const detail = payload?.detail; throw new Error(requestError(detail, response.status, 'Modbus')) }
   return payload
 }
 async function refreshPorts() { refreshingPorts.value = true; try { ports.value = await fetchPorts(); if (!running.value && !stopping.value && !ports.value.some(item => item.device === settings.port)) settings.port = ports.value[0]?.device || '' } catch (error) { toast.error(String(error)) } finally { refreshingPorts.value = false; portsLoaded.value = true } }

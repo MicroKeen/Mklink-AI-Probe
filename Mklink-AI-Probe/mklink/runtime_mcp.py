@@ -641,8 +641,8 @@ def build_server():
 
     @server.tool()
     def systemview(action: str = 'status', arguments: dict | None = None) -> dict:
-        """Shared SystemView: status/history/start/stop/pause/resume. No private CDC reader."""
-        if action not in {'status', 'history', 'start', 'stop', 'pause', 'resume'}:
+        """Shared SystemView stream and JSONL recording. recording_stop finalizes or retries a pending summary."""
+        if action not in {'status', 'history', 'start', 'stop', 'pause', 'resume', 'recording_start', 'recording_stop'}:
             raise ValueError('Unsupported SystemView action')
         return client().call('systemview_'+action, arguments)
 

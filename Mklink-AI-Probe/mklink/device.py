@@ -1865,9 +1865,12 @@ class Device:
         )
         header = self.read_memory(control_block_addr, 24)
         if len(header) != 24:
-            raise DeviceError("RTT control block read was truncated")
+            raise DeviceError(f"读取 RTT 控制块 0x{control_block_addr:08X} 时只收到 {len(header)}/24 字节，请检查调试连接。RTT control block read was truncated")
         if header[:10] != _RTT_SIGNATURE:
-            raise _InvalidRTTControlBlock("RTT control block has an invalid signature")
+            raise _InvalidRTTControlBlock(
+                f"RTT control block has an invalid signature at 0x{control_block_addr:08X}。"
+                "请加载与板上程序一致的 ELF，确认程序已初始化 RTT；启用数据缓存时请核对控制块的缓存属性。"
+            )
 
         max_up = int.from_bytes(header[16:20], "little")
         max_down = int.from_bytes(header[20:24], "little")

@@ -28,7 +28,12 @@ def workbook_rows(path):
     import xml.etree.ElementTree as ET
     ns = {'s': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
     with zipfile.ZipFile(path) as archive:
-        return {name: [[(cell.attrib.get('t'), ''.join(cell.itertext())) for cell in row]
+        strings = ([''.join(node.itertext()) for node in ET.fromstring(archive.read('xl/sharedStrings.xml'))]
+                   if 'xl/sharedStrings.xml' in archive.namelist() else [])
+        def decoded(cell):
+            text = ''.join(cell.itertext())
+            return (cell.get('t'), strings[int(text)] if cell.get('t') == 's' else text)
+        return {name: [[decoded(cell) for cell in row]
                        for row in ET.fromstring(archive.read(name)).findall('s:sheetData/s:row', ns)]
                 for name in archive.namelist() if name.startswith('xl/worksheets/sheet') and name.endswith('.xml')}
 
@@ -303,5 +308,38 @@ def test_excel_existing_file_is_preserved_and_manual_request_is_idempotent(tmp_p
     path.write_bytes(b'user workbook')
     result = exported(recorder)
     assert result['export_state'] == 'failed' and path.read_bytes() == b'user workbook'
-    assert recorder.export()['export_state'] == 'failed'
-    assert len(list(tmp_path.glob('*-export.json'))) == 1
+    assert '同名文件已存在' in result['export_error']
+    assert recorder.export()['export_state'] in ('generating', 'completed')
+    recorder.export()  # The same in-flight retry is reused.
+    deadline = time.monotonic() + 10
+    while recorder.status()['export_state'] == 'generating' and time.monotonic() < deadline:
+        time.sleep(.01)
+    result = recorder.status()
+    assert result['export_state'] == 'completed' and Path(result['export_path']) != path
+    assert path.read_bytes() == b'user workbook'
+    assert len(list(tmp_path.glob('*-export.json'))) == 2
+
+
+def test_rtt_retry_after_second_part_conflict_preserves_both_originals(tmp_path):
+    recorder = TrafficRecorder(tmp_path, 'rtt', part_events=1)
+    recorder.append(0, b'first ', 'RX', 'one')
+    recorder.append(0, b'line\\n', 'RX', 'one')
+    status = recorder.stop()
+    assert status['parts'] == 2
+    occupied = Path(status['path']).with_suffix('.txt')
+    assert occupied.name.endswith('0002.txt')
+    occupied.write_bytes(b'existing')
+    originals = {p: p.read_bytes() for p in tmp_path.glob('*.jsonl')}
+    failed = exported(recorder)
+    assert failed['export_state'] == 'failed' and failed['export_parts'] == 1
+    first_output = Path(failed['export_path'])
+    first_bytes = first_output.read_bytes()
+    recorder.export()
+    deadline = time.monotonic() + 10
+    while recorder.status()['export_state'] == 'generating' and time.monotonic() < deadline:
+        time.sleep(.01)
+    result = recorder.status()
+    assert result['export_state'] == 'completed' and result['export_parts'] == 2
+    assert 'first line' in Path(result['export_path']).read_text(encoding='utf-8')
+    assert first_output.read_bytes() == first_bytes and occupied.read_bytes() == b'existing'
+    assert originals == {p: p.read_bytes() for p in originals}

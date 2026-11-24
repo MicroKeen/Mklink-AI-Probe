@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { requestError } from '../lib/requestError'
 import { frontendFetch as fetch } from '../lib/frontendControl'
 
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
@@ -73,7 +74,7 @@ async function refresh() {
       body: JSON.stringify({ part_number: props.partNumber, model: 'V4', otp_words: true }),
     })
     const body = await response.json()
-    if (!response.ok) throw new Error(typeof body.detail === 'string' ? body.detail : body.detail?.message || `HTTP ${response.status}`)
+    if (!response.ok) throw new Error(requestError(body.detail, response.status, 'OTP'))
     if (disposed || revision !== current) return
     if (body.source !== 'jtag_otp' || !Array.isArray(body.words) || body.words.length !== 128 ||
         !body.words.every((row: Word, i: number) => row.word === i)) {

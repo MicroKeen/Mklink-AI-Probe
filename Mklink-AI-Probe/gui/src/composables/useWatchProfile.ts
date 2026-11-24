@@ -1,3 +1,4 @@
+import { requestError } from '../lib/requestError'
 import type { SemanticExecutionContext } from '../lib/frontendControl'
 import { ref, shallowRef } from 'vue'
 import { API_BASE } from '../lib/runtimeEndpoint'
@@ -21,7 +22,7 @@ async function load() {
   try {
     const response = await fetch(API_BASE + '/api/dash/superwatch/profile')
     const data = await response.json()
-    if (!response.ok) throw new Error(data.detail || response.statusText)
+    if (!response.ok) throw new Error(requestError(data.detail, response.status, 'SuperWatch'))
     if (typeof data.path !== 'string' || !data.viewer?.revision || !data.layout?.revision) return
     if (pending || stagedLayout) return // A GET started before a local edit must not overwrite that edit.
     const old = profile.value
@@ -49,7 +50,7 @@ function save(section: 'viewer' | 'layout', value: Record<string, unknown>, cont
       body, keepalive: new TextEncoder().encode(body).length < 60000,
     })
     const data = await response.json()
-    if (!response.ok) throw new Error(data.detail || response.statusText)
+    if (!response.ok) throw new Error(requestError(data.detail, response.status, 'SuperWatch'))
     if (profile.value?.path === current.path) {
       profile.value = { ...profile.value, [section]: data }
       error.value = ''

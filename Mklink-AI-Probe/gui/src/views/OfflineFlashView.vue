@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { requestError } from '../lib/requestError'
 import { frontendFetch as fetch } from '../lib/frontendControl'
 
 import { useGuiId } from '../lib/guiAutomation'
@@ -1033,7 +1034,7 @@ async function requestIspOtp(action: 'read' | 'batch-plan' | 'batch-program', pa
       body: JSON.stringify({ part_number: targetPart.value.toUpperCase(), model: 'V4', extended: true, ...payload }),
     })
     const body = await response.json()
-    if (!response.ok) throw new Error(typeof body.detail === 'string' ? body.detail : body.detail?.message || `HTTP ${response.status}`)
+    if (!response.ok) throw new Error(requestError(body.detail, response.status, 'Offline Flash'))
     if (revision !== otpRevision) return
     if (action === 'read') otpSnapshot.value = body
     else if (action === 'batch-plan') otpPlan.value = body

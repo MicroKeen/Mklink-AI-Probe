@@ -33,6 +33,7 @@
 </template>
 
 <script setup lang="ts">
+import { requestError } from '../../lib/requestError'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Activity } from '@lucide/vue'
 import { tr } from '../../composables/useLanguage'
@@ -160,7 +161,7 @@ async function pollSnapshot(): Promise<void> {
   try {
     const response = await fetch(`${API_BASE}/api/dash/superwatch/array-snapshot`)
     const payload = await response.json().catch(() => ({}))
-    if (!response.ok) throw new Error(payload?.detail || response.statusText)
+    if (!response.ok) throw new Error(requestError(payload?.detail, response.status, 'SuperWatch'))
     const next = payload?.snapshot
     if (!next || next.name !== props.path) {
       snapshot.value = null
@@ -186,7 +187,7 @@ async function clearSnapshot(): Promise<void> {
     })
     if (!response.ok) {
       const payload = await response.json().catch(() => ({}))
-      throw new Error(payload?.detail || response.statusText)
+      throw new Error(requestError(payload?.detail, response.status, 'SuperWatch'))
     }
     emit('close')
   } catch (cause) {

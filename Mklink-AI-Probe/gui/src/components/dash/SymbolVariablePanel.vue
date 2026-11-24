@@ -369,6 +369,7 @@
 </template>
 
 <script setup lang="ts">
+import { requestError } from '../../lib/requestError'
 import { frontendFetch as fetch } from '../../lib/frontendControl'
 
 import type { SemanticExecutionContext } from '../../lib/frontendControl'
@@ -621,7 +622,7 @@ async function request(path: string, options?: RequestInit, context?: SemanticEx
   const payload = await response.json().catch(() => ({}))
   if (!response.ok) {
     const detail = payload?.detail
-    throw new Error(typeof detail === 'string' ? detail : detail?.message || response.statusText)
+    throw new Error(requestError(detail, response.status, 'SuperWatch'))
   }
   return payload
 }

@@ -255,6 +255,37 @@ fn write_file(path: String, contents: Vec<u8>) -> Result<(), String> {
 }
 
 #[tauri::command]
+async fn copy_systemview_log(source: String, destination: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        use std::io::{Read, Write};
+        let path = std::fs::canonicalize(&source).map_err(|e| format!("读取 SystemView 日志失败（{source}）。请刷新日志列表。{e}"))?;
+        let tail: Vec<_> = path.parent().into_iter().flat_map(Path::components).rev()
+            .take(3).map(|c| c.as_os_str()).collect();
+        if tail != ["systemview", "logs", ".mklink"].map(std::ffi::OsStr::new)
+            || !matches!(path.extension().and_then(|e| e.to_str()), Some("txt" | "jsonl"))
+        {
+            return Err("请选择用户工程 .mklink/logs/systemview 中的 JSONL 或摘要文件。".to_string());
+        }
+        let input = std::fs::File::open(&path).map_err(|e| format!("无法打开源日志（{source}）。请检查读取权限和文件占用。{e}"))?;
+        let size = input.metadata().map_err(|e| e.to_string())?.len();
+        let mut output = std::fs::OpenOptions::new().write(true).create_new(true)
+            .open(&destination).map_err(|e| format!("无法创建导出文件（{destination}）。请选择可写目录及未使用的文件名。{e}"))?;
+        let saved = std::io::copy(&mut input.take(size), &mut output).and_then(|copied| {
+            if copied != size {
+                return Err(std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "源日志在导出期间缩短"));
+            }
+            output.flush()
+        });
+        if let Err(e) = saved {
+            drop(output);
+            let _ = std::fs::remove_file(&destination);
+            return Err(format!("保存日志失败（{destination}）。请检查可用空间和访问权限。{e}"));
+        }
+        Ok(())
+    }).await.map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
 fn clipboard_read_text() -> Result<String, String> {
     desktop_clipboard::read_text()
 }
@@ -988,6 +1019,7 @@ pub fn run() {
             site_agent_stcp_credentials_configure,
             site_agent_bind_addresses,
             write_file,
+            copy_systemview_log,
             clipboard_read_text,
             clipboard_write_text,
             rename_usb_ports,

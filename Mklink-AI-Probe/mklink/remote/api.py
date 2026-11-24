@@ -961,6 +961,12 @@ def create_app(
     async def activate_watch_profile(device):
         path = (getattr(device, 'axf_status', {}) or {}).get('axf_path') or getattr(device, '_axf', None)
         await run_in_threadpool(watch_profile.activate, path, get_managers()['superwatch'])
+        if path and watch_profile.path:
+            from mklink.symbol_sources import remember_source
+            try:
+                await run_in_threadpool(remember_source, _state['project_root'], path)
+            except OSError:
+                pass  # A read-only workspace can still parse an explicit local path.
 
     async def _reparse_active_symbols(
         axf: str | None = None,
@@ -1873,7 +1879,12 @@ def create_app(
 
     @app.post("/api/files/symbol")
     async def upload_symbol_file(file: UploadFile = File(...)):
-        return await _upload_file_source(file, (".axf", ".elf", ".out"))
+        from mklink.symbol_sources import AmbiguousSymbolSource, match_upload
+        uploaded = await _upload_file_source(file, (".axf", ".elf", ".out"))
+        try:
+            return await run_in_threadpool(match_upload, _state["project_root"], uploaded)
+        except AmbiguousSymbolSource as exc:
+            raise HTTPException(409, str(exc)) from exc
 
     @app.post("/api/files/map")
     async def upload_map_file(file: UploadFile = File(...)):
@@ -2819,7 +2830,10 @@ def create_app(
             channel: int = Body(0, ge=0, le=7)):
         try:
             return await run_in_threadpool(traffic_recorder(kind).start, directory, channel)
-        except (ValueError, OSError) as exc:
+        except OSError as exc:
+            from mklink.work_files import file_error
+            raise HTTPException(400, file_error(f'创建 {kind.upper()} 工程日志', exc, directory)) from exc
+        except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
         except RuntimeError as exc:
             raise HTTPException(409, str(exc)) from exc
@@ -2988,7 +3002,7 @@ def create_app(
         return {"logs": list_systemview_logs(_state["project_root"])}
 
     @app.get("/api/dash/systemview/logs/download")
-    async def systemview_log_download(path: str = Query(...)):
+    async def systemview_log_download(path: str = Query(...), check: bool = False):
         from fastapi.responses import FileResponse
         from mklink.systemview_logs import (
             SystemViewLogPathError,
@@ -2999,10 +3013,16 @@ def create_app(
             resolved = resolve_systemview_log_download(
                 _state["project_root"], path,
             )
+            if check:
+                with resolved.open("rb"):
+                    return {"name": resolved.name, "path": str(resolved)}
         except SystemViewLogPathError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
         except FileNotFoundError:
-            raise HTTPException(status_code=404, detail="SystemView log not found")
+            raise HTTPException(404, "SystemView log not found。请刷新记录列表；摘要将在记录结束后生成。")
+        except OSError as exc:
+            from mklink.work_files import file_error
+            raise HTTPException(409, file_error('读取 SystemView 导出文件', exc, path)) from exc
 
         media_type = (
             "application/x-ndjson"
@@ -3091,7 +3111,10 @@ def create_app(
     async def superwatch_recording_start(directory: str = Body(..., embed=True, min_length=1, max_length=4096)):
         try:
             return await run_in_threadpool(get_managers()["superwatch"].start_recording, directory)
-        except (ValueError, OSError) as exc:
+        except OSError as exc:
+            from mklink.work_files import file_error
+            raise HTTPException(400, file_error('创建 SuperWatch 工程日志', exc, directory)) from exc
+        except ValueError as exc:
             raise HTTPException(400, detail=str(exc)) from exc
         except RuntimeError as exc:
             raise HTTPException(409, detail=str(exc)) from exc
