@@ -18,7 +18,7 @@ backend、connected、device_generation、visibility、focused、panels 和 aler
 
 ## 边展示边分析
 
-根据要回答的问题选择证据。比如用户说“分析一下速度环，为什么松手后还会抖”，可以先从源码或 AXF 确认设定值、反馈值和控制输出的实际变量名，再主动在 SuperWatch 中对齐三条曲线，看抖动从哪个信号开始。若怀疑状态切换，再把对应 RTT 通道并排显示。只问系数的推导或函数逻辑时直接读代码；提供了历史采集时可用 GUI 回放，并说明数据来源。
+按问题选择能检验判断的证据，用户的措辞和问题类别都不限。先想清楚哪项观测会影响答案：数值如何变化可用波形，事件有没有发生、先后顺序如何可用日志，需要核对二者的关系再并排。比如设备偶尔没响应，已有 RTT 收发日志就能帮助判断请求是否到达；用户只提供历史采集时可用 GUI 回放，并标明来源。源码或已有证据足以回答时直接解释。
 
 1. 需要实时证据时，先按工程和探针选定后台。复用其可见桌面或浏览器窗口；还没有窗口时调用 `gui_open` 打开，等返回 `ready`。使用 `gui_control(action="navigate", window_id=..., page="dashboard", tab="superwatch")` 展示变量，用 `tab="rtt"` 展示 RTT 文本与波形。用户正在使用灵活面板时，可复用其中匹配的视图。
 2. 用窗口快照核对实际页面、可见性和实时/回放状态。按任务配置变量或 RTT 通道，已有采集直接订阅。SuperWatch 用 `superwatch(action="values")` 读取已采样值，比较递增的 `sample.sequence`；RTT 用 `rtt_read_channel` 读取同一通道，为 AI 单独延续返回的 `session` 和 `cursor`。用户可以在 GUI 看实时变化，AI 用同期数值、时间或日志行解释观察结果。

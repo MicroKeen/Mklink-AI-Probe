@@ -1,6 +1,6 @@
 ---
 name: mklink-ai-probe
-description: 使用 MKLink/MicroLink 调试目标 MCU，包括分析板上算法响应、振荡和时序，支持固件烧录、内存与 AXF、RTT/VOFA/SuperWatch/SystemView、串口/Modbus、Web GUI、远程调试及安装排障。不用于维护 MKLink 本体、构建安装包或发布版本。
+description: 使用 MKLink/MicroLink 调试目标 MCU，通过实板信号和事件日志分析运行现象、验证判断。支持固件烧录、内存与 AXF、RTT/VOFA/SuperWatch/SystemView、串口/Modbus、Web GUI、远程调试及安装排障。不用于维护 MKLink 本体、构建安装包或发布版本。
 ---
 
 # MKLink
@@ -17,7 +17,7 @@ description: 使用 MKLink/MicroLink 调试目标 MCU，包括分析板上算法
   **GUI 共用连接**：`connect(probe=...)` 复用工程/符号；`gui_call` 调用共享能力。
   RTT 已运行时无参数 `rtt_start()` 订阅，用 `rtt_read_channel` 读取。
   不发送旧 `RTTView.start/stop`，不另开串口；缺能力不退回独占。
-- **边展示边分析**：板上算法、调参或故障分析需要观察信号随时间变化时，主动复用或打开可见 GUI，同时分析同一采集流，无需用户说“看曲线”。多项对照用[灵活面板](references/agent-ui.md)并排展示。纯源码问题直接读代码；后台分析或静态导出按用户要求。见[实时展示](references/gui-control.md#边展示边分析)。
+- **边展示边分析**：对任何调试问题，判断实时波形或日志能否帮助回答、区分原因或验证结论。有帮助就主动复用或打开可见 GUI，同时分析同一采集流，无需用户点名。多项对照用[灵活面板](references/agent-ui.md)。源码已足以回答时直接说明，后台分析或静态导出按用户要求。见[实时展示](references/gui-control.md#边展示边分析)。
 - **占用先查后台**：`runtime_status(probe=...)` 无需连接，查询会话、采集和任务。
   GUI 关闭不等于后台退出，AI 任务完成须 `detach`。占用/失败时读
   [控制权与恢复](references/runtime-recovery.md)。

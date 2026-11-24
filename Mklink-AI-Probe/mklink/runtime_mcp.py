@@ -82,7 +82,7 @@ def build_server():
                            "batch_read_max_total_bytes": BATCH_READ_MAX_TOTAL_BYTES,
                            "rtt_mux_channels": 8, "rtt_channel_cache_bytes": 65536,
                            "mux_watch_regions": 15, "mux_watch_region_bytes": 128},
-                "guidance": "Use existing MKLink views and combine related panels in Workbench. When board behavior needs time-series evidence, show the GUI and analyze the same shared stream even if the user only describes a symptom. Confirm its window, then connect to the explicit probe on that same backend. For static code questions, inspect the source. Disconnect stops shared target acquisition; detach only leaves this AI session."}
+                "guidance": "For any debugging question, consider whether live waveforms or logs would help answer it, distinguish causes, or verify a conclusion. If so, show the relevant existing GUI view and analyze the same shared stream without waiting for a display request. Combine related views in Workbench when useful. Confirm the window, then connect to the intended probe on that backend. Respect explicit headless requests. Disconnect stops shared target acquisition; detach only leaves this AI session."}
 
     @server.tool()
     def gui_open(action: Literal['open', 'status'] = 'open', probe: str | None = None,
@@ -90,7 +90,7 @@ def build_server():
                  window_id: str | None = None, open_browser: StrictBool = True) -> dict:
         """Open/reuse MKLink on the MCP computer; never connects hardware or starts capture.
 
-        Use when live signals help explain target behavior, for RTT monitoring, or a requested visible GUI. Reuses this MCP's backend,
+        Use when live waveforms or logs would help answer the current question, or for a requested visible GUI. Reuses this MCP's backend,
         the probe's existing backend, or a unique unbound GUI. Multiple choices return
         select_runtime/select_window; choose explicitly, never take the first entry.
         New backends require an existing project_root. Existing project/symbols stay intact.
