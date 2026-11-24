@@ -53,7 +53,7 @@
         <ChevronRight v-if="collapsed.signals" :size="14" /><ChevronDown v-else :size="14" />
         <span>{{ tr('信号分组', 'Signal groups') }}</span><small>{{ tr(`已选 ${selected.size}`, `${selected.size} selected`) }}</small>
       </button>
-      <SelectedSignals ref="selectedSignals" v-show="!collapsed.signals" :paths="selectedPaths" :values="latestValues" :hidden="hiddenChannels" :hide-rows="standaloneVariables"
+      <SelectedSignals ref="selectedSignals" v-show="!collapsed.signals" :paths="selectedPaths" :values="latestValues" :hidden="hiddenChannels" :hide-rows="standaloneVariables" :viewer-id="standaloneVariables ? null : panelId"
         :expanded-path="actions?.section === 'selected' ? actions.path : undefined" @actions="path => toggleActions('selected', path)"
         @visibility="changeVisibility">
         <template #actions="{ path }">

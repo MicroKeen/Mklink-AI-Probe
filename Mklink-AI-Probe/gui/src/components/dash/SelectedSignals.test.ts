@@ -69,12 +69,56 @@ it('configures a formula and individual color and merges a separated group witho
   expect(workspace.signals.adc).toMatchObject({group:'main',pane:'main',formula:'x * 3.3 / 4095',color:'#00aaff'})
   await wrapper.get('[aria-label="曲线设置 adc"]').trigger('click')
   await wrapper.get('[aria-label="计算公式"]').setValue('window.alert(x)')
+  expect(wrapper.get<HTMLInputElement>('[aria-label="曲线颜色"]').element.value).toBe('#00aaff')
   await wrapper.get('.curve-settings button').trigger('click'); await flushPromises()
   expect(wrapper.find('[role=alert]').exists()).toBe(true)
   expect(workspace.signals.adc.formula).toBe('x * 3.3 / 4095')
   expect(values).toEqual({adc:4095})
   expect(request.mock.calls.every(([url])=>String(url).endsWith('/workspace'))).toBe(true)
   wrapper.unmount()
+})
+it('reads the associated plot color and only saves fields edited in the dialog', async () => {
+  const prefs = useWatchWorkspace()
+  const main = { mode: 'SuperWatch', getChannelColor: () => '#111111' }
+  const motor = { mode: 'SuperWatch', getChannelColor: () => '#3898EC' }
+  vi.stubGlobal('__waveformViewers', { SuperWatch: main, motor, vofa: { mode: 'VOFA', getChannelColor: () => '#abcdef' } })
+  let workspace = { version: 2, groups: [{ id: 'main' }], panes: [{ id: 'main' }], signals: {} }
+  vi.stubGlobal('fetch', vi.fn(async (_url, init?: RequestInit) => {
+    if (init) workspace = JSON.parse(String(init.body)).workspace
+    return { ok: true, json: async () => ({ workspace: structuredClone(workspace), revision: '1' }) }
+  }))
+  const wrapper = mount(SelectedSignals, { props: { paths: ['rpm'], values: {}, viewerId: 'motor' } })
+  await flushPromises()
+  const open = () => wrapper.get('[aria-label="曲线设置 rpm"]').trigger('click')
+  const picker = () => wrapper.get<HTMLInputElement>('[aria-label="曲线颜色"]')
+  const apply = async () => { await wrapper.get('.curve-settings button').trigger('click'); await flushPromises() }
+  await open()
+  expect(picker().element.value).toBe('#3898ec')
+  await wrapper.get('[aria-label="计算公式"]').setValue('x * 2')
+  await apply()
+  expect(prefs.style('rpm').formula).toBe('x * 2')
+  expect(prefs.style('rpm')).not.toHaveProperty('color')
+  // A style edit from another control while the dialog is open must survive Apply.
+  await open()
+  await prefs.setStyle(['rpm'], { color: '#008800' })
+  await wrapper.get('[aria-label="计算公式"]').setValue('')
+  await apply()
+  expect(prefs.style('rpm')).toMatchObject({ formula: '', color: '#008800' })
+  await open()
+  await prefs.setStyle(['rpm'], { formula: 'x / 2' })
+  await picker().setValue('#ccbb00')
+  await apply()
+  expect(prefs.style('rpm')).toMatchObject({ formula: 'x / 2', color: '#ccbb00' })
+  wrapper.unmount()
+})
+it('resolves a standalone color only from agreeing SuperWatch plots or shared settings', () => {
+  const prefs = useWatchWorkspace()
+  const left = { mode: 'SuperWatch', getChannelColor: () => '#aabbcc' }
+  const right = { mode: 'SuperWatch', getChannelColor: () => '#AABBCC' }
+  vi.stubGlobal('__waveformViewers', { left, right, vofa: { mode: 'VOFA', getChannelColor: () => '#aaaaaa' } })
+  expect(prefs.curveColor('standalone-signal', null)).toBe('#aabbcc')
+  right.getChannelColor = () => '#bbccdd'
+  expect(prefs.curveColor('standalone-signal', null)).toBeUndefined()
 })
 it('persists Chinese aliases and folding/assignments without acquisition calls', async () => {
   let revision=0

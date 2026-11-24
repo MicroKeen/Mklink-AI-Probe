@@ -53,7 +53,10 @@
       <strong>{{ editing }}</strong>
       <label>{{ tr('计算公式（x 为原始值）', 'Formula (x is the raw value)') }}<input v-model="formula" maxlength="256" aria-label="计算公式" placeholder="x * 3.3 / 4095" /></label>
       <small>{{ tr('支持 + - * / % ^、括号及 abs、sqrt、sin、cos、min、max、pow 等函数。留空显示原始值。', 'Supports + - * / % ^, parentheses, abs, sqrt, sin, cos, min, max, pow, etc. Leave empty for raw values.') }}</small>
-      <label>{{ tr('曲线颜色', 'Curve color') }}<input v-model="color" type="color" aria-label="曲线颜色" /></label>
+      <label>{{ tr('曲线颜色', 'Curve color') }}<span class="color-control" :class="{ automatic: !color }">
+        <span v-if="!color">{{ tr('自动配色', 'Automatic') }}</span>
+        <input :value="color || undefined" type="color" aria-label="曲线颜色" @input="color = value($event)" />
+      </span></label>
       <p v-if="formulaError" role="alert">{{ formulaError }}</p>
       <button :disabled="prefs.busy.value" @click="applyCurve">{{ tr('应用', 'Apply') }}</button>
       <button @click="editing = ''">{{ tr('取消', 'Cancel') }}</button>
@@ -63,25 +66,34 @@
 <script setup lang="ts">
 import { Eye, EyeOff } from '@lucide/vue'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { useWatchWorkspace } from '../../composables/useWatchWorkspace'
+import { useWatchWorkspace, type SignalStyle } from '../../composables/useWatchWorkspace'
 import InlineWatchName from './InlineWatchName.vue'
 import { tr } from '../../composables/useLanguage'
 import { compileSignalFormula, signalFormula } from '../../lib/signalFormula'
 import { domainAction, pathArg, pathsArg, boolArg, requireDomain, type DomainArgs } from '../../lib/domainActions'
-const props = defineProps<{ paths: string[]; values: Record<string, number | boolean>; hidden?: ReadonlySet<string>; expandedPath?: string; hideRows?: boolean }>()
+const props = defineProps<{ paths: string[]; values: Record<string, number | boolean>; hidden?: ReadonlySet<string>; expandedPath?: string; hideRows?: boolean; viewerId?: string | null }>()
 const emit = defineEmits<{ visibility: [path: string, visible: boolean]; actions: [path: string] }>()
 const prefs = useWatchWorkspace(), settings = ref(false), newName = ref(''), checked = ref<string[]>([])
-const editing = ref(''), formula = ref(''), color = ref('#ef9878'), formulaError = ref('')
+const editing = ref(''), formula = ref(''), color = ref(''), formulaError = ref('')
+let initialFormula = '', initialColor = ''
 watch(() => props.paths, paths => {
   if (checked.value.length) checked.value = checked.value.filter(path => paths.includes(path))
   if (editing.value && !paths.includes(editing.value)) editing.value = ''
 })
 function configure(path: string) {
-  editing.value = path; formula.value = prefs.style(path).formula || ''; color.value = prefs.style(path).color || '#ef9878'; formulaError.value = ''
+  initialFormula = prefs.style(path).formula || ''
+  initialColor = prefs.curveColor(path, props.viewerId)?.toLowerCase() || ''
+  formula.value = initialFormula
+  color.value = initialColor
+  formulaError.value = ''
+  editing.value = path
 }
 async function applyCurve() {
   try { compileSignalFormula(formula.value) } catch (error) { formulaError.value = String(error); return }
-  if (await prefs.setStyle([editing.value], { formula: formula.value.trim(), color: color.value })) editing.value = ''
+  const patch: Partial<SignalStyle> = {}
+  if (formula.value.trim() !== initialFormula) patch.formula = formula.value.trim()
+  if (color.value !== initialColor) patch.color = color.value
+  if (!Object.keys(patch).length || await prefs.setStyle([editing.value], patch)) editing.value = ''
 }
 const workspaceElement = ref<HTMLElement>(), dragTarget = ref('')
 let drag: {path:string; pointerId:number; x:number; y:number; moved:boolean; handle:HTMLElement} | undefined
@@ -213,6 +225,10 @@ onUnmounted(() => {clearInterval(timer);cancelDrag();window.removeEventListener(
 .curve-settings { position: fixed; z-index: 1000; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(420px, calc(100vw - 32px)); max-height: 80vh; overflow: auto; padding: 18px; background: var(--surface); box-shadow: 0 12px 48px #0008; border: 1px solid var(--accent); border-radius: 8px; display: grid; gap: 10px; }
 .curve-settings label { display: grid; gap: 4px; }
 .curve-settings input[type=color] { width: 48px; height: 28px; }
+.color-control { position: relative; width: fit-content; }
+.color-control.automatic { padding: 4px 8px; border: 1px solid var(--border); border-radius: 4px; }
+.color-control.automatic:focus-within { outline: 2px solid var(--accent); }
+.curve-settings .automatic input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
 .curve-settings strong { overflow-wrap: anywhere; }
 .converted-value { padding: 3px 8px; font: 12px monospace; overflow-wrap: anywhere; }
 header,.signal-heading,.section-editor { display:flex; align-items:center; gap:5px; padding:4px; }

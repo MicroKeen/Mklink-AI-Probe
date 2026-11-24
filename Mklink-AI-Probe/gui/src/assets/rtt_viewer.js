@@ -419,6 +419,11 @@ function calculatedRange(name) {
   return {min: low, max: high};
 }
 function signalLabel(name) { return signalStyle(name).alias || name; }
+function getChannelColor(name) {
+  if (Object.prototype.hasOwnProperty.call(FIELDS, name)) return signalStyle(name).color || FIELDS[name].color;
+  var saved = viewerPreferences && (viewerPreferences.channels || []).find(function(ch) { return ch.name === name; });
+  if (saved) return signalStyle(name).color || saved.color;
+}
 function setWorkspace(value, local) {
   if (!IS_SUPERWATCH_MODE || !value || !Array.isArray(value.panes) || !value.panes.length) return;
   if (!local) sharedWorkspaceSnapshot = value;
@@ -3869,6 +3874,7 @@ if (typeof window !== 'undefined') {
     updateCollectionUI(paused ? 'paused' : 'running');
   };
   binaryViewer.setWorkspace = setWorkspace;
+  binaryViewer.getChannelColor = getChannelColor;
   binaryViewer.setProfilePreferences = applyProfilePreferences;
   binaryViewer.exportProfilePreferences = function() {
     if (!viewerPreferencesReady || replaySession) throw new Error('Finish replay and wait for live view preferences before saving');
@@ -6509,7 +6515,7 @@ async function executeSemanticAction(action, args, context) {
       var field = FIELDS[name], latest = field.ringBuf.latest(), visible = getBinaryEnvelopeChannelRange(name);
       var rawLatest = latest && Number.isFinite(latest.y) ? latest.y : null;
       var displayedLatest = rawLatest === null ? null : calculatedValue(name, rawLatest);
-      return { name: name, visible: field.visible, color: signalStyle(name).color || field.color, format: field.format, precision: field.precision, style: signalStyle(name), latest: Number.isFinite(displayedLatest) ? displayedLatest : null, rawLatest: rawLatest, visibleMin: visible && Number.isFinite(visible.min) ? visible.min : null, visibleMax: visible && Number.isFinite(visible.max) ? visible.max : null };
+      return { name: name, visible: field.visible, color: getChannelColor(name), format: field.format, precision: field.precision, style: signalStyle(name), latest: Number.isFinite(displayedLatest) ? displayedLatest : null, rawLatest: rawLatest, visibleMin: visible && Number.isFinite(visible.min) ? visible.min : null, visibleMax: visible && Number.isFinite(visible.max) ? visible.max : null };
     }) };
   }
   _watchStructGen++; updateWatchTable(); updateChartLegend(); drawChart(); drawMinimap(); updateCursorReadout(); scheduleViewerPreferences();
