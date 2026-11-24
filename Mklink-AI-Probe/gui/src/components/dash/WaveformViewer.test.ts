@@ -463,15 +463,16 @@ describe('WaveformViewer VOFA binary transport', () => {
     }
   })
 
-  it('anchors readable time divisions while panning and adapts units on zoom', async () => {
+  it('holds divisions at the same pixels while panning and labels the time at each line', async () => {
     const runtime = await loadRttViewerRuntime('SuperWatch')
     try {
       const grid = runtime.probe.timeGrid(2.5945, 2.6678, 800)
       expect(grid.division).toBe('10 ms/div')
       const major = grid.ticks.filter((t: any) => t.major)
-      expect(major.map((t: any) => grid.label(t.time))).toEqual(['2600','2610','2620','2630','2640','2650','2660'])
+      expect(major.map((t: any) => grid.label(t.time))).toEqual(['2594.5','2604.5','2614.5','2624.5','2634.5','2644.5','2654.5','2664.5'])
       const pan = runtime.probe.timeGrid(2.5955, 2.6688, 800)
-      expect(pan.ticks.filter((t: any) => t.major).map((t: any) => t.time)).toEqual(major.map((t: any) => t.time))
+      expect(pan.ticks.map((t: any) => Math.round(t.fraction * 800))).toEqual(grid.ticks.map((t: any) => Math.round(t.fraction * 800)))
+      pan.ticks.forEach((t: any, i: number) => expect(t.time - grid.ticks[i].time).toBeCloseTo(0.001, 10))
       expect(runtime.probe.timeGrid(0, 0.000073, 800).division).toBe('10 μs/div')
       expect(runtime.probe.timeGrid(0, 73, 800).division).toBe('10 s/div')
       expect(runtime.probe.timeGrid(0, 0, 800)).toBeNull()
@@ -4167,6 +4168,30 @@ describe('VOFA viewer typed-ring runtime', () => {
 
 
 describe('independent semantic waveform panels', () => {
+  it('follows shared group moves while retaining unrelated local splits across restore', async () => {
+    const { viewer, cleanup } = await loadRttViewerRuntime('SuperWatch', 100, undefined, 'flex-watch')
+    try {
+      const main = { id: 'main', name: 'Main', height: 200 }, motor = { ...main, id: 'motor', name: 'Motor' }
+      const shared = { version: 2, defaultGroup: 'main', panes: [main], groups: [main], signals: {} }
+      viewer.setWorkspace(shared)
+      viewer.configureBinaryChannels([{ name: 'speed' }, { name: 'current' }])
+      await viewer.execute('waveform.plot', { command: 'split', name: 'current' })
+      await viewer.execute('waveform.plot', { command: 'split', name: 'speed' })
+      const saved = viewer.read().view
+      const moved = { ...shared, panes: [main, motor], groups: [main, motor], signals: { speed: { group: 'motor', pane: 'motor' } } }
+      viewer.setWorkspace(moved)
+      async function checkPanes() {
+        const view = await viewer.execute('waveform.inspect', {})
+        expect(view.channels.find((c: any) => c.name === 'speed').style.pane).toBe('motor')
+        const currentPane = view.channels.find((c: any) => c.name === 'current').style.pane
+        expect(currentPane).toBe(saved.plotLayout.signalPanes.current)
+        expect(view.plots.map((p: any) => p.id)).toEqual(['motor', currentPane])
+      }
+      await checkPanes()
+      await viewer.restore(saved)
+      await checkPanes()
+    } finally { cleanup() }
+  })
   it('keeps default GUI control and AXF preferences independent of workbench viewers', async () => {
     const original = await loadRttViewerRuntime('SuperWatch', 100)
     const preferences = vi.fn(), ready = vi.fn()

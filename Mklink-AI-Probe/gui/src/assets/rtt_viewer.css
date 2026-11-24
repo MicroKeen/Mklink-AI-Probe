@@ -893,6 +893,9 @@ tr.watch-child-row td[data-col="value"] {
   position: absolute;
   pointer-events: none;
   display: none;
+  width: max-content;
+  max-width: 100%;
+  box-sizing: border-box;
   background: var(--fg);
   color: var(--surface);
   font-size: 11px;
@@ -915,6 +918,8 @@ tr.watch-child-row td[data-col="value"] {
   border-radius: 2px;
   flex: 0 0 auto;
 }
+.tooltip-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.tooltip-value { flex: 0 0 auto; max-width: calc(100% - 26px); white-space: normal; overflow-wrap: anywhere; }
 
 /* bottom panel */
 #raw-log-panel {

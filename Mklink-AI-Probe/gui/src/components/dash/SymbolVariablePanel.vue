@@ -1087,7 +1087,7 @@ function read() {
   const inheritedPaths = props.viewPaths?.length ? props.viewPaths : null
   const viewPaths = JSON.stringify(localViewPaths.value) === JSON.stringify(inheritedPaths) ? undefined : localViewPaths.value
   return {
-    view: { viewPaths, hidden: standaloneVariables.value ? [...localHidden.value] : undefined, alignment: pathAlignment.value.edge, sections: { ...collapsed }, sectionSizes: { ...sectionSizes.preferred }, signals: { organizing: selectedSignals.value?.read?.()?.organizing || false } },
+    view: { viewPaths, hidden: standaloneVariables.value ? [...localHidden.value] : undefined, alignment: pathAlignment.value.edge, sections: { ...collapsed }, sectionSizes: { ...sectionSizes.preferred } },
     generation: catalog.generation.value, stale: catalog.stale.value, loading: catalog.loading.value,
     query: query.value, selectedOnly: selectedOnly.value, selectedCount: selected.value.size, selected: [...selected.value].slice(0, 64),
     visibleSelectedCount: selectedPaths.value.filter(path => !standaloneVariables.value || !localHidden.value.has(path)).length, visibleSelected: selectedPaths.value.filter(path => !standaloneVariables.value || !localHidden.value.has(path)).slice(0, 64), hidden: [...hiddenChannels.value].slice(0, 64),
@@ -1183,7 +1183,6 @@ function restore(view: DomainArgs) {
   if (view.alignment === 'left' || view.alignment === 'right') alignPaths(view.alignment)
   for (const key of ['signals', 'pinned', 'all'] as const) if (typeof view.sections?.[key] === 'boolean') collapsed[key] = view.sections[key]
   if (view.sectionSizes) sectionSizes.restore(view.sectionSizes)
-  if (view.signals) selectedSignals.value?.restore(view.signals)
 }
 defineExpose({ catalog: semanticCatalog, read, execute, restore, hasSignal: (path: string) => selected.value.has(path) })
 </script>

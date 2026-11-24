@@ -378,6 +378,9 @@ var sharedWorkspaceSnapshot = watchWorkspace;
 var localPlotLayout = null;
 var panelSignalStyles = {};
 var panelStyleCache = Object.create(null);
+function assignedPane(workspace, name) {
+  return workspace.signals[name]?.pane || workspace.defaultGroup || workspace.panes[0].id;
+}
 function dispatchWorkspaceEvent(event) {
   if (!root || viewerKey === CONFIG.mode) { window.dispatchEvent(event); return; }
   var next = JSON.parse(JSON.stringify(watchWorkspace || { version: 2, groups: [{ id: 'main', name: 'Main', height: 240 }], panes: [{ id: 'main', name: 'Main', height: 240 }], signals: {} }));
@@ -392,8 +395,14 @@ function dispatchWorkspaceEvent(event) {
     next.panes = next.panes.filter(function(p) { return p.id !== detail.group || p.id === defaultGroup; });
   } else if (event.type === 'mklink:workspace-resize') next.panes = detail;
   else if (event.type === 'mklink:workspace-import') next = detail;
-  localPlotLayout = { panes: next.panes, signalPanes: Object.fromEntries(Object.entries(next.signals).map(function(pair) { return [pair[0], pair[1].pane]; })) };
-  setWorkspace(next, true);
+  var shared = sharedWorkspaceSnapshot || next;
+  var signalPanes = Object.create(null), sourcePanes = Object.create(null);
+  Object.keys(next.signals).forEach(function(name) {
+    var base = assignedPane(shared, name), pane = assignedPane(next, name);
+    if (pane !== base) { signalPanes[name] = pane; sourcePanes[name] = base; }
+  });
+  localPlotLayout = { panes: next.panes, signalPanes: signalPanes, sourcePanes: sourcePanes, sharedPaneIds: shared.panes.map(function(p) { return p.id; }) };
+  setWorkspace(shared, true);
 }
 var workspaceY = Object.create(null);
 var workspaceSignature = null;
@@ -426,12 +435,28 @@ function getChannelColor(name) {
 }
 function setWorkspace(value, local) {
   if (!IS_SUPERWATCH_MODE || !value || !Array.isArray(value.panes) || !value.panes.length) return;
+  var previous = sharedWorkspaceSnapshot;
   if (!local) sharedWorkspaceSnapshot = value;
   if (localPlotLayout) {
     value = JSON.parse(JSON.stringify(value));
-    value.panes = localPlotLayout.panes;
-    Object.keys(localPlotLayout.signalPanes).forEach(function(name) {
-      value.signals[name] = Object.assign({}, value.signals[name], { pane: localPlotLayout.signalPanes[name] });
+    var layout = localPlotLayout;
+    var paneIds = new Set(value.panes.map(function(p) { return p.id; }));
+    var oldSharedIds = new Set(layout.sharedPaneIds || (previous?.panes || []).map(function(p) { return p.id; }));
+    var localPanes = new Map(layout.panes.map(function(p) { return [p.id, p]; }));
+    value.panes.forEach(function(p) { if (localPanes.has(p.id)) p.height = localPanes.get(p.id).height; });
+    layout.panes.forEach(function(p) {
+      if (!paneIds.has(p.id) && !oldSharedIds.has(p.id)) { value.panes.push(p); paneIds.add(p.id); }
+    });
+    var overrides = layout.signalPanes || {};
+    Object.keys(overrides).forEach(function(name) {
+      var base = assignedPane(value, name);
+      var original = layout.sourcePanes?.[name] || (previous && assignedPane(previous, name));
+      if (!paneIds.has(overrides[name]) || overrides[name] === base || (original && original !== base)) {
+        delete overrides[name];
+        if (layout.sourcePanes) delete layout.sourcePanes[name];
+      } else {
+        value.signals[name] = Object.assign({}, value.signals[name], { pane: overrides[name] });
+      }
     });
   }
   var signature=JSON.stringify(value);
@@ -4399,24 +4424,23 @@ function formatTimeAxisValue(seconds) {
   return (seconds * 1000).toFixed(1) + 'ms';
 }
 
-// Stable 1/2/5 time divisions anchored to acquisition time, not viewport edges.
+// Keep the graticule fixed to the plot while the time under each division changes.
 function timeGrid(min, max, width) {
   var span = max - min;
   if (!isFinite(span) || span <= 0) return null;
-  var raw = span / Math.max(2, Math.min(10, Math.floor(width / 100)));
+  var raw = span / Math.max(2, Math.min(10, Math.floor(width / 100))) * (1 - 1e-12);
   var magnitude = Math.pow(10, Math.floor(Math.log10(raw)));
   var fraction = raw / magnitude;
   var step = (fraction <= 1 ? 1 : fraction <= 2 ? 2 : fraction <= 5 ? 5 : 10) * magnitude;
   var scale = step < 0.001 ? 1000000 : step < 1 ? 1000 : 1;
   var unit = scale === 1000000 ? 'μs' : scale === 1000 ? 'ms' : 's';
-  var decimals = Math.max(0, Math.min(6, -Math.floor(Math.log10(step * scale) + 1e-9)));
+  var decimals = Math.max(0, Math.min(8, 2 - Math.floor(Math.log10(step * scale) + 1e-9)));
   function label(value) {
-    return (Math.abs(value) < step * 1e-8 ? 0 : value * scale).toFixed(decimals);
+    return String(Number((value * scale).toFixed(decimals)));
   }
   var ticks = [], minor = step / 5;
-  var first = Math.ceil(min / minor - 1e-8);
-  for (var index = first; index * minor <= max + minor * 1e-8 && ticks.length < 100; index++) {
-    ticks.push({ time: index * minor, major: index % 5 === 0 });
+  for (var index = 0; index * minor <= span + minor * 1e-8 && index < 100; index++) {
+    ticks.push({ time: min + index * minor, fraction: index * minor / span, major: index % 5 === 0 });
   }
   return { step: step, unit: unit, label: label, division: label(step) + ' ' + unit + '/div', ticks: ticks };
 }
@@ -4611,7 +4635,7 @@ function drawChart() {
   });
   for (var i = 0; i < timeTicks.length; i++) {
     var tick = timeTicks[i], xv = tick.time;
-    var xp = Math.round(tx(xv)) + 0.5;
+    var xp = Math.round(timingGrid ? ml + tick.fraction * pw : tx(xv)) + 0.5;
     ctx.globalAlpha = tick.major ? 1 : 0.35;
     ctx.lineWidth = tick.major ? 0.8 : 0.5;
     ctx.beginPath();
@@ -4939,7 +4963,8 @@ function drawChart() {
         lines.push(
           '<span class="tooltip-row">' +
           '<span class="tooltip-swatch" style="background:' + FIELDS[k].color + '"></span>' +
-          '<span>' + escapeHtml(signalLabel(k)) + ': ' + escapeHtml(tipVal) + '</span>' +
+          '<span class="tooltip-label">' + escapeHtml(signalLabel(k)) + ':</span>' +
+          '<span class="tooltip-value">' + escapeHtml(tipVal) + '</span>' +
           '</span>'
         );
       }
@@ -4947,8 +4972,10 @@ function drawChart() {
     if (lines.length) {
       tooltip.innerHTML = lines.join('');
       tooltip.style.display = 'block';
-      tooltip.style.left = Math.min(mx + 12, W - 180) + 'px';
-      tooltip.style.top = Math.max(0, my - 8) + 'px';
+      var tipWidth = tooltip.offsetWidth, tipHeight = tooltip.offsetHeight;
+      var left = mx + 12 + tipWidth <= W ? mx + 12 : mx - 12 - tipWidth;
+      tooltip.style.left = Math.max(0, Math.min(left, W - tipWidth)) + 'px';
+      tooltip.style.top = Math.max(0, Math.min(my - 8, H - tipHeight)) + 'px';
     } else { tooltip.style.display = 'none'; }
     drawChart();
   };
@@ -6387,7 +6414,7 @@ function restorePanelView(state) {
   }
   if (state.plotLayout === null) localPlotLayout = null;
   if (state.plotLayout && Array.isArray(state.plotLayout.panes) && state.plotLayout.panes.length && state.plotLayout.panes.length <= 64) {
-    localPlotLayout = state.plotLayout;
+    localPlotLayout = JSON.parse(JSON.stringify(state.plotLayout));
   }
   if (watchWorkspace) { workspaceSignature = null; setWorkspace(sharedWorkspaceSnapshot || { version: 2, groups: [{ id: 'main', name: 'Main', height: 240 }], panes: [{ id: 'main', name: 'Main', height: 240 }], signals: {} }, true); }
   workspaceY = Object.create(null);

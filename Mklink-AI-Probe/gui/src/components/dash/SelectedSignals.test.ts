@@ -138,7 +138,7 @@ it('persists Chinese aliases and folding/assignments without acquisition calls',
   await fold.trigger('click');await flushPromises()
   await wrapper.get('[aria-label="强调 rpm"]').trigger('click');await flushPromises()
   expect(workspace.signals.rpm.emphasis).toBe(true)
-  await wrapper.findAll('header button')[0].trigger('click')
+  expect(wrapper.findAll('header button').map(b => b.text())).not.toContain('整理')
   await wrapper.get('button[aria-label="重命名变量 rpm"]').trigger('click')
   const aliasInput=wrapper.get<HTMLInputElement>('input[aria-label="重命名变量 rpm"]')
   aliasInput.element.value='主轴转速'

@@ -1,17 +1,15 @@
 <template>
   <section ref="workspaceElement" class="selected-workspace">
     <header><strong>{{ tr('已选信号', 'Selected signals') }} · {{ paths.length }}</strong>
-      <button @click="settings = !settings">{{ settings ? tr('完成', 'Done') : tr('整理', 'Organize') }}</button>
       <button @click="prefs.load()" :disabled="prefs.busy.value">{{ tr('刷新配置', 'Reload settings') }}</button>
     </header>
     <p v-if="prefs.error.value" role="alert">{{ prefs.error.value }}</p>
-    <fieldset v-if="settings" :disabled="!prefs.ready.value || prefs.busy.value">
-      <p class="hint">{{ tr('分组即波形区；空组不占图，折叠不影响采样。', 'One plot per group. Empty groups take no plot space; folding keeps sampling.') }}</p>
+    <fieldset :disabled="!prefs.ready.value || prefs.busy.value">
       <div class="section-editor">
         <input v-model="newName" maxlength="128" :placeholder="tr('分组名称', 'Group name')" @keydown.enter.prevent="add()" />
         <button :disabled="prefs.workspace.value.groups.length >= 128" @click="add()">{{ tr('新增分组', 'New group') }}</button>
       </div>
-      <div class="section-editor">
+      <div v-if="checked.length" class="section-editor">
         <button @click="checked = checked.length === paths.length ? [] : [...paths]">{{ checked.length === paths.length && paths.length ? tr('清空勾选','Clear checks') : tr('全选','Select all') }}</button>
         <select aria-label="批量分组" :value="''" :disabled="!checked.length" @change="batch($event)">
           <option value="" disabled>{{ tr('移动到分组…', 'Move to group…') }} ({{ checked.length }})</option>
@@ -26,16 +24,14 @@
           <InlineWatchName :value="group.name" :label="`重命名分组 ${group.name}`" :commit="name => rename(group.id,name)" />
           <small>{{ group.paths.length }}</small>
           <button v-if="group.id !== (prefs.workspace.value.defaultGroup || groups[0].id)" :disabled="prefs.busy.value" :aria-label="`合并 ${group.name}`" @click="prefs.merge(group.id)">{{ tr('合并窗口', 'Merge plot') }}</button>
-          <template v-if="settings">
             <button :disabled="prefs.busy.value || groups[0].id === group.id" title="上移分组" @click="move(group.id,-1)">↑</button>
             <button :disabled="prefs.busy.value || groups[groups.length-1].id === group.id" title="下移分组" @click="move(group.id,1)">↓</button>
             <button :disabled="prefs.busy.value || groups.length === 1" title="删除分组，信号移入第一个分组" @click="remove(group.id)">×</button>
-          </template>
         </div>
         <div v-show="!group.collapsed && (!hideRows || !hidden?.has(path))" v-for="path in group.paths" :key="path" class="selected-signal" :class="{ emphasized: prefs.style(path).emphasis }">
           <div class="signal-heading">
             <button class="drag-handle" :aria-label="`移动 ${path} 到分组`" :disabled="!prefs.ready.value" :title="tr('按住拖入目标分组', 'Drag into a group')" @pointerdown="startDrag(path,$event)" @pointermove="dragMove" @pointerup="finishDrag" @pointercancel="cancelDrag" @lostpointercapture="cancelDrag" @dragstart.prevent>⠿</button>
-            <input v-if="settings" type="checkbox" :value="path" v-model="checked" :aria-label="`选择 ${path}`" />
+            <input type="checkbox" :value="path" v-model="checked" :aria-label="`选择 ${path}`" />
             <button class="signal-visibility" :aria-label="`${hidden?.has(path) ? tr('显示', 'Show') : tr('隐藏', 'Hide')} ${path}`" :aria-pressed="!hidden?.has(path)" :title="hideRows ? tr('显示或隐藏已选变量', 'Show or hide a selected variable') : tr('显示或隐藏波形', 'Show or hide waveform')" @click="$emit('visibility', path, hidden?.has(path) ?? false)"><EyeOff v-if="hidden?.has(path)" :size="15" aria-hidden="true" /><Eye v-else :size="15" aria-hidden="true" /></button>
             <InlineWatchName :value="prefs.style(path).alias" :fallback="path" :title="path" :label="`重命名变量 ${path}`"
               :expanded="$slots.actions ? expandedPath === path : undefined" @actions="$emit('actions', path)"
@@ -73,7 +69,7 @@ import { compileSignalFormula, signalFormula } from '../../lib/signalFormula'
 import { domainAction, pathArg, pathsArg, boolArg, requireDomain, type DomainArgs } from '../../lib/domainActions'
 const props = defineProps<{ paths: string[]; values: Record<string, number | boolean>; hidden?: ReadonlySet<string>; expandedPath?: string; hideRows?: boolean; viewerId?: string | null }>()
 const emit = defineEmits<{ visibility: [path: string, visible: boolean]; actions: [path: string] }>()
-const prefs = useWatchWorkspace(), settings = ref(false), newName = ref(''), checked = ref<string[]>([])
+const prefs = useWatchWorkspace(), newName = ref(''), checked = ref<string[]>([])
 const editing = ref(''), formula = ref(''), color = ref(''), formulaError = ref('')
 let initialFormula = '', initialColor = ''
 watch(() => props.paths, paths => {
@@ -135,7 +131,7 @@ function dragMove(event: PointerEvent) {
     if(event.clientY<bounds.top+24 && event.clientY>=bounds.top)root.scrollTop-=12
     if(event.clientY>bounds.bottom-24 && event.clientY<=bounds.bottom)root.scrollTop+=12
   }
-  const target=document.elementFromPoint(event.clientX,event.clientY)?.closest<HTMLElement>('[data-watch-group]')
+  const target=root.ownerDocument.elementFromPoint(event.clientX,event.clientY)?.closest<HTMLElement>('[data-watch-group]')
   const id=target && root.contains(target) ? target.dataset.watchGroup || '' : ''
   dragTarget.value=id !== prefs.style(drag.path).group ? id : ''
 }
@@ -168,7 +164,7 @@ function semanticCatalog() {
   ]
 }
 function read() {
-  return { view: { organizing: settings.value }, ready: prefs.ready.value, error: prefs.error.value, groupCount: groups.value.length, groups: groups.value.slice(0, 16).map(group => ({ ...group, pathCount: group.paths.length, paths: group.paths.slice(0, 16) })), signalCount: props.paths.length, hidden: [...(props.hidden || [])].slice(0, 64), styles: Object.fromEntries(props.paths.slice(0, 32).map(path => [path, prefs.style(path)])), organizing: settings.value }
+  return { ready: prefs.ready.value, error: prefs.error.value, groupCount: groups.value.length, groups: groups.value.slice(0, 16).map(group => ({ ...group, pathCount: group.paths.length, paths: group.paths.slice(0, 16) })), signalCount: props.paths.length, hidden: [...(props.hidden || [])].slice(0, 64), styles: Object.fromEntries(props.paths.slice(0, 32).map(path => [path, prefs.style(path)])) }
 }
 async function execute(action: string, args: DomainArgs = {}) {
   if (action === 'signals.inspect') {
@@ -214,10 +210,9 @@ async function execute(action: string, args: DomainArgs = {}) {
   await nextTick()
   return read()
 }
-function restore(view: DomainArgs) { if (typeof view.organizing === 'boolean') settings.value = view.organizing }
-defineExpose({ catalog: semanticCatalog, read, execute, restore })
+defineExpose({ catalog: semanticCatalog, read, execute })
 let timer: ReturnType<typeof setInterval>
-onMounted(() => { window.addEventListener('keydown',cancelDragKey); window.addEventListener('blur',cancelDrag); void prefs.load(); timer=setInterval(() => { if (!settings.value) void prefs.load() },3000) })
+onMounted(() => { window.addEventListener('keydown',cancelDragKey); window.addEventListener('blur',cancelDrag); void prefs.load(); timer=setInterval(() => { if (!drag) void prefs.load() },3000) })
 onUnmounted(() => {clearInterval(timer);cancelDrag();window.removeEventListener('keydown',cancelDragKey);window.removeEventListener('blur',cancelDrag)})
 </script>
 <style scoped>
