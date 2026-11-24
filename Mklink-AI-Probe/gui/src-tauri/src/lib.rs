@@ -619,6 +619,14 @@ fn terminate_sidecar_tree(state: &Sidecar) -> Result<(), String> {
     Ok(())
 }
 
+fn show_main_window(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
+}
+
 fn request_desktop_exit(app: tauri::AppHandle, shutdown: std::sync::Arc<AtomicBool>) {
     if shutdown.swap(true, Ordering::Relaxed) {
         return;
@@ -1065,51 +1073,30 @@ pub fn run() {
                 })?;
             TrayIconBuilder::new()
                 .icon(tray_icon)
+                .tooltip("MKLink AI Probe")
                 .menu(&tray_menu)
-                .show_menu_on_left_click(false)
+                .show_menu_on_left_click(cfg!(target_os = "macos"))
                 .on_menu_event(move |app, event| match event.id.as_ref() {
-                    "show" => {
-                        if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.show();
-                            let _ = window.set_focus();
-                        }
-                    }
+                    "show" => show_main_window(app),
                     "exit" => {
                         request_desktop_exit(app.clone(), tray_shutdown.clone());
                     }
                     _ => {}
                 })
                 .on_tray_icon_event(|tray, event| {
+                    if cfg!(target_os = "macos") {
+                        return; // The native menu offers both Show and Exit on a single click.
+                    }
                     if let TrayIconEvent::Click {
                         button: MouseButton::Left,
                         button_state: MouseButtonState::Up,
                         ..
                     } = event
                     {
-                        let app = tray.app_handle();
-                        if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.show();
-                            let _ = window.set_focus();
-                        }
+                        show_main_window(tray.app_handle());
                     }
                 })
                 .build(app)?;
-
-            // Closing the main window exits the desktop and its local proxy.
-            // Shared CDC runtimes and their remote services have independent
-            // lifetimes and must remain available to other clients.
-            let cleanup_handle = app.handle().clone();
-            let cleanup_shutdown = shutdown.clone();
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.on_window_event(move |event| {
-                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                        // Use the application exit path for window destruction,
-                        // rather than starting it again as this event returns.
-                        api.prevent_close();
-                        request_desktop_exit(cleanup_handle.clone(), cleanup_shutdown.clone());
-                    }
-                });
-            }
 
             std::thread::spawn(move || {
                 let state: State<Sidecar> = handle.state();
@@ -1135,8 +1122,33 @@ pub fn run() {
 
             Ok(())
         })
-        .run(context)
-        .expect("error while running tauri application");
+        .on_window_event(|window, event| {
+            if window.label() == "main" {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    if let Err(error) = window.hide() {
+                        eprintln!("[tauri] could not hide the main window: {error}");
+                    }
+                }
+            }
+        })
+        .build(context)
+        .expect("error while building tauri application")
+        .run(|app, event| match event {
+            #[cfg(target_os = "macos")]
+            tauri::RunEvent::Reopen { has_visible_windows: false, .. } => show_main_window(app),
+            tauri::RunEvent::Exit => {
+                // Native Quit (such as Cmd+Q) also owns cleanup of this desktop's proxy.
+                let state: State<Sidecar> = app.state();
+                if !state.shutdown.swap(true, Ordering::Relaxed) {
+                    let _lifecycle = state.lifecycle.lock().unwrap();
+                    if let Err(error) = terminate_sidecar_tree(state.inner()) {
+                        eprintln!("[tauri] proxy shutdown failed: {error}");
+                    }
+                }
+            }
+            _ => {}
+        });
 }
 
 #[cfg(test)]

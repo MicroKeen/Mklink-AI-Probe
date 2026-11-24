@@ -5,7 +5,7 @@
         <span>{{ tr('端口', 'Port') }}</span>
         <select v-model="portName" :disabled="starting || stopping || ymodemStarting || readingBaudrates">
           <option v-for="port in selectablePorts" :key="port.device" :value="port.device">
-            {{ port.device }}{{ port.description ? ` · ${port.description}` : '' }}
+            {{ uartPortLabel(port) }}
           </option>
         </select>
       </label>
@@ -199,6 +199,7 @@ import {
   type SerialAssistantSettings,
 } from '../../lib/serialAssistantSettings'
 import type { PortInfo } from '../../types/mklink'
+import { orderUartPorts, uartPortLabel } from '../../lib/uartPortOptions'
 import RttTerminalPanel from './RttTerminalPanel.vue'
 import LogDisplayControls, { type LogDisplayMode } from './LogDisplayControls.vue'
 import RttTransmitBar from './RttTransmitBar.vue'
@@ -278,7 +279,7 @@ const { baudrates, baudrateSourceLabel, canReadBaudrates, readingBaudrates, read
 )
 const activeConfigs = ref<Array<Record<string, unknown>>>([])
 const selectablePorts = computed(() => running.value
-  ? activeConfigs.value.map(item => ({ device: String(item.port), description: '' })) : ports.value)
+  ? activeConfigs.value.map(item => ports.value.find(port => port.device === item.port) ?? { device: String(item.port), description: '' }) : ports.value)
 let displayedSource = ''
 watch(portName, port => {
   logBinary.selectSerialPort(port)
@@ -447,7 +448,7 @@ async function refreshPorts(): Promise<void> {
   if (refreshingPorts.value) return
   refreshingPorts.value = true
   try {
-    ports.value = await fetchPorts()
+    ports.value = orderUartPorts(await fetchPorts(), 'mklink_uart')
     if (!running.value && (!portName.value || !ports.value.some(port => port.device === portName.value))) {
       portName.value = ports.value[0]?.device || ''
     }

@@ -26,7 +26,7 @@
         <div class="config-group primary-config">
           <span class="group-label">{{ tr('链路', 'LINK') }}</span>
           <div class="link-grid">
-            <label class="port-field"><span>{{ tr('串口', 'Port') }}</span><select :disabled="running || stopping || connecting || readingBaudrates" data-testid="modbus-port" v-model="settings.port" class="form-input"><option v-for="p in ports" :key="p.device" :value="p.device">{{ p.device }} {{ p.description ? `· ${p.description}` : '' }}</option></select></label>
+            <label class="port-field"><span>{{ tr('串口', 'Port') }}</span><select :disabled="running || stopping || connecting || readingBaudrates" data-testid="modbus-port" v-model="settings.port" class="form-input"><option v-for="p in ports" :key="p.device" :value="p.device">{{ uartPortLabel(p) }}</option></select></label>
             <label><span>{{ tr('波特率', 'Baud') }}</span><select :disabled="running || stopping || connecting || readingBaudrates" v-model.number="settings.baudrate" class="form-input mono" data-testid="modbus-baudrate" :title="baudrateSourceLabel" :aria-invalid="!validBaudrate">
               <option v-for="rate in baudrates" :key="rate" :value="rate">{{ rate }}</option>
               <option v-if="(running || stopping) && !baudrates.includes(settings.baudrate)" :value="settings.baudrate" disabled>{{ settings.baudrate }} ({{ tr('当前会话', 'current session') }})</option>
@@ -114,6 +114,7 @@ import { useUartBaudrates } from '../../composables/useUartBaudrates'
 import { useMklinkApi } from '../../composables/useMklinkApi'
 import { useToast } from '../../composables/useToast'
 import type { PortInfo } from '../../types/mklink'
+import { orderUartPorts, uartPortLabel } from '../../lib/uartPortOptions'
 import { tr } from '../../composables/useLanguage'
 import SetupHint from './SetupHint.vue'
 import { API_BASE } from '../../lib/runtimeEndpoint'
@@ -160,7 +161,7 @@ async function api(path: string, body?: unknown) {
   if (!response.ok) { const detail = payload?.detail; throw new Error(requestError(detail, response.status, 'Modbus')) }
   return payload
 }
-async function refreshPorts() { refreshingPorts.value = true; try { ports.value = await fetchPorts(); if (!running.value && !stopping.value && !ports.value.some(item => item.device === settings.port)) settings.port = ports.value[0]?.device || '' } catch (error) { toast.error(String(error)) } finally { refreshingPorts.value = false; portsLoaded.value = true } }
+async function refreshPorts() { refreshingPorts.value = true; try { ports.value = orderUartPorts(await fetchPorts(), 'mklink_rs485'); if (!running.value && !stopping.value && !ports.value.some(item => item.device === settings.port)) settings.port = ports.value[0]?.device || '' } catch (error) { toast.error(String(error)) } finally { refreshingPorts.value = false; portsLoaded.value = true } }
 function applyLoopStatus(status: LoopStatus): void {
   // HTTP replies and SSE share an order; completion can precede a start reply.
   if (!running.value || !status || !Number.isSafeInteger(status.revision) || status.revision < loopStatus.value.revision) return
