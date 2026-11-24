@@ -9,20 +9,17 @@
         <input v-model="newName" maxlength="128" :placeholder="tr('分组名称', 'Group name')" @keydown.enter.prevent="add()" />
         <button :disabled="prefs.workspace.value.groups.length >= 128" @click="add()">{{ tr('新增分组', 'New group') }}</button>
       </div>
-      <div v-if="checked.length" class="section-editor">
-        <button @click="checked = checked.length === paths.length ? [] : [...paths]">{{ checked.length === paths.length && paths.length ? tr('清空勾选','Clear checks') : tr('全选','Select all') }}</button>
-        <select aria-label="批量分组" :value="''" :disabled="!checked.length" @change="batch($event)">
-          <option value="" disabled>{{ tr('移动到分组…', 'Move to group…') }} ({{ checked.length }})</option>
-          <option v-for="g in prefs.workspace.value.groups" :key="g.id" :value="g.id">{{ g.name }}</option>
-        </select>
-      </div>
     </fieldset>
     <div class="selected-groups">
       <section v-for="group in groups" :key="group.id" :data-watch-group="group.id" :class="{ 'drop-target': dragTarget === group.id }">
         <div class="group-heading" :title="!group.paths.length ? tr('空组：移入信号后显示波形', 'Empty: move signals here to show a plot') : undefined">
           <button :aria-label="`折叠 ${group.name}`" :aria-expanded="!group.collapsed" @click="collapse(group.id)">{{ group.collapsed ? '▸' : '▾' }}</button>
+          <input type="checkbox" :checked="group.enabled > 0 && group.enabled === group.members.length"
+            :disabled="samplingBusy || !group.members.length" :aria-label="tr('采集整组 ', 'Sample group ') + group.name"
+            :title="tr('全选或取消本组采集', 'Enable or disable sampling for the whole group')"
+            @change="toggleSampling(group.members, $event)" />
           <InlineWatchName :value="group.name" :label="`重命名分组 ${group.name}`" :commit="name => rename(group.id,name)" />
-          <small>{{ group.paths.length }}</small>
+          <small :title="tr('已勾选 / 组内变量', 'Enabled / group total')">{{ group.enabled }}/{{ group.members.length }}</small>
           <button v-if="group.id !== (prefs.workspace.value.defaultGroup || groups[0].id)" :disabled="prefs.busy.value" :aria-label="`合并 ${group.name}`" @click="prefs.merge(group.id)">{{ tr('合并窗口', 'Merge plot') }}</button>
             <button :disabled="prefs.busy.value || groups[0].id === group.id" title="上移分组" @click="move(group.id,-1)">↑</button>
             <button :disabled="prefs.busy.value || groups[groups.length-1].id === group.id" title="下移分组" @click="move(group.id,1)">↓</button>
@@ -31,16 +28,18 @@
         <div v-show="!group.collapsed && (!hideRows || !hidden?.has(path))" v-for="path in group.paths" :key="path" class="selected-signal" :class="{ emphasized: prefs.style(path).emphasis }">
           <div class="signal-heading">
             <button class="drag-handle" :aria-label="`移动 ${path} 到分组`" :disabled="!prefs.ready.value" :title="tr('按住拖入目标分组', 'Drag into a group')" @pointerdown="startDrag(path,$event)" @pointermove="dragMove" @pointerup="finishDrag" @pointercancel="cancelDrag" @lostpointercapture="cancelDrag" @dragstart.prevent>⠿</button>
-            <input type="checkbox" :value="path" v-model="checked" :aria-label="`选择 ${path}`" />
+            <input type="checkbox" :checked="!disabledSampling?.has(path)" :disabled="samplingBusy"
+              :aria-label="tr('采集 ', 'Sample ') + path" :title="tr('勾选采集此变量', 'Sample this variable')"
+              @change="toggleSampling([path], $event)" />
             <button class="signal-visibility" :aria-label="`${hidden?.has(path) ? tr('显示', 'Show') : tr('隐藏', 'Hide')} ${path}`" :aria-pressed="!hidden?.has(path)" :title="hideRows ? tr('显示或隐藏已选变量', 'Show or hide a selected variable') : tr('显示或隐藏波形', 'Show or hide waveform')" @click="$emit('visibility', path, hidden?.has(path) ?? false)"><EyeOff v-if="hidden?.has(path)" :size="15" aria-hidden="true" /><Eye v-else :size="15" aria-hidden="true" /></button>
             <InlineWatchName :value="prefs.style(path).alias" :fallback="path" :title="path" :label="`重命名变量 ${path}`"
               :expanded="$slots.actions ? expandedPath === path : undefined" @actions="$emit('actions', path)"
-              :commit="name => prefs.setStyle([path],{alias:name})" /><output>{{ formatValue(values[path]) }}</output>
+              :commit="name => prefs.setStyle([path],{alias:name})" /><output>{{ formatValue(disabledSampling?.has(path) ? undefined : values[path]) }}</output>
             <button :aria-label="`强调 ${path}`" :aria-pressed="prefs.style(path).emphasis" @click="toggleStyle(path,'emphasis')"><b>B</b></button>
             <button :aria-label="`采样点 ${path}`" :title="tr('仅显示采样点，不连线', 'Sample points only, no lines')" :aria-pressed="prefs.style(path).renderMode === 'points'" @click="toggleStyle(path,'renderMode')">{{ tr('点','Dots') }}</button>
             <button :aria-label="`曲线设置 ${path}`" @click="configure(path)">ƒx</button>
           </div>
-          <div v-if="prefs.style(path).formula" class="converted-value">{{ tr('计算值', 'Calculated') }}: {{ formatValue(signalFormula(prefs.style(path).formula)(Number(values[path]))) }} · {{ tr('原始值', 'Raw') }}: {{ formatValue(values[path]) }}</div>
+          <div v-if="prefs.style(path).formula && !disabledSampling?.has(path)" class="converted-value">{{ tr('计算值', 'Calculated') }}: {{ formatValue(signalFormula(prefs.style(path).formula)(Number(values[path]))) }} · {{ tr('原始值', 'Raw') }}: {{ formatValue(disabledSampling?.has(path) ? undefined : values[path]) }}</div>
           <slot v-if="expandedPath === path" name="actions" :path="path" />
         </div>
       </section>
@@ -67,13 +66,12 @@ import InlineWatchName from './InlineWatchName.vue'
 import { tr } from '../../composables/useLanguage'
 import { compileSignalFormula, signalFormula } from '../../lib/signalFormula'
 import { domainAction, pathArg, pathsArg, boolArg, requireDomain, type DomainArgs } from '../../lib/domainActions'
-const props = defineProps<{ paths: string[]; values: Record<string, number | boolean>; hidden?: ReadonlySet<string>; expandedPath?: string; hideRows?: boolean; viewerId?: string | null }>()
+const props = defineProps<{ paths: string[]; values: Record<string, number | boolean>; hidden?: ReadonlySet<string>; expandedPath?: string; hideRows?: boolean; allPaths?: string[]; disabledSampling?: ReadonlySet<string>; samplingBusy?: boolean; setSampling?: (paths: string[], enabled: boolean) => Promise<void>; viewerId?: string | null }>()
 const emit = defineEmits<{ visibility: [path: string, visible: boolean]; actions: [path: string] }>()
-const prefs = useWatchWorkspace(), newName = ref(''), checked = ref<string[]>([])
+const prefs = useWatchWorkspace(), newName = ref('')
 const editing = ref(''), formula = ref(''), color = ref(''), formulaError = ref('')
 let initialFormula = '', initialColor = ''
 watch(() => props.paths, paths => {
-  if (checked.value.length) checked.value = checked.value.filter(path => paths.includes(path))
   if (editing.value && !paths.includes(editing.value)) editing.value = ''
 })
 function configure(path: string) {
@@ -93,23 +91,33 @@ async function applyCurve() {
 }
 const workspaceElement = ref<HTMLElement>(), dragTarget = ref('')
 let drag: {path:string; pointerId:number; x:number; y:number; moved:boolean; handle:HTMLElement} | undefined
-const groups = computed(() => prefs.workspace.value.groups.map(g => ({...g, paths: props.paths.filter(p => prefs.style(p).group === g.id)})))
+const groups = computed(() => prefs.workspace.value.groups.map(group => {
+  const members = (props.allPaths || props.paths).filter(path => prefs.style(path).group === group.id)
+  return { ...group, members, enabled: members.filter(path => !props.disabledSampling?.has(path)).length,
+    paths: props.allPaths ? props.paths.filter(path => prefs.style(path).group === group.id) : members }
+}))
+async function toggleSampling(paths: string[], event: Event) {
+  const input = event.currentTarget as HTMLInputElement
+  const enabled = input.checked
+  const count = paths.filter(path => !props.disabledSampling?.has(path)).length
+  input.checked = count === paths.length
+  await props.setSampling?.(paths, enabled)
+}
 const formatValue = (v: number | boolean | undefined) => typeof v === 'number' ? !Number.isFinite(v) ? '—' : Number.isInteger(v) ? String(v) : v.toPrecision(7) : v === undefined ? '—' : String(v)
 const value = (event: Event) => (event.target as HTMLInputElement).value
-async function add() {
+async function add(paths: string[] = []) {
   if(prefs.workspace.value.groups.length >= 128) return
   const id=crypto.randomUUID(); let name=newName.value.trim()
   if(!name) {let n=1; do {name=tr('分组 ','Group ')+n++} while(prefs.workspace.value.groups.some(g=>g.name===name))}
   const saved=await prefs.update(w => {
     w.groups.push({id, name, collapsed: false, height: 200})
-    for(const path of checked.value.filter(p=>props.paths.includes(p))) w.signals[path]={...prefs.style(path),group:id,pane:id}
+    for(const path of paths) w.signals[path]={...prefs.style(path),group:id,pane:id}
   })
-  if(saved) {newName.value='';checked.value=[]}
+  if(saved) newName.value=''
   return saved
 }
 function toggleStyle(path: string, key: 'emphasis'|'renderMode') { void prefs.update(w=>{const current=w.signals[path] || {...prefs.style(path)}; w.signals[path]={...current,...(key==='emphasis' ? {emphasis:!current.emphasis} : {renderMode:current.renderMode==='points' ? 'line' as const : 'points' as const})} }) }
 function collapse(id: string) { void prefs.update(w => { const g=w.groups.find(g=>g.id===id)!;g.collapsed=!g.collapsed }) }
-async function batch(e: Event) { await prefs.setStyle(checked.value.filter(p=>props.paths.includes(p)),{group:value(e)}); (e.target as HTMLSelectElement).value='' }
 function rename(id: string,name: string) { return prefs.update(w=>{const group=w.groups.find(p=>p.id===id);if(group)group.name=name || group.name}) }
 function remove(id: string) { return prefs.update(w=>{w.groups=w.groups.filter(p=>p.id!==id); if(w.defaultGroup===id)w.defaultGroup=w.groups[0].id; for(const s of Object.values(w.signals)) if(s.group===id){s.group=w.groups[0].id;s.pane=s.group} }) }
 function move(id: string,delta: number) { return prefs.update(w=>{const a=w.groups,index=a.findIndex(g=>g.id===id);const [item]=a.splice(index,1);a.splice(index+delta,0,item)}) }
@@ -164,7 +172,7 @@ function semanticCatalog() {
   ]
 }
 function read() {
-  return { ready: prefs.ready.value, error: prefs.error.value, groupCount: groups.value.length, groups: groups.value.slice(0, 16).map(group => ({ ...group, pathCount: group.paths.length, paths: group.paths.slice(0, 16) })), signalCount: props.paths.length, hidden: [...(props.hidden || [])].slice(0, 64), styles: Object.fromEntries(props.paths.slice(0, 32).map(path => [path, prefs.style(path)])) }
+  return { ready: prefs.ready.value, error: prefs.error.value, groupCount: groups.value.length, groups: groups.value.slice(0, 16).map(({members, ...group}) => ({ ...group, memberCount: members.length, pathCount: group.paths.length, paths: group.paths.slice(0, 16) })), signalCount: props.paths.length, hidden: [...(props.hidden || [])].slice(0, 64), styles: Object.fromEntries(props.paths.slice(0, 32).map(path => [path, prefs.style(path)])) }
 }
 async function execute(action: string, args: DomainArgs = {}) {
   if (action === 'signals.inspect') {
@@ -181,8 +189,8 @@ async function execute(action: string, args: DomainArgs = {}) {
   let saved: boolean | undefined = true
   if (action === 'signals.group.add' || action === 'signals.group.split') {
     requireDomain(prefs.workspace.value.groups.length < 128, 'Group limit reached')
-    checked.value = paths; newName.value = args.name || (action === 'signals.group.split' ? prefs.style(args.path).alias || args.path : '')
-    saved = await add()
+    newName.value = args.name || (action === 'signals.group.split' ? prefs.style(args.path).alias || args.path : '')
+    saved = await add(paths)
   } else if (action === 'signals.group.rename') { requireDomain(args.name.trim(), 'Group name cannot be empty'); saved = await rename(args.id, args.name) }
   else if (action === 'signals.group.remove') {
     requireDomain(prefs.workspace.value.groups.length > 1, 'Cannot remove the final group')
@@ -229,8 +237,7 @@ onUnmounted(() => {clearInterval(timer);cancelDrag();window.removeEventListener(
 header,.signal-heading,.section-editor { display:flex; align-items:center; gap:5px; padding:4px; }
 header strong { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 button { white-space:nowrap; flex-shrink:0; }
-.section-editor select { flex:1; min-width:0; }
-button,input,select { background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:4px; padding:3px; min-width:0; }
+button,input { background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:4px; padding:3px; min-width:0; }
 input { width:100%; } input[type=checkbox] { width:auto; } fieldset { border:0; padding:4px; }
 .section-editor input { flex:1; } .group-heading { display:flex; align-items:center; gap:6px; padding:4px; background:var(--bg); }
 

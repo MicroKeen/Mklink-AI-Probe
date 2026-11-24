@@ -44,6 +44,35 @@ def test_create_save_and_restore_names_against_new_catalog(tmp_path):
     assert 'address' not in path.read_text(encoding='utf-8')
 
 
+def test_sampling_subset_reconfigures_probe_regions_and_restores_without_losing_rows(tmp_path):
+    axf = tmp_path / 'app.axf'
+    axf.touch()
+    sw = manager(tmp_path, ('a', 'b', 'c'))
+    profile = WatchProfile()
+    profile.activate(str(axf), sw)
+    for name in ('a', 'b', 'c'):
+        sw.add_watch(name)
+        profile.remember_selection(name, True, sw)
+    def sampled():
+        scalar, _, blocks = sw._sampling_layout_locked()
+        return [item.name for item in scalar], [(block.address, block.size) for block in blocks]
+    profile.set_sampling(sw, ['a', 'b'], False, str(profile.path))
+    assert sampled() == (['c'], [(0x20000008, 4)])
+    assert [item['name'] for item in sw.get_status()['items']] == ['c']
+    assert [item.get('sampling_enabled', True) for item in sw.list_watches()] == [False, False, True]
+    profile.activate(str(axf), sw)
+    assert sampled() == (['c'], [(0x20000008, 4)])
+    profile.set_sampling(sw, ['c'], False, None)
+    assert sampled() == ([], [])
+    with pytest.raises(ValueError):
+        profile.set_sampling(sw, ['a', 'missing'], True, None)
+    assert sampled() == ([], [])
+    profile.path.write_text('external change')
+    with pytest.raises(PreferencesConflict):
+        profile.set_sampling(sw, ['a', 'b'], True, None)
+    assert sampled() == ([], [])
+
+
 def test_file_isolation_and_stale_window_cannot_overwrite(tmp_path):
     store = WatchProfile()
     sw = manager(tmp_path)
@@ -119,6 +148,12 @@ def test_gui_and_capability_routes_share_one_profile(tmp_path, monkeypatch):
         result = call('add', {'name': 'gain', 'profile': initial['path']})
         assert result.status_code == 200 and not result.json().get('error')
         assert app.state.watch_profile.data['selected'] == ['gain']
+        toggle = dict(paths=['gain'], enabled=False, profile=initial['path'])
+        assert call('sampling', {**toggle, 'profile': 'previous.axf'}).status_code == 409
+        assert call('sampling', toggle).json()['items'][0]['sampling_enabled'] is False
+        assert call('status').json()['items'] == []
+        assert call('items').json()['items'][0]['name'] == 'gain'
+        assert call('sampling', {**toggle, 'enabled': True}).status_code == 200
         assert call('interval', {'interval': .000001}).status_code == 200
         # The same user's pending display save is not invalidated by interval.
         view = initial['viewer']

@@ -665,7 +665,7 @@ class RuntimeGate:
             return await reject(409, 'An exclusive job is active; inspect its result before further hardware operations')
         from mklink.probes import select_probe
         from mklink.runtime import RuntimeErrorResponse
-        local_symbols = path in {'/api/device/parse-axf', '/api/dash/superwatch/add', '/api/dash/superwatch/remove', '/api/dash/superwatch/workspace', '/api/dash/superwatch/pins', '/api/dash/superwatch/profile'}
+        local_symbols = path in {'/api/device/parse-axf', '/api/dash/superwatch/add', '/api/dash/superwatch/remove', '/api/dash/superwatch/sampling', '/api/dash/superwatch/workspace', '/api/dash/superwatch/pins', '/api/dash/superwatch/profile'}
         if (path.startswith(('/api/device/', '/api/dash/', '/api/probe/')) or path == '/api/mcu-detect') and not path.endswith(('/stop', '/disconnect')) and path != '/api/probe/firmware-upgrade' and not local_symbols:
             try:
                 from mklink.runtime_capabilities import MUX_MEMORY_PATHS

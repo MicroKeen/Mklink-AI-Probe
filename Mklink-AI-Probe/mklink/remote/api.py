@@ -3182,6 +3182,18 @@ def create_app(
         async with _dashboard_start_lock(_state):
             return await run_in_threadpool(prepare_and_add)
 
+    @app.post("/api/dash/superwatch/sampling")
+    async def superwatch_sampling(paths: list[str] = Body(..., min_length=1, max_length=1024),
+                                  enabled: bool = Body(..., strict=True), profile: str | None = Body(None)):
+        from mklink.watch_preferences import PreferencesConflict
+        async with _dashboard_start_lock(_state):
+            try:
+                return await run_in_threadpool(watch_profile.set_sampling, get_managers()["superwatch"], paths, enabled, profile)
+            except PreferencesConflict as exc:
+                raise HTTPException(409, str(exc)) from exc
+            except (ValueError, OSError) as exc:
+                raise HTTPException(422, f"无法更改 SuperWatch 采集选择：{exc}") from exc
+
     @app.post("/api/dash/superwatch/remove")
     async def superwatch_remove(name: str = Body(..., embed=True), profile: str | None = Body(None)):
         managers = get_managers()

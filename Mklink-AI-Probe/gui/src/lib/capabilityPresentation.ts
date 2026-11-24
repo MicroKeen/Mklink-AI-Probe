@@ -6,7 +6,7 @@ const labels: Record<string, string> = {
   read_variable: '读取变量', write_variable: '设置变量', superwatch_values: '最新采样',
   superwatch_recording_export: '导出 Excel', superwatch_recording_status: '记录状态',
   superwatch_start: '开始采样', superwatch_stop: '停止采样', superwatch_add: '添加采样变量',
-  superwatch_items: '采样变量', address: '地址', data_hex: '写入数据（十六进制）', verify: '写后校验',
+  superwatch_sampling: '设置变量采集开关', sampling_enabled: '参与采集', superwatch_items: '已选变量', address: '地址', data_hex: '写入数据（十六进制）', verify: '写后校验',
   path: '路径', directory: '保存目录', names: '变量名称', name: '名称', value: '值', rows: '变量读数',
   type: '类型', size: '字节数', connected: '已连接', state: '状态', status: '状态', active: '正在记录',
   running: '正在采样', sample: '最新采样', values: '数值', channels: '通道', sequence: '采样序号',

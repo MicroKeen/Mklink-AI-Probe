@@ -67,10 +67,11 @@ var I18N = {
     ],
     help_sw_variables: '程序变量与已选信号', help_sw_sampling: '采集与波形',
     help_sw_var_items: [
-      '加载与目标固件匹配的 AXF / ELF。在<strong>搜索变量</strong>中勾选变量，它会出现在上方的<strong>已选信号</strong>中。图钉可将变量加入<strong>常用变量</strong>。',
+      '点击<strong>打开 AXF / ELF</strong>，选择与板上程序匹配的文件。在<strong>搜索变量</strong>中勾选变量，它会出现在上方的<strong>已选信号</strong>中。图钉可将变量加入<strong>常用变量</strong>。',
       '在已选信号、常用变量或搜索结果中，点击变量名展开操作，再点一次收起。选择<strong>写入</strong>，输入新值后点击<strong>确认写入</strong>。写入需要连接设备并选用可写的变量。位域只读。',
-      '对已勾选的变量，展开后点击<strong>移除</strong>可取消采样。各列表同步取消勾选，置顶状态保留。眼睛按钮只控制波形的显示。',
-      '用<strong>整理</strong>为信号分组，或将信号拖入另一组。双击名称可设置别名，ƒx 可设置显示公式和颜色。'
+      '在<strong>已选信号</strong>中，变量前打勾才参与采集和记录。取消勾选后保留分组、别名和颜色；再次勾选可继续采集。眼睛按钮控制曲线显隐。展开变量后点<strong>移除</strong>可将它移出列表。',
+      '组名旁显示“已勾选数 / 变量总数”。全部勾选时组框打勾，部分勾选时组框留空。点击空框全选本组，点击已勾选的组框取消整组采集。',
+      '按住变量左侧拖动柄拖入目标组，曲线随变量换组，采集勾选保持原状。双击名称可设置别名，ƒx 可设置显示公式和颜色。'
     ],
     help_sw_sampling_items: [
       '也可在<strong>芯片外设</strong>中勾选寄存器或字段。选好信号后点击<strong>开始</strong>采集，点击<strong>停止</strong>结束采集。',
@@ -189,10 +190,11 @@ var I18N = {
     ],
     help_sw_variables: 'Program variables and selected signals', help_sw_sampling: 'Acquisition and waveforms',
     help_sw_var_items: [
-      'Load the AXF / ELF that matches the target firmware. Check a variable in <strong>Find variables</strong> to add it to <strong>Selected signals</strong>. Use the pin to add it to <strong>Pinned variables</strong>.',
+      'Click <strong>Open AXF / ELF</strong> and select the file for the running firmware. Check a variable in <strong>Find variables</strong> to add it to <strong>Selected signals</strong>. Use the pin to add it to <strong>Pinned variables</strong>.',
       'Click a variable name in any of these three lists to show its actions. Click it again to collapse them. Select <strong>Write</strong>, enter or select a value, then click <strong>Confirm write</strong>. Writing requires a connected device and a writable variable. Bit fields are read-only.',
-      'For a checked variable, expand its actions and click <strong>Remove</strong> to stop sampling it. The lists uncheck it together and keep its pin. The eye button controls waveform visibility only.',
-      'Use <strong>Organize</strong> to group signals, or drag a signal into another group. Double-click a name to set an alias. Use ƒx to set a display formula or color.'
+      'In <strong>Selected signals</strong>, check a variable to sample and record it. Uncheck it to keep its group, alias and color for later. The eye controls waveform visibility. Expand a variable and click <strong>Remove</strong> to take it off the list.',
+      'Each group shows its enabled count and total. Its box is checked only when every variable is enabled. Click an empty box to sample the whole group, or clear a checked box to disable the whole group.',
+      'Drag a variable by its handle into another group. Its curve moves with it and its sampling setting stays the same. Double-click a name to set an alias. Use ƒx to set a display formula or color.'
     ],
     help_sw_sampling_items: [
       'You can also select registers and fields under <strong>Peripherals</strong>. Click <strong>Start</strong> to collect the selected signals and <strong>Stop</strong> to end acquisition.',

@@ -1961,6 +1961,8 @@ class SuperWatchStreamManager:
         # that subscribe before a runtime is prepared.  Cache replacement is
         # one reference assignment, so readers never observe payload/snapshot
         # from different layouts.
+        self._sampling_disabled = set()
+        self._configured_channels_json = "[]"
         empty_channels_json = "[]"
         self._metadata_version = 1
         self._published_metadata_signature = empty_channels_json
@@ -2180,18 +2182,20 @@ class SuperWatchStreamManager:
     def _sampling_layout_locked(self):
         return self._layout_for_snapshot_locked(self._array_snapshot)
 
-    def _layout_for_snapshot_locked(self, snapshot, scalar_items=None):
+    def _layout_for_snapshot_locked(self, snapshot, scalar_items=None, disabled=None):
         from mklink.superwatch import (
             SUPERWATCH_DUMP_MERGE_GAP,
             build_read_blocks,
         )
 
+        if disabled is None:
+            disabled = self._sampling_disabled
         if scalar_items is None:
             scalar_items = tuple(self._runtime.items) if self._runtime is not None else ()
-            if snapshot is None:
+            if snapshot is None and not disabled:
                 blocks = tuple(self._runtime.blocks) if self._runtime is not None else ()
                 return scalar_items, scalar_items, blocks
-        scalar_items = tuple(scalar_items)
+        scalar_items = tuple(item for item in scalar_items if item.name not in disabled)
         items_by_name = {item.name: item for item in scalar_items}
         for item in snapshot["items"] if snapshot is not None else ():
             items_by_name.setdefault(item.name, item)
@@ -2205,8 +2209,8 @@ class SuperWatchStreamManager:
             )),
         )
 
-    def _validate_sampling_layout_locked(self, snapshot, scalar_items=None):
-        _, _, blocks = self._layout_for_snapshot_locked(snapshot, scalar_items)
+    def _validate_sampling_layout_locked(self, snapshot, scalar_items=None, disabled=None):
+        _, _, blocks = self._layout_for_snapshot_locked(snapshot, scalar_items, disabled)
         if not blocks:
             return  # An empty selection is a valid idle configuration.
         regions = [(block.address, block.size) for block in blocks]
@@ -2276,6 +2280,8 @@ class SuperWatchStreamManager:
                         ):
                             runtime = self._runtime
                             scalar_items, items, dump_blocks = self._sampling_layout_locked()
+                            if not dump_blocks:
+                                runtime = None
                             config_generation = self._config_generation
                             origin_us = self._origin_us
                         else:
@@ -2738,7 +2744,27 @@ class SuperWatchStreamManager:
                     "restore_error": getattr(self, "_peripheral_restore_error", None),
                     "items": [{"name": item.name, **metadata[item.name]} for item in items]}
 
-    def add_watch(self, name: str) -> dict:
+    def set_sampling(self, names, enabled, persist=None):
+        """Change a batch at one channel-layout boundary, including during capture."""
+        with self._read_lock:
+            configured = {item.name for item in self._runtime.items} if self._runtime else set()
+            unknown = set(names) - configured
+            if unknown:
+                raise ValueError("变量已移除或工程已切换，请刷新已选信号：" + ", ".join(sorted(unknown)))
+            disabled = self._sampling_disabled.difference(names) if enabled else self._sampling_disabled.union(names)
+            if disabled != self._sampling_disabled:
+                self._validate_sampling_layout_locked(self._array_snapshot, disabled=disabled)
+                if persist:
+                    persist()
+                self._flush_binary_batch_locked()
+                self._sampling_disabled = disabled
+                self._latest_sample = None
+                self._rate_timestamps.clear()
+                self._actual_rate = 0.0
+                self._rebuild_metadata_cache_locked(publish=True)
+            return {"items": self.list_watches()}
+
+    def add_watch(self, name: str, *, sampling_enabled=True) -> dict:
         # Every SVD register/field path includes its peripheral prefix.
         if "." in name:
             self._ensure_peripheral_catalog()
@@ -2746,9 +2772,15 @@ class SuperWatchStreamManager:
             if self._runtime is None:
                 return {"error": "SuperWatch not started"}
             self._flush_binary_batch_locked()
+            if not sampling_enabled:
+                self._sampling_disabled.add(name)
             result = self._runtime.add(name, validate_layout=self._validate_scalar_edit_locked)
+            if result.get("error") and not sampling_enabled:
+                self._sampling_disabled.discard(name)
             if not result.get("error"):
                 self._rebuild_metadata_cache_locked(publish=True)
+            if name in self._sampling_disabled and not result.get("error"):
+                result["sampling_enabled"] = False
             return {"item": result}
 
     def remove_watch(self, name: str) -> dict:
@@ -2870,7 +2902,13 @@ class SuperWatchStreamManager:
             return self._rebuild_metadata_cache_locked(publish=force)
 
     def _rebuild_metadata_cache_locked(self, *, publish: bool = False, new_epoch: bool = False) -> int:
-        channels = self._list_watches_locked()
+        configured = self._list_watches_locked()
+        self._sampling_disabled.intersection_update(item["name"] for item in configured)
+        self._configured_channels_json = json.dumps([
+            {**item, "sampling_enabled": False} if item["name"] in self._sampling_disabled else item
+            for item in configured
+        ], separators=(",", ":"))
+        channels = [item for item in configured if item["name"] not in self._sampling_disabled]
         signature = json.dumps(channels, sort_keys=True, default=str)
         snapshot_json = json.dumps(channels, separators=(",", ":"), default=str)
         with self._metadata_publish_lock:
@@ -2917,7 +2955,7 @@ class SuperWatchStreamManager:
         if names is None:
             if self._runtime is None or not self._runtime.items:
                 return False
-            names = tuple(item.name for item in self._runtime.items)
+            names = tuple(item.name for item in self._runtime.items if item.name not in self._sampling_disabled)
         if not names:
             return False
         merged = {}
@@ -3167,8 +3205,7 @@ class SuperWatchStreamManager:
         }
 
     def list_watches(self) -> list[dict]:
-        _payload, snapshot_json, _version = self._metadata_cache
-        return json.loads(snapshot_json)
+        return json.loads(self._configured_channels_json)
 
     def _list_watches_locked(self) -> list[dict]:
         if self._runtime is None:
@@ -3191,7 +3228,7 @@ class SuperWatchStreamManager:
         q = bridge.add_client()
         try:
             # Send initial channel metadata for already-added variables
-            items = self.list_watches()
+            items = json.loads(self._metadata_cache[1])
             if items:
                 meta = {
                     item["name"]: {

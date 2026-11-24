@@ -25,7 +25,7 @@ MCP_ALIASES = {
     'hpm_otp': 'hpm_otp_jtag_read hpm_otp_jtag_plan hpm_otp_jtag_program hpm_otp_jtag_lock_plan hpm_otp_jtag_lock_program hpm_otp_isp_read hpm_otp_isp_plan hpm_otp_isp_program hpm_otp_isp_batch_plan hpm_otp_isp_batch_program',
     'security_lock': 'job_start', 'security_unlock': 'job_start', 'start_job': 'job_start',
     'rtt_write_hex': 'rtt_write',
-    'superwatch': ' '.join('superwatch_' + action for action in ('status items values snapshot snapshot_select snapshot_clear add remove start stop pause resume interval write recording_start recording_stop recording_status recording_export profile profile_save workspace workspace_save pins pins_save').split()),
+    'superwatch': ' '.join('superwatch_' + action for action in ('status items values snapshot snapshot_select snapshot_clear add remove sampling start stop pause resume interval write recording_start recording_stop recording_status recording_export profile profile_save workspace workspace_save pins pins_save').split()),
     'systemview': ' '.join('systemview_' + action for action in 'status history start stop pause resume'.split()),
 }
 CLI_ALIASES = {

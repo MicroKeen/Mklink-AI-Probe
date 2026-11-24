@@ -85,6 +85,7 @@ CAPABILITIES = {
     'superwatch_snapshot_select': ('POST', '/api/dash/superwatch/array-snapshot/select'),
     'superwatch_snapshot_clear': ('POST', '/api/dash/superwatch/array-snapshot/clear'),
     'superwatch_values': ('GET', '/api/dash/superwatch/latest'),
+    'superwatch_sampling': ('POST', '/api/dash/superwatch/sampling'),
     'superwatch_add': ('POST', '/api/dash/superwatch/add'),
     'superwatch_remove': ('POST', '/api/dash/superwatch/remove'),
     'superwatch_write': ('POST', '/api/dash/superwatch/write'),

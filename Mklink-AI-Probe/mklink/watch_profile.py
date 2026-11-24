@@ -160,12 +160,12 @@ def snapshot(value):
     return dict(name=value['name'], start_index=int(start), count=int(count))
 
 
-NORMALIZE = {'selected': names, 'pins': normalize_pins, 'snapshot': snapshot,
+NORMALIZE = {'selected': names, 'sampling_disabled': names, 'pins': normalize_pins, 'snapshot': snapshot,
              'workspace': normalize_workspace, 'viewer': viewer, 'layout': layout}
 
 
 def defaults():
-    return dict(version=1, selected=[], pins=[], snapshot=None, workspace=normalize_workspace({'version': 2}),
+    return dict(version=1, selected=[], sampling_disabled=[], pins=[], snapshot=None, workspace=normalize_workspace({'version': 2}),
                 viewer=viewer({}), layout=layout({}))
 
 
@@ -237,6 +237,8 @@ class WatchProfile:
                 if revision is not None and revision != self.section(name)['revision']:
                     raise PreferencesConflict('SuperWatch configuration changed; reload settings and retry')
                 updated = {**self.data, name: NORMALIZE[name](value)}
+                if name == 'selected':
+                    updated['sampling_disabled'] = [path for path in updated['sampling_disabled'] if path in updated['selected']]
                 if updated != self.data:
                     self._write(updated)
                 else:
@@ -288,12 +290,13 @@ class WatchProfile:
                 if item.get('source', 'ram') == 'ram':
                     manager.remove_watch(item['name'])
             catalog = getattr(manager._device, 'symbol_catalog', None)
+            disabled = set(self.data['sampling_disabled'])
             for name in self.data['selected']:
                 descriptor = catalog.by_path(name, writable_only=False) if catalog else None
                 if descriptor is None:
                     self.missing.append(name)
                     continue
-                result = manager.add_watch(name)
+                result = manager.add_watch(name, sampling_enabled=False) if name in disabled else manager.add_watch(name)
                 if result.get('error') or result.get('item', {}).get('error'):
                     self.missing.append(name)
             if self.data['snapshot']:
@@ -305,6 +308,17 @@ class WatchProfile:
                 except (SymbolCatalogError, ValueError):
                     self.missing.append(self.data['snapshot']['name'])
             manager.set_interval(self.data['viewer']['interval'])
+
+    def set_sampling(self, manager, paths, enabled, profile):
+        with self.lock:
+            if profile is not None and profile != str(self.path or ''):
+                raise PreferencesConflict('当前 AXF/ELF 已切换，请刷新已选信号。')
+            def persist():
+                if self.path:
+                    disabled = set(self.data['sampling_disabled'])
+                    changed = disabled.difference(paths) if enabled else disabled.union(paths)
+                    self.save('sampling_disabled', [name for name in self.data['selected'] if name in changed])
+            return manager.set_sampling(paths, enabled, persist)
 
     def remember_selection(self, name, selected, manager):
         if not self.path:

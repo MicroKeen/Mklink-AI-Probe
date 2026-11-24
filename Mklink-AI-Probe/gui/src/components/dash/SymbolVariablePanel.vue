@@ -53,7 +53,8 @@
         <ChevronRight v-if="collapsed.signals" :size="14" /><ChevronDown v-else :size="14" />
         <span>{{ tr('信号分组', 'Signal groups') }}</span><small>{{ tr(`已选 ${selected.size}`, `${selected.size} selected`) }}</small>
       </button>
-      <SelectedSignals ref="selectedSignals" v-show="!collapsed.signals" :paths="selectedPaths" :values="latestValues" :hidden="hiddenChannels" :hide-rows="standaloneVariables" :viewer-id="standaloneVariables ? null : panelId"
+      <SelectedSignals ref="selectedSignals" v-show="!collapsed.signals" :paths="selectedPaths" :all-paths="localViewPaths ? [...selected] : undefined" :values="latestValues"
+        :disabled-sampling="disabledSampling" :sampling-busy="samplingBusy || !!selectionBusy.size || catalog.stale.value" :set-sampling="setSampling" :hidden="hiddenChannels" :hide-rows="standaloneVariables" :viewer-id="standaloneVariables ? null : panelId"
         :expanded-path="actions?.section === 'selected' ? actions.path : undefined" @actions="path => toggleActions('selected', path)"
         @visibility="changeVisibility">
         <template #actions="{ path }">
@@ -471,6 +472,8 @@ const cLayoutPack = ref('')
 const selectedOnly = ref(false)
 const selected = shallowRef(new Set<string>())
 const localHidden = shallowRef(new Set<string>())
+const disabledSampling = shallowRef(new Set<string>())
+const samplingBusy = ref(false)
 const standaloneVariables = computed(() => props.hiddenChannels === undefined)
 const hiddenChannels = computed(() => props.hiddenChannels ?? localHidden.value)
 const localViewPaths = ref<string[] | null>(props.viewPaths?.length ? [...props.viewPaths] : null)
@@ -769,6 +772,7 @@ async function changeSelection(path: string, symbol: SymbolDescriptor | null, st
     if (symbol) descriptors.set(path, symbol)
     else descriptors.delete(path)
     selectedDescriptors.value = descriptors
+    disabledSampling.value = withSet(disabledSampling.value, path, checked && result?.item?.sampling_enabled === false)
     if (!checked) selectionRemoved(path)
   } catch (cause) {
     toast.error(cause instanceof Error ? cause.message : String(cause))
@@ -787,10 +791,35 @@ function selectionRemoved(path: string): void {
   emit('selection-removed', path)
 }
 
+type ConfiguredWatch = { name: string; sampling_enabled?: boolean }
+function syncSampling(items: ConfiguredWatch[]) {
+  const disabled = items.filter(item => item.sampling_enabled === false).map(item => item.name)
+  if (disabled.length !== disabledSampling.value.size || disabled.some(path => !disabledSampling.value.has(path))) {
+    disabledSampling.value = new Set(disabled)
+  }
+}
+async function setSampling(paths: string[], enabled: boolean): Promise<void> {
+  if (samplingBusy.value) return
+  const profile = useWatchProfile().profile.value?.path
+  samplingBusy.value = true
+  selectionRevision++
+  try {
+    const data = await request('/api/dash/superwatch/sampling', {
+      method: 'POST', body: JSON.stringify({ paths, enabled, ...(profile ? { profile } : {}) }),
+    })
+    if (!disposed && profile === useWatchProfile().profile.value?.path) syncSampling(data.items)
+  } catch (cause) {
+    toast.error(cause instanceof Error ? cause.message : String(cause))
+  } finally {
+    samplingBusy.value = false
+    selectionRevision++
+  }
+}
 async function refreshSelection(resolveAll = false): Promise<void> {
   const revision = selectionRevision
   const list = await request('/api/dash/superwatch/items')
-  if (disposed || revision !== selectionRevision || selectionBusy.value.size || !Array.isArray(list.items)) return
+  if (disposed || revision !== selectionRevision || selectionBusy.value.size || samplingBusy.value || !Array.isArray(list.items)) return
+  syncSampling(list.items)
   const next = new Set<string>(list.items.map((item: { name: string }) => item.name))
   if (!resolveAll && next.size === selected.value.size && [...next].every(path => selected.value.has(path))) return
   for (const path of selected.value) if (!next.has(path)) selectionRemoved(path)

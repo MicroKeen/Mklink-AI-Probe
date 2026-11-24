@@ -621,6 +621,8 @@ def build_server():
     def superwatch(action: str = 'status', arguments: dict | None = None) -> dict:
         """Shared SuperWatch: status/items/values/snapshot/snapshot_select/snapshot_clear/add/remove/start/stop/pause/resume/interval/write.
 
+        sampling accepts paths and enabled (boolean) to change the shared capture set in one batch.
+        items retains disabled rows (sampling_enabled=false); status.items lists active channels.
         snapshot_select uses name, start_index, count for the same array view as GUI;
         snapshot_clear removes that shared array view. Neither starts acquisition.
         recording_start accepts directory (existing absolute path on the backend computer).
@@ -635,7 +637,7 @@ def build_server():
         write requires path, generation from gui_call('symbol_status'), and value. It uses the existing typed
         live-write transaction. Start with empty arguments subscribes to an existing capture.
         """
-        if action not in {'status', 'items', 'values', 'snapshot', 'snapshot_select', 'snapshot_clear', 'add', 'remove', 'start', 'stop', 'pause', 'resume', 'interval', 'write', 'recording_start', 'recording_stop', 'recording_status', 'recording_export', 'profile', 'profile_save', 'workspace', 'workspace_save', 'pins', 'pins_save'}:
+        if action not in {'status', 'items', 'values', 'snapshot', 'snapshot_select', 'snapshot_clear', 'add', 'remove', 'sampling', 'start', 'stop', 'pause', 'resume', 'interval', 'write', 'recording_start', 'recording_stop', 'recording_status', 'recording_export', 'profile', 'profile_save', 'workspace', 'workspace_save', 'pins', 'pins_save'}:
             raise ValueError('Unsupported SuperWatch action')
         return client().call('superwatch_'+action, arguments)
 
