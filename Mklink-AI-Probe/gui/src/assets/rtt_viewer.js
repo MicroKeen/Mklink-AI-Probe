@@ -4426,7 +4426,8 @@ function formatTimeAxisValue(seconds) {
 
 // Keep the graticule fixed to the plot while the time under each division changes.
 function timeGrid(min, max, width) {
-  var span = max - min;
+  // Subtracting panned timestamps can move a half-pixel tick across a rounding tie.
+  var span = Number((max - min).toPrecision(12));
   if (!isFinite(span) || span <= 0) return null;
   var raw = span / Math.max(2, Math.min(10, Math.floor(width / 100))) * (1 - 1e-12);
   var magnitude = Math.pow(10, Math.floor(Math.log10(raw)));

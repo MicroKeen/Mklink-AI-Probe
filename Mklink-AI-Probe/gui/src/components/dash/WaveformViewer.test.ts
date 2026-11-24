@@ -473,6 +473,8 @@ describe('WaveformViewer VOFA binary transport', () => {
       const pan = runtime.probe.timeGrid(2.5955, 2.6688, 800)
       expect(pan.ticks.map((t: any) => Math.round(t.fraction * 800))).toEqual(grid.ticks.map((t: any) => Math.round(t.fraction * 800)))
       pan.ticks.forEach((t: any, i: number) => expect(t.time - grid.ticks[i].time).toBeCloseTo(0.001, 10))
+      const pixels = (start: number) => runtime.probe.timeGrid(start, start + .4, 855).ticks.map((t: any) => Math.round(t.fraction * 855))
+      expect(pixels(.2793)).toEqual(pixels(.24))
       expect(runtime.probe.timeGrid(0, 0.000073, 800).division).toBe('10 μs/div')
       expect(runtime.probe.timeGrid(0, 73, 800).division).toBe('10 s/div')
       expect(runtime.probe.timeGrid(0, 0, 800)).toBeNull()
