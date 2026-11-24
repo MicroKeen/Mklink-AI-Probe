@@ -939,6 +939,8 @@ class SystemViewStreamManager:
         self._recording_summary_path = ""
         self._recording_error = ""
         self._recording_device = None
+        self._saved_device = None
+        self._recording_source = None
         self._mux_transport_stats = None
         self._recording_meta: dict[str, Any] = {}
         self._target_overflow_events = 0
@@ -1469,18 +1471,21 @@ class SystemViewStreamManager:
         self._history.trim(max_count=self._max_history,
                            window_us=self._history_buffer_us)
 
-    def _start_recording(self, device, extra_meta: dict | None = None) -> None:
+    def _start_recording(self, device, extra_meta: dict | None = None, project=None) -> None:
         with self._recording_lock:
             try:
                 from mklink.systemview_logger import SystemViewJsonlLogger
-
+                from mklink.systemview_logs import capture_project
                 project_root = getattr(device, "_project_root", None) or "."
+                project_root = capture_project(project_root, getattr(device, "axf_path", None), project)
                 meta = {
                     **self._status_meta(),
                     **(extra_meta or {}),
                 }
                 self._recording = SystemViewJsonlLogger(project_root, meta)
                 self._recording_path = str(self._recording.path)
+                self._saved_device = device
+                self._recording_source = getattr(device, "axf_path", None)
                 self._recording_summary_path = ""
                 self._pending_summary = None
                 self._recording_error = ""
@@ -1489,7 +1494,15 @@ class SystemViewStreamManager:
                 from mklink.work_files import file_error
                 self._recording_error = file_error('创建 SystemView 工程日志', e, project_root)
 
-    def start_recording(self) -> dict:
+    def saved_project(self, device):
+        with self._recording_lock:
+            if (self._recording_path and device is self._saved_device and
+                    getattr(device, 'axf_path', None) == self._recording_source):
+                from pathlib import Path
+                return Path(self._recording_path).parents[3]
+        return None
+
+    def start_recording(self, project=None) -> dict:
         if not self.running:
             raise RuntimeError("SystemView stream is not running")
         with self._recording_lock:
@@ -1497,7 +1510,7 @@ class SystemViewStreamManager:
                 if self._recording_device is None:
                     raise RuntimeError("SystemView device is unavailable")
                 self._start_recording(
-                    self._recording_device, dict(self._recording_meta),
+                    self._recording_device, dict(self._recording_meta), project,
                 )
             if self._recording is None:
                 raise RuntimeError(

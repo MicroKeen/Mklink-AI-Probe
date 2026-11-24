@@ -2966,10 +2966,10 @@ def create_app(
         return managers["systemview"].get_status()
 
     @app.post("/api/dash/systemview/recording/start")
-    async def systemview_recording_start():
+    async def systemview_recording_start(project: str | None = Body(None, embed=True, max_length=4096)):
         managers = get_managers()
         try:
-            return managers["systemview"].start_recording()
+            return managers["systemview"].start_recording(project)
         except RuntimeError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
 
@@ -2995,11 +2995,24 @@ def create_app(
         except RuntimeError as exc:
             raise HTTPException(409, str(exc)) from exc
 
+    def systemview_log_roots():
+        from mklink.systemview_logs import capture_project
+        project = Path(_state["project_root"]).resolve()
+        device = _state.get("device") or _state.get("symbol_device")
+        manager = get_managers()["systemview"]
+        saved = manager.saved_project(device)
+        try:
+            root = capture_project(project, getattr(device, "axf_path", None))
+        except ValueError:
+            root = project  # Allow access to historical default-workspace captures.
+        return {saved, root} if saved else {root}
+
     @app.get("/api/dash/systemview/logs")
     async def systemview_logs():
         from mklink.systemview_logs import list_systemview_logs
 
-        return {"logs": list_systemview_logs(_state["project_root"])}
+        logs = [item for root in systemview_log_roots() for item in list_systemview_logs(root)]
+        return {"logs": sorted(logs, key=lambda item: item['modified_at'], reverse=True)[:50]}
 
     @app.get("/api/dash/systemview/logs/download")
     async def systemview_log_download(path: str = Query(...), check: bool = False):
@@ -3010,9 +3023,15 @@ def create_app(
         )
 
         try:
-            resolved = resolve_systemview_log_download(
-                _state["project_root"], path,
-            )
+            for root in systemview_log_roots():
+                try:
+                    resolved = resolve_systemview_log_download(root, path)
+                    break
+                except SystemViewLogPathError:
+                    continue
+            else:
+                raise SystemViewLogPathError('SystemView log path is outside the project log directory or unsupported. '
+                                             '请选择当前用户工程 .mklink/logs/systemview 中的 JSONL 或摘要。')
             if check:
                 with resolved.open("rb"):
                     return {"name": resolved.name, "path": str(resolved)}

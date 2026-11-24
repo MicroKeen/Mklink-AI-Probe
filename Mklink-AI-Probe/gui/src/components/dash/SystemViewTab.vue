@@ -73,6 +73,13 @@
         </button>
         <button class="btn-clear sv-tool-btn" @click="triggerImport">{{ tr('导入 JSONL', 'Import JSONL') }}</button>
         <button class="btn-clear sv-tool-btn" :disabled="IS_REMOTE || !currentJsonlPath" @click="exportLog(currentJsonlPath)">{{ tr('导出 JSONL', 'Export JSONL') }}</button>
+        <details v-if="!IS_REMOTE && !offlineMode" class="sv-log-location">
+          <summary>{{ tr('日志位置', 'Log location') }}</summary>
+          <label>{{ tr('用户工程目录', 'Project folder') }}
+            <input v-model.trim="recordProject" :disabled="meta.recording" :placeholder="tr('默认使用当前工程', 'Current project by default')" />
+          </label>
+          <small>.mklink/logs/systemview</small>
+        </details>
         <button v-if="meta.summaryPending && !meta.recording" class="btn-clear sv-tool-btn" :disabled="IS_REMOTE || recordingBusy" @click="toggleRecording(true)">{{ tr('重新保存摘要', 'Retry saving summary') }}</button>
         <button class="btn-clear sv-tool-btn" :disabled="IS_REMOTE || !currentSummaryPath || meta.recording" @click="exportLog(currentSummaryPath)">{{ tr('导出摘要', 'Export Summary') }}</button>
         <label class="sv-window" :title="tr('Timeline 显示的时间跨度；实时连续滚动，不是刷新周期。', 'Time span shown by the continuously scrolling Timeline, not its refresh period.')">
@@ -1160,6 +1167,7 @@ const runtimeRows = computed(() => offlineMode.value
   ? computeRuntimeRows(Object.values(taskStats), intervals.value)
   : exactRuntimeRows.value)
 const contextRows = computed(() => computeContextRows(Object.values(taskStats)))
+const recordProject = ref('')
 const currentJsonlPath = computed(() => meta.recordingPath || latestLog.value?.path || '')
 const currentSummaryPath = computed(() => meta.recordingPath ? meta.recordingSummaryPath : latestLog.value?.summary_path || '')
 
@@ -1327,7 +1335,12 @@ async function toggleRecording(retrySummary = false) {
   runtimeError.value = null
   try {
     const action = meta.recording || retrySummary ? 'stop' : 'start'
-    const response = await fetch(`${API_BASE}/api/dash/systemview/recording/${action}`, { method: 'POST' })
+    const options: RequestInit = { method: 'POST' }
+    if (action === 'start' && recordProject.value) {
+      options.headers = { 'Content-Type': 'application/json' }
+      options.body = JSON.stringify({ project: recordProject.value })
+    }
+    const response = await fetch(`${API_BASE}/api/dash/systemview/recording/${action}`, options)
     const body = await response.json().catch(() => ({}))
     if (!response.ok) throw new Error(requestError(body.detail, response.status, tr('保存 SystemView 记录', 'Save SystemView trace')))
     meta.recording = !!body.recording

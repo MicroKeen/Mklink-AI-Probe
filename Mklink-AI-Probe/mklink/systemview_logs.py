@@ -16,6 +16,28 @@ def systemview_log_dir(project_root: str) -> Path:
     return Path(project_root or ".").resolve() / ".mklink" / "logs" / "systemview"
 
 
+def capture_project(project_root, axf=None, selected=None):
+    """Resolve the target project, keeping an explicitly configured root."""
+    if selected:
+        root = Path(selected).expanduser()
+        if not root.is_absolute() or not root.is_dir():
+            raise ValueError('SystemView 日志工程目录须为后台电脑上已存在的绝对路径。')
+        return root.resolve()
+    root = Path(project_root or '.').resolve()
+    if (root.name.lower() != 'workspace' or
+            root.parent.name.lower() not in {'com.microkeen.mklink-ai-probe', 'mklink ai probe'}):
+        return root
+    if axf:
+        source = Path(axf).resolve()
+        if source.is_file() and not source.is_relative_to(root / '.mklink' / 'uploads'):
+            for directory in source.parents:
+                if ((directory / '.mklink').is_dir() or (directory / 'CMakeLists.txt').is_file()
+                        or (directory / 'SConstruct').is_file()):
+                    return directory
+            return source.parent
+    raise ValueError('当前后台使用桌面默认工作区。请在 SystemView 的“日志位置”填写用户工程目录，或解析该工程的原始 AXF/ELF，再开始保存。')
+
+
 def list_systemview_logs(project_root: str, limit: int = 50) -> list[dict]:
     """List recent SystemView JSONL captures with matching summaries."""
     log_dir = systemview_log_dir(project_root)

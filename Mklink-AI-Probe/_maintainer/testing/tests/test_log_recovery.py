@@ -58,3 +58,19 @@ def test_read_error_includes_operation_address_length_and_recovery():
     error = MuxTargetError(5, 0x16, struct.pack('<IH', 0x010bd198, 24))
     for word in ['0x010BD198', '24', '供电', 'opcode 0x16', 'status 5']:
         assert word in str(error)
+
+
+def test_desktop_trace_belongs_to_user_project(tmp_path):
+    from mklink.systemview_logs import capture_project
+    fallback = tmp_path / 'com.microkeen.mklink-ai-probe' / 'workspace'
+    app = tmp_path / 'control'
+    output = app / 'build' / 'output'
+    output.mkdir(parents=True)
+    (app / 'CMakeLists.txt').touch()
+    elf = output / 'control.elf'
+    elf.touch()
+    assert capture_project(fallback, elf) == app
+    assert capture_project(tmp_path, elf) == tmp_path
+    assert capture_project(fallback, None, str(output)) == output
+    with pytest.raises(ValueError, match='日志位置'):
+        capture_project(fallback)
