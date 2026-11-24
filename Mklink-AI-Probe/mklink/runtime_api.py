@@ -37,7 +37,8 @@ LOCAL_RECORDING_EXPORT_PATHS = frozenset({
     '/api/dash/superwatch/recording/export',
     '/api/dash/rtt/traffic-recording/export',
 })
-WATCH_DISPLAY_PATHS = frozenset({
+WATCH_SETTINGS_PATHS = frozenset({
+    '/api/dash/superwatch/sampling',
     '/api/dash/superwatch/profile', '/api/dash/superwatch/pins', '/api/dash/superwatch/workspace',
 })
 active_operation = ContextVar('mklink_runtime_operation', default=None)
@@ -398,14 +399,15 @@ class RuntimeControl:
                 return await settle(task)
             finally:
                 self.uart_operations.pop(task, None)
-        if name in WATCH_DISPLAY_PATHS:
+        if name in WATCH_SETTINGS_PATHS:
             # A desktop poll may hold admission when a user clicks Apply. Wait
             # before dispatch, keeping session, revision and lifecycle checks.
             await self.wait_for_shared_slot()
-            if self.operation_lock.locked():
-                raise HTTPException(409, '正在处理设备操作，显示设置尚未保存。请稍后重新应用。')
+            setting = '采集勾选' if name.endswith('/sampling') else '显示设置'
             if self.stopping:
-                raise HTTPException(503, '后台正在关闭，请重新连接后保存显示设置。')
+                raise HTTPException(503, f'后台正在关闭，请重新连接后调整{setting}。')
+            if self.operation_lock.locked() or (self.job_busy() and not own_job):
+                raise HTTPException(409, f'设备正在执行其他操作，{setting}尚未更改。请在操作结束后再试。')
         if self.lifecycle_pending and not own_job and not online_stop:
             raise HTTPException(409, 'Device connection is changing; wait for completion')
         if self.operation_lock.locked() or (self.job_busy() and not own_job and not online_stop):

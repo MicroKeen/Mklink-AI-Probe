@@ -76,7 +76,8 @@ def test_desktop_trace_belongs_to_user_project(tmp_path):
         capture_project(fallback)
 
 
-def test_competing_poll_allows_one_display_write_without_replaying_hardware():
+@pytest.mark.parametrize('setting', ['workspace', 'sampling'])
+def test_competing_poll_allows_one_watch_setting_without_replaying_hardware(setting):
     import asyncio
     from types import SimpleNamespace
     from fastapi import HTTPException
@@ -90,7 +91,7 @@ def test_competing_poll_allows_one_display_write_without_replaying_hardware():
             writes.append('saved')
 
         await control.operation_lock.acquire()
-        waiting = asyncio.create_task(control.run_operation('/api/dash/superwatch/workspace', apply))
+        waiting = asyncio.create_task(control.run_operation('/api/dash/superwatch/' + setting, apply))
         await asyncio.sleep(.01)
         assert not waiting.done() and not writes
         with pytest.raises(HTTPException) as busy:
