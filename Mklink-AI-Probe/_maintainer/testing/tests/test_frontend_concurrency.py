@@ -1,5 +1,6 @@
 """Offline concurrency regressions: real ASGI routes and injected slow disk I/O."""
 import asyncio
+import threading
 import time
 from pathlib import Path
 
@@ -44,23 +45,28 @@ def test_slow_storage_keeps_heartbeat_and_other_window_responsive(broker, monkey
     }
     module, name, method, path, value = routes[operation]
     original = getattr(module, name)
+    storage_started = threading.Event()
+    release_storage = threading.Event()
 
     def slow(*args, **kwargs):
-        time.sleep(0.4)
+        storage_started.set()
+        assert release_storage.wait(5), 'Storage blocked the event loop or another window'
         return original(*args, **kwargs)
 
     monkeypatch.setattr(module, name, slow)
 
     async def run():
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://test') as client:
-            started = time.perf_counter()
             pending = asyncio.create_task(client.request(method, BASE + path, json=value))
-            await asyncio.sleep(0.02)
-            assert (await client.get('/health')).status_code == 200
-            assert (await client.post(BASE + '/exchange', json={'report': report(current, page_id='other_window'), 'receipts': []})).status_code == 200
-            assert time.perf_counter() - started < 0.25
-            assert not pending.done()
-            assert (await pending).status_code == 200
+            try:
+                assert await asyncio.to_thread(storage_started.wait, 5)
+                assert (await client.get('/health')).status_code == 200
+                assert (await client.post(BASE + '/exchange', json={'report': report(current, page_id='other_window'), 'receipts': []})).status_code == 200
+                assert not pending.done()
+            finally:
+                release_storage.set()
+                response = await pending
+            assert response.status_code == 200
 
     asyncio.run(run())
 

@@ -226,10 +226,19 @@ r.export()
     manifest, = tmp_path.glob('*-export.json')
     deadline = time.monotonic() + 10
     while time.monotonic() < deadline:
-        result = json.loads(manifest.read_text(encoding='utf-8'))
+        try:
+            result = json.loads(manifest.read_text(encoding='utf-8'))
+        except PermissionError as exc:
+            # Windows can briefly deny a reader while the worker replaces the manifest.
+            if getattr(exc, 'winerror', None) not in (5, 32, 33):
+                raise
+            time.sleep(.01)
+            continue
         if result['export_state'] != 'generating':
             break
         time.sleep(.01)
+    else:
+        pytest.fail('Detached export did not publish its final manifest in time')
     assert result['export_state'] == 'completed'
     assert 'parent exit' in Path(result['export_path']).read_text(encoding='utf-8')
 
