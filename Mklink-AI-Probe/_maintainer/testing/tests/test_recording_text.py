@@ -245,7 +245,7 @@ def test_worker_launch_failure_persists_failure_without_changing_source(tmp_path
     export.start(dict(path=str(source), parts=1, started_at=1700000000, state='completed'))
     assert export.status()['export_state'] == 'failed'
     manifest, = tmp_path.glob('*-export.json')
-    assert json.loads(manifest.read_text())['export_state'] == 'failed'
+    assert json.loads(manifest.read_text(encoding='utf-8'))['export_state'] == 'failed'
     assert source.read_bytes() == b'original'
 
 
@@ -293,7 +293,7 @@ def test_excel_splits_at_row_limit_and_preserves_changed_columns(tmp_path, monke
                export_state='generating', export_error='')
     manifest.write_text(json.dumps(job))
     assert recording_excel.export_excel(manifest) == 0
-    result = json.loads(manifest.read_text())
+    result = json.loads(manifest.read_text(encoding='utf-8'))
     sheets = workbook_rows(result['export_path'])
     assert [len(rows) for name, rows in sheets.items() if name != 'xl/worksheets/sheet1.xml'] == [4, 4, 2, 2]
     assert result['export_rows'] == 8 and result['export_sheets'] == 4

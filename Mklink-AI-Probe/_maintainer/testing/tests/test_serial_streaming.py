@@ -958,10 +958,14 @@ def test_sse_initial_snapshot_always_releases_its_subscription(monkeypatch, kind
     monkeypatch.setattr(dashboard_module, '_managers', {})
     manager = dashboard_module.get_managers()[kind]
     bridge = manager._bridge
-    def failing():
+    def failing(*args, **kwargs):
         raise RuntimeError('snapshot unavailable')
     if outcome == 'snapshot_error':
-        monkeypatch.setattr(manager, 'list_watches' if kind == 'superwatch' else 'get_status', failing)
+        if kind == 'superwatch':
+            # The initial SSE snapshot serializes cached metadata.
+            monkeypatch.setattr(dashboard_module, '_sse_json', failing)
+        else:
+            monkeypatch.setattr(manager, 'get_status', failing)
     async def scenario():
         stream = manager.sse_generator()
         try:
