@@ -3449,7 +3449,12 @@ describe('VOFA viewer typed-ring runtime', () => {
       canvas.onmousemove?.({ clientX: 400, clientY: 200 } as MouseEvent)
       const hoverVisits = (window as any).__ringPointVisits
       expect(hoverVisits).toBeLessThanOrEqual(channelCount * 48)
-      expect(document.getElementById('tooltip')?.textContent).toContain('I0')
+      const tooltip = document.getElementById('tooltip')!
+      expect(tooltip.textContent).toContain('I0')
+      Object.defineProperties(tooltip, { offsetWidth: { value: 340 }, offsetHeight: { value: 180 } })
+      canvas.onmousemove?.({ clientX: 780, clientY: 360 } as MouseEvent)
+      expect(Number.parseFloat(tooltip.style.left) + tooltip.offsetWidth).toBeLessThan(780)
+      expect(Number.parseFloat(tooltip.style.top) + tooltip.offsetHeight).toBeLessThanOrEqual(400)
 
       ;(window as any).__ringPointVisits = 0
       canvas.onwheel?.({
