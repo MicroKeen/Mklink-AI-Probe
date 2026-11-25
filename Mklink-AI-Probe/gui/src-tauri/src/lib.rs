@@ -994,13 +994,19 @@ pub fn run() {
     let context = tauri::generate_context!();
     let builder = tauri::Builder::default();
     #[cfg(target_os = "windows")]
-    let (builder, context) = {
+    let (builder, context, deferred_main) = {
         // WebView2 creates the HWND before it has navigated to our inline splash.
         // Present the loaded document once, independently of backend readiness.
         let mut context = context;
-        if let Some(main) = context.config_mut().app.windows.iter_mut().find(|w| w.label == "main") {
+        let deferred_main = context.config_mut().app.windows.iter_mut().find(|w| w.label == "main" && w.create).map(|main| {
             main.visible = false;
-        }
+            // Tauri normally creates configured WebViews before the setup hook.
+            // Build this same window after dispatching the owned sidecar so cold
+            // WebView2 initialization can overlap the Python startup.
+            let config = main.clone();
+            main.create = false;
+            config
+        });
         let revealed = AtomicBool::new(false);
         let builder = builder.on_page_load(move |view, payload| {
             if view.label() == "main"
@@ -1014,7 +1020,7 @@ pub fn run() {
                 }
             }
         });
-        (builder, context)
+        (builder, context, deferred_main)
     };
     builder
         .manage(startup_timing)
@@ -1148,6 +1154,18 @@ pub fn run() {
                 run_monitor(handle, shutdown_clone);
             });
 
+            #[cfg(target_os = "windows")]
+            if let Some(config) = deferred_main {
+                let window = tauri::WebviewWindowBuilder::from_config(app.handle(), &config)
+                    .and_then(|builder| builder.build());
+                if let Err(error) = window {
+                    shutdown.store(true, Ordering::Relaxed);
+                    let state: State<Sidecar> = app.state();
+                    let _guard = state.lifecycle.lock().map_err(|e| e.to_string())?;
+                    terminate_sidecar_tree(state.inner())?;
+                    return Err(error.into());
+                }
+            }
             Ok(())
         })
         .on_window_event(|window, event| {
