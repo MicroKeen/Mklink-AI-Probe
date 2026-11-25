@@ -16,6 +16,7 @@ export interface SemanticSurface {
 export interface FrontendTarget { instance_id: string; probe_id: string; device_generation: number; project_root: string }
 export interface FrontendReport { protocol: string; session_id: string; page_id: string; title: string; catalog: unknown; actions: JsonObject; state: { revision: number; value: unknown } }
 export interface FrontendRuntime {
+  readonly identity: Readonly<Pick<FrontendReport, 'protocol' | 'session_id' | 'page_id'>>
   report(): FrontendReport
   execute(command: JsonObject): JsonObject
   receipts(): JsonObject[]
@@ -129,7 +130,7 @@ export function connectFrontend(options: {
         const discovery = await frontendRequest('pages')
         if (stopped) return
         if (discovery.protocol !== 'agent-frontend/1') throw new Error('Unsupported frontend protocol')
-        if (runtime && runtime.report().session_id !== discovery.session_id) {
+        if (runtime && runtime.identity.session_id !== discovery.session_id) {
           runtime.dispose(); runtime = null; sent.clear(); options.reset()
         }
         if (!runtime) {

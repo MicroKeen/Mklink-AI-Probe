@@ -15,8 +15,10 @@ it('maps the selected GUI window to its current semantic page without publishing
   try {
     await flushPromises()
     const gui = createGuiAutomation(createRouter({ history: createMemoryHistory(), routes: [] }), () => ({}))
+    const report = vi.spyOn(frontend!.runtime.value!, 'report')
     expect(gui.snapshot().panels.workbench).toEqual({ connected: true, protocol: 'agent-frontend/1',
-      session_id: 'session-one', page_id: frontend!.runtime.value!.report().page_id, target })
+      session_id: 'session-one', page_id: frontend!.runtime.value!.identity.page_id, target })
+    expect(report).not.toHaveBeenCalled()
     wrapper.unmount()
     expect(gui.snapshot().panels).not.toHaveProperty('workbench')
   } finally { wrapper.unmount(); vi.unstubAllGlobals() }
