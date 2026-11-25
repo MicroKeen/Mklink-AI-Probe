@@ -77,6 +77,22 @@ def save_endpoint(info, digit):
     return probe_id, path
 
 
+@pytest.mark.parametrize('stage,method', [('connect', 'connect'), ('send', 'request'), ('receive', 'getresponse')])
+def test_startup_discovery_keeps_stage_and_socket_error_without_endpoint_token(endpoints, monkeypatch, stage, method):
+    info, _ = endpoints(json_response({}))
+    identity, _ = save_endpoint(info, 'a')
+    def denied(*args, **kwargs):
+        error = PermissionError(13, 'Access denied')
+        error.winerror = 10013
+        raise error
+    monkeypatch.setattr(runtime.HTTPConnection, method, denied)
+    details = []
+    assert runtime.discover(identity, startup_failure=details) is None
+    assert len(details) == 1 and f'({stage})' in details[0]
+    assert f"127.0.0.1:{info['port']}" in details[0] and '10013' in details[0]
+    assert info['token'] not in details[0]
+
+
 @pytest.mark.parametrize('alive', [False, True])
 def test_process_precheck_only_skips_confirmed_dead_backend(endpoints, monkeypatch, alive):
     health = dict(instance_id='live', probe_id='lobby', protocol=runtime.PROTOCOL, version=runtime.VERSION)

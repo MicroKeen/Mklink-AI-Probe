@@ -175,8 +175,16 @@ def create_proxy(info, *, port, instance_id, transport=None):
             response = await app.state.client.get(f"http://127.0.0.1:{info['port']}/api/health", headers={"X-Auth-Token": info["token"]}, timeout=3)
             response.raise_for_status()
             return {**response.json(), "backend_port": port, "desktop_instance_id": instance_id}
-        except httpx.HTTPError:
-            return JSONResponse({"detail": "Shared runtime is unavailable"}, status_code=503)
+        except httpx.HTTPError as exc:
+            from mklink.runtime import _os_error_label
+            if isinstance(exc, httpx.HTTPStatusError):
+                reason = f"HTTP {exc.response.status_code}"
+            else:
+                cause = exc
+                while cause.__cause__ is not None:
+                    cause = cause.__cause__
+                reason = f"{type(exc).__name__} ({_os_error_label(cause)})"
+            return JSONResponse({"detail": f"桌面代理访问共享后台 127.0.0.1:{info['port']} 的健康接口失败：{reason}"}, status_code=503)
 
     @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"])
     async def forward(request: Request, path: str):
@@ -258,12 +266,15 @@ def serve_desktop_proxy(args):
     from mklink.startup_timing import mark
     mark("proxy_imported")
     import uvicorn
-    from mklink.runtime import ensure_runtime
+    from mklink.runtime import ensure_runtime, RuntimeStartupError
     from mklink.desktop_endpoint import _bind_desktop_server_socket, _write_desktop_runtime_info
     mark("proxy_dependencies")
     info = ensure_runtime(project_root=args.project_root, port=args.port, allow_lobby=True, new_window=True)
     mark("runtime_discovered")
-    listener, selected = _bind_desktop_server_socket(args.host, args.port, args.desktop_port_end)
+    try:
+        listener, selected = _bind_desktop_server_socket(args.host, args.port, args.desktop_port_end)
+    except OSError as exc:
+        raise RuntimeStartupError(f"桌面代理无法监听本机端口：{exc}") from exc
     try:
         app = create_proxy(info, port=selected, instance_id=args.desktop_instance_id)
         mark("proxy_routes")

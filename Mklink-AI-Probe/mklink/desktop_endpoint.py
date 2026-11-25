@@ -26,9 +26,9 @@ def _bind_desktop_server_socket(host: str, port: int, port_end: int):
         except OSError as exc:
             last_error = exc
             listener.close()
-    raise OSError(
-        f"no available desktop backend port in {port}..{port_end}"
-    ) from last_error
+    from mklink.runtime import _os_error_label
+    raise OSError(f"no available desktop backend port in {port}..{port_end}: "
+                  f"bind/listen {host}:{port_end} ({_os_error_label(last_error)})") from last_error
 
 
 def _write_desktop_runtime_info(

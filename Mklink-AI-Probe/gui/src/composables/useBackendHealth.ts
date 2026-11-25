@@ -1,4 +1,5 @@
-import { ref, onUnmounted } from 'vue'
+import { computed, ref, onUnmounted } from 'vue'
+import { invoke } from '@tauri-apps/api/core'
 import {
   API_BASE,
   IS_TAURI,
@@ -13,6 +14,7 @@ import {
 const backendState = ref<'starting' | 'alive' | 'dead'>('starting')
 export const sharedRuntime = ref(false)
 const authenticationRequired = ref(false)
+const healthDetail = ref('')
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let refCount = 0
 let firstCheckDone = false
@@ -27,17 +29,32 @@ async function checkBackendHealth(epoch = healthEpoch): Promise<boolean | null> 
     const res = await fetch(`${endpoint}/api/health`, { signal: AbortSignal.timeout(3000) })
     if (!current()) return null
     authenticationRequired.value = res.status === 401
-    if (!res.ok) return false
+    if (!res.ok) {
+      if (IS_TAURI) {
+        const body = res.status === 503 ? await res.json().catch(() => null) : null
+        if (!current()) return null
+        healthDetail.value = typeof body?.detail === 'string' && body.detail.startsWith('桌面代理访问共享后台 ')
+          ? body.detail : `桌面访问本机后台 ${endpoint} 的健康接口时收到 HTTP ${res.status}`
+      }
+      return false
+    }
     const payload = await res.json().catch(() => null)
     if (!current()) return null
     if (payload && typeof payload === 'object') {
       applyReportedBackendPort((payload as { backend_port?: unknown }).backend_port)
       sharedRuntime.value = (payload as { shared_runtime?: unknown }).shared_runtime === true
     }
+    healthDetail.value = ''
     return true
   } catch {
     if (!current()) return null
     authenticationRequired.value = false
+    if (IS_TAURI) {
+      const detail = firstCheckDone || backendState.value === 'dead'
+        ? await invoke<string | null>('backend_health_detail').catch(() => null) : null
+      if (!current()) return null
+      healthDetail.value = detail || `桌面 WebView 未收到本机后台 ${endpoint} 的健康响应。请检查后台进程和本机连接权限。`
+    }
     return false
   }
 }
@@ -164,7 +181,7 @@ export function useBackendHealth() {
     backendState,
     sharedRuntime,
     authenticationRequired,
-    backendStartupError,
+    backendStartupError: computed(() => backendStartupError.value || healthDetail.value),
     backendPort: runtimeBackendPort,
     isTauri: IS_TAURI,
     startHealthPolling,

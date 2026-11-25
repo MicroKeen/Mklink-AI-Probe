@@ -51,6 +51,7 @@ struct Sidecar {
     instance_id: String,
     runtime_info_path: PathBuf,
     startup_error: Mutex<Option<String>>,
+    health_error: Mutex<Option<String>>,
     project_root: Mutex<String>,
     site_agent_root: Mutex<Option<PathBuf>>,
     #[cfg(target_os = "windows")]
@@ -648,16 +649,14 @@ fn request_desktop_exit(app: tauri::AppHandle, shutdown: std::sync::Arc<AtomicBo
 }
 
 /// Minimal owned-backend health check using raw TCP — no external deps needed.
-fn check_health(port: u16, instance_id: &str) -> bool {
+fn check_health(port: u16, instance_id: &str) -> Result<(), String> {
     use std::io::{Read, Write};
     let addr = format!("127.0.0.1:{}", port);
-    let mut stream = match std::net::TcpStream::connect_timeout(
+    let failure = |stage: &str, error: std::io::Error| format!("桌面进程健康检查：{stage} {addr} 失败，{error}");
+    let mut stream = std::net::TcpStream::connect_timeout(
         &addr.parse().unwrap(),
         std::time::Duration::from_secs(3),
-    ) {
-        Ok(s) => s,
-        Err(_) => return false,
-    };
+    ).map_err(|e| failure("建立连接 (connect)", e))?;
     let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(3)));
     let _ = stream.set_write_timeout(Some(std::time::Duration::from_secs(3)));
 
@@ -665,15 +664,18 @@ fn check_health(port: u16, instance_id: &str) -> bool {
         "GET /api/health HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nConnection: close\r\n\r\n",
         port
     );
-    if stream.write_all(request.as_bytes()).is_err() {
-        return false;
-    }
+    stream.write_all(request.as_bytes()).map_err(|e| failure("发送请求 (send)", e))?;
     let mut response = Vec::new();
-    if stream.take(8192).read_to_end(&mut response).is_err() {
-        return false;
-    }
+    stream.take(8192).read_to_end(&mut response).map_err(|e| failure("接收响应 (receive)", e))?;
     let response = String::from_utf8_lossy(&response);
-    health_response_matches(&response, instance_id)
+    if health_response_matches(&response, instance_id) { return Ok(()); }
+    let status = response.lines().next().and_then(|line| line.split_whitespace().nth(1))
+        .and_then(|s| s.parse::<u16>().ok());
+    Err(match status {
+        Some(200) => format!("桌面进程健康检查：{addr} 的响应未通过状态或实例身份校验"),
+        Some(code) => format!("桌面进程健康检查：{addr} 返回 HTTP {code}"),
+        None => format!("桌面进程健康检查：{addr} 未返回有效的 HTTP 响应"),
+    })
 }
 
 fn health_response_matches(response: &str, instance_id: &str) -> bool {
@@ -734,12 +736,19 @@ fn wait_for_runtime_endpoint(state: &Sidecar) -> Result<BackendEndpoint, String>
             }
         };
         if let Some(status) = exit_status {
-            return Err(format!("Desktop proxy exited ({status}) before publishing its endpoint. Log: {}",
+            let failure_file = state.runtime_info_path.with_extension("error.json");
+            let detail = std::fs::read(&failure_file).ok()
+                .and_then(|raw| serde_json::from_slice::<serde_json::Value>(&raw).ok())
+                .filter(|v| v["instanceId"].as_str() == Some(&state.instance_id))
+                .and_then(|v| v["reason"].as_str().map(str::to_owned))
+                .unwrap_or_else(|| "未收到代理的启动详情，请查看启动日志".into());
+            let _ = std::fs::remove_file(failure_file);
+            return Err(format!("桌面代理在公布端口前退出（{status}）。{detail}。日志：{}",
                                state.runtime_info_path.with_extension("log").display()));
         }
         std::thread::sleep(std::time::Duration::from_millis(100));
     }
-    Err("Timed out waiting for the sidecar API endpoint".into())
+    Err(format!("等待桌面代理公布本机端口超时（{SIDECAR_START_TIMEOUT_SECS} 秒）。日志：{}", state.runtime_info_path.with_extension("log").display()))
 }
 
 fn start_owned_sidecar(
@@ -757,6 +766,7 @@ fn start_owned_sidecar_locked(
     preferred_port: Option<u16>,
 ) -> Result<BackendEndpoint, String> {
     *state.startup_error.lock().map_err(|error| error.to_string())? = None;
+    *state.health_error.lock().map_err(|error| error.to_string())? = None;
     let result = start_owned_sidecar_attempt(state, project_root, preferred_port);
     if let Err(error) = &result {
         *state.startup_error.lock().map_err(|error| error.to_string())? = Some(error.clone());
@@ -885,7 +895,12 @@ fn backend_alive(state: State<Sidecar>) -> Result<bool, String> {
     let Some(endpoint) = current_endpoint(state.inner())? else {
         return Ok(false);
     };
-    Ok(check_health(endpoint.port, &endpoint.instance_id))
+    Ok(check_health(endpoint.port, &endpoint.instance_id).is_ok())
+}
+
+#[tauri::command]
+fn backend_health_detail(state: State<Sidecar>) -> Option<String> {
+    state.health_error.lock().ok().and_then(|error| error.clone())
 }
 
 fn run_monitor(handle: tauri::AppHandle, shutdown: std::sync::Arc<AtomicBool>) {
@@ -940,13 +955,18 @@ fn run_monitor(handle: tauri::AppHandle, shutdown: std::sync::Arc<AtomicBool>) {
         }
 
         let endpoint = current_endpoint(state.inner()).ok().flatten();
-        if endpoint
-            .as_ref()
-            .is_some_and(|endpoint| check_health(endpoint.port, &endpoint.instance_id))
-        {
+        let health = endpoint.map(|endpoint| check_health(endpoint.port, &endpoint.instance_id));
+        if let Some(Ok(())) = health {
+            if consecutive_fails > 0 { *state.health_error.lock().unwrap() = None; }
             consecutive_fails = 0;
         } else {
             consecutive_fails += 1;
+            if let Some(Err(reason)) = health {
+                if consecutive_fails == 1 {
+                    let _ = std::fs::write(state.runtime_info_path.with_extension("health.log"), &reason);
+                }
+                *state.health_error.lock().unwrap() = Some(reason);
+            }
             eprintln!(
                 "[tauri] health check failed ({}/{})",
                 consecutive_fails, MAX_CONSECUTIVE_FAILS
@@ -1004,6 +1024,7 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .manage(Sidecar {
             startup_error: Mutex::new(None),
+            health_error: Mutex::new(None),
             lifecycle: Mutex::new(()),
             shutdown: shutdown.clone(),
             child: Mutex::new(None),
@@ -1022,6 +1043,7 @@ pub fn run() {
             stop_sidecar,
             restart_sidecar,
             backend_endpoint,
+            backend_health_detail,
             backend_alive,
             site_agent_config_get,
             site_agent_runtime_settings,
@@ -1108,11 +1130,13 @@ pub fn run() {
                     Ok(endpoint) => {
                         eprintln!("[tauri] sidecar started on port {}", endpoint.port);
                         // Wait for Python to fully initialize before monitoring
-                        for _ in 0..20 {
-                            if check_health(endpoint.port, &endpoint.instance_id) {
+                        for attempt in 0..20 {
+                            let health = check_health(endpoint.port, &endpoint.instance_id);
+                            if health.is_ok() {
                                 eprintln!("[tauri] backend healthy");
                                 break;
                             }
+                            if attempt == 19 { *state.health_error.lock().unwrap() = health.err(); }
                             std::thread::sleep(std::time::Duration::from_millis(500));
                         }
                     }
@@ -1243,6 +1267,7 @@ mod tests {
     fn remote_credentials_are_scoped_to_valid_probe_identities() {
         let state = Sidecar {
             startup_error: Mutex::new(None),
+            health_error: Mutex::new(None),
             lifecycle: Mutex::new(()),
             shutdown: std::sync::Arc::new(AtomicBool::new(false)),
             child: Mutex::new(None), port: Mutex::new(None), instance_id: "test".into(),
@@ -1278,6 +1303,7 @@ mod tests {
             .spawn().unwrap();
         let state = Sidecar {
             startup_error: Mutex::new(None),
+            health_error: Mutex::new(None),
             lifecycle: Mutex::new(()),
             shutdown: std::sync::Arc::new(AtomicBool::new(false)),
             child: Mutex::new(Some(child)), port: Mutex::new(None),
@@ -1345,6 +1371,7 @@ mod tests {
 
         let state = Sidecar {
             startup_error: Mutex::new(None),
+            health_error: Mutex::new(None),
             lifecycle: Mutex::new(()),
             shutdown: std::sync::Arc::new(AtomicBool::new(false)),
             child: Mutex::new(Some(tracked)),

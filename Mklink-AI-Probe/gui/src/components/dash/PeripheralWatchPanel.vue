@@ -17,7 +17,6 @@
     <p v-if="selection" data-testid="peripheral-source">{{ tr('当前已加载：', 'Currently loaded: ') }}{{ selection.target }} · {{ selection.pack }} · {{ selection.svd }} · {{ items.length }} {{ tr('项（只读）', 'items (read only)') }}</p>
     <p v-if="restoreError" role="status" data-testid="peripheral-restore-warning">{{ tr('上次的外设选择已失效，请重新选择实际芯片和 Pack。下载器连接及其他功能可继续使用。', 'The previous peripheral selection is unavailable. Select the actual chip and Pack again. The probe connection and other features remain available.') }} <span>{{ restoreError }}</span></p>
     <p v-if="selection?.series" data-testid="peripheral-series-note">{{ tr('已加载该系列共用外设；扩展外设可手动加载对应型号的 XML。', 'Common peripherals for this series are loaded. Load the model XML for additional peripherals.') }}</p>
-    <p>{{ tr('GPIO 输入电平与输出锁存值是不同寄存器，名称以所选描述为准。采样可能漏掉短脉冲，GPIO 时钟须由程序开启。', 'GPIO input levels and output latches are separate registers; names follow the selected description. Short pulses may be missed. Firmware must enable the GPIO clock.') }}</p>
     <select v-model="group" class="form-input" data-testid="peripheral-group"><option value="">{{ tr('所有外设', 'All peripherals') }}</option><option v-for="name in groups" :key="name">{{ name }}</option></select>
     <input v-model="query" class="form-input" data-testid="peripheral-search" :placeholder="tr('搜索，如 GPIOB.12', 'Search, e.g. GPIOB.12')" />
     <p v-if="error" role="alert">{{ error }}</p>
