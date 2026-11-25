@@ -108,6 +108,9 @@
           :aria-pressed="viewMode === 'terminal'" @click="setViewMode('terminal')"
         ><SquareTerminal :size="14" /><span>{{ tr('终端', 'Terminal') }}</span></button>
       </div>
+      <button v-if="viewMode === 'terminal'" type="button" class="btn"
+        :aria-label="tr('查找终端文本', 'Find terminal text')" :title="tr('查找终端文本', 'Find terminal text') + ' (Ctrl+F / ⌘F)'"
+        @click="terminalPanel?.openSearch()"><Search :size="14" /></button>
       <LogDisplayControls
         v-if="viewMode === 'log'" :id-prefix="guiId('serial')"
         v-model:mode="logDisplayMode" v-model:show-timestamp="showLogTimestamp"
@@ -185,7 +188,7 @@ const guiId = useGuiId()
 import TrafficLogControls from './TrafficLogControls.vue'
 import { trafficBytes, TrafficTextDecoder, type TrafficFrame } from '../../lib/trafficReplay'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { ChevronDown, RefreshCw, ScrollText, SlidersHorizontal, SquareTerminal, Trash2 } from '@lucide/vue'
+import { ChevronDown, RefreshCw, ScrollText, Search, SlidersHorizontal, SquareTerminal, Trash2 } from '@lucide/vue'
 import { useBinaryStream } from '../../composables/useBinaryStream'
 import { useUartBaudrates } from '../../composables/useUartBaudrates'
 import { useMklinkApi } from '../../composables/useMklinkApi'

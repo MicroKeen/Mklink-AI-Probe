@@ -41,6 +41,9 @@
           </div>
         </div>
         <div class="rtt-secondary-tools">
+          <button v-if="viewMode === 'terminal'" type="button" class="icon-action"
+            :aria-label="tr('查找终端文本', 'Find terminal text')" :title="tr('查找终端文本', 'Find terminal text') + ' (Ctrl+F / ⌘F)'"
+            @click="terminalPanel?.openSearch()"><Search :size="14" /></button>
           <LogDisplayControls
             v-if="viewMode === 'log'" :id-prefix="instanceId"
             v-model:mode="logDisplayMode" v-model:show-timestamp="showLogTimestamp"
@@ -125,7 +128,7 @@ import TrafficLogControls from './TrafficLogControls.vue'
 import { mountAnchoredPopover } from '../../lib/detailsMenu'
 import { trafficBytes, TrafficTextDecoder, type TrafficFrame } from '../../lib/trafficReplay'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { Eye, EyeOff, Info, ScrollText, SquareTerminal, Trash2 } from '@lucide/vue'
+import { Eye, EyeOff, Info, ScrollText, Search, SquareTerminal, Trash2 } from '@lucide/vue'
 import { useBinaryStream } from '../../composables/useBinaryStream'
 import { useMklinkApi } from '../../composables/useMklinkApi'
 import { loadDesktopSettings, type DesktopSettings, type RttEncoding } from '../../lib/desktopSettings'
