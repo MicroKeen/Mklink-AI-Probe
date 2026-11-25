@@ -34,6 +34,14 @@ Windows 从候选 NSIS 提取原始程序启动两个独立实例，分别隐藏
 
 macOS 仅构建 Apple Silicon。[原生验收](https://github.com/MicroKeen/Mklink-AI-Probe/actions/runs/45411912491)覆盖挂载 DMG、应用临时签名校验、内置 CLI/MCP、后台健康及 WebKit 菜单测试。下载后按 GitHub 产物摘要与 DMG 清单交叉核验，确认主程序和后端均为 ARM64 Mach-O。DMG 大小 168,857,688 字节，SHA-256 为 `f83629fa6b65aa7b6ec7e07f369c5ba6395aa7425152bdf44aa47d941c1d6604`。此包未经 Apple 公证。客户 Mac 的菜单栏交互与物理串口尚待现场验证。
 
+## macOS 关闭到菜单栏及第三方串口名称
+
+2026-11-25 客户确认 MKLink 已正确区分 UART 和 RS485。其外部串口工具列出同一设备的 `cu.*`、`tty.*` 节点，并给各接口显示相同的 USB 产品名。V4 的整机产品名为 `MicroKeenV4 CMSIS-DAP`，各接口另有 UART、Python Console 和 RS485 描述。MKLink 用 IOKit 接口信息标出角色；其他工具自行决定展示哪些描述。这台 Mac 上 TTL 和 RS485 分别对应 `/dev/cu.usbmodem11103` 和 `/dev/cu.usbmodem11107`，这些后缀不用于跨设备判定。
+
+之前的 ARM 包点红叉只隐藏窗口，进程还具有前台应用身份，Dock 会保留运行图标。Apple Silicon 客测修订 `52e3439f` 在隐藏成功后切换为 AppKit 的 accessory 模式；菜单栏的 **Show MKLink** 恢复 regular 模式并显示原窗口。用户固定的 Dock 项由系统管理。
+
+[macOS 原生验收](https://github.com/MicroKeen/Mklink-AI-Probe/actions/runs/45524884889)在 macOS 15 上启动从 DMG 复制的应用，通过辅助功能实际点击红叉，核对原窗口从屏幕消失、进程为 accessory，再点击菜单栏 **Show MKLink**，核对同一 PID、原窗口编号及 regular 模式。冻结版 CLI/MCP、WebKit、后台退出及临时签名校验通过。主程序和后端均为 arm64；DMG 为 168,866,972 字节，SHA-256 为 `89d70c2fb24d556d4dbfb24145deac28b558689ffeb3c26350eca22af9ea5c78`。客户测试包使用 ad-hoc 签名，未经 Apple 公证。
+
 ## Windows 覆盖安装后的跨端复验
 
 2026-11-24 在原目录覆盖安装 V0.5.1（应用源码 `e41a6560`）。安装目录内 3,740 个本次分发文件逐一匹配安装包，原设置校验值一致，保留一个卸载登记和一个公共桌面快捷方式。本机同版本 Skill 曾携带较早的 Web GUI，已通过完整 Skill 包刷新并逐一核对 2,736 个文件。当前 90 个 Web 分发文件在安装版、Skill 和源码中逐字节一致。安装目录另外留有 1,883 个旧静态文件，当前分发不引用它们。Skill ZIP 的 SHA-256 为 `09ca914113054963f4b30d6e0bf3aab2530d8733f8866c986fb8b09d337c60d1`。
