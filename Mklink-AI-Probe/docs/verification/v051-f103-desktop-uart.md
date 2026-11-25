@@ -57,3 +57,22 @@ Windows 修订 `f460b664` 已覆盖安装。在已安装桌面和 Edge Web GUI �
 前端全量 1474 项通过。Windows 安装文件比对 3,742 项、完整 Skill 比对 2,738 项。安装包与校验表在 `F:/MKLink-Build/artifacts/v051-f460b664`，浏览器结果在 `F:/MKLink-Build/reports/v051-replay-split-20261125/project/replay-123010/results.json`。
 
 构建脚本清理时，WebView2 日志与桌面进程临时文件仍被占用。`F:/MKLink-Build/runs/run-20261125-123010-d27dbc45` 和 `F:/MKLink-Build/runs/run-20261125-123031-9162ff38` 保留待进程退出后清理。
+
+## 大块 RAM 吞吐
+
+2026-11-25，Windows 0.5.1 共享后台、HPMLink V4.7.5、COM62、SWD。工程为 STM32F103RC，实板 DBGMCU 器件号为 `0x414`，Flash 容量寄存器读到 512 KiB。对照 AXF 核验 118,272 字节 Flash 后，在程序运行中测试专用数组 `mklink_benchmark_words`，范围为 `0x20005F40–0x20008F3F`，共 12 KiB。
+
+| SWD | 每个方向的轮数 | 顺序读 KiB/s | 顺序写 KiB/s |
+| --- | ---: | ---: | ---: |
+| 4 MHz | 5 | 250.0 | 137.6 |
+| 10 MHz | 5 | 483.7 | 189.1 |
+| 20 MHz | 96 | 679.4 | 213.2 |
+| 30 MHz | 96 | 776.8 | 220.8 |
+
+每轮分三次传输 4 KiB，速率按主机传输的总字节数除以累计调用耗时计算。30 MHz 下还对比了 256、512、1024 和 2048 字节请求。每轮写入不同的伪随机数据，写确认后另行逐字节回读。30 MHz 下读、写完整数组的中位耗时分别为 15.27 和 53.81 ms。启用 `write_memory(verify=True)` 后，将内置回读计入写耗时，24 轮实测 179.1 KiB/s。
+
+MUX 最快连续模式重复采集同一段 4 KiB，512 帧逐字节匹配。探针时间戳折算 1054.4 KiB/s，主机从发起调用到取得全部 2 MiB 数据为 1007.1 KiB/s。该次采集无 CRC 错误、丢帧、读取错误或未完成尾帧。
+
+单次提交整个 12 KiB 时，`dump_memory` 七次读回平均 407.8 KiB/s。`flush_memory` 的一轮伪随机写拆成 410 条控制台命令，耗时 145.01 秒。同字节填充每轮一条命令，四轮实测 13.79 KiB/s。两种写法均完整回读。
+
+测试后逐字节确认原数组已恢复，SWD 恢复原 30 MHz，RT-Thread 节拍继续递增。逐轮计时、完整性计数和板卡复核保存在测试工程的 `.mklink/logs/ram-throughput-20261125/`。
