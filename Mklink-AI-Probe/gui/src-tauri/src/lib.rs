@@ -1,4 +1,6 @@
 mod desktop_clipboard;
+mod desktop_install;
+use desktop_install::{begin_desktop_install, end_desktop_install, DesktopInstall};
 mod sidecar_diagnostics;
 mod startup_timing;
 use startup_timing::record_startup_timing;
@@ -1024,6 +1026,7 @@ pub fn run() {
     };
     builder
         .manage(startup_timing)
+        .manage(DesktopInstall::default())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -1043,6 +1046,8 @@ pub fn run() {
             job: Mutex::new(None),
         })
         .invoke_handler(tauri::generate_handler![
+            begin_desktop_install,
+            end_desktop_install,
             record_startup_timing,
             sidecar_status,
             start_sidecar,

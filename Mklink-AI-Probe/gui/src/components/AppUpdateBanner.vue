@@ -17,12 +17,13 @@ defineEmits<{
   install: []
   retry: []
   dismiss: []
+  cancel: []
 }>()
 </script>
 
 <template>
   <div
-    v-if="['downloading', 'ready', 'installing', 'restart-required', 'unavailable', 'error'].includes(state)"
+    v-if="['downloading', 'ready', 'waiting', 'installing', 'restart-required', 'unavailable', 'error'].includes(state)"
     class="update-banner"
     :class="{ 'update-error': state === 'error' }"
     data-testid="update-banner"
@@ -34,12 +35,13 @@ defineEmits<{
     <CircleArrowUp v-else :size="15" aria-hidden="true" />
 
     <span v-if="state === 'downloading'">{{ tr('正在下载', 'Downloading') }} v{{ version }}</span>
-    <span v-else-if="state === 'ready'">{{ tr(`v${version} 已下载完成`, `v${version} is ready`) }}</span>
+    <span v-else-if="state === 'ready'">{{ tr(`v${version} 已下载完成。立即安装会重启上位机，正在进行的采集和调试可能中断。`, `v${version} is ready. Installing now restarts the app and may interrupt acquisition and debugging.`) }}</span>
     <span v-else-if="state === 'installing'">{{ tr('正在安装更新并重新启动', 'Installing update and restarting') }}</span>
+    <span v-else-if="state === 'waiting'">{{ tr('已安排安装。下载器固件升级或其他安装结束后将自动继续。', 'Installation is queued. It will continue automatically when the firmware update or other installation finishes.') }}</span>
     <span v-else-if="state === 'restart-required'">{{ error }}</span>
     <span v-else-if="state === 'unavailable'">{{ tr('当前平台暂无可用更新，可继续使用现有版本。', 'No update is available for this platform. You can continue using this version.') }}</span>
     <span v-else>{{ tr('更新失败：', 'Update failed: ') }}{{ error }}</span>
-    <span v-if="firmwareBusy">{{ tr('固件升级处理中，请完成后再安装上位机更新。', 'Firmware update in progress. Finish it before installing the app update.') }}</span>
+    <span v-if="firmwareBusy && state === 'ready'">{{ tr('下载器正在升级固件，可预约结束后自动安装。', 'A probe firmware update is running. You can queue the app installation.') }}</span>
     <span v-else-if="blocked" role="alert" data-testid="update-blocked">{{ blocked }}</span>
     <span v-else-if="firmwarePending && ['downloading', 'ready'].includes(state)">{{ tr('建议先更新上位机，重启后再升级固件。', 'Update the app first, then restart and update the firmware.') }}</span>
 
@@ -54,7 +56,6 @@ defineEmits<{
         class="btn btn-sm btn-primary"
         data-testid="install-update"
         type="button"
-        :disabled="firmwareBusy"
         @click="$emit('install')"
       >
         <CircleArrowUp :size="13" aria-hidden="true" />
@@ -68,6 +69,7 @@ defineEmits<{
         @click="$emit('dismiss')"
       >{{ tr('稍后', 'Later') }}</button>
     </div>
+    <button v-else-if="state === 'waiting'" class="btn btn-sm" type="button" @click="$emit('cancel')">{{ tr('取消等待', 'Cancel Wait') }}</button>
     <button
       v-else-if="state === 'error' || state === 'unavailable'"
       class="btn btn-sm"

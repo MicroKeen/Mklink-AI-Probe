@@ -31,8 +31,28 @@ def test_github_firmware_lookup_uses_active_repository(monkeypatch, v2, name, in
 
 
 @pytest.fixture(autouse=True)
-def isolated_release_catalog(monkeypatch):
+def isolated_release_catalog(monkeypatch, tmp_path):
     monkeypatch.setattr(fc, 'bundled_firmwares', lambda: [])
+    monkeypatch.setattr(Path, 'home', classmethod(lambda cls: tmp_path))
+
+
+def test_install_lock_blocks_confirmed_firmware_before_device_io(tmp_path):
+    from mklink.desktop_install import DesktopInstallInProgress, probe_firmware_transfer
+
+    with probe_firmware_transfer(), probe_firmware_transfer():
+        pass  # Independent probes can transfer at the same time.
+    with (tmp_path / '.mklink' / 'desktop-install.lock').open('r+b') as lock:
+        if os.name == 'nt':
+            import msvcrt
+            msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        with pytest.raises(DesktopInstallInProgress, match='上位机正在安装更新'):
+            fc.upgrade_probe_firmware(None, tmp_path, confirm=True, disk_reader=lambda: pytest.fail('device I/O'))
+        with pytest.raises(ValueError, match='confirm=True'):
+            fc.upgrade_probe_firmware(None, tmp_path)
+    assert fc.upgrade_probe_firmware(None, tmp_path, confirm=True, disk_reader=lambda: None)['status'] == 'no_probe_disk'
 
 
 def _valid_uf2(payload: bytes = b"firmware") -> bytes:
