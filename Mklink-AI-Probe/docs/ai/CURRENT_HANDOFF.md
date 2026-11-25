@@ -9,7 +9,7 @@
 - HEAD：`ea0aca11`
 - 远端 HEAD：`ea0aca11`
 - 工作树：已验收主线 ea0aca11，#91/#92 已合。Windows/Skill 1a07d885；Mac ARM 52e3439f。
-- 当前任务：[启动与灵活面板](../verification/v051-integration.md)、[STM32F103与UART5](../verification/v051-f103-desktop-uart.md)。
+- 当前任务：[启动与灵活面板](../verification/v051-integration.md)、[STM32F103、UART5 与 RAM 吞吐](../verification/v051-f103-desktop-uart.md)。
 - 状态：`0.5.1 已整合。Python 7989/跳2、GUI 1474、Rust 23 通过。正式渠道 0.5.0，S3 #65 单独保留。`
 
 ## 里程碑
