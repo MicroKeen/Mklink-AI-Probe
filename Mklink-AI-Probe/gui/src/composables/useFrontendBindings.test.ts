@@ -10,7 +10,7 @@ vi.mock('../lib/frontendControl', async importOriginal => {
   const original = await importOriginal<typeof import('../lib/frontendControl')>()
   return { ...original, connectFrontend: (options: any) => {
     fixture.options = options
-    options.ready({ report: () => ({ session_id: 'test-session' }) }, { instance_id: 'instance', probe_id: 'probe', device_generation: 1, project_root: 'project' })
+    options.ready({ identity: { protocol: 'agent-frontend/1', session_id: 'test-session', page_id: 'page' } }, { instance_id: 'instance', probe_id: 'probe', device_generation: 1, project_root: 'project' })
     return () => {}
   } }
 })
