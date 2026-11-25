@@ -359,7 +359,7 @@ def build_server():
 
     @server.tool()
     def list_target_profiles() -> dict:
-        """List target model keys for connect(mcu=...) without a GUI, runtime or probe.
+        """List target model keys and declared aliases for connect(mcu=...) without a GUI, runtime or probe.
 
         A mem_ap field identifies a model that requires native MUX profile attach.
         """
@@ -375,7 +375,7 @@ def build_server():
         Explicit probe selection switches the existing backend after draining work.
         Other target sessions are retired and must explicitly reconnect; GUI pages follow.
         Conflicting project/symbol settings still require explicit reconfiguration.
-        For native target attach, select a key from list_target_profiles, for example
+        For native target attach, select a key or alias from list_target_profiles, for example
         mcu="s32k314". No GUI is required. Check target_attach.profile and mem_ap
         in the receipt before issuing memory or stream operations on this session.
         A profile failure requires explicit reconnect. A plain probe connection can

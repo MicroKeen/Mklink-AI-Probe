@@ -9,7 +9,7 @@ import uuid
 from collections import deque
 from concurrent.futures import Future
 from dataclasses import dataclass, field
-from typing import Callable, Deque, Dict, Iterator, List, Optional, Sequence
+from typing import Callable, Deque, Dict, Iterator, List, Mapping, Optional, Sequence
 
 from .errors import FlashError, FlashErrorCode
 from .daemon_executor import DaemonSingleExecutor
@@ -67,6 +67,7 @@ class _Job:
     image: Optional[ImageInspection] = None
     error_code: Optional[str] = None
     error_message: Optional[str] = None
+    error_details: Optional[Mapping[str, object]] = None
     cancel_requested: bool = False
     completed_actions: int = 0
     sequence: int = 0
@@ -758,6 +759,7 @@ class OnlineFlashJobManager:
     def _fail_locked(self, job: _Job, error: FlashError) -> None:
         job.error_code = error.code.value
         job.error_message = error.message
+        job.error_details = error.details
         self._emit_locked(job, "error", message=error.message, state=JobState.FAILED)
         self._transition_locked(job, JobState.FAILED)
 
@@ -780,6 +782,7 @@ class OnlineFlashJobManager:
                 message=message,
                 state=state,
                 progress=progress,
+                error_details=job.error_details if event == "error" else None,
             )
         )
         self._condition.notify_all()
@@ -852,6 +855,7 @@ class OnlineFlashJobManager:
             elapsed_seconds=max(0.0, elapsed_end - job.created_at),
             error_code=job.error_code,
             error_message=job.error_message,
+            error_details=job.error_details,
         )
 
     def _require_job(self, job_id: str) -> _Job:

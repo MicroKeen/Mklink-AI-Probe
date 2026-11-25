@@ -8,12 +8,14 @@ from .pyocd_runtime import import_pyocd_module
 
 
 class ProfileAttachDelegate:
-    def __init__(self, profile: MuxAttachProfile, next_delegate=None):
+    def __init__(self, profile: MuxAttachProfile, next_delegate=None, *, observe_before_halt=False):
         encode_attach_profile(profile)  # Validate the entire table before opening the target.
         self.profile = profile
         self._next_delegate = next_delegate
         self._attempted = False
         self.bound = False
+        self.observe_before_halt = observe_before_halt
+        self.was_running = False
 
     def __getattr__(self, name):
         return getattr(self._next_delegate, name)
@@ -35,6 +37,16 @@ class ProfileAttachDelegate:
         # Top-level InitTarget failures propagate out of Session.open(), before
         # component discovery (where pyOCD may log and skip a failing component).
         init_sequence.insert_after('dp_init', ('mklink_profile_attach', lambda: self._bind(target.dp)))
+        if self.observe_before_halt:
+            init_sequence.insert_before('halt_on_connect', ('mklink_observe_run_state',
+                                                            lambda: self._observe_running(target)))
+
+    def _observe_running(self, target):
+        core = target.selected_core
+        if not self.bound or getattr(getattr(getattr(core, 'ap', None), 'address', None), 'apsel', None) != self.profile.mem_ap:
+            return
+        state = core.get_state()
+        self.was_running = state.name in ('RUNNING', 'SLEEPING')
 
     def unlock_device(self, target=None):
         # CoreSightTarget prefers this delegate over Pack DebugDeviceUnlock.

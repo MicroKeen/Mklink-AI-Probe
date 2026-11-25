@@ -236,6 +236,8 @@ def _json_primitive(value: object, *, hide_paths: bool = False) -> object:
     if is_dataclass(value) and not isinstance(value, type):
         result = {}
         for field in fields(value):
+            if field.name == "error_details" and getattr(value, field.name) is None:
+                continue
             if hide_paths and field.name in ("file_path", "pack_path", "custom_flm_paths", "flm_path"):
                 continue
             result[field.name] = _json_primitive(getattr(value, field.name), hide_paths=hide_paths)

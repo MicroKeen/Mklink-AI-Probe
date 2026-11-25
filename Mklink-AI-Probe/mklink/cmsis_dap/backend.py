@@ -10,6 +10,7 @@ import re
 import struct
 import threading
 import time
+from contextlib import ExitStack, nullcontext
 from copy import copy
 from pathlib import Path
 from types import MethodType
@@ -18,6 +19,9 @@ from typing import Any, Callable, Iterator, Mapping, Optional, Tuple
 from mklink.profiles import TargetProfileError, resolve_attach_profile
 
 from .errors import FlashError, FlashErrorCode
+from .flash_launch import install_flash_launch_checks
+from .flash_interrupts import mask_flash_interrupts
+from .flash_workspace import check_flash_workspace
 from .images import ImageInspector
 from .models import ImageInspection, ImageSegment, MemoryRegion
 from .pyocd_runtime import import_pyocd_attr
@@ -920,6 +924,10 @@ class PyOcdBackend:
         self._security_family = ""
         self._algorithm_reset_required = False
         self._algorithm_reset_done = False
+        self._flash_profile = None
+        self._profile_core = None
+        self._profile_flash_hooks = {}
+        self._profile_started_running = False
         self._connection_arguments: Optional[dict[str, Any]] = None
         self._py32f030_unlock_transition_pending = False
         self._nrf54l_lock_pending = False
@@ -1189,7 +1197,7 @@ class PyOcdBackend:
                     factory = lambda selected_probe, selected_options: Session(
                         selected_probe, options=selected_options
                     )
-                session_target = target
+                session_target = profile.name if profile is not None else target
                 if resolved_pack is None and profile is not None:
                     # The shared profile describes discovery; the selected FLM supplies Flash geometry.
                     session_target = "cortex_m"
@@ -1266,7 +1274,9 @@ class PyOcdBackend:
                 if profile is not None:
                     from .target_attach import ProfileAttachDelegate
 
-                    profile_delegate = ProfileAttachDelegate(profile, delegate)
+                    profile_delegate = ProfileAttachDelegate(
+                        profile, delegate, observe_before_halt=profile.flash_prepare == "halt" and connect_mode == "halt",
+                    )
                     delegate = profile_delegate
                 session.delegate = _TraceStateDelegate(delegate)
                 nrf54l_recovery_connect = (
@@ -1302,9 +1312,12 @@ class PyOcdBackend:
                 if connect_frequency != frequency:
                     resolved_probe.set_clock(frequency)
                     session.options["frequency"] = frequency
-                if resolved_flms or security_payload is not None:
+                if (resolved_flms or security_payload is not None) and not (profile and profile.flash_prepare == "halt"):
                     _mask_custom_flm_interrupts(session.target)
                 self._session = session
+                self._flash_profile = profile
+                self._profile_core = core if profile is not None else None
+                self._profile_started_running = profile_delegate is not None and profile_delegate.was_running
                 self._reset_mode = reset_mode
                 self._reset_voltage_mv = reset_voltage_mv
                 self._probe_identifier = str(
@@ -2471,6 +2484,12 @@ class PyOcdBackend:
             self._security_family = ""
             self._algorithm_reset_required = False
             self._algorithm_reset_done = False
+            self._flash_profile = None
+            self._profile_core = None
+            for uninstall, _ in self._profile_flash_hooks.values():
+                uninstall()
+            self._profile_flash_hooks.clear()
+            self._profile_started_running = False
             self._connection_arguments = None
             self._py32f030_unlock_transition_pending = False
             self._nrf54l_lock_pending = False
@@ -2490,7 +2509,8 @@ class PyOcdBackend:
             try:
                 self._prepare_algorithm_execution(session.target)
                 factory, mode = self._eraser(erase_mode="CHIP")
-                factory(session, mode).erase()
+                with self._flash_interrupt_guard(session.target):
+                    factory(session, mode).erase()
             except FlashError:
                 raise
             except Exception as exc:
@@ -2501,15 +2521,17 @@ class PyOcdBackend:
             session = self._require_session()
             self._erased_ranges = ()
             try:
-                unique = self._validated_sector_addresses(session.target, addresses)
+                pname = self._flash_core_name(session.target)
+                unique = self._validated_sector_addresses(session.target, addresses, pname=pname)
                 ranges = tuple(
                     (address, address + self._flash_region_for_address(
-                        session.target, address).flash.get_sector_info(address).size)
+                        session.target, address, pname=pname).flash.get_sector_info(address).size)
                     for address in unique
                 )
-                self._prepare_algorithm_execution(session.target)
+                self._prepare_algorithm_execution(session.target, ranges)
                 factory, mode = self._eraser(erase_mode="SECTOR")
-                factory(session, mode).erase(unique)
+                with self._flash_interrupt_guard(session.target):
+                    factory(session, mode).erase(unique)
                 # Only a fully successful erase on this connection is reusable,
                 # and only by the immediately following program operation.
                 self._erased_ranges = ranges
@@ -2537,7 +2559,6 @@ class PyOcdBackend:
                     self._decode_hex_image(image)
                     if image.format.lower() == "hex" else None
                 )
-                self._prepare_algorithm_execution(session.target)
                 factory = self._programmer_factory
                 if factory is None:
                     from .programmer import create_programmer
@@ -2548,17 +2569,19 @@ class PyOcdBackend:
                     if image.format.lower() == "bin" and image.base_address is not None
                     else image.start
                 )
-                region = self._flash_region_for_address(session.target, image_start)
+                spans = (
+                    tuple((segment.start, segment.end) for segment, _ in hex_data)
+                    if hex_data is not None else ((image_start, image_start + path.stat().st_size),)
+                )
+                self._prepare_algorithm_execution(session.target, spans)
+                pname = self._flash_core_name(session.target)
+                region = self._flash_region_for_address(session.target, image_start, pname=pname)
                 # A program request only authorizes image-covered sectors, never
                 # pyOCD's automatic cost-based escalation to chip erase.
                 programmer_options: dict[str, Any] = {"chip_erase": "sector"}
                 if self._programmer_factory is None:
-                    spans = (
-                        tuple((segment.start, segment.end) for segment, _ in hex_data)
-                        if hex_data is not None else ((image_start, image_start + path.stat().st_size),)
-                    )
                     programmer_options["already_erased"] = self._image_pages_erased(
-                        session.target, erased_ranges, spans
+                        session.target, erased_ranges, spans, pname=pname
                     )
                 if progress_callback is not None:
                     programmer_options["progress"] = progress_callback
@@ -2568,19 +2591,17 @@ class PyOcdBackend:
                 kwargs = {}
                 if image.format.lower() == "bin":
                     kwargs["base_address"] = image.base_address
-                if hex_data is None:
-                    programmer.program(str(path), **kwargs)
-                else:
-                    # Use the same validated segments as preview/verification.
-                    # Feeding the raw HEX to a second parser rejects harmless
-                    # repeated entry points after the target was already erased.
-                    # Queue all sparse segments before committing once.
-                    for segment, payload in hex_data:
-                        programmer.add_file(
-                            io.BytesIO(payload), file_format="bin",
-                            base_address=segment.start,
-                        )
-                    programmer.commit()
+                with self._flash_interrupt_guard(session.target):
+                    if hex_data is None:
+                        programmer.program(str(path), **kwargs)
+                    else:
+                        # Queue the validated sparse segments before committing once.
+                        for segment, payload in hex_data:
+                            programmer.add_file(
+                                io.BytesIO(payload), file_format="bin",
+                                base_address=segment.start,
+                            )
+                        programmer.commit()
             except FlashError:
                 self._close_after_failure()
                 raise
@@ -2596,14 +2617,14 @@ class PyOcdBackend:
                 raise self._mapped_error(exc, FlashErrorCode.PROGRAM_FAIL) from None
 
     @staticmethod
-    def _image_pages_erased(target, erased, spans) -> bool:
+    def _image_pages_erased(target, erased, spans, *, pname=None) -> bool:
         if not erased:
             return False
         pages = []
         for start, end in spans:
             address = start
             while address < end:
-                region = PyOcdBackend._flash_region_for_address(target, address)
+                region = PyOcdBackend._flash_region_for_address(target, address, pname=pname)
                 get_info = getattr(getattr(region, "flash", None), "get_page_info", None)
                 info = get_info(address) if callable(get_info) else None
                 if info is None or info.size <= 0 or not info.base_addr <= address < info.base_addr + info.size:
@@ -2630,15 +2651,23 @@ class PyOcdBackend:
                 return False
         return True
 
-    def _prepare_algorithm_execution(self, target: Any) -> None:
-        """Reset Cortex-M targets once before destructive work.
+    def _prepare_algorithm_execution(self, target: Any, spans=None) -> None:
+        """Check the execution context before any RAM Flash algorithm runs.
 
         Attaching to a running RTOS can retain exception/stack/MPU state that
         is unsuitable for a RAM algorithm. Connection and read-only operations
         remain non-resetting; erase/program need a deterministic execution state.
         """
 
-        if not self._algorithm_reset_required or self._algorithm_reset_done:
+        if not self._algorithm_reset_required:
+            return
+        if self._flash_profile is not None and self._flash_profile.flash_prepare == "halt":
+            self._prepare_profile_flash(target)
+            for flash in self._profile_flash_algorithms(target, spans):
+                self._check_profile_workspace(target, flash)
+            self._algorithm_reset_done = True
+            return
+        if self._algorithm_reset_done:
             return
         dual_h7 = uses_cm7_flash((self._connection_arguments or {}).get("target", ""))
         if dual_h7:
@@ -2669,20 +2698,99 @@ class PyOcdBackend:
             )
         self._algorithm_reset_done = True
 
+    def _prepare_profile_flash(self, target: Any) -> None:
+        """Confirm the live profile core without changing debug grants or MPU/cache settings."""
+        from .flash_thread import acquire_flash_thread
+
+        allow_resume = self._profile_started_running
+        self._profile_started_running = False
+        profile = self._flash_profile
+        core = target.selected_core
+        ap = getattr(getattr(getattr(core, "ap", None), "address", None), "apsel", None)
+        evidence = {"profile": profile.name, "mem_ap": profile.mem_ap, "selected_ap": ap}
+        if core is not self._profile_core or ap != profile.mem_ap:
+            raise FlashError(FlashErrorCode.CONNECT_FAIL,
+                             "The selected core or MEM-AP changed; reconnect explicitly.", evidence)
+        try:
+            Target = import_pyocd_attr("pyocd.core.target", "Target")
+            acquire_flash_thread(core, Target.State, allow_resume=allow_resume)
+        except FlashError as exc:
+            raise FlashError(exc.code, exc.message, {**evidence, **(exc.details or {})}) from exc
+        except Exception as exc:
+            raise FlashError(FlashErrorCode.CONNECT_FAIL,
+                             f"Could not confirm the halted profile core before Flash execution: {exc}", evidence) from exc
+
+    def _flash_core_name(self, target):
+        if self._flash_profile is not None and self._flash_profile.flash_prepare == "halt":
+            return target.selected_core.node_name
+        return None
+
+    def _flash_interrupt_guard(self, target):
+        if self._flash_profile is not None and self._flash_profile.flash_prepare == "halt":
+            return mask_flash_interrupts(target, self._profile_core)
+        return nullcontext()
+
+    def _profile_flash_algorithms(self, target, spans):
+        """Match the core and regions used by pyOCD FlashEraser and MemoryLoader."""
+        pname = self._flash_core_name(target)
+        if spans is None:
+            MemoryType = import_pyocd_attr("pyocd.core.memory_map", "MemoryType")
+            regions = target.memory_map.iter_matching_regions(type=MemoryType.FLASH, pname=pname)
+        else:
+            regions = []
+            for address, end in spans:
+                while address < end:
+                    region = self._flash_region_for_address(target, address, pname=pname)
+                    if region is None or region.flash is None:
+                        raise FlashError(FlashErrorCode.IMAGE_OUT_OF_RANGE,
+                                         f"No Flash algorithm for {pname} at 0x{address:X}")
+                    regions.append(region)
+                    address = int(region.start) + int(region.length)
+        seen = set()
+        for region in regions:
+            flash = region.flash
+            if flash is not None and id(flash) not in seen:
+                seen.add(id(flash))
+                yield flash
+
+    def _check_profile_workspace(self, target, flash):
+        key = id(flash)
+        if key not in self._profile_flash_hooks:
+            uninstall, has_sync = install_flash_launch_checks(target, self._profile_core, flash)
+            if uninstall is not None:
+                self._profile_flash_hooks[key] = uninstall, has_sync
+        _, has_sync = self._profile_flash_hooks.get(key, (None, False))
+        check_flash_workspace(target, flash, icache_sync=has_sync)
+
     def verify(
         self,
         image: ImageInspection,
         progress_callback: Optional[Callable[[float], None]] = None,
     ) -> None:
-        with self._lock:
+        with self._lock, ExitStack() as operation:
             session = self._require_session()
             try:
                 verified = 0
+                pname = self._flash_core_name(session.target)
+                checked = set()
+
+                def prepare_verify_algorithm(flash):
+                    if id(flash) in checked:
+                        return
+                    if not checked:
+                        self._prepare_profile_flash(session.target)
+                    self._check_profile_workspace(session.target, flash)
+                    if not checked:
+                        operation.enter_context(self._flash_interrupt_guard(session.target))
+                    checked.add(id(flash))
                 total = image.payload_size
                 if progress_callback is not None:
                     progress_callback(0.0)
                 for address, expected in self._iter_image_chunks(image):
-                    self._verify_expected_bytes(session.target, address, expected)
+                    self._verify_expected_bytes(
+                        session.target, address, expected, pname=pname,
+                        before_algorithm=prepare_verify_algorithm if pname is not None else None,
+                    )
                     verified += len(expected)
                     if progress_callback is not None:
                         progress_callback(verified / total if total else 1.0)
@@ -2698,14 +2806,14 @@ class PyOcdBackend:
 
     @classmethod
     def _verify_expected_bytes(
-        cls, target: Any, address: int, expected: bytes
+        cls, target: Any, address: int, expected: bytes, *, pname=None, before_algorithm=None
     ) -> None:
         offset = 0
         active_flash = None
         try:
             while offset < len(expected):
                 current = address + offset
-                region = cls._flash_region_for_address(target, current)
+                region = cls._flash_region_for_address(target, current, pname=pname)
                 size = len(expected) - offset
                 if region is not None:
                     size = min(size, int(region.start) + int(region.length) - current)
@@ -2720,6 +2828,8 @@ class PyOcdBackend:
                     and flash_algo.get("mklink_custom_verify") is True
                 )
                 if custom_verify:
+                    if before_algorithm is not None:
+                        before_algorithm(flash)
                     page_size = getattr(region, "page_size", None)
                     if (
                         not isinstance(page_size, int)
@@ -2773,13 +2883,22 @@ class PyOcdBackend:
                         )
                 offset += size
 
+        except BaseException:
+            # An interrupted profile Verify may still be executing. Never issue
+            # another FLM call (including UnInit) after an uncertain result.
+            if before_algorithm is not None:
+                active_flash = None
+            raise
         finally:
             if active_flash is not None:
                 active_flash.uninit()
 
     @staticmethod
-    def _flash_region_for_address(target: Any, address: int) -> Any:
+    def _flash_region_for_address(target: Any, address: int, *, pname=None) -> Any:
         memory_map = getattr(target, "memory_map", ())
+        if pname is not None:
+            region = memory_map.get_region_for_address(address, pname)
+            return region if getattr(region, "is_flash", False) else None
         getter = getattr(memory_map, "get_region_for_address", None)
         if callable(getter):
             region = getter(address)
@@ -2847,6 +2966,9 @@ class PyOcdBackend:
                 "default", "hardware", "software", "core", "system", "power-cycle"
             }:
                 raise ValueError(f"unknown reset mode: {mode}")
+            if self._flash_profile is not None and self._flash_profile.flash_prepare == "halt":
+                self._reset_profile_and_check(session, mode)
+                return
             dual_h7 = self._algorithm_reset_done and uses_cm7_flash(
                 (self._connection_arguments or {}).get("target", ""))
             try:
@@ -2942,6 +3064,71 @@ class PyOcdBackend:
                 raise
             except Exception as exc:
                 raise self._mapped_error(exc, FlashErrorCode.RESET_FAIL) from None
+
+    def _reset_profile_and_check(self, session: Any, mode: str) -> None:
+        from .profile_reset import close_reset_transport, reset_command
+
+        profile = self._flash_profile
+        core = session.target.selected_core
+        probe = session.probe
+        evidence = {"profile": profile.name, "mem_ap": profile.mem_ap, "mode": mode,
+                    "reset_outcome": "not_issued", "run_state": "unconfirmed"}
+        try:
+            if core is not self._profile_core or core.ap.address.apsel != profile.mem_ap:
+                raise RuntimeError("The selected profile core or MEM-AP changed before reset")
+            reconnect = dict(self._connection_arguments, probe=probe, connect_mode="attach")
+            if mode == "power-cycle":
+                voltage = self._reset_voltage_mv
+                if voltage not in _POWER_CYCLE_VOLTAGES_MV:
+                    raise ValueError("power-cycle reset requires a validated restore voltage")
+                command = lambda: self._power_cycle(self._probe_identifier, voltage)
+                evidence["command"] = "power-cycle"
+            else:
+                evidence["command"], command = reset_command(core, probe, mode)
+            probe.flush()
+
+            # One possibly-effective reset consumes this binding, including when
+            # its transport ACK is lost. No later operation can use the old core.
+            self._session = None
+            self._profile_core = None
+            evidence["reset_outcome"] = "unknown"
+            try:
+                command()
+                probe.flush()
+                evidence["reset_outcome"] = "acknowledged"
+            finally:
+                try:
+                    close_reset_transport(probe)
+                except Exception as exc:
+                    evidence["transport_close_error"] = str(exc)
+            if "transport_close_error" in evidence:
+                raise RuntimeError("Could not release the pre-reset probe transport")
+            if evidence["command"] in ("SYSRESETREQ", "VECTRESET"):
+                # The generic pyOCD AIRCR implementation observes this configured
+                # delay before its recovery polls. Keep it before our fresh attach.
+                time.sleep(session.options.get("reset.post_delay") or 0)
+
+            # A new non-halting session reruns the whole profile before touching
+            # the core. A failed attach or state check never repeats the reset.
+            self.connect(**reconnect)
+            try:
+                if self._flash_profile != profile:
+                    raise RuntimeError("The target profile changed while confirming reset")
+                state = self._require_session().target.get_state()
+                evidence["run_state"] = state.name
+                Target = import_pyocd_attr("pyocd.core.target", "Target")
+                if state not in (Target.State.RUNNING, Target.State.SLEEPING):
+                    raise RuntimeError(f"The target did not start (state={state.name})")
+            finally:
+                self._session = None
+                self._profile_core = None
+                close_reset_transport(probe)
+        except Exception as exc:
+            if isinstance(exc, FlashError) and exc.details:
+                evidence["cause"] = exc.details
+            raise FlashError(FlashErrorCode.RESET_FAIL,
+                             f"{profile.name} reset {evidence['reset_outcome']}, "
+                             f"run state {evidence['run_state']}: {exc}", evidence) from exc
 
     def memory_regions(self) -> Tuple[MemoryRegion, ...]:
         with self._lock:
@@ -3156,7 +3343,7 @@ class PyOcdBackend:
         return self._eraser_factory or FlashEraser, FlashEraser.Mode[erase_mode]
 
     @staticmethod
-    def _validated_sector_addresses(target: Any, addresses: Any) -> list[int]:
+    def _validated_sector_addresses(target: Any, addresses: Any, *, pname=None) -> list[int]:
         values = list(addresses)
         if not values:
             raise FlashError(
@@ -3168,7 +3355,7 @@ class PyOcdBackend:
             raise FlashError(
                 FlashErrorCode.IMAGE_OUT_OF_RANGE, "sector address is invalid"
             )
-        regions = tuple(target.memory_map)
+        regions = tuple(target.memory_map) if pname is None else ()
         for address in unique:
             containing = [
                 region
@@ -3176,6 +3363,9 @@ class PyOcdBackend:
                 if bool(getattr(region, "is_flash", False))
                 and int(region.start) <= address < int(region.start) + int(region.length)
             ]
+            if pname is not None:
+                region = PyOcdBackend._flash_region_for_address(target, address, pname=pname)
+                containing = [region] if region is not None else []
             if not containing:
                 raise FlashError(
                     FlashErrorCode.IMAGE_OUT_OF_RANGE,

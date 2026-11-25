@@ -36,6 +36,7 @@ class MuxAttachProfile:
     mem_ap: int
     steps: tuple[MuxAttachStep, ...]
     requires_reset_released: bool = False
+    flash_prepare: str = "reset"
 
 
 _ATTACH_HOOKS = ("ConfigTargetSettings", "InitTarget", "SetupTarget")
@@ -71,10 +72,13 @@ def compile_attach_profile(name: str, recipe: dict) -> MuxAttachProfile:
             raise TargetProfileError("unsupported_hook", f"{name} cannot execute {hook}", hook=hook)
     settings = hooks.get("ConfigTargetSettings")
     if (not isinstance(settings, dict) or "mem_ap" not in settings
-            or set(settings) - {"mem_ap", "requires_reset_released"}
-            or type(settings.get("requires_reset_released", False)) is not bool):
-        raise TargetProfileError("invalid_hook", "ConfigTargetSettings requires mem_ap and accepts a boolean requires_reset_released",
-                                 hook="ConfigTargetSettings")
+            or set(settings) - {"mem_ap", "requires_reset_released", "flash_prepare"}
+            or type(settings.get("requires_reset_released", False)) is not bool
+            or settings.get("flash_prepare", "reset") not in ("reset", "halt")):
+        raise TargetProfileError(
+            "invalid_hook", "ConfigTargetSettings requires mem_ap; requires_reset_released must be boolean "
+            "and flash_prepare must be reset or halt when supplied", hook="ConfigTargetSettings",
+        )
     steps = []
     for hook, kinds in (("InitTarget", {"ap_check": 1, "ap_update": 2}),
                         ("SetupTarget", {"mem32_check": 3})):
@@ -92,7 +96,11 @@ def compile_attach_profile(name: str, recipe: dict) -> MuxAttachProfile:
             except (KeyError, TypeError, ValueError) as exc:
                 raise TargetProfileError("invalid_hook", f"{hook}[{index}] invalid operation: {exc}",
                                          hook=hook) from exc
-    profile = MuxAttachProfile(name, settings["mem_ap"], tuple(steps), settings.get("requires_reset_released", False))
+    profile = MuxAttachProfile(
+        name, settings["mem_ap"], tuple(steps),
+        requires_reset_released=settings.get("requires_reset_released", False),
+        flash_prepare=settings.get("flash_prepare", "reset"),
+    )
     try:
         encode_attach_profile(profile)
     except ValueError as exc:
@@ -100,11 +108,37 @@ def compile_attach_profile(name: str, recipe: dict) -> MuxAttachProfile:
     return profile
 
 
+def normalize_model_id(value: str) -> str:
+    """Ignore case and whitespace while preserving every character of the model identifier."""
+    return "".join(value.split()).casefold()
+
+
+def model_key_index(models: dict) -> dict[str, str]:
+    """Index declared keys and aliases and reject every duplicate before selecting a target."""
+    index = {}
+    for key, entry in models.items():
+        aliases = entry.get("aliases", [])
+        if not isinstance(aliases, list):
+            raise TargetProfileError("invalid_profile_alias", f"{key}: aliases must be a list")
+        for token in (key, *aliases):
+            if not isinstance(token, str) or not (identifier := normalize_model_id(token)):
+                raise TargetProfileError("invalid_profile_alias", f"{key}: a model key or alias is empty or invalid")
+            if identifier in index:
+                raise TargetProfileError("ambiguous_profile_alias",
+                                         f"Duplicate model identifier {token!r} in {index[identifier]} and {key}")
+            index[identifier] = key
+    return index
+
+
 def target_profile_catalog() -> dict:
     """Describe host hook support and selectable models without a probe or runtime."""
     profiles = []
-    for key, entry in load_mcu_profiles().items():
+    models = load_mcu_profiles()
+    model_key_index(models)
+    for key, entry in models.items():
         row = {"key": key, "name": entry["name"]}
+        if "aliases" in entry:
+            row["aliases"] = list(entry["aliases"])
         if "mux_attach" in entry:
             try:
                 profile = compile_attach_profile(entry["name"], entry["mux_attach"])
@@ -131,7 +165,9 @@ def resolve_attach_profile(mcu: str | None, *, project_root: str | None = None,
         return None
     if not isinstance(mcu, str):
         raise TargetProfileError("invalid_profile", "The selected MCU model must be a string")
-    entry = load_mcu_profiles().get(mcu.strip().casefold())
+    models = load_mcu_profiles()
+    key = model_key_index(models).get(normalize_model_id(mcu))
+    entry = models.get(key)
     if entry is None or "mux_attach" not in entry:
         return None
     return compile_attach_profile(entry["name"], entry["mux_attach"])

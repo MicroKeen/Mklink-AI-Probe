@@ -242,6 +242,7 @@ class JobEvent:
     message: str = ""
     state: Optional[JobState] = None
     progress: Optional[float] = None
+    error_details: Optional[Mapping[str, object]] = None
 
 
 @dataclass(frozen=True)
@@ -271,3 +272,4 @@ class JobSnapshot:
     elapsed_seconds: float = 0.0
     error_code: Optional[str] = None
     error_message: Optional[str] = None
+    error_details: Optional[Mapping[str, object]] = None

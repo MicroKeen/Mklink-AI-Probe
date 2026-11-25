@@ -145,6 +145,7 @@ build_server().run()
             assert len(set(hooks['supported'] + hooks['reserved'])) == 44
             model, = (row for row in catalog['profiles'] if row['name'] == 'S32K314')
             assert model['mem_ap'] == 4 and model['hooks'] == hooks['supported']
+            assert model['aliases'] == ['S32K314HMS', 'NXPS32K314HMS']
             assert not peer.ops and not peer.text
             selection = dict(mcu=model['key'], project_root=str(tmp_path))
             for mode, expected in [('old', '0x2000'), ('wrong', 'actual=0xBAD00000')]:
@@ -154,6 +155,7 @@ build_server().run()
                 assert app.state.mklink_state['device'] is None
                 assert peer.ops.count(0x18) == int(mode == 'wrong')
             peer.mode = 'ok'
+            selection['mcu'] = model['aliases'][1]
             result = (await mcp.call_tool('connect', selection)).data
             assert result['target_attach']['profile'] == 'S32K314'
             assert result['target_attach']['mem_ap'] == 4

@@ -186,6 +186,7 @@ export interface JobSnapshot {
   elapsed_seconds: number
   error_code: string | null
   error_message: string | null
+  error_details?: Record<string, unknown>
 }
 
 export interface JobEvent {
@@ -196,6 +197,7 @@ export interface JobEvent {
   message: string
   state: JobState | null
   progress: number | null
+  error_details?: Record<string, unknown>
 }
 
 export interface JobStreamError {
