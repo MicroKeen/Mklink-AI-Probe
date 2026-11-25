@@ -4293,7 +4293,9 @@ describe('independent semantic waveform panels', () => {
       expect(right.viewer.read().localPaused).toBe(false)
       expect(right.viewer.read().view.legend).toBe(false)
       expect(left.wrapper.element.querySelector('#btn-pause')?.textContent).not.toBe(right.wrapper.element.querySelector('#btn-pause')?.textContent)
-      ;(right.wrapper.element as HTMLElement).focus()
+      const rightPanel = right.wrapper.get<HTMLElement>('.waveform-viewer').element
+      rightPanel.focus()
+      expect(document.activeElement).toBe(rightPanel)
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', bubbles: true }))
       expect(right.viewer.read().view.cursor.enabled).toBe(true)
       expect(left.viewer.read().view.cursor.enabled).toBe(false)
