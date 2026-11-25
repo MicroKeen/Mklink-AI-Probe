@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import io
 import logging
+import os
 import re
 import struct
 import threading
@@ -13,6 +14,8 @@ from copy import copy
 from pathlib import Path
 from types import MethodType
 from typing import Any, Callable, Iterator, Mapping, Optional, Tuple
+
+from mklink.profiles import TargetProfileError, resolve_attach_profile
 
 from .errors import FlashError, FlashErrorCode
 from .images import ImageInspector
@@ -945,6 +948,18 @@ class PyOcdBackend:
     ) -> None:
         with self._lock:
             self.disconnect()
+            try:
+                profile = resolve_attach_profile(target)
+            except TargetProfileError as exc:
+                raise FlashError(FlashErrorCode.CONNECT_FAIL, str(exc), exc.detail) from exc
+            if profile is not None and profile.requires_reset_released and connect_mode == "under-reset":
+                # This model verifies a released reset before discovery.
+                # pyOCD holds nRESET throughout this part of under-reset discovery.
+                raise FlashError(
+                    FlashErrorCode.CONNECT_FAIL,
+                    f"{profile.name} requires reset released for profile attach; choose halt or attach",
+                    {"profile": profile.name, "mem_ap": profile.mem_ap, "connect_mode": connect_mode},
+                )
             if not isinstance(frequency, int) or isinstance(frequency, bool) or frequency <= 0:
                 raise ValueError("frequency must be a positive integer")
             if reset_voltage_mv is not None and reset_voltage_mv not in _POWER_CYCLE_VOLTAGES_MV:
@@ -1175,7 +1190,10 @@ class PyOcdBackend:
                         selected_probe, options=selected_options
                     )
                 session_target = target
-                if security_family == "stm32h743-rdp1":
+                if resolved_pack is None and profile is not None:
+                    # The shared profile describes discovery; the selected FLM supplies Flash geometry.
+                    session_target = "cortex_m"
+                elif security_family == "stm32h743-rdp1":
                     session_target = "stm32h743xx"
                 elif (
                     resolved_pack is None
@@ -1209,6 +1227,10 @@ class PyOcdBackend:
                     "connect_mode": connect_mode,
                     "auto_unlock": False,
                 }
+                if profile is not None:
+                    # Session loads project files and changes the process cwd before we install the delegate.
+                    options.update(resume_on_disconnect=False, no_config=True,
+                                   user_script=os.devnull, project_dir=os.getcwd())
                 if reset_mode == "hardware":
                     # Apply the selected reset to algorithm preparation too,
                     # not just to the final reset after verification.
@@ -1240,6 +1262,12 @@ class PyOcdBackend:
                         security_family or "",
                         security_flm_region,
                     )
+                profile_delegate = None
+                if profile is not None:
+                    from .target_attach import ProfileAttachDelegate
+
+                    profile_delegate = ProfileAttachDelegate(profile, delegate)
+                    delegate = profile_delegate
                 session.delegate = _TraceStateDelegate(delegate)
                 nrf54l_recovery_connect = (
                     security_family == "nrf54l15-ctrl-ap" and connect_mode == "attach"
@@ -1254,6 +1282,16 @@ class PyOcdBackend:
                 if uses_cm7_flash(target):
                     bind_cm7(session.target)
                 core = getattr(session.target, "selected_core", None)
+                if profile_delegate is not None:
+                    address = getattr(getattr(core, "ap", None), "address", None)
+                    selected_ap = getattr(address, "apsel", None)
+                    if not profile_delegate.bound or selected_ap != profile.mem_ap:
+                        raise FlashError(
+                            FlashErrorCode.CONNECT_FAIL,
+                            f"{profile.name} did not bind the selected CPU to MEM-AP {profile.mem_ap}",
+                            {"profile": profile.name, "mem_ap": profile.mem_ap, "reason": "bind_failed",
+                             "selected_ap": selected_ap},
+                        )
                 if not nrf54l_recovery_connect and core is not None and "xpsr" not in core.core_registers.by_name:
                     # pyOCD can log and swallow component initialization errors.
                     # Do not let a partial CPU description reach flash erase.

@@ -25,7 +25,7 @@ import { refreshRttAddressForSymbol } from '../lib/rttSymbolAddress'
 import { IS_TAURI } from '../lib/runtimeEndpoint'
 import { rememberSymbolPath } from '../lib/symbolPathHistory'
 import { sharedRuntime } from '../composables/useBackendHealth'
-import type { AxlStatus, FileSourceKind, PortInfo, ProbeFirmwareCheck, ProbeFirmwareUpgrade, ProjectConfig } from '../types/mklink'
+import type { AxlStatus, FileSourceKind, McuProfile, PortInfo, ProbeFirmwareCheck, ProbeFirmwareUpgrade } from '../types/mklink'
 import ConfigSectionNav, { type ConfigSection } from '../components/config/ConfigSectionNav.vue'
 import FileSourcesPanel from '../components/config/FileSourcesPanel.vue'
 import RuntimePanel from '../components/config/RuntimePanel.vue'
@@ -36,6 +36,7 @@ const { clientPending, clientInstalling, firmwareBusy: firmwareUpgrading } = inj
 const {
   deviceStatus,
   listPorts,
+  getProfiles,
   getConfig,
   updateConfig,
   refreshStatus,
@@ -66,7 +67,6 @@ watch(activeSection, section => {
     void router.replace({ query: { ...route?.query, section } })
   }
 })
-const config = ref<ProjectConfig>({})
 const localPort = ref('')
 const portOptions = ref<{ label: string; value: string }[]>([])
 const localPortExplicit = ref(false)
@@ -78,6 +78,15 @@ const probePorts = ref<PortInfo[]>([])
 const selectedProbe = computed(() => probePorts.value.find(port => port.device === localPort.value))
 const switchingProbe = computed(() => sharedRuntime.value && deviceStatus.value.connected && localPortExplicit.value
   && !!selectedProbe.value && localPort.value !== deviceStatus.value.port)
+const profiles = ref<McuProfile[]>([])
+const profilesError = ref('')
+const selectedMcu = ref('')
+const boundProbeId = computed(() => sharedRuntime.value && deviceStatus.value.probe_id !== 'lobby'
+  ? deviceStatus.value.probe_id || '' : '')
+const targetScope = computed(() => localPortExplicit.value ? selectedProbeId.value || localPort.value : boundProbeId.value)
+watch(targetScope, (_next, previous) => {
+  if (previous) selectedMcu.value = ''
+})
 const settings = ref<DesktopSettings>(loadDesktopSettings(window.localStorage))
 
 const portsLoading = ref(false)
@@ -151,7 +160,6 @@ async function loadConfig() {
     const loaded = await getConfig()
     if (disposed) return
     // Initial loading must not overwrite edits made while the request was pending.
-    config.value = { ...loaded, ...config.value }
     if (!localPortTouched) {
       localPort.value = loaded.com_port || ''
       localPortExplicit.value = false
@@ -161,16 +169,24 @@ async function loadConfig() {
   }
 }
 
+async function loadProfiles() {
+  try {
+    const available = await getProfiles()
+    if (!disposed) {
+      profiles.value = available
+      profilesError.value = ''
+    }
+  } catch (error) {
+    if (!disposed) profilesError.value = error instanceof Error ? error.message : String(error)
+  }
+}
+
 async function saveLocalConfig() {
   if (savingLocal.value) return
   savingLocal.value = true
   localSaveState.value = 'saving'
-  const payload = {
-    com_port: localPort.value.trim(),
-    mcu_key: config.value.mcu_key,
-  }
   try {
-    config.value = await updateConfig(payload)
+    await updateConfig({ com_port: localPort.value.trim() })
     localSaveState.value = 'saved'
   } catch (error: any) {
     localSaveState.value = 'unconfirmed'
@@ -203,21 +219,24 @@ async function connectLocal() {
         throw { detail: { reason: 'probe_missing' } }
       }
     }
-    const selectedPort = localPort.value.trim()
+    const explicitPort = localPortExplicit.value ? localPort.value.trim() : ''
+    const probe = explicitPort ? selectedProbeId.value : selectedMcu.value && boundProbeId.value
+    const restoreLast = !explicitPort || (!!probe && probe === boundProbeId.value && !deviceStatus.value.connected)
     const result = await connectDevice({
-      ...(localPortExplicit.value && selectedPort
-        ? { port: selectedPort, ...(sharedRuntime.value && selectedProbeId.value ? { probe: selectedProbeId.value } : {}) }
-        : { restore_last: true }),
+      ...(explicitPort ? { port: explicitPort } : {}),
+      ...(sharedRuntime.value && probe ? { probe } : {}),
+      ...(restoreLast ? { restore_last: true } : {}),
+      ...(selectedMcu.value ? { mcu: selectedMcu.value } : {}),
       axf: isSymbolFilePath(settings.value.symbolPath)
         ? settings.value.symbolPath.trim()
         : undefined,
     })
+    selectedMcu.value = ''
     const connectedPort = result.port || deviceStatus.value.port
     if (connectedPort) {
       localPort.value = connectedPort
       localPortExplicit.value = false
       selectedProbeId.value = deviceStatus.value.probe_id || selectedProbe.value?.probe_id || ''
-      config.value = { ...config.value, com_port: connectedPort }
     }
     const symbolPath = settings.value.symbolPath.trim()
     if (
@@ -231,7 +250,6 @@ async function connectLocal() {
     // A failed explicit selection must stay selected for the next attempt.
     if (!localPortExplicit.value) {
       localPort.value = ''
-      config.value = { ...config.value, com_port: '' }
     }
     const reason = String(error.detail?.reason || '')
     if (IS_TAURI && reason === 'probe_in_use') occupiedProbe.value = error.detail?.probe_id || selectedProbeId.value
@@ -535,6 +553,7 @@ onMounted(async () => {
   // Firmware status is checked from the dedicated upgrade action. Avoid a
   // network manifest lookup during login so the local connection controls are
   // immediately responsive.
+  void loadProfiles()
   await Promise.all([refreshPorts(), loadConfig()])
   const bound = deviceStatus.value.probe_id
   if (!localPortTouched && sharedRuntime.value && bound && bound !== 'lobby'
@@ -577,6 +596,9 @@ onUnmounted(() => {
         <div v-if="deviceStatus.connected && deviceStatus.port" class="connection-detail" data-testid="connected-port">
           {{ tr('当前串口：', 'Connected port: ') }}{{ deviceStatus.port }}
         </div>
+        <div v-if="deviceStatus.connected && deviceStatus.mcu" class="connection-detail" data-testid="connected-mcu">
+          {{ tr('当前目标：', 'Connected target: ') }}{{ deviceStatus.mcu }}
+        </div>
         <div class="form-row">
           <label class="form-label" :for="guiId('local-port')">{{ tr('串口', 'Serial Port') }}</label>
           <select :id="guiId('local-port')" v-model="localPort" class="form-select" data-testid="local-port" :disabled="savingLocal || savingClock || connecting || disconnecting" @change="selectLocalPort">
@@ -604,13 +626,28 @@ onUnmounted(() => {
           {{ tr('原下载器已不可用。请刷新列表或明确选择其他下载器，当前未改连其他设备。', 'The selected probe is unavailable. Refresh or explicitly select another probe; no other device has been connected.') }}
         </p>
 
+        <div v-if="!deviceStatus.connected || switchingProbe" class="form-row">
+          <label class="form-label" :for="guiId('connection-mcu')">{{ tr('目标芯片', 'Target MCU') }}</label>
+          <select :id="guiId('connection-mcu')" v-model="selectedMcu" class="form-select" data-testid="connection-mcu"
+            :disabled="connecting || disconnecting || savingLocal || savingClock || selectedProbeMissing">
+            <option value="">{{ tr('默认连接', 'Default connection') }}</option>
+            <option v-for="profile in profiles" :key="profile.key" :value="profile.key">{{ profile.name }}</option>
+          </select>
+          <button v-if="profilesError" class="btn btn-sm" type="button" @click="loadProfiles">
+            {{ tr('重新加载型号', 'Reload targets') }}
+          </button>
+        </div>
+        <p v-if="profilesError && (!deviceStatus.connected || switchingProbe)" class="connection-detail" role="alert">
+          {{ tr('读取目标型号失败：', 'Failed to load target models: ') }}{{ profilesError }}
+        </p>
+
         <ConnectionClockControl :device-connected="deviceStatus.connected" :device-generation="deviceStatus.device_generation"
           :disabled="savingLocal || connecting || disconnecting || switchingProbe" @busy="savingClock = $event" @firmware-update="activeSection = 'firmware'" />
         <p v-if="switchingProbe" class="connection-detail">{{ tr('请先切换下载器，再选择该设备支持的时钟。', 'Switch probes first, then select a clock supported by that device.') }}</p>
 
         <div class="local-actions">
-          <span class="auto-save-state" data-testid="local-auto-save">
-            {{ localSaveState === 'saving' ? tr('自动保存中...', 'Saving...') : localSaveState === 'saved' ? tr('已自动保存', 'Saved') : localSaveState === 'unconfirmed' ? tr('保存未确认，请刷新页面核对配置', 'Save unconfirmed; refresh the page to check configuration') : tr('修改后自动保存', 'Changes save automatically') }}
+          <span v-if="!sharedRuntime" class="auto-save-state" data-testid="local-auto-save">
+            {{ localSaveState === 'saving' ? tr('正在保存串口设置…', 'Saving serial port…') : localSaveState === 'saved' ? tr('串口设置已自动保存', 'Serial port saved') : localSaveState === 'unconfirmed' ? tr('串口设置保存未确认，请刷新页面核对', 'Serial port save unconfirmed; refresh to check') : tr('串口设置自动保存', 'Serial port changes save automatically') }}
           </span>
           <button
             class="btn btn-primary icon-command"

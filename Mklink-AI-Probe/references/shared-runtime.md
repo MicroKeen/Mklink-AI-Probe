@@ -8,6 +8,23 @@ ESP32-S3 无线工作台通过传输适配复用本后台，接入步骤见
 
 ## 连接与选择
 
+S32K314 可在无 GUI 的环境连接。在共享 MCP 调用 `list_target_profiles()` 查询型号键与阶段支持，
+再调用 `connect(probe="已确认的探针ID", mcu="s32k314", project_root="目标工程绝对路径")`。
+成功回执中的 `target_attach` 给出 `profile="S32K314"` 和 `mem_ap=4`。随后可用同一 MCP 会话的
+`read_memory`、`write_memory` 和采集工具。CLI 使用相同目录和共享后台，例如：
+
+```powershell
+python -B -m mklink target-profiles
+$probe = Read-Host '目标探针 ID'
+$project = Read-Host '目标工程绝对路径'
+python -B -m mklink device-status --probe $probe --mcu s32k314 --project-root $project
+python -B -m mklink read-ram --probe $probe --mcu s32k314 --addr 0xE000ED00 --size 4
+```
+
+缺少 MUX HELLO 0x2000 时按提示升级匹配的下载器固件。芯片检查失败时查看从 0 开始的
+`step`、`reason` 和 `actual`。绑定失效后需显式重新连接，结果不确定的写入不要重放。
+`unsupported_hook` 表示主机暂未实现配置声明的阶段。桌面与 Web 在配置页的本地连接中选择同一型号。
+
 Skill 首次加载以 `ping(force_update_check=True, background_update_check=True)` 发起客户端
 版本检查，继续任务，后续用 `ping(background_update_check=True)` 取结果。发现 Skill 新版
 主动告知用户当前/最新版本；`checking` 或离线不能当作最新。授权连接后对下述固件状态也

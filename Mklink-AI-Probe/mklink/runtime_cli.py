@@ -196,7 +196,8 @@ def run(args):
     owned_stream = None
     try:
         client.connect(project_root=project, port=getattr(args, 'port', None), probe=getattr(args, 'probe', None),
-                       axf=getattr(args, 'source', None), elf_backend=getattr(args, 'elf_backend', None))
+                       mcu=getattr(args, 'mcu', None), axf=getattr(args, 'source', None),
+                       elf_backend=getattr(args, 'elf_backend', None))
         if args.command in {'flash', 'erase', 'reset'}:
             arguments = {}
             if args.command == 'flash':

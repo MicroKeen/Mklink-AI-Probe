@@ -313,6 +313,28 @@ def release_resource_by_name(
     return release_resource_owner(state, lease.owner, stop_active=stop_active)
 
 
+def check_live_attach_profile(device, mcu: str | None) -> bool:
+    """An existing physical claim can be shared, but never relabeled."""
+    if not mcu:
+        return False
+    from mklink.device import target_attach_status
+    from mklink.profiles import TargetProfileError, resolve_attach_profile
+
+    active = target_attach_status(device)
+    try:
+        requested = resolve_attach_profile(mcu)
+    except TargetProfileError as exc:
+        raise HTTPException(422, exc.detail) from exc
+    if requested is None and active is None:
+        return False
+    if active and requested == getattr(device, "_attach_profile", None):
+        return True
+    raise HTTPException(409, {
+        "code": "mux_profile_conflict", "requested": mcu, "target_attach": active,
+        "message": "Disconnect the current target before selecting a different attach profile.",
+    })
+
+
 def remember_device_connection(
     state: dict[str, Any],
     device,
@@ -328,10 +350,12 @@ def remember_device_connection(
     except Exception:
         axf_status = {}
     device_state = getattr(device, "__dict__", {})
+    from mklink.device import target_attach_status
+    profile = target_attach_status(device)
     details = {
         "port": getattr(device, "port", None),
         "axf": axf_status.get("axf_path") or device_state.get("_axf"),
-        "mcu": mcu if mcu is not None else device_state.get("_mcu_hint"),
+        "mcu": profile["profile"] if profile else (mcu if mcu is not None else device_state.get("_mcu_hint")),
         "elf_backend": (
             axf_status.get("elf_backend")
             or device_state.get("_elf_backend")
@@ -1832,6 +1856,9 @@ def create_app(
                     previous = _state.get('last_device_connection') or {}
                     _state['last_device_connection'] = {
                         k: previous[k] for k in ('axf', 'elf_backend') if k in previous}
+                    pending = _state.get('requested_attach_profile')
+                    if pending and pending[0] != selected['probe_id']:
+                        _state.pop('requested_attach_profile')
                 result = None
                 if 'connect' in body:
                     options = {k: v for k, v in body['connect'].items()
@@ -2007,8 +2034,11 @@ def create_app(
         restore_last: bool = Body(default=False),
         reuse_connected: bool = Body(default=False),
     ):
+        from mklink.device import target_attach_status
         runtime = getattr(app.state, "shared_runtime", None)
         port_changed = False
+        explicit_mcu = mcu is not None
+        current = _state.get("device")
         if runtime is not None:
             from mklink.probes import select_probe
             from mklink.runtime import RuntimeErrorResponse
@@ -2021,14 +2051,17 @@ def create_app(
             except RuntimeErrorResponse as exc:
                 raise HTTPException(409, exc.detail) from exc
             runtime.prune()
-            current = _state.get("device")
             port_changed = bool(current and current.port and current.port.casefold() != port.casefold())
-            if current and current.connected and not port_changed:
+        if current and current.connected and not port_changed:
+            matching_profile = check_live_attach_profile(current, mcu)
+            if runtime is not None:
                 restore_last = False  # Reuse live symbols; never reparse on an implicit reconnect.
                 if reuse_connected:
                     axf = mcu = elf_backend = None
-            if runtime.target_sessions and current and current.connected and not port_changed and any(value is not None for value in (axf, mcu, elf_backend)):
-                raise HTTPException(status_code=409, detail="Detach shared clients before changing device configuration or symbols")
+                elif matching_profile:
+                    mcu = None  # A subscription to the same profile performs no device I/O.
+                if runtime.target_sessions and any(value is not None for value in (axf, mcu, elf_backend)):
+                    raise HTTPException(status_code=409, detail="Detach shared clients before changing device configuration or symbols")
         preferred_port = None
         symbol_device = _state.get('device') or _state.get('symbol_device')
         if axf is None and symbol_device is not None and not symbol_device.connected:
@@ -2077,13 +2110,13 @@ def create_app(
                 "axf_loaded": bool(getattr(dev, "_dwarf_info", None)),
                 "elf_backend": dev.axf_status.get("elf_backend"),
                 "axf": dev.axf_status,
+                "target_attach": target_attach_status(dev),
             }
 
         import mklink
 
-        # Open the command port first. Target SWD/IDCODE initialization is
-        # intentionally deferred so a successful serial connection returns
-        # immediately; it is synchronized in the background below.
+        # Generic target identity is read in the background. A selected native
+        # profile must complete before this connection is shared with clients.
         loop = asyncio.get_event_loop()
 
         def _connect():
@@ -2098,21 +2131,53 @@ def create_app(
             )
 
         async with async_target_debug_lease(_state, "connect"):
+            if runtime is not None:
+                # A failed profile attach never publishes a Device. Retain
+                # explicit selection by physical identity across that failure
+                # so a later client without a model cannot enter generic SWD.
+                probe_id = _state["shared_probe_id"]
+                pending = _state.get("requested_attach_profile")
+                if not explicit_mcu and pending and pending[0] == probe_id:
+                    mcu = pending[1]
             device = None
             try:
+                if runtime is not None and mcu is not None:
+                    from mklink.profiles import resolve_attach_profile
+                    profile = resolve_attach_profile(mcu)
+                    _state["requested_attach_profile"] = (probe_id, profile.name) if profile else None
                 device = await loop.run_in_executor(None, _connect)
                 await run_in_threadpool(get_managers()["superwatch"].prepare, device)
                 await activate_watch_profile(device)
+                if getattr(device, "_attach_profile", None) and not device.connected:
+                    raise ConnectionError('Target attach binding lost while preparing the shared connection')
                 dispatcher = DeviceDispatcher(device)
             except Exception as exc:
+                from mklink.firmware_compatibility import FirmwareUpgradeRequired
+                from mklink.hil_lock import HilLockHeld
+                from mklink.mux import MuxProfileError
+                from mklink.profiles import TargetProfileError
                 detail = str(exc)
+                status_code = 400 if isinstance(exc, ValueError) else 500
+                if isinstance(exc, MuxProfileError):
+                    detail, status_code = exc.detail, 409
+                elif isinstance(exc, FirmwareUpgradeRequired):
+                    detail, status_code = exc.to_detail(), 409
+                elif isinstance(exc, TargetProfileError):
+                    detail, status_code = exc.detail, 422
+                    if runtime is not None and mcu:
+                        _state["requested_attach_profile"] = (probe_id, mcu)
+                elif isinstance(exc, HilLockHeld):
+                    detail, status_code = {"code": "PROBE_BUSY", "message": str(exc)}, 409
                 if device is not None:
                     try:
                         await run_in_threadpool(device.close)
                     except Exception as close_error:
-                        detail += f"; connection cleanup failed: {close_error}"
+                        if isinstance(detail, dict):
+                            detail = {**detail, "cleanup_error": str(close_error)}
+                        else:
+                            detail += f"; connection cleanup failed: {close_error}"
                 raise HTTPException(
-                    status_code=400 if isinstance(exc, ValueError) else 500,
+                    status_code=status_code,
                     detail=detail,
                 ) from exc
             # Publish only a fully prepared command session. A catalog/symbol
@@ -2120,6 +2185,9 @@ def create_app(
             _state["device"] = device
             _state["dispatcher"] = dispatcher
             remember_device_connection(_state, device, mcu=mcu)
+            target_attach = target_attach_status(device)
+            if target_attach and runtime is not None:
+                _state["requested_attach_profile"] = (_state["shared_probe_id"], target_attach["profile"])
 
         async def _initialize_target_later():
             try:
@@ -2141,7 +2209,8 @@ def create_app(
                 # until a target becomes available.
                 return
 
-        asyncio.create_task(_initialize_target_later())
+        if target_attach is None:
+            asyncio.create_task(_initialize_target_later())
         return {
             "status": "connected",
             "mcu": device.mcu_name,
@@ -2149,7 +2218,8 @@ def create_app(
             "port": device.port,
             "axf_loaded": bool(getattr(device, "_dwarf_info", None)),
             "elf_backend": device.axf_status.get("elf_backend"),
-            "target_initializing": True,
+            "target_initializing": target_attach is None,
+            "target_attach": target_attach,
             "clock_warning": getattr(device, "clock_warning", None),
             "clock_hz": getattr(device, "clock_hz", None),
         }
@@ -2170,6 +2240,7 @@ def create_app(
 
     @app.get("/api/device/status")
     async def device_status():
+        from mklink.device import target_attach_status
         from mklink.firmware_compatibility import compatibility_snapshot
         if not _state["device"]:
             symbols = _state.get('symbol_device')
@@ -2185,6 +2256,7 @@ def create_app(
             "device_generation": _state.get('device_generation', 0),
             "state": dev.state.name if dev.state else "disconnected",
             "mcu": dev.mcu_name if dev.connected else None,
+            "target_attach": target_attach_status(dev) if dev.connected else None,
             "idcode": hex(dev.idcode) if dev.connected else None,
             "port": dev.port,
             "axf": active_symbol_status(dev),
@@ -4044,8 +4116,9 @@ def create_app(
         from mklink.runtime_capabilities import validate_arguments
         arguments = validate_arguments('rtt_inspect', body)
         device = _state.get('device')
-        if device is None or not device.connected or not device.idcode:
-            raise HTTPException(400, 'Connect a target with a valid chip ID before inspecting RTT')
+        from mklink.device import target_attach_status
+        if device is None or not device.connected or not (device.idcode or target_attach_status(device)):
+            raise HTTPException(400, 'Connect a target with a valid chip ID or verified attach profile before inspecting RTT')
         async with async_target_debug_lease(_state, 'rtt-inspect'):
             try:
                 return await run_in_threadpool(device.rtt_inspect, int(arguments['address'], 0))

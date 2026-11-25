@@ -69,6 +69,7 @@ import SetupHint from './SetupHint.vue'
 import RttChannelPanel from './RttChannelPanel.vue'
 import { tr } from '../../composables/useLanguage'
 import { API_BASE } from '../../lib/runtimeEndpoint'
+import type { DeviceStatus } from '../../types/mklink'
 import { useToast } from '../../composables/useToast'
 const props = defineProps<{ deviceConnected: boolean; panelId?: string }>()
 const channelSurfaces = new Map<number, SemanticSurface>()
@@ -247,11 +248,14 @@ async function searchRttAddress(): Promise<void> {
     if (props.deviceConnected) {
       const deviceResponse = await fetch(`${API_BASE}/api/device/status`)
       if (!deviceResponse.ok) throw new Error(tr('读取设备状态失败', 'Could not read device status'))
-      const device = await deviceResponse.json()
+      const device: DeviceStatus = await deviceResponse.json()
       if (disposed || generation !== searchGeneration) return
-      if (device.connected && Number(device.idcode) > 0) {
+      if (device.connected && (Number(device.idcode) > 0 || device.target_attach?.profile)) {
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+        if (device.probe_id) headers['X-MKLink-Probe'] = device.probe_id
+        if (device.device_generation !== undefined) headers['X-MKLink-Device-Generation'] = String(device.device_generation)
         const response = await fetch(`${API_BASE}/api/device/rtt-control-block`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          method: 'POST', headers,
           body: JSON.stringify({ address: result.addr }),
         })
         const info = await response.json()

@@ -525,7 +525,12 @@ class RuntimeControl:
                               'json': {key: value for key, value in (arguments or {}).items() if key != 'channel'}}
             response = await client.request(method, path, headers=headers, **kwargs)
         if response.status_code >= 400:
-            raise HTTPException(response.status_code, response.json())
+            error = response.json()
+            if path == "/api/device/connect" and isinstance(error, dict) and isinstance(error.get("detail"), dict):
+                # Preserve the firmware diagnostic at the normal HTTP detail
+                # level for CLI, SDK and MCP clients of /_runtime/attach.
+                error = error["detail"]
+            raise HTTPException(response.status_code, error)
         return response.json()
 
 
@@ -865,7 +870,7 @@ fetch('/_runtime/login', {method:'POST', headers:{'Content-Type':'application/js
     async def status():
         control.prune()
         return {"protocol": PROTOCOL, "version": VERSION, "instance_id": info["instance_id"],
-                "gui_launch": 1, "runtime_id": info.get("runtime_id"),
+                "gui_launch": 1, "target_attach_version": 1, "runtime_id": info.get("runtime_id"),
                 "pid": info.get("pid"), "project_root": state["project_root"], "transport": info.get('transport', 'cdc'),
                 "probe_id": info.get("probe_id"), "clients": len(control.sessions), "busy": control.operation_lock.locked(),
                 "capabilities": sorted(CAPABILITIES)}
@@ -947,8 +952,12 @@ fetch('/_runtime/login', {method:'POST', headers:{'Content-Type':'application/js
                 if body.get("axf") and (not axf or not same_path(body["axf"], axf)):
                     raise HTTPException(409, "Runtime already has different symbols; change them explicitly in the GUI")
                 if body.get("mcu") or body.get("elf_backend"):
+                    from mklink.remote.api import check_live_attach_profile
+                    matching_profile = check_live_attach_profile(dev, body.get("mcu"))
                     previous = state.get("last_device_connection") or {}
                     for key in ("mcu", "elf_backend"):
+                        if key == "mcu" and matching_profile:
+                            continue
                         if body.get(key) and body[key] != previous.get(key):
                             raise HTTPException(409, f"Shared {key} differs from the requested configuration")
             else:

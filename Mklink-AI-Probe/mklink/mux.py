@@ -14,7 +14,7 @@ import struct
 import threading
 import time
 from mklink.connection_diagnostics import event, error_detail
-from mklink.firmware_compatibility import upgrade_message
+from mklink.firmware_compatibility import FirmwareUpgradeRequired, upgrade_message
 
 
 class MuxError(ConnectionError):
@@ -26,6 +26,50 @@ SLEEP_COMMAND_TIMEOUT = 12.0
 SLEEP_READ_MAX = 480
 # Keep a write in a single 512-byte wire frame (20 header/CRC + 8 nonce + 7 parameters).
 SLEEP_WRITE_MAX = 477
+PROFILE_ATTACH_COMMAND = 0x18
+PROFILE_ATTACH_CAPABILITY = 1 << 13
+PROFILE_MAX_STEPS = 16
+PROFILE_STEP = struct.Struct('<BBHIII')
+PROFILE_DIAGNOSTIC = struct.Struct('<BBBBI')
+PROFILE_REASONS = ('success', 'format', 'DP initialization', 'AP read', 'AP value',
+                   'AP write', 'AP write verification', 'memory read', 'memory value',
+                   'AP binding', 'target or binding lost')
+
+
+def encode_attach_profile(profile):
+    """Validate the complete recipe before sending any target operation."""
+    if type(profile.mem_ap) is not int or not 0 <= profile.mem_ap <= 255:
+        raise ValueError('Invalid profile memory AP')
+    steps = profile.steps
+    if not 1 <= len(steps) <= PROFILE_MAX_STEPS or steps[-1].kind != 3:
+        raise ValueError('Profile requires 1–16 steps ending with MEM32_CHECK')
+    encoded = bytearray(struct.pack('<BBBB', 1, profile.mem_ap, len(steps), 0))
+    identified_aps = set()
+    checking_memory = False
+    for index, step in enumerate(steps):
+        kind, ap, addr, mask, value = step.kind, step.ap, step.address, step.mask, step.value
+        if (any(type(v) is not int for v in (kind, ap, addr, mask, value))
+                or kind not in (1, 2, 3) or not 0 <= ap <= 255
+                or not 0 <= addr <= 0xffffffff or addr % 4
+                or not 0 < mask <= 0xffffffff or value < 0 or value & ~mask):
+            raise ValueError(f'Invalid profile fields at step {index}')
+        if kind == 3:
+            if ap != profile.mem_ap:
+                raise ValueError(f'MEM32_CHECK must use the selected memory AP at step {index}')
+            checking_memory = True
+        elif checking_memory:
+            raise ValueError(f'AP operations must precede memory checks at step {index}')
+        elif addr > 0xfc:
+            raise ValueError(f'Invalid AP register offset at step {index}')
+        elif kind == 1 and addr == 0xfc and mask == 0xffffffff:
+            identified_aps.add(ap)
+        elif kind == 2:
+            if addr == 0xfc:
+                raise ValueError(f'AP_UPDATE cannot modify the read-only AP IDR at step {index}')
+            if ap not in identified_aps:
+                raise ValueError(f'AP_UPDATE requires a preceding full AP IDR check at step {index}')
+        encoded.extend(PROFILE_STEP.pack(kind, ap, 0, addr, mask, value))
+    return bytes(encoded)
 
 
 def sleep_rpc_timeout(size, *, write=False, verify=False):
@@ -40,9 +84,10 @@ def sleep_rpc_timeout(size, *, write=False, verify=False):
 
 
 class MuxTargetError(RuntimeError):
-    def __init__(self, status, op=None, payload=b""):
+    def __init__(self, status, op=None, payload=b"", *, response=b""):
         self.status = status
         self.op = op
+        self.response = response
         if status == 1 and op in (0x10, 0x11, 0x12, 0x13, 0x15, 0x16, 0x17,
                                   0x20, 0x21, 0x22, 0x23, 0x24, 0x25,
                                   0x31, 0x32, 0x33, 0x34):
@@ -74,6 +119,61 @@ class MuxTargetError(RuntimeError):
         super().__init__(message)
 
 
+def _profile_error_diagnostic(profile, status, response):
+    if len(response) != PROFILE_DIAGNOSTIC.size:
+        return None
+    version, ap, step, reason, actual = PROFILE_DIAGNOSTIC.unpack(response)
+    if version != 1 or (step != 0xff and step >= len(profile.steps)):
+        return None
+    if status == 2 and reason == 1 and actual == 0:
+        if ap == profile.mem_ap or (ap == 0xff and step == 0xff):
+            return step, reason, actual
+    if status != 5 or ap != profile.mem_ap:
+        return None
+    if step == 0xff:
+        return (step, reason, actual) if reason in (2, 9, 10) and actual == 0 else None
+    # A step-specific reason must identify an operation that could produce it.
+    step_kinds = {3: (1, 2), 4: (1,), 5: (2,), 6: (2,), 7: (3,), 8: (3,)}
+    if profile.steps[step].kind not in step_kinds.get(reason, ()):
+        return None
+    if reason in (3, 7) and actual != 0:
+        return None
+    return step, reason, actual
+
+
+class MuxProfileError(MuxTargetError):
+    def __init__(self, profile, status, response):
+        super().__init__(status, PROFILE_ATTACH_COMMAND, response=response)
+        step = reason = actual = None
+        message = f'{profile.name} PROFILE_ATTACH failed (status {status})'
+        diagnostic = _profile_error_diagnostic(profile, status, response)
+        if diagnostic is not None:
+            step, reason, actual = diagnostic
+            message += f': step={step}, reason={reason} ({PROFILE_REASONS[reason]}), actual=0x{actual:08X}'
+        elif response or status in (2, 5):
+            message += f': missing or invalid diagnostic ({response.hex()})'
+        if status == 1:
+            message += ' ' + upgrade_message('Profile-based SWD attach', 'MUX command 0x18 (status 1: unsupported)')
+        elif status in (3, 4):
+            message += (': epoch/nonce or claim invalid' if status == 3 else ': request ID duplicated or out of order')
+            message += '; reconnect explicitly, do not replay the profile'
+        elif status == 6:
+            message += ': target busy; check for active capture or external debugger ownership before reconnecting explicitly'
+        elif status == 5:
+            through_failure = profile.steps if step in (None, 0xff) else profile.steps[:step + 1]
+            if reason == 5:
+                message += '; submitted AP write outcome unknown, do not replay the profile'
+            elif reason not in (2, 10) and any(s.kind == 2 for s in through_failure):
+                message += '; previously submitted AP writes may have taken effect, do not replay the profile'
+        self.args = (message,)
+        self.detail = dict(code='mux_profile_attach_failed', message=message, profile=profile.name,
+                           status=status, mem_ap=profile.mem_ap, step=step, reason=reason,
+                           actual=actual, response_hex=response.hex())
+        if status == 1:
+            self.detail.update(code='firmware_upgrade_required', action='upgrade_probe_firmware',
+                               feature='Profile-based SWD attach', required='MUX command 0x18')
+
+
 class MuxWatchEvent(bytes):
     """Local reset generation accompanies queued wire bytes, without loss."""
     def __new__(cls, payload, reset_generation):
@@ -86,6 +186,7 @@ class MuxWatchEvent(bytes):
 
 def packet(op, epoch, request, payload=b''):
     limit = {0x12: 492, 0x24: 489, SLEEP_ACCESS_COMMAND: 15 + SLEEP_WRITE_MAX,
+             PROFILE_ATTACH_COMMAND: 8 + 4 + PROFILE_MAX_STEPS * PROFILE_STEP.size,
              SLEEP_ACCESS_COMMAND | 0x80: 1 + SLEEP_READ_MAX}.get(op, 256)
     if len(payload) > limit:
         raise ValueError(f'Multiplex payload exceeds {limit} bytes')
@@ -132,6 +233,8 @@ class MuxTransport:
         self.nonce = secrets.token_bytes(8)
         self.ready = False
         self.capabilities = 0
+        self.attach_profile = None
+        self._profile_failed = False
         self.transfer_quantum = 128
         self.sleep_access = False
         self._pending_quantum = None
@@ -171,6 +274,7 @@ class MuxTransport:
                       last_reply_age_ms=None if self._last_reply is None else round((now-self._last_reply)*1000),
                       timeout=self._last_timeout, rtt_mask=self.rtt_mask, watch_running=self.watch_running)
             self.ready = False
+            self.attach_profile = None
             self._condition.notify_all()
 
     def _check(self):
@@ -217,6 +321,10 @@ class MuxTransport:
     def request(self, op, payload=b'', *, deadline=None):
         with self._commands, self._condition:
             self._check()
+            if self._profile_failed and op >= 0x10:
+                raise MuxError('Profile AP binding is unavailable; reconnect explicitly')
+            if self.attach_profile is not None and op in (1, 4, 0x13, PROFILE_ATTACH_COMMAND):
+                raise MuxError('Changing a profile AP binding requires an explicit reconnect')
             self._request_waiting = True
             try:
                 while self._pending:
@@ -235,10 +343,41 @@ class MuxTransport:
                 raise MuxError('Empty command response')
             if answer[0] in (3, 4):
                 self.fail('Claim expired or request duplicated; reconnect explicitly')
+                if op == PROFILE_ATTACH_COMMAND:
+                    raise MuxTargetError(answer[0], op, payload, response=answer[1:])
                 self._check()
             if answer[0]:
-                raise MuxTargetError(answer[0], op, payload)
+                error = MuxTargetError(answer[0], op, payload, response=answer[1:])
+                if self.attach_profile is not None and answer[0] == 5:
+                    self.attach_profile = None
+                    self._profile_failed = True
+                    error.args = (str(error) + ' Profile AP binding is unconfirmed; reconnect explicitly.',)
+                raise error
             return answer[1:]
+
+    def bind_attach_profile(self, profile):
+        """Bind the AP only after the firmware confirms every profile step."""
+        with self._commands:
+            self._check()
+            if not self.ready or self._profile_failed or self.attach_profile is not None:
+                raise MuxError('Profile attach requires a fresh HELLO/CLAIM')
+            if not self.capabilities & PROFILE_ATTACH_CAPABILITY:
+                self._profile_failed = True
+                raise FirmwareUpgradeRequired('Profile-based SWD attach', 'MUX HELLO 0x2000')
+            try:
+                answer = self.request(PROFILE_ATTACH_COMMAND, encode_attach_profile(profile))
+                if answer != PROFILE_DIAGNOSTIC.pack(1, profile.mem_ap, 0xff, 0, 0):
+                    raise MuxError(f'Invalid PROFILE_ATTACH success response {answer.hex()}; '
+                                   'binding unconfirmed, do not replay the profile')
+            except MuxTargetError as error:
+                self._profile_failed = True
+                raise MuxProfileError(profile, error.status, error.response) from error
+            except Exception:
+                self._profile_failed = True
+                raise
+            with self._condition:
+                self._check()
+                self.attach_profile = profile
 
     def _wait(self, deadline=None):
         self._check()
@@ -569,6 +708,9 @@ class MuxTransport:
         with self._commands:
             with self._condition:
                 self._closing = True
+                if self.attach_profile is not None:
+                    self._profile_failed = True
+                    self.attach_profile = None
                 while self._heartbeats and self._error is None:
                     self.tick()
                     if self._error is None:

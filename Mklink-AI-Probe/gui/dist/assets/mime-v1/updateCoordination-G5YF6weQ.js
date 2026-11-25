@@ -1,0 +1,1 @@
+import{Z as e}from"./vue-runtime-3WpXCy8-.js";import{a as t}from"./core-CRnXhCds.js";var n=Symbol(`updateCoordination`);function r(){return{clientPending:e(!1),clientInstalling:e(!1),firmwareBusy:e(!1)}}async function i(){if(await t(`begin_desktop_install`))return()=>t(`end_desktop_install`)}export{i as n,n as r,r as t};

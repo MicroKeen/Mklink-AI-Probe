@@ -451,7 +451,7 @@ class RuntimeClient:
             raise ValueError('Session scope must be target or uart')
         if scope == 'uart' and any(value is not None for value in (port, axf, mcu, elf_backend)):
             raise ValueError('UART-only attachment accepts a probe selector, not target connection settings')
-        with self._lock:
+        with self._attach_guard(mcu, project_root, scope) as profile:
             self._close_memory_channel()
             self._memory_transport = False
             self._check_sleep_budget = False
@@ -464,6 +464,7 @@ class RuntimeClient:
             # Only explicit connect may rediscover or select a target. Ordinary
             # calls retain the original session and never replay hardware work.
             selected = None
+            health = None
             if existing and (probe or port):
                 from mklink.probes import select_probe
                 selected = select_probe(probe or port, allow_lobby=scope == 'uart')
@@ -479,6 +480,7 @@ class RuntimeClient:
                         raise RuntimeErrorResponse('The selected GUI backend changed or exited; reopen explicitly before connecting')
                     self.info = ensure_runtime(project_root=project_root or self.project_root,
                         probe=selected['probe_id'] if selected else self.info['probe_id'], allow_lobby=scope == 'uart')
+                    health = None
                 else:
                     if health.get('protocol') != PROTOCOL or health.get('version') != VERSION:
                         raise RuntimeErrorResponse('Runtime version differs; stop the old runtime explicitly before upgrading')
@@ -492,17 +494,26 @@ class RuntimeClient:
                     if selected and selected['probe_id'] != actual:
                         if scope == 'uart':
                             raise RuntimeErrorResponse('Select another target with a target-scoped connection')
+                        if profile is not None:
+                            self._require_profile_service(health)
                         request(self.info, 'POST', '/api/runtime/select', {'probe': selected['probe_id']}, timeout=300)
                         self._stop_heartbeat()
                         self.session_id = None
                         self.info = {**self.info, 'probe_id': selected['probe_id']}
+            if profile is not None:
+                self._require_profile_service(health or request(self.info, 'GET', '/_runtime/status', timeout=2))
             result = request(self.info, "POST", "/_runtime/attach", {
                 "project_root": project_root, "port": port, "axf": axf,
-                "mcu": mcu, "elf_backend": elf_backend, "session_id": self.session_id,
+                "mcu": profile.name if profile is not None else mcu,
+                "elf_backend": elf_backend, "session_id": self.session_id,
                 'probe_id': self.info.get('probe_id'),
                 'kind': self.kind, 'name': self.name, 'scope': scope,
             })
             self.session_id = result["session_id"]
+            if profile is not None:
+                bound = result.get('target_attach') or {}
+                if bound.get('profile') != profile.name or bound.get('mem_ap') != profile.mem_ap:
+                    raise RuntimeErrorResponse(f'{profile.name} MEM-AP {profile.mem_ap} binding was not confirmed')
             self._memory_transport = result.get('memory_transport') == 'websocket-v1'
             self._check_sleep_budget = result.get('check_sleep_budget') is True
             if project_root is not None:
@@ -515,6 +526,32 @@ class RuntimeClient:
                                                daemon=True, name="runtime-session")
             self._heartbeat.start()
             return result
+
+    @staticmethod
+    def _require_profile_service(health):
+        if health.get('target_attach_version') != 1:
+            raise RuntimeErrorResponse('Shared backend does not support target profile attach v1; '
+                                       'restart with a matching host before connecting')
+
+    @contextmanager
+    def _attach_guard(self, mcu, project_root, scope):
+        from mklink.profiles import resolve_attach_profile, TargetProfileError
+        with self._lock:
+            profile = None
+            try:
+                if scope == 'target':
+                    if not project_root and (self.info is None or self.project_root != '.'):
+                        project_root = self.project_root
+                    profile = resolve_attach_profile(mcu, project_root=project_root)
+                yield profile
+            except BaseException as exc:
+                # Another client can keep its own valid binding. This client must
+                # never issue the next operation on its previous target by mistake.
+                if profile is not None or isinstance(exc, TargetProfileError):
+                    self.session_id = None
+                    self._stop_heartbeat()
+                    self._close_memory_channel()
+                raise
 
     def _stop_heartbeat(self):
         self._stop.set()

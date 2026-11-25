@@ -358,6 +358,15 @@ def build_server():
         return set_alias(probe, alias)
 
     @server.tool()
+    def list_target_profiles() -> dict:
+        """List target model keys for connect(mcu=...) without a GUI, runtime or probe.
+
+        A mem_ap field identifies a model that requires native MUX profile attach.
+        """
+        from mklink.profiles import target_profile_catalog
+        return target_profile_catalog()
+
+    @server.tool()
     def connect(port: str | None = None, axf: str | None = None, mcu: str | None = None,
                 project_root: str | None = None, elf_backend: str | None = None, probe: str | None = None,
                 client_name: str = 'AI client', scope: str = 'target') -> dict:
@@ -366,7 +375,11 @@ def build_server():
         Explicit probe selection switches the existing backend after draining work.
         Other target sessions are retired and must explicitly reconnect; GUI pages follow.
         Conflicting project/symbol settings still require explicit reconfiguration.
-        The default scope connects the USB probe without requiring a target MCU.
+        For native target attach, select a key from list_target_profiles, for example
+        mcu="s32k314". No GUI is required. Check target_attach.profile and mem_ap
+        in the receipt before issuing memory or stream operations on this session.
+        A profile failure requires explicit reconnect. A plain probe connection can
+        succeed without a target MCU.
         For a new backend pass the target project's absolute project_root. Do not
         use the Skill/desktop install directory as the project; captures belong
         in the target project's .mklink/logs, with an explicit recording directory.

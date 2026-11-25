@@ -82,6 +82,7 @@ export interface FirmwareCompatibility {
 
 export interface DeviceStatus {
   probe_id?: string | null
+  target_attach?: { profile: string; mem_ap: number } | null
   firmware_update?: FirmwareUpdateNotice | null
   firmware_compatibility?: FirmwareCompatibility | null
   probe_product?: 'MKLink' | 'HPMLINK'

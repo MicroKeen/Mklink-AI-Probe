@@ -45,6 +45,8 @@ jobs:
           $tests += 'test_update_check'
           $tests += 'test_uart_high_baud'
           $tests += 'test_mux'
+          $tests += @('test_target_profile_catalog', 'test_mux_profile_attach', 'test_profile_attach_runtime', 'test_profile_attach_headless')
+          $tests += @('test_pyocd_target_attach_profile', 'test_online_flash_profile_binding', 'test_s32k314_online_routes')
           $tests += 'test_remote_shared_modbus'
           $tests += 'test_remote_shared_serial'
           $tests += 'test_remote_shared_target'

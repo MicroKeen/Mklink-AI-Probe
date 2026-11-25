@@ -102,6 +102,8 @@ class MKLinkSerialBridge:
         self._buffer_lock = threading.Lock()
         self._cmd_lock = threading.RLock()  # Includes explicit framed/legacy transitions.
         self._mux = None
+        self.attach_profile = None  # Selected by the physical connection owner, before MUX entry.
+        self._mux_selected_profile = None
         self._mux_supported = None
         self._firmware_capabilities: frozenset[str] | None = None
         self._firmware_version_response: str | None = None
@@ -456,10 +458,15 @@ class MKLinkSerialBridge:
         return (self._diagnostic_id, id(self._serial), self._port.casefold())
 
     def enable_multiplex(self):
+        from mklink.firmware_compatibility import FirmwareUpgradeRequired
         from mklink.mux import MuxTargetError, MuxTransport
         with self._cmd_lock:
             if self._mux is not None:
                 self._mux._check()
+                if self._mux_selected_profile != self.attach_profile:
+                    raise RuntimeError('Changing the target profile requires an explicit reconnect')
+                if self.attach_profile is not None and self._mux.attach_profile != self.attach_profile:
+                    raise RuntimeError('Profile AP binding is unconfirmed; reconnect explicitly')
                 return self._mux
             # Cached capabilities do not permit entering MUX while a legacy
             # binary stream is active, or after the command port has failed.
@@ -468,11 +475,14 @@ class MKLinkSerialBridge:
             if self._ctx.state not in (DeviceState.READY, DeviceState.BUSY):
                 raise ConnectionError(f'Device is not ready for MUX: {self._ctx.state.value}')
             if not self.supports_multiplex():
+                if self.attach_profile is not None:
+                    raise FirmwareUpgradeRequired('Profile-based SWD attach', 'MUX_TARGET=1 and MUX HELLO 0x2000')
                 return None
             transport = MuxTransport(self._serial.write, self._cmd_lock,
                                      command_timeout=getattr(self, 'mux_timeout', 3.0),
                                      background_heartbeats=getattr(self, 'mux_background_heartbeats', False),
                                      diagnostic_context={'connection': getattr(self, '_diagnostic_id', None), 'port': getattr(self, '_port', None)})
+            self._mux_selected_profile = self.attach_profile
             self._mux = transport  # The existing reader changes decoder before entry.
             try:
                 self._mux_marker.parent.mkdir(parents=True, exist_ok=True)
@@ -490,7 +500,12 @@ class MKLinkSerialBridge:
                 status = transport.request(0x10)
                 if len(status) != 16 or status[15] not in (1, 2):
                     raise RuntimeError('Multiplex target has no supported debug interface')
-                if status[15] == 1:  # DAP_PORT_SWD; JTAG uses the established sysbus.
+                if self.attach_profile is not None:
+                    if status[15] != 1:
+                        raise RuntimeError('The selected target profile requires a SWD debug interface')
+                    transport.bind_attach_profile(self.attach_profile)
+                    self._ctx.clock_interface = 'SWD'
+                elif status[15] == 1:  # DAP_PORT_SWD; JTAG uses the established sysbus.
                     try:
                         transport.request(0x13)  # Non-resetting SWD attach.
                     except MuxTargetError as exc:
@@ -510,6 +525,8 @@ class MKLinkSerialBridge:
     def _leave_multiplex(self):
         if self._mux is None:
             return
+        if self._mux_selected_profile is not None:
+            raise RuntimeError('This operation requires text mode and would release the profile AP binding; disconnect explicitly')
         if self._mux.sampling:
             raise RuntimeError('This command requires legacy mode; explicitly stop RTT and SuperWatch first')
         with self._mux._commands:

@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 
 from mklink.bridge import MKLinkSerialBridge
 from mklink.memory_access import parse_read_ram_response
+from mklink.profiles import MuxAttachProfile
 
 
 # --- Cortex-M Debug Registers (PPB) ---
@@ -53,8 +54,11 @@ class DebugState:
 
 
 def _read_u32(bridge: MKLinkSerialBridge, addr: int) -> int:
-    resp = bridge.send_command(f"cmd.read_ram(0x{addr:08X}, 4)", timeout=5.0)
-    data = parse_read_ram_response(resp)
+    if isinstance(getattr(bridge, "attach_profile", None), MuxAttachProfile):
+        data = bridge.enable_multiplex().read_memory(addr, 4)
+    else:
+        resp = bridge.send_command(f"cmd.read_ram(0x{addr:08X}, 4)", timeout=5.0)
+        data = parse_read_ram_response(resp)
     if len(data) < 4:
         raise RuntimeError(f"read_ram(0x{addr:08X}) returned {len(data)} bytes, expected 4")
     return struct.unpack("<I", data[:4])[0]
@@ -62,6 +66,9 @@ def _read_u32(bridge: MKLinkSerialBridge, addr: int) -> int:
 
 def _write_u32(bridge: MKLinkSerialBridge, addr: int, value: int) -> None:
     b = struct.pack("<I", value)
+    if isinstance(getattr(bridge, "attach_profile", None), MuxAttachProfile):
+        bridge.enable_multiplex().write_memory(addr, b)
+        return
     cmd = f"cmd.write_ram(0x{addr:08X}, 0x{b[0]:02X}, 0x{b[1]:02X}, 0x{b[2]:02X}, 0x{b[3]:02X})"
     bridge.send_command(cmd, timeout=5.0)
 

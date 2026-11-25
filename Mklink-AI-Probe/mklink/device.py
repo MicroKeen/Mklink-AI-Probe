@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Any
 
 from mklink._types import DeviceState, DEFAULT_BAUDRATE
+from mklink.profiles import MuxAttachProfile, resolve_attach_profile
 from mklink.transport_factory import file_transfer_hook
 from mklink.sleep_debug import memory_transport, preserve_access_clock, selected_clock, set_mode
 
@@ -57,6 +58,16 @@ class DeviceError(Exception):
 
 class DeviceNotConnectedError(DeviceError):
     pass
+
+
+def target_attach_status(device):
+    """Return the live, acknowledged profile for this physical connection."""
+    profile = getattr(device, "_attach_profile", None)
+    if isinstance(profile, MuxAttachProfile) and device.connected:
+        mux = getattr(getattr(device, "_bridge", None), "_mux", None)
+        if getattr(mux, "attach_profile", None) == profile:
+            return {"profile": profile.name, "mem_ap": profile.mem_ap}
+    return None
 
 
 class _InvalidRTTControlBlock(DeviceError):
@@ -232,11 +243,10 @@ def initialize_target(
     the reported identity and resolve ``current_mcu`` with priority
     ``mcu_hint > .mklink/config.json:mcu_key > idcode match``.
 
-    Call this on a freshly ``bridge.connect()``-ed session for **every path
-    that establishes a target *debug* session** — ``Device._connect``,
-    direct-bridge CLI ops, ``memory_access.read_memory``. Do NOT call it for
-    probe-only paths (``version``, ``firmware_check``, port detection, Modbus,
-    generic serial): those must work without a target MCU attached.
+    Call this on a fresh generic target debug session. A configured native
+    MUX attach establishes its own AP binding and must skip this text query.
+    Probe-only operations (version, firmware checks, port detection, Modbus,
+    serial) must also work without a target MCU attached.
 
     Best-effort / tolerant by design: if IDCODE cannot be read (no target,
     broken SWD, timeout, or a mock bridge in tests), the bridge context keeps
@@ -327,6 +337,7 @@ class Device:
         self._preferred_port = preferred_port
         self._axf = axf
         self._mcu_hint = mcu
+        self._attach_profile = None
         self._project_root = project_root
         self._elf_backend_requested = elf_backend
         self._initialize_target_now = initialize_target_now
@@ -359,11 +370,12 @@ class Device:
     # Connection
     # ------------------------------------------------------------------
     def _connect(self, *, load_symbols: bool = True) -> None:
-        from mklink.bridge import MKLinkSerialBridge
         from mklink.discovery import find_mklink_cdc_port
+        from mklink.flash import MKLinkFlash, FlashError
         from mklink.project_config import load_config
 
         config = load_config(self._project_root) or {}
+        self._attach_profile = resolve_attach_profile(self._mcu_hint, project_root=self._project_root, config=config)
         # COM numbers saved in a project are neither an identity nor permission
         # to switch probes. Shared callers already supply the selected port.
         candidate = self._port or self._preferred_port or find_mklink_cdc_port()
@@ -373,20 +385,49 @@ class Device:
             )
         from mklink.transport_factory import create_bridge
         bridge = create_bridge(candidate)
+        if self._attach_profile is not None:
+            # The profile can update the target during connect. Honor external
+            # HIL ownership before opening the handle or submitting any step.
+            self._hold_hil_lock(bridge, candidate)
         try:
+            if self._attach_profile is not None:
+                bridge.attach_profile = self._attach_profile
+                # A profile can update the target. Re-entry requires an explicit connection.
+                bridge.auto_recovery = False
             if not bridge.connect():
                 reason = getattr(bridge, 'last_connect_error', None) or 'Command-port handshake failed'
                 raise DeviceNotConnectedError(f'Failed to connect to selected MKLink port {candidate}: {reason}; no fallback attempted')
-        except BaseException:
-            bridge.close()
+            if self._attach_profile is not None:
+                mux = bridge.enable_multiplex()
+                if getattr(mux, 'attach_profile', None) != self._attach_profile:
+                    raise DeviceNotConnectedError('Probe did not confirm the requested MUX target profile')
+                bridge._ctx.current_mcu = self._attach_profile.name
+            self._bridge = bridge
+            self._port = candidate
+            self._connected = True
+            self._flash = MKLinkFlash(bridge)
+            self.clock_warning = None
+            if self._attach_profile is not None:
+                # Legacy identity/clock commands would leave the verified MUX binding.
+                if self._axf and load_symbols:
+                    self._load_dwarf_info()
+                return
+        except BaseException as error:
+            self._connected = False
+            self._flash = None
+            try:
+                try:
+                    bridge.close()
+                finally:
+                    if self._attach_profile is not None:
+                        self._release_hil_lock()
+            except Exception as cleanup_error:
+                # Keep the handle reachable for an explicit close after an
+                # unconfirmed shutdown. A failed connection can never do I/O.
+                self._bridge = bridge
+                raise error from cleanup_error
+            self._bridge = None
             raise
-        self._bridge = bridge
-        self._port = candidate
-        self._connected = True
-
-        from mklink.flash import MKLinkFlash, FlashError
-        self._flash = MKLinkFlash(self._bridge)
-        self.clock_warning = None
 
         # Negotiate once per USB connection, before applying a saved clock or
         # entering MUX. Dashboard status only reads this cache, never USB.
@@ -517,6 +558,31 @@ class Device:
         hz = getattr(context, 'swd_clock_hz', None)
         return hz if self.connected and type(hz) is int and hz > 0 else None
 
+    def _hold_hil_lock(self, bridge, port):
+        from mklink.hil_lock import HilFileLock, transport_lock_name
+
+        lock = HilFileLock(
+            transport_lock_name(getattr(bridge, 'transport_kind', 'usb-serial'), port),
+            owner_id=f"mklink-{os.getpid()}",
+        )
+        stop = threading.Event()
+
+        def renew():
+            while not stop.wait(lock.lease_s / 3):
+                if not lock.renew():
+                    return
+
+        worker = threading.Thread(target=renew, daemon=True, name="hil-lock-renew")
+        lock.acquire()
+        try:
+            worker.start()
+        except BaseException:
+            lock.release()
+            raise
+        self._hil_lock = lock
+        self._hil_renew_stop = stop
+        self._hil_renew_thread = worker
+
     def close(self) -> None:
         if self._rtt_session and self._rtt_session._running:
             try:
@@ -545,6 +611,9 @@ class Device:
         self._systemview_session = None
         self._systemview_parser = None
         self._connected = False
+        self._release_hil_lock()
+
+    def _release_hil_lock(self):
         # HIL-Infra lockd 协议互操作锁（connect 时获取）：断连即释放
         renew_stop = getattr(self, "_hil_renew_stop", None)
         if renew_stop is not None:
@@ -564,6 +633,9 @@ class Device:
         bridge = self._bridge
         if not self._connected or bridge is None:
             return False
+        profile = getattr(self, "_attach_profile", None)
+        if profile is not None and getattr(getattr(bridge, "_mux", None), "attach_profile", None) != profile:
+            return False
         transport_error = getattr(bridge, "_transport_error", None)
         if isinstance(transport_error, BaseException):
             return False
@@ -574,6 +646,10 @@ class Device:
 
     def _require_connected(self) -> None:
         if not self.connected:
+            if getattr(self, "_attach_profile", None) is not None:
+                raise DeviceNotConnectedError(
+                    f"{self._attach_profile.name} MUX binding is unavailable; reconnect explicitly before target access"
+                )
             raise DeviceNotConnectedError("Device not connected")
 
     @property
@@ -2906,7 +2982,8 @@ def connect(
         port: Explicit COM port. Auto-detected if not specified.
         preferred_port: Previously selected port; a failed connection never falls back.
         axf: Path to AXF/ELF file for symbol resolution.
-        mcu: MCU profile hint (e.g. "stm32f4").
+        mcu: MCU model key. A model with a native MUX profile (e.g.
+            "s32k314") requires a verified attachment to its configured AP.
         project_root: Project root for .mklink/ config lookup.
         elf_backend: Explicit ELF parser backend (builtin or external).
     """
@@ -2920,31 +2997,12 @@ def connect(
         initialize_target_now=initialize_target_now,
     )
     dev._connect()
-    # HIL-Infra lockd 协议互操作：connect 成功即持有 transport_usb-serial_<COM>，
-    # close() 释放；与 hil_core.lockd 编排器在同一锁名上互斥（T5 原生对齐）。
-    from mklink.hil_lock import HilFileLock, transport_lock_name
-    hil_lock = HilFileLock(
-        transport_lock_name(getattr(dev._bridge, 'transport_kind', 'usb-serial'), dev.port),
-        owner_id=f"mklink-{os.getpid()}",
-    )
-    try:
-        hil_lock.acquire()
-    except Exception:
-        dev.close()
-        raise
-    dev._hil_lock = hil_lock
-    # 长会话自动续租：按 lease/3 心跳防止超时会话的锁被回收；close 停止
-    renew_stop = threading.Event()
-
-    def _hil_renew_loop():
-        while not renew_stop.wait(hil_lock.lease_s / 3):
-            if not hil_lock.renew():
-                return  # 所有权丢失（被回收）——停止续租，断连时如实释放
-
-    dev._hil_renew_stop = renew_stop
-    dev._hil_renew_thread = threading.Thread(target=_hil_renew_loop,
-                                             daemon=True, name="hil-lock-renew")
-    dev._hil_renew_thread.start()
+    if getattr(dev, '_hil_lock', None) is None:
+        try:
+            dev._hold_hil_lock(dev._bridge, dev.port)
+        except Exception:
+            dev.close()
+            raise
     return dev
 
 
