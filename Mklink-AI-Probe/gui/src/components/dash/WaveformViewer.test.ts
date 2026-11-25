@@ -241,7 +241,8 @@ window.__rttTestProbe = {
 };`)
   if (panelId) {
     new Function(instrumented.replace("else if (typeof CONFIG !== 'undefined') createWaveformViewer(CONFIG, null);", '')).call(window)
-    ;(window as any).__mklinkCreateWaveformViewer({ ...(globalThis as any).CONFIG, panelId, viewerSettingsKey: 'waveform-test.' + panelId }, host)
+    const container = wrapper.get('.waveform-viewer').element
+    ;(window as any).__mklinkCreateWaveformViewer({ ...(globalThis as any).CONFIG, panelId, viewerSettingsKey: 'waveform-test.' + panelId }, container)
   } else new Function(instrumented).call(window)
   return {
     wrapper,
@@ -296,6 +297,48 @@ beforeEach(() => {
 })
 
 describe('WaveformViewer VOFA binary transport', () => {
+  it.each(['SuperWatch', 'flexible-watch'])('separates replay channels on one clock and restores the live workspace in %s', async panelId => {
+    const runtime = await loadRttViewerRuntime('SuperWatch', 4, undefined, panelId)
+    const sharedEdit = vi.fn()
+    window.addEventListener('mklink:workspace-split', sharedEdit)
+    try {
+      const { viewer, probe } = runtime
+      const main = { id: 'main', name: 'Main', height: 240 }
+      const live = { version: 2, defaultGroup: 'main', groups: [main], panes: [main], signals: {} }
+      viewer.setWorkspace(live)
+      viewer.configureBinaryChannels([{ name: 'live' }])
+      const channels = ['current', 'speed', 'angle'].map((name, i) => ({
+        name, latest: (i + 1) * 100, points: [[0, i * 100], [1, (i + 1) * 100]],
+      }))
+      const control = vi.fn()
+      viewer.beginReplay({ duration: 12, rows: 12, channels }, control)
+      viewer.renderReplayView({ id: 1, start: 0, end: 1, position: 1, width: 800, channels })
+      viewer.setReplayPosition(1, true, true)
+      control.mockClear()
+      for (const name of ['angle', 'speed', 'speed']) await viewer.execute('waveform.plot', { command: 'split', name })
+      const panes = () => probe.panelLayout().panes.map((p: any) => p.name)
+      expect(panes()).toEqual(['replay_main', 'angle', 'speed'])
+      expect(Object.keys(viewer.read().replayPlots).sort()).toEqual(['angle', 'speed'])
+      expect(runtime.wrapper.emitted('replay-panes')?.at(-1)?.[0]).toEqual([['speed', 'replay-1'], ['angle', 'replay-2']])
+      expect(probe.panelLayout().panes[1].range.yMin).toBeGreaterThan(probe.panelLayout().panes[0].range.yMax)
+      const groups = [main, { id: 'changed', name: 'Next live', height: 240 }]
+      viewer.setWorkspace({ ...live, groups, panes: groups, signals: { live: { pane: 'changed' } } })
+      expect(panes()).toHaveLength(3)
+      expect(control).not.toHaveBeenCalled()
+      expect(sharedEdit).not.toHaveBeenCalled()
+      const merge = document.querySelector<HTMLButtonElement>('.workspace-merge')!
+      merge.click()
+      expect(panes()).toEqual(['replay_main', 'speed'])
+      viewer.setReplayHiddenChannels(['speed'])
+      expect(panes()).toEqual(['replay_main'])
+      viewer.setReplayHiddenChannels([])
+      expect(panes()).toEqual(['replay_main', 'speed'])
+      viewer.endReplay()
+      expect(probe.serializeState().workspace.signals).toEqual({ live: { pane: 'changed' } })
+      viewer.beginReplay({ duration: 12, rows: 12, channels }, control)
+      expect(probe.serializeState().workspace.panes).toHaveLength(1)
+    } finally { runtime.viewer.endReplay(); window.removeEventListener('mklink:workspace-split', sharedEdit); runtime.cleanup() }
+  })
   it('replays in the original canvas, isolates live updates, and restores the current live channels', async () => {
     const runtime = await loadRttViewerRuntime('SuperWatch')
     try {

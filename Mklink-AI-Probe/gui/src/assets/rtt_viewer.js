@@ -381,13 +381,18 @@ var panelStyleCache = Object.create(null);
 function assignedPane(workspace, name) {
   return workspace.signals[name]?.pane || workspace.defaultGroup || workspace.panes[0].id;
 }
+function separatedReplayChannels() {
+  return binaryChannelNames.filter(function(name) { return assignedPane(watchWorkspace, name) !== watchWorkspace.defaultGroup; })
+    .map(function(name) { return [name, assignedPane(watchWorkspace, name)]; });
+}
 function dispatchWorkspaceEvent(event) {
-  if (!root || viewerKey === CONFIG.mode) { window.dispatchEvent(event); return; }
+  if (!replaySession && (!root || viewerKey === CONFIG.mode)) { window.dispatchEvent(event); return; }
   var next = JSON.parse(JSON.stringify(watchWorkspace || { version: 2, groups: [{ id: 'main', name: 'Main', height: 240 }], panes: [{ id: 'main', name: 'Main', height: 240 }], signals: {} }));
   var detail = event.detail;
   var defaultGroup = next.defaultGroup || next.panes[0].id;
   if (event.type === 'mklink:workspace-split') {
-    var id = 'plot-' + crypto.randomUUID();
+    if (replaySession && assignedPane(next, detail.path) !== defaultGroup) return;
+    var id = replaySession ? 'replay-' + binaryChannelNames.indexOf(detail.path) : 'plot-' + crypto.randomUUID();
     next.panes.push({ id: id, name: signalLabel(detail.path), height: 200, collapsed: false });
     next.signals[detail.path] = Object.assign({}, next.signals[detail.path], { pane: id });
   } else if (event.type === 'mklink:workspace-merge') {
@@ -395,6 +400,7 @@ function dispatchWorkspaceEvent(event) {
     next.panes = next.panes.filter(function(p) { return p.id !== detail.group || p.id === defaultGroup; });
   } else if (event.type === 'mklink:workspace-resize') next.panes = detail;
   else if (event.type === 'mklink:workspace-import') next = detail;
+  if (replaySession) { applyWorkspace(next); return; }
   var shared = sharedWorkspaceSnapshot || next;
   var signalPanes = Object.create(null), sourcePanes = Object.create(null);
   Object.keys(next.signals).forEach(function(name) {
@@ -437,6 +443,7 @@ function setWorkspace(value, local) {
   if (!IS_SUPERWATCH_MODE || !value || !Array.isArray(value.panes) || !value.panes.length) return;
   var previous = sharedWorkspaceSnapshot;
   if (!local) sharedWorkspaceSnapshot = value;
+  if (replaySession) return; // Apply the latest live workspace when this recording closes.
   if (localPlotLayout) {
     value = JSON.parse(JSON.stringify(value));
     var layout = localPlotLayout;
@@ -459,6 +466,9 @@ function setWorkspace(value, local) {
       }
     });
   }
+  applyWorkspace(value);
+}
+function applyWorkspace(value) {
   var signature=JSON.stringify(value);
   if (signature === workspaceSignature) return;
   workspaceSignature=signature;
@@ -469,11 +479,18 @@ function setWorkspace(value, local) {
   });
   workspaceY = Object.create(null);
   frozenSharedYRange = null;
-  requestBinaryVisibleRangeAfterTimelineChange();
+  if (!replaySession) requestBinaryVisibleRangeAfterTimelineChange();
+  if (replaySession && root) {
+    root.dispatchEvent(new CustomEvent('mklink:replay-panes', {detail: separatedReplayChannels()}));
+  }
   var wrap=document.getElementById('chart-wrap');
   if (wrap) {
     var parent=wrap.parentElement;
-    if (parent) parent.style.overflowY='auto';
+    if (parent) parent.style.overflowY = value ? 'auto' : '';
+    if (!value) {
+      wrap.querySelectorAll('.workspace-divider,.workspace-merge').forEach(function(el) { el.remove(); });
+      wrap.style.minHeight = '';
+    }
   }
   if (chartLegend) delete chartLegend.dataset.signature;
   updateChartLegend(); drawChart();
@@ -717,8 +734,9 @@ function updateChartLegend() {
       action.type = 'button';
       action.className = 'chart-legend-action';
       action.dataset.channel = name;
-      action.dataset.i18n = name === splitChannelName ? 'merge_channel' : 'split_channel';
-      action.dataset.i18nTitle = name === splitChannelName ? 'merge_channel_tip' : 'split_channel_tip';
+      var separate = name === splitChannelName || (replaySession && watchWorkspace && assignedPane(watchWorkspace, name) !== watchWorkspace.defaultGroup);
+      action.dataset.i18n = separate ? 'merge_channel' : 'split_channel';
+      action.dataset.i18nTitle = separate ? 'merge_channel_tip' : 'split_channel_tip';
       action.textContent = t(action.dataset.i18n);
       action.title = t(action.dataset.i18nTitle);
       action.setAttribute('aria-label', action.title);
@@ -745,6 +763,10 @@ function updateSplitPanelControl(active, dividerY) {
 function setSplitChannel(name) {
   if (!IS_SUPERWATCH_MODE || !FIELDS[name] || !FIELDS[name].visible) return false;
   if (watchWorkspace) {
+    if (replaySession && assignedPane(watchWorkspace, name) !== watchWorkspace.defaultGroup) {
+      dispatchWorkspaceEvent(new CustomEvent('mklink:workspace-merge', {detail: {group: assignedPane(watchWorkspace, name)}}));
+      return true;
+    }
     dispatchWorkspaceEvent(new CustomEvent('mklink:workspace-split', {detail: {path: name}}));
     return true;
   }
@@ -3781,13 +3803,14 @@ function beginReplay(metadata, control) {
   signalSubset = null;
   signalSubsetOverride = false;
   var liveSpan = superwatchTimelineSpan;
+  var liveWorkspace = watchWorkspace, liveY = workspaceY;
   saveViewerPreferences();
   resetBinaryStream();
   setArraySnapshot(null);
   configureBinaryChannels(metadata.channels.map(function(channel) { return {name: channel.name, type: 'float'}; }));
   setHiddenChannels([]);
   replayLiveChannels = liveChannels;
-  replaySession = {control: control, playing: false, duration: Math.max(.001, metadata.duration), liveHidden: liveHidden, liveSpan: liveSpan, liveSignals: liveSignals, liveSignalsOverride: liveSignalsOverride,
+  replaySession = {control: control, playing: false, duration: Math.max(.001, metadata.duration), liveHidden: liveHidden, liveSpan: liveSpan, liveSignals: liveSignals, liveSignalsOverride: liveSignalsOverride, liveWorkspace: liveWorkspace, liveY: liveY,
     overview: Object.fromEntries((metadata.overview || []).map(function(channel) { return [channel.name, channel.points]; }))};
   binaryTimeOrigin = 0;
   binaryBufferStart = 0;
@@ -3801,6 +3824,11 @@ function beginReplay(metadata, control) {
   document.getElementById('btn-apply-interval').disabled = true;
   document.getElementById('btn-apply-buffer').disabled = true;
   canvas.dataset.source = 'replay';
+  var main = {id: 'main', name: t('replay_main'), height: 240};
+  var styles = Object.fromEntries(binaryChannelNames.map(function(name) {
+    return [name, Object.assign({}, signalStyle(name), {pane: main.id})];
+  }));
+  applyWorkspace({version: 2, defaultGroup: main.id, groups: [main], panes: [main], signals: styles});
   updateReplayControls();
   updateTimelineInteractionUI();
   drawChart(); drawMinimap();
@@ -3855,6 +3883,9 @@ function endReplay() {
   configureBinaryChannels(replayLiveChannels);
   resetBinaryStream();
   setHiddenChannels(session.liveHidden);
+  if (sharedWorkspaceSnapshot) setWorkspace(sharedWorkspaceSnapshot, true);
+  else applyWorkspace(session.liveWorkspace);
+  if (JSON.stringify(watchWorkspace) === JSON.stringify(session.liveWorkspace)) workspaceY = session.liveY;
   superwatchTimelineSpan = session.liveSpan;
   paused = false; renderPaused = false;
   document.getElementById('btn-apply-interval').disabled = false;
@@ -6374,6 +6405,7 @@ function panelViewState() {
 }
 function readSemanticState() {
   return { panelId: viewerKey, mode: CONFIG.mode, ready: true, acquisition: acquisitionState, localPaused: renderPaused,
+    ...(replaySession ? { replayPlots: Object.fromEntries(separatedReplayChannels()) } : {}),
     replaying: !!replaySession, triggerState: triggerSettings.state, channels: { total: Object.keys(FIELDS).length, preview: Object.keys(FIELDS).slice(0, 16).map(function(name) { return { name: name, visible: FIELDS[name].visible }; }) }, view: panelViewState() };
 }
 function setSignalSubset(names, override) {

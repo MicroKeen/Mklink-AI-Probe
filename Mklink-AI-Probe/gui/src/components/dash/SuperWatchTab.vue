@@ -3,10 +3,15 @@
     <div class="watch-catalog-pane">
       <div v-if="replayChannels" class="replay-catalog">
         <strong>{{ tr('日志通道', 'Log channels') }}</strong>
-        <label v-for="name in replayChannels" :key="name">
-          <input type="checkbox" :checked="!replayHidden.has(name)" @change="setReplayVisibility(name, ($event.target as HTMLInputElement).checked)">
-          <span>{{ name }}<small>{{ latestValues[name] ?? '—' }}</small></span>
-        </label>
+        <div v-for="name in replayChannels" :key="name" class="replay-channel">
+          <label>
+            <input type="checkbox" :checked="!replayHidden.has(name)" @change="setReplayVisibility(name, ($event.target as HTMLInputElement).checked)">
+            <span>{{ name }}<small>{{ latestValues[name] ?? '—' }}</small></span>
+          </label>
+          <button v-if="replayChannels.length > 1" type="button" class="panel-btn"
+            :disabled="replayHidden.has(name) && !replayPanes.has(name)"
+            :aria-label="replayPaneLabel(name) + ' · ' + name" @click="toggleReplayPane(name)">{{ replayPaneLabel(name) }}</button>
+        </div>
       </div>
       <div v-show="!replayChannels" class="watch-source-tabs">
         <button :class="{ active: source === 'variables' }" @click="source = 'variables'">{{ tr('程序变量', 'Variables') }}</button>
@@ -52,6 +57,7 @@
         :array-snapshot-path="snapshotPath"
         @latest-values="latestValues = $event"
         @replay-channels="setReplayChannels"
+        @replay-panes="replayPanes = new Map($event)"
         @visibility-change="(path, visible) => replayChannels ? setReplayVisibility(path, visible) : setChannelVisibility(path, visible)"
       >
         <template #actions>
@@ -105,7 +111,16 @@ const source = ref('variables')
 const latestValues = shallowRef<Record<string, number | boolean>>({})
 const replayChannels = shallowRef<string[] | null>(null)
 const replayHidden = shallowRef(new Set<string>())
+const replayPanes = shallowRef(new Map<string, string>())
+function replayPaneLabel(name: string) {
+  return replayPanes.value.has(name) ? tr('合并窗口', 'Merge plot') : tr('分离窗口', 'Split plot')
+}
+function toggleReplayPane(name: string) {
+  const group = replayPanes.value.get(name)
+  return waveformPanel.value?.execute('waveform.plot', group ? { command: 'merge', group } : { command: 'split', name })
+}
 function setReplayChannels(channels: string[] | null) {
+  if (!channels) replayPanes.value = new Map()
   if (!replayChannels.value || !channels) replayHidden.value = new Set()
   replayChannels.value = channels
 }
@@ -291,7 +306,9 @@ defineExpose({ catalog, read, execute, restore })
 
 .watch-catalog-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
 .replay-catalog { padding: 12px; overflow: auto; }
-.replay-catalog label { display: flex; align-items: center; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.replay-channel { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.replay-channel label { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; overflow-wrap: anywhere; }
+.replay-channel button { flex-shrink: 0; }
 .replay-catalog small { display: block; color: var(--accent); margin-top: 4px; }
 .watch-catalog-pane :deep(.symbol-panel) { flex: 1; min-height: 0; }
 .watch-source-tabs { display: flex; border-bottom: 1px solid var(--border); flex: 0 0 auto; }

@@ -151,7 +151,8 @@ window.__waveformViewers.SuperWatch = {
     metadata.channels.forEach(function(channel) { channels[channel.name] = {type: 'float'}; });
     applyChannelMetadata(channels);
     Object.keys(FIELDS).forEach(function(name) { FIELDS[name].ringBuf = new RingBuffer(4096); });
-    replaySession = {control: control, live: live, duration: Math.max(.001, metadata.duration), playing: false};
+    replaySession = {control: control, live: live, duration: Math.max(.001, metadata.duration), playing: false, split: new Set()};
+    _watchStructGen++;
     replayLiveState = collectionState; replayLiveMetadata = null;
     paused = true; collectionState = 'paused';
     timelineView.zoom = Math.max(1, replaySession.duration / 10); timelineView.offset = 0;
@@ -1114,6 +1115,11 @@ function _buildWatchRowHtml(name, m) {
       '<input class="watch-y-max" data-name="' + escapeHtml(name) + '" type="number" step="any" placeholder="max" value="' + escapeHtml(yMax) + '"' + (!yManual ? ' disabled' : '') + '>' +
     '</span>'
   );
+  if (replaySession && Object.keys(FIELDS).length > 1) {
+    var split = replaySession.split.has(name);
+    var action = CONFIG.lang === 'en' ? (split ? 'Merge plot' : 'Split plot') : (split ? '合并窗口' : '分离窗口');
+    visHtml += '<button type="button" class="panel-btn replay-split-channel" data-name="' + escapeHtml(name) + '" aria-label="' + action + ' · ' + escapeHtml(name) + '">' + action + '</button>';
+  }
   return '<tr data-channel="' + escapeHtml(name) + '">' +
     '<td class="watch-col-delete"><button class="watch-delete-btn" data-name="' + escapeHtml(name) + '" title="Remove">&times;</button></td>' +
     '<td data-col="name" class="' + watchColClass('name') + '" style="' + watchColStyle('name') + 'color:' + m.color + '"><span class="watch-name-cell">' + expandHtml + visHtml + '<span class="watch-name-text">' + escapeHtml(name) + '</span></span></td>' +
@@ -1231,7 +1237,7 @@ function _rebuildWatchTable() {
     var name = names[i];
     // Skip child members if their parent struct is also in FIELDS
     // (they will be shown in the parent's expanded tree instead)
-    if (name.indexOf('.') >= 0) {
+    if (!replaySession && name.indexOf('.') >= 0) {
       var baseName = name.split('.')[0];
       if (FIELDS[baseName]) {
         continue;
@@ -1288,6 +1294,15 @@ function _bindWatchDelegates(tbody) {
     }
   });
   tbody.addEventListener('click', function(e) {
+    var plotButton = e.target.closest('.replay-split-channel');
+    if (plotButton && replaySession) {
+      var path = plotButton.dataset.name;
+      if (!replaySession.split.delete(path)) replaySession.split.add(path);
+      _watchStructGen++;
+      updateWatchTable();
+      drawChart();
+      return;
+    }
     // Struct expand/collapse button (works for both top-level and sub-structs)
     var expandBtn = e.target.closest('.watch-expand-btn');
     if (expandBtn) {
@@ -2128,6 +2143,21 @@ function drawChart() {
       replaySession.control('inspect');
     }
   }
+  var names = Object.keys(FIELDS).sort();
+  var paneIndex = null, paneCount = 1;
+  if (replaySession && replaySession.split.size) {
+    paneIndex = new Map();
+    paneCount = names.some(function(name) { return FIELDS[name].visible && !replaySession.split.has(name); }) ? 1 : 0;
+    names.forEach(function(name) {
+      if (FIELDS[name].visible && replaySession.split.has(name)) paneIndex.set(name, paneCount++);
+    });
+    paneCount = Math.max(1, paneCount);
+  }
+  var minHeight = paneCount > 1 ? paneCount * 130 + 'px' : '';
+  if (wrap.style.minHeight !== minHeight) {
+    wrap.style.minHeight = minHeight;
+    wrap.parentElement.classList.toggle('replay-plots', paneCount > 1);
+  }
   if (!resize()) return;
   resizeMinimap();
   var W = canvas.clientWidth || parseFloat(canvas.style.width);
@@ -2163,13 +2193,17 @@ function drawChart() {
   }
 
   // Count visible channels
-  var visChNames = Object.keys(FIELDS).sort().filter(function(k) {
+  var visChNames = names.filter(function(k) {
     return FIELDS[k].visible && FIELDS[k].ringBuf.count >= 2;
   });
   var mr = 16, mt = 8, mb = 32, ml = 16;
   var pw = W - ml - mr;
   var ph = H - mt - mb;
   if (pw <= 0 || ph <= 0) return;
+  var paneStep = ph / paneCount, paneHeight = paneStep - (paneCount > 1 ? 12 : 0);
+  function paneOf(name) { return paneIndex ? paneIndex.get(name) || 0 : 0; }
+  function paneTop(name) { return mt + paneOf(name) * paneStep; }
+  function inHoverPane(name, my) { return paneCount === 1 || (my >= paneTop(name) && my <= paneTop(name) + paneHeight); }
 
   function tx(v) { return ml + (v - tMin) / (tMax - tMin || 1) * pw; }
   function tyGlobal(v) { return mt + ph - (v - yMin) / (yMax - yMin || 1) * ph; }
@@ -2180,17 +2214,19 @@ function drawChart() {
     if (!name) return tyGlobal(v);
     var yr = getChannelYRange(name);
     if (!yr) return tyGlobal(v);
-    return mt + ph - (v - yr.yMin) / (yr.yMax - yr.yMin || 1) * ph;
+    return paneTop(name) + paneHeight - (v - yr.yMin) / (yr.yMax - yr.yMin || 1) * paneHeight;
   }
 
   // Grid — horizontal lines at fixed pixel positions
   ctx.strokeStyle = GRID_COLOR;
   ctx.lineWidth = 0.5;
-  for (var i = 0; i <= 5; i++) {
-    var yp = Math.round(mt + ph * i / 5) + 0.5;
-    ctx.beginPath();
-    ctx.moveTo(ml, yp); ctx.lineTo(ml + pw, yp);
-    ctx.stroke();
+  for (var panel = 0; panel < paneCount; panel++) {
+    for (var i = 0; i <= 5; i++) {
+      var yp = Math.round(mt + paneStep * panel + paneHeight * i / 5) + 0.5;
+      ctx.beginPath();
+      ctx.moveTo(ml, yp); ctx.lineTo(ml + pw, yp);
+      ctx.stroke();
+    }
   }
   // Time grid
   for (var i = 0; i <= 5; i++) {
@@ -2220,12 +2256,15 @@ function drawChart() {
   ctx.rect(ml, mt, pw, ph);
   ctx.clip();
 
-  var names = Object.keys(FIELDS).sort();
   for (var ni = 0; ni < names.length; ni++) {
     var name = names[ni];
     var meta = FIELDS[name];
     if (!meta.visible || meta.ringBuf.count < 2) continue;
 
+    if (paneCount > 1) {
+      ctx.save();
+      ctx.beginPath(); ctx.rect(ml, paneTop(name), pw, paneHeight); ctx.clip();
+    }
     ctx.strokeStyle = meta.color;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
@@ -2239,11 +2278,17 @@ function drawChart() {
       else ctx.lineTo(sx, sy);
     }
     ctx.stroke();
+    if (paneCount > 1) ctx.restore();
   }
   ctx.restore();
 
   // Per-channel Y labels at right edge of chart, staggered to avoid overlap
   // Max labels pinned at top, Min labels pinned at bottom, each 14px apart
+  var labelCounts = [], paneTotals = [];
+  if (paneCount > 1) visChNames.forEach(function(name) {
+    var pane = paneOf(name);
+    paneTotals[pane] = (paneTotals[pane] || 0) + 1;
+  });
   for (var ni = 0; ni < visChNames.length; ni++) {
     var chName = visChNames[ni];
     var chMeta = FIELDS[chName];
@@ -2256,9 +2301,12 @@ function drawChart() {
     ctx.textAlign = 'right';
     var lx = ml + pw - 4;
     // Max label at top area
-    ctx.fillText(chRange.yMax.toFixed(dec), lx, mt + 10 + ni * 14);
+    var pane = paneOf(chName), line = labelCounts[pane] || 0;
+    labelCounts[pane] = line + 1;
+    ctx.fillText(chRange.yMax.toFixed(dec), lx, paneTop(chName) + 10 + line * 14);
     // Min label at bottom area
-    ctx.fillText(chRange.yMin.toFixed(dec), lx, mt + ph - (visChNames.length - 1 - ni) * 14);
+    var count = paneCount > 1 ? paneTotals[pane] : visChNames.length;
+    ctx.fillText(chRange.yMin.toFixed(dec), lx, paneTop(chName) + paneHeight - (count - 1 - line) * 14);
   }
 
   // Hover probe: vertical dashed line
@@ -2353,19 +2401,22 @@ function drawChart() {
   updateCursorReadout();
 
   // Channel legend (only visible, plottable channels)
-  var lx = ml + 8, ly = mt + 8;
+  var lx = ml + 8;
+  labelCounts.length = 0;
   for (var ni = 0; ni < names.length; ni++) {
     var name = names[ni];
     var meta = FIELDS[name];
     if (!meta.visible || (CHANNEL_METADATA[name] && CHANNEL_METADATA[name].source === 'struct')) continue;
+    var pane = paneOf(name), line = labelCounts[pane] || 0;
+    var ly = paneTop(name) + 8 + line * 16;
+    if (ly > paneTop(name) + paneHeight - 10) continue;
+    labelCounts[pane] = line + 1;
     ctx.fillStyle = meta.color;
     ctx.fillRect(lx, ly, 12, 3);
     ctx.fillStyle = '#141413';
     ctx.font = '11px ' + getComputedStyle(document.body).getPropertyValue('--font-body');
     ctx.textAlign = 'left';
     ctx.fillText(name, lx + 16, ly + 6);
-    ly += 16;
-    if (ly > mt + ph - 10) break;
   }
 
   // ============================================================
@@ -2402,7 +2453,7 @@ function drawChart() {
     var lines = ['<span class="tooltip-row" style="color:var(--dim);font-size:11px">' + escapeHtml(formatTimeAxisValue(hoverT)) + '</span>'];
     for (var k in FIELDS) {
       var pts = FIELDS[k].ringBuf.toArray();
-      if (!FIELDS[k].visible || pts.length < 1) continue;
+      if (!FIELDS[k].visible || pts.length < 1 || !inHoverPane(k, my)) continue;
       var best = null, bestDist = Infinity;
       for (var i = 0; i < pts.length; i++) {
         var d = Math.abs(pts[i].t - hoverT);
@@ -2456,7 +2507,7 @@ function drawChart() {
       var closestChannel = null;
       var closestDist = Infinity;
       for (var k in FIELDS) {
-        if (!FIELDS[k].visible) continue;
+        if (!FIELDS[k].visible || !inHoverPane(k, my)) continue;
         var pts = FIELDS[k].ringBuf.toArray();
         for (var i = 0; i < pts.length; i++) {
           var d = Math.abs(pts[i].t - hoverT);

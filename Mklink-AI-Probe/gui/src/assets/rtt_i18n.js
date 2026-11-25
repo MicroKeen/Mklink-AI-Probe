@@ -33,7 +33,7 @@ var I18N = {
     force_trigger: '强制触发',
     // SuperWatch
     sw_search_placeholder: '搜索或输入变量名...', add: '添加', time: '时间', inspect: '检查',
-    split_channel: '分离', merge_channel: '合并', split_panel: '独立通道',
+    split_channel: '分离', merge_channel: '合并', split_panel: '独立通道', replay_main: '主窗口',
     split_channel_tip: '将此通道移到独立纵轴面板', merge_channel_tip: '将此通道合并回主面板',
     show_channel_legend_tip: '显示通道列表', hide_channel_legend_tip: '隐藏通道列表',
     // Watch panel
@@ -84,7 +84,7 @@ var I18N = {
     ],
     help_sw_pause_items: [
       '<strong>暂停</strong>或 <span class="help-kbd">P</span> 键会冻结实时显示，后台继续采集。点击<strong>恢复</strong>后跟随最新数据。',
-      '回放日志时，暂停、恢复和进度条控制当前日志。点击<strong>返回实时</strong>退出回放。'
+      '日志通道旁的<strong>分离窗口</strong>可让多条曲线各用一个纵轴。所有窗口共用播放进度和时间轴，点击<strong>合并窗口</strong>可叠回主图。点击<strong>返回实时</strong>恢复实时布局。'
     ],
     help_trigger_items: [
       '<strong>Trigger</strong> — 启用 / 禁用触发功能',
@@ -162,7 +162,7 @@ var I18N = {
     auto: 'Auto', normal: 'Normal', single: 'Single',
     force_trigger: 'Force Trigger',
     sw_search_placeholder: 'Search or type variable name...', add: 'Add', time: 'Time', inspect: 'Inspect',
-    split_channel: 'Split', merge_channel: 'Merge', split_panel: 'Split channel',
+    split_channel: 'Split', merge_channel: 'Merge', split_panel: 'Split channel', replay_main: 'Main plot',
     split_channel_tip: 'Move this channel to an independent Y-axis panel', merge_channel_tip: 'Merge this channel into the main panel',
     show_channel_legend_tip: 'Show channel list', hide_channel_legend_tip: 'Hide channel list',
     watch: 'Watch', columns: 'Columns', columns_tip: 'Show or hide columns', collapse_watch: 'Collapse Watch',
@@ -207,7 +207,7 @@ var I18N = {
     ],
     help_sw_pause_items: [
       '<strong>Pause</strong> or <span class="help-kbd">P</span> freezes the live display while acquisition continues. Click <strong>Resume</strong> to follow the latest data.',
-      'During log replay, Pause, Resume and the position slider control playback. Click <strong>Return to live</strong> to leave replay.'
+      'Use <strong>Split plot</strong> beside a log channel to give it its own vertical axis. All plots share playback and the time axis. Use <strong>Merge plot</strong> to overlay it again, or <strong>Return to live</strong> to restore the live layout.'
     ],
     help_trigger_items: [
       '<strong>Trigger</strong> — Enable / disable trigger',

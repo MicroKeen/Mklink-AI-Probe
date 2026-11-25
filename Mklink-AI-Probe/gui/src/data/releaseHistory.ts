@@ -18,6 +18,7 @@ export const releaseHistory: ReleaseHistoryEntry[] = [
       "SuperWatch 支持拖动信号换组。修改公式保留曲线颜色，平移时网格固定，边缘读数完整显示。修复 Windows 日志转 Excel、RTT 导出与 SystemView 日志保存问题。",
       "RTT 和串口终端支持 Ctrl+F / ⌘F 查找历史文本。灵活面板可组合波形、日志和仪表，Agent 协助入口位于面板内。",
       "HPM 系列支持通过 JTAG 查看 OTP 熔丝值、影子值和锁状态。HPM6E80 已实板验证读取。",
+      "SuperWatch 日志回放支持按变量分窗，共用时间轴，可随时合并。",
       "修复 macOS 后台启动、固件检查和串口名称显示。桌面关闭窗口后可从托盘或菜单栏恢复，点击菜单外可收起店铺列表。",
     ],
     changesEn: [
@@ -26,6 +27,7 @@ export const releaseHistory: ReleaseHistoryEntry[] = [
       "Drag signals between groups. Editing a formula preserves its color, panning keeps the grid fixed, and edge tooltips stay visible. Fixed Windows Excel conversion, RTT export and SystemView log saving.",
       "Use Ctrl+F or ⌘F to find text in RTT and serial terminal history. Flexible Panels combine waveforms, logs and gauges, with Agent assistance inside the panel.",
       "Read HPM OTP fuse values, shadow values and lock status over JTAG. Reads were verified on HPM6E80 hardware.",
+      "Split SuperWatch log channels into separate plots on one playback timeline and merge them again.",
       "Fixed macOS backend startup, firmware checks and serial port labels. Restore closed windows from the tray or menu bar, and dismiss the store menu by clicking outside it.",
     ],
   },
