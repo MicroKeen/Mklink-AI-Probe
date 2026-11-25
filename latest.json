@@ -1,44 +1,44 @@
 {
-  "version": "0.5.0",
-  "notes": "# MKLink AI Probe V0.5.0\n\nWindows、macOS（Apple Silicon / Intel）、Linux x64 上位机、完整 Skill 与 Windows Site Agent 更新。\n\n- 修复普通用户连接和覆盖安装权限；Windows 默认按用户安装，不再自动修改端口名称。\n- 改善 SuperWatch 断线恢复与采集中写入，变量和采集配置随 AXF/ELF 自动保存、恢复。\n- 日志改为手动转换：SuperWatch 导出 Excel，RTT 导出精简的带时间戳 TXT。\n- 修复 RTOS Trace 再次启动时的任务名称刷新，优化 Timeline 连续显示、缩放和平移；修复多窗口事件更新时误报后端离线。\n- Skill/MCP 可操作桌面和 Web GUI 的页面、控件、文件及 SystemView、RTT、SuperWatch、串口日志回放；回放不停止其他窗口的采集。\n- 修复多下载器独立连接、单窗口切换与 USB 拔插后的选择保持；恢复等待缩短至 0.5 秒。显式重启 MKLink 可停止当前采集后执行。\n- HPM 在线/脱机烧录按芯片选择配置，支持用户填写外部 NOR Flash 参数；优化脱机 OTP 配置界面。\n- 补全串口和 Modbus 波特率档位至 10M，修复部分 ELF 变量遗漏，支持通用工程初始化和显式重载符号。\n- 修复 macOS 后台启动和 USB 身份识别，优化枚举耗时与共享会话续约。\n- 新增客户端和固件更新提醒，协调更新顺序；默认从腾讯云下载，不可用时回退 MicroKeen GitHub。\n\n配套发布 MicroLink V2.9.4、V3.7.0、MicroLink V4.7.4 和 HPMLink V4.7.4。两款 V4 均支持 Arm SWD 与 HPM JTAG，升级时必须选择对应下载器型号的文件。建议先更新上位机/Skill、重载 MCP，再按提示升级固件。\n\nWindows 覆盖安装会结束当前用户的旧 MKLink、Skill/MCP 后台及正在执行的任务，请先保存数据。升级能力仍以固件协商为准。1 µs 极限三路采集和 10 Mbps / 16 KiB RS485 仍存在已知丢弃边界；STOP 低功耗访问取决于目标状态。macOS 使用 ad-hoc 签名，尚未获得 Apple Developer ID 公证；Gatekeeper 首次安装与真实 USB 验收未完成。Linux AppImage 首次访问 USB 可能需要管理员安装附件中的 70-mklink.rules；DEB 已内置该规则。\n\n\n原生平台补充包：macOS / Linux 由审查合入的 `8d532019ffff55f2f9e93387c205b3feb1df78a4` 构建，包含慢速设备枚举阻塞心跳的修复；具体来源与哈希见 `desktop-manifest.json`。原有 v0.5.0 标签、Windows、Skill、Site Agent 与固件附件保持不变。\n\n\n2026-11-15 Windows/完整 Skill 同版本修订：恢复原安装目录并修正旧快捷方式，脱机 USB 状态静默刷新；工程记录及转换拒绝写入安装目录，Skill 显式使用目标工程。已装 0.5.0 者需手动覆盖。其他平台和原标签/附件保留。\n",
-  "pub_date": "2026-11-14T16:21:27Z",
+  "version": "0.5.1",
+  "notes": "MKLink AI Probe 0.5.1\n\n- \u684c\u9762\u3001Web\u3001CLI \u548c MCP \u53ef\u540c\u65f6\u8bfb\u53d6 RTT \u6587\u672c\u3001\u6ce2\u5f62\u548c\u4e32\u53e3\u6570\u636e\u3002\u91cd\u65b0\u6253\u5f00\u684c\u9762\u7a97\u53e3\u53ef\u590d\u7528\u539f\u63a2\u9488\u8fde\u63a5\u3002\n- SuperWatch \u6309 AXF/ELF \u4fdd\u5b58\u53d8\u91cf\u3001\u5916\u8bbe\u5bc4\u5b58\u5668\u548c\u91c7\u96c6\u52fe\u9009\u72b6\u6001\uff0c\u684c\u9762\u4e0e Web \u5171\u7528\u3002\u652f\u6301\u62d6\u52a8\u6362\u7ec4\u3001\u6309\u7ec4\u52fe\u9009\u3001\u65e5\u5fd7\u5206\u7a97\u56de\u653e\uff0c\u4fee\u590d\u516c\u5f0f\u7f16\u8f91\u6539\u8272\u548c Excel \u8f6c\u6362\u5931\u8d25\u3002\n- RTT \u4e0e\u4e32\u53e3\u7ec8\u7aef\u652f\u6301 Ctrl+F \u6216 \u2318F \u641c\u7d22\u3002RTT \u548c SuperWatch \u53ef\u76f4\u63a5\u6253\u5f00\u6216\u5207\u6362 AXF/ELF\uff1b\u6539\u8fdb RTT \u5bfc\u51fa\u3001SystemView \u65e5\u5fd7\u4fdd\u5b58\u548c\u76ee\u6807\u8bbf\u95ee\u9519\u8bef\u63d0\u793a\u3002\n- HPM JTAG \u53ef\u8bfb\u53d6 OTP \u7194\u4e1d\u3001\u5f71\u5b50\u503c\u53ca\u9501\u5b9a\u72b6\u6001\uff0c\u5df2\u5728 HPM6E80 \u9a8c\u8bc1\u3002\n- \u6539\u8fdb Windows \u542f\u52a8\u8bca\u65ad\u548c\u7075\u6d3b\u9762\u677f\u4ea4\u4e92\uff0c\u4fee\u590d macOS \u540e\u53f0\u8fde\u63a5\u3001\u56fa\u4ef6\u7248\u672c\u68c0\u67e5\u548c\u4e32\u53e3\u540d\u79f0\u663e\u793a\u3002\u684c\u9762\u7a97\u53e3\u53ef\u4ece\u7cfb\u7edf\u6258\u76d8\u6216\u83dc\u5355\u680f\u6062\u590d\u3002\n\nWindows x64 \u4f7f\u7528 Setup.exe\uff0cMac \u6309 Apple Silicon \u6216 Intel \u9009\u62e9 DMG\uff0cLinux x64 \u63d0\u4f9b DEB \u548c AppImage\u3002Mac \u5305\u4f7f\u7528 ad-hoc \u7b7e\u540d\uff0c\u672a\u7ecf Apple Developer ID \u516c\u8bc1\u3002\u5b8c\u6574 Skill \u548c Windows Site Agent \u968f\u7248\u672c\u63d0\u4f9b\u3002",
+  "pub_date": "2026-11-25T07:59:43Z",
   "platforms": {
     "windows-x86_64": {
-      "size": 187248206,
-      "sha256": "29ff1d3450976fd2afa1a9ac88113f68f97b0fbd54b21a9333121c36e09c4517",
-      "url": "https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/v0.5.0/Mklink-AI-Probe-v0.5.0-r20261115-a38557b9-x64-Setup.exe",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWkJ5dmZ4MnVLVWMyZGZIaDcyK1hIdlJmRFRFYW9yY1BRSjlLY0JCQlRRTmhRL21YYXlwYnUzZ2U2eTJtdFg0TWw1VWV4SXp3QzhmWVoyV084RkkrRThEOStzVXZaQXdzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk0ODAxMjYzCWZpbGU6TWtsaW5rIEFJIFByb2JlXzAuNS4wX3g2NC1zZXR1cC5leGUKbkxhZ1VlSlFnaC84QzhzVFNPVFRXWDM1K1crcEdkZzk1dVY4UE1OQmFrWERwcGpWUC9CTWxONnE5ZzMyaEUrTDJUK0kvRTM4YW9VbTIrb1JTOUR2RFE9PQo="
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWkJ5dmZ4MnVLVVpGSUFkcVRFMUJYWWREVlpzQmlOVXBBeWF4dm9Mb0JOcS9oZmtEeTdkL2F4ZUc0aTZnUWlWK1duRG9CYnBTYXRaUXZOQ0tBK0hUTHJtcVBXY3RTV0FjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1NTkxNjU0CWZpbGU6TWtsaW5rIEFJIFByb2JlXzAuNS4xX3g2NC1zZXR1cC5leGUKa3JxYnlLanBDK1dCeExtUk51TDRtMG53ZEVSUlAvcHpyaTJIdTduUkJEc2Z0ZzdGZkpkekFkb2x4SVQvMElmWmdnUzVBRWFIZXJRaGRlZmdVMzRjQVE9PQo=",
+      "url": "https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/v0.5.1/Mklink-AI-Probe-v0.5.1-x64-Setup.exe",
+      "sha256": "6dbd3da007ce0d2f27fc0753ded29fef836c0c0019bedddbfed6dcb5b549dd00",
+      "size": 188117624
     },
     "darwin-aarch64": {
-      "url": "https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/v0.5.0/Mklink-AI-Probe-v0.5.0-aarch64-apple-darwin.app.tar.gz",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWkJ5dmZ4MnVLVVQwNGJBUlczQ1RrbGQwaFN4RU5BRW0xeFJWTTByc250cmh1NWJiZGJOeXByQ0t2N3gzRDdYREZtVWJ6OHhkcGU4ZFYxWTdBb2J5bE5NSnRrSm5McEFZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk0NzExNzAwCWZpbGU6TWtsaW5rLUFJLVByb2JlLXYwLjUuMC1hYXJjaDY0LWFwcGxlLWRhcndpbi5hcHAudGFyLmd6CnVBczRDcms3VzlSNG5YL1RBOHcyRnlmTUV4SitxSTVONDRUWG9zcUpJZm9zdDd5RzVxOXkzejV2Z0tNYUVZQ3BrOGpTVWVhV2Q0RUcyWExOeXhNcUNRPT0K",
-      "size": 167602841,
-      "sha256": "ac6554f108fd5a901a425b7e144f738cb919e83efd2d84ef031511ded3c9ba9b"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWkJ5dmZ4MnVLVVhnZjJtUXdDeks1R1FkbSthNnZrQ01VWC95YzVXQ2tSYzEwRE1XQ3N6U1YxTnFlanFBbnNHZWt5N3dxWUJrOC80am5VNisvWFdqdU44TFM2ODdTSGd3PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1NTkzNTY5CWZpbGU6TWtsaW5rLUFJLVByb2JlLXYwLjUuMS1hYXJjaDY0LWFwcGxlLWRhcndpbi5hcHAudGFyLmd6Ckova2xTNzE5ZDdGUTZ0ZE1UelRMNEtTWkpJZm9wV1ZJL3ZLOU9aTnlRYjFDNmVsZWdSamsxY2R4Y0FRVElib1JkK3dtWWlrTmQwN1dhVSsvSXRTWkJRPT0K",
+      "url": "https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/v0.5.1/Mklink-AI-Probe-v0.5.1-aarch64-apple-darwin.app.tar.gz",
+      "sha256": "d1df2e13a7607477791e13856c6898dd04eb8df9651624903af47b4981669659",
+      "size": 168612762
     },
     "darwin-x86_64": {
-      "url": "https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/v0.5.0/Mklink-AI-Probe-v0.5.0-x86_64-apple-darwin.app.tar.gz",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWkJ5dmZ4MnVLVWFwOFZqa1pCTWhkUk96eWhBMUZtb09OV1dKMFU4UDB2dThMSG5nOHBnYjZxblNMb0l1WG4zMGxnQlpBWmxNL0JmL3FsMjkwRThDa0M0LytvTmZzQ0FzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk0NzEyMjAyCWZpbGU6TWtsaW5rLUFJLVByb2JlLXYwLjUuMC14ODZfNjQtYXBwbGUtZGFyd2luLmFwcC50YXIuZ3oKQ2p2UnRtQ0J5Q0RpTEVrY3JhZXVwUGs5NVc3L3VURUY3MVMvZFUwbTR2Vm5haUJzV2Q4cXJ4Q0JpV2c5KzVMdVBLZ093blFJZHBlVjJmQzRsUmJtQkE9PQo=",
-      "size": 168025804,
-      "sha256": "9a133b7a3335f1aab97bbf259f1d39ffe67a3a3328a376627ebe6bc6803ffd5d"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWkJ5dmZ4MnVLVVdPTHdSZTNCb2xyZXRFUWJ5c0xLZUJFYlE5Z1g4WGo5MGVBZ2JJbzJaWWhwYzNWWGpHOVZkUlh6ZFI4S1VUeVpVYnZrNzYxVGVBUkRlSWkybFdUbFF3PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1NTkzNTY5CWZpbGU6TWtsaW5rLUFJLVByb2JlLXYwLjUuMS14ODZfNjQtYXBwbGUtZGFyd2luLmFwcC50YXIuZ3oKcWFUcTdVbmtoN0VRdEduakNkNzZHb3A3QTFyd3h0MDNlUzJaMHhSam5VQlpySmF0Y1Myb3ZKUERJUHVOZ2E3ZWdFNjF1WkZVUXA4aGJCS2JtYWpMQ0E9PQo=",
+      "url": "https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/v0.5.1/Mklink-AI-Probe-v0.5.1-x86_64-apple-darwin.app.tar.gz",
+      "sha256": "57838f5783b3f378d8f2e635937112dff37a670acb2cd42260ddc8bfc93aaa95",
+      "size": 169052560
     },
     "linux-x86_64-appimage": {
-      "url": "https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/v0.5.0/Mklink-AI-Probe-v0.5.0-x86_64-unknown-linux-gnu.AppImage",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWkJ5dmZ4MnVLVVpOMkplWVFqQnpoOFczRkFaK1l5eXFzbEQ1M2ZyS0FFRUtNLzgzOWsydnlIM2FWRnpBRzZhR243d0N4WjcrN0twMllYSTRpUlgwUkRwano3ZW9IakFNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk0NzExNzAxCWZpbGU6TWtsaW5rLUFJLVByb2JlLXYwLjUuMC14ODZfNjQtdW5rbm93bi1saW51eC1nbnUuQXBwSW1hZ2UKN0hMR1VCOTRmRlUwSzVrZHJzK1pncEY5SThFNGhXWHhhM1dOdmtOcDRnN0swcHpnU3BYaFRnNlFJckd2UXBsVE5KYVlTZEtpVmI4d2ppTDNMK0hLRHc9PQo=",
-      "size": 264137208,
-      "sha256": "7ee57037ac9ec1f42dbe958fe45f9cbf22d8bb611ce6493dde5c303a5d8519b8"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWkJ5dmZ4MnVLVWQ0SGszZmg1YXB2WVhJWWZzMG5meG5xV0loRWh3Mzd3c3E2QVViaVZiQ0pTM0pQeTVlcjZBUkZMMStQQ2JGenJvMEx2TzVVTHozcldZYWlvR0NiNFFNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1NTkzNTcwCWZpbGU6TWtsaW5rLUFJLVByb2JlLXYwLjUuMS14ODZfNjQtdW5rbm93bi1saW51eC1nbnUuQXBwSW1hZ2UKNG1WVmZtRkdwbFZBc0doZkJJNjh3eldDd0hva1gySm1Iem84bXQ1ZXZDeURCdjdMeXYyWks1clBHVy9Yc0M2WGFBRUliZXJGNFMyVFd1TTBkaC8wQkE9PQo=",
+      "url": "https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/v0.5.1/Mklink-AI-Probe-v0.5.1-x86_64-unknown-linux-gnu.AppImage",
+      "sha256": "53f9b9098acf8a63029ee0a296504a30d981d3dff1498fce8607ea35596ba65b",
+      "size": 265206264
     },
     "linux-x86_64-deb": {
-      "url": "https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/v0.5.0/Mklink-AI-Probe-v0.5.0-x86_64-unknown-linux-gnu.deb",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWkJ5dmZ4MnVLVVNNK0dnMjUyanJRKzc3eDRZdjVqZWlkN1FyQlhjTlI4TVV2VldIMmtjNmdhdkJxdnh4OXJxUVg2SyswT0tQaXZiQkJVZElQSDIvR2FXYnVjYkNLNVE4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk0NzExNzAyCWZpbGU6TWtsaW5rLUFJLVByb2JlLXYwLjUuMC14ODZfNjQtdW5rbm93bi1saW51eC1nbnUuZGViCk1WZ3BQRzhFRDhnVytRUVNaV0NHTS80Nm9yb01mZkRNUGNJTm8xckg3aXlQZWtHQnN1M2JiTUJYV0RGY2I4MlU2MDFyTXZJMDJUVEVuUzVCZkRkREJ3PT0K",
-      "size": 186267876,
-      "sha256": "640987225579545152875770387f60234acab9f16898261b920cef572a02da1c"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWkJ5dmZ4MnVLVVdXV3Z5bzdCSTRGZXhzeFQ3ZFN2S0kzRUNBMkgzMGdDdS90SmE0NFUzSEFSUGtjaExWTzJQWkdSd3FqOXhLNWhwRDRGTDRBWVVmVEFncHdiY1ZCV0EwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1NTkzNTcxCWZpbGU6TWtsaW5rLUFJLVByb2JlLXYwLjUuMS14ODZfNjQtdW5rbm93bi1saW51eC1nbnUuZGViClh0ZzhFc3FVS2lZMm9TeWdaQ3Jzc3IybytMZHFHV2VSc0NsRnlyeWN2M21YVzMvcS9XUnZoMnZqT2h4YWlQM1d5UDFuN25WYkl3aTh2M3JBbjBTb0R3PT0K",
+      "url": "https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/v0.5.1/Mklink-AI-Probe-v0.5.1-x86_64-unknown-linux-gnu.deb",
+      "sha256": "39f73018a69d5475c1911fbfa1dbbe2a8ff0a5d473245fe2d57402d6f22e338e",
+      "size": 187322222
     }
   },
   "skill": {
-    "version": "0.5.0",
-    "url": "https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/v0.5.0/Mklink-AI-Probe-v0.5.0-r20261115-a38557b9-Skill.zip",
-    "sha256": "03aaa1093e2397965e0ba5dff2866490dd408048c4407556a982bfe5b01ed80d",
-    "size": 99839506,
-    "source_commit": "a38557b93ed0ec0efdb007ea72ebb06b4cff408b"
+    "version": "0.5.1",
+    "url": "https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/v0.5.1/Mklink-AI-Probe-v0.5.1-Skill.zip",
+    "sha256": "e20043ae697f66ba76406475be051c5adc23873012a5551a8af3482b45f719f1",
+    "size": 100847700,
+    "source_commit": "595544d958a42f9c170de3429c26db046a444fa3"
   }
 }
