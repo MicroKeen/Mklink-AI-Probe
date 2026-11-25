@@ -5,12 +5,12 @@
 ## 当前断点
 
 - 更新时间：`2026-11-25`
-- 分支：`main`
-- HEAD：`595544d9`
-- 远端 HEAD：`595544d9`
-- 工作树：0.5.1 已从 595544d9 正式发布。Windows 与 Skill 的同版本修订在独立 PR 验收。
-- 当前任务：桌面立即安装与固件互斥；[0.5.1 首发交接](https://github.com/MicroKeen/Mklink-AI-Probe/pull/95)。
-- 状态：`0.5.1 首发已上线。此次同版本修订仅替换腾讯云 Windows 与 Skill，验收后切换索引。`
+- 分支：`codex/v0.5.2-fixes`
+- HEAD：`4b75ea5f`
+- 远端 HEAD：`4b75ea5f`
+- 工作树：开发基线为 main 11202db0。0.5.1 首发 595544d9，腾讯云 Windows/Skill 已更新至 r20261125。
+- 当前任务：S32K314 连接、在线烧录与 AP4 共享访问见[联调记录](../verification/v052-mux-profile-attach.md)。
+- 状态：`0.5.2 修复分支。发布与三平台验证见 [PR #97](https://github.com/MicroKeen/Mklink-AI-Probe/pull/97)。`
 
 ## 里程碑
 
@@ -53,7 +53,7 @@
 
 ## 下一动作
 
-1. 完成 Windows 与 Skill 修订包验签、覆盖安装及腾讯云回读。HPM6E80 永久写入暂停。
+1. 由固件会话独占实板验证下载/读回、MEM、RTT、SuperWatch 及同条件性能。HPM6E80 OTP Word 72 永久写入继续暂停。
 2. 覆盖安装会结束当前用户旧MKLink及Skill/MCP活动任务，安装后由AI宿主重载MCP。保留损坏历史备份；异常收集installation-history-report.json、history-backups及诊断包，区分权限、占用和格式，不删除有效未知结果或重放烧录。
 3. 客户SystemView先核对实际CH、目标IRQ锁及元数据。1µs三路溢出先采集0x40 CH2设备时间戳/长度/序号与主机单调到达时间，低频读0x10错误和0x14批次耗时；诊断开销保持一致，再判断背压、重试或调度，不直接假定80ms停读或给CH2固定优先级。多视图假离线已完成修复与安装版六窗口复验。保留目标构建快照供AXF源码路径使用，原工程重编后再清理；见[静态补充](../verification/v050-systemview-loss-reboot.md)。
 4. 有Linux/Mac实物后补验真实USB、Gatekeeper首次安装和交互式提权；不能把本轮CI结果当作这些硬件/系统验收。
