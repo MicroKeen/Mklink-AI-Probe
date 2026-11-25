@@ -14,16 +14,18 @@ describe('AppUpdateBanner', () => {
     expect(wrapper.emitted('install')).toHaveLength(1)
     wrapper.unmount()
   })
-  it('prioritizes the client update and disables installation while firmware is being written', async () => {
+  it('offers a queued installation during a firmware write and lets the user cancel the wait', async () => {
     const wrapper = mount(AppUpdateBanner, {
       props: { state: 'ready', version: '0.5.0', progress: 1, error: '', firmwarePending: true },
     })
     expect(wrapper.text()).toContain('先更新上位机')
     await wrapper.setProps({ firmwareBusy: true })
-    expect(wrapper.get('[data-testid="install-update"]').attributes('disabled')).toBeDefined()
     await wrapper.get('[data-testid="install-update"]').trigger('click')
-    expect(wrapper.emitted('install')).toBeUndefined()
-    expect(wrapper.text()).toContain('固件升级处理中')
+    expect(wrapper.emitted('install')).toHaveLength(1)
+    await wrapper.setProps({ state: 'waiting' })
+    expect(wrapper.text()).toContain('自动继续')
+    await wrapper.get('button').trigger('click')
+    expect(wrapper.emitted('cancel')).toHaveLength(1)
     wrapper.unmount()
   })
   it('presents an unavailable platform as information with no install action', async () => {

@@ -15,7 +15,7 @@ vi.mock('./composables/useBackendHealth', () => ({
 }))
 vi.mock('./composables/useAppUpdater', () => ({
   useAppUpdater: () => ({ state: ref('idle'), version: ref(''), progress: ref(0),
-    error: ref(''), checkForUpdates: vi.fn(), installAndRelaunch: vi.fn(), retry: vi.fn() }),
+    error: ref(''), checkForUpdates: vi.fn(), installAndRelaunch: vi.fn(), cancelQueuedInstall: vi.fn(), retry: vi.fn() }),
 }))
 vi.mock('./lib/browserSessionLease', () => ({ startBrowserSessionLease: () => vi.fn() }))
 vi.mock('./views/DashboardView.vue', () => ({

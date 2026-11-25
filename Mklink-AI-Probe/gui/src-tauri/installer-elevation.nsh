@@ -97,6 +97,10 @@ Function MklinkTryElevatedInstall
     Goto done
   ${EndIf}
   System::Call '*$0(i, i, p, p, p, p, p, i, p, p, p, p, i, p, p .r1)'
+  !ifdef MKLINK_INSTALLER_HAS_UPDATE_LOCK
+    ; The elevated child acquires its own lock; the parent only waits from here.
+    Call MklinkReleaseInstallLock
+  !endif
   System::Free $0
   ShowWindow $HWNDPARENT 0
   wait:

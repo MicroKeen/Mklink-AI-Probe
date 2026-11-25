@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import subprocess
 import threading
+import time
 
 import pytest
 
@@ -24,7 +25,15 @@ def installer(tmp_path, request):
     # This suite exercises file locks only. The process helper has a separate
     # real-process suite with an isolated inventory; never close user apps here.
     prepare = tmp_path / 'prepare.ps1'
-    prepare.write_text('exit 0\n', encoding='utf-8')
+    prepare.write_text('''param([string]$InstallDir)
+if (Test-Path "$InstallDir/hold-preparation") {
+  Set-Content "$InstallDir/preparing" started
+  for ($i = 0; $i -lt 200 -and (Test-Path "$InstallDir/hold-preparation"); $i++) {
+    Start-Sleep -Milliseconds 100
+  }
+}
+exit 0
+''', encoding='utf-8')
     create_uninstaller = 'WriteUninstaller "$EXEDIR\\remove.exe"' if request.param == 'uninstall' else ''
     install_check = 'Call MklinkWaitForUpgradeFiles' if request.param == 'install' else ''
     script.write_text(f'''Unicode true
@@ -35,6 +44,7 @@ SilentInstall silent
 SilentUnInstall silent
 !include "LogicLib.nsh"
 !define MKLINK_PREPARE_SCRIPT "{prepare}"
+!define MKLINK_INSTALL_LOCK_DIR "$EXEDIR\\.mklink"
 !include "{gate}"
 Section
   StrCpy $INSTDIR "$EXEDIR\\payload"
@@ -96,6 +106,39 @@ def test_installer_proceeds_when_files_are_available(installer):
     assert run_gate(output).returncode == 0
     assert (payload / 'completed').read_text() == 'ready'
     assert (payload / 'mklink-sidecar.exe').read_bytes() == b'existing version'
+
+
+@pytest.mark.parametrize('installer', ['install'], indirect=True)
+def test_installer_waits_for_firmware_and_protects_its_own_writes(tmp_path, monkeypatch, installer):
+    from mklink.desktop_install import DesktopInstallInProgress, probe_firmware_transfer
+
+    output, payload = installer
+    monkeypatch.setattr(Path, 'home', classmethod(lambda cls: tmp_path))
+    hold = payload / 'hold-preparation'
+    hold.touch()
+    with probe_firmware_transfer():
+        process = subprocess.Popen([str(output)], creationflags=subprocess.CREATE_NO_WINDOW)
+        try:
+            time.sleep(1)
+            assert process.poll() is None and not (payload / 'preparing').exists()
+        except BaseException:
+            process.terminate()
+            process.wait(timeout=10)
+            raise
+    try:
+        deadline = time.monotonic() + 10
+        while not (payload / 'preparing').exists():
+            assert process.poll() is None and time.monotonic() < deadline
+            time.sleep(0.05)
+        with pytest.raises(DesktopInstallInProgress):
+            with probe_firmware_transfer():
+                pytest.fail('Firmware started during installation')
+    finally:
+        hold.unlink()
+        process.wait(timeout=15)
+    assert process.returncode == 0 and (payload / 'completed').exists()
+    with probe_firmware_transfer():
+        pass
 
 
 def test_installer_waits_for_normal_backend_release(installer):

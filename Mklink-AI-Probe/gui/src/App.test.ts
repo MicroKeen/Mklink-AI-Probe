@@ -55,6 +55,7 @@ vi.mock('./composables/useAppUpdater', () => ({
     error: ref(''),
     checkForUpdates,
     installAndRelaunch,
+    cancelQueuedInstall: vi.fn(),
     retry: retryUpdate,
   }),
 }))

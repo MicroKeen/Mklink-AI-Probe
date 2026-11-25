@@ -2229,6 +2229,7 @@ def create_app(
         if confirm is not True:
             raise HTTPException(status_code=400, detail="firmware upgrade requires confirm=true")
         from mklink import firmware_check as _fc
+        from mklink.desktop_install import DesktopInstallInProgress
 
         device = None
         try:
@@ -2264,6 +2265,8 @@ def create_app(
                     bridge.close()
 
             return await run_in_threadpool(_upgrade_without_debug_session)
+        except DesktopInstallInProgress as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
         except ValueError as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
         finally:

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const updaterMocks = vi.hoisted(() => ({
   check: vi.fn(),
@@ -29,6 +29,7 @@ function update(version = '0.2.0') {
 }
 
 describe('useAppUpdater', () => {
+  afterEach(() => vi.useRealTimers())
   beforeEach(() => {
     updaterMocks.check.mockReset()
     updaterMocks.isTauri.mockReset()
@@ -122,25 +123,29 @@ describe('useAppUpdater', () => {
     expect(updaterMocks.relaunch).toHaveBeenCalledTimes(2)
   })
 
-  it('keeps the downloaded update when the backend is busy and retries without redownloading', async () => {
+  it('one click waits for firmware or an installer, ignoring repeated clicks and update checks', async () => {
+    vi.useFakeTimers()
     updaterMocks.isTauri.mockReturnValue(true)
     const available = update()
     updaterMocks.check.mockResolvedValue(available)
-    updaterMocks.reserve.mockRejectedValueOnce(new Error('firmware upgrade is busy'))
+    updaterMocks.reserve.mockResolvedValueOnce(undefined)
     const updater = useAppUpdater()
     await updater.checkForUpdates()
-    await updater.installAndRelaunch()
-    expect(updater.state.value).toBe('ready')
-    expect(updater.blocked.value).toContain('busy')
+    const pending = updater.installAndRelaunch()
+    expect(updater.state.value).toBe('waiting')
     expect(available.install).not.toHaveBeenCalled()
     expect(updaterMocks.relaunch).not.toHaveBeenCalled()
     await updater.installAndRelaunch()
+    await updater.retry()
+    await vi.advanceTimersByTimeAsync(1000)
+    await pending
     expect(available.install).toHaveBeenCalledOnce()
     expect(available.download).toHaveBeenCalledOnce()
     expect(updaterMocks.release).toHaveBeenCalledOnce()
   })
 
-  it('never installs while local firmware work is active and releases admission on install failure', async () => {
+  it('can cancel a wait before the local firmware update ends and releases admission on install failure', async () => {
+    vi.useFakeTimers()
     updaterMocks.isTauri.mockReturnValue(true)
     const available = update()
     available.install.mockRejectedValueOnce(new Error('installer failed'))
@@ -148,9 +153,13 @@ describe('useAppUpdater', () => {
     let idle = false
     const updater = useAppUpdater(() => idle)
     await updater.checkForUpdates()
-    await updater.installAndRelaunch()
+    const pending = updater.installAndRelaunch()
     expect(updaterMocks.reserve).not.toHaveBeenCalled()
+    updater.cancelQueuedInstall()
     idle = true
+    await vi.advanceTimersByTimeAsync(1000)
+    await pending
+    expect(available.install).not.toHaveBeenCalled()
     await updater.installAndRelaunch()
     expect(updater.state.value).toBe('error')
     expect(updaterMocks.release).toHaveBeenCalledOnce()
@@ -166,5 +175,7 @@ describe('useAppUpdater', () => {
     await updater.checkForUpdates()
     expect(updater.state.value).toBe('error')
     expect(updater.error.value).toContain('signature')
+    await updater.installAndRelaunch()
+    expect(available.install).not.toHaveBeenCalled()
   })
 })

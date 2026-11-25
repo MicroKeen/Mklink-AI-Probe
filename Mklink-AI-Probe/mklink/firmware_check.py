@@ -22,6 +22,8 @@ from urllib.request import Request, urlopen
 
 import certifi
 
+from mklink.desktop_install import probe_firmware_transfer
+
 # 固件文件名格式：MicroLink_V3.3.1.uf2 / HPMLink_V4.3.7.uf2
 _FIRMWARE_FILE_RE = re.compile(
     r"^(?P<prefix>MicroLink|HPMLink)_"
@@ -572,6 +574,13 @@ def upgrade_probe_firmware(
     """Upgrade a connected probe through its UF2 bootloader drive."""
     if confirm is not True:
         raise ValueError("firmware upgrade requires confirm=True")
+    with probe_firmware_transfer():
+        return _upgrade_confirmed(device, firmware_root, bootloader_timeout, verify_timeout,
+                                  disk_reader, bootloader_finder)
+
+
+def _upgrade_confirmed(device, firmware_root, bootloader_timeout, verify_timeout,
+                       disk_reader, bootloader_finder):
     disk_reader = disk_reader or _probe_disk
     try:
         disk = disk_reader()

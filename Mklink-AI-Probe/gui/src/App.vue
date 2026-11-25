@@ -70,6 +70,7 @@
       :firmware-busy="firmwareBusy"
       :firmware-pending="['available', 'unrecognized'].includes(deviceStatus.firmware_update?.status || '')"
       @install="installAndRelaunch"
+      @cancel="cancelQueuedInstall"
       @retry="retryUpdate"
       @dismiss="updateDismissed = true"
     />
@@ -172,11 +173,12 @@ const {
   blocked: updateBlocked,
   checkForUpdates,
   installAndRelaunch,
+  cancelQueuedInstall,
   retry: retryUpdate,
 } = useAppUpdater(() => !firmwareBusy.value)
 const initialBackendReady = ref(false)
 const updateDismissed = ref(false)
-const clientInstalling = computed(() => ['installing', 'restart-required'].includes(updateState.value))
+const clientInstalling = computed(() => ['waiting', 'installing', 'restart-required'].includes(updateState.value))
 const clientPending = computed(() => !updateDismissed.value && ['checking', 'downloading', 'ready'].includes(updateState.value))
 provide(updateCoordinationKey, { clientPending, clientInstalling, firmwareBusy })
 let statusPollingStarted = false
@@ -245,6 +247,7 @@ onMounted(() => {
   void checkForUpdates()
 })
 onUnmounted(() => {
+  cancelQueuedInstall()
   document.removeEventListener('click', closeStoreFromOutside, true)
   document.removeEventListener('focusin', closeStoreFromOutside, true)
   if (statusPollingStarted) stopStatusPolling()

@@ -5,7 +5,7 @@ import { ref } from 'vue'
 import { reserveHostUpdate } from '../lib/updateCoordination'
 import { tr } from './useLanguage'
 
-export type AppUpdateState = 'idle' | 'checking' | 'downloading' | 'ready' | 'installing' | 'restart-required' | 'unavailable' | 'error'
+export type AppUpdateState = 'idle' | 'checking' | 'downloading' | 'ready' | 'waiting' | 'installing' | 'restart-required' | 'unavailable' | 'error'
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
@@ -19,10 +19,11 @@ export function useAppUpdater(canInstall: () => boolean = () => true) {
   const blocked = ref('')
   let availableUpdate: Update | null = null
   let installed = false
+  let pendingInstall: symbol | undefined
 
   async function checkForUpdates() {
     if (!isTauri()) return
-    if (['checking', 'downloading', 'installing', 'restart-required'].includes(state.value)) return
+    if (['checking', 'downloading', 'waiting', 'installing', 'restart-required'].includes(state.value)) return
 
     state.value = 'checking'
     version.value = ''
@@ -65,19 +66,40 @@ export function useAppUpdater(canInstall: () => boolean = () => true) {
     }
   }
 
+  function cancelQueuedInstall() {
+    if (state.value === 'waiting') {
+      pendingInstall = undefined
+      state.value = installed ? 'restart-required' : 'ready'
+    }
+  }
+
   async function installAndRelaunch() {
-    if (!availableUpdate || !['ready', 'restart-required'].includes(state.value) || !canInstall()) return
-    state.value = 'installing'
+    if (!availableUpdate || !['ready', 'restart-required'].includes(state.value)) return
+    const request = Symbol()
+    pendingInstall = request
+    state.value = 'waiting'
     error.value = ''
     blocked.value = ''
     let release: (() => Promise<void>) | undefined
     try {
-      release = await reserveHostUpdate()
+      while (pendingInstall === request) {
+        if (canInstall()) release = await reserveHostUpdate()
+        if (release) break
+        await new Promise(resolve => setTimeout(resolve, 1000))
+      }
     } catch (value) {
-      blocked.value = message(value)
-      state.value = installed ? 'restart-required' : 'ready'
+      if (pendingInstall === request) {
+        blocked.value = tr('无法准备安装更新：', 'Could not prepare the update: ') + message(value)
+        cancelQueuedInstall()
+      }
       return
     }
+    if (pendingInstall !== request || !release) {
+      await release?.()
+      return
+    }
+    pendingInstall = undefined
+    state.value = 'installing'
     try {
       if (!installed) {
         await availableUpdate.install()
@@ -101,5 +123,6 @@ export function useAppUpdater(canInstall: () => boolean = () => true) {
     checkForUpdates,
     retry: checkForUpdates,
     installAndRelaunch,
+    cancelQueuedInstall,
   }
 }

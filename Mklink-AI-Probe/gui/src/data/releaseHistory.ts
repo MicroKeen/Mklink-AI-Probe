@@ -13,6 +13,7 @@ export const releaseHistory: ReleaseHistoryEntry[] = [
     summary: '共享采集、SuperWatch 配置与终端查找',
     summaryEn: 'Shared capture, SuperWatch profiles and terminal search',
     changes: [
+      "Windows 修订版可在连接或采集中点“立即安装”。下载器正在升级固件时，安装会自动等到升级结束。",
       "桌面、Web、CLI 和 MCP 可共享 RTT 文本、波形和串口数据。重开桌面可接回已有探针连接。",
       "SuperWatch 的变量、外设寄存器勾选和采集开关随 AXF/ELF 保存，桌面与 Web 可恢复同一配置。RTT 和 SuperWatch 显示已加载的文件名，可直接换文件。",
       "SuperWatch 支持拖动信号换组。修改公式保留曲线颜色，平移时网格固定，边缘读数完整显示。修复 Windows 日志转 Excel、RTT 导出与 SystemView 日志保存问题。",
@@ -22,6 +23,7 @@ export const releaseHistory: ReleaseHistoryEntry[] = [
       "修复 macOS 后台启动、固件检查和串口名称显示。桌面关闭窗口后可从托盘或菜单栏恢复，点击菜单外可收起店铺列表。",
     ],
     changesEn: [
+      "The revised Windows app can install updates during a connection or capture. A probe firmware update in progress finishes first.",
       "Desktop, Web, CLI and MCP share RTT text, waveforms and serial traffic. Reopened desktop windows can reattach to the connected probe.",
       "SuperWatch saves variables, peripheral register selections and sampling checkboxes beside the AXF/ELF for both desktop and Web. RTT and SuperWatch show the active filename and let you open another file.",
       "Drag signals between groups. Editing a formula preserves its color, panning keeps the grid fixed, and edge tooltips stay visible. Fixed Windows Excel conversion, RTT export and SystemView log saving.",

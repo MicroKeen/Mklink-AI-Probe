@@ -4,6 +4,7 @@
 Var MklinkBlockedFile
 Var MklinkFileError
 Var MklinkPrepareMessage
+!include "${__FILEDIR__}\installer-update-lock.nsh"
 !include "${__FILEDIR__}\installer-elevation.nsh"
 !ifndef MKLINK_PREPARE_SCRIPT
   !define MKLINK_PREPARE_SCRIPT "${__FILEDIR__}\installer-prepare.ps1"
@@ -37,6 +38,7 @@ Function ${PREFIX}MklinkWaitForUpgradeFiles
   Push $0
   retry:
   !if "${PREFIX}" == ""
+    Call MklinkAcquireInstallLock
     InitPluginsDir
     Push $OUTDIR
     SetOutPath "$PLUGINSDIR"
@@ -80,6 +82,9 @@ Function ${PREFIX}MklinkWaitForUpgradeFiles
   IfSilent blocked
   MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "无法覆盖原安装目录。请关闭占用文件的软件后重试；如果旧目录需要管理员权限，请取消后以管理员身份运行此安装包。不会改装到其他目录。$\r$\n$\r$\nCannot replace the existing installation. Close software holding its files and retry. If the old directory requires administrator access, cancel and run this installer as administrator. No second installation will be created elsewhere.$\r$\n$\r$\n$MklinkBlockedFile$\r$\nWindows error: $MklinkFileError" /SD IDCANCEL IDRETRY retry
   blocked:
+  !if "${PREFIX}" == ""
+    Call MklinkReleaseInstallLock
+  !endif
   SetErrorLevel 2
   Abort "MKLink files are still in use or inaccessible. No new payload was written."
   ready:

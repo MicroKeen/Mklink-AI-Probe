@@ -13,6 +13,8 @@ Function MklinkCheckBeforeMaintenance
   Push $0
   ${If} ${FileExists} "$INSTDIR\mklink-ai-probe.exe"
     Call MklinkWaitForUpgradeFiles
+    ; Release during the installer's interactive directory/maintenance pages.
+    Call MklinkReleaseInstallLock
   ${EndIf}
   Pop $0
 FunctionEnd
@@ -92,6 +94,7 @@ Var MklinkShortcutName
     WriteRegStr HKCU "Software\Classes\mklink-ai-probe\Application" "ApplicationDescription" "MKLink AI Probe Web GUI Launcher"
   ${EndIf}
 
+  Call MklinkReleaseInstallLock
 !macroend
 
 !macro NSIS_HOOK_PREUNINSTALL
