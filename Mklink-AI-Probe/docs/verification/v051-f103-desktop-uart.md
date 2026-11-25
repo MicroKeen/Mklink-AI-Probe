@@ -47,3 +47,13 @@ Windows 修订 `38f4578f` 在 STM32F103RC 上同时采集程序变量 `superwatc
 自动用例另外覆盖手动 SVD 的相对路径、描述变化后按新地址恢复、SVD 缺失时保留普通变量，以及来自旧工程或旧外设目录的修改被拒绝。相关后端 365 项、前端全量 1472 项通过。桌面和 Web 版的版本历史均显示 0.5.1 的修复摘要。
 
 本地覆盖安装逐个比对 3,742 个文件，完整 Skill 的 2,738 个文件也已逐个校验。验收后已恢复原桌面连接和原 AXF。安装包与校验表位于 `F:/MKLink-Build/artifacts/v051-38f4578f`，实板验收记录位于 `F:/MKLink-Build/reports/v051-peripheral-profile-20261125/project/board-115157/results.json`。
+
+## SuperWatch 日志回放分窗
+
+Windows 修订 `f460b664` 已覆盖安装。在已安装桌面和 Edge Web GUI 各打开一份八通道 CSV，把三个变量连续分离为独立子图。四幅图共用进度，在播放中分离后继续播放，跳转到 35 秒后同步暂停。隐藏、重新显示、合并和重新载入日志均通过。又载入 STM32F103RC 先前实测的四通道 JSONL 并分成三幅图，返回实时后回放子图全部关闭。本轮回放未向后台发送采集启停或工程布局写请求。
+
+独立 SuperWatch Web 查看器通过已安装 Skill 在无目标连接条件下启动，也验证了分窗、合并和同步跳转。自动回归覆盖实时分组在回放期间更新、退出后恢复，以及灵活面板中的独立布局。
+
+前端全量 1474 项通过。Windows 安装文件比对 3,742 项、完整 Skill 比对 2,738 项。安装包与校验表在 `F:/MKLink-Build/artifacts/v051-f460b664`，浏览器结果在 `F:/MKLink-Build/reports/v051-replay-split-20261125/project/replay-123010/results.json`。
+
+构建脚本清理时，WebView2 日志与桌面进程临时文件仍被占用。`F:/MKLink-Build/runs/run-20261125-123010-d27dbc45` 和 `F:/MKLink-Build/runs/run-20261125-123031-9162ff38` 保留待进程退出后清理。

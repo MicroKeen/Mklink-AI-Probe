@@ -6,11 +6,11 @@
 
 - 更新时间：`2026-11-25`
 - 分支：`codex/watch-formula-color`
-- HEAD：`38f4578f`
-- 远端 HEAD：`38f4578f`
-- 工作树：PR #92，Windows/Skill 修订 38f4578f。Mac ARM Dock 测试包仍为 52e3439f。
+- HEAD：`f460b664`
+- 远端 HEAD：`f460b664`
+- 工作树：PR #92，Windows/Skill 修订 f460b664。Mac ARM Dock 测试包仍为 52e3439f。
 - 当前任务：[STM32F103与UART5](../verification/v051-f103-desktop-uart.md)、[HPM6E80与导出](../verification/v051-superwatch-export-profile.md)。
-- 状态：`0.5.1 Windows/Skill 已覆盖，STM32F103 实测共享采集、终端查找和外设勾选随 AXF 恢复。正式渠道 0.5.0。`
+- 状态：`0.5.1 Windows/Skill 已覆盖，STM32F103 采集、外设勾选与多通道日志回放分窗已验收。正式渠道 0.5.0。`
 
 ## 里程碑
 
@@ -53,7 +53,7 @@
 
 ## 下一动作
 
-1. 0.5.1 发布需单独授权。F:/MKLink-Build/artifacts 中 v051-38f4578f 为 Windows/Skill，v051-52e3439f 为 Mac ARM。暂停 HPM6E80 永久写入。
+1. 0.5.1 发布需单独授权。F:/MKLink-Build/artifacts 中 v051-f460b664 为 Windows/Skill，v051-52e3439f 为 Mac ARM。暂停 HPM6E80 永久写入。
 2. 覆盖安装会结束当前用户旧MKLink及Skill/MCP活动任务，安装后由AI宿主重载MCP。保留损坏历史备份；异常收集installation-history-report.json、history-backups及诊断包，区分权限、占用和格式，不删除有效未知结果或重放烧录。
 3. 客户SystemView先核对实际CH、目标IRQ锁及元数据。1µs三路溢出先采集0x40 CH2设备时间戳/长度/序号与主机单调到达时间，低频读0x10错误和0x14批次耗时；诊断开销保持一致，再判断背压、重试或调度，不直接假定80ms停读或给CH2固定优先级。多视图假离线已完成修复与安装版六窗口复验。保留目标构建快照供AXF源码路径使用，原工程重编后再清理；见[静态补充](../verification/v050-systemview-loss-reboot.md)。
 4. 有Linux/Mac实物后补验真实USB、Gatekeeper首次安装和交互式提权；不能把本轮CI结果当作这些硬件/系统验收。
