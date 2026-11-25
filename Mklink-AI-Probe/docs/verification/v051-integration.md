@@ -61,3 +61,23 @@ macOS 仅构建 Apple Silicon。[原生验收](https://github.com/MicroKeen/Mkli
 完整前端套件 1,467 项通过。Windows 回归修正了异常快照注入点、固件拒绝写入的结构化原因断言及 UTF-8 清单读取。慢存储测试在存储操作受阻期间检查健康接口和第二窗口；独立导出测试允许 Windows 原子替换清单时短暂拒读，仍核对最终状态和文本。49 项相关回归通过。完整 Python 回归使用已校验的 7,059 个目标、2,224 个算法文件；原始结果见本地验收目录 `v051-windows-system-qa-20261124` 中的 `python-final.log`。
 
 覆盖安装会结束旧 MCP 进程。本聊天原连接返回 `Transport closed`，重新按同一配置启动的 MCP 已通过上述检查。实板未执行永久 OTP 写入、供电切换、目标擦写或下载器固件升级。
+
+## 80504c21 的历史主线安装包
+
+版本 PR [#90](https://github.com/MicroKeen/Mklink-AI-Probe/pull/90) 的 7,971 项 Python 测试通过，2 项跳过。GUI 1,459 项、生产构建及三项 GitHub 必需检查通过。合并提交 `80504c21` 与受测版本的源码树一致。四个安装或分发文件均取自该主线提交。
+
+| 文件 | 字节数 | SHA-256 |
+|---|---:|---|
+| `Mklink-AI-Probe-v0.5.1-aarch64-apple-darwin.dmg` | 168,797,774 | `53937676e02ab49c662327aae7dd2caee665d723d1b73fa96c22280836d41c19` |
+| `MKLink-AI-Probe-v0.5.1-Skill.zip` | 100,235,682 | `6cafedf05df56a9933867ebdf4e64737eea10d623aabed4e1b6b9c08b7a42ed8` |
+| `MKLink-AI-Probe-v0.5.1-Windows-x64-Setup.exe` | 188,010,190 | `bd123759d5e3441ea039250bcf368612182dbce928029111d75a5e5e393aaa92` |
+| `Mklink-AI-Probe-v0.5.1-x86_64-apple-darwin.dmg` | 169,175,263 | `327277f896b217f8ea8eb86203503fe7ac4d2dd72f2802eb0c29f105a139874a` |
+
+- **Windows**。将最终 NSIS 包覆盖到原目录，3,739 个安装文件与包内逐一匹配，用户设置和唯一公共桌面快捷方式保留。原生 WebView2 中可打开四条 0.5.1 更新说明，店铺菜单点外部或按 Escape 均收起。
+- **HPM6E80**。原生桌面选择 V4、HPM6E80、JTAG ROM API，在 OTP 页刷新后显示 Word 0–127。安装包内的 stdio MCP 用 `extended=true` 回读同样范围、熔丝、影子及锁字段。对同一板和程序，最终安装版 75 秒、5 秒、1.25 秒分别核对 150、10、2 组文本和波形，计 7,800、520、104 字节。缺批、丢字节均为 0。MCP 独立收到 208 字节并退出后，桌面继续收数。测试结束时探针释放。
+- **完整 Skill**。归档 CRC 逐文件校验通过。从分发 ZIP 加载运行时与插件元数据，版本均为 0.5.1，完整 JTAG OTP 读取参数校验通过。内置算法覆盖 7,059 个目标，内置外设覆盖 4,800 个目标。
+- **macOS**。两种架构的原生构建机均通过冻结 CLI、MCP、后台正常退出、WebKit 店铺菜单及在线固件下载检查。已下载 DMG，大小和 SHA-256 与各自构建清单一致。真实 Mac 的 USB 固件刷写仍待现场验证。[Apple Silicon 构建](https://github.com/MicroKeen/Mklink-AI-Probe/actions/runs/45143314727) · [Intel 构建](https://github.com/MicroKeen/Mklink-AI-Probe/actions/runs/45143331724)
+
+核对时腾讯云稳定更新索引和 GitHub 最新正式发布均为 0.5.0。0.5.1 的发布签名、标签和渠道更新需另行授权。
+
+2026-11-23 历史采样清理保留了基线和 1,063 份采样的统计，索引位于 `F:/MKLink-Build/reports/v051-storage-cleanup-20261123/summary.json`。
