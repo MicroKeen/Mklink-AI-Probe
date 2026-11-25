@@ -31,3 +31,11 @@ UART 两端初设 115200 时出现乱码。目标配置 76800、主机保持 115
 全量回归结果为 Python 7,985 项通过、2 项跳过，GUI 139 个文件的 1,469 项全部通过。生产构建及安装版实板验证通过。验收后的 Windows 桌面已重新打开，探针采集已释放。
 
 安装包和 Skill 校验表位于 `F:/MKLink-Build/artifacts/v051-dea1bec1/SHA256SUMS.txt`。实板结果见验收目录下的 `clock-uart5.json`、`capture-integrity.json` 和 `project/board-111547/results.json`。本轮未重建 Mac/Linux，未进行永久 OTP 编程。
+
+## RTT 和串口助手的终端查找
+
+修订 `85c6691e` 已覆盖安装到原 Windows 目录，完整 Skill 已同步。点击终端内再按 Ctrl+F 或 ⌘F，也可以点击终端工具栏的放大镜。输入文本即定位，Enter 和 Shift+Enter 分别查找下一个和上一个匹配，Esc 返回终端。查找范围是该终端当前显示和保留的滚动历史，默认忽略大小写。
+
+在实际 WebView2 桌面和 Edge 中分别查找 STM32F103 的 RTT CH1 和 UART5 实时日志。两端均可定位，搜索期间目标的 RTT 与 UART 接收字节计数都没有增加。在两个终端回放含 180 行填充的日志，确认能跳回屏外的中文文本，按字面查找句点和方括号，正反向切换到预期行，并在新匹配到达后更新“未找到”提示。Mac 快捷键使用 Meta 键事件验证，未重建原生 Mac 安装包。
+
+前端全量回归 139 个文件、1,471 项通过。安装包内 3,742 个文件与安装目录逐个校验一致，完整 Skill 核对 2,738 个文件。验收结束后恢复桌面的探针连接和原 AXF。安装包与校验表位于 `F:/MKLink-Build/artifacts/v051-85c6691e`，测试结果位于 `F:/MKLink-Build/reports/v051-terminal-find-20261125`。
