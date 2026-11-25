@@ -20,6 +20,20 @@ from mklink.remote.online_flash_api import OnlineFlashServices, create_online_fl
 from mklink.remote.resource_manager import ResourceManager
 
 
+AP6_IDR = 0x060000FC
+AP6_CTL = 0x06000004
+EXPECTED_IDR = 0x001C0030
+# Keil.S32K3xx_DFP 1.0.1, ResetSystem -> FunctionalReset.
+FUNCTIONAL_RESET = (0x00400B00, 0x00400B20, 0x00400B00, 0x00400000)
+
+
+def reset_transfers(step_count):
+    expected = [call.read_ap(AP6_IDR)]
+    for value in FUNCTIONAL_RESET[:step_count]:
+        expected.extend((call.write_ap(AP6_CTL, value), call.flush()))
+    return expected
+
+
 @pytest.fixture
 def rig(monkeypatch):
     probe = Mock(spec=["unique_id", "flush", "reset", "disconnect", "close"])
@@ -40,7 +54,9 @@ def rig(monkeypatch):
                                get_state=Mock(side_effect=lambda: order.append("observe") or Target.State.RUNNING),
                                halt=Mock(side_effect=lambda: order.append("halt")), resume=Mock(),
                                write32=Mock(), has_debug_sequence=Mock(return_value=True))
-        target = SimpleNamespace(dp=object(), selected_core=core,
+        dp = Mock(spec=["read_ap", "write_ap", "flush"])
+        dp.read_ap.return_value = EXPECTED_IDR
+        target = SimpleNamespace(dp=dp, selected_core=core,
                                  get_state=Mock(return_value=Target.State.RUNNING))
         session = SimpleNamespace(target=target, probe=probe, options=options,
                                   delegate=None, close=Mock(), order=order)
@@ -81,10 +97,14 @@ def test_final_reset_rebinds_same_probe_before_status_and_leaves_old_core_alone(
         rig.probe.reset.assert_called_once_with()
     elif mode == "power-cycle":
         rig.power.assert_called_once_with("fixture-probe", 3300)
-    else:
-        mask = CortexM.NVIC_AIRCR_VECTRESET if mode == "core" else CortexM.NVIC_AIRCR_SYSRESETREQ
+    elif mode == "core":
         old.target.selected_core.write32.assert_called_once_with(
-            CortexM.NVIC_AIRCR, CortexM.NVIC_AIRCR_VECTKEY | mask)
+            CortexM.NVIC_AIRCR, CortexM.NVIC_AIRCR_VECTKEY | CortexM.NVIC_AIRCR_VECTRESET)
+    else:
+        assert old.target.dp.mock_calls == reset_transfers(4)
+        old.target.selected_core.write32.assert_not_called()
+    if mode in {"hardware", "power-cycle", "core"}:
+        assert not old.target.dp.mock_calls
 
 
 @pytest.mark.parametrize(("mode", "expected"), [("system", "ResetSystem"), ("software", "VendorReset"),
@@ -98,6 +118,7 @@ def test_active_pack_reset_sequence_runs_once_on_the_bound_processor(rig, mode, 
     rig.backend.reset_run(mode)
     delegate.run_sequence.assert_called_once_with(expected, pname="Cortex-M7_0")
     core.write32.assert_not_called()
+    assert not rig.sessions[0].target.dp.mock_calls
     rig.probe.reset.assert_not_called()
 
 
@@ -106,7 +127,7 @@ def test_final_reset_failure_preserves_evidence_and_never_reissues(rig, failure)
     old = rig.sessions[0]
     core = old.target.selected_core
     if failure == "write":
-        core.write32.side_effect = OSError("lost transfer")
+        old.target.dp.write_ap.side_effect = OSError("lost transfer")
     elif failure == "ack":
         rig.probe.flush.side_effect = [None, OSError("lost ACK")]
     elif failure == "release":
@@ -136,13 +157,63 @@ def test_final_reset_failure_preserves_evidence_and_never_reissues(rig, failure)
         assert evidence["cause"] == {"step": 7}
     if failure == "pack":
         core.debug_sequence_delegate.run_sequence.assert_called_once_with("ResetSystem", pname=core.node_name)
-        core.write32.assert_not_called()
+        assert not old.target.dp.mock_calls
+    elif failure == "write":
+        assert old.target.dp.mock_calls == [call.read_ap(AP6_IDR), call.write_ap(AP6_CTL, FUNCTIONAL_RESET[0])]
+        assert evidence["step"] == 1 and evidence["acknowledged_steps"] == 0
     else:
-        assert core.write32.call_count == 1
+        assert old.target.dp.mock_calls == reset_transfers(4)
+        assert evidence["step"] == evidence["acknowledged_steps"] == 4
+    core.write32.assert_not_called()
     old.target.get_state.assert_not_called()
     old.close.assert_not_called()
     rig.backend.disconnect()
     assert rig.probe.close.call_args_list[0] == call()
+
+
+@pytest.mark.parametrize("step", [1, 2, 3, 4])
+def test_lost_per_step_ack_stops_at_the_dispatched_prefix(rig, step):
+    old = rig.sessions[0]
+    dp = old.target.dp
+    dp.flush.side_effect = [None] * (step-1) + [OSError(f"lost MDM-AP ACK at step {step}")]
+    with pytest.raises(FlashError) as caught:
+        rig.backend.reset_run("software")
+    assert caught.value.code is FlashErrorCode.RESET_FAIL
+    evidence = caught.value.details
+    assert evidence["command"] == "S32K314.FunctionalReset"
+    assert evidence["ap6_idr"] == EXPECTED_IDR
+    assert evidence["step"] == step and evidence["acknowledged_steps"] == step-1
+    assert evidence["reset_outcome"] == "unknown" and evidence["run_state"] == "unconfirmed"
+    assert dp.mock_calls == reset_transfers(step)
+    assert len(rig.sessions) == 1
+    assert rig.backend._session is None
+    old.target.selected_core.write32.assert_not_called()
+    old.target.get_state.assert_not_called()
+    rig.probe.reset.assert_not_called()
+
+
+@pytest.mark.parametrize("actual", [0x24770011, None])
+def test_unconfirmed_mdm_ap_identity_rejects_before_any_reset_dispatch(rig, actual):
+    old = rig.sessions[0]
+    if actual is None:
+        old.target.dp.read_ap.side_effect = OSError("No ACK reading AP6 IDR")
+    else:
+        old.target.dp.read_ap.return_value = actual
+    with pytest.raises(FlashError) as caught:
+        rig.backend.reset_run("system")
+    assert caught.value.code is FlashErrorCode.RESET_FAIL
+    evidence = caught.value.details
+    assert evidence["reset_outcome"] == "not_issued" and evidence["ap6_idr"] == actual
+    assert evidence["acknowledged_steps"] == 0
+    assert old.target.dp.mock_calls == [call.read_ap(AP6_IDR)]
+    assert len(rig.sessions) == 1
+    assert rig.backend._session is None
+    rig.probe.disconnect.assert_called_once_with()
+    rig.probe.close.assert_called_once_with()
+    old.close.assert_not_called()
+    old.target.get_state.assert_not_called()
+    old.target.selected_core.write32.assert_not_called()
+    rig.probe.reset.assert_not_called()
 
 
 def test_job_api_retains_uncertain_reset_receipt_in_snapshot_and_error_event(rig):
@@ -161,7 +232,8 @@ def test_job_api_retains_uncertain_reset_receipt_in_snapshot_and_error_event(rig
             assert result["error_code"] == "RESET_FAIL"
             assert result["error_details"] == {"profile": "S32K314", "mem_ap": 4, "mode": "software",
                                                "reset_outcome": "unknown", "run_state": "unconfirmed",
-                                               "command": "SYSRESETREQ"}
+                                               "command": "S32K314.FunctionalReset", "ap6_idr": EXPECTED_IDR,
+                                               "acknowledged_steps": 4, "step": 4}
             stream = client.get(f"/api/online-flash/jobs/{job}/events").text
             events = [json.loads(line[6:]) for line in stream.splitlines() if line.startswith("data: ")]
             assert [e["error_details"] for e in events if e["event"] == "error"] == [result["error_details"]]

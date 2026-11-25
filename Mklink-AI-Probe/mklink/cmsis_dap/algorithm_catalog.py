@@ -11,6 +11,8 @@ from pathlib import Path
 import re
 from typing import Callable, Iterable, Mapping, Optional, Sequence, Tuple, Union
 import uuid
+from zipfile import BadZipFile
+from zlib import error as ZlibError
 
 from .models import TargetRecord, MemoryRegion
 from .paths import PackPaths
@@ -169,6 +171,20 @@ def _pack_algorithms(record: TargetRecord, part_number: str) -> list[FlashAlgori
                 ram_size = int(raw_ram_size, 0) if isinstance(raw_ram_size, str) else int(raw_ram_size)
             except (TypeError, ValueError):
                 continue
+            if part_number.casefold() == "s32k314":
+                from .s32k314_flm import CODE_SHA256, code_range
+
+                try:
+                    with device.get_file(str(name)) as source:
+                        payload_digest = hashlib.sha256(source.read()).hexdigest()
+                except (KeyError, OSError, BadZipFile, EOFError, RuntimeError, ZlibError):
+                    # Older or partial Packs may list an unavailable member.
+                    # Keep independently usable algorithms on the same target.
+                    continue
+                if payload_digest == CODE_SHA256:
+                    flash_start, flash_size = code_range(flash_start, flash_size)
+                    if not flash_size:
+                        continue
             identity = "|".join((
                 record.source,
                 record.pack_id,

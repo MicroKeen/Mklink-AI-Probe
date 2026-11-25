@@ -287,6 +287,7 @@ def load_builtin_flm_targets(root: Optional[Path] = None) -> List[TargetRecord]:
 
 
 def discover_builtin_flm_algorithms(part_number: str, root: Optional[Path] = None):
+    from .s32k314_flm import correct_algorithm
     target = str(part_number or "").strip()
     if not target:
         return []
@@ -316,6 +317,9 @@ def discover_builtin_flm_algorithms(part_number: str, root: Optional[Path] = Non
                 raise BuiltinFlmBundleError("builtin FLM algorithm is invalid")
             if item.get("automatic", True) is False:
                 continue
+            item = correct_algorithm(bundle_root, bundle_target, item)
+            if item is None:
+                continue
             path, digest = _blob(bundle_root, item.get("blob"), item.get("sha256"))
             flash_start = _integer(item.get("flash_start"), "builtin FLM flash start")
             flash_size = _integer(item.get("flash_size"), "builtin FLM flash size")
@@ -342,8 +346,8 @@ def discover_builtin_flm_algorithms(part_number: str, root: Optional[Path] = Non
                 file_name=_text(item.get("file_name"), "builtin FLM file name"),
                 flash_start=flash_start,
                 flash_size=flash_size,
-                ram_start=ram_start,
-                ram_size=ram_size,
+                ram_start=_integer(item.get("ram_start", ram_start), "builtin FLM RAM start"),
+                ram_size=_integer(item.get("ram_size", ram_size), "builtin FLM RAM size"),
                 default=index == 0,
                 source_kind="daplink-builtin",
                 source_name="常用型号内置算法",
@@ -411,10 +415,16 @@ def discover_builtin_option_algorithm(
 
 
 def extract_builtin_flm(algorithm: object) -> bytes:
+    from .s32k314_flm import CODE_SHA256, code_range
+
     path = Path(_text(getattr(algorithm, "builtin_blob_path", None), "builtin FLM blob path"))
     expected = _text(
         getattr(algorithm, "builtin_blob_sha256", None), "builtin FLM SHA-256"
     ).casefold()
+    if str(getattr(algorithm, "target_part", "")).casefold() == "s32k314" and expected == CODE_SHA256:
+        selected = (algorithm.flash_start, algorithm.flash_size)
+        if code_range(*selected) != selected:
+            raise BuiltinFlmBundleError("Selected range exceeds the S32K314 Code FLM FlashDevice; inspect again")
     if _SHA256.fullmatch(expected) is None or not path.is_file():
         raise BuiltinFlmBundleError("builtin FLM blob is unavailable")
     payload = path.read_bytes()

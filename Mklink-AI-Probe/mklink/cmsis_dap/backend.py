@@ -19,6 +19,7 @@ from typing import Any, Callable, Iterator, Mapping, Optional, Tuple
 from mklink.profiles import TargetProfileError, resolve_attach_profile
 
 from .errors import FlashError, FlashErrorCode
+from .flash_bounds import check_chip_erase, check_flash_span, check_flm_override, limit_pack_code_regions
 from .flash_launch import install_flash_launch_checks
 from .flash_interrupts import mask_flash_interrupts
 from .flash_workspace import check_flash_workspace
@@ -171,6 +172,7 @@ def _prepare_pack_flm_regions(
 ) -> None:
     _relocate_pack_flm_regions(target)
     _expand_pack_flm_regions(target, requested_regions)
+    limit_pack_code_regions(target)
 
 
 class _TraceStateDelegate:
@@ -449,6 +451,7 @@ def _install_custom_flm_regions(
         _enable_custom_flm_verify(algorithm)
         if flash_regions:
             start, size = flash_regions[index]
+            check_flm_override(getattr(target, "part_number", None), hashlib.sha256(payload).hexdigest(), start, size)
             algorithm.flash_start = start
             algorithm.flash_size = size
         else:
@@ -1073,6 +1076,9 @@ class PyOcdBackend:
                         FlashErrorCode.PACK_INTEGRITY_ERROR,
                         "custom FLM integrity check failed",
                     )
+                if profile is not None and resolved_regions:
+                    start, size = resolved_regions[len(resolved_flms)]
+                    check_flm_override(profile.name, digest, start, size)
                 resolved_flms.append(payload)
             security_payload = None
             if security_family == "nrf54l15-ctrl-ap":
@@ -2573,7 +2579,7 @@ class PyOcdBackend:
                     tuple((segment.start, segment.end) for segment, _ in hex_data)
                     if hex_data is not None else ((image_start, image_start + path.stat().st_size),)
                 )
-                self._prepare_algorithm_execution(session.target, spans)
+                self._prepare_algorithm_execution(session.target, spans, program=True)
                 pname = self._flash_core_name(session.target)
                 region = self._flash_region_for_address(session.target, image_start, pname=pname)
                 # A program request only authorizes image-covered sectors, never
@@ -2651,7 +2657,7 @@ class PyOcdBackend:
                 return False
         return True
 
-    def _prepare_algorithm_execution(self, target: Any, spans=None) -> None:
+    def _prepare_algorithm_execution(self, target: Any, spans=None, *, program=False) -> None:
         """Check the execution context before any RAM Flash algorithm runs.
 
         Attaching to a running RTOS can retain exception/stack/MPU state that
@@ -2662,8 +2668,9 @@ class PyOcdBackend:
         if not self._algorithm_reset_required:
             return
         if self._flash_profile is not None and self._flash_profile.flash_prepare == "halt":
+            algorithms = tuple(self._profile_flash_algorithms(target, spans, program=program))
             self._prepare_profile_flash(target)
-            for flash in self._profile_flash_algorithms(target, spans):
+            for flash in algorithms:
                 self._check_profile_workspace(target, flash)
             self._algorithm_reset_done = True
             return
@@ -2730,12 +2737,14 @@ class PyOcdBackend:
             return mask_flash_interrupts(target, self._profile_core)
         return nullcontext()
 
-    def _profile_flash_algorithms(self, target, spans):
+    def _profile_flash_algorithms(self, target, spans, *, program=False):
         """Match the core and regions used by pyOCD FlashEraser and MemoryLoader."""
         pname = self._flash_core_name(target)
         if spans is None:
             MemoryType = import_pyocd_attr("pyocd.core.memory_map", "MemoryType")
-            regions = target.memory_map.iter_matching_regions(type=MemoryType.FLASH, pname=pname)
+            regions = tuple(target.memory_map.iter_matching_regions(type=MemoryType.FLASH, pname=pname))
+            for region in regions:
+                check_chip_erase(self._flash_profile.name, region)
         else:
             regions = []
             for address, end in spans:
@@ -2745,7 +2754,9 @@ class PyOcdBackend:
                         raise FlashError(FlashErrorCode.IMAGE_OUT_OF_RANGE,
                                          f"No Flash algorithm for {pname} at 0x{address:X}")
                     regions.append(region)
-                    address = int(region.start) + int(region.length)
+                    region_end = int(region.start) + int(region.length)
+                    check_flash_span(self._flash_profile.name, region, address, min(end, region_end), program=program)
+                    address = region_end
         seen = set()
         for region in regions:
             flash = region.flash
@@ -3084,7 +3095,9 @@ class PyOcdBackend:
                 command = lambda: self._power_cycle(self._probe_identifier, voltage)
                 evidence["command"] = "power-cycle"
             else:
-                evidence["command"], command = reset_command(core, probe, mode)
+                evidence["command"], command = reset_command(
+                    core, probe, mode, profile=profile, dp=session.target.dp, evidence=evidence,
+                )
             probe.flush()
 
             # One possibly-effective reset consumes this binding, including when
@@ -3124,6 +3137,15 @@ class PyOcdBackend:
                 self._profile_core = None
                 close_reset_transport(probe)
         except Exception as exc:
+            if "command" in evidence and self._session is session:
+                # A failed preflight on the probe or AP invalidates the binding.
+                # Teardown through a potentially different core is unsafe.
+                self._session = None
+                self._profile_core = None
+                try:
+                    close_reset_transport(probe)
+                except Exception as close_error:
+                    evidence["transport_close_error"] = str(close_error)
             if isinstance(exc, FlashError) and exc.details:
                 evidence["cause"] = exc.details
             raise FlashError(FlashErrorCode.RESET_FAIL,

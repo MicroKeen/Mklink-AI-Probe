@@ -18,6 +18,7 @@ def test_s32k314_compiles_exact_firmware_recipe_in_lifecycle_order():
     compiled = profiles.compile_attach_profile(model["name"], recipe)
     assert compiled.requires_reset_released
     assert compiled.flash_prepare == "halt"
+    assert compiled.online_system_reset == "s32k314_functional"
     wire = encode_attach_profile(compiled)
     assert wire[:4] == bytes((1, 4, 8, 0))
     assert list(struct.iter_unpack("<BBHIII", wire[4:])) == [
@@ -33,6 +34,18 @@ def test_s32k314_compiles_exact_firmware_recipe_in_lifecycle_order():
     assert profiles.resolve_attach_profile(" S32K314 ") == compiled
     assert profiles.resolve_attach_profile("stm32f1") is None
     assert profiles.resolve_attach_profile(None) is None
+
+
+@pytest.mark.parametrize("name,mem_ap,policy", [
+    ("S32K344", 4, "s32k314_functional"),
+    ("S32K314", 0, "s32k314_functional"),
+    ("S32K314", 4, "arbitrary_ap_write"),
+])
+def test_online_system_reset_is_limited_to_the_verified_model(name, mem_ap, policy):
+    recipe = profiles.load_mcu_profiles()["s32k314"]["mux_attach"]
+    recipe["hooks"]["ConfigTargetSettings"].update(mem_ap=mem_ap, online_system_reset=policy)
+    with pytest.raises(profiles.TargetProfileError, match="online_system_reset"):
+        profiles.compile_attach_profile(name, recipe)
 
 
 @pytest.mark.parametrize("selection", ["s32k314hms", "  NXP S32k314hMs\t"])

@@ -45,6 +45,7 @@ class MuxAttachProfile:
     steps: tuple[MuxAttachStep, ...]
     requires_reset_released: bool = False
     flash_prepare: str = "reset"
+    online_system_reset: str = "default"
 
 
 _ATTACH_HOOKS = ("ConfigTargetSettings", "InitTarget", "SetupTarget")
@@ -69,6 +70,7 @@ class TargetProfileError(ValueError):
 def compile_attach_profile(name: str, recipe: dict) -> MuxAttachProfile:
     """Compile declarative lifecycle phases in connection order, before opening the probe."""
     from mklink.mux import encode_attach_profile
+    from mklink.cmsis_dap.profile_reset import system_reset_handler
 
     if not isinstance(recipe, dict) or type(recipe.get("version")) is not int or recipe["version"] != 1:
         raise TargetProfileError("unsupported_profile_version", f"{name} requires target profile version 1")
@@ -80,13 +82,18 @@ def compile_attach_profile(name: str, recipe: dict) -> MuxAttachProfile:
             raise TargetProfileError("unsupported_hook", f"{name} cannot execute {hook}", hook=hook)
     settings = hooks.get("ConfigTargetSettings")
     if (not isinstance(settings, dict) or "mem_ap" not in settings
-            or set(settings) - {"mem_ap", "requires_reset_released", "flash_prepare"}
+            or set(settings) - {"mem_ap", "requires_reset_released", "flash_prepare", "online_system_reset"}
             or type(settings.get("requires_reset_released", False)) is not bool
             or settings.get("flash_prepare", "reset") not in ("reset", "halt")):
         raise TargetProfileError(
             "invalid_hook", "ConfigTargetSettings requires mem_ap; requires_reset_released must be boolean "
             "and flash_prepare must be reset or halt when supplied", hook="ConfigTargetSettings",
         )
+    online_reset = settings.get("online_system_reset", "default")
+    try:
+        system_reset_handler(online_reset, name, settings["mem_ap"])
+    except ValueError as exc:
+        raise TargetProfileError("invalid_hook", str(exc), hook="ConfigTargetSettings") from exc
     steps = []
     for hook, kinds in (("InitTarget", {"ap_check": 1, "ap_update": 2}),
                         ("SetupTarget", {"mem32_check": 3})):
@@ -108,6 +115,7 @@ def compile_attach_profile(name: str, recipe: dict) -> MuxAttachProfile:
         name, settings["mem_ap"], tuple(steps),
         requires_reset_released=settings.get("requires_reset_released", False),
         flash_prepare=settings.get("flash_prepare", "reset"),
+        online_system_reset=online_reset,
     )
     try:
         encode_attach_profile(profile)

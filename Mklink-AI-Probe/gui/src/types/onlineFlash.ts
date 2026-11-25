@@ -66,6 +66,8 @@ export interface FlashAlgorithmRecord {
   source_kind: 'installed-pack' | 'builtin-pack' | 'daplink-builtin' | 'pyocd-builtin' | 'custom-flm' | 'hpm-rom-api' | string
   source_name: string
   sector_sizes?: Array<[number, number]>
+  ram_start?: number
+  ram_size?: number
 }
 
 export interface ImageSegment {

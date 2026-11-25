@@ -705,6 +705,8 @@ def _flash_algorithm_payload(record: object) -> Dict[str, object]:
     }
     if getattr(record, "source_kind", "") == "daplink-builtin":
         payload["sector_sizes"] = [list(pair) for pair in getattr(record, "sector_sizes", ())]
+        payload["ram_start"] = record.ram_start
+        payload["ram_size"] = record.ram_size
     return payload
 
 
