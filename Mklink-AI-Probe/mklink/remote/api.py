@@ -3183,13 +3183,19 @@ def create_app(
         except RuntimeError as exc:
             raise HTTPException(409, str(exc)) from exc
 
+    def check_watch_source(sw, profile, peripheral_revision):
+        if profile is not None and profile != str(watch_profile.path or ''):
+            raise HTTPException(409, 'The active AXF/ELF changed; reload settings')
+        if peripheral_revision is not None and peripheral_revision != sw.peripheral_revision:
+            raise HTTPException(409, '外设描述已切换，请刷新寄存器列表后重试。')
+
     @app.post("/api/dash/superwatch/add")
-    async def superwatch_add(name: str = Body(..., embed=True), profile: str | None = Body(None)):
+    async def superwatch_add(name: str = Body(..., embed=True), profile: Annotated[str | None, Body()] = None,
+                             peripheral_revision: Annotated[int | None, Body()] = None):
         managers = get_managers()
         sw = managers["superwatch"]
         def prepare_and_add():
-            if profile is not None and profile != str(watch_profile.path or ''):
-                raise HTTPException(409, 'The active AXF/ELF changed; reload settings')
+            check_watch_source(sw, profile, peripheral_revision)
             if sw._runtime is None and _state["device"] and _state["device"].connected:
                 sw.prepare(_state["device"])
             result = sw.add_watch(name)
@@ -3216,12 +3222,12 @@ def create_app(
                 raise HTTPException(422, f"无法更改 SuperWatch 采集选择：{exc}") from exc
 
     @app.post("/api/dash/superwatch/remove")
-    async def superwatch_remove(name: str = Body(..., embed=True), profile: str | None = Body(None)):
+    async def superwatch_remove(name: str = Body(..., embed=True), profile: Annotated[str | None, Body()] = None,
+                                peripheral_revision: Annotated[int | None, Body()] = None):
         managers = get_managers()
         sw = managers["superwatch"]
         def prepare_and_remove():
-            if profile is not None and profile != str(watch_profile.path or ''):
-                raise HTTPException(409, 'The active AXF/ELF changed; reload settings')
+            check_watch_source(sw, profile, peripheral_revision)
             if sw._runtime is None and _state["device"] and _state["device"].connected:
                 sw.prepare(_state["device"])
             result = sw.remove_watch(name)
@@ -3285,7 +3291,7 @@ def create_app(
 
     @app.post("/api/dash/superwatch/peripherals/select")
     async def peripheral_select(target_id: str | None = Body(None), chip: str | None = Body(None),
-                                svd: str | None = Body(None)):
+                                svd: str | None = Body(None), profile: Annotated[str | None, Body()] = None):
         device = _state.get("device")
         if not device or not device.connected:
             raise HTTPException(status_code=400, detail="Device not connected")
@@ -3293,8 +3299,17 @@ def create_app(
             raise HTTPException(422, "Select exactly one target_id, chip or SVD")
         try:
             async with _dashboard_start_lock(_state):
-                return await run_in_threadpool(get_managers()["superwatch"].select_peripherals, device,
-                                              target_id=target_id, chip=chip, svd=svd)
+                sw = get_managers()["superwatch"]
+                check_watch_source(sw, profile, None)
+                result = await run_in_threadpool(sw.select_peripherals, device, target_id=target_id, chip=chip, svd=svd)
+                try:
+                    await run_in_threadpool(watch_profile.remember_peripheral_source, sw)
+                except (OSError, ValueError) as exc:
+                    result['profile_error'] = str(exc)
+                result['selected'] = [i['name'] for i in sw.list_watches() if i.get('source') == 'peripheral']
+                return result
+        except HTTPException:
+            raise
         except RuntimeError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         except Exception as exc:
@@ -3303,8 +3318,10 @@ def create_app(
     @app.get("/api/dash/superwatch/items")
     async def superwatch_items():
         managers = get_managers()
-        items = await run_in_threadpool(managers["superwatch"].list_watches)
-        return {"items": items}
+        sw = managers["superwatch"]
+        async with _dashboard_start_lock(_state):
+            items = await run_in_threadpool(sw.list_watches)
+            return {"items": items, "peripheral_revision": sw.peripheral_revision, "profile": str(watch_profile.path or '')}
 
     def pinned_variable_payload(preferences):
         device = _state.get("device") or _state.get("symbol_device")

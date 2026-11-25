@@ -1938,6 +1938,7 @@ class SuperWatchStreamManager:
         self._device = None
         self._runtime = None
         self._catalog_lock = threading.Lock()
+        self.peripheral_revision = 0
         self._catalog_pending = False
         # One re-entrant lock owns runtime layout snapshots, pending sample
         # rows, and metadata transitions. Hardware reads happen outside it.
@@ -2055,12 +2056,14 @@ class SuperWatchStreamManager:
                     )
                     self._peripheral_restore_error = error
                     self._catalog_pending = False
+                    self.peripheral_revision += 1
 
     def prepare(self, device) -> None:
         """Build runtime from DWARF info so search/add work before collection starts."""
         with self._read_lock:
             device_changed = self._device is not device
             if device_changed:
+                self.peripheral_revision += 1
                 self._catalog_pending = True
                 self._peripheral_selection = None
                 self._peripheral_restore_error = None
@@ -2705,7 +2708,22 @@ class SuperWatchStreamManager:
                     except Exception as exc:
                         raise SuperWatchTransactionError("restore", exc) from exc
 
-    def select_peripherals(self, device, target=None, *, target_id=None, chip=None, svd=None) -> dict:
+    @property
+    def peripheral_source(self):
+        with self._read_lock:
+            return getattr(self, '_peripheral_selection', None)
+
+    def clear_peripheral_source(self, error):
+        with self._read_lock:
+            self.peripheral_revision += 1
+            self._catalog_pending = False
+            self._peripheral_selection = None
+            self._peripheral_restore_error = error
+            if self._runtime is not None:
+                self._runtime.peripheral_items = {}
+                self._runtime.svd_registers = {}
+
+    def select_peripherals(self, device, target=None, *, target_id=None, chip=None, svd=None, persist=True) -> dict:
         from mklink.peripheral_watch import load_catalog, save_catalog_selection
 
         with self._operation_lock:
@@ -2717,7 +2735,8 @@ class SuperWatchStreamManager:
                 raise ValueError("Select one target_id, chip or SVD")
             items, skipped = catalog.items, catalog.skipped
             self.prepare(device)
-            save_catalog_selection(getattr(device, "_project_root", "."), catalog)
+            if persist:
+                save_catalog_selection(getattr(device, "_project_root", "."), catalog)
             with self._read_lock:
                 for item in list(self._runtime.items):
                     if item.source == "peripheral":
@@ -2728,9 +2747,10 @@ class SuperWatchStreamManager:
 
                 self._runtime.svd_registers = catalog_registers(catalog)
                 self._peripheral_selection = {**catalog.selection, "skipped_registers": skipped}
+                self.peripheral_revision += 1
                 self._peripheral_restore_error = None
                 self._rebuild_metadata_cache_locked(publish=True)
-            return self.peripheral_catalog()
+            return self.peripheral_catalog() if persist else {}
 
     def peripheral_catalog(self, query: str = "") -> dict:
         from mklink.superwatch import make_channel_metadata
@@ -2740,7 +2760,7 @@ class SuperWatchStreamManager:
             items = [item for item in getattr(self._runtime, "peripheral_items", {}).values()
                      if query.casefold() in item.name.casefold()]
             metadata = make_channel_metadata(items)
-            return {"selection": getattr(self, "_peripheral_selection", None),
+            return {"selection": getattr(self, "_peripheral_selection", None), "revision": self.peripheral_revision,
                     "restore_error": getattr(self, "_peripheral_restore_error", None),
                     "items": [{"name": item.name, **metadata[item.name]} for item in items]}
 
