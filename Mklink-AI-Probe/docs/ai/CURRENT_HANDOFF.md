@@ -6,11 +6,11 @@
 
 - 更新时间：`2026-11-25`
 - 分支：`codex/watch-formula-color`
-- HEAD：`52e3439f`
-- 远端 HEAD：`52e3439f`
-- 工作树：PR #92；Windows/Skill 包 e41a6560，Mac ARM Dock 修订 52e3439f。
-- 当前任务：[Windows采集与导出](../verification/v051-superwatch-export-profile.md)、[跨平台基线](../verification/v051-integration.md)。
-- 状态：`0.5.1 Windows已覆盖安装，Skill已同步；HPM6E80桌面/Web/MCP联测完成。正式渠道0.5.0。`
+- HEAD：`dea1bec1`
+- 远端 HEAD：`dea1bec1`
+- 工作树：PR #92，Windows/Skill 修订 dea1bec1。Mac ARM Dock 测试包仍为 52e3439f。
+- 当前任务：[STM32F103与UART5](../verification/v051-f103-desktop-uart.md)、[HPM6E80与导出](../verification/v051-superwatch-export-profile.md)。
+- 状态：`0.5.1 Windows/Skill 已覆盖。STM32F103 实测共享符号文件、Agent 入口、采集和 UART5。正式渠道 0.5.0。`
 
 ## 里程碑
 
@@ -21,12 +21,12 @@
 ## 验证证据
 
 - **慢下载保存与受保护安装目录**：公共保存及按需同用户 UAC 修复：Python7195/2跳过、GUI1299；真实 Chrome/Skill 四型号慢下载、实际 UAC 取消/同意、普通安装通过。PR #86 main a38557b9 最终签名包无 /D 覆盖 3687 文件一致，设置保留；冻结 MCP/Web 通过。腾讯云/GitHub 五文件完整回读、HEAD/Range/回退和索引通过；release 5539a7b5，见[报告](https://github.com/MicroKeen/Mklink-AI-Probe/blob/7371497486182ad103f1306c470be07f00096a86/Mklink-AI-Probe/docs/verification/v050-save-elevation.md)。
-- **GUI共享控制、回放与多窗口健康**：ba3a334b实现桌面/Web共享控制及回放，修复SystemView冗余SSE耗尽连接池。安装版6窗口72/72正常，645064事件/9任务，解析及目标/主机丢弃0，见[完整验收](../verification/v050-gui-control.md)；IRQ锁、采集中重启见[前轮](../verification/v050-systemview-loss-reboot.md)，历史/显示优化见[刷新报告](../verification/v050-systemview-refresh.md)。 桌面可复用探针后台。Windows/CLI/Skill 已同步。多窗口、Ctrl+C、945000 字节对照及六条流的读取者保护见共享报告。回归845通过、1跳过。 0.5.1 后续修复 bb6fbee8 已装入 Windows 桌面。使用测试通道在 Edge 和已安装 WebView2 中验证公式编辑保留当前曲线色，只有显式改色才保存；离线通道可保留自动配色。Windows 修订 784c03c4 延续该修复。普通 SuperWatch 与灵活面板均按视口固定时间网格，悬浮读数自动避让边界；信号可直接拖入分组，曲线同步换组。两种视图均已用模拟波形在 Edge 及已安装 WebView2 复验，Windows 安装包与校验表位于 F:/MKLink-Build/artifacts/v051-784c03c4。macOS/Linux 留待发布前重建。
+- **GUI共享控制、回放与多窗口健康**：多窗口桌面/Web、暂停回放、探针后台复用、SystemView与同步采集验收见[共享控制](../verification/v050-gui-control.md)、[IRQ锁与重启](../verification/v050-systemview-loss-reboot.md)、[刷新](../verification/v050-systemview-refresh.md)。0.5.1 修复公式保存时保留曲线颜色、视口固定网格、悬浮读数避边与拖动换组，已在 Edge/WebView2 验证。
 - **HPM Flash 配置、连接设置与脱机 OTP**：目录覆盖 41 个型号，见[读取验收](../verification/v051-hpm-jtag-otp.md)。HPM6E80 桌面 MCP 核对 256 个显示值，ROM 读芯片标识通过。首次编程 rc=-10，Word 72 仍为 0，见[读写验收](../verification/v051-hpm-jtag-otp-write.md)。
 - **ELF 解析与完整 UART 波特率**：ELF 可写范围合并 PT_LOAD，客户 ELF 的结构体成员恢复，400 项解析/共享关联及真实浏览器通过，未操作客户板，见[ELF 报告](../verification/v050-elf-load-segments.md)。串口助手/Modbus 按 UART、RS485 独立声明使用 34 档至 10M，870 后端/25 GUI/69 Skill 及双 V4 实读通过，未发高速载荷，见[波特率报告](../verification/v050-uart-baud.md)。两项已随 ad00c962 普通用户覆盖并复验，见[覆盖报告](../verification/v050-elf-baud-overwrite.md)。
 - **固件能力提醒与采集中写入**：同一V4/STM32F103RC实测V4.7.3与V4.7.4写入前后最大采样间隔0.195/0.208/0.192ms；RTT并行为1.562ms，各轮10次写入成功且无序号/读错。真实Web写入保持约15.9kHz，三端警告一致，状态检查无设备I/O，见[能力报告](../verification/v050-firmware-capabilities.md)。V2.9.4与云端V2.9.3不误报降级；版本缓存/提醒/跳转验收见[提醒报告](../verification/v050-firmware-update-notice.md)。客户端先行、MCP重载与重启失败互斥恢复见[更新顺序](../verification/v050-update-order.md)。专项用例有重叠，最终全量结果以发布交接为准。 V3/V4拔插恢复既有实物证据见[恢复报告](../verification/v050-superwatch-swclk.md)。
 - **macOS 兼容性与跨平台回归**：最终原生包源8d532019；Mac ARM/Intel DMG与Linux AppImage/DEB的冻结后台、真实WebView/MCP操作、错误签名拒绝、有效更新与重启通过。USB各73项通过/1项Windows专属跳过。Windows Python7175/2跳过、GUI1291和生产构建通过；两渠道13附件及5平台索引验证完成。设施边界见[原生验收](../verification/v050-native-release.md)。
-- **SuperWatch 配置与手动日志转换**：Excel 1,114,032组/4,456,128值、RTT 505行，对照[转换](../verification/v050-manual-recording-export.md)、[配置](../verification/v050-superwatch-profile.md)及[TXT](../verification/v050-rtt-txt-readable.md)。0.5.1修复导出，仪表盘可打开AXF，分组勾选控制采集；波形或日志有助判断时Skill主动展示，见[Windows验收](../verification/v051-superwatch-export-profile.md)。
+- **SuperWatch 配置与手动日志转换**：Excel 1,114,032组/4,456,128值、RTT 505行，对照[转换](../verification/v050-manual-recording-export.md)、[配置](../verification/v050-superwatch-profile.md)及[TXT](../verification/v050-rtt-txt-readable.md)。0.5.1修复导出，仪表盘可打开AXF，分组勾选控制采集；波形或日志有助判断时Skill主动展示，见[Windows验收](../verification/v051-superwatch-export-profile.md)。 RTT/SuperWatch 显示活动 AXF/ELF 的原文件名并可重新选择，Agent 请求位于灵活面板。Windows 安装、桌面/Web/CLI/MCP、TTL 双向及 Modbus 见[验收](../verification/v051-f103-desktop-uart.md)。
 - **V0.5.0 发布、安装与升级**：首发源1097f98e的安装、四类回放、冻结MCP与双渠道发布见[首发交接](../verification/v050-release-handoff.md)；PR #84 main ed5d55aa的安装路径、脱机静默刷新与工程日志修订，及V2.9.5双渠道发布/归档见[修订发布](../verification/v050-revision-release.md)。本轮最新Windows/Skill修订见本页首项；原标签与其他平台保留。
 
 ## 架构决策
@@ -49,10 +49,11 @@
 - **普通 V3**：固件会话已回读 V3.6.10 / 2026-11-10T14:14:14，原 STM32F103 的一次 SWCLK 拔插恢复通过；测试结束时后台退出、设备释放。下次仍需重新核对占用。
 - **普通 V2**：固件V2.9.5 / 2026-11-15T21:39:19，测试源码56f5fdf5、合并main866fc5ff，未重编。固件会话备用V2+STM32F103RE完成47/49命令、34档UART189回环及复位/烧录/采集/Keil联测，原512KiB恢复一致。YMODEM对端、Modbus从站、USB12Mbps、H7双核、深度低功耗和SWD拔插未完整验收；原故障V2取消恢复。11月16日上位机用当前V2+STM32F103拍公众号：匹配AXF后四路1kHz记录10135组、Excel与回放通过；未刷写，设备已释放，GUI留在回放。
 - **HPMLink V4**：HPM6E80、V4.7.5（11月19日15:00:56）。OTP 30 MHz，ROM 返回0x10206141，Word 72 熔丝/影子均0且未锁，授权已用，暂停永久写入。11月20日授权烧录 hello_world，RTT 10 MHz、0x012841D0，75秒150条三端一致，MCP退出后GUI继续。
+- **STM32F103 UART5**：本轮 HPMLink V4.7.5：COM62 命令，COM61 TTL，PC12 TX、PD2 RX。目标工程 12 MHz HSE、PLL×6，应用始于 0x08005000、独立校验 118272 字节，Bootloader 保留。RS485 未接。
 
 ## 下一动作
 
-1. 0.5.1 发布需单独授权。F:/MKLink-Build/artifacts 中的 v051-e41a6560 为 Windows/Skill，v051-52e3439f 为 Mac ARM。暂停 HPM6E80 永久写入。
+1. 0.5.1 发布需单独授权。F:/MKLink-Build/artifacts 中 v051-dea1bec1 为 Windows/Skill，v051-52e3439f 为 Mac ARM。暂停 HPM6E80 永久写入。
 2. 覆盖安装会结束当前用户旧MKLink及Skill/MCP活动任务，安装后由AI宿主重载MCP。保留损坏历史备份；异常收集installation-history-report.json、history-backups及诊断包，区分权限、占用和格式，不删除有效未知结果或重放烧录。
 3. 客户SystemView先核对实际CH、目标IRQ锁及元数据。1µs三路溢出先采集0x40 CH2设备时间戳/长度/序号与主机单调到达时间，低频读0x10错误和0x14批次耗时；诊断开销保持一致，再判断背压、重试或调度，不直接假定80ms停读或给CH2固定优先级。多视图假离线已完成修复与安装版六窗口复验。保留目标构建快照供AXF源码路径使用，原工程重编后再清理；见[静态补充](../verification/v050-systemview-loss-reboot.md)。
 4. 有Linux/Mac实物后补验真实USB、Gatekeeper首次安装和交互式提权；不能把本轮CI结果当作这些硬件/系统验收。
