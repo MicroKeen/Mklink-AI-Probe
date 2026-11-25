@@ -4,6 +4,7 @@
 Var MklinkBlockedFile
 Var MklinkFileError
 Var MklinkPrepareMessage
+!include "${__FILEDIR__}\installer-update-lock.nsh"
 !include "${__FILEDIR__}\installer-elevation.nsh"
 !ifndef MKLINK_PREPARE_SCRIPT
   !define MKLINK_PREPARE_SCRIPT "${__FILEDIR__}\installer-prepare.ps1"
@@ -37,6 +38,7 @@ Function ${PREFIX}MklinkWaitForUpgradeFiles
   Push $0
   retry:
   !if "${PREFIX}" == ""
+    Call MklinkAcquireInstallLock
     InitPluginsDir
     Push $OUTDIR
     SetOutPath "$PLUGINSDIR"
