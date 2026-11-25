@@ -241,7 +241,8 @@ window.__rttTestProbe = {
 };`)
   if (panelId) {
     new Function(instrumented.replace("else if (typeof CONFIG !== 'undefined') createWaveformViewer(CONFIG, null);", '')).call(window)
-    ;(window as any).__mklinkCreateWaveformViewer({ ...(globalThis as any).CONFIG, panelId, viewerSettingsKey: 'waveform-test.' + panelId }, host)
+    const container = wrapper.get('.waveform-viewer').element
+    ;(window as any).__mklinkCreateWaveformViewer({ ...(globalThis as any).CONFIG, panelId, viewerSettingsKey: 'waveform-test.' + panelId }, container)
   } else new Function(instrumented).call(window)
   return {
     wrapper,
@@ -296,6 +297,48 @@ beforeEach(() => {
 })
 
 describe('WaveformViewer VOFA binary transport', () => {
+  it.each(['SuperWatch', 'flexible-watch'])('separates replay channels on one clock and restores the live workspace in %s', async panelId => {
+    const runtime = await loadRttViewerRuntime('SuperWatch', 4, undefined, panelId)
+    const sharedEdit = vi.fn()
+    window.addEventListener('mklink:workspace-split', sharedEdit)
+    try {
+      const { viewer, probe } = runtime
+      const main = { id: 'main', name: 'Main', height: 240 }
+      const live = { version: 2, defaultGroup: 'main', groups: [main], panes: [main], signals: {} }
+      viewer.setWorkspace(live)
+      viewer.configureBinaryChannels([{ name: 'live' }])
+      const channels = ['current', 'speed', 'angle'].map((name, i) => ({
+        name, latest: (i + 1) * 100, points: [[0, i * 100], [1, (i + 1) * 100]],
+      }))
+      const control = vi.fn()
+      viewer.beginReplay({ duration: 12, rows: 12, channels }, control)
+      viewer.renderReplayView({ id: 1, start: 0, end: 1, position: 1, width: 800, channels })
+      viewer.setReplayPosition(1, true, true)
+      control.mockClear()
+      for (const name of ['angle', 'speed', 'speed']) await viewer.execute('waveform.plot', { command: 'split', name })
+      const panes = () => probe.panelLayout().panes.map((p: any) => p.name)
+      expect(panes()).toEqual(['replay_main', 'angle', 'speed'])
+      expect(Object.keys(viewer.read().replayPlots).sort()).toEqual(['angle', 'speed'])
+      expect(runtime.wrapper.emitted('replay-panes')?.at(-1)?.[0]).toEqual([['speed', 'replay-1'], ['angle', 'replay-2']])
+      expect(probe.panelLayout().panes[1].range.yMin).toBeGreaterThan(probe.panelLayout().panes[0].range.yMax)
+      const groups = [main, { id: 'changed', name: 'Next live', height: 240 }]
+      viewer.setWorkspace({ ...live, groups, panes: groups, signals: { live: { pane: 'changed' } } })
+      expect(panes()).toHaveLength(3)
+      expect(control).not.toHaveBeenCalled()
+      expect(sharedEdit).not.toHaveBeenCalled()
+      const merge = document.querySelector<HTMLButtonElement>('.workspace-merge')!
+      merge.click()
+      expect(panes()).toEqual(['replay_main', 'speed'])
+      viewer.setReplayHiddenChannels(['speed'])
+      expect(panes()).toEqual(['replay_main'])
+      viewer.setReplayHiddenChannels([])
+      expect(panes()).toEqual(['replay_main', 'speed'])
+      viewer.endReplay()
+      expect(probe.serializeState().workspace.signals).toEqual({ live: { pane: 'changed' } })
+      viewer.beginReplay({ duration: 12, rows: 12, channels }, control)
+      expect(probe.serializeState().workspace.panes).toHaveLength(1)
+    } finally { runtime.viewer.endReplay(); window.removeEventListener('mklink:workspace-split', sharedEdit); runtime.cleanup() }
+  })
   it('replays in the original canvas, isolates live updates, and restores the current live channels', async () => {
     const runtime = await loadRttViewerRuntime('SuperWatch')
     try {
@@ -463,15 +506,18 @@ describe('WaveformViewer VOFA binary transport', () => {
     }
   })
 
-  it('anchors readable time divisions while panning and adapts units on zoom', async () => {
+  it('holds divisions at the same pixels while panning and labels the time at each line', async () => {
     const runtime = await loadRttViewerRuntime('SuperWatch')
     try {
       const grid = runtime.probe.timeGrid(2.5945, 2.6678, 800)
       expect(grid.division).toBe('10 ms/div')
       const major = grid.ticks.filter((t: any) => t.major)
-      expect(major.map((t: any) => grid.label(t.time))).toEqual(['2600','2610','2620','2630','2640','2650','2660'])
+      expect(major.map((t: any) => grid.label(t.time))).toEqual(['2594.5','2604.5','2614.5','2624.5','2634.5','2644.5','2654.5','2664.5'])
       const pan = runtime.probe.timeGrid(2.5955, 2.6688, 800)
-      expect(pan.ticks.filter((t: any) => t.major).map((t: any) => t.time)).toEqual(major.map((t: any) => t.time))
+      expect(pan.ticks.map((t: any) => Math.round(t.fraction * 800))).toEqual(grid.ticks.map((t: any) => Math.round(t.fraction * 800)))
+      pan.ticks.forEach((t: any, i: number) => expect(t.time - grid.ticks[i].time).toBeCloseTo(0.001, 10))
+      const pixels = (start: number) => runtime.probe.timeGrid(start, start + .4, 855).ticks.map((t: any) => Math.round(t.fraction * 855))
+      expect(pixels(.2793)).toEqual(pixels(.24))
       expect(runtime.probe.timeGrid(0, 0.000073, 800).division).toBe('10 μs/div')
       expect(runtime.probe.timeGrid(0, 73, 800).division).toBe('10 s/div')
       expect(runtime.probe.timeGrid(0, 0, 800)).toBeNull()
@@ -3446,7 +3492,12 @@ describe('VOFA viewer typed-ring runtime', () => {
       canvas.onmousemove?.({ clientX: 400, clientY: 200 } as MouseEvent)
       const hoverVisits = (window as any).__ringPointVisits
       expect(hoverVisits).toBeLessThanOrEqual(channelCount * 48)
-      expect(document.getElementById('tooltip')?.textContent).toContain('I0')
+      const tooltip = document.getElementById('tooltip')!
+      expect(tooltip.textContent).toContain('I0')
+      Object.defineProperties(tooltip, { offsetWidth: { value: 340 }, offsetHeight: { value: 180 } })
+      canvas.onmousemove?.({ clientX: 780, clientY: 360 } as MouseEvent)
+      expect(Number.parseFloat(tooltip.style.left) + tooltip.offsetWidth).toBeLessThan(780)
+      expect(Number.parseFloat(tooltip.style.top) + tooltip.offsetHeight).toBeLessThanOrEqual(400)
 
       ;(window as any).__ringPointVisits = 0
       canvas.onwheel?.({
@@ -4167,6 +4218,30 @@ describe('VOFA viewer typed-ring runtime', () => {
 
 
 describe('independent semantic waveform panels', () => {
+  it('follows shared group moves while retaining unrelated local splits across restore', async () => {
+    const { viewer, cleanup } = await loadRttViewerRuntime('SuperWatch', 100, undefined, 'flex-watch')
+    try {
+      const main = { id: 'main', name: 'Main', height: 200 }, motor = { ...main, id: 'motor', name: 'Motor' }
+      const shared = { version: 2, defaultGroup: 'main', panes: [main], groups: [main], signals: {} }
+      viewer.setWorkspace(shared)
+      viewer.configureBinaryChannels([{ name: 'speed' }, { name: 'current' }])
+      await viewer.execute('waveform.plot', { command: 'split', name: 'current' })
+      await viewer.execute('waveform.plot', { command: 'split', name: 'speed' })
+      const saved = viewer.read().view
+      const moved = { ...shared, panes: [main, motor], groups: [main, motor], signals: { speed: { group: 'motor', pane: 'motor' } } }
+      viewer.setWorkspace(moved)
+      async function checkPanes() {
+        const view = await viewer.execute('waveform.inspect', {})
+        expect(view.channels.find((c: any) => c.name === 'speed').style.pane).toBe('motor')
+        const currentPane = view.channels.find((c: any) => c.name === 'current').style.pane
+        expect(currentPane).toBe(saved.plotLayout.signalPanes.current)
+        expect(view.plots.map((p: any) => p.id)).toEqual(['motor', currentPane])
+      }
+      await checkPanes()
+      await viewer.restore(saved)
+      await checkPanes()
+    } finally { cleanup() }
+  })
   it('keeps default GUI control and AXF preferences independent of workbench viewers', async () => {
     const original = await loadRttViewerRuntime('SuperWatch', 100)
     const preferences = vi.fn(), ready = vi.fn()
@@ -4218,7 +4293,9 @@ describe('independent semantic waveform panels', () => {
       expect(right.viewer.read().localPaused).toBe(false)
       expect(right.viewer.read().view.legend).toBe(false)
       expect(left.wrapper.element.querySelector('#btn-pause')?.textContent).not.toBe(right.wrapper.element.querySelector('#btn-pause')?.textContent)
-      ;(right.wrapper.element as HTMLElement).focus()
+      const rightPanel = right.wrapper.get<HTMLElement>('.waveform-viewer').element
+      rightPanel.focus()
+      expect(document.activeElement).toBe(rightPanel)
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', bubbles: true }))
       expect(right.viewer.read().view.cursor.enabled).toBe(true)
       expect(left.viewer.read().view.cursor.enabled).toBe(false)

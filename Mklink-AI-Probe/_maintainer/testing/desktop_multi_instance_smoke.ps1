@@ -1,6 +1,7 @@
 param(
     [Parameter(Mandatory = $true)]
     [string]$Executable,
+    [string]$PythonExecutable = 'python',
     [switch]$CrashFirst,
     [switch]$KeepRunning
 )
@@ -12,13 +13,13 @@ $started = @()
 $runtimeFiles = @()
 $completed = $false
 
-function Close-DesktopWindow($Process) {
+function Close-DesktopWindow($Process, $Info) {
     $Process.Refresh()
-    if (-not $Process.CloseMainWindow()) {
-        throw "Unable to request normal close for desktop PID $($Process.Id)"
-    }
+    # Exercise the title-bar close, restore, and the actual native tray Exit item.
+    & $PythonExecutable (Join-Path $PSScriptRoot 'windows_desktop_tray.py') $Process.Id $Process.MainWindowHandle $Info.port $Info.instanceId
+    if ($LASTEXITCODE) { throw "Desktop tray verification failed for PID $($Process.Id)" }
     if (-not $Process.WaitForExit(12000)) {
-        throw "Desktop PID $($Process.Id) remained after normal window close"
+        throw "Desktop PID $($Process.Id) remained after tray Exit"
     }
     if ($Process.ExitCode -ne 0) {
         throw "Desktop PID $($Process.Id) exited with $($Process.ExitCode)"
@@ -100,7 +101,7 @@ try {
         if (-not $started[0].WaitForExit(10000)) { throw 'First desktop did not exit' }
     }
     else {
-        Close-DesktopWindow $started[0]
+        Close-DesktopWindow $started[0] $infos[0]
     }
     Start-Sleep -Milliseconds 500
     $secondHealth = Invoke-RestMethod `
@@ -110,12 +111,12 @@ try {
         throw 'Second desktop backend changed ownership'
     }
 
-    Close-DesktopWindow $started[1]
+    Close-DesktopWindow $started[1] $infos[1]
     foreach ($info in $infos) {
         # Windows can retain a PID 0 TCP table row after the socket has closed.
         $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, $info.port)
         try { $listener.Start() }
-        catch { throw "Desktop proxy port $($info.port) cannot be rebound after window close: $_" }
+        catch { throw "Desktop proxy port $($info.port) cannot be rebound after tray Exit: $_" }
         finally { $listener.Stop() }
     }
 

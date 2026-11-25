@@ -64,7 +64,7 @@
         <button
           v-if="!offlineMode" data-testid="systemview-recording" type="button"
           class="btn-clear sv-tool-btn sv-record-btn" :class="{ active: meta.recording }"
-          :disabled="IS_REMOTE || recordingBusy || dash.state.value !== 'running'" @click="toggleRecording"
+          :disabled="IS_REMOTE || recordingBusy || dash.state.value !== 'running'" @click="toggleRecording()"
           :title="meta.recording ? tr('停止保存并完成当前 JSONL 文件', 'Stop and finalize the current JSONL file') : tr('将后续事件实时保存为 JSONL', 'Save subsequent events to JSONL in real time')"
         >
           <Square v-if="meta.recording" :size="13" />
@@ -73,7 +73,15 @@
         </button>
         <button class="btn-clear sv-tool-btn" @click="triggerImport">{{ tr('导入 JSONL', 'Import JSONL') }}</button>
         <button class="btn-clear sv-tool-btn" :disabled="IS_REMOTE || !currentJsonlPath" @click="exportLog(currentJsonlPath)">{{ tr('导出 JSONL', 'Export JSONL') }}</button>
-        <button class="btn-clear sv-tool-btn" :disabled="IS_REMOTE || !currentSummaryPath" @click="exportLog(currentSummaryPath)">{{ tr('导出摘要', 'Export Summary') }}</button>
+        <details v-if="!IS_REMOTE && !offlineMode" class="sv-log-location">
+          <summary>{{ tr('日志位置', 'Log location') }}</summary>
+          <label>{{ tr('用户工程目录', 'Project folder') }}
+            <input v-model.trim="recordProject" :disabled="meta.recording" :placeholder="tr('默认使用当前工程', 'Current project by default')" />
+          </label>
+          <small>.mklink/logs/systemview</small>
+        </details>
+        <button v-if="meta.summaryPending && !meta.recording" class="btn-clear sv-tool-btn" :disabled="IS_REMOTE || recordingBusy" @click="toggleRecording(true)">{{ tr('重新保存摘要', 'Retry saving summary') }}</button>
+        <button class="btn-clear sv-tool-btn" :disabled="IS_REMOTE || !currentSummaryPath || meta.recording" @click="exportLog(currentSummaryPath)">{{ tr('导出摘要', 'Export Summary') }}</button>
         <label class="sv-window" :title="tr('Timeline 显示的时间跨度；实时连续滚动，不是刷新周期。', 'Time span shown by the continuously scrolling Timeline, not its refresh period.')">
           {{ tr('时间窗口', 'Time window') }}
           <select v-model.number="windowUs">
@@ -302,6 +310,7 @@
 </template>
 
 <script setup lang="ts">
+import { requestError } from '../../lib/requestError'
 import { frontendFetch as fetch } from '../../lib/frontendControl'
 
 import { useGuiId } from '../../lib/guiAutomation'
@@ -412,6 +421,7 @@ const meta = reactive({
   recordingPath: '',
   recordingSummaryPath: '',
   recordingError: '',
+  summaryPending: false,
   connectionGeneration: 0,
   sessionGeneration: 0,
   autoRetryCount: 0,
@@ -1006,7 +1016,8 @@ watch(dash.status, dp => {
   if (dp.cpu_freq_source !== undefined) meta.cpuFreqSource = dp.cpu_freq_source || ''
   if (dp.recording !== undefined) meta.recording = !!dp.recording
   if (dp.recording_path !== undefined) meta.recordingPath = dp.recording_path || meta.recordingPath
-  if (dp.recording_summary_path !== undefined) meta.recordingSummaryPath = dp.recording_summary_path || meta.recordingSummaryPath
+  if (dp.recording_summary_path !== undefined) meta.recordingSummaryPath = dp.recording_summary_path || ''
+  if (dp.summary_pending !== undefined) meta.summaryPending = !!dp.summary_pending
   if (dp.recording_error !== undefined) meta.recordingError = dp.recording_error || ''
   if (dp.progress_state === 'error' && dp.progress_error) {
     runtimeError.value = String(dp.progress_error)
@@ -1156,8 +1167,9 @@ const runtimeRows = computed(() => offlineMode.value
   ? computeRuntimeRows(Object.values(taskStats), intervals.value)
   : exactRuntimeRows.value)
 const contextRows = computed(() => computeContextRows(Object.values(taskStats)))
+const recordProject = ref('')
 const currentJsonlPath = computed(() => meta.recordingPath || latestLog.value?.path || '')
-const currentSummaryPath = computed(() => meta.recordingSummaryPath || latestLog.value?.summary_path || '')
+const currentSummaryPath = computed(() => meta.recordingPath ? meta.recordingSummaryPath : latestLog.value?.summary_path || '')
 
 // ---- 辅助 ----
 function clamp(v: number) { return Math.max(0, Math.min(100, v)) }
@@ -1292,23 +1304,49 @@ async function refreshLogList() {
   }
 }
 
-function exportLog(path: string) {
+async function exportLog(path: string) {
   if (!path) return
-  window.open(`${API_BASE}/api/dash/systemview/logs/download?path=${encodeURIComponent(path)}`, '_blank')
+  runtimeError.value = null
+  const url = `${API_BASE}/api/dash/systemview/logs/download?path=${encodeURIComponent(path)}`
+  try {
+    const response = await fetch(url + '&check=true')
+    const body = await response.json()
+    if (!response.ok) throw new Error(requestError(body.detail, response.status, 'SystemView'))
+    const { isTauri, invoke } = await import('@tauri-apps/api/core')
+    if (isTauri()) {
+      const { save } = await import('@tauri-apps/plugin-dialog')
+      const destination = await save({ defaultPath: body.name })
+      if (destination) await invoke('copy_systemview_log', { source: body.path, destination })
+    } else {
+      const link = document.createElement('a')
+      link.href = url
+      link.download = body.name
+      document.body.appendChild(link)
+      try { link.click() } finally { link.remove() }
+    }
+  } catch (caught) {
+    runtimeError.value = caught instanceof Error ? caught.message : String(caught)
+  }
 }
 
-async function toggleRecording() {
+async function toggleRecording(retrySummary = false) {
   if (recordingBusy.value || offlineMode.value) return
   recordingBusy.value = true
   runtimeError.value = null
   try {
-    const action = meta.recording ? 'stop' : 'start'
-    const response = await fetch(`${API_BASE}/api/dash/systemview/recording/${action}`, { method: 'POST' })
+    const action = meta.recording || retrySummary ? 'stop' : 'start'
+    const options: RequestInit = { method: 'POST' }
+    if (action === 'start' && recordProject.value) {
+      options.headers = { 'Content-Type': 'application/json' }
+      options.body = JSON.stringify({ project: recordProject.value })
+    }
+    const response = await fetch(`${API_BASE}/api/dash/systemview/recording/${action}`, options)
     const body = await response.json().catch(() => ({}))
-    if (!response.ok) throw new Error(body.detail || tr('保存操作失败', 'Recording operation failed'))
+    if (!response.ok) throw new Error(requestError(body.detail, response.status, tr('保存 SystemView 记录', 'Save SystemView trace')))
     meta.recording = !!body.recording
     if (body.recording_path) meta.recordingPath = body.recording_path
-    if (body.recording_summary_path) meta.recordingSummaryPath = body.recording_summary_path
+    meta.recordingSummaryPath = body.recording_summary_path || ''
+    meta.summaryPending = !!body.summary_pending
     meta.recordingError = body.recording_error || ''
     if (!meta.recording) await refreshLogList()
   } catch (caught) {

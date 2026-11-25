@@ -31,7 +31,7 @@
       v-if="symbolError || catalog.error.value"
       kind="error"
       :message="tr('符号文件解析失败：', 'Symbol parsing failed: ') + (symbolError || catalog.error.value)"
-      :primary-label="tr('重新选择', 'Choose Another File')"
+      :primary-label="filePickerInToolbar ? '' : tr('重新选择', 'Choose Another File')"
       :secondary-label="hasSymbolSource ? tr('重试解析', 'Retry Parsing') : ''"
       :busy="loadingSymbols"
       @primary="loadSymbolFile"
@@ -40,8 +40,8 @@
     <SetupHint
       v-else-if="!symbolLoaded"
       kind="symbols"
-      :message="hasSymbolSource ? tr('已选择 AXF / ELF，解析后即可浏览变量。', 'An AXF / ELF file is selected. Parse it to browse variables.') : tr('SuperWatch 需要 AXF / ELF 中的变量和类型信息。', 'SuperWatch needs variable and type information from an AXF / ELF file.')"
-      :primary-label="hasSymbolSource ? tr('解析已选文件', 'Parse Selected File') : tr('加载 AXF / ELF', 'Load AXF / ELF')"
+      :message="hasSymbolSource ? tr('已选择 AXF / ELF，解析后即可浏览变量。', 'An AXF / ELF file is selected. Parse it to browse variables.') : tr('打开板上程序对应的 AXF / ELF，即可选择要观测的变量。', 'Open the AXF / ELF for the running firmware to choose variables to watch.')"
+      :primary-label="hasSymbolSource ? tr('解析已选文件', 'Parse Selected File') : filePickerInToolbar ? '' : tr('加载 AXF / ELF', 'Load AXF / ELF')"
       :busy="loadingSymbols"
       @primary="hasSymbolSource ? parseSelectedSymbols() : loadSymbolFile()"
     />
@@ -53,7 +53,8 @@
         <ChevronRight v-if="collapsed.signals" :size="14" /><ChevronDown v-else :size="14" />
         <span>{{ tr('信号分组', 'Signal groups') }}</span><small>{{ tr(`已选 ${selected.size}`, `${selected.size} selected`) }}</small>
       </button>
-      <SelectedSignals ref="selectedSignals" v-show="!collapsed.signals" :paths="selectedPaths" :values="latestValues" :hidden="hiddenChannels" :hide-rows="standaloneVariables"
+      <SelectedSignals ref="selectedSignals" v-show="!collapsed.signals" :paths="selectedPaths" :all-paths="localViewPaths ? [...selected] : undefined" :values="latestValues"
+        :disabled-sampling="disabledSampling" :sampling-busy="samplingBusy || !!selectionBusy.size || catalog.stale.value" :set-sampling="setSampling" :hidden="hiddenChannels" :hide-rows="standaloneVariables" :viewer-id="standaloneVariables ? null : panelId"
         :expanded-path="actions?.section === 'selected' ? actions.path : undefined" @actions="path => toggleActions('selected', path)"
         @visibility="changeVisibility">
         <template #actions="{ path }">
@@ -369,6 +370,7 @@
 </template>
 
 <script setup lang="ts">
+import { requestError } from '../../lib/requestError'
 import { frontendFetch as fetch } from '../../lib/frontendControl'
 
 import type { SemanticExecutionContext } from '../../lib/frontendControl'
@@ -398,6 +400,7 @@ import { useBinaryStream } from '../../composables/useBinaryStream'
 
 const props = withDefaults(defineProps<{
   deviceConnected: boolean
+  filePickerInToolbar?: boolean
   symbolLoaded?: boolean
   symbolError?: string
   latestValues: Record<string, number | boolean>
@@ -469,6 +472,8 @@ const cLayoutPack = ref('')
 const selectedOnly = ref(false)
 const selected = shallowRef(new Set<string>())
 const localHidden = shallowRef(new Set<string>())
+const disabledSampling = shallowRef(new Set<string>())
+const samplingBusy = ref(false)
 const standaloneVariables = computed(() => props.hiddenChannels === undefined)
 const hiddenChannels = computed(() => props.hiddenChannels ?? localHidden.value)
 const localViewPaths = ref<string[] | null>(props.viewPaths?.length ? [...props.viewPaths] : null)
@@ -621,7 +626,7 @@ async function request(path: string, options?: RequestInit, context?: SemanticEx
   const payload = await response.json().catch(() => ({}))
   if (!response.ok) {
     const detail = payload?.detail
-    throw new Error(typeof detail === 'string' ? detail : detail?.message || response.statusText)
+    throw new Error(requestError(detail, response.status, 'SuperWatch'))
   }
   return payload
 }
@@ -767,6 +772,7 @@ async function changeSelection(path: string, symbol: SymbolDescriptor | null, st
     if (symbol) descriptors.set(path, symbol)
     else descriptors.delete(path)
     selectedDescriptors.value = descriptors
+    disabledSampling.value = withSet(disabledSampling.value, path, checked && result?.item?.sampling_enabled === false)
     if (!checked) selectionRemoved(path)
   } catch (cause) {
     toast.error(cause instanceof Error ? cause.message : String(cause))
@@ -785,10 +791,35 @@ function selectionRemoved(path: string): void {
   emit('selection-removed', path)
 }
 
+type ConfiguredWatch = { name: string; sampling_enabled?: boolean }
+function syncSampling(items: ConfiguredWatch[]) {
+  const disabled = items.filter(item => item.sampling_enabled === false).map(item => item.name)
+  if (disabled.length !== disabledSampling.value.size || disabled.some(path => !disabledSampling.value.has(path))) {
+    disabledSampling.value = new Set(disabled)
+  }
+}
+async function setSampling(paths: string[], enabled: boolean): Promise<void> {
+  if (samplingBusy.value) return
+  const profile = useWatchProfile().profile.value?.path
+  samplingBusy.value = true
+  selectionRevision++
+  try {
+    const data = await request('/api/dash/superwatch/sampling', {
+      method: 'POST', body: JSON.stringify({ paths, enabled, ...(profile ? { profile } : {}) }),
+    })
+    if (!disposed && profile === useWatchProfile().profile.value?.path) syncSampling(data.items)
+  } catch (cause) {
+    toast.error(cause instanceof Error ? cause.message : String(cause))
+  } finally {
+    samplingBusy.value = false
+    selectionRevision++
+  }
+}
 async function refreshSelection(resolveAll = false): Promise<void> {
   const revision = selectionRevision
   const list = await request('/api/dash/superwatch/items')
-  if (disposed || revision !== selectionRevision || selectionBusy.value.size || !Array.isArray(list.items)) return
+  if (disposed || revision !== selectionRevision || selectionBusy.value.size || samplingBusy.value || !Array.isArray(list.items)) return
+  syncSampling(list.items)
   const next = new Set<string>(list.items.map((item: { name: string }) => item.name))
   if (!resolveAll && next.size === selected.value.size && [...next].every(path => selected.value.has(path))) return
   for (const path of selected.value) if (!next.has(path)) selectionRemoved(path)
@@ -1087,7 +1118,7 @@ function read() {
   const inheritedPaths = props.viewPaths?.length ? props.viewPaths : null
   const viewPaths = JSON.stringify(localViewPaths.value) === JSON.stringify(inheritedPaths) ? undefined : localViewPaths.value
   return {
-    view: { viewPaths, hidden: standaloneVariables.value ? [...localHidden.value] : undefined, alignment: pathAlignment.value.edge, sections: { ...collapsed }, sectionSizes: { ...sectionSizes.preferred }, signals: { organizing: selectedSignals.value?.read?.()?.organizing || false } },
+    view: { viewPaths, hidden: standaloneVariables.value ? [...localHidden.value] : undefined, alignment: pathAlignment.value.edge, sections: { ...collapsed }, sectionSizes: { ...sectionSizes.preferred } },
     generation: catalog.generation.value, stale: catalog.stale.value, loading: catalog.loading.value,
     query: query.value, selectedOnly: selectedOnly.value, selectedCount: selected.value.size, selected: [...selected.value].slice(0, 64),
     visibleSelectedCount: selectedPaths.value.filter(path => !standaloneVariables.value || !localHidden.value.has(path)).length, visibleSelected: selectedPaths.value.filter(path => !standaloneVariables.value || !localHidden.value.has(path)).slice(0, 64), hidden: [...hiddenChannels.value].slice(0, 64),
@@ -1183,7 +1214,6 @@ function restore(view: DomainArgs) {
   if (view.alignment === 'left' || view.alignment === 'right') alignPaths(view.alignment)
   for (const key of ['signals', 'pinned', 'all'] as const) if (typeof view.sections?.[key] === 'boolean') collapsed[key] = view.sections[key]
   if (view.sectionSizes) sectionSizes.restore(view.sectionSizes)
-  if (view.signals) selectedSignals.value?.restore(view.signals)
 }
 defineExpose({ catalog: semanticCatalog, read, execute, restore, hasSignal: (path: string) => selected.value.has(path) })
 </script>

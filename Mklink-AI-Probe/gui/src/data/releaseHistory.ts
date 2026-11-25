@@ -10,19 +10,25 @@ export interface ReleaseHistoryEntry {
 export const releaseHistory: ReleaseHistoryEntry[] = [
   {
     version: '0.5.1', date: '2026-11-23',
-    summary: '共享 RTT 采集与灵活面板',
-    summaryEn: 'Shared RTT capture and flexible panels',
+    summary: '共享采集、SuperWatch 配置与终端查找',
+    summaryEn: 'Shared capture, SuperWatch profiles and terminal search',
     changes: [
-      "桌面、CLI 和 MCP 可同时读取同一 RTT 通道的文本和波形。重开桌面可接回已有连接。",
-      "灵活面板可组合变量、波形、RTT、串口和图表。Agent 更新图表或操作被拒绝时，可在对应卡片查看反馈。",
+      "桌面、Web、CLI 和 MCP 可共享 RTT 文本、波形和串口数据。重开桌面可接回已有探针连接。",
+      "SuperWatch 的变量、外设寄存器勾选和采集开关随 AXF/ELF 保存，桌面与 Web 可恢复同一配置。RTT 和 SuperWatch 显示已加载的文件名，可直接换文件。",
+      "SuperWatch 支持拖动信号换组。修改公式保留曲线颜色，平移时网格固定，边缘读数完整显示。修复 Windows 日志转 Excel、RTT 导出与 SystemView 日志保存问题。",
+      "RTT 和串口终端支持 Ctrl+F / ⌘F 查找历史文本。灵活面板可组合波形、日志和仪表，Agent 协助入口位于面板内。",
       "HPM 系列支持通过 JTAG 查看 OTP 熔丝值、影子值和锁状态。HPM6E80 已实板验证读取。",
-      "修复 macOS 本地后台启动和固件检查。固件检查标明在线或内置目录，点击其他位置会收起淘宝店铺菜单。",
+      "SuperWatch 日志回放支持按变量分窗，共用时间轴，可随时合并。",
+      "修复 macOS 后台启动、固件检查和串口名称显示。桌面关闭窗口后可从托盘或菜单栏恢复，点击菜单外可收起店铺列表。",
     ],
     changesEn: [
-      "Desktop, CLI and MCP can read text and waveforms from the same RTT channel. Reopened windows can reattach to an existing connection.",
-      "Combine variables, waveforms, RTT, serial data and charts in flexible panels. The affected card shows chart updates and rejected actions.",
+      "Desktop, Web, CLI and MCP share RTT text, waveforms and serial traffic. Reopened desktop windows can reattach to the connected probe.",
+      "SuperWatch saves variables, peripheral register selections and sampling checkboxes beside the AXF/ELF for both desktop and Web. RTT and SuperWatch show the active filename and let you open another file.",
+      "Drag signals between groups. Editing a formula preserves its color, panning keeps the grid fixed, and edge tooltips stay visible. Fixed Windows Excel conversion, RTT export and SystemView log saving.",
+      "Use Ctrl+F or ⌘F to find text in RTT and serial terminal history. Flexible Panels combine waveforms, logs and gauges, with Agent assistance inside the panel.",
       "Read HPM OTP fuse values, shadow values and lock status over JTAG. Reads were verified on HPM6E80 hardware.",
-      "Fixed macOS backend startup and firmware checks. The app identifies the online or bundled firmware catalog and closes the store menu when you click elsewhere.",
+      "Split SuperWatch log channels into separate plots on one playback timeline and merge them again.",
+      "Fixed macOS backend startup, firmware checks and serial port labels. Restore closed windows from the tray or menu bar, and dismiss the store menu by clicking outside it.",
     ],
   },
   {

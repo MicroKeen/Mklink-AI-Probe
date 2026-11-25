@@ -187,7 +187,7 @@ onUnmounted(() => { disposed = true; if (timer) clearInterval(timer) })
       <div v-for="client in state.clients" :key="client.id" class="runtime-row" data-testid="runtime-client">
         <div><strong>{{ client.name }}</strong> <span class="runtime-muted">{{ client.kind }} · {{ client.id.slice(0, 8) }}</span><p>{{ client.streams.join(', ') || tr('无采集订阅', 'No capture subscriptions') }}</p></div>
         <button v-if="client.kind !== 'gui'" class="btn btn-sm" :disabled="acting || state.busy" @click="act('detach-client', { client_id: client.id })">{{ tr('结束会话', 'End session') }}</button>
-        <span v-else class="runtime-muted">{{ tr('关闭窗口即可退出', 'Close window to leave') }}</span>
+        <span v-else class="runtime-muted">{{ tr('桌面端从托盘菜单退出；网页端关闭标签页', 'Exit the desktop app from its tray menu, or close the browser tab') }}</span>
       </div>
       <h3>{{ tr('运行中的采集', 'Active captures') }}</h3>
       <p v-if="!state.streams.some(s => s.running)">{{ tr('暂无采集', 'No active capture') }}</p>

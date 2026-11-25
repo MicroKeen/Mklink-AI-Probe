@@ -1,3 +1,4 @@
+import { requestError } from '../lib/requestError'
 import { frontendFetch as fetch } from '../lib/frontendControl'
 import type {
   CustomFlmRecord,
@@ -109,7 +110,8 @@ export class OnlineFlashApiError extends Error {
 
   constructor(status: number, fallback: string, payload: unknown, notStarted = false) {
     const detail = errorDetail(payload)
-    super(errorMessage(detail, fallback || `HTTP ${status}`))
+    const readable = errorMessage(detail, '')
+    super(requestError(readable || detail || (status ? '' : fallback), status, 'Online Flash'))
     this.name = 'OnlineFlashApiError'
     this.status = status
     this.code = stringField(detail, 'code')

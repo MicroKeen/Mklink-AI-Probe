@@ -32,6 +32,18 @@ class RuntimeErrorResponse(RuntimeError):
         self.detail = message if detail is None else detail
 
 
+class RuntimeStartupError(RuntimeErrorResponse):
+    """Safe startup detail for a local desktop window (no HTTP body or token)."""
+
+
+def _os_error_label(exc):
+    winerror = getattr(exc, "winerror", None)
+    code = winerror if winerror is not None else getattr(exc, "errno", None)
+    if code is None:
+        return type(exc).__name__
+    return f"{'WinError' if winerror is not None else 'errno'} {code}: {exc.strerror or type(exc).__name__}"
+
+
 def runtime_dir(probe_id=None) -> Path:
     override = os.environ.get("MKLINK_RUNTIME_DIR")
     if override:
@@ -116,10 +128,15 @@ def request(info: dict, method: str, path: str, payload=None, *, timeout=35, for
         connection = HTTPConnection('127.0.0.1', port, timeout=timeout)
         _local_http.connection, _local_http.key = connection, key
     connection.timeout = timeout
+    stage = "connect"
     try:
         if connection.sock is not None:
             connection.sock.settimeout(timeout)
+        else:
+            connection.connect()
+        stage = "send"
         connection.request(method, path, body=data, headers=headers)
+        stage = "receive"
         with connection.getresponse() as response:
             if response.status >= 300:
                 detail = response.read(65536).decode('utf-8', 'replace')
@@ -137,12 +154,16 @@ def request(info: dict, method: str, path: str, payload=None, *, timeout=35, for
         connection.close()
         # A stale endpoint's port may now speak another protocol. Treat failed
         # HTTP parsing like other transport failures, without replaying work.
-        raise RuntimeErrorResponse("Shared runtime is unavailable; no direct CDC fallback was attempted") from exc
+        operation = {"connect": "建立本机连接", "send": "发送本机请求", "receive": "接收本机响应"}[stage]
+        raise RuntimeErrorResponse(
+            f"{operation}失败 ({stage})：127.0.0.1:{port}，{_os_error_label(exc)}; "
+            "no direct CDC fallback was attempted"
+        ) from exc
     finally:
         _local_http.used_at = time.monotonic()
 
 
-def discover(probe_id=None) -> dict | None:
+def discover(probe_id=None, *, startup_failure=None) -> dict | None:
     if probe_id == 'lobby':
         entries = [info for info in running_runtimes() if info.get('probe_id') == 'lobby']
         if len(entries) > 1:
@@ -161,7 +182,15 @@ def discover(probe_id=None) -> dict | None:
         if endpoint_owner_dead(info):
             return None  # Discovery stays read-only; startup reclaims dead records.
         health = request(info, "GET", "/_runtime/status", timeout=1)
-    except (OSError, ValueError, KeyError, RuntimeErrorResponse):
+    except RuntimeErrorResponse as exc:
+        if startup_failure is not None:
+            # Response bodies and endpoint credentials never belong in startup diagnostics.
+            if exc.status_code is not None:
+                startup_failure[:] = [f"状态检查 127.0.0.1:{info['port']} 返回 HTTP {exc.status_code}"]
+            elif isinstance(exc.__cause__, (OSError, HTTPException)):
+                startup_failure[:] = [str(exc)]
+        return None
+    except (OSError, ValueError, KeyError):
         return None
     if health.get("instance_id") != info.get("instance_id"):
         return None
@@ -258,15 +287,24 @@ def ensure_runtime(*, project_root: str = ".", port: int = 8765, probe=None, dev
                 # Only pre-server/native diagnostics use the inherited handle.
                 # The server owns and rotates its Python diagnostics separately.
                 with (root / "startup.log").open("wb") as output:
-                    process = subprocess.Popen(command, stdout=output, stderr=output, **kwargs)
+                    try:
+                        process = subprocess.Popen(command, stdout=output, stderr=output, **kwargs)
+                    except OSError as exc:
+                        raise RuntimeStartupError(f"无法创建共享后台进程（spawn）：{_os_error_label(exc)}。日志目录：{root}") from exc
+                failure = []
                 while time.monotonic() < deadline:
-                    info = discover(runtime_id)
+                    info = discover(runtime_id, startup_failure=failure)
                     if info:
                         return info
-                    if process.poll() is not None:
-                        raise RuntimeErrorResponse(f"Runtime startup failed; inspect {root / 'runtime.log'} and {root / 'startup.log'}")
+                    exit_code = process.poll()
+                    if exit_code is not None:
+                        break
                     time.sleep(0.05)
-                raise RuntimeErrorResponse("Runtime startup timed out; do not open CDC independently")
+                else:
+                    exit_code = None
+                outcome = f"进程提前退出，退出码 {exit_code}" if exit_code is not None else "等待后台就绪超时"
+                detail = failure[0] if failure else "尚未确认有效的后台端点"
+                raise RuntimeStartupError(f"共享后台启动失败（PID {process.pid}）：{outcome}。{detail}。请查看 {root / 'runtime.log'} 和 {root / 'startup.log'}")
         except RuntimeErrorResponse as exc:
             if "starting or already running" not in str(exc):
                 raise

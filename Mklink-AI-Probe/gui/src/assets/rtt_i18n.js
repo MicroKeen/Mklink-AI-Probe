@@ -33,7 +33,7 @@ var I18N = {
     force_trigger: '强制触发',
     // SuperWatch
     sw_search_placeholder: '搜索或输入变量名...', add: '添加', time: '时间', inspect: '检查',
-    split_channel: '分离', merge_channel: '合并', split_panel: '独立通道',
+    split_channel: '分离', merge_channel: '合并', split_panel: '独立通道', replay_main: '主窗口',
     split_channel_tip: '将此通道移到独立纵轴面板', merge_channel_tip: '将此通道合并回主面板',
     show_channel_legend_tip: '显示通道列表', hide_channel_legend_tip: '隐藏通道列表',
     // Watch panel
@@ -67,10 +67,11 @@ var I18N = {
     ],
     help_sw_variables: '程序变量与已选信号', help_sw_sampling: '采集与波形',
     help_sw_var_items: [
-      '加载与目标固件匹配的 AXF / ELF。在<strong>搜索变量</strong>中勾选变量，它会出现在上方的<strong>已选信号</strong>中。图钉可将变量加入<strong>常用变量</strong>。',
+      '点击<strong>打开 AXF / ELF</strong>，选择与板上程序匹配的文件。加载后按钮显示文件名，点击可换文件。RTT、SuperWatch 与配置页的文件来源共用当前文件。在<strong>搜索变量</strong>中勾选变量即可加入<strong>已选信号</strong>，图钉可将变量加入<strong>常用变量</strong>。',
       '在已选信号、常用变量或搜索结果中，点击变量名展开操作，再点一次收起。选择<strong>写入</strong>，输入新值后点击<strong>确认写入</strong>。写入需要连接设备并选用可写的变量。位域只读。',
-      '对已勾选的变量，展开后点击<strong>移除</strong>可取消采样。各列表同步取消勾选，置顶状态保留。眼睛按钮只控制波形的显示。',
-      '用<strong>整理</strong>为信号分组，或将信号拖入另一组。双击名称可设置别名，ƒx 可设置显示公式和颜色。'
+      '在<strong>已选信号</strong>中，变量前打勾才参与采集和记录。取消勾选后保留分组、别名和颜色；再次勾选可继续采集。眼睛按钮控制曲线显隐。展开变量后点<strong>移除</strong>可将它移出列表。',
+      '组名旁显示“已勾选数 / 变量总数”。全部勾选时组框打勾，部分勾选时组框留空。点击空框全选本组，点击已勾选的组框取消整组采集。',
+      '按住变量左侧拖动柄拖入目标组，曲线随变量换组，采集勾选保持原状。双击名称可设置别名，ƒx 可设置显示公式和颜色。'
     ],
     help_sw_sampling_items: [
       '也可在<strong>芯片外设</strong>中勾选寄存器或字段。选好信号后点击<strong>开始</strong>采集，点击<strong>停止</strong>结束采集。',
@@ -83,7 +84,7 @@ var I18N = {
     ],
     help_sw_pause_items: [
       '<strong>暂停</strong>或 <span class="help-kbd">P</span> 键会冻结实时显示，后台继续采集。点击<strong>恢复</strong>后跟随最新数据。',
-      '回放日志时，暂停、恢复和进度条控制当前日志。点击<strong>返回实时</strong>退出回放。'
+      '日志通道旁的<strong>分离窗口</strong>可让多条曲线各用一个纵轴。所有窗口共用播放进度和时间轴，点击<strong>合并窗口</strong>可叠回主图。点击<strong>返回实时</strong>恢复实时布局。'
     ],
     help_trigger_items: [
       '<strong>Trigger</strong> — 启用 / 禁用触发功能',
@@ -161,7 +162,7 @@ var I18N = {
     auto: 'Auto', normal: 'Normal', single: 'Single',
     force_trigger: 'Force Trigger',
     sw_search_placeholder: 'Search or type variable name...', add: 'Add', time: 'Time', inspect: 'Inspect',
-    split_channel: 'Split', merge_channel: 'Merge', split_panel: 'Split channel',
+    split_channel: 'Split', merge_channel: 'Merge', split_panel: 'Split channel', replay_main: 'Main plot',
     split_channel_tip: 'Move this channel to an independent Y-axis panel', merge_channel_tip: 'Merge this channel into the main panel',
     show_channel_legend_tip: 'Show channel list', hide_channel_legend_tip: 'Hide channel list',
     watch: 'Watch', columns: 'Columns', columns_tip: 'Show or hide columns', collapse_watch: 'Collapse Watch',
@@ -189,10 +190,11 @@ var I18N = {
     ],
     help_sw_variables: 'Program variables and selected signals', help_sw_sampling: 'Acquisition and waveforms',
     help_sw_var_items: [
-      'Load the AXF / ELF that matches the target firmware. Check a variable in <strong>Find variables</strong> to add it to <strong>Selected signals</strong>. Use the pin to add it to <strong>Pinned variables</strong>.',
+      'Click <strong>Open AXF / ELF</strong> and select the file for the running firmware. The button shows the loaded filename. Click it to open another file. RTT, SuperWatch and File Sources share the active file. Check a variable in <strong>Find variables</strong> to add it to <strong>Selected signals</strong>. Use the pin to add it to <strong>Pinned variables</strong>.',
       'Click a variable name in any of these three lists to show its actions. Click it again to collapse them. Select <strong>Write</strong>, enter or select a value, then click <strong>Confirm write</strong>. Writing requires a connected device and a writable variable. Bit fields are read-only.',
-      'For a checked variable, expand its actions and click <strong>Remove</strong> to stop sampling it. The lists uncheck it together and keep its pin. The eye button controls waveform visibility only.',
-      'Use <strong>Organize</strong> to group signals, or drag a signal into another group. Double-click a name to set an alias. Use ƒx to set a display formula or color.'
+      'In <strong>Selected signals</strong>, check a variable to sample and record it. Uncheck it to keep its group, alias and color for later. The eye controls waveform visibility. Expand a variable and click <strong>Remove</strong> to take it off the list.',
+      'Each group shows its enabled count and total. Its box is checked only when every variable is enabled. Click an empty box to sample the whole group, or clear a checked box to disable the whole group.',
+      'Drag a variable by its handle into another group. Its curve moves with it and its sampling setting stays the same. Double-click a name to set an alias. Use ƒx to set a display formula or color.'
     ],
     help_sw_sampling_items: [
       'You can also select registers and fields under <strong>Peripherals</strong>. Click <strong>Start</strong> to collect the selected signals and <strong>Stop</strong> to end acquisition.',
@@ -205,7 +207,7 @@ var I18N = {
     ],
     help_sw_pause_items: [
       '<strong>Pause</strong> or <span class="help-kbd">P</span> freezes the live display while acquisition continues. Click <strong>Resume</strong> to follow the latest data.',
-      'During log replay, Pause, Resume and the position slider control playback. Click <strong>Return to live</strong> to leave replay.'
+      'Use <strong>Split plot</strong> beside a log channel to give it its own vertical axis. All plots share playback and the time axis. Use <strong>Merge plot</strong> to overlay it again, or <strong>Return to live</strong> to restore the live layout.'
     ],
     help_trigger_items: [
       '<strong>Trigger</strong> — Enable / disable trigger',

@@ -11,6 +11,7 @@ import {
   loadDesktopSettings,
   saveDesktopSettings,
 } from '../lib/desktopSettings'
+import { rememberSymbolPath } from '../lib/symbolPathHistory'
 import { pickSymbolFile } from '../lib/filePicker'
 import { refreshRttAddressForSymbol } from '../lib/rttSymbolAddress'
 import type { AxlStatus } from '../types/mklink'
@@ -42,6 +43,13 @@ export function useDashboardSetup() {
   const api = useMklinkApi()
   const catalog = useSymbolCatalog()
   const toast = useToast()
+  const loadedSymbolName = computed(() => {
+    const active = api.deviceStatus.value.axf
+    if (!active?.loaded || !active.axf_path) return ''
+    const path = active.display_name || (isSameFileSourcePath(active.axf_path, symbolPath.value)
+      ? symbolDisplayPath.value : active.axf_path)
+    return path.split(/[\\/]/).pop() || ''
+  })
 
   async function refreshRttForSymbols(path: string): Promise<void> {
     const refreshed = await refreshRttAddressForSymbol(
@@ -106,16 +114,16 @@ export function useDashboardSetup() {
     connectionError.value = ''
   }
 
-  async function parseSelectedSymbols(context?: SemanticExecutionContext): Promise<boolean> {
-    const path = symbolPath.value.trim()
+  async function parseSymbolPath(path: string, context?: SemanticExecutionContext, onLoaded?: () => void, displayName?: string): Promise<boolean> {
     if (!isSymbolFilePath(path)) return false
     loadingSymbols.value = true
     try {
-      const result = await (context ? useMklinkApi(context) : api).parseAxf(path) as AxlStatus
+      const result = await (context ? useMklinkApi(context) : api).parseAxf(path, undefined, true, displayName) as AxlStatus
       if (!result.loaded) throw new Error(result.error || tr('AXF / ELF 解析失败', 'AXF / ELF parsing failed'))
       if (!isSameFileSourcePath(path, result.axf_path)) {
         throw new Error(tr('后端未切换到所选符号文件', 'The backend did not switch to the selected symbol file'))
       }
+      onLoaded?.()
       if (api.deviceStatus.value.connected) await refreshRttForSymbols(path)
       await catalog.ensureLoaded(true)
       toast.success(tr(`已加载 ${result.variable_count || 0} 个可读变量`, `Loaded ${result.variable_count || 0} readable variables`))
@@ -128,35 +136,45 @@ export function useDashboardSetup() {
     }
   }
 
+  function parseSelectedSymbols(context?: SemanticExecutionContext): Promise<boolean> {
+    return parseSymbolPath(symbolPath.value.trim(), context, undefined, symbolDisplayPath.value)
+  }
+
   async function loadSymbolFile(): Promise<boolean> {
     if (loadingSymbols.value) return false
     loadingSymbols.value = true
     try {
       const selected = await pickSymbolFile()
       if (!selected) return false
-      const source = typeof selected === 'string'
-        ? { path: selected, displayPath: selected }
-        : await api.uploadFileSource('symbol', selected).then(uploaded => ({
-          path: uploaded.path,
-          displayPath: uploaded.name || selected.name,
-        }))
-      const settings = loadDesktopSettings(window.localStorage)
-      saveDesktopSettings(window.localStorage, {
-        ...settings,
-        symbolPath: source.path,
-        symbolDisplayPath: source.displayPath === source.path ? '' : source.displayPath,
-        rttAddress: isSameFileSourcePath(settings.symbolPath, source.path)
-          ? settings.rttAddress
-          : '',
-      })
-      syncSettings()
+      let path: string
+      let displayPath: string
+      let track: (() => void) | undefined
+      if (typeof selected === 'string') {
+        path = displayPath = selected
+      } else {
+        const uploaded = await api.uploadFileSource('symbol', selected, false)
+        path = uploaded.path
+        displayPath = uploaded.source_kind === 'local' ? path : uploaded.name || selected.name
+        track = () => api.trackUploadedSymbol(selected, uploaded)
+      }
+      return await parseSymbolPath(path, undefined, () => {
+        const settings = loadDesktopSettings(window.localStorage)
+        saveDesktopSettings(window.localStorage, {
+          ...settings,
+          symbolPath: path,
+          symbolDisplayPath: displayPath === path ? '' : displayPath,
+          rttAddress: isSameFileSourcePath(settings.symbolPath, path) ? settings.rttAddress : '',
+        })
+        rememberSymbolPath(window.localStorage, path, displayPath)
+        track?.()
+        syncSettings()
+      }, displayPath)
     } catch (cause) {
       toast.error(tr('选择 AXF / ELF 失败：', 'Failed to select AXF / ELF: ') + (cause instanceof Error ? cause.message : String(cause)))
       return false
     } finally {
       loadingSymbols.value = false
     }
-    return parseSelectedSymbols()
   }
 
   return {
@@ -165,6 +183,7 @@ export function useDashboardSetup() {
     loadingSymbols: readonly(loadingSymbols),
     connectionError: readonly(connectionError),
     symbolPath: readonly(symbolPath),
+    loadedSymbolName,
     symbolDisplayPath: readonly(symbolDisplayPath),
     hasSymbolSource: computed(() => isSymbolFilePath(symbolPath.value)),
     quickConnect,

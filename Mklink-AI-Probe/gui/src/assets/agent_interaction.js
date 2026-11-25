@@ -56,11 +56,10 @@
     let revision = 0, fingerprint, disposed = false, active = null;
     const records = new Map();
     function read() {
-      const value = clone(adapter.read());
-      const next = JSON.stringify(value);
+      const next = JSON.stringify(adapter.read());
       if (fingerprint !== undefined && fingerprint !== next) revision++;
       fingerprint = next;
-      return { revision, value };
+      return { revision, value: JSON.parse(next) };
     }
     const report = () => ({ protocol, session_id, page_id, title: adapter.title, catalog: clone(adapter.catalog()), actions: clone(adapter.actions), state: read() });
     const receipts = () => [...records.values()].map(record => clone(record.receipt));
@@ -119,7 +118,7 @@
       if (active) records.get(active).receipt = { ...records.get(active).receipt, status: 'unknown', code: 'DISPOSED' };
       adapter.dispose?.();
     }
-    return { report, read, execute, receipts, dispose, invalidate: () => { revision++; } };
+    return { identity: Object.freeze({ protocol, session_id, page_id }), report, read, execute, receipts, dispose, invalidate: () => { revision++; } };
   }
   const api = { protocol, create, validateCommand, validateArgs, keys, ensure, id, signature };
   root.AgentInteraction = api;

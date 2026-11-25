@@ -157,3 +157,11 @@ def test_mcp_schema_and_dispatch_use_shared_hpm_interface(monkeypatch):
             assert invalid.is_error
     asyncio.run(scenario())
     assert calls == [('hpm_debug', {'action': 'read-register', 'register': 'mcause'})]
+
+
+def test_debug_module_status_failure_preserves_diagnostics():
+    d = device(receipt(1, rc=-4, dmstatus=0))
+    with pytest.raises(HpmDebugError) as result:
+        execute(d, {'action': 'status'})
+    for detail in ('status', 'rc=-4', 'dmstatus=0x00000000', 'JTAG', 'Flash/RAM'):
+        assert detail in str(result.value)

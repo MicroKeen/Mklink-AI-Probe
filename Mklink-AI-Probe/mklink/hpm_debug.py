@@ -112,8 +112,15 @@ def _record(response, op):
         raise HpmDebugError('Missing or invalid HPM debug receipt; do not replay the operation',
                             uncertain=op in MUTATIONS) from error
     if record['rc'] != 0 or record['cleanup']:
-        raise HpmDebugError('HPM debug: ' + ERRORS.get(record['rc'], 'cleanup or protocol failure'),
-                            record=record, uncertain=bool(record['issued'] or record['cleanup'] or record['rc'] == -9))
+        action = next(name for name, value in ACTIONS.items() if value == op)
+        uncertain = bool(record['issued'] or record['cleanup'] or record['rc'] == -9)
+        message = f"HPM debug {action}: {ERRORS.get(record['rc'], 'cleanup or protocol failure')}"
+        if record['rc'] == -4:
+            message += '。未能确认 RISC-V 调试模块状态。请核对目标供电、复位状态及 JTAG 连线，读取已知 Flash/RAM 地址作对照。'
+        if uncertain:
+            message += ' 请先核实目标当前状态，再决定下一步操作。'
+        message += f" (rc={record['rc']}, dmstatus=0x{record['dmstatus']:08X})"
+        raise HpmDebugError(message, record=record, uncertain=uncertain)
     return record
 
 

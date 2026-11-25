@@ -629,8 +629,16 @@ def test_delayed_uart_start_response_cannot_claim_a_later_gui_session(uart_app, 
                 base_url='http://127.0.0.1:8765', headers={'X-Auth-Token': 'test-secret'}) as http:
             request = asyncio.create_task(http.post('/_runtime/call', json={'session_id': owner,
                 'capability': 'modbus_start', 'arguments': {'port': 'TEST', 'slave': 1, 'registers': []}}))
-            await asyncio.wait_for(reached.wait(), 1)
             try:
+                # Synchronize on the completed start. Runner scheduling is not
+                # part of the ownership contract, and a rejected call should
+                # surface its actual response instead of timing out at the gate.
+                gate = asyncio.create_task(reached.wait())
+                done, _ = await asyncio.wait({gate, request}, timeout=10,
+                                             return_when=asyncio.FIRST_COMPLETED)
+                if request in done:
+                    pytest.fail(f'Start returned before the response gate: {request.result().text}')
+                assert gate in done, 'Timed out waiting for the Modbus start transaction'
                 assert control.created_streams == {'modbus': owner}
                 assert (await http.post('/api/dash/modbus/stop')).status_code == 409
                 await http.post('/_runtime/detach', json={'session_id': owner})
@@ -639,7 +647,8 @@ def test_delayed_uart_start_response_cannot_claim_a_later_gui_session(uart_app, 
                 assert not control.created_streams
             finally:
                 release.set()
-                assert (await request).status_code == 200
+                gate.cancel()
+                assert (await asyncio.wait_for(request, 10)).status_code == 200
             assert not control.created_streams and managers['modbus'].get_status()['slave'] == 2
     client.portal.call(scenario)
 

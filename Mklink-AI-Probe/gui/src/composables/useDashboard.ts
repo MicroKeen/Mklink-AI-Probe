@@ -1,3 +1,4 @@
+import { requestError } from '../lib/requestError'
 import { frontendFetch as fetch } from '../lib/frontendControl'
 import { ref, shallowRef, readonly } from 'vue'
 import { API_BASE } from '../lib/runtimeEndpoint'
@@ -24,7 +25,7 @@ async function api(path: string, options?: RequestInit) {
       const name = ({ rtt: 'RTT View', superwatch: 'SuperWatch', systemview: 'RTOS Trace', vofa: 'VOFA+' } as Record<string, string>)[owner ?? ''] ?? owner
       throw new Error(tr(`请先停止 ${name || '当前采集'}，再启动此功能。`, `Stop ${name || 'the current capture'} before starting this feature.`))
     }
-    throw new Error(typeof detail === 'string' ? detail : detail?.message || res.statusText)
+    throw new Error(requestError(detail, res.status, path))
   }
   return res.json()
 }

@@ -9,6 +9,7 @@
 </template>
 
 <script setup lang="ts">
+import { requestError } from '../../lib/requestError'
 import type { SemanticExecutionContext } from '../../lib/frontendControl'
 import { mountDetailsMenu } from '../../lib/detailsMenu'
 
@@ -43,6 +44,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   'latest-values': [values: Record<string, number>]
   'replay-channels': [channels: string[] | null]
+  'replay-panes': [panes: [string, string][]]
   'visibility-change': [path: string, visible: boolean]
 }>()
 
@@ -112,7 +114,7 @@ async function loadReplayFile(path: string, context?: { fetch: typeof fetch }): 
     })
     if (!response.ok) {
       const error = await response.json().catch(() => ({}))
-      throw new Error(error.detail?.message || error.detail || response.statusText)
+      throw new Error(requestError(error.detail, response.status, 'SuperWatch'))
     }
     const blob = await response.blob()
     if (disposed) throw new Error('Waveform panel is closed')
@@ -206,6 +208,9 @@ function onReplay(event: Event) {
   const detail = (event as CustomEvent).detail
   emit('replay-channels', detail.channels)
   emit('latest-values', detail.values)
+}
+function onReplayPanes(event: Event) {
+  emit('replay-panes', (event as CustomEvent<[string, string][]>).detail)
 }
 
 function stopArraySnapshotPolling(): void {
@@ -419,6 +424,7 @@ onMounted(() => {
   const el = container.value
   mountedContainer = el
   el.addEventListener('mklink:replay', onReplay)
+  el.addEventListener('mklink:replay-panes', onReplayPanes)
   el.addEventListener('mklink:visibility', onVisibility)
 
   const saveViewerFile = (filename: string, text: string) => saveTextFile(filename, text)
@@ -467,6 +473,7 @@ onUnmounted(() => {
     if ((script as any).__mklinkContext) (script as any).__mklinkContext.cancelled = true
   })
   el?.removeEventListener('mklink:replay', onReplay)
+  el?.removeEventListener('mklink:replay-panes', onReplayPanes)
   el?.removeEventListener('mklink:visibility', onVisibility)
   disposeReplay?.()
   disposeLogMenu?.()

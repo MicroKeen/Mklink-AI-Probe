@@ -7,6 +7,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
+from mklink.systemview_analyzer import ExecutionSlices
+from mklink.work_files import open_log_file
+
 
 class SystemViewJsonlLogger:
     """Write a SystemView capture as line-delimited JSON.
@@ -34,7 +37,7 @@ class SystemViewJsonlLogger:
         self.summary_path = self.path.with_name(f"{self.path.stem}-summary.txt")
         self._seq = 0
         self._closed = False
-        self._pending_task_start: dict[int, float] = {}
+        self._execution = ExecutionSlices()
         self._task_stats: dict[int, dict] = {}
 
         session = {
@@ -44,8 +47,13 @@ class SystemViewJsonlLogger:
             "unit": "us+tk",
             **(session_meta or {}),
         }
-        self._write_record(session)
-        self._fh.flush()
+        self.pending_summary = None
+        try:
+            self._write_record(session)
+            self._fh.flush()
+        except BaseException:
+            self.abort()
+            raise
 
     @staticmethod
     def _open_unique_trace(log_dir: Path, stamp: str):
@@ -78,13 +86,25 @@ class SystemViewJsonlLogger:
             "started_at": self.started_at.isoformat(),
             "ended_at": ended_at.isoformat(),
             **(summary or {}),
+            "events": self._seq,
             "top_tasks": self._top_tasks(),
         }
-        self._write_record(merged_summary)
-        self._fh.flush()
-        self._fh.close()
+        try:
+            self._write_record(merged_summary)
+            self._fh.flush()
+        finally:
+            self.abort()
+        self.pending_summary = merged_summary
+        self.finish_summary()
+
+    def abort(self):
         self._closed = True
-        self._write_text_summary(merged_summary)
+        self._fh.close()
+
+    def finish_summary(self):
+        if self.pending_summary is not None:
+            self._write_text_summary(self.pending_summary)
+            self.pending_summary = None
 
     def _write_record(self, record: dict) -> None:
         self._fh.write(
@@ -93,6 +113,9 @@ class SystemViewJsonlLogger:
         )
 
     def _update_task_stats(self, event: dict) -> None:
+        interval = self._execution.observe(event)
+        if interval and interval['tid'] is not None:
+            self._task_stats[interval['tid']]['run_time'] += interval['end'] - interval['start']
         task_id = event.get("task_id")
         if not isinstance(task_id, int):
             return
@@ -108,16 +131,8 @@ class SystemViewJsonlLogger:
         if event.get("task_name") and not stats["task_name"]:
             stats["task_name"] = event["task_name"]
 
-        timestamp = self._event_time(event)
-        if timestamp is None:
-            return
         if event.get("kind") == "task_start_exec":
-            self._pending_task_start[task_id] = timestamp
             stats["schedules"] += 1
-        elif event.get("kind") == "task_stop_exec":
-            start = self._pending_task_start.pop(task_id, None)
-            if start is not None and timestamp >= start:
-                stats["run_time"] += timestamp - start
 
     def _top_tasks(self) -> list[dict]:
         return sorted(
@@ -138,6 +153,7 @@ class SystemViewJsonlLogger:
             f"started_at: {summary.get('started_at', '')}",
             f"ended_at: {summary.get('ended_at', '')}",
             f"events: {summary.get('events', 0)}",
+            *([f"stream_events: {summary['stream_events']}"] if 'stream_events' in summary else []),
             f"dropped_bytes: {summary.get('dropped_bytes', 0)}",
             f"dropped_packets: {summary.get('dropped_packets', 0)}",
             f"cpu_freq: {summary.get('cpu_freq', 0)}",
@@ -150,17 +166,14 @@ class SystemViewJsonlLogger:
             lines.append(
                 f"- {name}: run_time={task.get('run_time', 0)} schedules={task.get('schedules', 0)}"
             )
-        self.summary_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-
-    @staticmethod
-    def _event_time(event: dict) -> float | None:
-        value = event.get("t_us")
-        if isinstance(value, (int, float)):
-            return float(value)
-        value = event.get("t_ticks")
-        if isinstance(value, (int, float)):
-            return float(value)
-        return None
+        with open_log_file(self.summary_path, 'x', encoding='utf-8') as stream:
+            try:
+                stream.write("\n".join(lines) + "\n")
+                stream.flush()
+            except OSError:
+                stream.close()
+                self.summary_path.unlink(missing_ok=True)
+                raise
 
     @staticmethod
     def _normalize_datetime(value: datetime) -> datetime:

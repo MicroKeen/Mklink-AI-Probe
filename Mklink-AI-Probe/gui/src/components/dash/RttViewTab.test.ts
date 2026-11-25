@@ -48,6 +48,7 @@ const mocks = vi.hoisted(() => ({
   },
   checkConflict: vi.fn(),
   api: {
+    deviceStatus: { value: { axf: { loaded: false, axf_path: '', display_name: '' } } },
     findRtt: vi.fn(),
     writeRtt: vi.fn(),
     setRttEncoding: vi.fn(),
@@ -92,6 +93,7 @@ describe('RttViewTab binary migration', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.api.deviceStatus.value.axf = { loaded: false, axf_path: '', display_name: '' }
     mocks.binary.rttLines = shallowRef(null)
     mocks.binary.rttTerminal = shallowRef(null)
     mocks.binary.waveformBatch = shallowRef(null)
@@ -718,6 +720,19 @@ describe('RttViewTab binary migration', () => {
     expect(JSON.parse(localStorage.getItem('mklink.desktop.settings.v1') ?? '{}').rttAddress)
       .toBe('0x20001A40')
     expect(wrapper.get('[data-testid="rtt-search"]').attributes('title')).toBe('binary:app.elf')
+    wrapper.unmount()
+  })
+
+  it('labels and searches the active file selected by another window while a local path is pending', async () => {
+    saveDesktopSettings(localStorage, desktopSettings({ symbolPath: 'C:\\draft\\pending.axf' }))
+    const path = '/project/.mklink/uploads/file-sources/abc.elf'
+    mocks.api.deviceStatus.value.axf = { loaded: true, axf_path: path, display_name: 'motor.elf' }
+    const wrapper = mount(RttViewTab, { props: { deviceConnected: false } })
+    const button = wrapper.get('[data-testid="rtt-open-symbol"]')
+    expect(button.text()).toBe('motor.elf')
+    expect(button.attributes('disabled')).toBeUndefined()
+    await wrapper.get('[data-testid="rtt-search"]').trigger('click')
+    expect(mocks.api.findRtt).toHaveBeenCalledWith(path)
     wrapper.unmount()
   })
 

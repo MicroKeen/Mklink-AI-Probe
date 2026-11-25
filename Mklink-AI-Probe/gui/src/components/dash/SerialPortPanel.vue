@@ -19,6 +19,7 @@
 </template>
 
 <script setup lang="ts">
+import { requestError } from '../../lib/requestError'
 import { frontendFetch as fetch } from '../../lib/frontendControl'
 
 import type { SemanticExecutionContext } from '../../lib/frontendControl'
@@ -53,7 +54,7 @@ let pausedLines: VirtualLogInput[] = [], pausedText = ''
 async function request(path: string, body?: object, context?: SemanticExecutionContext) {
   const response = await (context?.fetch || fetch)(`${API_BASE}/api/dash/serial/${path}`, body === undefined ? undefined : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
   const data = await response.json()
-  if (!response.ok || data.error) throw new Error(typeof data.detail === 'string' ? data.detail : data.detail?.message || data.error || `HTTP ${response.status}`)
+  if (!response.ok || data.error) throw new Error(requestError(data.detail || data.error, response.status, 'Serial'))
   return data
 }
 async function refresh() {

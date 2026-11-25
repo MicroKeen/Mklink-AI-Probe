@@ -1,16 +1,26 @@
 <template>
-  <div
-    ref="host" class="rtt-terminal-panel" role="application" tabindex="-1"
-    :aria-label="ariaLabel || tr('RTT 终端', 'RTT terminal')" @mousedown="focus"
-  />
+  <div class="rtt-terminal-panel" @keydown.capture="onFindShortcut">
+    <div v-if="searchOpen" class="terminal-find" role="search" @keydown.esc.stop.prevent="closeSearch">
+      <input ref="findInput" v-model="query" type="text" :aria-label="tr('查找终端文本', 'Find terminal text')"
+        :placeholder="tr('查找终端文本', 'Find terminal text')" @keydown.enter="onFindEnter">
+      <span v-if="missing" role="status">{{ tr('未找到', 'No matches') }}</span>
+      <button type="button" :disabled="!query" :aria-label="tr('上一个匹配', 'Previous match')" @click="find('previous')"><ChevronUp :size="16" /></button>
+      <button type="button" :disabled="!query" :aria-label="tr('下一个匹配', 'Next match')" @click="find('next')"><ChevronDown :size="16" /></button>
+      <button type="button" :aria-label="tr('关闭查找', 'Close search')" @click="closeSearch"><X :size="16" /></button>
+    </div>
+    <div ref="host" class="terminal-screen" role="application" tabindex="-1"
+      :aria-label="ariaLabel || tr('RTT 终端', 'RTT terminal')" @mousedown="focus" />
+  </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { ChevronDown, ChevronUp, X } from '@lucide/vue'
 import { invoke, isTauri } from '@tauri-apps/api/core'
 import { writeClipboard } from '../../lib/writeClipboard'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
+import { SearchAddon } from '@xterm/addon-search'
 import '@xterm/xterm/css/xterm.css'
 import { tr } from '../../composables/useLanguage'
 import { SeggerAnsiNormalizer } from '../../lib/seggerAnsi'
@@ -18,6 +28,12 @@ import { SeggerAnsiNormalizer } from '../../lib/seggerAnsi'
 const props = defineProps<{ inputEnabled: boolean, ariaLabel?: string }>()
 const emit = defineEmits<{ input: [data: string] }>()
 const host = ref<HTMLElement | null>(null)
+const findInput = ref<HTMLInputElement | null>(null)
+const searchOpen = ref(false)
+const query = ref('')
+const missing = ref(false)
+let search: SearchAddon | undefined
+let searchRetry: ReturnType<typeof setTimeout> | undefined
 const normalizer = new SeggerAnsiNormalizer()
 let terminal: Terminal | null = null
 let fitAddon: FitAddon | null = null
@@ -43,6 +59,12 @@ function flushOutput(): void {
   writeInFlight = true
   terminal.write(output, () => {
     writeInFlight = false
+    if (!disposed && missing.value && searchOpen.value && searchRetry === undefined) {
+      searchRetry = setTimeout(() => {
+        searchRetry = undefined
+        if (searchOpen.value && missing.value) find('incremental')
+      }, 300)
+    }
     if (pendingOutput && !disposed) scheduleOutput()
   })
 }
@@ -62,6 +84,7 @@ function write(text: string): void {
 
 function clear(): void {
   normalizer.reset()
+  missing.value = searchOpen.value && !!query.value
   if (outputFrame !== null) cancelAnimationFrame(outputFrame)
   outputFrame = null
   if (outputFallback !== null) clearTimeout(outputFallback)
@@ -80,6 +103,53 @@ function fit(): void {
 function focus(): void {
   terminal?.focus()
 }
+
+async function openSearch(): Promise<void> {
+  if (!terminal) return
+  if (!search) {
+    search = new SearchAddon()
+    terminal.loadAddon(search)
+  }
+  searchOpen.value = true
+  await nextTick()
+  findInput.value?.focus()
+  findInput.value?.select()
+}
+
+function closeSearch(): void {
+  if (query.value) terminal?.clearSelection()
+  query.value = ''
+  missing.value = false
+  searchOpen.value = false
+  focus()
+}
+
+function find(direction: 'next' | 'previous' | 'incremental'): void {
+  if (!search || !searchOpen.value) return
+  if (!query.value) {
+    terminal?.clearSelection()
+    missing.value = false
+    return
+  }
+  missing.value = direction === 'previous'
+    ? !search.findPrevious(query.value)
+    : !search.findNext(query.value, { incremental: direction === 'incremental' })
+}
+
+function onFindShortcut(event: KeyboardEvent): void {
+  if (event.key.toLowerCase() !== 'f' || !(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) return
+  event.preventDefault()
+  event.stopPropagation()
+  void openSearch()
+}
+
+function onFindEnter(event: KeyboardEvent): void {
+  if (event.isComposing || event.keyCode === 229) return
+  event.preventDefault()
+  find(event.shiftKey ? 'previous' : 'next')
+}
+
+watch(query, () => find('incremental'))
 
 function activate(): void {
   requestAnimationFrame(() => {
@@ -199,6 +269,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   disposed = true
+  clearTimeout(searchRetry)
   if (outputFrame !== null) cancelAnimationFrame(outputFrame)
   outputFrame = null
   if (outputFallback !== null) clearTimeout(outputFallback)
@@ -217,11 +288,13 @@ onUnmounted(() => {
   }
 })
 
-defineExpose({ write, clear, activate, focus, flushOutput })
+defineExpose({ write, clear, activate, focus, flushOutput, openSearch })
 </script>
 
 <style scoped>
 .rtt-terminal-panel {
+  display: flex;
+  flex-direction: column;
   flex: 1 1 auto;
   min-height: 220px;
   margin-top: 8px;
@@ -231,6 +304,11 @@ defineExpose({ write, clear, activate, focus, flushOutput })
   border-radius: var(--radius);
   background: #10151d;
 }
+.terminal-screen { flex: 1 1 auto; min-height: 0; min-width: 0; }
+.terminal-find { display: flex; align-items: center; justify-content: flex-end; gap: 4px; margin-bottom: 4px; }
+.terminal-find input { min-width: 0; width: 22ch; }
+.terminal-find span { color: #d7dde7; white-space: nowrap; }
+.terminal-find button { display: inline-flex; align-items: center; padding: 3px; }
 .rtt-terminal-panel :deep(.xterm) { height: 100%; }
 .rtt-terminal-panel :deep(.xterm-viewport) { scrollbar-width: thin; }
 </style>

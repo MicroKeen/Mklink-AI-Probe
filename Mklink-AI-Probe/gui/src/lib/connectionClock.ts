@@ -1,9 +1,10 @@
+import { requestError } from './requestError'
 import { API_BASE } from './runtimeEndpoint'
 
 export async function readConnectionClock() {
   const response = await fetch(`${API_BASE}/api/device/debug-speed`)
   const payload = await response.json()
-  if (!response.ok) throw new Error(typeof payload.detail === 'string' ? payload.detail : payload.detail?.message || response.statusText)
+  if (!response.ok) throw new Error(requestError(payload.detail, response.status, 'SWD/JTAG'))
   if (!Array.isArray(payload.clocks_hz)) throw new Error('The backend does not support connection clock settings')
   return payload
 }
@@ -18,7 +19,7 @@ export async function applyConnectionClock(status: any, mode: string, requested:
   })
   const payload = await response.json()
   if (!response.ok) {
-    throw Object.assign(new Error(typeof payload.detail === 'string' ? payload.detail : payload.detail?.message || response.statusText), { detail: payload.detail })
+    throw Object.assign(new Error(requestError(payload.detail, response.status, 'SWD/JTAG')), { detail: payload.detail })
   }
   if (applyToProbe
     ? payload.interface !== mode || payload.configured_hz !== requested || !['configured', 'applied', 'acknowledged'].includes(payload.apply_state)

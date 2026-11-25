@@ -1,3 +1,4 @@
+import { requestError } from './requestError'
 import '../assets/agent_interaction.js'
 import { API_BASE } from './runtimeEndpoint'
 
@@ -15,6 +16,7 @@ export interface SemanticSurface {
 export interface FrontendTarget { instance_id: string; probe_id: string; device_generation: number; project_root: string }
 export interface FrontendReport { protocol: string; session_id: string; page_id: string; title: string; catalog: unknown; actions: JsonObject; state: { revision: number; value: unknown } }
 export interface FrontendRuntime {
+  readonly identity: Readonly<Pick<FrontendReport, 'protocol' | 'session_id' | 'page_id'>>
   report(): FrontendReport
   execute(command: JsonObject): JsonObject
   receipts(): JsonObject[]
@@ -41,7 +43,7 @@ export async function frontendRequest(path: string, body?: unknown, method = bod
     method, signal: AbortSignal.timeout(5000), ...(body === undefined ? {} : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
   })
   const payload = await response.json()
-  if (!response.ok) throw Object.assign(new Error(typeof payload.detail === 'string' ? payload.detail : payload.detail?.message || response.statusText), { status: response.status, code: payload.detail?.code })
+  if (!response.ok) throw Object.assign(new Error(requestError(payload.detail, response.status, path)), { status: response.status, code: payload.detail?.code })
   return payload
 }
 
@@ -128,7 +130,7 @@ export function connectFrontend(options: {
         const discovery = await frontendRequest('pages')
         if (stopped) return
         if (discovery.protocol !== 'agent-frontend/1') throw new Error('Unsupported frontend protocol')
-        if (runtime && runtime.report().session_id !== discovery.session_id) {
+        if (runtime && runtime.identity.session_id !== discovery.session_id) {
           runtime.dispose(); runtime = null; sent.clear(); options.reset()
         }
         if (!runtime) {

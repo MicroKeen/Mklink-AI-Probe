@@ -5,7 +5,7 @@
         <span>{{ tr('端口', 'Port') }}</span>
         <select v-model="portName" :disabled="starting || stopping || ymodemStarting || readingBaudrates">
           <option v-for="port in selectablePorts" :key="port.device" :value="port.device">
-            {{ port.device }}{{ port.description ? ` · ${port.description}` : '' }}
+            {{ uartPortLabel(port) }}
           </option>
         </select>
       </label>
@@ -108,6 +108,9 @@
           :aria-pressed="viewMode === 'terminal'" @click="setViewMode('terminal')"
         ><SquareTerminal :size="14" /><span>{{ tr('终端', 'Terminal') }}</span></button>
       </div>
+      <button v-if="viewMode === 'terminal'" type="button" class="btn"
+        :aria-label="tr('查找终端文本', 'Find terminal text')" :title="tr('查找终端文本', 'Find terminal text') + ' (Ctrl+F / ⌘F)'"
+        @click="terminalPanel?.openSearch()"><Search :size="14" /></button>
       <LogDisplayControls
         v-if="viewMode === 'log'" :id-prefix="guiId('serial')"
         v-model:mode="logDisplayMode" v-model:show-timestamp="showLogTimestamp"
@@ -185,7 +188,7 @@ const guiId = useGuiId()
 import TrafficLogControls from './TrafficLogControls.vue'
 import { trafficBytes, TrafficTextDecoder, type TrafficFrame } from '../../lib/trafficReplay'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { ChevronDown, RefreshCw, ScrollText, SlidersHorizontal, SquareTerminal, Trash2 } from '@lucide/vue'
+import { ChevronDown, RefreshCw, ScrollText, Search, SlidersHorizontal, SquareTerminal, Trash2 } from '@lucide/vue'
 import { useBinaryStream } from '../../composables/useBinaryStream'
 import { useUartBaudrates } from '../../composables/useUartBaudrates'
 import { useMklinkApi } from '../../composables/useMklinkApi'
@@ -199,6 +202,7 @@ import {
   type SerialAssistantSettings,
 } from '../../lib/serialAssistantSettings'
 import type { PortInfo } from '../../types/mklink'
+import { orderUartPorts, uartPortLabel } from '../../lib/uartPortOptions'
 import RttTerminalPanel from './RttTerminalPanel.vue'
 import LogDisplayControls, { type LogDisplayMode } from './LogDisplayControls.vue'
 import RttTransmitBar from './RttTransmitBar.vue'
@@ -278,7 +282,7 @@ const { baudrates, baudrateSourceLabel, canReadBaudrates, readingBaudrates, read
 )
 const activeConfigs = ref<Array<Record<string, unknown>>>([])
 const selectablePorts = computed(() => running.value
-  ? activeConfigs.value.map(item => ({ device: String(item.port), description: '' })) : ports.value)
+  ? activeConfigs.value.map(item => ports.value.find(port => port.device === item.port) ?? { device: String(item.port), description: '' }) : ports.value)
 let displayedSource = ''
 watch(portName, port => {
   logBinary.selectSerialPort(port)
@@ -447,7 +451,7 @@ async function refreshPorts(): Promise<void> {
   if (refreshingPorts.value) return
   refreshingPorts.value = true
   try {
-    ports.value = await fetchPorts()
+    ports.value = orderUartPorts(await fetchPorts(), 'mklink_uart')
     if (!running.value && (!portName.value || !ports.value.some(port => port.device === portName.value))) {
       portName.value = ports.value[0]?.device || ''
     }

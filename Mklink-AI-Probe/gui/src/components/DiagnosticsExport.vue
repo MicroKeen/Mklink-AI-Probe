@@ -5,6 +5,7 @@
 </template>
 
 <script setup lang="ts">
+import { requestError } from '../lib/requestError'
 import { ref } from 'vue'
 import { API_BASE, IS_REMOTE } from '../lib/runtimeEndpoint'
 import { saveBlobFile } from '../lib/downloadTextFile'
@@ -20,7 +21,10 @@ async function exportDiagnostics() {
   try {
     await flushConnectionDiagnostics()
     const response = await fetch(`${API_BASE}/api/diagnostics/export`, { signal: AbortSignal.timeout(15000) })
-    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    if (!response.ok) {
+      const payload = response.headers?.get('content-type')?.includes('json') ? await response.json().catch(() => null) : null
+      throw new Error(requestError(payload, response.status, tr('导出诊断', 'Export diagnostics')))
+    }
     if (!response.headers.get('content-type')?.includes('application/zip')) throw new Error(tr('诊断包格式无效', 'Invalid diagnostic archive'))
     const filename = `mklink-diagnostics-${new Date().toISOString().replace(/[:.]/g, '-')}.zip`
     if (await saveBlobFile(filename, await response.blob())) toast.success(tr('诊断包已保存，可发送给技术支持', 'Diagnostic archive saved; send it to support'))

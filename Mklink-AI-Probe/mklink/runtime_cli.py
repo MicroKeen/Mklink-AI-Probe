@@ -340,8 +340,16 @@ def run(args):
                 if running and (args.variables or args.period is not None):
                     raise RuntimeErrorResponse('Capture already running; omit variable/period changes to subscribe')
                 if not running:
+                    disabled = []
                     for name in args.variables:
-                        client.call('superwatch_add', {'name': name})
+                        result = client.call('superwatch_add', {'name': name})
+                        error = result.get('error') or result.get('item', {}).get('error')
+                        if error:
+                            raise RuntimeErrorResponse(error)
+                        if result.get('item', {}).get('sampling_enabled') is False:
+                            disabled.append(name)
+                    if disabled:
+                        client.call('superwatch_sampling', {'paths': disabled, 'enabled': True})
                     if args.period is not None:
                         client.call('superwatch_interval', {'interval': args.period})
             if stream == 'systemview' and not running:

@@ -683,7 +683,7 @@ describe('ConfigView', () => {
     await wrapper.get('[data-testid="parse-symbols"]').trigger('click')
     await flushPromises()
 
-    expect(mocks.api.parseAxf).toHaveBeenCalledWith('C:\\saved\\app.axf')
+    expect(mocks.api.parseAxf).toHaveBeenCalledWith('C:\\saved\\app.axf', undefined, false, undefined)
     expect(mocks.refreshSymbolCatalog).toHaveBeenCalledWith(true)
     expect(mocks.toastSuccess).toHaveBeenCalledWith(expect.stringContaining('3'))
   })
@@ -781,6 +781,7 @@ describe('ConfigView', () => {
     await flushPromises()
     expect(mocks.api.parseAxf).toHaveBeenCalledWith(
       'C:\\Users\\test\\.mklink\\uploads\\file-sources\\uploaded.axf',
+      undefined, false, 'browser.axf',
     )
   })
 
@@ -807,7 +808,7 @@ describe('ConfigView', () => {
     await wrapper.get('[data-testid="parse-symbols"]').trigger('click')
     await flushPromises()
 
-    expect(mocks.api.parseAxf).toHaveBeenCalledWith('C:\\saved\\app.axf')
+    expect(mocks.api.parseAxf).toHaveBeenCalledWith('C:\\saved\\app.axf', undefined, false, undefined)
     expect(mocks.toastError).toHaveBeenCalledWith('符号目录刷新失败: catalog unavailable')
     expect(mocks.toastError).not.toHaveBeenCalledWith(expect.stringContaining('AXF 解析失败'))
   })

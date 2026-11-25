@@ -1,5 +1,6 @@
 import { frontendFetch as fetch } from '../lib/frontendControl'
 import type { SemanticExecutionContext } from '../lib/frontendControl'
+import { requestError } from '../lib/requestError'
 import { ref, readonly } from 'vue'
 import { tr } from './useLanguage'
 import { flushWatchProfile, useWatchProfile } from './useWatchProfile'
@@ -42,14 +43,7 @@ async function apiRequest<T>(path: string, options?: RequestInit, context?: Sema
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    let msg = res.statusText
-    if (err) {
-      const d = err.detail
-      if (typeof d === 'string') msg = d
-      else if (Array.isArray(d)) msg = d.map((e: any) => e.msg || String(e)).join('; ')
-      else if (d && typeof d === 'object' && 'message' in d) msg = String(d.message)
-      else if (d) msg = JSON.stringify(d)
-    }
+    const msg = requestError(err?.detail ?? err, res.status, path)
     throw Object.assign(new Error(msg), { status: res.status, detail: err?.detail })
   }
   return res.json()
@@ -84,7 +78,7 @@ export function useMklinkApi(context?: SemanticExecutionContext) {
     } catch (error) {
       throw new Error(`${String(error)} · Request ${requestId}. Check backend jobs before starting again.`)
     }
-    if (job.state !== 'succeeded') throw new Error(`${job.state}: ${job.error || JSON.stringify(job.result)} · ${job.job_id}`)
+    if (job.state !== 'succeeded') throw new Error(`${job.state}: ${requestError(job.error || job.result, 0, action)} · ${job.job_id}`)
     return job.result
   }
   async function listPorts(): Promise<PortInfo[]> {
@@ -117,11 +111,17 @@ export function useMklinkApi(context?: SemanticExecutionContext) {
   async function uploadFileSource(
     kind: FileSourceKind,
     file: File,
+    track = true,
   ): Promise<UploadedFileSource> {
     const body = new FormData()
     body.append('file', file)
     const uploaded = await api<UploadedFileSource>(`/api/files/${kind}`, { method: 'POST', body })
-    if (kind === 'symbol') trackSymbolSource(file, uploaded, {
+    if (kind === 'symbol' && track) trackUploadedSymbol(file, uploaded)
+    return uploaded
+  }
+
+  function trackUploadedSymbol(file: File, uploaded: UploadedFileSource) {
+    trackSymbolSource(file, uploaded, {
       upload: (next, operation) => {
         const data = new FormData()
         data.append('file', next)
@@ -134,7 +134,6 @@ export function useMklinkApi(context?: SemanticExecutionContext) {
         return result
       },
     })
-    return uploaded
   }
 
   async function getConfigStatus(): Promise<ConfigStatus> {
@@ -212,7 +211,7 @@ export function useMklinkApi(context?: SemanticExecutionContext) {
     const res = await fetch(`${API_BASE}/api/probe/firmware-download?${query.toString()}`)
     if (!res.ok) {
       const error = await res.json().catch(() => null)
-      throw new Error(typeof error?.detail === 'string' ? error.detail : res.statusText)
+      throw new Error(requestError(error?.detail, res.status, 'MKLink'))
     }
     const filename = res.headers.get('X-MKLink-Firmware-Name')
       || /filename="([^"]+)"/i.exec(res.headers.get('Content-Disposition') || '')?.[1]
@@ -297,13 +296,15 @@ export function useMklinkApi(context?: SemanticExecutionContext) {
     }
   }
 
-  async function parseAxf(axf?: string, elfBackend?: 'builtin' | 'external') {
+  async function parseAxf(axf?: string, elfBackend?: 'builtin' | 'external', preserveCapture = false, displayName?: string) {
     await flushWatchProfile()
     const result = await api('/api/device/parse-axf', {
       method: 'POST',
       body: JSON.stringify({
         ...(axf ? { axf } : {}),
+        ...(displayName && displayName !== axf ? { display_name: displayName.split(/[\\/]/).pop() } : {}),
         ...(elfBackend ? { elf_backend: elfBackend } : {}),
+        ...(preserveCapture ? { preserve_capture: true } : {}),
       }),
     })
     await refreshStatus()
@@ -430,6 +431,7 @@ export function useMklinkApi(context?: SemanticExecutionContext) {
     getConfig,
     updateConfig,
     uploadFileSource,
+    trackUploadedSymbol,
     getConfigStatus,
     getProjectInfo,
     getRttConfig,

@@ -1,3 +1,4 @@
+import { requestError } from '../lib/requestError'
 import { frontendFetch as fetch } from '../lib/frontendControl'
 import type { SemanticExecutionContext } from '../lib/frontendControl'
 import { matchesSignal } from '../lib/signalSearch'
@@ -73,7 +74,7 @@ async function request<T>(path: string, options?: RequestInit, context?: Semanti
   })
   if (!response.ok) {
     const payload = await response.json().catch(() => null)
-    throw new Error(errorMessage(payload, response.statusText || 'Request failed'))
+    throw new Error(errorMessage(payload, requestError(payload, response.status, 'AXF/ELF')))
   }
   const payload = await response.json() as T
   if (epoch !== deviceEpoch) throw new Error('Device changed; discard previous symbol response')

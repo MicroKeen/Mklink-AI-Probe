@@ -1,3 +1,4 @@
+import { requestError } from '../lib/requestError'
 import { ref } from 'vue'
 import { API_BASE } from '../lib/runtimeEndpoint'
 export interface Section { id: string; name: string; collapsed: boolean; height: number }
@@ -18,7 +19,7 @@ function publish() {
 async function request(options?: RequestInit) {
   const response = await fetch(`${API_BASE}/api/dash/superwatch/workspace`, options)
   const data = await response.json()
-  if (!response.ok) throw new Error(data.detail || response.statusText)
+  if (!response.ok) throw new Error(requestError(data.detail, response.status, 'SuperWatch'))
   if (data.workspace?.version !== 2 || !Array.isArray(data.workspace.groups) || !Array.isArray(data.workspace.panes) || !data.workspace.panes.length || !data.workspace.signals || typeof data.revision !== 'string') throw new Error('Invalid workspace response')
   return data
 }
@@ -56,6 +57,17 @@ function update(change: (value: WatchWorkspace) => void): Promise<boolean> {
 function style(path: string): SignalStyle {
   return workspace.value.signals[path] || { alias: '', emphasis: false, group: workspace.value.defaultGroup || workspace.value.groups[0]?.id || 'main', pane: workspace.value.defaultGroup || workspace.value.groups[0]?.id || 'main', renderMode: 'line' }
 }
+function curveColor(path: string, viewerId: string | null = 'SuperWatch'): string | undefined {
+  const viewers: Record<string, { mode?: string; getChannelColor?: (name: string) => string | undefined }> = (window as any).__waveformViewers || {}
+  if (viewerId !== null) return viewers[viewerId]?.getChannelColor?.(path) || style(path).color
+  // A standalone variable list can accompany several plots with panel-local colors.
+  const colors = new Set<string>()
+  for (const viewer of Object.values(viewers)) {
+    const color = viewer.mode === 'SuperWatch' && viewer.getChannelColor?.(path)
+    if (color) colors.add(color.toLowerCase())
+  }
+  return colors.size === 1 ? [...colors][0] : style(path).color
+}
 function setStyle(paths: string[], patch: Partial<SignalStyle>) {
   return update(w => { for (const path of paths) w.signals[path] = { ...style(path), ...patch, ...(patch.group !== undefined ? {pane: patch.group} : {}) } })
 }
@@ -75,7 +87,7 @@ function imported(event: Event) {
 }
 if (typeof window !== 'undefined') window.addEventListener('mklink:workspace-import', imported)
 if (typeof window !== 'undefined') window.addEventListener('mklink:watch-profile-loaded', () => { void load() })
-export function useWatchWorkspace() { return { workspace, error, busy, ready, load, update, style, setStyle, merge } }
+export function useWatchWorkspace() { return { workspace, error, busy, ready, load, update, style, curveColor, setStyle, merge } }
 
 if (typeof window !== 'undefined') window.addEventListener('mklink:workspace-merge', event => {
   const group = (event as CustomEvent).detail?.group

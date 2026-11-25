@@ -129,6 +129,9 @@ header h1 {
   border-right: none;
 }
 #chart-wrap canvas { display: block; width: 100%; height: 100%; }
+#chart-watch-wrap.replay-plots { overflow-y: auto; }
+#chart-watch-wrap.replay-plots #watch-panel { position: sticky; top: 0; }
+.replay-split-channel { flex-shrink: 0; }
 
 #watch-resizer {
   width: 5px;

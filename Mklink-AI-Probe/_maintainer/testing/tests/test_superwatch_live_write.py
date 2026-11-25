@@ -8,7 +8,8 @@ from types import SimpleNamespace
 import pytest
 
 from mklink.dump_memory import DumpMemoryParser, DumpMemoryStreamSession, MAGIC
-from mklink.remote.dashboards import SuperWatchStreamManager
+from mklink.mux import MuxTargetError
+from mklink.remote.dashboards import SuperWatchStreamManager, SuperWatchTransactionError
 from mklink.superwatch import SuperWatchRuntime, WatchItem
 from test_rtt_superwatch_streaming import _symbol_write_device, _dump_frame
 
@@ -128,8 +129,11 @@ def test_rejected_write_does_not_reset_or_stop_capture(tmp_path):
     try:
         before = manager._metadata_version
         manager.pause()
-        with pytest.raises(RuntimeError, match='failed|unsupported'):
+        with pytest.raises(SuperWatchTransactionError) as rejected:
             manager.write_symbol('gain', generation=1, value=2.0)
+        assert rejected.value.phase == 'write'
+        assert isinstance(rejected.value.cause, MuxTargetError)
+        assert (rejected.value.cause.status, rejected.value.cause.op) == (2, 0x12)
         manager._thread.join(timeout=1)
         assert manager.get_status()['state'] == 'stopped'
         assert manager._metadata_version == before

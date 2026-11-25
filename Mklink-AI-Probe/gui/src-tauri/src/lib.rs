@@ -51,6 +51,7 @@ struct Sidecar {
     instance_id: String,
     runtime_info_path: PathBuf,
     startup_error: Mutex<Option<String>>,
+    health_error: Mutex<Option<String>>,
     project_root: Mutex<String>,
     site_agent_root: Mutex<Option<PathBuf>>,
     #[cfg(target_os = "windows")]
@@ -252,6 +253,37 @@ fn write_file(path: String, contents: Vec<u8>) -> Result<(), String> {
         return Err("file path is empty".into());
     }
     std::fs::write(&target, contents).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+async fn copy_systemview_log(source: String, destination: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        use std::io::{Read, Write};
+        let path = std::fs::canonicalize(&source).map_err(|e| format!("读取 SystemView 日志失败（{source}）。请刷新日志列表。{e}"))?;
+        let tail: Vec<_> = path.parent().into_iter().flat_map(Path::components).rev()
+            .take(3).map(|c| c.as_os_str()).collect();
+        if tail != ["systemview", "logs", ".mklink"].map(std::ffi::OsStr::new)
+            || !matches!(path.extension().and_then(|e| e.to_str()), Some("txt" | "jsonl"))
+        {
+            return Err("请选择用户工程 .mklink/logs/systemview 中的 JSONL 或摘要文件。".to_string());
+        }
+        let input = std::fs::File::open(&path).map_err(|e| format!("无法打开源日志（{source}）。请检查读取权限和文件占用。{e}"))?;
+        let size = input.metadata().map_err(|e| e.to_string())?.len();
+        let mut output = std::fs::OpenOptions::new().write(true).create_new(true)
+            .open(&destination).map_err(|e| format!("无法创建导出文件（{destination}）。请选择可写目录及未使用的文件名。{e}"))?;
+        let saved = std::io::copy(&mut input.take(size), &mut output).and_then(|copied| {
+            if copied != size {
+                return Err(std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "源日志在导出期间缩短"));
+            }
+            output.flush()
+        });
+        if let Err(e) = saved {
+            drop(output);
+            let _ = std::fs::remove_file(&destination);
+            return Err(format!("保存日志失败（{destination}）。请检查可用空间和访问权限。{e}"));
+        }
+        Ok(())
+    }).await.map_err(|error| error.to_string())?
 }
 
 #[tauri::command]
@@ -588,6 +620,18 @@ fn terminate_sidecar_tree(state: &Sidecar) -> Result<(), String> {
     Ok(())
 }
 
+fn show_main_window(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        #[cfg(target_os = "macos")]
+        if let Err(error) = app.set_activation_policy(tauri::ActivationPolicy::Regular) {
+            eprintln!("[tauri] could not restore the Dock icon: {error}");
+        }
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
+}
+
 fn request_desktop_exit(app: tauri::AppHandle, shutdown: std::sync::Arc<AtomicBool>) {
     if shutdown.swap(true, Ordering::Relaxed) {
         return;
@@ -605,16 +649,14 @@ fn request_desktop_exit(app: tauri::AppHandle, shutdown: std::sync::Arc<AtomicBo
 }
 
 /// Minimal owned-backend health check using raw TCP — no external deps needed.
-fn check_health(port: u16, instance_id: &str) -> bool {
+fn check_health(port: u16, instance_id: &str) -> Result<(), String> {
     use std::io::{Read, Write};
     let addr = format!("127.0.0.1:{}", port);
-    let mut stream = match std::net::TcpStream::connect_timeout(
+    let failure = |stage: &str, error: std::io::Error| format!("桌面进程健康检查：{stage} {addr} 失败，{error}");
+    let mut stream = std::net::TcpStream::connect_timeout(
         &addr.parse().unwrap(),
         std::time::Duration::from_secs(3),
-    ) {
-        Ok(s) => s,
-        Err(_) => return false,
-    };
+    ).map_err(|e| failure("建立连接 (connect)", e))?;
     let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(3)));
     let _ = stream.set_write_timeout(Some(std::time::Duration::from_secs(3)));
 
@@ -622,15 +664,18 @@ fn check_health(port: u16, instance_id: &str) -> bool {
         "GET /api/health HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nConnection: close\r\n\r\n",
         port
     );
-    if stream.write_all(request.as_bytes()).is_err() {
-        return false;
-    }
+    stream.write_all(request.as_bytes()).map_err(|e| failure("发送请求 (send)", e))?;
     let mut response = Vec::new();
-    if stream.take(8192).read_to_end(&mut response).is_err() {
-        return false;
-    }
+    stream.take(8192).read_to_end(&mut response).map_err(|e| failure("接收响应 (receive)", e))?;
     let response = String::from_utf8_lossy(&response);
-    health_response_matches(&response, instance_id)
+    if health_response_matches(&response, instance_id) { return Ok(()); }
+    let status = response.lines().next().and_then(|line| line.split_whitespace().nth(1))
+        .and_then(|s| s.parse::<u16>().ok());
+    Err(match status {
+        Some(200) => format!("桌面进程健康检查：{addr} 的响应未通过状态或实例身份校验"),
+        Some(code) => format!("桌面进程健康检查：{addr} 返回 HTTP {code}"),
+        None => format!("桌面进程健康检查：{addr} 未返回有效的 HTTP 响应"),
+    })
 }
 
 fn health_response_matches(response: &str, instance_id: &str) -> bool {
@@ -691,12 +736,19 @@ fn wait_for_runtime_endpoint(state: &Sidecar) -> Result<BackendEndpoint, String>
             }
         };
         if let Some(status) = exit_status {
-            return Err(format!("Desktop proxy exited ({status}) before publishing its endpoint. Log: {}",
+            let failure_file = state.runtime_info_path.with_extension("error.json");
+            let detail = std::fs::read(&failure_file).ok()
+                .and_then(|raw| serde_json::from_slice::<serde_json::Value>(&raw).ok())
+                .filter(|v| v["instanceId"].as_str() == Some(&state.instance_id))
+                .and_then(|v| v["reason"].as_str().map(str::to_owned))
+                .unwrap_or_else(|| "未收到代理的启动详情，请查看启动日志".into());
+            let _ = std::fs::remove_file(failure_file);
+            return Err(format!("桌面代理在公布端口前退出（{status}）。{detail}。日志：{}",
                                state.runtime_info_path.with_extension("log").display()));
         }
         std::thread::sleep(std::time::Duration::from_millis(100));
     }
-    Err("Timed out waiting for the sidecar API endpoint".into())
+    Err(format!("等待桌面代理公布本机端口超时（{SIDECAR_START_TIMEOUT_SECS} 秒）。日志：{}", state.runtime_info_path.with_extension("log").display()))
 }
 
 fn start_owned_sidecar(
@@ -714,6 +766,7 @@ fn start_owned_sidecar_locked(
     preferred_port: Option<u16>,
 ) -> Result<BackendEndpoint, String> {
     *state.startup_error.lock().map_err(|error| error.to_string())? = None;
+    *state.health_error.lock().map_err(|error| error.to_string())? = None;
     let result = start_owned_sidecar_attempt(state, project_root, preferred_port);
     if let Err(error) = &result {
         *state.startup_error.lock().map_err(|error| error.to_string())? = Some(error.clone());
@@ -842,7 +895,12 @@ fn backend_alive(state: State<Sidecar>) -> Result<bool, String> {
     let Some(endpoint) = current_endpoint(state.inner())? else {
         return Ok(false);
     };
-    Ok(check_health(endpoint.port, &endpoint.instance_id))
+    Ok(check_health(endpoint.port, &endpoint.instance_id).is_ok())
+}
+
+#[tauri::command]
+fn backend_health_detail(state: State<Sidecar>) -> Option<String> {
+    state.health_error.lock().ok().and_then(|error| error.clone())
 }
 
 fn run_monitor(handle: tauri::AppHandle, shutdown: std::sync::Arc<AtomicBool>) {
@@ -897,13 +955,18 @@ fn run_monitor(handle: tauri::AppHandle, shutdown: std::sync::Arc<AtomicBool>) {
         }
 
         let endpoint = current_endpoint(state.inner()).ok().flatten();
-        if endpoint
-            .as_ref()
-            .is_some_and(|endpoint| check_health(endpoint.port, &endpoint.instance_id))
-        {
+        let health = endpoint.map(|endpoint| check_health(endpoint.port, &endpoint.instance_id));
+        if let Some(Ok(())) = health {
+            if consecutive_fails > 0 { *state.health_error.lock().unwrap() = None; }
             consecutive_fails = 0;
         } else {
             consecutive_fails += 1;
+            if let Some(Err(reason)) = health {
+                if consecutive_fails == 1 {
+                    let _ = std::fs::write(state.runtime_info_path.with_extension("health.log"), &reason);
+                }
+                *state.health_error.lock().unwrap() = Some(reason);
+            }
             eprintln!(
                 "[tauri] health check failed ({}/{})",
                 consecutive_fails, MAX_CONSECUTIVE_FAILS
@@ -931,13 +994,19 @@ pub fn run() {
     let context = tauri::generate_context!();
     let builder = tauri::Builder::default();
     #[cfg(target_os = "windows")]
-    let (builder, context) = {
+    let (builder, context, deferred_main) = {
         // WebView2 creates the HWND before it has navigated to our inline splash.
         // Present the loaded document once, independently of backend readiness.
         let mut context = context;
-        if let Some(main) = context.config_mut().app.windows.iter_mut().find(|w| w.label == "main") {
+        let deferred_main = context.config_mut().app.windows.iter_mut().find(|w| w.label == "main" && w.create).map(|main| {
             main.visible = false;
-        }
+            // Tauri normally creates configured WebViews before the setup hook.
+            // Build this same window after dispatching the owned sidecar so cold
+            // WebView2 initialization can overlap the Python startup.
+            let config = main.clone();
+            main.create = false;
+            config
+        });
         let revealed = AtomicBool::new(false);
         let builder = builder.on_page_load(move |view, payload| {
             if view.label() == "main"
@@ -951,7 +1020,7 @@ pub fn run() {
                 }
             }
         });
-        (builder, context)
+        (builder, context, deferred_main)
     };
     builder
         .manage(startup_timing)
@@ -961,6 +1030,7 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .manage(Sidecar {
             startup_error: Mutex::new(None),
+            health_error: Mutex::new(None),
             lifecycle: Mutex::new(()),
             shutdown: shutdown.clone(),
             child: Mutex::new(None),
@@ -979,6 +1049,7 @@ pub fn run() {
             stop_sidecar,
             restart_sidecar,
             backend_endpoint,
+            backend_health_detail,
             backend_alive,
             site_agent_config_get,
             site_agent_runtime_settings,
@@ -988,6 +1059,7 @@ pub fn run() {
             site_agent_stcp_credentials_configure,
             site_agent_bind_addresses,
             write_file,
+            copy_systemview_log,
             clipboard_read_text,
             clipboard_write_text,
             rename_usb_ports,
@@ -1033,51 +1105,30 @@ pub fn run() {
                 })?;
             TrayIconBuilder::new()
                 .icon(tray_icon)
+                .tooltip("MKLink AI Probe")
                 .menu(&tray_menu)
-                .show_menu_on_left_click(false)
+                .show_menu_on_left_click(cfg!(target_os = "macos"))
                 .on_menu_event(move |app, event| match event.id.as_ref() {
-                    "show" => {
-                        if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.show();
-                            let _ = window.set_focus();
-                        }
-                    }
+                    "show" => show_main_window(app),
                     "exit" => {
                         request_desktop_exit(app.clone(), tray_shutdown.clone());
                     }
                     _ => {}
                 })
                 .on_tray_icon_event(|tray, event| {
+                    if cfg!(target_os = "macos") {
+                        return; // The native menu offers both Show and Exit on a single click.
+                    }
                     if let TrayIconEvent::Click {
                         button: MouseButton::Left,
                         button_state: MouseButtonState::Up,
                         ..
                     } = event
                     {
-                        let app = tray.app_handle();
-                        if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.show();
-                            let _ = window.set_focus();
-                        }
+                        show_main_window(tray.app_handle());
                     }
                 })
                 .build(app)?;
-
-            // Closing the main window exits the desktop and its local proxy.
-            // Shared CDC runtimes and their remote services have independent
-            // lifetimes and must remain available to other clients.
-            let cleanup_handle = app.handle().clone();
-            let cleanup_shutdown = shutdown.clone();
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.on_window_event(move |event| {
-                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                        // Use the application exit path for window destruction,
-                        // rather than starting it again as this event returns.
-                        api.prevent_close();
-                        request_desktop_exit(cleanup_handle.clone(), cleanup_shutdown.clone());
-                    }
-                });
-            }
 
             std::thread::spawn(move || {
                 let state: State<Sidecar> = handle.state();
@@ -1085,11 +1136,13 @@ pub fn run() {
                     Ok(endpoint) => {
                         eprintln!("[tauri] sidecar started on port {}", endpoint.port);
                         // Wait for Python to fully initialize before monitoring
-                        for _ in 0..20 {
-                            if check_health(endpoint.port, &endpoint.instance_id) {
+                        for attempt in 0..20 {
+                            let health = check_health(endpoint.port, &endpoint.instance_id);
+                            if health.is_ok() {
                                 eprintln!("[tauri] backend healthy");
                                 break;
                             }
+                            if attempt == 19 { *state.health_error.lock().unwrap() = health.err(); }
                             std::thread::sleep(std::time::Duration::from_millis(500));
                         }
                     }
@@ -1101,10 +1154,52 @@ pub fn run() {
                 run_monitor(handle, shutdown_clone);
             });
 
+            #[cfg(target_os = "windows")]
+            if let Some(config) = deferred_main {
+                let window = tauri::WebviewWindowBuilder::from_config(app.handle(), &config)
+                    .and_then(|builder| builder.build());
+                if let Err(error) = window {
+                    shutdown.store(true, Ordering::Relaxed);
+                    let state: State<Sidecar> = app.state();
+                    let _guard = state.lifecycle.lock().map_err(|e| e.to_string())?;
+                    terminate_sidecar_tree(state.inner())?;
+                    return Err(error.into());
+                }
+            }
             Ok(())
         })
-        .run(context)
-        .expect("error while running tauri application");
+        .on_window_event(|window, event| {
+            if window.label() == "main" {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    if let Err(error) = window.hide() {
+                        eprintln!("[tauri] could not hide the main window: {error}");
+                        return;
+                    }
+                    #[cfg(target_os = "macos")]
+                    if let Err(error) = window.app_handle().set_activation_policy(tauri::ActivationPolicy::Accessory) {
+                        eprintln!("[tauri] could not hide the Dock icon: {error}");
+                    }
+                }
+            }
+        })
+        .build(context)
+        .expect("error while building tauri application")
+        .run(|app, event| match event {
+            #[cfg(target_os = "macos")]
+            tauri::RunEvent::Reopen { has_visible_windows: false, .. } => show_main_window(app),
+            tauri::RunEvent::Exit => {
+                // Native Quit (such as Cmd+Q) also owns cleanup of this desktop's proxy.
+                let state: State<Sidecar> = app.state();
+                if !state.shutdown.swap(true, Ordering::Relaxed) {
+                    let _lifecycle = state.lifecycle.lock().unwrap();
+                    if let Err(error) = terminate_sidecar_tree(state.inner()) {
+                        eprintln!("[tauri] proxy shutdown failed: {error}");
+                    }
+                }
+            }
+            _ => {}
+        });
 }
 
 #[cfg(test)]
@@ -1190,6 +1285,7 @@ mod tests {
     fn remote_credentials_are_scoped_to_valid_probe_identities() {
         let state = Sidecar {
             startup_error: Mutex::new(None),
+            health_error: Mutex::new(None),
             lifecycle: Mutex::new(()),
             shutdown: std::sync::Arc::new(AtomicBool::new(false)),
             child: Mutex::new(None), port: Mutex::new(None), instance_id: "test".into(),
@@ -1225,6 +1321,7 @@ mod tests {
             .spawn().unwrap();
         let state = Sidecar {
             startup_error: Mutex::new(None),
+            health_error: Mutex::new(None),
             lifecycle: Mutex::new(()),
             shutdown: std::sync::Arc::new(AtomicBool::new(false)),
             child: Mutex::new(Some(child)), port: Mutex::new(None),
@@ -1292,6 +1389,7 @@ mod tests {
 
         let state = Sidecar {
             startup_error: Mutex::new(None),
+            health_error: Mutex::new(None),
             lifecycle: Mutex::new(()),
             shutdown: std::sync::Arc::new(AtomicBool::new(false)),
             child: Mutex::new(Some(tracked)),

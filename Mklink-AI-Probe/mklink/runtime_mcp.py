@@ -82,7 +82,7 @@ def build_server():
                            "batch_read_max_total_bytes": BATCH_READ_MAX_TOTAL_BYTES,
                            "rtt_mux_channels": 8, "rtt_channel_cache_bytes": 65536,
                            "mux_watch_regions": 15, "mux_watch_region_bytes": 128},
-                "guidance": "Use gui_open when a visible GUI is requested; confirm its window, then connect to the explicit probe on that same backend. Otherwise connect directly. Disconnect stops shared target acquisition; detach only leaves this AI session."}
+                "guidance": "For any debugging question, consider whether live waveforms or logs would help answer it, distinguish causes, or verify a conclusion. If so, show the relevant existing GUI view and analyze the same shared stream without waiting for a display request. Combine related views in Workbench when useful. Confirm the window, then connect to the intended probe on that backend. Respect explicit headless requests. Disconnect stops shared target acquisition; detach only leaves this AI session."}
 
     @server.tool()
     def gui_open(action: Literal['open', 'status'] = 'open', probe: str | None = None,
@@ -90,7 +90,7 @@ def build_server():
                  window_id: str | None = None, open_browser: StrictBool = True) -> dict:
         """Open/reuse MKLink on the MCP computer; never connects hardware or starts capture.
 
-        Call only when the user requests a visible GUI. Reuses this MCP's backend,
+        Use when live waveforms or logs would help answer the current question, or for a requested visible GUI. Reuses this MCP's backend,
         the probe's existing backend, or a unique unbound GUI. Multiple choices return
         select_runtime/select_window; choose explicitly, never take the first entry.
         New backends require an existing project_root. Existing project/symbols stay intact.
@@ -621,6 +621,8 @@ def build_server():
     def superwatch(action: str = 'status', arguments: dict | None = None) -> dict:
         """Shared SuperWatch: status/items/values/snapshot/snapshot_select/snapshot_clear/add/remove/start/stop/pause/resume/interval/write.
 
+        sampling accepts paths and enabled (boolean) to change the shared capture set in one batch.
+        items retains disabled rows (sampling_enabled=false); status.items lists active channels.
         snapshot_select uses name, start_index, count for the same array view as GUI;
         snapshot_clear removes that shared array view. Neither starts acquisition.
         recording_start accepts directory (existing absolute path on the backend computer).
@@ -635,14 +637,14 @@ def build_server():
         write requires path, generation from gui_call('symbol_status'), and value. It uses the existing typed
         live-write transaction. Start with empty arguments subscribes to an existing capture.
         """
-        if action not in {'status', 'items', 'values', 'snapshot', 'snapshot_select', 'snapshot_clear', 'add', 'remove', 'start', 'stop', 'pause', 'resume', 'interval', 'write', 'recording_start', 'recording_stop', 'recording_status', 'recording_export', 'profile', 'profile_save', 'workspace', 'workspace_save', 'pins', 'pins_save'}:
+        if action not in {'status', 'items', 'values', 'snapshot', 'snapshot_select', 'snapshot_clear', 'add', 'remove', 'sampling', 'start', 'stop', 'pause', 'resume', 'interval', 'write', 'recording_start', 'recording_stop', 'recording_status', 'recording_export', 'profile', 'profile_save', 'workspace', 'workspace_save', 'pins', 'pins_save'}:
             raise ValueError('Unsupported SuperWatch action')
         return client().call('superwatch_'+action, arguments)
 
     @server.tool()
     def systemview(action: str = 'status', arguments: dict | None = None) -> dict:
-        """Shared SystemView: status/history/start/stop/pause/resume. No private CDC reader."""
-        if action not in {'status', 'history', 'start', 'stop', 'pause', 'resume'}:
+        """Shared SystemView stream and JSONL recording. recording_stop finalizes or retries a pending summary."""
+        if action not in {'status', 'history', 'start', 'stop', 'pause', 'resume', 'recording_start', 'recording_stop'}:
             raise ValueError('Unsupported SystemView action')
         return client().call('systemview_'+action, arguments)
 
@@ -652,8 +654,7 @@ def build_server():
 
         gui_control is the typed entry for navigation, fresh window snapshots and display controls.
         gui_windows lists presentation-capable windows; gui_present({window_id, tab})
-        switches an existing window only when showing results is useful. Routine collection
-        stays in the background. Only displayed confirms navigation; never auto-replay.
+        presents live waveforms or RTT while this client analyzes the same shared stream. Only displayed confirms navigation; never auto-replay.
         After gui_open, gui_frontend_* uses the existing hardware-free GUI attachment.
         gui_snapshot.panels.workbench identifies that window's semantic page and target.
         gui_frontend_pages discovers live agent-frontend/1 page identities and their target.

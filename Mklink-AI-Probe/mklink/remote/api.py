@@ -961,6 +961,12 @@ def create_app(
     async def activate_watch_profile(device):
         path = (getattr(device, 'axf_status', {}) or {}).get('axf_path') or getattr(device, '_axf', None)
         await run_in_threadpool(watch_profile.activate, path, get_managers()['superwatch'])
+        if path and watch_profile.path:
+            from mklink.symbol_sources import remember_source
+            try:
+                await run_in_threadpool(remember_source, _state['project_root'], path)
+            except OSError:
+                pass  # A read-only workspace can still parse an explicit local path.
 
     async def _reparse_active_symbols(
         axf: str | None = None,
@@ -1023,7 +1029,19 @@ def create_app(
         await activate_watch_profile(device)
         return result
 
-    async def _load_symbol_file(axf=None, elf_backend=None, *, error_status=500):
+    # Browser snapshots are stored by content hash. Keep their user-facing name
+    # with the successfully activated source on this backend for all its windows.
+    symbol_display_source = (None, None)
+
+    def active_symbol_status(device):
+        status = device.axf_status if device else {"loaded": False}
+        path, name = symbol_display_source
+        if name and status.get("loaded") and _same_file_source_path(path, status.get("axf_path")):
+            return {**status, "display_name": name}
+        return status
+
+    async def _load_symbol_file(axf=None, elf_backend=None, *, error_status=500, preserve_capture=False, display_name=None):
+        nonlocal symbol_display_source
         # Explicit file loading owns admission and drains capture workers before
         # rebinding addresses. It never resumes acquisition on the new layout.
         runtime = getattr(app.state, 'shared_runtime', None)
@@ -1034,13 +1052,27 @@ def create_app(
         async with _dashboard_start_lock(_state):
             async with _async_target_lock():
                 from mklink.remote.dashboards import BRIDGE_DASHBOARD_TYPES
+                managers = get_managers()
+                if preserve_capture:
+                    active = [name for name in BRIDGE_DASHBOARD_TYPES if _dashboard_worker_alive(managers[name])]
+                    if active:
+                        raise HTTPException(409, '正在采集 ' + ', '.join(sorted(active))
+                                            + '。请先停止对应采集，再打开 AXF / ELF。'
+                                            ' Stop the listed captures before opening another symbol file.')
                 for name in BRIDGE_DASHBOARD_TYPES:
-                    manager = get_managers()[name]
+                    manager = managers[name]
                     if _dashboard_worker_alive(manager):
                         await run_in_threadpool(stop_dashboard_manager, _state, name, manager)
                         if _dashboard_worker_alive(manager):
                             raise DashboardStopPending(name)
-                return await _reparse_active_symbols(axf, elf_backend, error_status=error_status)
+                result = await _reparse_active_symbols(axf, elf_backend, error_status=error_status)
+                path = result.get("axf_path")
+                if display_name and path:
+                    name = display_name.replace("\\", "/").rsplit("/", 1)[-1]
+                    symbol_display_source = (path, name)
+                elif not _same_file_source_path(path, symbol_display_source[0]):
+                    symbol_display_source = (None, None)
+                return result
 
     online_flash = online_flash_api.create_default_online_flash_services(
         _state["resource_manager"],
@@ -1166,7 +1198,8 @@ def create_app(
             if source_path and not expected_source_active():
                 raise HTTPException(409, 'The active symbol source changed')
             event['state'] = 'reloading'
-            result = await _load_symbol_file(source_path)
+            name = active_symbol_status(device).get("display_name") if expected_axf else None
+            result = await _load_symbol_file(source_path, display_name=name)
             event.update(axf_path=result.get('axf_path'), rebind=result.get('rebind', {}),
                          symbols_reloaded=True, rtt_restarted=False, pending=False, state='applied')
             source_monitor.acknowledge(device, pending)
@@ -1873,7 +1906,12 @@ def create_app(
 
     @app.post("/api/files/symbol")
     async def upload_symbol_file(file: UploadFile = File(...)):
-        return await _upload_file_source(file, (".axf", ".elf", ".out"))
+        from mklink.symbol_sources import AmbiguousSymbolSource, match_upload
+        uploaded = await _upload_file_source(file, (".axf", ".elf", ".out"))
+        try:
+            return await run_in_threadpool(match_upload, _state["project_root"], uploaded)
+        except AmbiguousSymbolSource as exc:
+            raise HTTPException(409, str(exc)) from exc
 
     @app.post("/api/files/map")
     async def upload_map_file(file: UploadFile = File(...)):
@@ -2135,7 +2173,7 @@ def create_app(
         from mklink.firmware_compatibility import compatibility_snapshot
         if not _state["device"]:
             symbols = _state.get('symbol_device')
-            return {"connected": False, "probe_product": "MKLink", "state": "disconnected", "axf": symbols.axf_status if symbols else {"loaded": False},
+            return {"connected": False, "probe_product": "MKLink", "state": "disconnected", "axf": active_symbol_status(symbols),
                     "probe_id": _state.get('shared_probe_id'),
                     "device_generation": _state.get('device_generation', 0)}
         dev = _state["device"]
@@ -2149,7 +2187,7 @@ def create_app(
             "mcu": dev.mcu_name if dev.connected else None,
             "idcode": hex(dev.idcode) if dev.connected else None,
             "port": dev.port,
-            "axf": dev.axf_status,
+            "axf": active_symbol_status(dev),
             "clock_warning": getattr(dev, "clock_warning", None),
             "clock_hz": getattr(dev, "clock_hz", None),
             "firmware_compatibility": compatibility_snapshot(getattr(dev, '_bridge', None)) if dev.connected else None,
@@ -2306,9 +2344,11 @@ def create_app(
     async def parse_axf(
         axf: str | None = Body(default=None, embed=True),
         elf_backend: str | None = Body(default=None, embed=True),
+        preserve_capture: bool = Body(default=False, embed=True),
+        display_name: str | None = Body(default=None, embed=True, max_length=255),
     ):
         """手动触发 AXF/ELF 符号表解析。"""
-        return await _load_symbol_file(axf, elf_backend)
+        return await _load_symbol_file(axf, elf_backend, preserve_capture=preserve_capture, display_name=display_name)
 
     @app.post("/api/device/flash")
     async def flash_device(body: dict = Body(...)):
@@ -2819,7 +2859,10 @@ def create_app(
             channel: int = Body(0, ge=0, le=7)):
         try:
             return await run_in_threadpool(traffic_recorder(kind).start, directory, channel)
-        except (ValueError, OSError) as exc:
+        except OSError as exc:
+            from mklink.work_files import file_error
+            raise HTTPException(400, file_error(f'创建 {kind.upper()} 工程日志', exc, directory)) from exc
+        except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
         except RuntimeError as exc:
             raise HTTPException(409, str(exc)) from exc
@@ -2952,10 +2995,10 @@ def create_app(
         return managers["systemview"].get_status()
 
     @app.post("/api/dash/systemview/recording/start")
-    async def systemview_recording_start():
+    async def systemview_recording_start(project: str | None = Body(None, embed=True, max_length=4096)):
         managers = get_managers()
         try:
-            return managers["systemview"].start_recording()
+            return managers["systemview"].start_recording(project)
         except RuntimeError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
 
@@ -2981,14 +3024,27 @@ def create_app(
         except RuntimeError as exc:
             raise HTTPException(409, str(exc)) from exc
 
+    def systemview_log_roots():
+        from mklink.systemview_logs import capture_project
+        project = Path(_state["project_root"]).resolve()
+        device = _state.get("device") or _state.get("symbol_device")
+        manager = get_managers()["systemview"]
+        saved = manager.saved_project(device)
+        try:
+            root = capture_project(project, getattr(device, "axf_path", None))
+        except ValueError:
+            root = project  # Allow access to historical default-workspace captures.
+        return {saved, root} if saved else {root}
+
     @app.get("/api/dash/systemview/logs")
     async def systemview_logs():
         from mklink.systemview_logs import list_systemview_logs
 
-        return {"logs": list_systemview_logs(_state["project_root"])}
+        logs = [item for root in systemview_log_roots() for item in list_systemview_logs(root)]
+        return {"logs": sorted(logs, key=lambda item: item['modified_at'], reverse=True)[:50]}
 
     @app.get("/api/dash/systemview/logs/download")
-    async def systemview_log_download(path: str = Query(...)):
+    async def systemview_log_download(path: str = Query(...), check: bool = False):
         from fastapi.responses import FileResponse
         from mklink.systemview_logs import (
             SystemViewLogPathError,
@@ -2996,13 +3052,25 @@ def create_app(
         )
 
         try:
-            resolved = resolve_systemview_log_download(
-                _state["project_root"], path,
-            )
+            for root in systemview_log_roots():
+                try:
+                    resolved = resolve_systemview_log_download(root, path)
+                    break
+                except SystemViewLogPathError:
+                    continue
+            else:
+                raise SystemViewLogPathError('SystemView log path is outside the project log directory or unsupported. '
+                                             '请选择当前用户工程 .mklink/logs/systemview 中的 JSONL 或摘要。')
+            if check:
+                with resolved.open("rb"):
+                    return {"name": resolved.name, "path": str(resolved)}
         except SystemViewLogPathError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
         except FileNotFoundError:
-            raise HTTPException(status_code=404, detail="SystemView log not found")
+            raise HTTPException(404, "SystemView log not found。请刷新记录列表；摘要将在记录结束后生成。")
+        except OSError as exc:
+            from mklink.work_files import file_error
+            raise HTTPException(409, file_error('读取 SystemView 导出文件', exc, path)) from exc
 
         media_type = (
             "application/x-ndjson"
@@ -3091,7 +3159,10 @@ def create_app(
     async def superwatch_recording_start(directory: str = Body(..., embed=True, min_length=1, max_length=4096)):
         try:
             return await run_in_threadpool(get_managers()["superwatch"].start_recording, directory)
-        except (ValueError, OSError) as exc:
+        except OSError as exc:
+            from mklink.work_files import file_error
+            raise HTTPException(400, file_error('创建 SuperWatch 工程日志', exc, directory)) from exc
+        except ValueError as exc:
             raise HTTPException(400, detail=str(exc)) from exc
         except RuntimeError as exc:
             raise HTTPException(409, detail=str(exc)) from exc
@@ -3112,13 +3183,19 @@ def create_app(
         except RuntimeError as exc:
             raise HTTPException(409, str(exc)) from exc
 
+    def check_watch_source(sw, profile, peripheral_revision):
+        if profile is not None and profile != str(watch_profile.path or ''):
+            raise HTTPException(409, 'The active AXF/ELF changed; reload settings')
+        if peripheral_revision is not None and peripheral_revision != sw.peripheral_revision:
+            raise HTTPException(409, '外设描述已切换，请刷新寄存器列表后重试。')
+
     @app.post("/api/dash/superwatch/add")
-    async def superwatch_add(name: str = Body(..., embed=True), profile: str | None = Body(None)):
+    async def superwatch_add(name: str = Body(..., embed=True), profile: Annotated[str | None, Body()] = None,
+                             peripheral_revision: Annotated[int | None, Body()] = None):
         managers = get_managers()
         sw = managers["superwatch"]
         def prepare_and_add():
-            if profile is not None and profile != str(watch_profile.path or ''):
-                raise HTTPException(409, 'The active AXF/ELF changed; reload settings')
+            check_watch_source(sw, profile, peripheral_revision)
             if sw._runtime is None and _state["device"] and _state["device"].connected:
                 sw.prepare(_state["device"])
             result = sw.add_watch(name)
@@ -3132,13 +3209,25 @@ def create_app(
         async with _dashboard_start_lock(_state):
             return await run_in_threadpool(prepare_and_add)
 
+    @app.post("/api/dash/superwatch/sampling")
+    async def superwatch_sampling(paths: list[str] = Body(..., min_length=1, max_length=1024),
+                                  enabled: bool = Body(..., strict=True), profile: str | None = Body(None)):
+        from mklink.watch_preferences import PreferencesConflict
+        async with _dashboard_start_lock(_state):
+            try:
+                return await run_in_threadpool(watch_profile.set_sampling, get_managers()["superwatch"], paths, enabled, profile)
+            except PreferencesConflict as exc:
+                raise HTTPException(409, str(exc)) from exc
+            except (ValueError, OSError) as exc:
+                raise HTTPException(422, f"无法更改 SuperWatch 采集选择：{exc}") from exc
+
     @app.post("/api/dash/superwatch/remove")
-    async def superwatch_remove(name: str = Body(..., embed=True), profile: str | None = Body(None)):
+    async def superwatch_remove(name: str = Body(..., embed=True), profile: Annotated[str | None, Body()] = None,
+                                peripheral_revision: Annotated[int | None, Body()] = None):
         managers = get_managers()
         sw = managers["superwatch"]
         def prepare_and_remove():
-            if profile is not None and profile != str(watch_profile.path or ''):
-                raise HTTPException(409, 'The active AXF/ELF changed; reload settings')
+            check_watch_source(sw, profile, peripheral_revision)
             if sw._runtime is None and _state["device"] and _state["device"].connected:
                 sw.prepare(_state["device"])
             result = sw.remove_watch(name)
@@ -3202,7 +3291,7 @@ def create_app(
 
     @app.post("/api/dash/superwatch/peripherals/select")
     async def peripheral_select(target_id: str | None = Body(None), chip: str | None = Body(None),
-                                svd: str | None = Body(None)):
+                                svd: str | None = Body(None), profile: Annotated[str | None, Body()] = None):
         device = _state.get("device")
         if not device or not device.connected:
             raise HTTPException(status_code=400, detail="Device not connected")
@@ -3210,8 +3299,17 @@ def create_app(
             raise HTTPException(422, "Select exactly one target_id, chip or SVD")
         try:
             async with _dashboard_start_lock(_state):
-                return await run_in_threadpool(get_managers()["superwatch"].select_peripherals, device,
-                                              target_id=target_id, chip=chip, svd=svd)
+                sw = get_managers()["superwatch"]
+                check_watch_source(sw, profile, None)
+                result = await run_in_threadpool(sw.select_peripherals, device, target_id=target_id, chip=chip, svd=svd)
+                try:
+                    await run_in_threadpool(watch_profile.remember_peripheral_source, sw)
+                except (OSError, ValueError) as exc:
+                    result['profile_error'] = str(exc)
+                result['selected'] = [i['name'] for i in sw.list_watches() if i.get('source') == 'peripheral']
+                return result
+        except HTTPException:
+            raise
         except RuntimeError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         except Exception as exc:
@@ -3220,8 +3318,10 @@ def create_app(
     @app.get("/api/dash/superwatch/items")
     async def superwatch_items():
         managers = get_managers()
-        items = await run_in_threadpool(managers["superwatch"].list_watches)
-        return {"items": items}
+        sw = managers["superwatch"]
+        async with _dashboard_start_lock(_state):
+            items = await run_in_threadpool(sw.list_watches)
+            return {"items": items, "peripheral_revision": sw.peripheral_revision, "profile": str(watch_profile.path or '')}
 
     def pinned_variable_payload(preferences):
         device = _state.get("device") or _state.get("symbol_device")

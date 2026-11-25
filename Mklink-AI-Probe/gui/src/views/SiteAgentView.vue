@@ -121,6 +121,7 @@
 </template>
 
 <script setup lang="ts">
+import { requestError } from '../lib/requestError'
 import { frontendFetch as fetch } from '../lib/frontendControl'
 
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
@@ -212,7 +213,7 @@ async function serviceRequest<T>(path = '', body?: Record<string, unknown>): Pro
     body: body === undefined ? undefined : JSON.stringify(body),
   })
   const value = await response.json()
-  if (!response.ok) throw new Error(typeof value.detail === 'string' ? value.detail : `HTTP ${response.status}`)
+  if (!response.ok) throw new Error(requestError(value.detail, response.status, 'Site Agent'))
   return value as T
 }
 

@@ -933,11 +933,14 @@ class SystemViewStreamManager:
         self._last_name_resolution = 0.0
         self._cpu_freq_source = ""
         self._recording_lock = threading.RLock()
+        self._pending_summary = None
         self._recording = None
         self._recording_path = ""
         self._recording_summary_path = ""
         self._recording_error = ""
         self._recording_device = None
+        self._saved_device = None
+        self._recording_source = None
         self._mux_transport_stats = None
         self._recording_meta: dict[str, Any] = {}
         self._target_overflow_events = 0
@@ -1022,6 +1025,7 @@ class SystemViewStreamManager:
         self._cpu_freq_source = ""
         with self._recording_lock:
             self._recording = None
+            self._pending_summary = None
             self._recording_path = ""
             self._recording_summary_path = ""
             self._recording_error = ""
@@ -1467,25 +1471,38 @@ class SystemViewStreamManager:
         self._history.trim(max_count=self._max_history,
                            window_us=self._history_buffer_us)
 
-    def _start_recording(self, device, extra_meta: dict | None = None) -> None:
+    def _start_recording(self, device, extra_meta: dict | None = None, project=None) -> None:
         with self._recording_lock:
             try:
                 from mklink.systemview_logger import SystemViewJsonlLogger
-
+                from mklink.systemview_logs import capture_project
                 project_root = getattr(device, "_project_root", None) or "."
+                project_root = capture_project(project_root, getattr(device, "axf_path", None), project)
                 meta = {
                     **self._status_meta(),
                     **(extra_meta or {}),
                 }
                 self._recording = SystemViewJsonlLogger(project_root, meta)
                 self._recording_path = str(self._recording.path)
-                self._recording_summary_path = str(self._recording.summary_path)
+                self._saved_device = device
+                self._recording_source = getattr(device, "axf_path", None)
+                self._recording_summary_path = ""
+                self._pending_summary = None
                 self._recording_error = ""
             except Exception as e:
                 self._recording = None
-                self._recording_error = str(e)
+                from mklink.work_files import file_error
+                self._recording_error = file_error('创建 SystemView 工程日志', e, project_root)
 
-    def start_recording(self) -> dict:
+    def saved_project(self, device):
+        with self._recording_lock:
+            if (self._recording_path and device is self._saved_device and
+                    getattr(device, 'axf_path', None) == self._recording_source):
+                from pathlib import Path
+                return Path(self._recording_path).parents[3]
+        return None
+
+    def start_recording(self, project=None) -> dict:
         if not self.running:
             raise RuntimeError("SystemView stream is not running")
         with self._recording_lock:
@@ -1493,7 +1510,7 @@ class SystemViewStreamManager:
                 if self._recording_device is None:
                     raise RuntimeError("SystemView device is unavailable")
                 self._start_recording(
-                    self._recording_device, dict(self._recording_meta),
+                    self._recording_device, dict(self._recording_meta), project,
                 )
             if self._recording is None:
                 raise RuntimeError(
@@ -1502,7 +1519,19 @@ class SystemViewStreamManager:
             return self.get_status()
 
     def stop_recording(self) -> dict:
-        self._close_recording()
+        with self._recording_lock:
+            if self._recording is None and self._pending_summary is not None:
+                logger = self._pending_summary
+                try:
+                    logger.finish_summary()
+                    self._recording_summary_path = str(logger.summary_path)
+                    self._pending_summary = None
+                    self._recording_error = ""
+                except OSError as exc:
+                    from mklink.work_files import file_error
+                    self._recording_error = file_error('保存 SystemView 摘要', exc, logger.summary_path)
+            else:
+                self._close_recording()
         return self.get_status()
 
     def _record_events(self, events: list[dict]) -> None:
@@ -1514,9 +1543,10 @@ class SystemViewStreamManager:
             try:
                 self._recording.write_events(events)
             except Exception as e:
-                self._recording_error = str(e)
+                from mklink.work_files import file_error
+                self._recording_error = file_error('写入 SystemView 事件，记录已中断', e, self._recording.path)
                 try:
-                    self._recording.close({"events": self._stats.get("events", 0)})
+                    self._recording.abort()
                 except Exception:
                     pass
                 self._recording = None
@@ -1527,7 +1557,7 @@ class SystemViewStreamManager:
                 return
             try:
                 self._recording.close({
-                    "events": self._stats.get("events", 0),
+                    "stream_events": self._stats.get("events", 0),
                     "bytes": self._stats.get("bytes", 0),
                     "history_size": len(self._history),
                     "cpu_freq": _positive_int(getattr(self._parser, "cpu_freq", 0)),
@@ -1536,8 +1566,14 @@ class SystemViewStreamManager:
                     "dropped_packets": getattr(self._parser, "dropped_packets", 0),
                     **self._target_overflow_status(),
                 })
+                self._recording_summary_path = str(self._recording.summary_path)
             except Exception as e:
-                self._recording_error = str(e)
+                from mklink.work_files import file_error
+                if self._recording.pending_summary is not None:
+                    self._pending_summary = self._recording
+                    self._recording_error = file_error('JSONL 已保存，写入 SystemView 摘要', e, self._recording.summary_path)
+                else:
+                    self._recording_error = file_error('完成 SystemView JSONL 记录', e, self._recording.path)
             finally:
                 self._recording = None
 
@@ -1587,6 +1623,7 @@ class SystemViewStreamManager:
                 "recording_path": self._recording_path,
                 "recording_summary_path": self._recording_summary_path,
                 "recording_error": self._recording_error,
+                "summary_pending": self._pending_summary is not None,
             }
         return {
             "synced": p.synced,
@@ -1608,6 +1645,7 @@ class SystemViewStreamManager:
             "recording_path": self._recording_path,
             "recording_summary_path": self._recording_summary_path,
             "recording_error": self._recording_error,
+            "summary_pending": self._pending_summary is not None,
         }
 
     def _unknown_task_ids(self, events: list[dict], *, allow_partial=False) -> set[int]:
@@ -1900,6 +1938,7 @@ class SuperWatchStreamManager:
         self._device = None
         self._runtime = None
         self._catalog_lock = threading.Lock()
+        self.peripheral_revision = 0
         self._catalog_pending = False
         # One re-entrant lock owns runtime layout snapshots, pending sample
         # rows, and metadata transitions. Hardware reads happen outside it.
@@ -1923,6 +1962,8 @@ class SuperWatchStreamManager:
         # that subscribe before a runtime is prepared.  Cache replacement is
         # one reference assignment, so readers never observe payload/snapshot
         # from different layouts.
+        self._sampling_disabled = set()
+        self._configured_channels_json = "[]"
         empty_channels_json = "[]"
         self._metadata_version = 1
         self._published_metadata_signature = empty_channels_json
@@ -2015,12 +2056,14 @@ class SuperWatchStreamManager:
                     )
                     self._peripheral_restore_error = error
                     self._catalog_pending = False
+                    self.peripheral_revision += 1
 
     def prepare(self, device) -> None:
         """Build runtime from DWARF info so search/add work before collection starts."""
         with self._read_lock:
             device_changed = self._device is not device
             if device_changed:
+                self.peripheral_revision += 1
                 self._catalog_pending = True
                 self._peripheral_selection = None
                 self._peripheral_restore_error = None
@@ -2142,18 +2185,20 @@ class SuperWatchStreamManager:
     def _sampling_layout_locked(self):
         return self._layout_for_snapshot_locked(self._array_snapshot)
 
-    def _layout_for_snapshot_locked(self, snapshot, scalar_items=None):
+    def _layout_for_snapshot_locked(self, snapshot, scalar_items=None, disabled=None):
         from mklink.superwatch import (
             SUPERWATCH_DUMP_MERGE_GAP,
             build_read_blocks,
         )
 
+        if disabled is None:
+            disabled = self._sampling_disabled
         if scalar_items is None:
             scalar_items = tuple(self._runtime.items) if self._runtime is not None else ()
-            if snapshot is None:
+            if snapshot is None and not disabled:
                 blocks = tuple(self._runtime.blocks) if self._runtime is not None else ()
                 return scalar_items, scalar_items, blocks
-        scalar_items = tuple(scalar_items)
+        scalar_items = tuple(item for item in scalar_items if item.name not in disabled)
         items_by_name = {item.name: item for item in scalar_items}
         for item in snapshot["items"] if snapshot is not None else ():
             items_by_name.setdefault(item.name, item)
@@ -2167,8 +2212,8 @@ class SuperWatchStreamManager:
             )),
         )
 
-    def _validate_sampling_layout_locked(self, snapshot, scalar_items=None):
-        _, _, blocks = self._layout_for_snapshot_locked(snapshot, scalar_items)
+    def _validate_sampling_layout_locked(self, snapshot, scalar_items=None, disabled=None):
+        _, _, blocks = self._layout_for_snapshot_locked(snapshot, scalar_items, disabled)
         if not blocks:
             return  # An empty selection is a valid idle configuration.
         regions = [(block.address, block.size) for block in blocks]
@@ -2238,6 +2283,8 @@ class SuperWatchStreamManager:
                         ):
                             runtime = self._runtime
                             scalar_items, items, dump_blocks = self._sampling_layout_locked()
+                            if not dump_blocks:
+                                runtime = None
                             config_generation = self._config_generation
                             origin_us = self._origin_us
                         else:
@@ -2661,7 +2708,22 @@ class SuperWatchStreamManager:
                     except Exception as exc:
                         raise SuperWatchTransactionError("restore", exc) from exc
 
-    def select_peripherals(self, device, target=None, *, target_id=None, chip=None, svd=None) -> dict:
+    @property
+    def peripheral_source(self):
+        with self._read_lock:
+            return getattr(self, '_peripheral_selection', None)
+
+    def clear_peripheral_source(self, error):
+        with self._read_lock:
+            self.peripheral_revision += 1
+            self._catalog_pending = False
+            self._peripheral_selection = None
+            self._peripheral_restore_error = error
+            if self._runtime is not None:
+                self._runtime.peripheral_items = {}
+                self._runtime.svd_registers = {}
+
+    def select_peripherals(self, device, target=None, *, target_id=None, chip=None, svd=None, persist=True) -> dict:
         from mklink.peripheral_watch import load_catalog, save_catalog_selection
 
         with self._operation_lock:
@@ -2673,7 +2735,8 @@ class SuperWatchStreamManager:
                 raise ValueError("Select one target_id, chip or SVD")
             items, skipped = catalog.items, catalog.skipped
             self.prepare(device)
-            save_catalog_selection(getattr(device, "_project_root", "."), catalog)
+            if persist:
+                save_catalog_selection(getattr(device, "_project_root", "."), catalog)
             with self._read_lock:
                 for item in list(self._runtime.items):
                     if item.source == "peripheral":
@@ -2684,9 +2747,10 @@ class SuperWatchStreamManager:
 
                 self._runtime.svd_registers = catalog_registers(catalog)
                 self._peripheral_selection = {**catalog.selection, "skipped_registers": skipped}
+                self.peripheral_revision += 1
                 self._peripheral_restore_error = None
                 self._rebuild_metadata_cache_locked(publish=True)
-            return self.peripheral_catalog()
+            return self.peripheral_catalog() if persist else {}
 
     def peripheral_catalog(self, query: str = "") -> dict:
         from mklink.superwatch import make_channel_metadata
@@ -2696,11 +2760,31 @@ class SuperWatchStreamManager:
             items = [item for item in getattr(self._runtime, "peripheral_items", {}).values()
                      if query.casefold() in item.name.casefold()]
             metadata = make_channel_metadata(items)
-            return {"selection": getattr(self, "_peripheral_selection", None),
+            return {"selection": getattr(self, "_peripheral_selection", None), "revision": self.peripheral_revision,
                     "restore_error": getattr(self, "_peripheral_restore_error", None),
                     "items": [{"name": item.name, **metadata[item.name]} for item in items]}
 
-    def add_watch(self, name: str) -> dict:
+    def set_sampling(self, names, enabled, persist=None):
+        """Change a batch at one channel-layout boundary, including during capture."""
+        with self._read_lock:
+            configured = {item.name for item in self._runtime.items} if self._runtime else set()
+            unknown = set(names) - configured
+            if unknown:
+                raise ValueError("变量已移除或工程已切换，请刷新已选信号：" + ", ".join(sorted(unknown)))
+            disabled = self._sampling_disabled.difference(names) if enabled else self._sampling_disabled.union(names)
+            if disabled != self._sampling_disabled:
+                self._validate_sampling_layout_locked(self._array_snapshot, disabled=disabled)
+                if persist:
+                    persist()
+                self._flush_binary_batch_locked()
+                self._sampling_disabled = disabled
+                self._latest_sample = None
+                self._rate_timestamps.clear()
+                self._actual_rate = 0.0
+                self._rebuild_metadata_cache_locked(publish=True)
+            return {"items": self.list_watches()}
+
+    def add_watch(self, name: str, *, sampling_enabled=True) -> dict:
         # Every SVD register/field path includes its peripheral prefix.
         if "." in name:
             self._ensure_peripheral_catalog()
@@ -2708,9 +2792,15 @@ class SuperWatchStreamManager:
             if self._runtime is None:
                 return {"error": "SuperWatch not started"}
             self._flush_binary_batch_locked()
+            if not sampling_enabled:
+                self._sampling_disabled.add(name)
             result = self._runtime.add(name, validate_layout=self._validate_scalar_edit_locked)
+            if result.get("error") and not sampling_enabled:
+                self._sampling_disabled.discard(name)
             if not result.get("error"):
                 self._rebuild_metadata_cache_locked(publish=True)
+            if name in self._sampling_disabled and not result.get("error"):
+                result["sampling_enabled"] = False
             return {"item": result}
 
     def remove_watch(self, name: str) -> dict:
@@ -2832,7 +2922,13 @@ class SuperWatchStreamManager:
             return self._rebuild_metadata_cache_locked(publish=force)
 
     def _rebuild_metadata_cache_locked(self, *, publish: bool = False, new_epoch: bool = False) -> int:
-        channels = self._list_watches_locked()
+        configured = self._list_watches_locked()
+        self._sampling_disabled.intersection_update(item["name"] for item in configured)
+        self._configured_channels_json = json.dumps([
+            {**item, "sampling_enabled": False} if item["name"] in self._sampling_disabled else item
+            for item in configured
+        ], separators=(",", ":"))
+        channels = [item for item in configured if item["name"] not in self._sampling_disabled]
         signature = json.dumps(channels, sort_keys=True, default=str)
         snapshot_json = json.dumps(channels, separators=(",", ":"), default=str)
         with self._metadata_publish_lock:
@@ -2879,7 +2975,7 @@ class SuperWatchStreamManager:
         if names is None:
             if self._runtime is None or not self._runtime.items:
                 return False
-            names = tuple(item.name for item in self._runtime.items)
+            names = tuple(item.name for item in self._runtime.items if item.name not in self._sampling_disabled)
         if not names:
             return False
         merged = {}
@@ -3129,8 +3225,7 @@ class SuperWatchStreamManager:
         }
 
     def list_watches(self) -> list[dict]:
-        _payload, snapshot_json, _version = self._metadata_cache
-        return json.loads(snapshot_json)
+        return json.loads(self._configured_channels_json)
 
     def _list_watches_locked(self) -> list[dict]:
         if self._runtime is None:
@@ -3153,7 +3248,7 @@ class SuperWatchStreamManager:
         q = bridge.add_client()
         try:
             # Send initial channel metadata for already-added variables
-            items = self.list_watches()
+            items = json.loads(self._metadata_cache[1])
             if items:
                 meta = {
                     item["name"]: {

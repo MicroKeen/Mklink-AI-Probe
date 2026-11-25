@@ -51,7 +51,7 @@ export function useFrontendWorkbench(tab: Ref<string>, superwatch: Ref<SemanticS
   const sessionEpoch = ref(0)
   useGuiPanel('workbench', {
     snapshot: () => {
-      const report = runtime.value?.report()
+      const report = runtime.value?.identity
       return { connected: connected.value, protocol: report?.protocol, session_id: report?.session_id,
         page_id: report?.page_id, target: target.value }
     },
@@ -82,9 +82,9 @@ export function useFrontendWorkbench(tab: Ref<string>, superwatch: Ref<SemanticS
       ...(workbench.value?.entries() || []),
     ].filter(entry => entry.surface && typeof entry.surface.catalog === 'function')
   }
-  function actions() {
+  function actions(panels = entries()) {
     const mapped: Record<string, { panel: PanelEntry; name: string; descriptor: JsonObject }> = {}
-    for (const panel of entries()) for (const action of panel.surface?.catalog() || []) {
+    for (const panel of panels) for (const action of panel.surface?.catalog() || []) {
       const key = `${panel.id}\u0000${action.name}`
       let hash = 2166136261
       for (let i = 0; i < key.length; i++) hash = Math.imul(hash ^ key.charCodeAt(i), 16777619)
@@ -180,13 +180,20 @@ export function useFrontendWorkbench(tab: Ref<string>, superwatch: Ref<SemanticS
       if (!connected.value || !runtime.value || !target.value) throw new Error('Frontend control is not connected')
       if (!context?.frontendGuarded && busy.value) throw new Error('An operation is already running')
       if (!context?.frontendGuarded) busy.value = true
-      try { return await withFrontendTarget(runtime.value.report().session_id, target.value, operation => runSurface(panelId, name, args, operation), context) }
+      try { return await withFrontendTarget(runtime.value.identity.session_id, target.value, operation => runSurface(panelId, name, args, operation), context) }
       finally { if (!context?.frontendGuarded) busy.value = false }
     },
   })
   const adapter = {
     title: 'MKLink Web Workbench',
-    catalog: () => ({ panels: entries().map(({ surface, ...panel }) => ({ ...panel, actions: Object.entries(actions()).filter(([, entry]) => entry.panel.id === panel.id).map(([id, entry]) => ({ id, name: entry.name })) })), intents: ['explain', 'inspect', 'plan'] }),
+    catalog: () => {
+      const panels = entries()
+      const byPanel = new Map(panels.map(panel => [panel.id, [] as { id: string; name: string }[]]))
+      for (const [id, entry] of Object.entries(actions(panels))) {
+        byPanel.get(entry.panel.id)!.push({ id, name: entry.name })
+      }
+      return { panels: panels.map(({ surface, ...panel }) => ({ ...panel, actions: byPanel.get(panel.id) })), intents: ['explain', 'inspect', 'plan'] }
+    },
     get actions() { return Object.fromEntries(Object.entries(actions()).map(([id, entry]) => [id, entry.descriptor])) },
     read: () => ({ tab: tab.value, panels: entries().map(panel => ({ id: panel.id, state: panel.surface!.read() })) }),
     execute: async (id: string, args: JsonObject, context?: SemanticExecutionContext) => {
@@ -197,7 +204,7 @@ export function useFrontendWorkbench(tab: Ref<string>, superwatch: Ref<SemanticS
   }
   onMounted(() => {
     stop = connectFrontend({ adapter,
-      ready: (value, binding) => { runtime.value = value; target.value = binding; connected.value = true; activity.bind(`${value.report().session_id}:${binding.probe_id}:${binding.device_generation}`) },
+      ready: (value, binding) => { runtime.value = value; target.value = binding; connected.value = true; activity.bind(`${value.identity.session_id}:${binding.probe_id}:${binding.device_generation}`) },
       feedback: presentFeedback,
       reset: () => { clearFeedback(); runtime.value = null; target.value = null; connected.value = false; sessionEpoch.value++; activity.bind('') },
       error: message => { error.value = message; connected.value = !message && runtime.value !== null },

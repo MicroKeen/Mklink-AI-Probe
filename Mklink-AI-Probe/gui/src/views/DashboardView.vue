@@ -24,7 +24,6 @@
           <button :class="['tab-btn', { active: tab === 'workbench' }]" @click="tab = 'workbench'">{{ tr('灵活面板', 'Flexible Panels') }}</button>
         </div>
         <div class="title-right">
-          <button type="button" class="device-quick-action" :title="frontend.error.value || tr('打开 Agent 协作请求', 'Open Agent request')" @click="askAgent(tab === 'workbench' ? 'workbench' : 'superwatch')"><span class="status-dot" :class="frontend.connected.value ? 'dot-user' : ''"></span>Agent</button>
           <span v-if="bridgeOwner" class="resource-status-inline">
             <span class="status-dot" :class="bridgeOwner.startsWith('ai:') ? 'dot-ai' : 'dot-user'"></span>
             <span v-if="bridgeOwner.startsWith('ai:')">{{ tr('AI 正在使用设备', 'AI is using the device') }}</span>
@@ -88,13 +87,17 @@
       <HardFaultTab :key="'HardFaultTab-' + (deviceStatus.device_generation || 0)" v-if="tab === 'hardfault'" :device-connected="deviceStatus.connected" :symbol-loaded="deviceStatus.axf?.loaded === true" />
       <MemoryTab :key="'MemoryTab-' + (deviceStatus.device_generation || 0)" v-if="tab === 'memory'" :device-connected="deviceStatus.connected" />
       <SuperWatchTab ref="superwatchSurface" :key="'SuperWatchTab-' + (deviceStatus.device_generation || 0)" v-show="tab === 'superwatch'" :device-connected="deviceStatus.connected" :symbol-loaded="deviceStatus.axf?.loaded === true" :symbol-error="deviceStatus.axf?.error" />
-      <WorkbenchTab v-if="workbenchOpened" v-show="tab === 'workbench'" ref="workbenchSurface" :agent-feedback="frontend.feedback.value" :key="'workbench-' + frontend.sessionEpoch.value" :active="tab === 'workbench'" :device-connected="deviceStatus.connected" :symbol-loaded="deviceStatus.axf?.loaded === true" :symbol-error="deviceStatus.axf?.error" @intent="askAgent" />
+      <WorkbenchTab v-if="workbenchOpened" v-show="tab === 'workbench'" ref="workbenchSurface" :agent-feedback="frontend.feedback.value" :key="'workbench-' + frontend.sessionEpoch.value" :active="tab === 'workbench'" :device-connected="deviceStatus.connected" :symbol-loaded="deviceStatus.axf?.loaded === true" :symbol-error="deviceStatus.axf?.error" @intent="askAgent">
+        <template #agent-action>
+          <button type="button" class="device-quick-action" aria-haspopup="dialog" :title="frontend.error.value || tr('打开 Agent 协作请求', 'Open Agent request')" @click="askAgent('workbench')"><span class="status-dot" :class="frontend.connected.value ? 'dot-user' : ''"></span>Agent</button>
+        </template>
+      </WorkbenchTab>
       <SerialMonitorTab v-if="!IS_REMOTE" v-show="tab === 'serial'" />
       <ModbusTab v-if="!IS_REMOTE" v-show="tab === 'modbus'" />
       <SystemViewTab :key="'SystemViewTab-' + (deviceStatus.device_generation || 0)" v-show="tab === 'systemview'" :active="tab === 'systemview'" :device-connected="deviceStatus.connected" />
       <SymbolsTab :key="'SymbolsTab-' + (deviceStatus.device_generation || 0)" v-if="tab === 'symbols'" :device-connected="deviceStatus.connected" :symbol-loaded="deviceStatus.axf?.loaded === true" :symbol-error="deviceStatus.axf?.error" />
     </div>
-    <FrontendIntent :open="intentOpen" :object-id="intentObject" :object-title="intentTitle" :send="frontend.submitIntent" @close="intentOpen = false" />
+    <FrontendIntent :open="intentOpen && tab === 'workbench'" :object-id="intentObject" :object-title="intentTitle" :send="frontend.submitIntent" @close="intentOpen = false" />
   </div>
 </template>
 
@@ -160,7 +163,7 @@ watch(tab, value => { if (value === 'workbench') workbenchOpened.value = true })
 const superwatchSurface = ref<SemanticSurface | null>(null)
 const workbenchSurface = ref<InstanceType<typeof WorkbenchTab> | null>(null)
 const frontend = useFrontendWorkbench(tab, superwatchSurface, workbenchSurface)
-const intentOpen = ref(false), intentObject = ref('superwatch'), intentTitle = ref('SuperWatch')
+const intentOpen = ref(false), intentObject = ref('workbench'), intentTitle = ref('')
 function askAgent(id: string) {
   intentObject.value = id
   intentTitle.value = frontend.entries().find(entry => entry.id === id)?.title || id

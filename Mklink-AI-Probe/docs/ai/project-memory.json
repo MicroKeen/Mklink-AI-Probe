@@ -1,20 +1,20 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-23",
+  "updated_at": "2026-11-25",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
-    "branch": "codex/v0.5.1-release",
-    "head": "8e147d1e",
-    "remote_head": "de05f572",
-    "working_tree": "E 盘主工作区。#87、#88、#89 已依次合入 main，#85、#80 已关闭。"
+    "branch": "codex/watch-formula-color",
+    "head": "958a9add",
+    "remote_head": "958a9add",
+    "working_tree": "PR #92 纳入 #91 交接。Windows/Skill 1a07d885，Mac ARM 测试包 52e3439f。"
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "V0.5.1 已通过 Windows 覆盖升级、HPM6E80 实板共享 RTT 和修复后的完整 OTP 读取。版本 PR 和最终安装包验收中。",
-    "current_task": "完成[版本说明](../releases/v0.5.1.md)与[整合验收](../verification/v051-integration.md)，从审查后的主线制作安装包。"
+    "status": "0.5.1 候选已覆盖。14 面板采集状态报告 8.7→2.8ms，新配置启动中位数 3.35→2.20s。正式渠道 0.5.0。",
+    "current_task": "[启动与灵活面板](../verification/v051-integration.md)、[STM32F103与UART5](../verification/v051-f103-desktop-uart.md)。"
   },
   "milestones": [
     {
@@ -40,7 +40,7 @@
     },
     {
       "area": "GUI共享控制、回放与多窗口健康",
-      "result": "ba3a334b实现桌面/Web共享控制及回放，修复SystemView冗余SSE耗尽连接池。安装版6窗口72/72正常，645064事件/9任务，解析及目标/主机丢弃0，见[完整验收](../verification/v050-gui-control.md)；IRQ锁、采集中重启见[前轮](../verification/v050-systemview-loss-reboot.md)，历史/显示优化见[刷新报告](../verification/v050-systemview-refresh.md)。 桌面可复用探针后台。Windows/CLI/Skill 已同步。多窗口、Ctrl+C、945000 字节对照及六条流的读取者保护见共享报告。回归845通过、1跳过。"
+      "result": "多窗口桌面/Web、暂停回放、探针后台复用、SystemView与同步采集验收见[共享控制](../verification/v050-gui-control.md)、[IRQ锁与重启](../verification/v050-systemview-loss-reboot.md)、[刷新](../verification/v050-systemview-refresh.md)。0.5.1 修复公式保存时保留曲线颜色、视口固定网格、悬浮读数避边与拖动换组，已在 Edge/WebView2 验证。"
     },
     {
       "area": "HPM Flash 配置、连接设置与脱机 OTP",
@@ -60,7 +60,7 @@
     },
     {
       "area": "SuperWatch 配置与手动日志转换",
-      "result": "手动转换56项、共享后台/流/边界296项、GUI152项及生产构建通过。冻结安装版记录1,114,032组，Excel两页及4,456,128个值与JSONL对应；RTT505行TXT对应，七个原件哈希不变。GUI/CLI/MCP重复请求复用转换任务且不停止采集，见[转换报告](../verification/v050-manual-recording-export.md)。AXF旁配置重启恢复、6,718变量/四选择/500000缓存/1µs间隔验证见[配置报告](../verification/v050-superwatch-profile.md)。TXT精简37项、Skill69项通过；505行时间正文等价，63,996→40,304字节，见[TXT报告](../verification/v050-rtt-txt-readable.md)。"
+      "result": "Excel 1,114,032组/4,456,128值、RTT 505行，对照[转换](../verification/v050-manual-recording-export.md)、[配置](../verification/v050-superwatch-profile.md)及[TXT](../verification/v050-rtt-txt-readable.md)。0.5.1修复导出，仪表盘可打开AXF，分组勾选控制采集；波形或日志有助判断时Skill主动展示，见[Windows验收](../verification/v051-superwatch-export-profile.md)。 RTT/SuperWatch 显示活动 AXF/ELF 的原文件名并可重新选择，Agent 请求位于灵活面板。Windows 安装、桌面/Web/CLI/MCP、终端查找、TTL 双向及 Modbus 见[验收](../verification/v051-f103-desktop-uart.md)。"
     },
     {
       "area": "V0.5.0 发布、安装与升级",
@@ -75,7 +75,7 @@
     "跨会话固件联测固定上位机提交并核对 mklink/runtime 模块导入路径；主工作区和全局 editable 入口不自动代表当前任务版本。",
     "project-init 是可选离线配置工具；通用工程可显式传型号和文件，直接烧录不依赖初始化。型号或镜像不明确时要求补充输入，不猜测，也不自动迁移已有芯片配置。 ELF 可写范围合并 SHF_WRITE/ALLOC 节及 PF_W 的 PT_LOAD 段，使用 p_vaddr/p_memsz；不凭 AX 或 RAM 地址放宽，不把 Flash 装载镜像当 RAM。已知只读映射不走通用回退。 HPM 四字 Flash 配置按实际 NOR 设置，GUI 可编辑/按器件保存/JSON 导入导出；无默认值时手填，不沿用旧型号。GUI/Python 共用参考表，显式 hpm_flash_cfg 优先于 board，已知默认值也走 flash_cfg；未知显式板名保留旧入口。XPI 控制器基址不等于 BIN 地址，USART ISP 配置独立。JTAG 脱机 OTP 只生成已确认的 hpm_user_otp 配方，读取绑定身份与代次；修改、断开或换设备后重新确认，系统字段只读。",
     "RTT / SuperWatch 实时记录 JSONL；停止记录不自动转换。用户手动将 SuperWatch 转为 Excel、RTT 转为带主机时间戳的 UTF-8 TXT，三端共用低优先级后台转换；Excel 保留采样相对时间，开始日期写在 Info 页。JSONL 保留作无损回放源。 RTT TXT 普通行仅含时间、CH 通道、RX/TX 和正文；session 在每个分段首次输出或切换时单列注释，JSONL 保留完整字段。",
-    "SuperWatch 配置由共享后台保存在 AXF/ELF 旁，名称为原文件名加 .superwatch.json；三端共用名称与修订协议，不存变量地址、不自动开始采集。显示修改防抖，样本接收不写配置；浏览器上传只能保存到后台副本旁。",
+    "SuperWatch 配置由共享后台保存在 AXF/ELF 旁，名称为原文件名加 .superwatch.json；三端共用名称与修订协议，不存变量地址、不自动开始采集。显示修改防抖，样本接收不写配置；浏览器匹配原件时复用工程配置，其余使用上传副本。",
     "macOS 原生包使用 ad-hoc 签名且不启用 Hardened Runtime；Developer ID 发布须在冻结阶段正确签内嵌库。0.5.0 原生补发与CI验收已完成，正式标签/旧附件不变。在线烧录身份枚举已移到工作线程，查询前后核对身份/代次；其他发现接口不据此宣称已全部异步化。",
     "缺固件能力按已有文本/HELLO 缓存判断，版本号不替代协商；Web/CLI/SDK/MCP 共用 firmware_compatibility 和 firmware_warning。未知型号或未协商状态不猜测；status 5/6、超时、目标及硬件限制不误报升级可解决。SuperWatch 运行或暂停时缺 MUX 写能力则提示升级并保留采集，不自动停流写入；地址限制提示显式停止。未知写结果不重放，不自动升级固件。 串口助手与 Modbus 共用完整 34 档预设（300～10M）；已识别 UART / RS485 分别按自身固件声明限制选择。列表刷新只用缓存，显式查询走物理探针共享所有者且不停止采集；缺声明提示升级，第三方预设不保证支持。已有连接的自定义速率只读保留。 固件云端提醒复用有序握手缓存，后台延迟 3 秒检查、成功缓存 6 小时/失败 15 分钟；无产品标识默认 MicroLink，显式 HPMLink 独立匹配。不能解析时直接提示升级但不猜版本/镜像。弹窗仅跳转，不停止采集或刷写，同窗口/设备/版本去重；能力协商保留。 更新顺序推荐客户端先行，重载 MCP/空闲旧后台后再重连检查固件；应用内更新保留空闲预约，外部覆盖安装按用户最终要求强制结束旧进程；重启失败暂缓固件。Skill 首次异步检查并主动提醒，未连接固件待查，不自动安装。"
   ],
@@ -84,21 +84,22 @@
     "普通 V4": "沿用V4.7.4 / STM32F103RC及此前IRQ锁/CH2 8KiB目标；本轮没有刷写、供电或应用变更。ba3a334b安装版SWD10MHz，四变量1ms+RTT CH0/1+Trace CH2，645064事件/9任务且无解析/目标/主机丢弃。RTT没有文本载荷，UART/RS485未接；采集停止、断开、测试窗口关闭，下次重新核对占用。",
     "普通 V3": "固件会话已回读 V3.6.10 / 2026-11-10T14:14:14，原 STM32F103 的一次 SWCLK 拔插恢复通过；测试结束时后台退出、设备释放。下次仍需重新核对占用。",
     "普通 V2": "固件V2.9.5 / 2026-11-15T21:39:19，测试源码56f5fdf5、合并main866fc5ff，未重编。固件会话备用V2+STM32F103RE完成47/49命令、34档UART189回环及复位/烧录/采集/Keil联测，原512KiB恢复一致。YMODEM对端、Modbus从站、USB12Mbps、H7双核、深度低功耗和SWD拔插未完整验收；原故障V2取消恢复。11月16日上位机用当前V2+STM32F103拍公众号：匹配AXF后四路1kHz记录10135组、Excel与回放通过；未刷写，设备已释放，GUI留在回放。",
-    "HPMLink V4": "HPM6E80、V4.7.5（11月19日15:00:56）。OTP 30 MHz，ROM 返回0x10206141，Word 72 熔丝/影子均0且未锁，授权已用，暂停永久写入。11月20日授权烧录 hello_world，RTT 10 MHz、0x012841D0，75秒150条三端一致，MCP退出后GUI继续。"
+    "HPMLink V4": "HPM6E80、V4.7.5（11月19日15:00:56）。OTP 30 MHz，ROM 返回0x10206141，Word 72 熔丝/影子均0且未锁，授权已用，暂停永久写入。11月20日授权烧录 hello_world，RTT 10 MHz、0x012841D0，75秒150条三端一致，MCP退出后GUI继续。",
+    "STM32F103 UART5": "本轮 HPMLink V4.7.5：COM62 命令，COM61 TTL，PC12 TX、PD2 RX。目标工程 12 MHz HSE、PLL×6，应用始于 0x08005000、独立校验 118272 字节，Bootloader 保留。RS485 未接。"
   },
   "known_limits": [
     "普通读取 P95 和间隔读取稳定低于 1 ms、最大采样间隔 20 µs、40 µs 翻转零漏采仍是未达目标。",
     "公网远程中继继续延期。独立 [S3 PR #65](https://github.com/MicroKeen/Mklink-AI-Probe/pull/65) 仍开放。其他硬件的[历史未验范围](known-limits-20261030.md)按需查阅。",
     "转换入口针对后台最近一次记录，应在开启下一次记录前触发；没有历史文件选择器或全局转换并发上限。Excel 约 15 位有效数字，原始 JSONL 不变。转换仍消耗 CPU/磁盘，本轮未做完整真机性能 A/B；冻结 Excel 父进程退出后仍运行的时间窗口未直接观测，详见报告。 RTT TXT 精简已包含在 V0.5.0 / 3a3fb298 安装包。",
     "Mac/Linux 实物 USB、Gatekeeper/Finder 首次安装、交互式提权及历史原生客户端升级未验；维护者接受CI原生验证。合成旧版本AppHandle的真实签名安装与最终包窗口操作已通过，见[原生验收](../verification/v050-native-release.md)。",
-    "客户旧版长停流未复现；14b86cd0同固件安装前后短测SW单独约15.793kHz、RTT共存约13.816kHz，40次写入无序号/读错，但不能证明所有负载零退化。普通HTTP读取P95含代理约4.463/4.921ms。未完成外部调试器共存、全部性能目标、8通道字节全量或长期压力。用户确认UART/RS485未接，本轮串口/Modbus未验。正式0.4.3→0.5.0签名自动更新和重启已验；覆盖安装按明确要求会中断活动任务，普通用户无法结束管理员进程或突破目录权限。",
+    "客户旧版长停流未复现；14b86cd0同固件安装前后短测SW单独约15.793kHz、RTT共存约13.816kHz，40次写入无序号/读错，但不能证明所有负载零退化。普通HTTP读取P95含代理约4.463/4.921ms。未完成外部调试器共存、全部性能目标、8通道字节全量或长期压力。用户确认UART/RS485未接，本轮串口/Modbus未验。正式0.4.3→0.5.0签名自动更新和重启已验；覆盖安装按明确要求会中断活动任务，普通用户无法结束管理员进程或突破目录权限。 HPM6750客户截图：0x16为块读，状态5及调试rc=-4须先对照已知Flash/RAM；缓存和RTT分流待客户板与对应ELF核实。",
     "STOP 案例中，V4 源码确认 0x17 重连失败会误报 6；固件会话提供修正为 5 的独立补丁和离线证据，尚未应用或刷写。客户固件版本、完整芯片型号与电气条件未齐备；持续 STOP 的调试访问不保证可唤醒，status 5 可能包含恢复未确认。",
     "STM32F103RC旧锁导致的SystemView解析丢字节/异常ISR已修复；客户丢名需芯片、RTOS、通道和原始流。1µs四变量SW+RTT+Trace约60秒仍有5次目标溢出/895丢包，MUX/主机队列0。固件静态复核未见固定80ms停顿，但USB背压/内部重试/调度无最大服务间隔保证；现有快照无法归因，不自动降采样。多视图假离线已定位并修复，见GUI控制验收；长期低延迟/恒定60FPS、HPM/FreeRTOS实物和全部性能门禁未验。",
     "ELF与34档波特率已在Windows候选包含；客户ELF仅离线解析/配置，未操作客户板。本轮没有高速串口/Modbus物理验收；固件会话RS485双V4测试不等同本轮/客户快速应答验证，10Mbps大帧丢包边界仍保留，第三方驱动可拒绝高档位。"
   ],
   "next_actions": [
-    "核对 0.5.1 最终产物、完整 Skill 与 macOS 两种架构。正式签名、发布与更新索引等待本轮明确授权。HPM6E80 永久 OTP 写入仍暂停。",
-    "客户可直接运行新版覆盖安装器，自动结束当前用户旧MKLink与Skill/MCP，不要求手动先关旧版；活动任务会结束。安装后AI宿主需重新加载被结束的MCP。损坏历史备份保留，仍失败时收集installation-history-report.json、history-backups和诊断包，区分权限/占用/格式；不手工删除有效未知结果，不重放烧录。",
+    "0.5.1 发布需单独授权。F:/MKLink-Build/artifacts 中 v051-1a07d885 为 Windows/Skill，v051-52e3439f 为 Mac ARM。暂停 HPM6E80 永久写入。",
+    "覆盖安装会结束当前用户旧MKLink及Skill/MCP活动任务，安装后由AI宿主重载MCP。保留损坏历史备份；异常收集installation-history-report.json、history-backups及诊断包，区分权限、占用和格式，不删除有效未知结果或重放烧录。",
     "客户SystemView先核对实际CH、目标IRQ锁及元数据。1µs三路溢出先采集0x40 CH2设备时间戳/长度/序号与主机单调到达时间，低频读0x10错误和0x14批次耗时；诊断开销保持一致，再判断背压、重试或调度，不直接假定80ms停读或给CH2固定优先级。多视图假离线已完成修复与安装版六窗口复验。保留目标构建快照供AXF源码路径使用，原工程重编后再清理；见[静态补充](../verification/v050-systemview-loss-reboot.md)。",
     "有Linux/Mac实物后补验真实USB、Gatekeeper首次安装和交互式提权；不能把本轮CI结果当作这些硬件/系统验收。",
     "固件会话继续维护 STOP 状态码补丁；客户信息齐备并获得明确实物安排后再做同条件 STOP/唤醒验证，不自动抢占调试器或刷写设备。"

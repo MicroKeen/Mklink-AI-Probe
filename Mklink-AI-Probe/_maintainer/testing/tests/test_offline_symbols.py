@@ -79,6 +79,20 @@ def test_cli_reload_requires_a_bound_backend(tmp_path, monkeypatch, info):
         cli.main()
 
 
+def test_dashboard_picker_preserves_capture_and_current_symbols(offline, monkeypatch):
+    app, client, axf, _ = offline
+    assert client.post('/api/device/parse-axf', json={'axf': str(axf)}).status_code == 200
+    managers = dashboards.get_managers()
+    for name in ('rtt', 'superwatch'):
+        monkeypatch.setattr(managers[name], '_running', True)
+        monkeypatch.setattr(managers[name], 'stop', Mock(side_effect=AssertionError('Capture interrupted')))
+    parser = Mock(side_effect=AssertionError('Active symbols must remain loaded'))
+    monkeypatch.setattr(app.state.mklink_state['symbol_device'], 'reparse_axf_atomically', parser)
+    result = client.post('/api/device/parse-axf', json={'axf': str(axf), 'preserve_capture': True})
+    assert result.status_code == 409 and 'rtt' in result.text and 'superwatch' in result.text
+    parser.assert_not_called()
+
+
 @pytest.mark.parametrize('route', ['/api/device/parse-axf', '/api/symbols/reparse', '/api/symbols/reload-sources'])
 def test_explicit_reload_stops_both_captures_before_parsing_and_does_not_restart(offline, monkeypatch, route):
     app, client, axf, _ = offline

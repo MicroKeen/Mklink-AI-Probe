@@ -1,3 +1,4 @@
+import { requestError } from '../lib/requestError'
 import { computed, onUnmounted, ref, type Ref } from 'vue'
 import type { PortInfo } from '../types/mklink'
 import { API_BASE } from '../lib/runtimeEndpoint'
@@ -49,7 +50,7 @@ export function useUartBaudrates(ports: Ref<PortInfo[]>, portName: Readonly<Ref<
       const result = await response.json()
       if (disposed || selectedPort.value !== requested || busy()) return
       if (!response.ok) throw new Error(typeof result?.detail === 'string'
-        ? result.detail : result?.detail?.message || result?.detail?.conflict || response.statusText)
+        ? result.detail : requestError(result?.detail, response.status, 'UART'))
       if (result.device !== requested.device || result.uart_kind !== requested.uart_kind
         || result.command_port !== requested.command_port || result.usb_serial !== requested.usb_serial) {
         throw new Error(tr('串口身份已变化，请刷新', 'Port identity changed; refresh ports'))

@@ -378,13 +378,21 @@ var sharedWorkspaceSnapshot = watchWorkspace;
 var localPlotLayout = null;
 var panelSignalStyles = {};
 var panelStyleCache = Object.create(null);
+function assignedPane(workspace, name) {
+  return workspace.signals[name]?.pane || workspace.defaultGroup || workspace.panes[0].id;
+}
+function separatedReplayChannels() {
+  return binaryChannelNames.filter(function(name) { return assignedPane(watchWorkspace, name) !== watchWorkspace.defaultGroup; })
+    .map(function(name) { return [name, assignedPane(watchWorkspace, name)]; });
+}
 function dispatchWorkspaceEvent(event) {
-  if (!root || viewerKey === CONFIG.mode) { window.dispatchEvent(event); return; }
+  if (!replaySession && (!root || viewerKey === CONFIG.mode)) { window.dispatchEvent(event); return; }
   var next = JSON.parse(JSON.stringify(watchWorkspace || { version: 2, groups: [{ id: 'main', name: 'Main', height: 240 }], panes: [{ id: 'main', name: 'Main', height: 240 }], signals: {} }));
   var detail = event.detail;
   var defaultGroup = next.defaultGroup || next.panes[0].id;
   if (event.type === 'mklink:workspace-split') {
-    var id = 'plot-' + crypto.randomUUID();
+    if (replaySession && assignedPane(next, detail.path) !== defaultGroup) return;
+    var id = replaySession ? 'replay-' + binaryChannelNames.indexOf(detail.path) : 'plot-' + crypto.randomUUID();
     next.panes.push({ id: id, name: signalLabel(detail.path), height: 200, collapsed: false });
     next.signals[detail.path] = Object.assign({}, next.signals[detail.path], { pane: id });
   } else if (event.type === 'mklink:workspace-merge') {
@@ -392,8 +400,15 @@ function dispatchWorkspaceEvent(event) {
     next.panes = next.panes.filter(function(p) { return p.id !== detail.group || p.id === defaultGroup; });
   } else if (event.type === 'mklink:workspace-resize') next.panes = detail;
   else if (event.type === 'mklink:workspace-import') next = detail;
-  localPlotLayout = { panes: next.panes, signalPanes: Object.fromEntries(Object.entries(next.signals).map(function(pair) { return [pair[0], pair[1].pane]; })) };
-  setWorkspace(next, true);
+  if (replaySession) { applyWorkspace(next); return; }
+  var shared = sharedWorkspaceSnapshot || next;
+  var signalPanes = Object.create(null), sourcePanes = Object.create(null);
+  Object.keys(next.signals).forEach(function(name) {
+    var base = assignedPane(shared, name), pane = assignedPane(next, name);
+    if (pane !== base) { signalPanes[name] = pane; sourcePanes[name] = base; }
+  });
+  localPlotLayout = { panes: next.panes, signalPanes: signalPanes, sourcePanes: sourcePanes, sharedPaneIds: shared.panes.map(function(p) { return p.id; }) };
+  setWorkspace(shared, true);
 }
 var workspaceY = Object.create(null);
 var workspaceSignature = null;
@@ -419,16 +434,41 @@ function calculatedRange(name) {
   return {min: low, max: high};
 }
 function signalLabel(name) { return signalStyle(name).alias || name; }
+function getChannelColor(name) {
+  if (Object.prototype.hasOwnProperty.call(FIELDS, name)) return signalStyle(name).color || FIELDS[name].color;
+  var saved = viewerPreferences && (viewerPreferences.channels || []).find(function(ch) { return ch.name === name; });
+  if (saved) return signalStyle(name).color || saved.color;
+}
 function setWorkspace(value, local) {
   if (!IS_SUPERWATCH_MODE || !value || !Array.isArray(value.panes) || !value.panes.length) return;
+  var previous = sharedWorkspaceSnapshot;
   if (!local) sharedWorkspaceSnapshot = value;
+  if (replaySession) return; // Apply the latest live workspace when this recording closes.
   if (localPlotLayout) {
     value = JSON.parse(JSON.stringify(value));
-    value.panes = localPlotLayout.panes;
-    Object.keys(localPlotLayout.signalPanes).forEach(function(name) {
-      value.signals[name] = Object.assign({}, value.signals[name], { pane: localPlotLayout.signalPanes[name] });
+    var layout = localPlotLayout;
+    var paneIds = new Set(value.panes.map(function(p) { return p.id; }));
+    var oldSharedIds = new Set(layout.sharedPaneIds || (previous?.panes || []).map(function(p) { return p.id; }));
+    var localPanes = new Map(layout.panes.map(function(p) { return [p.id, p]; }));
+    value.panes.forEach(function(p) { if (localPanes.has(p.id)) p.height = localPanes.get(p.id).height; });
+    layout.panes.forEach(function(p) {
+      if (!paneIds.has(p.id) && !oldSharedIds.has(p.id)) { value.panes.push(p); paneIds.add(p.id); }
+    });
+    var overrides = layout.signalPanes || {};
+    Object.keys(overrides).forEach(function(name) {
+      var base = assignedPane(value, name);
+      var original = layout.sourcePanes?.[name] || (previous && assignedPane(previous, name));
+      if (!paneIds.has(overrides[name]) || overrides[name] === base || (original && original !== base)) {
+        delete overrides[name];
+        if (layout.sourcePanes) delete layout.sourcePanes[name];
+      } else {
+        value.signals[name] = Object.assign({}, value.signals[name], { pane: overrides[name] });
+      }
     });
   }
+  applyWorkspace(value);
+}
+function applyWorkspace(value) {
   var signature=JSON.stringify(value);
   if (signature === workspaceSignature) return;
   workspaceSignature=signature;
@@ -439,11 +479,18 @@ function setWorkspace(value, local) {
   });
   workspaceY = Object.create(null);
   frozenSharedYRange = null;
-  requestBinaryVisibleRangeAfterTimelineChange();
+  if (!replaySession) requestBinaryVisibleRangeAfterTimelineChange();
+  if (replaySession && root) {
+    root.dispatchEvent(new CustomEvent('mklink:replay-panes', {detail: separatedReplayChannels()}));
+  }
   var wrap=document.getElementById('chart-wrap');
   if (wrap) {
     var parent=wrap.parentElement;
-    if (parent) parent.style.overflowY='auto';
+    if (parent) parent.style.overflowY = value ? 'auto' : '';
+    if (!value) {
+      wrap.querySelectorAll('.workspace-divider,.workspace-merge').forEach(function(el) { el.remove(); });
+      wrap.style.minHeight = '';
+    }
   }
   if (chartLegend) delete chartLegend.dataset.signature;
   updateChartLegend(); drawChart();
@@ -687,8 +734,9 @@ function updateChartLegend() {
       action.type = 'button';
       action.className = 'chart-legend-action';
       action.dataset.channel = name;
-      action.dataset.i18n = name === splitChannelName ? 'merge_channel' : 'split_channel';
-      action.dataset.i18nTitle = name === splitChannelName ? 'merge_channel_tip' : 'split_channel_tip';
+      var separate = name === splitChannelName || (replaySession && watchWorkspace && assignedPane(watchWorkspace, name) !== watchWorkspace.defaultGroup);
+      action.dataset.i18n = separate ? 'merge_channel' : 'split_channel';
+      action.dataset.i18nTitle = separate ? 'merge_channel_tip' : 'split_channel_tip';
       action.textContent = t(action.dataset.i18n);
       action.title = t(action.dataset.i18nTitle);
       action.setAttribute('aria-label', action.title);
@@ -715,6 +763,10 @@ function updateSplitPanelControl(active, dividerY) {
 function setSplitChannel(name) {
   if (!IS_SUPERWATCH_MODE || !FIELDS[name] || !FIELDS[name].visible) return false;
   if (watchWorkspace) {
+    if (replaySession && assignedPane(watchWorkspace, name) !== watchWorkspace.defaultGroup) {
+      dispatchWorkspaceEvent(new CustomEvent('mklink:workspace-merge', {detail: {group: assignedPane(watchWorkspace, name)}}));
+      return true;
+    }
     dispatchWorkspaceEvent(new CustomEvent('mklink:workspace-split', {detail: {path: name}}));
     return true;
   }
@@ -3751,13 +3803,14 @@ function beginReplay(metadata, control) {
   signalSubset = null;
   signalSubsetOverride = false;
   var liveSpan = superwatchTimelineSpan;
+  var liveWorkspace = watchWorkspace, liveY = workspaceY;
   saveViewerPreferences();
   resetBinaryStream();
   setArraySnapshot(null);
   configureBinaryChannels(metadata.channels.map(function(channel) { return {name: channel.name, type: 'float'}; }));
   setHiddenChannels([]);
   replayLiveChannels = liveChannels;
-  replaySession = {control: control, playing: false, duration: Math.max(.001, metadata.duration), liveHidden: liveHidden, liveSpan: liveSpan, liveSignals: liveSignals, liveSignalsOverride: liveSignalsOverride,
+  replaySession = {control: control, playing: false, duration: Math.max(.001, metadata.duration), liveHidden: liveHidden, liveSpan: liveSpan, liveSignals: liveSignals, liveSignalsOverride: liveSignalsOverride, liveWorkspace: liveWorkspace, liveY: liveY,
     overview: Object.fromEntries((metadata.overview || []).map(function(channel) { return [channel.name, channel.points]; }))};
   binaryTimeOrigin = 0;
   binaryBufferStart = 0;
@@ -3771,6 +3824,11 @@ function beginReplay(metadata, control) {
   document.getElementById('btn-apply-interval').disabled = true;
   document.getElementById('btn-apply-buffer').disabled = true;
   canvas.dataset.source = 'replay';
+  var main = {id: 'main', name: t('replay_main'), height: 240};
+  var styles = Object.fromEntries(binaryChannelNames.map(function(name) {
+    return [name, Object.assign({}, signalStyle(name), {pane: main.id})];
+  }));
+  applyWorkspace({version: 2, defaultGroup: main.id, groups: [main], panes: [main], signals: styles});
   updateReplayControls();
   updateTimelineInteractionUI();
   drawChart(); drawMinimap();
@@ -3825,6 +3883,9 @@ function endReplay() {
   configureBinaryChannels(replayLiveChannels);
   resetBinaryStream();
   setHiddenChannels(session.liveHidden);
+  if (sharedWorkspaceSnapshot) setWorkspace(sharedWorkspaceSnapshot, true);
+  else applyWorkspace(session.liveWorkspace);
+  if (JSON.stringify(watchWorkspace) === JSON.stringify(session.liveWorkspace)) workspaceY = session.liveY;
   superwatchTimelineSpan = session.liveSpan;
   paused = false; renderPaused = false;
   document.getElementById('btn-apply-interval').disabled = false;
@@ -3869,6 +3930,7 @@ if (typeof window !== 'undefined') {
     updateCollectionUI(paused ? 'paused' : 'running');
   };
   binaryViewer.setWorkspace = setWorkspace;
+  binaryViewer.getChannelColor = getChannelColor;
   binaryViewer.setProfilePreferences = applyProfilePreferences;
   binaryViewer.exportProfilePreferences = function() {
     if (!viewerPreferencesReady || replaySession) throw new Error('Finish replay and wait for live view preferences before saving');
@@ -4393,24 +4455,24 @@ function formatTimeAxisValue(seconds) {
   return (seconds * 1000).toFixed(1) + 'ms';
 }
 
-// Stable 1/2/5 time divisions anchored to acquisition time, not viewport edges.
+// Keep the graticule fixed to the plot while the time under each division changes.
 function timeGrid(min, max, width) {
-  var span = max - min;
+  // Subtracting panned timestamps can move a half-pixel tick across a rounding tie.
+  var span = Number((max - min).toPrecision(12));
   if (!isFinite(span) || span <= 0) return null;
-  var raw = span / Math.max(2, Math.min(10, Math.floor(width / 100)));
+  var raw = span / Math.max(2, Math.min(10, Math.floor(width / 100))) * (1 - 1e-12);
   var magnitude = Math.pow(10, Math.floor(Math.log10(raw)));
   var fraction = raw / magnitude;
   var step = (fraction <= 1 ? 1 : fraction <= 2 ? 2 : fraction <= 5 ? 5 : 10) * magnitude;
   var scale = step < 0.001 ? 1000000 : step < 1 ? 1000 : 1;
   var unit = scale === 1000000 ? 'μs' : scale === 1000 ? 'ms' : 's';
-  var decimals = Math.max(0, Math.min(6, -Math.floor(Math.log10(step * scale) + 1e-9)));
+  var decimals = Math.max(0, Math.min(8, 2 - Math.floor(Math.log10(step * scale) + 1e-9)));
   function label(value) {
-    return (Math.abs(value) < step * 1e-8 ? 0 : value * scale).toFixed(decimals);
+    return String(Number((value * scale).toFixed(decimals)));
   }
   var ticks = [], minor = step / 5;
-  var first = Math.ceil(min / minor - 1e-8);
-  for (var index = first; index * minor <= max + minor * 1e-8 && ticks.length < 100; index++) {
-    ticks.push({ time: index * minor, major: index % 5 === 0 });
+  for (var index = 0; index * minor <= span + minor * 1e-8 && index < 100; index++) {
+    ticks.push({ time: min + index * minor, fraction: index * minor / span, major: index % 5 === 0 });
   }
   return { step: step, unit: unit, label: label, division: label(step) + ' ' + unit + '/div', ticks: ticks };
 }
@@ -4605,7 +4667,7 @@ function drawChart() {
   });
   for (var i = 0; i < timeTicks.length; i++) {
     var tick = timeTicks[i], xv = tick.time;
-    var xp = Math.round(tx(xv)) + 0.5;
+    var xp = Math.round(timingGrid ? ml + tick.fraction * pw : tx(xv)) + 0.5;
     ctx.globalAlpha = tick.major ? 1 : 0.35;
     ctx.lineWidth = tick.major ? 0.8 : 0.5;
     ctx.beginPath();
@@ -4933,7 +4995,8 @@ function drawChart() {
         lines.push(
           '<span class="tooltip-row">' +
           '<span class="tooltip-swatch" style="background:' + FIELDS[k].color + '"></span>' +
-          '<span>' + escapeHtml(signalLabel(k)) + ': ' + escapeHtml(tipVal) + '</span>' +
+          '<span class="tooltip-label">' + escapeHtml(signalLabel(k)) + ':</span>' +
+          '<span class="tooltip-value">' + escapeHtml(tipVal) + '</span>' +
           '</span>'
         );
       }
@@ -4941,8 +5004,10 @@ function drawChart() {
     if (lines.length) {
       tooltip.innerHTML = lines.join('');
       tooltip.style.display = 'block';
-      tooltip.style.left = Math.min(mx + 12, W - 180) + 'px';
-      tooltip.style.top = Math.max(0, my - 8) + 'px';
+      var tipWidth = tooltip.offsetWidth, tipHeight = tooltip.offsetHeight;
+      var left = mx + 12 + tipWidth <= W ? mx + 12 : mx - 12 - tipWidth;
+      tooltip.style.left = Math.max(0, Math.min(left, W - tipWidth)) + 'px';
+      tooltip.style.top = Math.max(0, Math.min(my - 8, H - tipHeight)) + 'px';
     } else { tooltip.style.display = 'none'; }
     drawChart();
   };
@@ -6340,6 +6405,7 @@ function panelViewState() {
 }
 function readSemanticState() {
   return { panelId: viewerKey, mode: CONFIG.mode, ready: true, acquisition: acquisitionState, localPaused: renderPaused,
+    ...(replaySession ? { replayPlots: Object.fromEntries(separatedReplayChannels()) } : {}),
     replaying: !!replaySession, triggerState: triggerSettings.state, channels: { total: Object.keys(FIELDS).length, preview: Object.keys(FIELDS).slice(0, 16).map(function(name) { return { name: name, visible: FIELDS[name].visible }; }) }, view: panelViewState() };
 }
 function setSignalSubset(names, override) {
@@ -6381,7 +6447,7 @@ function restorePanelView(state) {
   }
   if (state.plotLayout === null) localPlotLayout = null;
   if (state.plotLayout && Array.isArray(state.plotLayout.panes) && state.plotLayout.panes.length && state.plotLayout.panes.length <= 64) {
-    localPlotLayout = state.plotLayout;
+    localPlotLayout = JSON.parse(JSON.stringify(state.plotLayout));
   }
   if (watchWorkspace) { workspaceSignature = null; setWorkspace(sharedWorkspaceSnapshot || { version: 2, groups: [{ id: 'main', name: 'Main', height: 240 }], panes: [{ id: 'main', name: 'Main', height: 240 }], signals: {} }, true); }
   workspaceY = Object.create(null);
@@ -6509,7 +6575,7 @@ async function executeSemanticAction(action, args, context) {
       var field = FIELDS[name], latest = field.ringBuf.latest(), visible = getBinaryEnvelopeChannelRange(name);
       var rawLatest = latest && Number.isFinite(latest.y) ? latest.y : null;
       var displayedLatest = rawLatest === null ? null : calculatedValue(name, rawLatest);
-      return { name: name, visible: field.visible, color: signalStyle(name).color || field.color, format: field.format, precision: field.precision, style: signalStyle(name), latest: Number.isFinite(displayedLatest) ? displayedLatest : null, rawLatest: rawLatest, visibleMin: visible && Number.isFinite(visible.min) ? visible.min : null, visibleMax: visible && Number.isFinite(visible.max) ? visible.max : null };
+      return { name: name, visible: field.visible, color: getChannelColor(name), format: field.format, precision: field.precision, style: signalStyle(name), latest: Number.isFinite(displayedLatest) ? displayedLatest : null, rawLatest: rawLatest, visibleMin: visible && Number.isFinite(visible.min) ? visible.min : null, visibleMax: visible && Number.isFinite(visible.max) ? visible.max : null };
     }) };
   }
   _watchStructGen++; updateWatchTable(); updateChartLegend(); drawChart(); drawMinimap(); updateCursorReadout(); scheduleViewerPreferences();

@@ -44,6 +44,35 @@ def test_create_save_and_restore_names_against_new_catalog(tmp_path):
     assert 'address' not in path.read_text(encoding='utf-8')
 
 
+def test_sampling_subset_reconfigures_probe_regions_and_restores_without_losing_rows(tmp_path):
+    axf = tmp_path / 'app.axf'
+    axf.touch()
+    sw = manager(tmp_path, ('a', 'b', 'c'))
+    profile = WatchProfile()
+    profile.activate(str(axf), sw)
+    for name in ('a', 'b', 'c'):
+        sw.add_watch(name)
+        profile.remember_selection(name, True, sw)
+    def sampled():
+        scalar, _, blocks = sw._sampling_layout_locked()
+        return [item.name for item in scalar], [(block.address, block.size) for block in blocks]
+    profile.set_sampling(sw, ['a', 'b'], False, str(profile.path))
+    assert sampled() == (['c'], [(0x20000008, 4)])
+    assert [item['name'] for item in sw.get_status()['items']] == ['c']
+    assert [item.get('sampling_enabled', True) for item in sw.list_watches()] == [False, False, True]
+    profile.activate(str(axf), sw)
+    assert sampled() == (['c'], [(0x20000008, 4)])
+    profile.set_sampling(sw, ['c'], False, None)
+    assert sampled() == ([], [])
+    with pytest.raises(ValueError):
+        profile.set_sampling(sw, ['a', 'missing'], True, None)
+    assert sampled() == ([], [])
+    profile.path.write_text('external change')
+    with pytest.raises(PreferencesConflict):
+        profile.set_sampling(sw, ['a', 'b'], True, None)
+    assert sampled() == ([], [])
+
+
 def test_file_isolation_and_stale_window_cannot_overwrite(tmp_path):
     store = WatchProfile()
     sw = manager(tmp_path)
@@ -58,6 +87,50 @@ def test_file_isolation_and_stale_window_cannot_overwrite(tmp_path):
         store.save('workspace', old['workspace'], old['revision'])
     store.activate(str(tmp_path / 'a.axf'), sw)
     assert len(sw.list_watches()) == 1
+
+
+def test_peripheral_selection_shares_profile_and_rebinds_from_current_svd(tmp_path):
+    from test_peripheral_watch import SVD
+    axf, other, svd = (tmp_path / name for name in ('app.axf', 'other.elf', 'board.svd'))
+    axf.touch()
+    other.touch()
+    svd.write_bytes(SVD)
+    store = WatchProfile()
+    sw = manager(tmp_path)
+    sw._device._project_root = str(tmp_path)
+    sw.select_peripherals(sw._device, svd=str(svd))
+    sw.add_watch('GPIOA.IDR')  # Also preserve a register checked before opening the first AXF.
+    store.activate(str(axf), sw)
+    sw.add_watch('gain')
+    store.remember_selection('gain', True, sw)
+    store.set_sampling(sw, ['GPIOA.IDR'], False, str(store.path))
+    saved = json.loads(store.path.read_text(encoding='utf-8'))
+    assert saved['selected'] == ['gain']
+    assert saved['peripherals'] == {'svd': 'board.svd', 'selected': ['GPIOA.IDR']}
+    assert saved['sampling_disabled'] == ['GPIOA.IDR']
+    sw.select_peripherals(sw._device, svd=str(svd))
+    store.remember_peripheral_source(sw)
+    assert {i['name'] for i in sw.list_watches()} == {'GPIOA.IDR', 'gain'}
+    store.activate(str(other), sw)
+    assert not sw.list_watches()
+    fresh = WatchProfile()
+    sw = manager(tmp_path)
+    sw._device._project_root = str(tmp_path)
+    svd.write_bytes(SVD.replace(b'0x40010800', b'0x40011000'))
+    fresh.activate(str(axf), sw)
+    reg, = [i for i in sw.list_watches() if i['source'] == 'peripheral']
+    assert reg['name'] == 'GPIOA.IDR' and int(reg['address'], 16) == 0x40011008
+    assert reg['sampling_enabled'] is False and not sw.running
+    svd.unlink()
+    fresh.activate(str(axf), sw)
+    assert [i['name'] for i in sw.list_watches()] == ['gain']
+    assert fresh.status()['missing'] == ['GPIOA.IDR']
+    assert sw.peripheral_catalog()['restore_error']
+    svd.write_bytes(SVD)
+    fresh.activate(str(axf), sw)
+    sw.remove_watch('GPIOA.IDR')
+    fresh.remember_selection('GPIOA.IDR', False, sw)
+    assert fresh.data['sampling_disabled'] == [] and fresh.data['peripherals']['selected'] == []
 
 
 def test_corrupt_and_external_changed_config_are_preserved(tmp_path):
@@ -119,6 +192,17 @@ def test_gui_and_capability_routes_share_one_profile(tmp_path, monkeypatch):
         result = call('add', {'name': 'gain', 'profile': initial['path']})
         assert result.status_code == 200 and not result.json().get('error')
         assert app.state.watch_profile.data['selected'] == ['gain']
+        toggle = dict(paths=['gain'], enabled=False, profile=initial['path'])
+        assert call('sampling', {**toggle, 'profile': 'previous.axf'}).status_code == 409
+        assert call('sampling', toggle).json()['items'][0]['sampling_enabled'] is False
+        assert call('status').json()['items'] == []
+        current = call('items').json()
+        assert current['items'][0]['name'] == 'gain' and current['profile'] == initial['path']
+        stale_catalog = {'name': 'gain', 'profile': current['profile'],
+                         'peripheral_revision': current['peripheral_revision'] + 1}
+        assert call('remove', stale_catalog).status_code == 409
+        assert sw.list_watches()[0]['name'] == 'gain'
+        assert call('sampling', {**toggle, 'enabled': True}).status_code == 200
         assert call('interval', {'interval': .000001}).status_code == 200
         # The same user's pending display save is not invalidated by interval.
         view = initial['viewer']

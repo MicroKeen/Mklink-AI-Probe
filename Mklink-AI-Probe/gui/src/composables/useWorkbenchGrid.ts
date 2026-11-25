@@ -25,20 +25,37 @@ export function useWorkbenchGrid(element: Ref<HTMLElement | null>, items: () => 
     syncing = true;
     try {
       const widgets = items();
-      const elements = Array.from(element.value.children) as HTMLElement[];
-      grid.batchUpdate();
-      for (const node of [...grid.engine.nodes]) {
-        if (!widgets.some(item => item.id === node.id) || !elements.some(el => el === node.el && el.dataset.gridId === node.id)) grid.removeWidget(node.el!, false, false);
+      const elements = new Map(Array.from(element.value.children, child => {
+        const el = child as HTMLElement;
+        return [el.dataset.gridId, el] as const;
+      }));
+      const nodes = new Map(grid.engine.nodes.map(node => [node.id, node]));
+      // A pointer gesture already placed the real nodes. Reload only for external
+      // geometry, constraint or DOM changes (including a different active dock tab).
+      const matches = widgets.length === nodes.size && widgets.every(item => {
+        const node = nodes.get(item.id);
+        return node && node.el === elements.get(item.id) &&
+          geometryKeys.every(key => node[key] === item[key]) &&
+          node.minW === item.minW && node.minH === item.minH && node.maxW === item.maxW && node.maxH === item.maxH;
+      });
+      if (!matches) {
+        grid.batchUpdate();
+        try {
+          const ids = new Set(widgets.map(item => item.id));
+          for (const node of nodes.values()) {
+            if (!ids.has(node.id) || elements.get(node.id) !== node.el) grid.removeWidget(node.el!, false, false);
+          }
+          for (const item of widgets) {
+            const el = elements.get(item.id);
+            if (el && nodes.get(item.id)?.el !== el) grid.makeWidget(el, item);
+          }
+          grid.load(widgets, false);
+        } finally { grid.batchUpdate(false); }
       }
-      // Vue owns the component DOM; GridStack owns only its placement and handles.
-      for (const item of widgets) {
-        const el = elements.find(el => el.dataset.gridId === item.id);
-        if (el && !grid.engine.nodes.some(node => node.el === el)) grid.makeWidget(el, item);
-      }
-      grid.load(widgets, false);
-      grid.batchUpdate(false);
-      grid.enableMove(editing.value && !narrow?.matches, false);
-      grid.enableResize((resizeWhileViewing || editing.value) && !narrow?.matches, false);
+      const move = editing.value && !narrow?.matches;
+      const resize = (resizeWhileViewing || editing.value) && !narrow?.matches;
+      if (move !== !grid.opts.disableDrag) grid.enableMove(move, false);
+      if (resize !== !grid.opts.disableResize) grid.enableResize(resize, false);
     } finally { syncing = false; }
   }
   onMounted(() => {

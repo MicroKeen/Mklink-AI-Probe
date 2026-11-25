@@ -17,7 +17,6 @@
     <p v-if="selection" data-testid="peripheral-source">{{ tr('当前已加载：', 'Currently loaded: ') }}{{ selection.target }} · {{ selection.pack }} · {{ selection.svd }} · {{ items.length }} {{ tr('项（只读）', 'items (read only)') }}</p>
     <p v-if="restoreError" role="status" data-testid="peripheral-restore-warning">{{ tr('上次的外设选择已失效，请重新选择实际芯片和 Pack。下载器连接及其他功能可继续使用。', 'The previous peripheral selection is unavailable. Select the actual chip and Pack again. The probe connection and other features remain available.') }} <span>{{ restoreError }}</span></p>
     <p v-if="selection?.series" data-testid="peripheral-series-note">{{ tr('已加载该系列共用外设；扩展外设可手动加载对应型号的 XML。', 'Common peripherals for this series are loaded. Load the model XML for additional peripherals.') }}</p>
-    <p>{{ tr('GPIO 输入电平与输出锁存值是不同寄存器，名称以所选描述为准。采样可能漏掉短脉冲，GPIO 时钟须由程序开启。', 'GPIO input levels and output latches are separate registers; names follow the selected description. Short pulses may be missed. Firmware must enable the GPIO clock.') }}</p>
     <select v-model="group" class="form-input" data-testid="peripheral-group"><option value="">{{ tr('所有外设', 'All peripherals') }}</option><option v-for="name in groups" :key="name">{{ name }}</option></select>
     <input v-model="query" class="form-input" data-testid="peripheral-search" :placeholder="tr('搜索，如 GPIOB.12', 'Search, e.g. GPIOB.12')" />
     <p v-if="error" role="alert">{{ error }}</p>
@@ -34,6 +33,7 @@
 </template>
 
 <script setup lang="ts">
+import { requestError } from '../../lib/requestError'
 import { frontendFetch as fetch } from '../../lib/frontendControl'
 
 import type { SemanticExecutionContext } from '../../lib/frontendControl'
@@ -69,6 +69,8 @@ const activeSuggestion = ref(-1)
 let searchTimer: ReturnType<typeof setTimeout> | undefined
 let blurTimer: ReturnType<typeof setTimeout> | undefined
 const selection = ref<Target | null>(null)
+let profilePath: string | undefined
+let catalogRevision: number | undefined
 const group = ref('')
 const groups = computed(() => [...new Set(items.value.map(item => item.name.split('.')[0]!))].sort())
 let targetRequest = 0
@@ -99,6 +101,7 @@ async function loadTargets(force = false) {
   finally { if (epoch === targetRequest) searching.value = false }
 }
 function applyCatalog(payload: any) {
+  catalogRevision = payload.revision
   restoreError.value = payload.restore_error ?? ''
   items.value = payload.items ?? []
   selection.value = payload.selection ?? null
@@ -127,10 +130,10 @@ async function loadChip() {
   finally { busy.value = false }
 }
 async function selectCatalog(source: { svd?: string; target_id?: string }, epoch = generation, context?: SemanticExecutionContext) {
-  const payload = await request('peripherals/select', source, context)
+  const payload = await request('peripherals/select', { ...source, profile: profilePath }, context)
   requireDomain(epoch === generation, 'Peripheral source changed during selection')
   applyCatalog(payload)
-  selected.value = new Set()
+  selected.value = new Set(payload.selected ?? [])
   group.value = groups.value.includes('GPIOB') ? 'GPIOB' : groups.value[0] ?? ''
 }
 function chooseTarget(target: Target) {
@@ -200,7 +203,8 @@ async function request(path: string, body?: object, context?: SemanticExecutionC
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
   } : undefined)
   const payload = await response.json()
-  if (!response.ok || payload.error || payload.item?.error) throw new Error(payload.error || payload.item?.error || payload.detail?.message || payload.detail || response.statusText)
+  if (!response.ok || payload.error || payload.item?.error) throw new Error(requestError(payload.error || payload.item?.error || payload.detail, response.status, 'SuperWatch'))
+  if (payload.profile_error) error.value = tr('外设设置已应用，但配置保存失败：', 'Peripheral settings applied, but could not save the profile: ') + payload.profile_error
   return payload
 }
 
@@ -209,6 +213,14 @@ async function refresh(epoch: number) {
   try {
     const watches = await request('items')
     if (epoch !== generation || busy.value) return
+    if (watches.peripheral_revision !== undefined && watches.peripheral_revision !== catalogRevision) {
+      const catalog = await request('peripherals')
+      if (epoch !== generation || busy.value) return
+      applyCatalog(catalog)
+      if (group.value && !groups.value.includes(group.value)) group.value = ''
+      if (catalog.revision !== watches.peripheral_revision) return
+    }
+    profilePath = watches.profile
     const available = new Set(items.value.map(item => item.name))
     selected.value = new Set((watches.items ?? []).map((item: { name: string }) => item.name).filter((name: string) => available.has(name)))
   } catch (cause) {
@@ -234,7 +246,7 @@ async function toggle(name: string, event: Event) {
   }
 }
 async function setSelected(name: string, enabled: boolean, epoch = generation, context?: SemanticExecutionContext) {
-  await request(enabled ? 'add' : 'remove', { name }, context)
+  await request(enabled ? 'add' : 'remove', { name, profile: profilePath, peripheral_revision: catalogRevision }, context)
   requireDomain(epoch === generation, 'Peripheral selection changed during the operation')
   const next = new Set(selected.value)
   if (enabled) next.add(name); else next.delete(name)
@@ -280,6 +292,8 @@ watch(() => props.deviceConnected, async connected => {
   clearTimeout(timer)
   items.value = []
   selection.value = null
+  profilePath = undefined
+  catalogRevision = undefined
   restoreError.value = ''
   selected.value = new Set()
   error.value = ''

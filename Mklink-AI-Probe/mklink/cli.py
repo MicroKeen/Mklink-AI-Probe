@@ -1886,10 +1886,23 @@ def _cli_web_entry(args):
 
 def _cli_desktop_proxy(args):
     """Start the internal desktop proxy to the shared runtime."""
-    from mklink._deps import require_gui_dependencies
-    require_gui_dependencies()
-    from mklink.runtime_proxy import serve_desktop_proxy
-    serve_desktop_proxy(args)
+    try:
+        from mklink._deps import require_gui_dependencies
+        require_gui_dependencies()
+        from mklink.runtime_proxy import serve_desktop_proxy
+        serve_desktop_proxy(args)
+    except Exception as exc:
+        import json
+        from pathlib import Path
+        from mklink.runtime import RuntimeStartupError, _os_error_label
+        # Only write after failure. Tauri reads this instance's record after child exit.
+        detail = str(exc) if isinstance(exc, RuntimeStartupError) else _os_error_label(exc)
+        try:
+            Path(args.desktop_runtime_info).with_suffix(".error.json").write_text(
+                json.dumps({"instanceId": args.desktop_instance_id, "reason": detail}), encoding="utf-8")
+        except OSError:
+            pass  # stderr still carries the original traceback.
+        raise
 
 
 

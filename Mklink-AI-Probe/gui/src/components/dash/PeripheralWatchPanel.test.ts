@@ -8,6 +8,35 @@ vi.mock('../../lib/filePicker', () => ({ pickSvdFile: files.pick }))
 vi.mock('../../composables/useMklinkApi', () => ({ useMklinkApi: () => ({ uploadFileSource: files.upload }) }))
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); files.pick.mockReset(); files.upload.mockReset() })
 
+it('follows the shared AXF and guards checkbox edits with its current catalog', async () => {
+  vi.useFakeTimers()
+  let revision = 1
+  const rows = ['GPIOA.IDR', 'GPIOB.ODR']
+  let edit: unknown
+  vi.stubGlobal('fetch', vi.fn(async (url: string, options?: RequestInit) => {
+    const name = rows[revision - 1]
+    let payload = {}
+    if (url.endsWith('/peripherals')) payload = { revision, items: [{ name }] }
+    if (url.endsWith('/items')) payload = { profile: 'elf-' + revision, peripheral_revision: revision, items: [{ name }] }
+    if (url.endsWith('/remove')) edit = JSON.parse(String(options?.body))
+    return { ok: true, json: async () => payload }
+  }))
+  const wrapper = mount(PeripheralWatchPanel, { props: { deviceConnected: true, latestValues: {} } })
+  try {
+    await flushPromises()
+    expect((wrapper.get('[data-testid="peripheral-GPIOA.IDR"]').element as HTMLInputElement).checked).toBe(true)
+    revision = 2
+    await vi.advanceTimersByTimeAsync(2000)
+    await flushPromises()
+    expect(wrapper.find('[data-testid="peripheral-GPIOA.IDR"]').exists()).toBe(false)
+    const restored = wrapper.get('[data-testid="peripheral-GPIOB.ODR"]')
+    expect((restored.element as HTMLInputElement).checked).toBe(true)
+    await restored.setValue(false)
+    await flushPromises()
+    expect(edit).toEqual({ name: 'GPIOB.ODR', profile: 'elf-2', peripheral_revision: 2 })
+  } finally { wrapper.unmount() }
+})
+
 it('adopts the online chip while disconnected and preserves a manual choice after Pack refresh', async () => {
   const values = new Map<string, string>()
   vi.stubGlobal('localStorage', { getItem: (key: string) => values.get(key) ?? null,

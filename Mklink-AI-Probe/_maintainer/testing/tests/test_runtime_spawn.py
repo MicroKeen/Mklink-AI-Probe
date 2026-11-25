@@ -15,7 +15,7 @@ def test_cold_runtime_can_publish_after_old_45_second_budget(tmp_path, monkeypat
     info = {'probe_id': 'lobby', 'port': 8766}
     monkeypatch.setattr(runtime.time, 'monotonic', lambda: clock[0])
     monkeypatch.setattr(runtime.time, 'sleep', lambda seconds: clock.__setitem__(0, clock[0] + seconds))
-    monkeypatch.setattr(runtime, 'discover', lambda _: info if clock[0] >= 50 else None)
+    monkeypatch.setattr(runtime, 'discover', lambda _, **kw: info if clock[0] >= 50 else None)
     def spawn(*args, **kwargs):
         spawned.append(args)
         return SimpleNamespace(poll=lambda: None)
@@ -32,7 +32,7 @@ def test_runtime_spawn_does_not_depend_on_launchers_temporary_directory(tmp_path
     monkeypatch.setattr(probes, "select_probe", lambda *args, **kwargs: {"probe_id": "lobby"})
     info = {"probe_id": "lobby", "port": 8765}
     spawned = []
-    monkeypatch.setattr(runtime, "discover", lambda probe_id: info if spawned else None)
+    monkeypatch.setattr(runtime, "discover", lambda probe_id, **kw: info if spawned else None)
 
     def spawn(command, **kwargs):
         spawned.append((command, kwargs))
@@ -59,7 +59,7 @@ def test_new_unbound_window_does_not_enumerate_usb(tmp_path, monkeypatch):
     monkeypatch.setattr(probes, 'select_probe', lambda *a, **kw: pytest.fail('Unbound window enumerated USB'))
     info = {'probe_id': 'lobby', 'port': 8765}
     spawned = []
-    monkeypatch.setattr(runtime, 'discover', lambda _: info if spawned else None)
+    monkeypatch.setattr(runtime, 'discover', lambda _, **kw: info if spawned else None)
     monkeypatch.setattr(runtime.subprocess, 'Popen', lambda command, **kw: spawned.append(command))
     assert runtime.ensure_runtime(new_window=True, allow_lobby=True) == info
     assert spawned[0][spawned[0].index('--probe-id') + 1] == 'lobby'

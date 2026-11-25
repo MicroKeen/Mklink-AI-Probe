@@ -18,6 +18,8 @@ const mocks = vi.hoisted(() => ({
   native: false,
   invoke: vi.fn(),
   fit: vi.fn(),
+  findNext: vi.fn(),
+  findPrevious: vi.fn(),
 }))
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -64,6 +66,7 @@ vi.mock('@xterm/xterm', () => ({
     getSelection() { return this.instance.selection }
     paste(text: string) { this.instance.paste(text) }
     selectAll() { this.instance.selectAll() }
+    clearSelection() { this.instance.selection = '' }
     clear() {}
     write(text: string, callback?: () => void) {
       this.instance.writes.push(text)
@@ -77,6 +80,13 @@ vi.mock('@xterm/xterm', () => ({
 vi.mock('@xterm/addon-fit', () => ({
   FitAddon: class {
     fit() { mocks.fit() }
+  },
+}))
+
+vi.mock('@xterm/addon-search', () => ({
+  SearchAddon: class {
+    findNext = mocks.findNext
+    findPrevious = mocks.findPrevious
   },
 }))
 
@@ -137,7 +147,7 @@ describe('RttTerminalPanel', () => {
       disconnect() {}
     })
     const wrapper = mount(RttTerminalPanel, { props: { inputEnabled: true } })
-    Object.defineProperties(wrapper.element, {
+    Object.defineProperties(wrapper.get('.terminal-screen').element, {
       clientWidth: { value: 520 }, clientHeight: { value: 420 },
     })
     resize()
@@ -255,7 +265,7 @@ describe('RttTerminalPanel', () => {
     Object.defineProperty(paste, 'clipboardData', {
       value: { getData: vi.fn(() => 'pasted command\r') },
     })
-    wrapper.get('.rtt-terminal-panel').element.dispatchEvent(paste)
+    wrapper.get('.terminal-screen').element.dispatchEvent(paste)
     await flushPromises()
 
     expect(paste.defaultPrevented).toBe(true)
@@ -283,9 +293,32 @@ describe('RttTerminalPanel', () => {
     Object.defineProperty(paste, 'clipboardData', {
       value: { getData: vi.fn(() => 'blocked paste') },
     })
-    wrapper.get('.rtt-terminal-panel').element.dispatchEvent(paste)
+    wrapper.get('.terminal-screen').element.dispatchEvent(paste)
     expect(paste.defaultPrevented).toBe(true)
     expect(mocks.terminals[0].paste).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it.each(['ctrlKey', 'metaKey'] as const)('finds in a read-only terminal with %s and keeps search input local', async modifier => {
+    const wrapper = mount(RttTerminalPanel, { props: { inputEnabled: false } })
+    const shortcut = new KeyboardEvent('keydown', { key: 'f', [modifier]: true, bubbles: true, cancelable: true })
+    wrapper.get('.terminal-screen').element.dispatchEvent(shortcut)
+    await flushPromises()
+    expect(shortcut.defaultPrevented).toBe(true)
+    const input = wrapper.get('input')
+    mocks.findNext.mockReturnValue(false)
+    await input.setValue('电压')
+    expect(mocks.findNext).toHaveBeenCalledWith('电压', { incremental: true })
+    expect(wrapper.get('[role="status"]').text()).toBeTruthy()
+    mocks.findNext.mockReturnValue(true)
+    await input.trigger('keydown.enter')
+    expect(mocks.findNext).toHaveBeenLastCalledWith('电压', { incremental: false })
+    expect(wrapper.find('[role="status"]').exists()).toBe(false)
+    await input.trigger('keydown.enter', { shiftKey: true })
+    expect(mocks.findPrevious).toHaveBeenCalledWith('电压')
+    await input.trigger('keydown.esc')
+    expect(wrapper.find('input').exists()).toBe(false)
+    expect(wrapper.emitted('input')).toBeUndefined()
     wrapper.unmount()
   })
 

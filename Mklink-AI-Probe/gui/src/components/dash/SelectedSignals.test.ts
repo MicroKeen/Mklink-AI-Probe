@@ -69,12 +69,56 @@ it('configures a formula and individual color and merges a separated group witho
   expect(workspace.signals.adc).toMatchObject({group:'main',pane:'main',formula:'x * 3.3 / 4095',color:'#00aaff'})
   await wrapper.get('[aria-label="曲线设置 adc"]').trigger('click')
   await wrapper.get('[aria-label="计算公式"]').setValue('window.alert(x)')
+  expect(wrapper.get<HTMLInputElement>('[aria-label="曲线颜色"]').element.value).toBe('#00aaff')
   await wrapper.get('.curve-settings button').trigger('click'); await flushPromises()
   expect(wrapper.find('[role=alert]').exists()).toBe(true)
   expect(workspace.signals.adc.formula).toBe('x * 3.3 / 4095')
   expect(values).toEqual({adc:4095})
   expect(request.mock.calls.every(([url])=>String(url).endsWith('/workspace'))).toBe(true)
   wrapper.unmount()
+})
+it('reads the associated plot color and only saves fields edited in the dialog', async () => {
+  const prefs = useWatchWorkspace()
+  const main = { mode: 'SuperWatch', getChannelColor: () => '#111111' }
+  const motor = { mode: 'SuperWatch', getChannelColor: () => '#3898EC' }
+  vi.stubGlobal('__waveformViewers', { SuperWatch: main, motor, vofa: { mode: 'VOFA', getChannelColor: () => '#abcdef' } })
+  let workspace = { version: 2, groups: [{ id: 'main' }], panes: [{ id: 'main' }], signals: {} }
+  vi.stubGlobal('fetch', vi.fn(async (_url, init?: RequestInit) => {
+    if (init) workspace = JSON.parse(String(init.body)).workspace
+    return { ok: true, json: async () => ({ workspace: structuredClone(workspace), revision: '1' }) }
+  }))
+  const wrapper = mount(SelectedSignals, { props: { paths: ['rpm'], values: {}, viewerId: 'motor' } })
+  await flushPromises()
+  const open = () => wrapper.get('[aria-label="曲线设置 rpm"]').trigger('click')
+  const picker = () => wrapper.get<HTMLInputElement>('[aria-label="曲线颜色"]')
+  const apply = async () => { await wrapper.get('.curve-settings button').trigger('click'); await flushPromises() }
+  await open()
+  expect(picker().element.value).toBe('#3898ec')
+  await wrapper.get('[aria-label="计算公式"]').setValue('x * 2')
+  await apply()
+  expect(prefs.style('rpm').formula).toBe('x * 2')
+  expect(prefs.style('rpm')).not.toHaveProperty('color')
+  // A style edit from another control while the dialog is open must survive Apply.
+  await open()
+  await prefs.setStyle(['rpm'], { color: '#008800' })
+  await wrapper.get('[aria-label="计算公式"]').setValue('')
+  await apply()
+  expect(prefs.style('rpm')).toMatchObject({ formula: '', color: '#008800' })
+  await open()
+  await prefs.setStyle(['rpm'], { formula: 'x / 2' })
+  await picker().setValue('#ccbb00')
+  await apply()
+  expect(prefs.style('rpm')).toMatchObject({ formula: 'x / 2', color: '#ccbb00' })
+  wrapper.unmount()
+})
+it('resolves a standalone color only from agreeing SuperWatch plots or shared settings', () => {
+  const prefs = useWatchWorkspace()
+  const left = { mode: 'SuperWatch', getChannelColor: () => '#aabbcc' }
+  const right = { mode: 'SuperWatch', getChannelColor: () => '#AABBCC' }
+  vi.stubGlobal('__waveformViewers', { left, right, vofa: { mode: 'VOFA', getChannelColor: () => '#aaaaaa' } })
+  expect(prefs.curveColor('standalone-signal', null)).toBe('#aabbcc')
+  right.getChannelColor = () => '#bbccdd'
+  expect(prefs.curveColor('standalone-signal', null)).toBeUndefined()
 })
 it('persists Chinese aliases and folding/assignments without acquisition calls', async () => {
   let revision=0
@@ -94,7 +138,7 @@ it('persists Chinese aliases and folding/assignments without acquisition calls',
   await fold.trigger('click');await flushPromises()
   await wrapper.get('[aria-label="强调 rpm"]').trigger('click');await flushPromises()
   expect(workspace.signals.rpm.emphasis).toBe(true)
-  await wrapper.findAll('header button')[0].trigger('click')
+  expect(wrapper.findAll('header button').map(b => b.text())).not.toContain('整理')
   await wrapper.get('button[aria-label="重命名变量 rpm"]').trigger('click')
   const aliasInput=wrapper.get<HTMLInputElement>('input[aria-label="重命名变量 rpm"]')
   aliasInput.element.value='主轴转速'
@@ -102,10 +146,8 @@ it('persists Chinese aliases and folding/assignments without acquisition calls',
   await wrapper.setProps({values:{rpm:900,amps:4}})
   expect(aliasInput.element.value).toBe('主轴转速')
   await aliasInput.trigger('blur');await flushPromises()
-  await wrapper.get('[aria-label="选择 rpm"]').setValue(true)
-  await wrapper.get('[aria-label="批量分组"]').setValue('c');await flushPromises()
-  await wrapper.get('[aria-label="选择 rpm"]').setValue(false)
-  expect(workspace.signals.rpm).toMatchObject({alias:'主轴转速',pane:'c',group:'c'})
+  expect(wrapper.find('[aria-label="批量分组"]').exists()).toBe(false)
+  expect(workspace.signals.rpm).toMatchObject({alias:'主轴转速',group:'motor'})
   await wrapper.get('[aria-label="采样点 rpm"]').trigger('click');await flushPromises()
   expect(workspace.signals.rpm.renderMode).toBe('points')
   expect(workspace.signals.rpm.emphasis).toBe(true)
@@ -113,12 +155,10 @@ it('persists Chinese aliases and folding/assignments without acquisition calls',
   expect(wrapper.find('.signal-settings').exists()).toBe(false)
   expect(wrapper.find('.group-heading .name-text').element.tagName).toBe('SPAN')
   expect(wrapper.find('[aria-label="分组 rpm"]').exists()).toBe(false)
-  await wrapper.get('[aria-label="选择 amps"]').setValue(true)
   await wrapper.get('[placeholder="分组名称"]').setValue('电流')
   await wrapper.get('[placeholder="分组名称"]').trigger('keydown', {key:'Enter'});await flushPromises()
   expect(workspace.groups.at(-1).name).toBe('电流')
-  expect(workspace.signals.amps.group).toBe(workspace.groups.at(-1).id)
-  expect(workspace.signals.amps.pane).toBe(workspace.signals.amps.group)
+  expect(workspace.signals.amps).toBeUndefined()
   const handle=wrapper.get('[aria-label="移动 rpm 到分组"]')
   Object.assign(handle.element,{setPointerCapture:vi.fn(),hasPointerCapture:()=>true,releasePointerCapture:vi.fn()})
   const destination=wrapper.findAll('.selected-groups > section').at(-1)!.element
@@ -144,6 +184,28 @@ it('persists Chinese aliases and folding/assignments without acquisition calls',
   expect(workspace.signals.rpm.group).toBe(savedGroup)
   delete (document as any).elementFromPoint
   expect(fetch.mock.calls.every(([url])=>String(url).endsWith('/workspace'))).toBe(true)
+  wrapper.unmount()
+})
+it('only checks a group when every member is sampled and toggles the group in one request', async () => {
+  const workspace = {version:2,groups:[{id:'main',name:'Drive'}],panes:[{id:'main'}],signals:{}}
+  vi.stubGlobal('fetch', vi.fn(async () => ({ok:true,json:async()=>({workspace,revision:'1'})})))
+  const setSampling = vi.fn(async () => {})
+  const wrapper = mount(SelectedSignals,{props:{paths:['a','b'],values:{},disabledSampling:new Set(['b']),setSampling}})
+  await flushPromises()
+  const group = wrapper.get<HTMLInputElement>('[aria-label="采集整组 Drive"]')
+  expect(group.element.checked).toBe(false)
+  expect(group.element.indeterminate).toBe(false)
+  expect(wrapper.text()).toContain('1/2')
+  await group.setValue(true)
+  expect(setSampling).toHaveBeenLastCalledWith(['a','b'],true)
+  await wrapper.setProps({disabledSampling:new Set<string>()})
+  expect(group.element.checked).toBe(true)
+  await group.setValue(false)
+  expect(setSampling).toHaveBeenLastCalledWith(['a','b'],false)
+  await wrapper.setProps({disabledSampling:new Set(['a','b'])})
+  expect(group.element.checked).toBe(false)
+  await wrapper.get('[aria-label="采集 b"]').setValue(true)
+  expect(setSampling).toHaveBeenLastCalledWith(['b'],true)
   wrapper.unmount()
 })
 it('keeps current presentation on failed save and exposes a reload path',async()=>{

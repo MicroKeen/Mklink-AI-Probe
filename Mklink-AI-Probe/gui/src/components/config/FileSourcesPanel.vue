@@ -39,9 +39,9 @@ const browserSymbolUpload = computed(() => Boolean(
   && !isSameFileSourcePath(props.symbolDisplayPath, props.symbolPath),
 ))
 const activeSymbolPath = computed(() => (
-  sourceMatches.value && browserSymbolUpload.value
+  props.symbolStatus.display_name || (sourceMatches.value && browserSymbolUpload.value
     ? displayedSymbolPath.value
-    : props.symbolStatus.axf_path
+    : props.symbolStatus.axf_path)
 ))
 const parserBackend = computed(() => {
   if (props.symbolStatus.elf_backend === 'external') return tr('外部 GNU 工具', 'External GNU tools')
@@ -107,6 +107,7 @@ const parserBackend = computed(() => {
     >
       {{ !symbolPath.trim() ? tr('未配置 AXF / ELF 文件', 'No AXF / ELF file configured') : browserSymbolUpload ? (isSameFileSourcePath(trackedSymbolPath, symbolPath) ? tr(`自动跟踪 · ${displayedSymbolPath}（本次页面会话）`, `Tracking · ${displayedSymbolPath} (this page session)`) : tr(`文件快照 · ${displayedSymbolPath}；重新编译后请重新选择，或输入原文件路径以自动跟踪`, `Snapshot · ${displayedSymbolPath}; reselect after rebuilding, or enter the original path for tracking`)) : isSymbolFilePath(symbolPath) ? tr('自动跟踪原文件内容变化', 'Tracking changes to the original file') : tr('仅支持 .axf、.elf 或 .out 文件', 'Only .axf, .elf, or .out files are supported') }}
     </div>
+    <p v-if="browserSymbolUpload" class="hint">{{ tr('当前使用上传副本及其 SuperWatch 配置。如需桌面端的变量和分组，请输入桌面端所用 AXF/ELF 的完整路径并解析。', 'This upload has its own SuperWatch settings. To use existing desktop watches and groups, enter and parse the original AXF/ELF path.') }}</p>
     <div v-if="trackedSymbolError && isSameFileSourcePath(trackedSymbolPath, symbolPath)" role="alert">{{ tr('符号文件跟踪失败：', 'Symbol file tracking failed: ') + trackedSymbolError }}</div>
 
     <div v-if="symbolStatus.error" class="alert alert-error">{{ symbolStatus.error }}</div>

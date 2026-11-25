@@ -521,6 +521,13 @@ describe('SystemViewTab asynchronous lifecycle', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/dash/systemview/recording/stop', { method: 'POST' })
     expect(button.text()).toContain('实时保存')
     expect(mocks.dash.stop).not.toHaveBeenCalled()
+    await wrapper.get('.sv-log-location input').setValue('D:/My Target')
+    await button.trigger('click')
+    await flushPromises()
+    expect(fetchMock).toHaveBeenCalledWith('/api/dash/systemview/recording/start', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project: 'D:/My Target' }),
+    })
     wrapper.unmount()
   })
 

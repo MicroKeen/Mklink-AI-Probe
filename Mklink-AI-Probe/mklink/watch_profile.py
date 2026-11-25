@@ -160,12 +160,24 @@ def snapshot(value):
     return dict(name=value['name'], start_index=int(start), count=int(count))
 
 
-NORMALIZE = {'selected': names, 'pins': normalize_pins, 'snapshot': snapshot,
+def peripherals(value):
+    if value is None:
+        return None
+    if not isinstance(value, dict) or set(value) not in ({'target_id', 'selected'}, {'svd', 'selected'}):
+        raise ValueError('Invalid saved SuperWatch peripheral source and registers')
+    key = 'target_id' if 'target_id' in value else 'svd'
+    source = value[key]
+    if not isinstance(source, str) or not source.strip() or len(source) > 4096 or any(ord(c) < 32 for c in source):
+        raise ValueError('Invalid SuperWatch peripheral source')
+    return {key: source, 'selected': names(value['selected'])}
+
+
+NORMALIZE = {'selected': names, 'peripherals': peripherals, 'sampling_disabled': names, 'pins': normalize_pins, 'snapshot': snapshot,
              'workspace': normalize_workspace, 'viewer': viewer, 'layout': layout}
 
 
 def defaults():
-    return dict(version=1, selected=[], pins=[], snapshot=None, workspace=normalize_workspace({'version': 2}),
+    return dict(version=1, selected=[], peripherals=None, sampling_disabled=[], pins=[], snapshot=None, workspace=normalize_workspace({'version': 2}),
                 viewer=viewer({}), layout=layout({}))
 
 
@@ -237,6 +249,9 @@ class WatchProfile:
                 if revision is not None and revision != self.section(name)['revision']:
                     raise PreferencesConflict('SuperWatch configuration changed; reload settings and retry')
                 updated = {**self.data, name: NORMALIZE[name](value)}
+                if name in ('selected', 'peripherals'):
+                    configured = set(updated['selected']) | set((updated['peripherals'] or {}).get('selected', []))
+                    updated['sampling_disabled'] = [path for path in updated['sampling_disabled'] if path in configured]
                 if updated != self.data:
                     self._write(updated)
                 else:
@@ -261,14 +276,24 @@ class WatchProfile:
     def activate(self, axf, manager):
         """Called after explicit symbol load/connection, outside sample callbacks."""
         if not isinstance(axf, str) or not axf or not Path(axf).is_file():
+            with self.lock:
+                self.path, self.raw, self.data, self.error, self.missing = None, None, defaults(), '', []
             return
         with self.lock:
             path = Path(axf).resolve()
+            first_profile = self.path is None
             self.path = path.with_name(path.name + '.superwatch.json')
             self.data, self.raw, self.error, self.missing = defaults(), None, '', []
             try:
                 self.raw = self._read()
                 if self.raw is None:
+                    if first_profile:
+                        # Registers can be chosen before the first AXF is opened.
+                        current = [i for i in manager.list_watches() if i.get('source') == 'peripheral']
+                        if current and manager.peripheral_source:
+                            self.data['peripherals'] = {**self._source(manager.peripheral_source),
+                                                        'selected': [i['name'] for i in current]}
+                            self.data['sampling_disabled'] = [i['name'] for i in current if not i.get('sampling_enabled', True)]
                     self._write(self.data)
                 else:
                     data = json.loads(self.raw.decode('utf-8-sig'))
@@ -285,15 +310,18 @@ class WatchProfile:
                 return  # Loading display preferences never mutates a live acquisition.
             manager.clear_array_snapshot()
             for item in manager.list_watches():
-                if item.get('source', 'ram') == 'ram':
+                if item.get('source', 'ram') in ('ram', 'peripheral'):
                     manager.remove_watch(item['name'])
+            if self.data['peripherals']:
+                self.restore_peripherals(manager)
             catalog = getattr(manager._device, 'symbol_catalog', None)
+            disabled = set(self.data['sampling_disabled'])
             for name in self.data['selected']:
                 descriptor = catalog.by_path(name, writable_only=False) if catalog else None
                 if descriptor is None:
                     self.missing.append(name)
                     continue
-                result = manager.add_watch(name)
+                result = manager.add_watch(name, sampling_enabled=False) if name in disabled else manager.add_watch(name)
                 if result.get('error') or result.get('item', {}).get('error'):
                     self.missing.append(name)
             if self.data['snapshot']:
@@ -306,15 +334,85 @@ class WatchProfile:
                     self.missing.append(self.data['snapshot']['name'])
             manager.set_interval(self.data['viewer']['interval'])
 
+    def set_sampling(self, manager, paths, enabled, profile):
+        with self.lock:
+            if profile is not None and profile != str(self.path or ''):
+                raise PreferencesConflict('当前 AXF/ELF 已切换，请刷新已选信号。')
+            def persist():
+                if self.path:
+                    disabled = set(self.data['sampling_disabled'])
+                    changed = disabled.difference(paths) if enabled else disabled.union(paths)
+                    configured = self.data['selected'] + (self.data['peripherals'] or {}).get('selected', [])
+                    self.save('sampling_disabled', [name for name in configured if name in changed])
+            return manager.set_sampling(paths, enabled, persist)
+
+    def _source(self, selection):
+        if selection.get('id'):
+            return {'target_id': selection['id']}
+        path = Path(selection['svd'])
+        try:
+            return {'svd': Path(os.path.relpath(path, self.path.parent)).as_posix()}
+        except ValueError:  # Windows volumes have no relative path between them.
+            return {'svd': str(path)}
+
+    def restore_peripherals(self, manager, *, load_source=True):
+        from zipfile import BadZipFile
+        saved = self.data['peripherals']
+        desired = saved['selected']
+        try:
+            source = {k: v for k, v in saved.items() if k != 'selected'}
+            if load_source:
+                if 'svd' in source:
+                    source['svd'] = str((self.path.parent / source['svd']).resolve())
+                manager.select_peripherals(manager._device, persist=False, **source)
+        except (OSError, KeyError, ValueError, BadZipFile) as exc:
+            manager.clear_peripheral_source(str(exc))
+            self.missing.extend(desired)
+            return
+        disabled = set(self.data['sampling_disabled'])
+        for name in desired:
+            if name in manager._runtime.peripheral_items:
+                result = manager.add_watch(name, sampling_enabled=name not in disabled)
+                if not result.get('error') and not result.get('item', {}).get('error'):
+                    continue
+            self.missing.append(name)
+
+    def remember_peripheral_source(self, manager):
+        with self.lock:
+            if not self.path:
+                return
+            source = self._source(manager.peripheral_source)
+            saved = self.data['peripherals']
+            if saved and all(saved.get(k) == v for k, v in source.items()):
+                self.missing = [n for n in self.missing if n not in saved['selected']]
+                self.restore_peripherals(manager, load_source=False)
+            else:
+                self.save('peripherals', {**source, 'selected': []})
+                if saved:
+                    self.missing = [n for n in self.missing if n not in saved['selected']]
+
     def remember_selection(self, name, selected, manager):
         if not self.path:
             return
-        catalog = getattr(manager._device, 'symbol_catalog', None)
-        if selected and (catalog is None or catalog.by_path(name, writable_only=False) is None):
-            return  # Peripheral selection is target-specific, not an ELF variable.
-        desired = list(self.data['selected'])
+        saved = self.data['peripherals']
+        if selected:
+            is_peripheral = any(i['name'] == name and i.get('source') == 'peripheral' for i in manager.list_watches())
+        else:
+            is_peripheral = saved is not None and name in saved['selected']
+        if is_peripheral:
+            source = (self._source(manager.peripheral_source) if selected
+                      else {k: v for k, v in saved.items() if k != 'selected'})
+            desired = list(saved['selected']) if saved and all(saved.get(k) == v for k, v in source.items()) else []
+        else:
+            catalog = getattr(manager._device, 'symbol_catalog', None)
+            if selected and (catalog is None or catalog.by_path(name, writable_only=False) is None):
+                return
+            desired = list(self.data['selected'])
         if selected and name not in desired:
             desired.append(name)
         elif not selected and name in desired:
             desired.remove(name)
-        self.save('selected', desired)
+        if is_peripheral:
+            self.save('peripherals', {**source, 'selected': desired})
+        else:
+            self.save('selected', desired)

@@ -40,17 +40,27 @@ def sleep_rpc_timeout(size, *, write=False, verify=False):
 
 
 class MuxTargetError(RuntimeError):
-    def __init__(self, status, op=None):
+    def __init__(self, status, op=None, payload=b""):
         self.status = status
         self.op = op
         if status == 1 and op in (0x10, 0x11, 0x12, 0x13, 0x15, 0x16, 0x17,
                                   0x20, 0x21, 0x22, 0x23, 0x24, 0x25,
                                   0x31, 0x32, 0x33, 0x34):
             message = upgrade_message('Requested host operation', f'MUX command 0x{op:02X} (status 1: unsupported)')
+        elif status == 2:
+            message = '探针未接受命令参数。请核对通道、地址和长度，以及上位机与探针固件的兼容性。Multiplex target status 2'
         elif status == 6:
             message = ('Multiplex target busy or access preparation incomplete (status 6); '
                        'debugger ownership is one possible cause, not confirmed by this status. '
                        'Retry explicitly when available; the request was not replayed')
+        elif status == 5 and op in (0x11, 0x16):
+            location = ''
+            if len(payload) == 6:
+                address, size = struct.unpack('<IH', payload)
+                location = f' 0x{address:08X}（{size} 字节）'
+            message = (f'读取目标内存{location}失败。请核对目标板供电、调试接口和对应 ELF 的地址，'
+                       '再读取一个已知可读的 Flash 或 RAM 地址作对照。'
+                       ' Multiplex target status 5; target access failed.')
         elif status == 5 and op == SLEEP_ACCESS_COMMAND:
             message = 'Sleep access or restoration of the original core state was not confirmed; submitted writes must not be replayed'
         elif status == 5:
@@ -227,7 +237,7 @@ class MuxTransport:
                 self.fail('Claim expired or request duplicated; reconnect explicitly')
                 self._check()
             if answer[0]:
-                raise MuxTargetError(answer[0], op)
+                raise MuxTargetError(answer[0], op, payload)
             return answer[1:]
 
     def _wait(self, deadline=None):
