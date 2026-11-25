@@ -621,6 +621,10 @@ fn terminate_sidecar_tree(state: &Sidecar) -> Result<(), String> {
 
 fn show_main_window(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
+        #[cfg(target_os = "macos")]
+        if let Err(error) = app.set_activation_policy(tauri::ActivationPolicy::Regular) {
+            eprintln!("[tauri] could not restore the Dock icon: {error}");
+        }
         let _ = window.show();
         let _ = window.unminimize();
         let _ = window.set_focus();
@@ -1128,6 +1132,11 @@ pub fn run() {
                     api.prevent_close();
                     if let Err(error) = window.hide() {
                         eprintln!("[tauri] could not hide the main window: {error}");
+                        return;
+                    }
+                    #[cfg(target_os = "macos")]
+                    if let Err(error) = window.app_handle().set_activation_policy(tauri::ActivationPolicy::Accessory) {
+                        eprintln!("[tauri] could not hide the Dock icon: {error}");
                     }
                 }
             }

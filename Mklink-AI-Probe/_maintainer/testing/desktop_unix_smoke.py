@@ -75,6 +75,10 @@ def main():
             update = updater_bin / executable
             assert os.access(update, os.X_OK), "Updater lost executable permissions"
             assert hashlib.sha256(packaged.read_bytes()).digest() == hashlib.sha256(update.read_bytes()).digest()
+        dock = subprocess.run(["swift", str(Path(__file__).with_name("macos_dock.swift")),
+                               str(binary_root / "mklink-ai-probe")], cwd=workspace, env=env, timeout=180)
+        if dock.returncode != 77:
+            dock.check_returncode()
     else:
         extracted = work / "deb-root"
         subprocess.run(["dpkg-deb", "-x", str(next(output.glob("*.deb"))), str(extracted)], check=True)
@@ -145,6 +149,8 @@ def main():
     report = {"target": target, "frozen_cli": "passed", "frozen_mcp": "passed", "backend_health": health,
               "firmware_download": firmware,
               "store_menu_webkit": "passed" if platform.system() == "Darwin" else None,
+              "dock_close_restore": ("passed" if dock.returncode == 0 else "Accessibility permission unavailable")
+                                    if platform.system() == "Darwin" else None,
               "production_web_assets": len(assets), "startup_seconds": round(elapsed, 3), "graceful_shutdown": "passed",
               "package_contents": "DMG mounted/copied" if platform.system() == "Darwin" else "DEB and AppImage extracted",
               "updater_payload": "app.tar.gz matches DMG executables and preserves executable permissions" if platform.system() == "Darwin" else "DEB and AppImage payloads use installer-specific updater keys",
