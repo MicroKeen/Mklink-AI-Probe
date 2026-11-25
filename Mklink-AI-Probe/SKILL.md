@@ -14,8 +14,7 @@ description: 使用 MKLink/MicroLink 调试目标 MCU，通过实板信号和事
 - **下载后端**：除 HPM ROM 或用户指定方式外，依次选 IDE、pyOCD、脱机。
   先读[下载优先级](references/firmware-download-priority.md)，复用 Keil 配置；工程初始化可选。
 - 优先共享 MCP，先读[共享后台](references/shared-runtime.md)。
-  无 GUI 时用 `list_target_profiles()` 查询型号。S32K314 用 `connect(probe=..., mcu="s32k314")`，
-  确认回执 `target_attach.mem_ap == 4` 后，在同一会话读写或采集。
+  无 GUI 选型用 `list_target_profiles()` 和 `connect(mcu=...)`。
   **GUI 共用连接**：`connect(probe=...)` 复用工程/符号；`gui_call` 调用共享能力。
   RTT 已运行时无参数 `rtt_start()` 订阅，用 `rtt_read_channel` 读取。
   不发送旧 `RTTView.start/stop`，不另开串口；缺能力不退回独占。
