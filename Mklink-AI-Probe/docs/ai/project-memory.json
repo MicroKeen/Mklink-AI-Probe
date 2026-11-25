@@ -5,9 +5,9 @@
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.5.2-fixes",
-    "head": "069c6dcc",
-    "remote_head": "069c6dcc",
-    "working_tree": "开发基线为 main 11202db0。0.5.1 首发 595544d9，腾讯云 Windows/Skill 已更新至 r20261125。"
+    "head": "78de3acc",
+    "remote_head": "78de3acc",
+    "working_tree": "上述为功能提交，本交接另提交。基线 main 11202db0。0.5.1 首发 595544d9，腾讯云 Windows/Skill 已更新至 r20261125。"
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"

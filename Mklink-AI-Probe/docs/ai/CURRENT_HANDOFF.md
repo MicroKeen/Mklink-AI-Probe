@@ -6,9 +6,9 @@
 
 - 更新时间：`2026-11-25`
 - 分支：`codex/v0.5.2-fixes`
-- HEAD：`069c6dcc`
-- 远端 HEAD：`069c6dcc`
-- 工作树：开发基线为 main 11202db0。0.5.1 首发 595544d9，腾讯云 Windows/Skill 已更新至 r20261125。
+- HEAD：`78de3acc`
+- 远端 HEAD：`78de3acc`
+- 工作树：上述为功能提交，本交接另提交。基线 main 11202db0。0.5.1 首发 595544d9，腾讯云 Windows/Skill 已更新至 r20261125。
 - 当前任务：S32K314 连接、在线烧录与 AP4 共享访问见[联调记录](../verification/v052-mux-profile-attach.md)。
 - 状态：`0.5.2 开发见 [PR #98](https://github.com/MicroKeen/Mklink-AI-Probe/pull/98)。0.5.1 发布和三平台验证见 [PR #97](https://github.com/MicroKeen/Mklink-AI-Probe/pull/97)。`
 
