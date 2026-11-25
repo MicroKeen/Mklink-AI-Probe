@@ -112,11 +112,36 @@ def test_live_pack_geometry_fails_before_any_target_command(tmp_path, operation)
 def test_last_byte_can_program_and_raw_read_still_reaches_reserved_tail(tmp_path):
     backend, target = driver(region(START, 0x400000, CODE))
     firmware = image(tmp_path, END-1, 1)
-    backend.program(firmware)
-    backend._programmer_factory.return_value.program.assert_called_once_with(str(firmware.file_path), base_address=END-1)
+    firmware.file_path = firmware.file_path.rename(tmp_path / "misnamed.hex")
+    firmware.sha256 = hashlib.sha256(b"\x00").hexdigest()
+    # The pathname changes after bounds admission. Only the checked bytes can be sent.
+    backend._prepare_profile_flash.side_effect = lambda _: firmware.file_path.write_bytes(b"grown")
+    progress = Mock()
+    backend.program(firmware, progress)
+    programmer = backend._programmer_factory.return_value
+    assert backend._programmer_factory.call_args.kwargs["progress"] is progress
+    args, kwargs = programmer.add_file.call_args
+    assert args[0].read() == b"\x00" and kwargs == {"file_format": "bin", "base_address": END-1}
+    programmer.commit.assert_called_once_with()
     target.read_memory_block8 = Mock(return_value=[0xFF])
     assert backend.read_memory(END, 1) == b"\xff"
     target.read_memory_block8.assert_called_once_with(END, 1)
+
+
+@pytest.mark.parametrize("invalid", ["digest", "base", "format"])
+def test_inconsistent_direct_image_never_reaches_the_target(tmp_path, invalid):
+    backend, _ = driver(region(START, 0x400000, CODE))
+    firmware = image(tmp_path, START, 1)
+    if invalid == "digest":
+        firmware.sha256 = "0" * 64
+    elif invalid == "format":
+        firmware.format = "elf"
+    else:
+        firmware.base_address = None
+    with pytest.raises(FlashError):
+        backend.program(firmware)
+    backend._prepare_profile_flash.assert_not_called()
+    backend._programmer_factory.assert_not_called()
 
 
 @pytest.mark.parametrize("scenario,allowed", [

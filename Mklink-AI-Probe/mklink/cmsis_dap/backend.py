@@ -2561,6 +2561,20 @@ class PyOcdBackend:
                         FlashErrorCode.FILE_NOT_FOUND,
                         "firmware snapshot file was not found",
                     )
+                binary = None
+                if self._flash_profile is not None:
+                    if image.format.lower() not in {"bin", "hex"}:
+                        raise FlashError(FlashErrorCode.FILE_FORMAT_ERROR, "Flash profile requires a BIN or HEX image")
+                    if image.format.lower() == "bin":
+                        if type(image.base_address) is not int or image.base_address < 0:
+                            raise FlashError(FlashErrorCode.BIN_ADDRESS_MISSING, "BIN requires an explicit base address")
+                        # Bind the checked extent and bytes to the same transfer, independent of filename suffix.
+                        binary = path.read_bytes()
+                        if not binary or image.base_address + len(binary) > 1 << 32:
+                            raise FlashError(FlashErrorCode.IMAGE_OUT_OF_RANGE, "Invalid BIN address range")
+                        expected_hash = getattr(image, "sha256", "")
+                        if expected_hash and hashlib.sha256(binary).hexdigest() != str(expected_hash).casefold():
+                            raise FlashError(FlashErrorCode.FILE_FORMAT_ERROR, "BIN snapshot differs from its inspection")
                 hex_data = (
                     self._decode_hex_image(image)
                     if image.format.lower() == "hex" else None
@@ -2575,10 +2589,11 @@ class PyOcdBackend:
                     if image.format.lower() == "bin" and image.base_address is not None
                     else image.start
                 )
-                spans = (
-                    tuple((segment.start, segment.end) for segment, _ in hex_data)
-                    if hex_data is not None else ((image_start, image_start + path.stat().st_size),)
-                )
+                if hex_data is None:
+                    size = len(binary) if binary is not None else path.stat().st_size
+                    spans = ((image_start, image_start + size),)
+                else:
+                    spans = tuple((segment.start, segment.end) for segment, _ in hex_data)
                 self._prepare_algorithm_execution(session.target, spans, program=True)
                 pname = self._flash_core_name(session.target)
                 region = self._flash_region_for_address(session.target, image_start, pname=pname)
@@ -2598,7 +2613,10 @@ class PyOcdBackend:
                 if image.format.lower() == "bin":
                     kwargs["base_address"] = image.base_address
                 with self._flash_interrupt_guard(session.target):
-                    if hex_data is None:
+                    if binary is not None:
+                        programmer.add_file(io.BytesIO(binary), file_format="bin", **kwargs)
+                        programmer.commit()
+                    elif hex_data is None:
                         programmer.program(str(path), **kwargs)
                     else:
                         # Queue the validated sparse segments before committing once.

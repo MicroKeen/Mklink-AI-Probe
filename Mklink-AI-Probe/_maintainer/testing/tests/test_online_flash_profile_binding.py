@@ -275,7 +275,7 @@ def test_uncertain_flash_command_is_issued_once(online_profile, tmp_path, stage)
         path = tmp_path / 'payload.bin'
         path.write_bytes(b'\x01')
         image = SimpleNamespace(file_path=path, format='bin', base_address=BASE)
-        command = driver._programmer_factory.return_value.program
+        command = driver._programmer_factory.return_value.commit
         operation = lambda: driver.program(image)
     command.side_effect = OSError('No ACK after dispatch')
     with pytest.raises(FlashError):
@@ -353,7 +353,7 @@ def test_running_application_interrupt_mask_restored_only_after_flm_returns(onli
     elif stage == 'program':
         path = tmp_path / 'single.bin'
         path.write_bytes(b'p')
-        driver._programmer_factory.return_value.program.side_effect = run_flm
+        driver._programmer_factory.return_value.commit.side_effect = run_flm
         driver.program(SimpleNamespace(file_path=path, format='bin', base_address=BASE))
     else:
         driver._iter_image_chunks = lambda _: [(BASE, b'v'), (BASE+0x100, b'v')]
