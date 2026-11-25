@@ -6,15 +6,16 @@
 
 - 更新时间：`2026-11-25`
 - 分支：`main`
-- HEAD：`ea0aca11`
-- 远端 HEAD：`ea0aca11`
-- 工作树：已验收主线 ea0aca11，#91/#92 已合。Windows/Skill 1a07d885；Mac ARM 52e3439f。
-- 当前任务：[启动与灵活面板](../verification/v051-integration.md)、[STM32F103与UART5](../verification/v051-f103-desktop-uart.md)。
-- 状态：`0.5.1 已整合。Python 7989/跳2、GUI 1474、Rust 23 通过。正式渠道 0.5.0，S3 #65 单独保留。`
+- HEAD：`595544d9`
+- 远端 HEAD：`595544d9`
+- 工作树：正式标签 v0.5.1 对应 main 595544d9。
+- 当前任务：[发布验收](../verification/v051-release.md)、[整合](../verification/v051-integration.md)、[F103 实板](../verification/v051-f103-desktop-uart.md)。
+- 状态：`0.5.1 已在腾讯云和 GitHub 正式发布，Windows、Mac 双架构、Linux、Skill 与 Site Agent 共 17 件。S3 #65 独立。`
 
 ## 里程碑
 
-- **MKLink 0.5.0** — `正式`。2026-11-15 双渠道正式发布；[PR #79](https://github.com/MicroKeen/Mklink-AI-Probe/pull/79) 与 v0.5.0 为1097f98e；Windows/Skill/Site Agent、MicroLink V2.9.4/V3.7.0/V4.7.4、HPMLink V4.7.4 首发。Mac ARM/Intel、Linux x64 补发源8d532019，支持签名更新。随后PR #84 main ed5d55aa的Windows/Skill修订r20261115与V2.9.5已双渠道上线。2026-11-16 PR #86 main a38557b9 的慢下载保存/按需UAC修订已替换腾讯云Windows与Skill，并新增GitHub备用附件，release 5539a7b5。已有0.5.0用户手动覆盖；先更新客户端、重载MCP，再更新对应固件。原标签和其他原件保留。
+- **MKLink 0.5.1** — `正式`。2026-11-25，595544d9。双渠道哈希及五种签名更新入口已验。
+- **MKLink 0.5.0** — `正式`。2026-11-15 双渠道首发，标签1097f98e。Mac/Linux 补发源8d532019；#84 更新 Windows/Skill 及 V2.9.5；#86 的修订源 a38557b9，历史原件及回退保留。见[交接](../verification/v050-release-handoff.md)。
 - **0.5.0 上位机开发基线** — `已合入 main`。[PR #78](https://github.com/MicroKeen/Mklink-AI-Probe/pull/78) 以2861d7a6合入，新增显式重载AXF/ELF；[PR #76](https://github.com/MicroKeen/Mklink-AI-Probe/pull/76) 以cf034fe1合入，修复普通用户jobs.json权限导致连接失败。[Issue #77](https://github.com/MicroKeen/Mklink-AI-Probe/issues/77)、[Issue #75](https://github.com/MicroKeen/Mklink-AI-Probe/issues/75) 均已Completed。
 - **MKLink 0.4.3** — `正式`。`v0.4.3` 指向 `3905a68b`。Windows 上位机、完整 Skill、Site Agent、MicroLink V3.6.9、MicroLink V4.7.3 和 HPMLink V4.7.3 已发布。MicroLink V2 沿用 V2.9.3。
 
@@ -53,7 +54,7 @@
 
 ## 下一动作
 
-1. 0.5.1 发布需单独授权。F:/MKLink-Build/artifacts 中 v051-1a07d885 为 Windows/Skill，v051-52e3439f 为 Mac ARM。暂停 HPM6E80 永久写入。
+1. 继续暂停 HPM6E80 永久写入。
 2. 覆盖安装会结束当前用户旧MKLink及Skill/MCP活动任务，安装后由AI宿主重载MCP。保留损坏历史备份；异常收集installation-history-report.json、history-backups及诊断包，区分权限、占用和格式，不删除有效未知结果或重放烧录。
 3. 客户SystemView先核对实际CH、目标IRQ锁及元数据。1µs三路溢出先采集0x40 CH2设备时间戳/长度/序号与主机单调到达时间，低频读0x10错误和0x14批次耗时；诊断开销保持一致，再判断背压、重试或调度，不直接假定80ms停读或给CH2固定优先级。多视图假离线已完成修复与安装版六窗口复验。保留目标构建快照供AXF源码路径使用，原工程重编后再清理；见[静态补充](../verification/v050-systemview-loss-reboot.md)。
 4. 有Linux/Mac实物后补验真实USB、Gatekeeper首次安装和交互式提权；不能把本轮CI结果当作这些硬件/系统验收。
