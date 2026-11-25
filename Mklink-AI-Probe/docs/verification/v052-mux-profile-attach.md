@@ -111,6 +111,6 @@ Code FLM 的无地址 `EraseChip`，请改为选择需要擦除的扇区。Data 
 - 用生产驱动所写镜像再次运行后，同一 stdio MCP 会话读到 RTT 连续序号 0–169，缺失 0 条，下行 4 字节由目标确认。SuperWatch 计数为 54622、55547、56402，MEM 邮箱回显 `0xadba12ab`。最终软件复位后原应用运行，`VTOR=0x20000000`、`MPU_CTRL=3`，测试镜像保留在指定扇区。
 - 内置算法写入的镜像也用原始料号从无 GUI MCP 复测，RTT 收齐 170 条、下行 4 字节，SuperWatch 计数为 57099、58023、58879，MEM 邮箱回显一致。随后从正在运行的测试程序执行一次内置驱动软件复位。`VTOR` 由 `0x00602000` 变为原应用的 `0x20000000`，`MPU_CTRL` 从 0 变为 3。新会话回报 RUNNING、AP4，全页 8192 字节读回一致。见 `bench/builtin-mcp-streams.log` 和 `bench/builtin-reset-proof.log`。
 - Code FLM 按实际范围收窄后，台架重新查询算法 ID，以 `0x007E0000` 为 Flash 结束地址、`0x20410000` 为 RAM 结束地址（均不含）。同一指定扇区再次通过在线任务，全部 FLM 调用返回 0，复位后的独立整页读回一致。见 `bench/ui-final-builtin-job.log`。
-- 真实 Edge 的在线烧录页在台架选中物理探针、S32K314、内置 Code FLM、10 MHz 和 ATTACH，从读回对话框读取 `0x00602000–0x00602637`，并点击「保存文件」。浏览器下载的 1592 字节与输入镜像逐字节一致，SHA-256 为 `1d862944b0cf1c8f3398148aba2777a99f1d08e9e86fec9f4d10613c34628000`。台架证据为 `bench/gui-readonly-20261125-235506-909790/verified.png` 和 `downloads/readback.bin`。实板擦写和复位通过上文的生产任务接口验收。
+- 真实 Edge 的在线烧录页在台架选中物理探针、S32K314、内置 Code FLM、10 MHz 和 ATTACH，从读回对话框读取 `0x00602000–0x00602637`，页面自动检查镜像并标出所在扇区。点击「保存文件」后，浏览器下载的 1592 字节与输入镜像逐字节一致，SHA-256 为 `1d862944b0cf1c8f3398148aba2777a99f1d08e9e86fec9f4d10613c34628000`。台架证据为 `bench/gui-readonly-20261125-235549-729544/verified.png` 和 `downloads/readback.bin`。实板擦写和复位通过上文的生产任务接口验收。
 
 同板普通读写的 P95、采集长尾及 RTT 共存需按[上位机性能基线](v043-host-baseline.md)另做同条件测量。
