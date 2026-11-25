@@ -43,6 +43,13 @@ export function useDashboardSetup() {
   const api = useMklinkApi()
   const catalog = useSymbolCatalog()
   const toast = useToast()
+  const loadedSymbolName = computed(() => {
+    const active = api.deviceStatus.value.axf
+    if (!active?.loaded || !active.axf_path) return ''
+    const path = active.display_name || (isSameFileSourcePath(active.axf_path, symbolPath.value)
+      ? symbolDisplayPath.value : active.axf_path)
+    return path.split(/[\\/]/).pop() || ''
+  })
 
   async function refreshRttForSymbols(path: string): Promise<void> {
     const refreshed = await refreshRttAddressForSymbol(
@@ -107,11 +114,11 @@ export function useDashboardSetup() {
     connectionError.value = ''
   }
 
-  async function parseSymbolPath(path: string, context?: SemanticExecutionContext, onLoaded?: () => void): Promise<boolean> {
+  async function parseSymbolPath(path: string, context?: SemanticExecutionContext, onLoaded?: () => void, displayName?: string): Promise<boolean> {
     if (!isSymbolFilePath(path)) return false
     loadingSymbols.value = true
     try {
-      const result = await (context ? useMklinkApi(context) : api).parseAxf(path, undefined, true) as AxlStatus
+      const result = await (context ? useMklinkApi(context) : api).parseAxf(path, undefined, true, displayName) as AxlStatus
       if (!result.loaded) throw new Error(result.error || tr('AXF / ELF 解析失败', 'AXF / ELF parsing failed'))
       if (!isSameFileSourcePath(path, result.axf_path)) {
         throw new Error(tr('后端未切换到所选符号文件', 'The backend did not switch to the selected symbol file'))
@@ -130,7 +137,7 @@ export function useDashboardSetup() {
   }
 
   function parseSelectedSymbols(context?: SemanticExecutionContext): Promise<boolean> {
-    return parseSymbolPath(symbolPath.value.trim(), context)
+    return parseSymbolPath(symbolPath.value.trim(), context, undefined, symbolDisplayPath.value)
   }
 
   async function loadSymbolFile(): Promise<boolean> {
@@ -161,7 +168,7 @@ export function useDashboardSetup() {
         rememberSymbolPath(window.localStorage, path, displayPath)
         track?.()
         syncSettings()
-      })
+      }, displayPath)
     } catch (cause) {
       toast.error(tr('选择 AXF / ELF 失败：', 'Failed to select AXF / ELF: ') + (cause instanceof Error ? cause.message : String(cause)))
       return false
@@ -176,6 +183,7 @@ export function useDashboardSetup() {
     loadingSymbols: readonly(loadingSymbols),
     connectionError: readonly(connectionError),
     symbolPath: readonly(symbolPath),
+    loadedSymbolName,
     symbolDisplayPath: readonly(symbolDisplayPath),
     hasSymbolSource: computed(() => isSymbolFilePath(symbolPath.value)),
     quickConnect,

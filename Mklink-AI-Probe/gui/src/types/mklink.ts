@@ -59,6 +59,7 @@ export interface ConfigStatus {
 export interface AxlStatus {
   loaded: boolean
   axf_path?: string | null
+  display_name?: string
   elf_backend?: 'builtin' | 'external'
   elf_available?: boolean
   builtin_elf_available?: boolean

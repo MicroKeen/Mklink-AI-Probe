@@ -39,9 +39,9 @@ const browserSymbolUpload = computed(() => Boolean(
   && !isSameFileSourcePath(props.symbolDisplayPath, props.symbolPath),
 ))
 const activeSymbolPath = computed(() => (
-  sourceMatches.value && browserSymbolUpload.value
+  props.symbolStatus.display_name || (sourceMatches.value && browserSymbolUpload.value
     ? displayedSymbolPath.value
-    : props.symbolStatus.axf_path
+    : props.symbolStatus.axf_path)
 ))
 const parserBackend = computed(() => {
   if (props.symbolStatus.elf_backend === 'external') return tr('外部 GNU 工具', 'External GNU tools')

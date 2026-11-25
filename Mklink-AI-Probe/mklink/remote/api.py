@@ -1029,7 +1029,19 @@ def create_app(
         await activate_watch_profile(device)
         return result
 
-    async def _load_symbol_file(axf=None, elf_backend=None, *, error_status=500, preserve_capture=False):
+    # Browser snapshots are stored by content hash. Keep their user-facing name
+    # with the successfully activated source on this backend for all its windows.
+    symbol_display_source = (None, None)
+
+    def active_symbol_status(device):
+        status = device.axf_status if device else {"loaded": False}
+        path, name = symbol_display_source
+        if name and status.get("loaded") and _same_file_source_path(path, status.get("axf_path")):
+            return {**status, "display_name": name}
+        return status
+
+    async def _load_symbol_file(axf=None, elf_backend=None, *, error_status=500, preserve_capture=False, display_name=None):
+        nonlocal symbol_display_source
         # Explicit file loading owns admission and drains capture workers before
         # rebinding addresses. It never resumes acquisition on the new layout.
         runtime = getattr(app.state, 'shared_runtime', None)
@@ -1053,7 +1065,14 @@ def create_app(
                         await run_in_threadpool(stop_dashboard_manager, _state, name, manager)
                         if _dashboard_worker_alive(manager):
                             raise DashboardStopPending(name)
-                return await _reparse_active_symbols(axf, elf_backend, error_status=error_status)
+                result = await _reparse_active_symbols(axf, elf_backend, error_status=error_status)
+                path = result.get("axf_path")
+                if display_name and path:
+                    name = display_name.replace("\\", "/").rsplit("/", 1)[-1]
+                    symbol_display_source = (path, name)
+                elif not _same_file_source_path(path, symbol_display_source[0]):
+                    symbol_display_source = (None, None)
+                return result
 
     online_flash = online_flash_api.create_default_online_flash_services(
         _state["resource_manager"],
@@ -1179,7 +1198,8 @@ def create_app(
             if source_path and not expected_source_active():
                 raise HTTPException(409, 'The active symbol source changed')
             event['state'] = 'reloading'
-            result = await _load_symbol_file(source_path)
+            name = active_symbol_status(device).get("display_name") if expected_axf else None
+            result = await _load_symbol_file(source_path, display_name=name)
             event.update(axf_path=result.get('axf_path'), rebind=result.get('rebind', {}),
                          symbols_reloaded=True, rtt_restarted=False, pending=False, state='applied')
             source_monitor.acknowledge(device, pending)
@@ -2153,7 +2173,7 @@ def create_app(
         from mklink.firmware_compatibility import compatibility_snapshot
         if not _state["device"]:
             symbols = _state.get('symbol_device')
-            return {"connected": False, "probe_product": "MKLink", "state": "disconnected", "axf": symbols.axf_status if symbols else {"loaded": False},
+            return {"connected": False, "probe_product": "MKLink", "state": "disconnected", "axf": active_symbol_status(symbols),
                     "probe_id": _state.get('shared_probe_id'),
                     "device_generation": _state.get('device_generation', 0)}
         dev = _state["device"]
@@ -2167,7 +2187,7 @@ def create_app(
             "mcu": dev.mcu_name if dev.connected else None,
             "idcode": hex(dev.idcode) if dev.connected else None,
             "port": dev.port,
-            "axf": dev.axf_status,
+            "axf": active_symbol_status(dev),
             "clock_warning": getattr(dev, "clock_warning", None),
             "clock_hz": getattr(dev, "clock_hz", None),
             "firmware_compatibility": compatibility_snapshot(getattr(dev, '_bridge', None)) if dev.connected else None,
@@ -2325,9 +2345,10 @@ def create_app(
         axf: str | None = Body(default=None, embed=True),
         elf_backend: str | None = Body(default=None, embed=True),
         preserve_capture: bool = Body(default=False, embed=True),
+        display_name: str | None = Body(default=None, embed=True, max_length=255),
     ):
         """手动触发 AXF/ELF 符号表解析。"""
-        return await _load_symbol_file(axf, elf_backend, preserve_capture=preserve_capture)
+        return await _load_symbol_file(axf, elf_backend, preserve_capture=preserve_capture, display_name=display_name)
 
     @app.post("/api/device/flash")
     async def flash_device(body: dict = Body(...)):

@@ -67,7 +67,7 @@ var I18N = {
     ],
     help_sw_variables: '程序变量与已选信号', help_sw_sampling: '采集与波形',
     help_sw_var_items: [
-      '点击<strong>打开 AXF / ELF</strong>，选择与板上程序匹配的文件。在<strong>搜索变量</strong>中勾选变量，它会出现在上方的<strong>已选信号</strong>中。图钉可将变量加入<strong>常用变量</strong>。',
+      '点击<strong>打开 AXF / ELF</strong>，选择与板上程序匹配的文件。加载后按钮显示文件名，点击可换文件。RTT、SuperWatch 与配置页的文件来源共用当前文件。在<strong>搜索变量</strong>中勾选变量即可加入<strong>已选信号</strong>，图钉可将变量加入<strong>常用变量</strong>。',
       '在已选信号、常用变量或搜索结果中，点击变量名展开操作，再点一次收起。选择<strong>写入</strong>，输入新值后点击<strong>确认写入</strong>。写入需要连接设备并选用可写的变量。位域只读。',
       '在<strong>已选信号</strong>中，变量前打勾才参与采集和记录。取消勾选后保留分组、别名和颜色；再次勾选可继续采集。眼睛按钮控制曲线显隐。展开变量后点<strong>移除</strong>可将它移出列表。',
       '组名旁显示“已勾选数 / 变量总数”。全部勾选时组框打勾，部分勾选时组框留空。点击空框全选本组，点击已勾选的组框取消整组采集。',
@@ -190,7 +190,7 @@ var I18N = {
     ],
     help_sw_variables: 'Program variables and selected signals', help_sw_sampling: 'Acquisition and waveforms',
     help_sw_var_items: [
-      'Click <strong>Open AXF / ELF</strong> and select the file for the running firmware. Check a variable in <strong>Find variables</strong> to add it to <strong>Selected signals</strong>. Use the pin to add it to <strong>Pinned variables</strong>.',
+      'Click <strong>Open AXF / ELF</strong> and select the file for the running firmware. The button shows the loaded filename. Click it to open another file. RTT, SuperWatch and File Sources share the active file. Check a variable in <strong>Find variables</strong> to add it to <strong>Selected signals</strong>. Use the pin to add it to <strong>Pinned variables</strong>.',
       'Click a variable name in any of these three lists to show its actions. Click it again to collapse them. Select <strong>Write</strong>, enter or select a value, then click <strong>Confirm write</strong>. Writing requires a connected device and a writable variable. Bit fields are read-only.',
       'In <strong>Selected signals</strong>, check a variable to sample and record it. Uncheck it to keep its group, alias and color for later. The eye controls waveform visibility. Expand a variable and click <strong>Remove</strong> to take it off the list.',
       'Each group shows its enabled count and total. Its box is checked only when every variable is enabled. Click an empty box to sample the whole group, or clear a checked box to disable the whole group.',

@@ -296,12 +296,13 @@ export function useMklinkApi(context?: SemanticExecutionContext) {
     }
   }
 
-  async function parseAxf(axf?: string, elfBackend?: 'builtin' | 'external', preserveCapture = false) {
+  async function parseAxf(axf?: string, elfBackend?: 'builtin' | 'external', preserveCapture = false, displayName?: string) {
     await flushWatchProfile()
     const result = await api('/api/device/parse-axf', {
       method: 'POST',
       body: JSON.stringify({
         ...(axf ? { axf } : {}),
+        ...(displayName && displayName !== axf ? { display_name: displayName.split(/[\\/]/).pop() } : {}),
         ...(elfBackend ? { elf_backend: elfBackend } : {}),
         ...(preserveCapture ? { preserve_capture: true } : {}),
       }),

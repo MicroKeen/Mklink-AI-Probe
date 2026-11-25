@@ -1331,8 +1331,9 @@ def test_device_parse_axf_rebinds_prepared_superwatch_runtime(tmp_path):
         assert client.post("/api/device/connect", json={}).status_code == 200
         response = client.post(
             "/api/device/parse-axf",
-            json={"axf": str(next_axf)},
+            json={"axf": str(next_axf), "display_name": "customer.elf"},
         )
+        assert client.get("/api/device/status").json()["axf"]["display_name"] == "customer.elf"
 
     assert response.status_code == 200
     assert response.json()["variable_count"] == 8

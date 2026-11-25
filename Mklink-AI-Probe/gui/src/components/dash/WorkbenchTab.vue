@@ -7,6 +7,7 @@
           <option v-for="panel in orderedPanels" :key="panel.id" :value="panel.id">{{ locatorLabel(panel) }}</option>
         </select>
         <button v-if="locateTarget && layout.panels.some(panel => panel.id === locateTarget)" type="button" class="locate-update" @click="jump(locateTarget); clearLocator()">{{ tr('定位到图表', 'Go to updated chart') }}</button>
+        <slot name="agent-action" />
         <button type="button" class="btn btn-secondary help-button" aria-haspopup="dialog" data-testid="workbench-help" @click="helpOpen = true">{{ tr('帮助', 'Help') }}</button>
       </div>
       <div v-if="reading" class="workbench-actions reading-actions">

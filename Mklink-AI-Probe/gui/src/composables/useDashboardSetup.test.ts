@@ -108,7 +108,7 @@ describe('useDashboardSetup', () => {
 
     expect(result).toBe(true)
     expect(loadDesktopSettings(storage).symbolPath).toBe('C:\\firmware\\app.axf')
-    expect(mocks.parseAxf).toHaveBeenCalledWith('C:\\firmware\\app.axf', undefined, true)
+    expect(mocks.parseAxf).toHaveBeenCalledWith('C:\\firmware\\app.axf', undefined, true, 'C:\\firmware\\app.axf')
     expect(mocks.findRtt).toHaveBeenCalledWith('C:\\firmware\\app.axf')
     expect(mocks.ensureLoaded).toHaveBeenCalledWith(true)
     expect(loadDesktopSettings(storage).rttAddress).toBe('0x20001A40')
@@ -122,7 +122,7 @@ describe('useDashboardSetup', () => {
     mocks.parseAxf.mockResolvedValue({ loaded: true, axf_path: path })
 
     expect(await useDashboardSetup().loadSymbolFile()).toBe(true)
-    expect(mocks.parseAxf).toHaveBeenCalledWith(path, undefined, true)
+    expect(mocks.parseAxf).toHaveBeenCalledWith(path, undefined, true, path)
     expect(loadSymbolPathHistory(storage)).toContain(path)
   })
 
@@ -150,7 +150,7 @@ describe('useDashboardSetup', () => {
     const result = await useDashboardSetup().loadSymbolFile()
 
     expect(result).toBe(true)
-    expect(mocks.parseAxf).toHaveBeenCalledWith('D:\\build\\next.axf', undefined, true)
+    expect(mocks.parseAxf).toHaveBeenCalledWith('D:\\build\\next.axf', undefined, true, 'D:\\build\\next.axf')
     expect(mocks.findRtt).not.toHaveBeenCalled()
     expect(loadDesktopSettings(storage)).toMatchObject({
       symbolPath: 'D:\\build\\next.axf',

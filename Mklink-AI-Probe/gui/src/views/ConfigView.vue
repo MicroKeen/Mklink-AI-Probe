@@ -383,7 +383,7 @@ async function parseSymbols() {
   const generation = ++symbolParseGeneration
   parsingSymbols.value = true
   try {
-    const result = await parseAxf(requestedPath) as AxlStatus
+    const result = await parseAxf(requestedPath, undefined, false, settings.value.symbolDisplayPath) as AxlStatus
     if (!isActiveSymbolParse(generation, requestedPath)) return
     if (result.loaded) {
       if (!isSameFileSourcePath(requestedPath, result.axf_path)) {

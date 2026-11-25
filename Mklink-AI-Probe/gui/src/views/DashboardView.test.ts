@@ -70,6 +70,20 @@ vi.mock('../composables/useResourceStatus', () => ({
 const dashStub = { template: '<div />', props: ['deviceConnected'] }
 
 describe('DashboardView layout classes', () => {
+  it('opens the workbench Agent request only from inside Flexible Panels', async () => {
+    const wrapper = shallowMount(DashboardView, {
+      global: { stubs: { WorkbenchTab: { template: '<section class="workbench"><slot name="agent-action" /></section>' } } },
+    })
+    expect(wrapper.find('.dashboard-nav-row [aria-haspopup="dialog"]').exists()).toBe(false)
+    await wrapper.findAll('.tab-btn').find(button => button.text() === '灵活面板')!.trigger('click')
+    await wrapper.get('.workbench [aria-haspopup="dialog"]').trigger('click')
+    const drawer = wrapper.getComponent({ name: 'FrontendIntent' })
+    expect(drawer.props()).toMatchObject({ open: true, objectId: 'workbench' })
+    await wrapper.findAll('.tab-btn').find(button => button.text() === 'SuperWatch')!.trigger('click')
+    expect(drawer.props('open')).toBe(false)
+    expect((wrapper.get('.workbench').element as HTMLElement).style.display).toBe('none')
+    wrapper.unmount()
+  })
   it('retains the same stream components and their DOM data across tab switches', async () => {
     const wrapper = shallowMount(DashboardView)
     const names = ['RttViewTab', 'SuperWatchTab', 'SerialMonitorTab']

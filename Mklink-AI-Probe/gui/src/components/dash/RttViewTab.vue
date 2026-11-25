@@ -9,12 +9,7 @@
       @primary="quickConnect"
     />
       <div class="rtt-config-row">
-        <button type="button" class="btn-search" data-testid="rtt-open-symbol" data-gui-file-picker
-          :disabled="IS_REMOTE || loadingSymbols || reloadingSources"
-          :title="tr('选择板上程序对应的 AXF/ELF，自动查找 RTT 地址', 'Open the AXF/ELF for the running firmware to find its RTT address')"
-          @click="loadSymbolFile">
-          <FolderOpen :size="15" aria-hidden="true" />{{ tr('打开 AXF / ELF', 'Open AXF / ELF') }}
-        </button>
+        <SymbolFileButton class="btn-search" data-testid="rtt-open-symbol" :busy="reloadingSources" />
         <label :for="guiId('rtt-address')">{{ tr('RTT 地址', 'RTT Address') }}</label>
         <input
           :id="guiId('rtt-address')" v-model="rttAddress" class="rtt-address" data-testid="rtt-address"
@@ -60,7 +55,8 @@ import { useGuiId } from '../../lib/guiAutomation'
 const guiId = useGuiId()
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { trackedSymbolPending, reloadTrackedSymbolSource } from '../../lib/trackedSymbolSource'
-import { FolderOpen, Search } from '@lucide/vue'
+import { Search } from '@lucide/vue'
+import SymbolFileButton from './SymbolFileButton.vue'
 import { CAPTURE_START_TIMEOUT_MS } from '../../lib/captureStartup'
 import { useDashboard } from '../../composables/useDashboard'
 import { useMklinkApi } from '../../composables/useMklinkApi'
@@ -72,7 +68,7 @@ import ControlToolbar from './ControlToolbar.vue'
 import SetupHint from './SetupHint.vue'
 import RttChannelPanel from './RttChannelPanel.vue'
 import { tr } from '../../composables/useLanguage'
-import { API_BASE, IS_REMOTE } from '../../lib/runtimeEndpoint'
+import { API_BASE } from '../../lib/runtimeEndpoint'
 import { useToast } from '../../composables/useToast'
 const props = defineProps<{ deviceConnected: boolean; panelId?: string }>()
 const channelSurfaces = new Map<number, SemanticSurface>()
@@ -102,12 +98,11 @@ defineExpose({
 })
 const dash = useDashboard('rtt')
 const toast = useToast()
-const { findRtt } = useMklinkApi()
+const { findRtt, deviceStatus } = useMklinkApi()
 const {
   connecting,
   loadingSymbols,
   quickConnect,
-  loadSymbolFile,
 } = useDashboardSetup()
 const desktopStorage = localStorage
 const settings = ref<DesktopSettings>(loadDesktopSettings(desktopStorage))
@@ -202,6 +197,11 @@ function sameRttSearchSource(left: string | undefined, right: string | undefined
   return isSameFileSourcePath(leftPath, rightPath)
 }
 
+function currentSearchPath(settings: DesktopSettings): string {
+  const active = deviceStatus.value.axf
+  return (active?.loaded && active.axf_path ? active.axf_path : settings.symbolPath).trim()
+}
+
 function isRttAddress(value: string): boolean {
   return /^0x[0-9a-f]{1,8}$/i.test(value)
 }
@@ -227,14 +227,14 @@ async function searchRttAddress(): Promise<void> {
   const initialSettings = loadDesktopSettings(desktopStorage)
   settings.value = initialSettings
   const initialAddress = initialSettings.rttAddress
-  const symbolPath = initialSettings.symbolPath.trim()
+  const symbolPath = currentSearchPath(initialSettings)
   const source = symbolPath || undefined
   try {
     const result = await findRtt(source)
     if (disposed || generation !== searchGeneration) return
     const latest = loadDesktopSettings(desktopStorage)
     if (
-      !sameRttSearchSource(symbolPath, latest.symbolPath)
+      !sameRttSearchSource(symbolPath, currentSearchPath(latest))
       || latest.rttAddress !== initialAddress
     ) return
     if (!result.addr || !isRttAddress(result.addr)) {

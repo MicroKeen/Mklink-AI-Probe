@@ -11,10 +11,7 @@
       <div v-show="!replayChannels" class="watch-source-tabs">
         <button :class="{ active: source === 'variables' }" @click="source = 'variables'">{{ tr('程序变量', 'Variables') }}</button>
         <button :class="{ active: source === 'peripherals' }" @click="source = 'peripherals'">{{ tr('芯片外设', 'Peripherals') }}</button>
-        <button type="button" class="open-symbol" data-testid="superwatch-open-symbol" data-gui-file-picker
-          :disabled="IS_REMOTE || loadingSymbols"
-          :title="tr('加载程序符号，并恢复此 AXF/ELF 已保存的观测变量', 'Load program symbols and restore the watches saved for this AXF/ELF')"
-          @click="loadSymbolFile"><FolderOpen :size="14" aria-hidden="true" />{{ tr('打开 AXF / ELF', 'Open AXF / ELF') }}</button>
+        <SymbolFileButton class="open-symbol" data-testid="superwatch-open-symbol" />
       </div>
     <SymbolVariablePanel file-picker-in-toolbar ref="symbolPanel" v-show="!replayChannels && source === 'variables'"
       :panel-id="panelId" :view-paths="viewPaths"
@@ -68,8 +65,7 @@
 </template>
 
 <script setup lang="ts">
-import { FolderOpen } from '@lucide/vue'
-import { useDashboardSetup } from '../../composables/useDashboardSetup'
+import SymbolFileButton from './SymbolFileButton.vue'
 import { frontendFetch as fetch } from '../../lib/frontendControl'
 
 import type { SemanticExecutionContext } from '../../lib/frontendControl'
@@ -79,7 +75,7 @@ import SymbolVariablePanel from './SymbolVariablePanel.vue'
 import PeripheralWatchPanel from './PeripheralWatchPanel.vue'
 import WaveformViewer from './WaveformViewer.vue'
 import { tr } from '../../composables/useLanguage'
-import { API_BASE, IS_REMOTE } from '../../lib/runtimeEndpoint'
+import { API_BASE } from '../../lib/runtimeEndpoint'
 import { DESKTOP_SETTINGS_STORAGE_KEY } from '../../lib/desktopSettings'
 import { domainAction, pathArg, boolArg, requireDomain, type DomainArgs } from '../../lib/domainActions'
 import { flushWatchProfile, useWatchProfile } from '../../composables/useWatchProfile'
@@ -95,7 +91,6 @@ const props = withDefaults(defineProps<{
   symbolError: '',
 })
 
-const { loadSymbolFile, loadingSymbols } = useDashboardSetup()
 const focusMode = ref(false)
 const symbolPanel = ref<InstanceType<typeof SymbolVariablePanel>>()
 const peripheralPanel = ref<InstanceType<typeof PeripheralWatchPanel>>()
