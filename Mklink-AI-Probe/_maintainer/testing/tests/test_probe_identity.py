@@ -137,7 +137,7 @@ def test_startup_waits_for_owner_after_http_has_disappeared(monkeypatch, tmp_pat
     monkeypatch.setattr('mklink.probes.select_probe', lambda *args, **kwargs: {'probe_id': probe_id})
     spawned = []
     info = {'instance_id': 'replacement'}
-    monkeypatch.setattr(runtime, 'discover', lambda key: info if spawned else None)
+    monkeypatch.setattr(runtime, 'discover', lambda key, *, startup_failure=None: info if spawned else None)
     owner = runtime_lock('owner.lock', probe_id)
     owner.__enter__()
     released = False
