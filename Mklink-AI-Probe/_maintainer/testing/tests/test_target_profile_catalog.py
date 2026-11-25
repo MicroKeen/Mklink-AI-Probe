@@ -66,6 +66,13 @@ def test_bad_aliases_rejected_before_selection_or_discovery(monkeypatch, alias, 
         assert error.value.detail["code"] == code
 
 
+def test_duplicate_json_model_keys_cannot_silently_replace_recipe(tmp_path):
+    path = tmp_path / "profiles.json"
+    path.write_text('{"mcus":{"s32k314":{"mux_attach":{}},"s32k314":{}}}', encoding="utf-8")
+    with pytest.raises(profiles.TargetProfileError, match="duplicate_profile_field"):
+        profiles.load_mcu_profiles(str(path))
+
+
 @pytest.mark.parametrize("hook,code", [
     ("BeforeResetTarget", "unsupported_hook"), ("UnknownHook", "unsupported_hook"),
     ("ConfigTargetSettings", "invalid_hook"), ("InitTarget", "invalid_hook"),

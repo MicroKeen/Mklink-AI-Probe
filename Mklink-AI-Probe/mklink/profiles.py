@@ -16,8 +16,16 @@ def load_mcu_profiles(profile_path: str | None = None) -> dict:
     if profile_path is None:
         profile_path = str(Path(__file__).parent / "mcu_profiles.json")
 
+    def unique_fields(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise TargetProfileError("duplicate_profile_field", f"Duplicate catalog field {key!r}")
+            result[key] = value
+        return result
+
     with open(profile_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
+        data = json.load(f, object_pairs_hook=unique_fields)
     return data.get("mcus", {})
 
 

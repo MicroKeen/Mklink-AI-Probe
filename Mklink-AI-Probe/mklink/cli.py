@@ -2076,7 +2076,7 @@ def main():
         description="MKLink Flash Programmer CLI",
     )
     subparsers = parser.add_subparsers(dest="command")
-    subparsers.add_parser("target-profiles", help="离线列出可用于 --mcu 的目标型号和专用 MEM-AP")
+    subparsers.add_parser("target-profiles", help="离线列出可用于 --mcu 的型号、别名和专用 MEM-AP")
     from mklink.peripheral_cli import add_parser as add_peripheral_parser
 
     add_peripheral_parser(subparsers)
@@ -2809,7 +2809,7 @@ def main():
     runtime_call.add_argument("--axf", default=None)
     runtime_call.add_argument("--probe", default=None)
     runtime_call.add_argument("--runtime-id", default=None, help="GUI 显示调用选择已有后台，不连接硬件")
-    mcu_help = "目标 MCU 配置键（见 target-profiles），例如 s32k314"
+    mcu_help = "目标 MCU 配置键或别名（见 target-profiles），例如 s32k314"
     runtime_call.add_argument("--mcu", help=mcu_help)
 
     probes_parser = subparsers.add_parser("probes", help="被动列出下载器、设置本机别名")
