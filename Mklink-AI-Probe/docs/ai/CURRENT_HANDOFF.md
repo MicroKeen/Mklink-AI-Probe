@@ -8,13 +8,14 @@
 - 分支：`main`
 - HEAD：`11202db0`
 - 远端 HEAD：`11202db0`
-- 工作树：修订来源为 main 11202db0。0.5.1 首发标签维持 595544d9。
-- 当前任务：[Windows 更新修订与验收](../verification/v051-windows-updater-revision.md)。
+- 工作树：修订来源为 main 11202db0。0.5.1 首发标签维持 595544d9。11 月 25 日清理构建与测试工作区，F 盘回收约 26.77 GiB，17 件首发资产和 5 件修订资产均已复核 SHA-256。
+- 当前任务：[三平台首发验收](../verification/v051-release.md)、[Windows 同版本修订](../verification/v051-windows-updater-revision.md)、[STM32F103、UART5 与 RAM 吞吐](../verification/v051-f103-desktop-uart.md)。
 - 状态：`腾讯云 Windows 与完整 Skill 已切换至 0.5.1 r20261125，公网回读通过。`
 
 ## 里程碑
 
-- **MKLink 0.5.0** — `正式`。2026-11-15 双渠道正式发布；[PR #79](https://github.com/MicroKeen/Mklink-AI-Probe/pull/79) 与 v0.5.0 为1097f98e；Windows/Skill/Site Agent、MicroLink V2.9.4/V3.7.0/V4.7.4、HPMLink V4.7.4 首发。Mac ARM/Intel、Linux x64 补发源8d532019，支持签名更新。随后PR #84 main ed5d55aa的Windows/Skill修订r20261115与V2.9.5已双渠道上线。2026-11-16 PR #86 main a38557b9 的慢下载保存/按需UAC修订已替换腾讯云Windows与Skill，并新增GitHub备用附件，release 5539a7b5。已有0.5.0用户手动覆盖；先更新客户端、重载MCP，再更新对应固件。原标签和其他原件保留。
+- **MKLink 0.5.1** — `正式`。2026-11-25 从 595544d9 首发，腾讯云和 GitHub 共用 17 件资产，五种签名更新入口验证通过。腾讯云 Windows 与完整 Skill 随后更新至 11202db0 的 r20261125 修订。
+- **MKLink 0.5.0** — `正式`。2026-11-15 双渠道首发，标签1097f98e。Mac/Linux 补发源8d532019；#84 更新 Windows/Skill 及 V2.9.5；#86 的修订源 a38557b9，历史原件及回退保留。见[交接](../verification/v050-release-handoff.md)。
 - **0.5.0 上位机开发基线** — `已合入 main`。[PR #78](https://github.com/MicroKeen/Mklink-AI-Probe/pull/78) 以2861d7a6合入，新增显式重载AXF/ELF；[PR #76](https://github.com/MicroKeen/Mklink-AI-Probe/pull/76) 以cf034fe1合入，修复普通用户jobs.json权限导致连接失败。[Issue #77](https://github.com/MicroKeen/Mklink-AI-Probe/issues/77)、[Issue #75](https://github.com/MicroKeen/Mklink-AI-Probe/issues/75) 均已Completed。
 - **MKLink 0.4.3** — `正式`。`v0.4.3` 指向 `3905a68b`。Windows 上位机、完整 Skill、Site Agent、MicroLink V3.6.9、MicroLink V4.7.3 和 HPMLink V4.7.3 已发布。MicroLink V2 沿用 V2.9.3。
 
