@@ -5,12 +5,12 @@
 ## 当前断点
 
 - 更新时间：`2026-11-25`
-- 分支：`codex/watch-formula-color`
-- HEAD：`958a9add`
-- 远端 HEAD：`958a9add`
-- 工作树：PR #92 纳入 #91 交接。Windows/Skill 1a07d885，Mac ARM 测试包 52e3439f。
+- 分支：`main`
+- HEAD：`ea0aca11`
+- 远端 HEAD：`ea0aca11`
+- 工作树：已验收主线 ea0aca11，#91/#92 已合。Windows/Skill 1a07d885；Mac ARM 52e3439f。
 - 当前任务：[启动与灵活面板](../verification/v051-integration.md)、[STM32F103与UART5](../verification/v051-f103-desktop-uart.md)。
-- 状态：`0.5.1 候选已覆盖。14 面板采集状态报告 8.7→2.8ms，新配置启动中位数 3.35→2.20s。正式渠道 0.5.0。`
+- 状态：`0.5.1 已整合。Python 7989/跳2、GUI 1474、Rust 23 通过。正式渠道 0.5.0，S3 #65 单独保留。`
 
 ## 里程碑
 

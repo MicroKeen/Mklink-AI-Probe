@@ -4,16 +4,16 @@
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
-    "branch": "codex/watch-formula-color",
-    "head": "958a9add",
-    "remote_head": "958a9add",
-    "working_tree": "PR #92 纳入 #91 交接。Windows/Skill 1a07d885，Mac ARM 测试包 52e3439f。"
+    "branch": "main",
+    "head": "ea0aca11",
+    "remote_head": "ea0aca11",
+    "working_tree": "已验收主线 ea0aca11，#91/#92 已合。Windows/Skill 1a07d885；Mac ARM 52e3439f。"
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "0.5.1 候选已覆盖。14 面板采集状态报告 8.7→2.8ms，新配置启动中位数 3.35→2.20s。正式渠道 0.5.0。",
+    "status": "0.5.1 已整合。Python 7989/跳2、GUI 1474、Rust 23 通过。正式渠道 0.5.0，S3 #65 单独保留。",
     "current_task": "[启动与灵活面板](../verification/v051-integration.md)、[STM32F103与UART5](../verification/v051-f103-desktop-uart.md)。"
   },
   "milestones": [
