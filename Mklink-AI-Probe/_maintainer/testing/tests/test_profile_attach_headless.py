@@ -10,6 +10,7 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
 import uvicorn
 from fastmcp import Client
 from fastmcp.client.transports import StdioTransport
@@ -84,7 +85,7 @@ class ProfileSerial:
         if op == 0x18:
             assert payload[8:12] == bytes([1, 4, 8, 0])
             assert struct.unpack_from('<BBHIII', payload, len(payload) - 16) == (
-                3, 4, 0, 0x40290004, 0xffff0000, 0x2d3a0000)
+                3, 4, 0, 0x40290004, 0xffff0000, self.peer.midr)
             self.bound = self.peer.mode != 'wrong'
             if not self.bound:
                 return b'\x05' + struct.pack('<BBBBI', 1, 4, 7, 8, 0xbad00000)
@@ -99,8 +100,9 @@ class ProfileSerial:
         return b'\x05' if self.peer.mode == 'lost' else b'\0'
 
 
-def test_headless_profile_stdio_shared_runtime(tmp_path, monkeypatch):
-    peer = SimpleNamespace(mode='old', memory=b'ABCD', ops=[], text=[])
+@pytest.mark.parametrize('part,midr', [('S32K314', 0x2D3A0000), ('S32K344', 0x2D580000)])
+def test_headless_profile_stdio_shared_runtime(tmp_path, monkeypatch, part, midr):
+    peer = SimpleNamespace(midr=midr, mode='old', memory=b'ABCD', ops=[], text=[])
     probe_id = 'usb-' + 'b' * 24
     port = 'TEST_HEADLESS_PROFILE'
     monkeypatch.setattr('serial.Serial', lambda name, *args, **kw: ProfileSerial(peer) if name == port else None)
@@ -143,9 +145,10 @@ build_server().run()
             hooks = catalog['hook_support']
             assert hooks['supported'] == ['ConfigTargetSettings', 'InitTarget', 'SetupTarget']
             assert len(set(hooks['supported'] + hooks['reserved'])) == 44
-            model, = (row for row in catalog['profiles'] if row['name'] == 'S32K314')
+            model, = (row for row in catalog['profiles'] if row['name'] == part)
             assert model['mem_ap'] == 4 and model['hooks'] == hooks['supported']
-            assert model['aliases'] == ['S32K314HMS', 'NXPS32K314HMS']
+            if part == 'S32K314':
+                assert model['aliases'] == ['S32K314HMS', 'NXPS32K314HMS']
             assert not peer.ops and not peer.text
             selection = dict(mcu=model['key'], project_root=str(tmp_path))
             for mode, expected in [('old', '0x2000'), ('wrong', 'actual=0xBAD00000')]:
@@ -155,9 +158,9 @@ build_server().run()
                 assert app.state.mklink_state['device'] is None
                 assert peer.ops.count(0x18) == int(mode == 'wrong')
             peer.mode = 'ok'
-            selection['mcu'] = model['aliases'][1]
+            selection['mcu'] = model.get('aliases', [part])[-1]
             result = (await mcp.call_tool('connect', selection)).data
-            assert result['target_attach']['profile'] == 'S32K314'
+            assert result['target_attach']['profile'] == part
             assert result['target_attach']['mem_ap'] == 4
             read = dict(address=0x20000000, size=4)
             write = dict(address=0x20000000, data_hex='1234abcd')

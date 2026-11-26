@@ -26,7 +26,11 @@ def load_mcu_profiles(profile_path: str | None = None) -> dict:
 
     with open(profile_path, "r", encoding="utf-8") as f:
         data = json.load(f, object_pairs_hook=unique_fields)
-    return data.get("mcus", {})
+    models = data.get("mcus", {})
+    if "s32k3_primary_core" in data:
+        from mklink.s32k3 import expand_profiles
+        expand_profiles(data["s32k3_primary_core"], models)
+    return models
 
 
 @dataclass(frozen=True)
@@ -182,7 +186,11 @@ def resolve_attach_profile(mcu: str | None, *, project_root: str | None = None,
     if not isinstance(mcu, str):
         raise TargetProfileError("invalid_profile", "The selected MCU model must be a string")
     models = load_mcu_profiles()
-    key = model_key_index(models).get(normalize_model_id(mcu))
+    identifier = normalize_model_id(mcu)
+    key = model_key_index(models).get(identifier)
+    if key is None and identifier.removeprefix("nxp").lstrip("-").startswith("s32k3"):
+        from mklink.s32k3 import MODELS
+        raise TargetProfileError("unknown_profile", f"Unknown S32K3 model {mcu!r}. Select one of {', '.join(sorted(MODELS))}")
     entry = models.get(key)
     if entry is None or "mux_attach" not in entry:
         return None

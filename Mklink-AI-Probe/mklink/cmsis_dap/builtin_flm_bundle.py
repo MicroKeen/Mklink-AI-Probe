@@ -138,6 +138,8 @@ def _target_records(root: Path) -> list[Mapping[str, object]]:
     assert isinstance(records, list)
     if any(not isinstance(record, Mapping) for record in records):
         raise BuiltinFlmBundleError("builtin FLM target is invalid")
+    from .s32k3_flm import extend_builtin_catalog
+    extend_builtin_catalog(records)
     _TARGET_RECORD_CACHE[cache_key] = (signature, records)
     return records
 
@@ -287,7 +289,7 @@ def load_builtin_flm_targets(root: Optional[Path] = None) -> List[TargetRecord]:
 
 
 def discover_builtin_flm_algorithms(part_number: str, root: Optional[Path] = None):
-    from .s32k314_flm import correct_algorithm
+    from .s32k3_flm import correct_algorithm
     target = str(part_number or "").strip()
     if not target:
         return []
@@ -415,16 +417,18 @@ def discover_builtin_option_algorithm(
 
 
 def extract_builtin_flm(algorithm: object) -> bytes:
-    from .s32k314_flm import CODE_SHA256, code_range
+    from .s32k3_flm import layout, code_range
 
     path = Path(_text(getattr(algorithm, "builtin_blob_path", None), "builtin FLM blob path"))
     expected = _text(
         getattr(algorithm, "builtin_blob_sha256", None), "builtin FLM SHA-256"
     ).casefold()
-    if str(getattr(algorithm, "target_part", "")).casefold() == "s32k314" and expected == CODE_SHA256:
+    part = getattr(algorithm, "target_part", "")
+    geometry = layout(part)
+    if geometry is not None and expected == geometry.code_sha:
         selected = (algorithm.flash_start, algorithm.flash_size)
-        if code_range(*selected) != selected:
-            raise BuiltinFlmBundleError("Selected range exceeds the S32K314 Code FLM FlashDevice; inspect again")
+        if code_range(*selected, geometry.code_end) != selected:
+            raise BuiltinFlmBundleError(f"Selected range exceeds the {part} Code FLM FlashDevice; inspect again")
     if _SHA256.fullmatch(expected) is None or not path.is_file():
         raise BuiltinFlmBundleError("builtin FLM blob is unavailable")
     payload = path.read_bytes()

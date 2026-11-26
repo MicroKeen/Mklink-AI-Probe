@@ -34,16 +34,24 @@ def _production_builtin_provider() -> Iterable[TargetRecord]:
     TARGET = import_pyocd_attr("pyocd.target", "TARGET")
 
     if hasattr(TARGET, "items"):
-        entries = TARGET.items()
+        entries = list(TARGET.items())
     else:
         names = TARGET.get_all_target_names()
         entries = ((name, TARGET[name]) for name in names)
 
+    from mklink.s32k3 import MODELS
+
     records = _hpm_rom_records()
+    records.extend(TargetRecord(model, "NXP", installed=True, source="target-profile", family="S32K3")
+                   for model in sorted(MODELS))
     records.extend(load_builtin_pack_records())
     records.extend(load_builtin_flm_targets())
     for name, target_type in entries:
+        if name.startswith("mklink_pack_"):
+            continue
         part_number = getattr(target_type, "PART_NUMBER", None) or name
+        if str(part_number).upper() in MODELS:
+            continue  # This host uses its verified profile and an explicit Flash algorithm.
         vendor = getattr(target_type, "VENDOR", "") or ""
         family = getattr(target_type, "FAMILY", "") or ""
         series = getattr(target_type, "SERIES", "") or ""

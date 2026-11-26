@@ -16,10 +16,10 @@ from mklink.cmsis_dap.paths import PackPaths
 
 @pytest.mark.parametrize("data_present", [True, False])
 def test_s32k314_pack_keeps_available_code_and_independent_data_geometry(tmp_path, monkeypatch, data_present):
-    from mklink.cmsis_dap import s32k314_flm
+    from mklink.cmsis_dap import s32k3_flm
 
     code, data = b"fixture Code FLM", b"fixture Data FLM"
-    monkeypatch.setattr(s32k314_flm, "CODE_SHA256", hashlib.sha256(code).hexdigest())
+    monkeypatch.setattr(s32k3_flm, "CODE_SHA256", hashlib.sha256(code).hexdigest())
     path = tmp_path / "s32k314.pack"
     with ZipFile(path, "w") as archive:
         archive.writestr("Test.S32K3xx_DFP.pdsc", """<package schemaVersion="1.7.0">

@@ -14,6 +14,7 @@ import uuid
 from zipfile import BadZipFile
 from zlib import error as ZlibError
 
+from .s32k3_flm import layout, code_range
 from .models import TargetRecord, MemoryRegion
 from .paths import PackPaths
 from .pyocd_runtime import import_pyocd_attr
@@ -154,6 +155,7 @@ def _pack_algorithms(record: TargetRecord, part_number: str) -> list[FlashAlgori
         device = devices[0]
         default_ram_start, default_ram_size = _default_ram(device)
         pack_digest = _sha256(pack_path)
+        geometry = layout(part_number)
         algorithms = []
         for index, element in enumerate(getattr(device, "_info").algos):
             name = element.attrib.get("name")
@@ -171,9 +173,7 @@ def _pack_algorithms(record: TargetRecord, part_number: str) -> list[FlashAlgori
                 ram_size = int(raw_ram_size, 0) if isinstance(raw_ram_size, str) else int(raw_ram_size)
             except (TypeError, ValueError):
                 continue
-            if part_number.casefold() == "s32k314":
-                from .s32k314_flm import CODE_SHA256, code_range
-
+            if geometry is not None:
                 try:
                     with device.get_file(str(name)) as source:
                         payload_digest = hashlib.sha256(source.read()).hexdigest()
@@ -181,8 +181,8 @@ def _pack_algorithms(record: TargetRecord, part_number: str) -> list[FlashAlgori
                     # Older or partial Packs may list an unavailable member.
                     # Keep independently usable algorithms on the same target.
                     continue
-                if payload_digest == CODE_SHA256:
-                    flash_start, flash_size = code_range(flash_start, flash_size)
+                if payload_digest == geometry.code_sha:
+                    flash_start, flash_size = code_range(flash_start, flash_size, geometry.code_end)
                     if not flash_size:
                         continue
             identity = "|".join((

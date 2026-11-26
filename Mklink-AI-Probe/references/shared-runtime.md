@@ -8,9 +8,9 @@ ESP32-S3 无线工作台通过传输适配复用本后台，接入步骤见
 
 ## 连接与选择
 
-S32K314 可在无 GUI 的环境连接。在共享 MCP 调用 `list_target_profiles()` 查询型号键与阶段支持，
+S32K3 目录中的 22 个型号可在无 GUI 的环境连接。在共享 MCP 调用 `list_target_profiles()` 查询型号键与阶段支持，
 再调用 `connect(probe="已确认的探针ID", mcu="s32k314", project_root="目标工程绝对路径")`。
-工程或 `mcu` 参数也可使用目录中的别名 `S32K314HMS`、`NXPS32K314HMS`。
+S32K344 使用 `mcu="s32k344"`，回执应为 S32K344、MEM-AP 4。S32K314 工程或 `mcu` 参数也可使用目录中的别名 `S32K314HMS`、`NXPS32K314HMS`。
 成功回执中的 `target_attach` 给出 `profile="S32K314"` 和 `mem_ap=4`。随后可用同一 MCP 会话的
 `read_memory`、`write_memory` 和采集工具。CLI 使用相同目录和共享后台，例如：
 

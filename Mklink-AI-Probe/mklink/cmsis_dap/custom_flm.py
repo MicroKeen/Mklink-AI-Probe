@@ -79,6 +79,8 @@ class CustomFlmCatalog:
         target_part = str(part_number).strip()
         self._part_key(target_part)
         digest = self._digest(source_path)
+        from .flash_bounds import check_flm_model
+        check_flm_model(target_part, digest)
         try:
             parsed = self._metadata(self._parser(source_path))
         except FlashError:

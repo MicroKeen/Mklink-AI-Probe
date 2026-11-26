@@ -19,7 +19,7 @@ from typing import Any, Callable, Iterator, Mapping, Optional, Tuple
 from mklink.profiles import TargetProfileError, resolve_attach_profile
 
 from .errors import FlashError, FlashErrorCode
-from .flash_bounds import check_chip_erase, check_flash_span, check_flm_override, limit_pack_code_regions
+from .flash_bounds import check_chip_erase, check_flash_span, check_flm_model, check_flm_override, limit_pack_code_regions
 from .flash_launch import install_flash_launch_checks
 from .flash_interrupts import mask_flash_interrupts
 from .flash_workspace import check_flash_workspace
@@ -1076,6 +1076,8 @@ class PyOcdBackend:
                         FlashErrorCode.PACK_INTEGRITY_ERROR,
                         "custom FLM integrity check failed",
                     )
+                if profile is not None:
+                    check_flm_model(profile.name, digest)
                 if profile is not None and resolved_regions:
                     start, size = resolved_regions[len(resolved_flms)]
                     check_flm_override(profile.name, digest, start, size)
@@ -1197,6 +1199,9 @@ class PyOcdBackend:
             try:
                 resolved_probe = self._resolve_probe(probe)
                 factory = self._session_factory
+                if factory is None and profile is not None and resolved_pack is not None:
+                    from .pack_session import create_profile_pack_session
+                    factory = create_profile_pack_session
                 if factory is None:
                     Session = import_pyocd_attr("pyocd.core.session", "Session")
 

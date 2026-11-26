@@ -60,7 +60,8 @@ def test_project_resolves_declared_ordering_codes(tmp_path, selection):
     assert profiles.resolve_attach_profile(None, project_root=str(tmp_path)) == canonical
     assert not any("mcu_key" in issue for issue in lint_config_semantic(str(tmp_path)))
     for similar in ("S32K31", "S32K314HMS1", "NXP-S32K314HMS", "S32K344HMS"):
-        assert profiles.resolve_attach_profile(similar) is None
+        with pytest.raises(profiles.TargetProfileError, match='Unknown S32K3 model'):
+            profiles.resolve_attach_profile(similar)
 
 
 @pytest.mark.parametrize("alias,code", [

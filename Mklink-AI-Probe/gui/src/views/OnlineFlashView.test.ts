@@ -765,6 +765,23 @@ async function readyAndStart(wrapper: ReturnType<typeof mount>) {
 }
 
 describe('online flash task workspace behavior', () => {
+  it('keeps reading available and requires an algorithm to erase a profile-only device', async () => {
+    const target = { ...installedTarget, part_number: 'S32K396', source: 'target-profile' }
+    const fallback = viewFetch([target])
+    vi.stubGlobal('fetch', (input: RequestInfo | URL, options?: RequestInit) => {
+      if (String(input).includes('/targets/S32K396/algorithms')) return Promise.resolve(new Response('[]'))
+      return fallback(input, options)
+    })
+    const wrapper = mount(await onlineFlashView())
+    await vi.waitFor(() => expect(wrapper.find('[data-testid="target-S32K396"]').exists()).toBe(true))
+    await wrapper.get('[data-testid="target-S32K396"]').trigger('click')
+    await vi.waitFor(() => expect(wrapper.text()).toContain('供应商 Pack 或 FLM'))
+    expect(wrapper.get('[data-testid="start-job"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="chip-erase"]').attributes('disabled')).toBeDefined()
+    await vi.waitFor(() => expect(wrapper.get('[data-testid="memory-read-submit"]').attributes('disabled')).toBeUndefined())
+    wrapper.unmount()
+  })
+
   it('binds a conflicting FLM choice to inspection and the flash job', async () => {
     const target = { ...installedTarget, part_number: 'STM32F767xG', source: 'daplink-builtin' }
     const fallback = viewFetch([target])

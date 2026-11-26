@@ -1,20 +1,25 @@
 """Issue the selected Cortex-M reset without pyOCD polling the pre-reset core."""
 
 from .pyocd_runtime import import_pyocd_attr
-from . import s32k314_reset
+from . import s32k3_reset
+from ..s32k3 import MODELS, DFP_RESET_MODELS
 
 
-_SYSTEM_RESET_HANDLERS = {"s32k314_functional": s32k314_reset}
+_SYSTEM_RESET_MODELS = {
+    "s32k314_functional": {"S32K314"},
+    "s32k3_dfp_functional": DFP_RESET_MODELS,
+    "s32k3_functional": MODELS - DFP_RESET_MODELS,
+}
 
 
 def system_reset_handler(strategy, model, mem_ap):
     """Resolve only a shipped handler certified for the catalog's model and AP."""
     if strategy == "default":
         return None
-    handler = _SYSTEM_RESET_HANDLERS.get(strategy) if isinstance(strategy, str) else None
-    if handler is None or (model, mem_ap) != (handler.MODEL, handler.MEM_AP):
+    allowed = _SYSTEM_RESET_MODELS.get(strategy) if isinstance(strategy, str) else None
+    if not allowed or model not in allowed or mem_ap != 4:
         raise ValueError(f"Unsupported online_system_reset {strategy!r} for {model} on AP{mem_ap}")
-    return handler
+    return s32k3_reset.prepare
 
 
 def reset_command(core, probe, mode, *, profile, dp, evidence):
@@ -40,7 +45,7 @@ def reset_command(core, probe, mode, *, profile, dp, evidence):
     if sequence == "ResetSystem":
         handler = system_reset_handler(profile.online_system_reset, profile.name, profile.mem_ap)
         if handler is not None:
-            return handler.prepare(dp, evidence)
+            return handler(dp, evidence, profile)
 
     if sequence == "ResetHardware":
         return "nRESET", probe.reset

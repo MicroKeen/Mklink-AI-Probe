@@ -9,7 +9,7 @@ from unittest.mock import Mock
 import pytest
 from pyocd.core.memory_map import FlashRegion, MemoryMap
 
-from mklink.cmsis_dap import s32k314_flm
+from mklink.cmsis_dap import s32k3_flm
 from mklink.cmsis_dap.backend import PyOcdBackend, _install_custom_flm_regions, _prepare_pack_flm_regions
 from mklink.cmsis_dap.errors import FlashError, FlashErrorCode
 from mklink.profiles import resolve_attach_profile
@@ -17,7 +17,7 @@ from mklink.profiles import resolve_attach_profile
 
 CODE = b"fixture S32K314 Code"
 DATA = b"fixture S32K314 Data"
-START, END = s32k314_flm.CODE_START, s32k314_flm.CODE_END
+START, END = s32k3_flm.CODE_START, s32k3_flm.CODE_END
 PAGE = 0x2000
 
 
@@ -34,7 +34,7 @@ def region(start, size, payload, *, pname="CM7", erase_all=True):
 
 @pytest.fixture(autouse=True)
 def identify_fixture(monkeypatch):
-    monkeypatch.setattr(s32k314_flm, "CODE_SHA256", hashlib.sha256(CODE).hexdigest())
+    monkeypatch.setattr(s32k3_flm, "CODE_SHA256", hashlib.sha256(CODE).hexdigest())
 
 
 def driver(*regions):
@@ -57,7 +57,7 @@ def image(tmp_path, start, size):
 
 def test_pack_memory_map_intersects_only_the_matching_elf_without_consuming_it():
     code = region(START, 0x400000, CODE)
-    data = region(s32k314_flm.DATA_START, 0x20000, DATA)
+    data = region(s32k3_flm.DATA_START, 0x20000, DATA)
     shared = MemoryMap(code, data)
     target = SimpleNamespace(memory_map=shared, part_number="S32K314")
     _prepare_pack_flm_regions(target, ((START, 0x400000),))
@@ -77,7 +77,7 @@ def test_custom_flm_override_rejected_by_driver_before_open_and_during_install(t
     override = ((address, size),)
     with pytest.raises(FlashError) as error:
         backend.connect(object(), "NXPS32K314HMS", 1_000_000, custom_flm_paths=(str(file),),
-                        custom_flm_digests=(s32k314_flm.CODE_SHA256,), custom_flm_regions=override)
+                        custom_flm_digests=(s32k3_flm.CODE_SHA256,), custom_flm_regions=override)
     assert error.value.code is FlashErrorCode.IMAGE_OUT_OF_RANGE
     constructor.assert_not_called()
     target = SimpleNamespace(memory_map=MemoryMap(), part_number="S32K314")

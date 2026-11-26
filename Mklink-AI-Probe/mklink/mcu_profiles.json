@@ -1,28 +1,23 @@
 {
   "$schema": "mklink-mcu-profiles-v1",
+  "s32k3_primary_core": {
+    "version": 1,
+    "hooks": {
+      "ConfigTargetSettings": {"mem_ap": 4, "requires_reset_released": true, "flash_prepare": "halt"},
+      "InitTarget": [
+        {"kind": "ap_check", "ap": 4, "address": "0xfc", "mask": "0xffffffff", "value": "0x84770001"},
+        {"kind": "ap_check", "ap": 6, "address": "0xfc", "mask": "0xffffffff", "value": "0x001c0030"},
+        {"kind": "ap_check", "ap": 7, "address": "0xfc", "mask": "0xffffffff", "value": "0x001c0040"},
+        {"kind": "ap_check", "ap": 7, "address": "0x00", "mask": "0x40000000", "value": "0x40000000"},
+        {"kind": "ap_check", "ap": 6, "address": "0x00", "mask": "0x00000004", "value": "0x00000000"},
+        {"kind": "ap_update", "ap": 7, "address": "0x80", "mask": "0x300000f0", "value": "0x300000f0"}
+      ],
+      "SetupTarget": [
+        {"kind": "mem32_check", "ap": 4, "address": "0xe000ed00", "mask": "0xff0ffff0", "value": "0x410fc270"}
+      ]
+    }
+  },
   "mcus": {
-    "s32k314": {
-      "name": "S32K314",
-      "aliases": ["S32K314HMS", "NXPS32K314HMS"],
-      "mux_attach": {
-        "version": 1,
-        "hooks": {
-          "ConfigTargetSettings": {"mem_ap": 4, "requires_reset_released": true, "flash_prepare": "halt", "online_system_reset": "s32k314_functional"},
-          "InitTarget": [
-            {"kind": "ap_check", "ap": 4, "address": "0xfc", "mask": "0xffffffff", "value": "0x84770001"},
-            {"kind": "ap_check", "ap": 6, "address": "0xfc", "mask": "0xffffffff", "value": "0x001c0030"},
-            {"kind": "ap_check", "ap": 7, "address": "0xfc", "mask": "0xffffffff", "value": "0x001c0040"},
-            {"kind": "ap_check", "ap": 7, "address": "0x00", "mask": "0x40000000", "value": "0x40000000"},
-            {"kind": "ap_check", "ap": 6, "address": "0x00", "mask": "0x00000004", "value": "0x00000000"},
-            {"kind": "ap_update", "ap": 7, "address": "0x80", "mask": "0x300000f0", "value": "0x300000f0"}
-          ],
-          "SetupTarget": [
-            {"kind": "mem32_check", "ap": 4, "address": "0xe000ed00", "mask": "0xff0ffff0", "value": "0x410fc270"},
-            {"kind": "mem32_check", "ap": 4, "address": "0x40290004", "mask": "0xffff0000", "value": "0x2d3a0000"}
-          ]
-        }
-      }
-    },
     "stm32f1": {
       "name": "STM32F10x",
       "idcode_pattern": "0x1BA01477",

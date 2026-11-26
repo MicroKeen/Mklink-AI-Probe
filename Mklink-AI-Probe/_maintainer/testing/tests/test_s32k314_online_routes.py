@@ -10,7 +10,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from mklink.cmsis_dap import s32k314_flm
+from mklink.cmsis_dap import s32k3_flm
 from mklink.cmsis_dap.builtin_flm_bundle import (BuiltinFlmBundleError, discover_builtin_flm_algorithms,
                                                 extract_builtin_flm, load_builtin_flm_targets)
 from mklink.cmsis_dap.images import ImageInspector
@@ -30,9 +30,16 @@ API = "/api/online-flash"
 
 
 @pytest.fixture
-def routes(tmp_path, monkeypatch):
+def model():
+    return PART
+
+
+@pytest.fixture
+def routes(tmp_path, monkeypatch, model):
     # Reproduce the shipped manifest and both content-addressed blobs with
     # inert fixture bytes. Only the Code FLM is referenced by the bad rows.
+    x2 = model in {"S32K312", "S32K322", "S32K342"}
+    family = "S32K3x2" if x2 else "S32K3x4"
     algorithms = []
     for start, size in BANKS:
         content = f"simulated algorithm for {start:#x}".encode()
@@ -41,21 +48,22 @@ def routes(tmp_path, monkeypatch):
         (tmp_path / blob).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / blob).write_bytes(content)
         algorithms.append({
-            "file_name": "S32K3x4_Code.FLM", "flash_start": start, "flash_size": size,
+            "file_name": f"{family}_Code.FLM", "flash_start": start, "flash_size": size,
             "page_size": SECTOR_SIZE, "sector_sizes": [[0, SECTOR_SIZE]],
             "blob": blob.as_posix(), "sha256": digest,
         })
-    monkeypatch.setattr(s32k314_flm, "CODE_SHA256", algorithms[0]["sha256"])
-    monkeypatch.setattr(s32k314_flm, "DATA_SHA256", algorithms[1]["sha256"])
+    monkeypatch.setattr(s32k3_flm, "X2_CODE_SHA256" if x2 else "CODE_SHA256", algorithms[0]["sha256"])
+    monkeypatch.setattr(s32k3_flm, "X2_DATA_SHA256" if x2 else "DATA_SHA256", algorithms[1]["sha256"])
     legacy = [algorithms[0], dict(algorithms[1], blob=algorithms[0]["blob"], sha256=algorithms[0]["sha256"])]
+    records = algorithms if x2 else legacy
     (tmp_path / "manifest.json").write_text(json.dumps({"schema": 1, "targets": [{
-        "part_number": PART, "manufacturer": "NXP", "ram_start": 0x20400000,
-        "ram_size": 0x28000, "algorithms": legacy,
+        "part_number": "S32K342" if model == "S32K322" else model, "manufacturer": "NXP", "ram_start": 0x20400000,
+        "ram_size": 0x28000, "algorithms": records,
     }]}), encoding="utf-8")
     monkeypatch.setenv("MKLINK_BUILTIN_FLM_ROOT", str(tmp_path))
 
     regions = [MemoryRegion("flash", a.flash_start, a.flash_size, True, True, SECTOR_SIZE)
-               for a in discover_builtin_flm_algorithms(PART)]
+               for a in discover_builtin_flm_algorithms(model)]
     memory = {}
     backend = Mock(spec_set=("connect", "disconnect", "memory_regions", "erase_sectors", "program", "verify", "read_memory"))
     backend.memory_regions.return_value = regions
@@ -88,27 +96,30 @@ def routes(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("bank", (0, 1), ids=("code-flash", "data-flash"))
-def test_online_s32k314_flash_program_verify_and_readback(routes, bank):
+@pytest.mark.parametrize("model", ["S32K312", "S32K314", "S32K322", "S32K324", "S32K342", "S32K344"])
+def test_online_family_flash_program_verify_and_readback(routes, bank, model):
     client, manager, backend, algorithms = routes
     start, size = BANKS[bank]
     payload = b"S32K314\x00\x80\xff"
-    choices = client.get(f"{API}/targets/{PART}/algorithms")
+    choices = client.get(f"{API}/targets/{model}/algorithms")
     assert choices.status_code == 200, choices.text
     algorithm = next(row for row in choices.json() if row["flash_start"] == start)
-    assert algorithm["target_part"] == PART and algorithm["source_kind"] == "daplink-builtin"
-    size = size if bank else 0x3E0000
+    assert algorithm["target_part"] == model and algorithm["source_kind"] == "daplink-builtin"
+    x2 = model in {"S32K312", "S32K322", "S32K342"}
+    family = "S32K3x2" if x2 else "S32K3x4"
+    size = size if bank else (0x1E0000 if x2 else 0x3E0000)
     assert algorithm["flash_size"] == size
-    assert algorithm["file_name"] == ("S32K3x4_Data.FLM" if bank else "S32K3x4_Code.FLM")
+    assert algorithm["file_name"] == (f"{family}_Data.FLM" if bank else f"{family}_Code.FLM")
     assert (algorithm["ram_start"], algorithm["ram_size"]) == (0x20400000, 0x10000)
     uploaded = client.post(f"{API}/images/inspect", files={"file": ("fixture.bin", payload)},
-                           data={"part_number": PART, "base_address": hex(start),
+                           data={"part_number": model, "base_address": hex(start),
                                  "algorithm_ids": algorithm["algorithm_id"]})
     assert uploaded.status_code == 200, uploaded.text
     image = uploaded.json()
     assert image["sectors"] == [{"address": start, "size": SECTOR_SIZE}]
     assert [part["algorithm_id"] for part in image["algorithm_plan"]] == [algorithm["algorithm_id"]]
 
-    selection = {"target_part": PART, "probe_id": PROBE, "frequency": 1_000_000, "connect_mode": "halt"}
+    selection = {"target_part": model, "probe_id": PROBE, "frequency": 1_000_000, "connect_mode": "halt"}
     started = client.post(f"{API}/jobs", json={
         **selection, "actions": ["connect", "erase", "program", "verify", "disconnect"],
         "image_id": image["image_id"], "sector_addresses": [start],
@@ -130,7 +141,7 @@ def test_online_s32k314_flash_program_verify_and_readback(routes, bank):
     assert backend.disconnect.call_count == 2
     assert backend.connect.call_count == 2
     for call in backend.connect.call_args_list:
-        assert (call.kwargs["probe"], call.kwargs["target"]) == (PROBE, PART)
+        assert (call.kwargs["probe"], call.kwargs["target"]) == (PROBE, model)
         assert (call.kwargs["frequency"], call.kwargs["connect_mode"]) == (1_000_000, "halt")
         assert call.kwargs["custom_flm_regions"] == ((start, size),)
         assert call.kwargs["custom_flm_digests"] == (algorithms[bank]["sha256"],)

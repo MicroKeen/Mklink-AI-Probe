@@ -87,7 +87,8 @@ function onSearchKeydown(event: KeyboardEvent): void {
 }
 function targetAvailability(target: TargetRecord): string {
   if (target.part_number.toLowerCase().startsWith('hpm')) return tr('内置 ROM API', 'Built-in ROM API')
-  if (target.source === 'bundle' || target.source === 'builtin') return tr('内置可用', 'Built-in')
+  if (target.source === 'target-profile') return tr('支持调试，可导入烧录算法', 'Debug available · import flash algorithm')
+  if (['bundle', 'builtin', 'daplink-builtin'].includes(target.source)) return tr('内置可用', 'Built-in')
   if (target.installed) return tr('本地 Pack', 'Local Pack')
   return tr('可导入或联网下载', 'Import or download')
 }
