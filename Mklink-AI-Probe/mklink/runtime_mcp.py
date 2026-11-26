@@ -375,7 +375,8 @@ def build_server():
         Explicit probe selection switches the existing backend after draining work.
         Other target sessions are retired and must explicitly reconnect; GUI pages follow.
         Conflicting project/symbol settings still require explicit reconfiguration.
-        For native target attach, select a key or alias from list_target_profiles, for example
+        An axf path can identify the target from its ELF and matching build metadata.
+        To override explicitly, select a key or alias from list_target_profiles, e.g.
         mcu="s32k314". No GUI is required. Check target_attach.profile and mem_ap
         in the receipt before issuing memory or stream operations on this session.
         A profile failure requires explicit reconnect. A plain probe connection can

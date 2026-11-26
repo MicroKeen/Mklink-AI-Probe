@@ -870,7 +870,7 @@ fetch('/_runtime/login', {method:'POST', headers:{'Content-Type':'application/js
     async def status():
         control.prune()
         return {"protocol": PROTOCOL, "version": VERSION, "instance_id": info["instance_id"],
-                "gui_launch": 1, "target_attach_version": 1, "runtime_id": info.get("runtime_id"),
+                "gui_launch": 1, "target_attach_version": 1, "image_target_version": 1, "runtime_id": info.get("runtime_id"),
                 "pid": info.get("pid"), "project_root": state["project_root"], "transport": info.get('transport', 'cdc'),
                 "probe_id": info.get("probe_id"), "clients": len(control.sessions), "busy": control.operation_lock.locked(),
                 "capabilities": sorted(CAPABILITIES)}

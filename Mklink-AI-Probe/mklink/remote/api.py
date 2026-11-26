@@ -16,7 +16,7 @@ from __future__ import annotations
 # See the eager-import block below for the required FastAPI/Pydantic types.
 
 import asyncio
-from contextlib import asynccontextmanager, contextmanager
+from contextlib import asynccontextmanager, contextmanager, nullcontext
 import contextvars
 import hashlib
 import json
@@ -352,10 +352,13 @@ def remember_device_connection(
     device_state = getattr(device, "__dict__", {})
     from mklink.device import target_attach_status
     profile = target_attach_status(device)
+    # Restore an explicit override; an image-derived binding is re-evaluated
+    # against the selected artifact (even if its path has not changed).
+    inferred = device_state.get("_image_target") is not None and not device_state.get("_mcu_hint")
     details = {
         "port": getattr(device, "port", None),
         "axf": axf_status.get("axf_path") or device_state.get("_axf"),
-        "mcu": profile["profile"] if profile else (mcu if mcu is not None else device_state.get("_mcu_hint")),
+        "mcu": None if inferred else (profile["profile"] if profile else (mcu or device_state.get("_mcu_hint"))),
         "elf_backend": (
             axf_status.get("elf_backend")
             or device_state.get("_elf_backend")
@@ -1089,7 +1092,23 @@ def create_app(
                         await run_in_threadpool(stop_dashboard_manager, _state, name, manager)
                         if _dashboard_worker_alive(manager):
                             raise DashboardStopPending(name)
-                result = await _reparse_active_symbols(axf, elf_backend, error_status=error_status)
+                device = _state.get("device")
+                previous_bridge = getattr(device, "_bridge", None)
+                try:
+                    lease = target_debug_lease(_state, "image-target") if previous_bridge is not None else nullcontext()
+                    with lease:
+                        result = await _reparse_active_symbols(axf, elf_backend, error_status=error_status)
+                finally:
+                    if previous_bridge is not None and getattr(device, "_bridge", None) is not previous_bridge:
+                        # The image required a new physical claim. Retire leases
+                        # and buffers even when the new binding was rejected.
+                        _state["symbol_device"] = device
+                        _retire_target_connection(runtime)
+                        _state.pop("requested_attach_profile", None)
+                        if device.connected:
+                            remember_device_connection(_state, device)
+                        else:
+                            _state["last_device_connection"] = {"port": device.port, "axf": device.axf_path}
                 path = result.get("axf_path")
                 if display_name and path:
                     name = display_name.replace("\\", "/").rsplit("/", 1)[-1]
@@ -2071,7 +2090,8 @@ def create_app(
             if port is None:
                 preferred_port = previous.get("port")
             axf = axf if axf is not None else previous.get("axf")
-            mcu = mcu if mcu is not None else previous.get("mcu")
+            if mcu is None and (axf is None or _same_file_source_path(axf, previous.get("axf"))):
+                mcu = previous.get("mcu")
             elf_backend = (
                 elf_backend
                 if elf_backend is not None
@@ -2097,7 +2117,7 @@ def create_app(
             manager = get_managers()["superwatch"]
             active_axf = axf or (getattr(dev, "axf_status", {}) or {}).get("axf_path")
             if active_axf and (axf is not None or elf_backend is not None):
-                await _reparse_active_symbols(axf, elf_backend)
+                await _load_symbol_file(axf, elf_backend)
             elif manager._device is not dev:
                 await run_in_threadpool(manager.prepare, dev)
                 await activate_watch_profile(dev)
@@ -2137,8 +2157,15 @@ def create_app(
                 # so a later client without a model cannot enter generic SWD.
                 probe_id = _state["shared_probe_id"]
                 pending = _state.get("requested_attach_profile")
-                if not explicit_mcu and pending and pending[0] == probe_id:
+                pending_image = _state.get("requested_attach_image")
+                if not explicit_mcu and not axf and pending_image and pending_image[0] == probe_id:
+                    axf = pending_image[1]
+                if not explicit_mcu and not axf and pending and pending[0] == probe_id:
                     mcu = pending[1]
+                if axf and not mcu:
+                    _state["requested_attach_image"] = (probe_id, axf)
+                else:
+                    _state.pop("requested_attach_image", None)
             device = None
             try:
                 if runtime is not None and mcu is not None:
@@ -2185,15 +2212,18 @@ def create_app(
             _state["device"] = device
             _state["dispatcher"] = dispatcher
             remember_device_connection(_state, device, mcu=mcu)
+            _state.pop("requested_attach_image", None)
             target_attach = target_attach_status(device)
-            if target_attach and runtime is not None:
+            if runtime is not None and axf and not mcu:
+                _state.pop('requested_attach_profile', None)
+            elif target_attach and runtime is not None:
                 _state["requested_attach_profile"] = (_state["shared_probe_id"], target_attach["profile"])
 
         async def _initialize_target_later():
             try:
                 from mklink.device import initialize_target
                 async with async_target_debug_lease(_state, "connect-init"):
-                    if _state.get("device") is not device or not device.connected:
+                    if _state.get("device") is not device or not device.connected or target_attach_status(device):
                         return
                     await run_in_threadpool(
                         initialize_target,

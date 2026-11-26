@@ -116,30 +116,18 @@ describe('ConfigView', () => {
     ]
   }
 
-  it('submits the chosen target only on connect and retains it on a failed attach', async () => {
+  it('opens a local connection without a model selector or MCU override', async () => {
     sharedRuntime.value = true
     mocks.api.listPorts.mockResolvedValue(identifiedPorts())
-    mocks.api.connectDevice.mockRejectedValueOnce(new Error('S32K314 MUX attach failed'))
     const wrapper = await mountView()
+    expect(wrapper.find('[data-testid="connection-mcu"]').exists()).toBe(false)
     await wrapper.get('[data-testid="local-port"]').setValue('TEST_PORT_B')
-    const target = wrapper.get<HTMLSelectElement>('[data-testid="connection-mcu"]')
-    expect(target.text()).toContain('S32K314')
-    await target.setValue('s32k314')
-    expect(mocks.api.updateConfig).not.toHaveBeenCalled()
-    expect(mocks.api.connectDevice).not.toHaveBeenCalled()
     await wrapper.get('[data-testid="connect-local"]').trigger('click')
     await flushPromises()
     expect(mocks.api.connectDevice).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
-      port: 'TEST_PORT_B', probe: 'usb-b', mcu: 's32k314',
+      port: 'TEST_PORT_B', probe: 'usb-b',
     }))
-    expect(mocks.toastError).toHaveBeenCalledWith(expect.stringContaining('S32K314 MUX attach failed'))
-    expect(target.element.value).toBe('s32k314')
-    await wrapper.get('[data-testid="local-port"]').setValue('TEST_PORT_A')
-    expect(target.element.value).toBe('')
-    await wrapper.get('[data-testid="connect-local"]').trigger('click')
-    await flushPromises()
     expect(mocks.api.connectDevice.mock.lastCall![0]).not.toHaveProperty('mcu')
-    expect(mocks.api.connectDevice.mock.lastCall![0]).not.toHaveProperty('restore_last')
     wrapper.unmount()
   })
 
@@ -159,19 +147,6 @@ describe('ConfigView', () => {
       port: 'TEST_PORT_NEW', probe: 'usb-b', restore_last: true,
     }))
     expect(mocks.api.connectDevice.mock.lastCall![0]).not.toHaveProperty('mcu')
-    wrapper.unmount()
-  })
-
-  it('pins an explicit target to the current shared probe even when the serial port is automatic', async () => {
-    sharedRuntime.value = true
-    Object.assign(mocks.deviceStatus, { probe_id: 'usb-b' })
-    const wrapper = await mountView()
-    await wrapper.get('[data-testid="connection-mcu"]').setValue('s32k314')
-    await wrapper.get('[data-testid="connect-local"]').trigger('click')
-    await flushPromises()
-    expect(mocks.api.connectDevice).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
-      probe: 'usb-b', restore_last: true, mcu: 's32k314',
-    }))
     wrapper.unmount()
   })
 

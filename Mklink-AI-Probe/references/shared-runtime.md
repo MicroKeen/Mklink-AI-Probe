@@ -24,7 +24,7 @@ python -B -m mklink read-ram --probe $probe --mcu s32k314 --addr 0xE000ED00 --si
 
 缺少 MUX HELLO 0x2000 时按提示升级匹配的下载器固件。芯片检查失败时查看从 0 开始的
 `step`、`reason` 和 `actual`。绑定失效后需显式重新连接，结果不确定的写入不要重放。
-`unsupported_hook` 表示主机暂未实现配置声明的阶段。桌面与 Web 在配置页的本地连接中选择同一型号。
+`unsupported_hook` 表示主机暂未实现配置声明的阶段。桌面与 Web 打开后端可访问的 ELF、AXF 或 IAR OUT 后自动识别芯片。CLI 与 MCP 可直接传入 `axf`，也可以用 `mcu` 显式覆盖。运行 `mklink image-target <文件>` 可离线查看判定及其依据。独立文件可配同目录的 `<完整文件名>.mklink.json`，内容示例为 `{"schema_version":1,"device":"S32K344","sha256":"整个 ELF 的 64 位十六进制 SHA-256"}`。浏览器上传单个文件时只能使用文件内部信息，要利用相邻文件请选本机后端上的原文件路径。
 
 Skill 首次加载以 `ping(force_update_check=True, background_update_check=True)` 发起客户端
 版本检查，继续任务，后续用 `ping(background_update_check=True)` 取结果。发现 Skill 新版

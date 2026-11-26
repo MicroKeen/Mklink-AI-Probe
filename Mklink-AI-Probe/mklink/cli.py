@@ -2076,6 +2076,7 @@ def main():
         description="MKLink Flash Programmer CLI",
     )
     subparsers = parser.add_subparsers(dest="command")
+    subparsers.add_parser("image-target", help="从本地 ELF/AXF/OUT 和关联文件识别目标芯片").add_argument("image")
     subparsers.add_parser("target-profiles", help="离线列出可用于 --mcu 的型号、别名和专用 MEM-AP")
     from mklink.peripheral_cli import add_parser as add_peripheral_parser
 
@@ -2909,6 +2910,11 @@ def main():
     subparsers.add_parser('remote-mcp', help='Existing remote Site Agent MCP over stdio')
     subparsers.add_parser('s3-workbench', help='Private stdio client for the S3 wireless workbench')
     args = parser.parse_args()
+    if args.command == 'image-target':
+        import json
+        from mklink.image_target import resolve_image_target
+        print(json.dumps(resolve_image_target(args.image), ensure_ascii=False, indent=2))
+        return
     if args.command == 'target-profiles':
         import json
         from mklink.profiles import target_profile_catalog

@@ -74,6 +74,10 @@ const parserBackend = computed(() => {
     >
       <span>{{ tr('当前加载', 'Loaded File') }}</span>
       <code :title="symbolStatus.axf_path || undefined">{{ activeSymbolPath }}</code>
+      <template v-if="symbolStatus.image_target?.device">
+        <span>{{ tr('文件标识的芯片', 'Image target') }}</span>
+        <code data-testid="image-target">{{ symbolStatus.image_target.device }}</code>
+      </template>
       <span>{{ tr('解析后端', 'Parser') }}</span>
       <code data-testid="symbol-parser-backend">{{ parserBackend }}</code>
     </div>

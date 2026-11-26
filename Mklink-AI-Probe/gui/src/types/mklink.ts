@@ -57,6 +57,7 @@ export interface ConfigStatus {
 }
 
 export interface AxlStatus {
+  image_target?: { status: 'identified' | 'unknown' | 'conflict'; device: string | null }
   loaded: boolean
   axf_path?: string | null
   display_name?: string

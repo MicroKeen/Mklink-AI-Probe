@@ -227,3 +227,24 @@ def test_profile_flush_counts_confirmed_frames_and_never_replays(shared, fail_se
     assert [call.args for call in transport.write_memory.call_args_list] == [
         (address + offset, data[offset:offset+4]) for offset in range(0, 8 if fail_second else 11, 4)]
     bridge.send_command.assert_not_called()
+
+@pytest.mark.parametrize("open_first", [False, True])
+def test_shared_image_connect_without_model(tmp_path, shared, monkeypatch, open_first):
+    from test_image_target import bind_file, image
+    from mklink.dwarf_parser import DwarfInfo
+    client, _, state, bridge, _ = shared
+    target = image(tmp_path, "firmware.elf")
+    bind_file(target, "S32K344")
+    monkeypatch.setattr("mklink.dwarf_parser.load_dwarf_info", lambda *a, **kw: DwarfInfo())
+    if open_first:
+        result = client.post("/api/device/parse-axf", json={"axf": str(target)})
+        assert result.status_code == 200, result.text
+        assert result.json()["image_target"]["device"] == "S32K344"
+        bridge.connect.assert_not_called()
+    body = {} if open_first else {"axf": str(target)}
+    result = client.post("/_runtime/attach", json={"kind": "mcp", **body})
+    assert result.status_code == 200, result.text
+    assert result.json()["target_attach"] == {"profile": "S32K344", "mem_ap": 4}
+    assert state["last_device_connection"]["mcu"] is None
+    bridge.enable_multiplex.assert_called_once()
+    bridge.send_command.assert_not_called()

@@ -338,6 +338,7 @@ class Device:
         self._axf = axf
         self._mcu_hint = mcu
         self._attach_profile = None
+        self._image_target = None
         self._project_root = project_root
         self._elf_backend_requested = elf_backend
         self._initialize_target_now = initialize_target_now
@@ -369,13 +370,17 @@ class Device:
     # ------------------------------------------------------------------
     # Connection
     # ------------------------------------------------------------------
-    def _connect(self, *, load_symbols: bool = True) -> None:
+    def _connect(self, *, load_symbols: bool = True, binding=None) -> None:
         from mklink.discovery import find_mklink_cdc_port
         from mklink.flash import MKLinkFlash, FlashError
         from mklink.project_config import load_config
 
         config = load_config(self._project_root) or {}
-        self._attach_profile = resolve_attach_profile(self._mcu_hint, project_root=self._project_root, config=config)
+        if binding is not None or self._axf:
+            from mklink.image_target import image_binding
+            self._image_target, self._attach_profile = binding or image_binding(self._axf, self._mcu_hint)
+        else:
+            self._attach_profile = resolve_attach_profile(self._mcu_hint, project_root=self._project_root, config=config)
         # COM numbers saved in a project are neither an identity nor permission
         # to switch probes. Shared callers already supply the selected port.
         candidate = self._port or self._preferred_port or find_mklink_cdc_port()
@@ -773,7 +778,28 @@ class Device:
 
     def reparse_axf_atomically(self, axf_path: str | None = None, elf_backend: str | None = None):
         candidate, requested, effective, info, catalog = self._prepare_axf_catalog(axf_path, elf_backend)
+        from mklink.image_target import image_binding
+        override = getattr(self, "_mcu_hint", None)
+        # An explicit attach applies to that image. Opening a different file
+        # starts a fresh selection, including a return to the generic path.
+        if axf_path and self._axf and Path(candidate).absolute() != Path(self._axf).absolute():
+            override = None
+        identity, profile = image_binding(candidate, override)
         with self._symbol_lock:
+            if self.connected and profile != self._attach_profile:
+                # Reopen this exact port once. If verification fails the old
+                # claim stays closed and no symbols from the new image go live.
+                self.close()
+                self._mcu_hint = override
+                try:
+                    self._connect(load_symbols=False, binding=(identity, profile))
+                except Exception:
+                    self._axf = candidate
+                    self._symbol_catalog = self._dwarf_info = None
+                    self._image_target = identity
+                    raise
+            self._mcu_hint = override
+            self._image_target = identity
             self._axf = candidate
             self._dwarf_info = info
             self._symbol_catalog = catalog
@@ -895,6 +921,8 @@ class Device:
             }
             if not self._axf_error:
                 self._axf_error = str(exc)
+        if getattr(self, "_image_target", None) is not None:
+            tc["image_target"] = self._image_target
         if not self._dwarf_info:
             out: dict = {"loaded": False, "axf_path": self._axf, **tc}
             if self._axf_error:

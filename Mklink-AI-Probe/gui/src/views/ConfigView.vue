@@ -25,7 +25,7 @@ import { refreshRttAddressForSymbol } from '../lib/rttSymbolAddress'
 import { IS_TAURI } from '../lib/runtimeEndpoint'
 import { rememberSymbolPath } from '../lib/symbolPathHistory'
 import { sharedRuntime } from '../composables/useBackendHealth'
-import type { AxlStatus, FileSourceKind, McuProfile, PortInfo, ProbeFirmwareCheck, ProbeFirmwareUpgrade } from '../types/mklink'
+import type { AxlStatus, FileSourceKind, PortInfo, ProbeFirmwareCheck, ProbeFirmwareUpgrade } from '../types/mklink'
 import ConfigSectionNav, { type ConfigSection } from '../components/config/ConfigSectionNav.vue'
 import FileSourcesPanel from '../components/config/FileSourcesPanel.vue'
 import RuntimePanel from '../components/config/RuntimePanel.vue'
@@ -36,7 +36,6 @@ const { clientPending, clientInstalling, firmwareBusy: firmwareUpgrading } = inj
 const {
   deviceStatus,
   listPorts,
-  getProfiles,
   getConfig,
   updateConfig,
   refreshStatus,
@@ -78,15 +77,8 @@ const probePorts = ref<PortInfo[]>([])
 const selectedProbe = computed(() => probePorts.value.find(port => port.device === localPort.value))
 const switchingProbe = computed(() => sharedRuntime.value && deviceStatus.value.connected && localPortExplicit.value
   && !!selectedProbe.value && localPort.value !== deviceStatus.value.port)
-const profiles = ref<McuProfile[]>([])
-const profilesError = ref('')
-const selectedMcu = ref('')
 const boundProbeId = computed(() => sharedRuntime.value && deviceStatus.value.probe_id !== 'lobby'
   ? deviceStatus.value.probe_id || '' : '')
-const targetScope = computed(() => localPortExplicit.value ? selectedProbeId.value || localPort.value : boundProbeId.value)
-watch(targetScope, (_next, previous) => {
-  if (previous) selectedMcu.value = ''
-})
 const settings = ref<DesktopSettings>(loadDesktopSettings(window.localStorage))
 
 const portsLoading = ref(false)
@@ -169,18 +161,6 @@ async function loadConfig() {
   }
 }
 
-async function loadProfiles() {
-  try {
-    const available = await getProfiles()
-    if (!disposed) {
-      profiles.value = available
-      profilesError.value = ''
-    }
-  } catch (error) {
-    if (!disposed) profilesError.value = error instanceof Error ? error.message : String(error)
-  }
-}
-
 async function saveLocalConfig() {
   if (savingLocal.value) return
   savingLocal.value = true
@@ -220,18 +200,16 @@ async function connectLocal() {
       }
     }
     const explicitPort = localPortExplicit.value ? localPort.value.trim() : ''
-    const probe = explicitPort ? selectedProbeId.value : selectedMcu.value && boundProbeId.value
+    const probe = explicitPort ? selectedProbeId.value : ''
     const restoreLast = !explicitPort || (!!probe && probe === boundProbeId.value && !deviceStatus.value.connected)
     const result = await connectDevice({
       ...(explicitPort ? { port: explicitPort } : {}),
       ...(sharedRuntime.value && probe ? { probe } : {}),
       ...(restoreLast ? { restore_last: true } : {}),
-      ...(selectedMcu.value ? { mcu: selectedMcu.value } : {}),
       axf: isSymbolFilePath(settings.value.symbolPath)
         ? settings.value.symbolPath.trim()
         : undefined,
     })
-    selectedMcu.value = ''
     const connectedPort = result.port || deviceStatus.value.port
     if (connectedPort) {
       localPort.value = connectedPort
@@ -553,7 +531,6 @@ onMounted(async () => {
   // Firmware status is checked from the dedicated upgrade action. Avoid a
   // network manifest lookup during login so the local connection controls are
   // immediately responsive.
-  void loadProfiles()
   await Promise.all([refreshPorts(), loadConfig()])
   const bound = deviceStatus.value.probe_id
   if (!localPortTouched && sharedRuntime.value && bound && bound !== 'lobby'
@@ -624,21 +601,6 @@ onUnmounted(() => {
         </div>
         <p v-if="selectedProbeMissing" class="connection-detail" data-testid="missing-probe">
           {{ tr('原下载器已不可用。请刷新列表或明确选择其他下载器，当前未改连其他设备。', 'The selected probe is unavailable. Refresh or explicitly select another probe; no other device has been connected.') }}
-        </p>
-
-        <div v-if="!deviceStatus.connected || switchingProbe" class="form-row">
-          <label class="form-label" :for="guiId('connection-mcu')">{{ tr('目标芯片', 'Target MCU') }}</label>
-          <select :id="guiId('connection-mcu')" v-model="selectedMcu" class="form-select" data-testid="connection-mcu"
-            :disabled="connecting || disconnecting || savingLocal || savingClock || selectedProbeMissing">
-            <option value="">{{ tr('默认连接', 'Default connection') }}</option>
-            <option v-for="profile in profiles" :key="profile.key" :value="profile.key">{{ profile.name }}</option>
-          </select>
-          <button v-if="profilesError" class="btn btn-sm" type="button" @click="loadProfiles">
-            {{ tr('重新加载型号', 'Reload targets') }}
-          </button>
-        </div>
-        <p v-if="profilesError && (!deviceStatus.connected || switchingProbe)" class="connection-detail" role="alert">
-          {{ tr('读取目标型号失败：', 'Failed to load target models: ') }}{{ profilesError }}
         </p>
 
         <ConnectionClockControl :device-connected="deviceStatus.connected" :device-generation="deviceStatus.device_generation"
