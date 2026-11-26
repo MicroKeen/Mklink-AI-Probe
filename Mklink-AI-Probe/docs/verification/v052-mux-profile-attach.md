@@ -9,7 +9,7 @@
 
 | 入口 | 操作 | 成功依据 |
 | --- | --- | --- |
-| 桌面 / Web | 配置页 → 本地设备，选下载器与 S32K314，连接 | 后台确认的型号与 MEM-AP 4 |
+| 桌面 / Web | 配置页选择下载器，在文件来源加载标识 S32K314 的 ELF/AXF 后连接 | 后台确认的型号与 MEM-AP 4 |
 | Skill / MCP | `list_target_profiles()` → `connect(probe=…, mcu="s32k314", project_root=…)` | `target_attach: {"profile":"S32K314","mem_ap":4}` |
 | CLI | `mklink target-profiles` → `mklink device-status --probe … --mcu s32k314` | 同一后台的 `target_attach` 回执 |
 
