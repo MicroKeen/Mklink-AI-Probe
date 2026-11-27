@@ -21,7 +21,7 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 from anyio import CancelScope
 from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import Response, StreamingResponse
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, StrictBool, StrictInt, field_validator
 from mklink.debug_speed import validate_clock_hz
 from starlette.concurrency import iterate_in_threadpool, run_in_threadpool
 
@@ -178,6 +178,8 @@ class JobBody(ClockBody):
     reset_voltage_mv: Optional[int] = None
     base_address: Optional[int] = None
     sector_addresses: List[int] = Field(default_factory=list)
+    algorithm_erase_range: Optional[Tuple[StrictInt, StrictInt]] = None
+    flash_prepare_reset: StrictBool = False
     board: Optional[str] = None
     hpm_flash_cfg: Optional[Tuple[str, str, str, str]] = None
 
@@ -1236,6 +1238,20 @@ def _start_job_with_configuration(
                 "reset_voltage_mv is only valid for power-cycle reset"
             )
         hpm_target = is_hpm_target(target.part_number)
+        from mklink.s32k3 import MODELS
+        algorithm_erase = body.algorithm_erase_range
+        if body.flash_prepare_reset and (target.part_number not in MODELS or "erase" not in body.actions or
+                                         body.reset_mode not in ("default", "software", "system", "hardware")):
+            raise FlashError(FlashErrorCode.TARGET_NOT_SUPPORTED, "烧录准备复位需要 S32K3 擦写作业和受支持的复位方式。")
+        if algorithm_erase is not None:
+            if (target.part_number not in MODELS or
+                    set(body.actions) - {"connect", "erase", "disconnect", "reset"} or "erase" not in body.actions
+                    or body.sector_addresses or body.image_id or len(body.algorithm_ids) != 1 or body.algorithm_id):
+                raise FlashError(FlashErrorCode.IMAGE_OUT_OF_RANGE,
+                                 "算法范围擦除需要单独的擦除作业、一个指定的 FLM 和确认的起止地址。")
+        elif target.part_number in MODELS and "erase" in body.actions and not body.sector_addresses:
+            raise FlashError(FlashErrorCode.IMAGE_OUT_OF_RANGE,
+                             "请选择镜像扇区，或选择一个 FLM 并确认其地址范围后逐扇区擦除。")
         if (
             target.source == "daplink-builtin"
             and "erase" in body.actions
@@ -1426,6 +1442,14 @@ def _start_job_with_configuration(
             elif inspection is not None and not catalog and configured_flm_paths:
                 custom_flm_paths = tuple(configured_flm_paths)
                 custom_flm_digests = tuple(fingerprint)
+            if algorithm_erase is not None:
+                if len(source_records) != 1:
+                    raise FlashError(FlashErrorCode.TARGET_NOT_SUPPORTED, "所选算法没有可校验的 FLM 文件。")
+                path, digest, (start, size) = source_records[0]
+                if algorithm_erase != (start, start + size):
+                    raise FlashError(FlashErrorCode.IMAGE_OUT_OF_RANGE, "算法范围已经变化，请重新选择并确认。")
+                from mklink.cmsis_dap.flash_bounds import validate_algorithm_erase_range
+                validate_algorithm_erase_range(path, digest, start, start + size)
             if custom_flm_ram_start is None and target.source == "daplink-builtin":
                 from mklink.cmsis_dap.builtin_flm_bundle import discover_builtin_flm_algorithms
 
@@ -1473,6 +1497,8 @@ def _start_job_with_configuration(
             reset_voltage_mv=body.reset_voltage_mv,
             base_address=body.base_address,
             sector_addresses=tuple(body.sector_addresses),
+            algorithm_erase_range=algorithm_erase,
+            flash_prepare_reset=body.flash_prepare_reset,
             board=board,
             hpm_flash_cfg=hpm_flash_cfg,
             security_family=security_family,

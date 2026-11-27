@@ -89,6 +89,11 @@ class ProfileAttachDelegate:
         dp.valid_aps = [self.profile.mem_ap]
         self.bound = True
 
+    @classmethod
+    def rebind_after_reset(cls, profile, dp):
+        """A reset invalidates the AP grants. Verify the complete profile once."""
+        cls(profile)._bind(dp)
+
     def _run_step(self, dp, regs, index, step):
         ap_base = step.ap << 24
         actual = None

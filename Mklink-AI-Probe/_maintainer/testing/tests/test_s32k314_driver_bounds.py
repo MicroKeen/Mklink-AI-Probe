@@ -68,6 +68,28 @@ def test_pack_memory_map_intersects_only_the_matching_elf_without_consuming_it()
     assert code.flm.elf._file.tell() == 3
 
 
+@pytest.mark.parametrize("issue", [None, "digest", "end", "late-gap"])
+def test_explicit_code_range_checks_every_sector_without_chip_erase(issue):
+    code = region(START, END-START, CODE)
+    backend, _ = driver(code, region(s32k3_flm.DATA_START, PAGE, DATA))
+    if issue == "late-gap":
+        sector_info = code.flash.get_sector_info
+        code.flash.get_sector_info = lambda addr: None if addr == END-PAGE else sector_info(addr)
+    def run():
+        backend.erase_algorithm_range(START, END+1 if issue == "end" else END,
+                                      "invalid" if issue == "digest" else s32k3_flm.CODE_SHA256)
+    if issue:
+        with pytest.raises(FlashError):
+            run()
+        backend._eraser_factory.assert_not_called()
+    else:
+        run()
+        _, mode = backend._eraser_factory.call_args.args
+        assert mode.name == "SECTOR"
+        args = backend._eraser_factory.return_value.erase.call_args.args
+        assert args == (list(range(START, END, PAGE)),) and len(args[0]) == 496
+
+
 @pytest.mark.parametrize("address,size", [(END, PAGE), (START, 0x400000), (0x10000000, PAGE)])
 def test_custom_flm_override_rejected_by_driver_before_open_and_during_install(tmp_path, monkeypatch, address, size):
     constructor = Mock()
@@ -115,7 +137,7 @@ def test_last_byte_can_program_and_raw_read_still_reaches_reserved_tail(tmp_path
     firmware.file_path = firmware.file_path.rename(tmp_path / "misnamed.hex")
     firmware.sha256 = hashlib.sha256(b"\x00").hexdigest()
     # The pathname changes after bounds admission. Only the checked bytes can be sent.
-    backend._prepare_profile_flash.side_effect = lambda _: firmware.file_path.write_bytes(b"grown")
+    backend._prepare_profile_flash.side_effect = lambda _, *, destructive: firmware.file_path.write_bytes(b"grown")
     progress = Mock()
     backend.program(firmware, progress)
     programmer = backend._programmer_factory.return_value

@@ -2872,4 +2872,26 @@ describe('online flash explicit algorithm mapping', () => {
     expect(JSON.parse(String(job[1]!.body)).algorithm_ids).toEqual(['pack-1', 'external-1'])
     wrapper.unmount()
   })
+
+  it('confirms the selected S32K3 algorithm interval for a standalone sector erase', async () => {
+    const fetch = viewFetch([{ ...installedTarget, part_number: 'S32K344' }])
+    vi.stubGlobal('fetch', fetch)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const wrapper = mount(await onlineFlashView())
+    await vi.waitFor(() => expect(wrapper.find('[data-testid="target-S32K344"]').exists()).toBe(true))
+    await wrapper.get('[data-testid="target-S32K344"]').trigger('click')
+    await vi.waitFor(() => expect(wrapper.find('[data-testid="flash-algorithm-pack-1"] input').exists()).toBe(true))
+    const erase = wrapper.get('[data-testid="chip-erase"]')
+    expect(erase.text()).toContain('擦除算法范围')
+    expect(erase.attributes('disabled')).toBeDefined()
+    await wrapper.get('[data-testid="flash-algorithm-pack-1"] input').setValue(true)
+    await erase.trigger('click')
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('0x8000000 – 0x807FFFF'))
+    await vi.waitFor(() => expect(fetch.mock.calls.some(([url, options]) =>
+      String(url).endsWith('/jobs') && options?.method === 'POST')).toBe(true))
+    const call = fetch.mock.calls.find(([url, options]) => String(url).endsWith('/jobs') && options?.method === 'POST')!
+    expect(JSON.parse(String(call[1]!.body))).toMatchObject({ actions: ['connect', 'erase', 'disconnect'],
+      algorithm_ids: ['pack-1'], algorithm_erase_range: [0x08000000, 0x08080000], sector_addresses: [], flash_prepare_reset: true })
+    wrapper.unmount()
+  })
 })

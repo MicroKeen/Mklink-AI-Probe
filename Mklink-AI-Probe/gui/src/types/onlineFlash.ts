@@ -129,6 +129,8 @@ export interface JobRequest {
   reset_voltage_mv?: 1800 | 3300 | 5000 | null
   base_address?: number | null
   sector_addresses?: number[]
+  algorithm_erase_range?: [number, number]
+  flash_prepare_reset?: boolean
   board?: string | null
   hpm_flash_cfg?: [string, string, string, string] | null
 }

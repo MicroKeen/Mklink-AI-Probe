@@ -931,6 +931,7 @@ class PyOcdBackend:
         self._profile_core = None
         self._profile_flash_hooks = {}
         self._profile_started_running = False
+        self._flash_prepare_reset_allowed = False
         self._connection_arguments: Optional[dict[str, Any]] = None
         self._py32f030_unlock_transition_pending = False
         self._nrf54l_lock_pending = False
@@ -956,6 +957,7 @@ class PyOcdBackend:
         security_flm_path: Optional[str] = None,
         security_flm_digest: Optional[str] = None,
         security_flm_region: Optional[Tuple[int, int]] = None,
+        allow_flash_prepare_reset: bool = False,
     ) -> None:
         with self._lock:
             self.disconnect()
@@ -1328,6 +1330,8 @@ class PyOcdBackend:
                 self._session = session
                 self._flash_profile = profile
                 self._profile_core = core if profile is not None else None
+                self._flash_prepare_reset_allowed = (allow_flash_prepare_reset is True and
+                                                     reset_mode in ("default", "software", "system", "hardware"))
                 self._profile_started_running = profile_delegate is not None and profile_delegate.was_running
                 self._reset_mode = reset_mode
                 self._reset_voltage_mv = reset_voltage_mv
@@ -2501,6 +2505,7 @@ class PyOcdBackend:
                 uninstall()
             self._profile_flash_hooks.clear()
             self._profile_started_running = False
+            self._flash_prepare_reset_allowed = False
             self._connection_arguments = None
             self._py32f030_unlock_transition_pending = False
             self._nrf54l_lock_pending = False
@@ -2550,6 +2555,33 @@ class PyOcdBackend:
                 raise
             except Exception as exc:
                 raise self._mapped_error(exc, FlashErrorCode.ERASE_FAIL) from None
+
+    def erase_algorithm_range(self, start, end, digest):
+        """Resolve every live sector and its algorithm before the first erase."""
+        with self._lock:
+            if type(start) is not int or type(end) is not int or not 0 <= start < end <= 1 << 32:
+                raise FlashError(FlashErrorCode.IMAGE_OUT_OF_RANGE, "无效的算法擦除范围。")
+            target = self._require_session().target
+            pname = self._flash_core_name(target)
+            addresses = []
+            cursor = start
+            checked = set()
+            while cursor < end:
+                region = self._flash_region_for_address(target, cursor, pname=pname)
+                if region is None or region.flash is None:
+                    raise FlashError(FlashErrorCode.IMAGE_OUT_OF_RANGE, f"No Flash algorithm at 0x{cursor:X}")
+                if id(region) not in checked:
+                    stream = getattr(getattr(getattr(region, "flm", None), "elf", None), "_file", None)
+                    if not isinstance(stream, io.BytesIO) or hashlib.sha256(stream.getbuffer()).hexdigest() != digest:
+                        raise FlashError(FlashErrorCode.TARGET_NOT_SUPPORTED, "当前内核使用的 FLM 与所选算法不符。")
+                    checked.add(id(region))
+                info = region.flash.get_sector_info(cursor)
+                if (info is None or info.base_addr != cursor or info.size <= 0
+                        or cursor + info.size > min(end, region.start + region.length)):
+                    raise FlashError(FlashErrorCode.IMAGE_OUT_OF_RANGE, f"Invalid live sector at 0x{cursor:X}")
+                addresses.append(cursor)
+                cursor += info.size
+            self.erase_sectors(addresses)
 
     def program(
         self,
@@ -2692,9 +2724,13 @@ class PyOcdBackend:
             return
         if self._flash_profile is not None and self._flash_profile.flash_prepare == "halt":
             algorithms = tuple(self._profile_flash_algorithms(target, spans, program=program))
-            self._prepare_profile_flash(target)
+            self._prepare_profile_flash(target, destructive=True)
             for flash in algorithms:
                 self._check_profile_workspace(target, flash)
+            if self._flash_profile.name == "S32K344":
+                from .s32k344_workspace import prepare_workspace
+                for flash in algorithms:
+                    prepare_workspace(target, flash)
             self._algorithm_reset_done = True
             return
         if self._algorithm_reset_done:
@@ -2728,9 +2764,9 @@ class PyOcdBackend:
             )
         self._algorithm_reset_done = True
 
-    def _prepare_profile_flash(self, target: Any) -> None:
+    def _prepare_profile_flash(self, target: Any, *, destructive=False) -> None:
         """Confirm the live profile core without changing debug grants or MPU/cache settings."""
-        from .flash_thread import acquire_flash_thread
+        from .flash_thread import acquire_flash_thread, catch_flash_reset
 
         allow_resume = self._profile_started_running
         self._profile_started_running = False
@@ -2745,6 +2781,26 @@ class PyOcdBackend:
             Target = import_pyocd_attr("pyocd.core.target", "Target")
             acquire_flash_thread(core, Target.State, allow_resume=allow_resume)
         except FlashError as exc:
+            details = exc.details or {}
+            if details.get("reason") == "flash_thread_context" and destructive:
+                ipsr = details["ipsr"]
+                valid_context = (ipsr in (0, 11, 14, 15) or 16 <= ipsr <= 255) and (
+                    details["xpsr"] & (1 << 24) and not details["control"] & ~7)
+                if valid_context and self._flash_prepare_reset_allowed and not self._algorithm_reset_done:
+                    self._flash_prepare_reset_allowed = False
+                    try:
+                        catch_flash_reset(self._session, profile, self._reset_mode, {**evidence, **details})
+                    except Exception:
+                        from .profile_reset import close_reset_transport
+                        failed_session, self._session = self._session, None
+                        self._profile_core = None
+                        close_reset_transport(failed_session.probe)
+                        raise
+                    return
+                if valid_context:
+                    raise FlashError(exc.code, f"{profile.name}: IPSR={ipsr}, CONTROL=0x{details['control']:X}. "
+                                     "请在在线作业中勾选复位，选择软件或硬件复位，或将目标停在特权 Thread/MSP 后重试。",
+                                     {**evidence, **details}) from exc
             raise FlashError(exc.code, exc.message, {**evidence, **(exc.details or {})}) from exc
         except Exception as exc:
             raise FlashError(FlashErrorCode.CONNECT_FAIL,

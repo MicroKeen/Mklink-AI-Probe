@@ -2,9 +2,36 @@
 
 import hashlib
 import io
+from pathlib import Path
 
 from . import s32k3_flm
 from .errors import FlashError, FlashErrorCode
+
+
+def validate_algorithm_erase_range(path, digest, start, end):
+    """Bind the requested catalog interval to the actual supplier FlashDevice and sector table."""
+    from .pyocd_runtime import import_pyocd_attr
+    algo_class = import_pyocd_attr("pyocd.target.pack.flash_algo", "PackFlashAlgo")
+    try:
+        payload = Path(path).read_bytes()
+        if hashlib.sha256(payload).hexdigest() != digest:
+            raise ValueError("FLM digest changed")
+        flm = algo_class(io.BytesIO(payload))
+        if not 0 <= flm.flash_start <= start < end <= flm.flash_start + flm.flash_size <= 1 << 32:
+            raise ValueError("range exceeds the supplier FlashDevice")
+        cursor = start
+        for span, size in flm.iter_sector_size_ranges():
+            low, high = max(start, span.start), min(end, span.end + 1)
+            if low >= high:
+                continue
+            if low != cursor or size <= 0 or (low - span.start) % size or (high - low) % size:
+                raise ValueError("range cuts a sector or has missing geometry")
+            cursor = high
+        if cursor != end:
+            raise ValueError("sector geometry is incomplete")
+    except Exception as exc:
+        raise FlashError(FlashErrorCode.IMAGE_OUT_OF_RANGE,
+                         f"所选 FLM 无法验证整个擦除区间 0x{start:X}..0x{end-1:X}: {exc}") from exc
 
 
 def _is_limited_code(part, region):

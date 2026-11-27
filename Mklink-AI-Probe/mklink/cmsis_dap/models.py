@@ -203,6 +203,8 @@ class JobRequest:
     security_flm_path: Optional[str] = None
     security_flm_digest: Optional[str] = None
     security_flm_region: Optional[Tuple[int, int]] = None
+    algorithm_erase_range: Optional[Tuple[int, int]] = None
+    flash_prepare_reset: bool = False
 
     @classmethod
     def full_sequence(

@@ -14,7 +14,7 @@
   },
   "current_session": {
     "status": "0.5.2 开发见 [PR #98](https://github.com/MicroKeen/Mklink-AI-Probe/pull/98)。0.5.1 发布和三平台验证见 [PR #97](https://github.com/MicroKeen/Mklink-AI-Probe/pull/97)。",
-    "current_task": "[单文件回放](../verification/v052-indexed-recordings.md)及 [Modbus 修复](../verification/v052-modbus-disconnect.md)已验证，暂缓打包。"
+    "current_task": "[S32K344 在线烧录](../verification/v052-s32k344-online-flash.md)冷上电及 IRQ87 单扇区作业通过，整段 Code 仅做预检。本轮准备 Windows 客户验证包。"
   },
   "milestones": [
     {
