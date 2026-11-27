@@ -4067,7 +4067,8 @@ class ModbusStreamManager:
                     self._record_event({'event': 'data', **result})
                 except Exception as error:
                     if not self._stop_event.is_set():
-                        self._bridge.put({'event': 'error', 'message': str(error)})
+                        self._record_event({'event': 'error', 'scope': 'poll',
+                                            'timestamp': time.time(), 'message': str(error)})
                 self._stop_event.wait(self._interval)
         finally:
             # Session/port ownership ends only after stop joins every worker.
@@ -4083,6 +4084,9 @@ class ModbusStreamManager:
             threads = (self._thread, self._loop_thread)
             if worker is not None:
                 worker.request_stop()
+                cancel = getattr(client, 'cancel_pending_io', None)
+                if cancel is not None:
+                    cancel()
         deadline = time.monotonic() + self._stop_timeout
         for thread in threads:
             if thread is not None and thread.ident is not None and thread is not threading.current_thread():

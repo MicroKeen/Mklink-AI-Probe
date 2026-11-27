@@ -1,8 +1,7 @@
 <template>
   <div class="modbus-workbench">
-    <SetupHint v-if="portsLoaded && !ports.length" kind="info"
-      :message="tr('未检测到可用串口。Modbus 不依赖 MKLink 设备连接。', 'No serial ports detected. Modbus does not depend on the MKLink device connection.')"
-      :primary-label="tr('刷新串口', 'Refresh Ports')" :busy="refreshingPorts" @primary="refreshPorts" />
+    <SetupHint v-if="portsLoaded && !ports.length && !running && !stopping" kind="info"
+      :message="tr('未检测到可用串口。Modbus 不依赖 MKLink 设备连接。', 'No serial ports detected. Modbus does not depend on the MKLink device connection.')" />
 
     <header class="workbench-hero">
       <div class="hero-copy">
@@ -26,7 +25,14 @@
         <div class="config-group primary-config">
           <span class="group-label">{{ tr('链路', 'LINK') }}</span>
           <div class="link-grid">
-            <label class="port-field"><span>{{ tr('串口', 'Port') }}</span><select :disabled="running || stopping || connecting || readingBaudrates" data-testid="modbus-port" v-model="settings.port" class="form-input"><option v-for="p in ports" :key="p.device" :value="p.device">{{ uartPortLabel(p) }}</option></select></label>
+            <div class="port-field">
+              <label><span>{{ tr('串口', 'Port') }}</span><select :disabled="running || stopping || connecting || readingBaudrates || refreshingPorts" data-testid="modbus-port" v-model="settings.port" class="form-input">
+                <option v-if="(running || stopping) && settings.port && !ports.some(p => p.device === settings.port)" :value="settings.port">{{ settings.port }}</option>
+                <option v-for="p in ports" :key="p.device" :value="p.device">{{ uartPortLabel(p) }}</option>
+              </select></label>
+              <button type="button" class="btn refresh-ports" :title="tr('刷新串口', 'Refresh ports')" :aria-label="tr('刷新串口', 'Refresh ports')"
+                :disabled="connecting || stopping || refreshingPorts || readingBaudrates" @click="refreshPorts"><RefreshCw :size="15" /></button>
+            </div>
             <label><span>{{ tr('波特率', 'Baud') }}</span><select :disabled="running || stopping || connecting || readingBaudrates" v-model.number="settings.baudrate" class="form-input mono" data-testid="modbus-baudrate" :title="baudrateSourceLabel" :aria-invalid="!validBaudrate">
               <option v-for="rate in baudrates" :key="rate" :value="rate">{{ rate }}</option>
               <option v-if="(running || stopping) && !baudrates.includes(settings.baudrate)" :value="settings.baudrate" disabled>{{ settings.baudrate }} ({{ tr('当前会话', 'current session') }})</option>
@@ -55,11 +61,14 @@
         </div>
         <div class="connect-block">
           <label class="echo-toggle"><input :disabled="running || stopping || connecting" v-model="settings.localEcho" type="checkbox" /><span><b>{{ tr('本地回显', 'Local echo') }}</b><small>{{ tr('适配器回显兼容', 'Adapter compatibility') }}</small></span></label>
-          <button v-if="!running && !stopping" class="btn btn-primary connection-action" :disabled="!settings.port || connecting || readingBaudrates || !validBaudrate" @click="connect">{{ connecting ? tr('连接中…', 'Connecting…') : tr('连接', 'Connect') }}</button>
-          <button v-else class="btn btn-danger connection-action" :disabled="disconnecting" @click="disconnect">{{ tr('断开连接', 'Disconnect') }}</button>
+          <button v-if="!running && !stopping" class="btn btn-primary connection-action" :disabled="!settings.port || connecting || refreshingPorts || readingBaudrates || !validBaudrate" @click="connect">{{ connecting ? tr('连接中…', 'Connecting…') : tr('连接', 'Connect') }}</button>
+          <button v-else class="btn btn-danger connection-action" :disabled="disconnecting" @click="disconnect">{{ disconnecting ? tr('正在断开…', 'Disconnecting…') : tr('断开连接', 'Disconnect') }}</button>
         </div>
       </div>
     </section>
+
+    <SetupHint v-if="requestErrorMessage && requestErrorMessage !== dismissedError" kind="error" :message="requestErrorMessage"
+      :secondary-label="tr('关闭', 'Dismiss')" @secondary="dismissedError = requestErrorMessage" />
 
     <div class="workbench-columns">
       <section class="workbench-card request-card">
@@ -80,7 +89,7 @@
             <label><span>{{ tr('间隔(ms)', 'Interval (ms)') }}</span><input v-model.number="settings.loopIntervalMs" type="number" class="form-input" min="20" /></label>
             <label><span>{{ tr('次数 (0=连续)', 'Count (0=continuous)') }}</span><input v-model.number="settings.loopCount" type="number" class="form-input" min="0" max="100000" /></label>
             <button v-if="!loopRunning" class="btn" :disabled="!running || stopping" @click="startLoop">{{ tr('循环发送', 'Start Loop') }}</button>
-            <button v-else class="btn btn-danger" @click="stopLoop">{{ tr('停止循环', 'Stop Loop') }}</button>
+            <button v-else class="btn btn-danger" :disabled="stopping" @click="stopLoop">{{ tr('停止循环', 'Stop Loop') }}</button>
           </div>
         </div>
         <div v-if="loopStatus.completed || loopRunning" class="loop-summary">{{ tr('已执行', 'Completed') }} {{ loopStatus.completed || 0 }} · {{ tr('错误', 'Errors') }} {{ loopStatus.errors || 0 }}</div>
@@ -100,7 +109,7 @@
 
     <section class="workbench-card log-card">
       <div class="card-heading log-heading"><div class="title-stack"><span class="terminal-lights"><i></i><i></i><i></i></span><div><strong>{{ tr('RTU 帧监视器', 'RTU frame monitor') }}</strong><small>{{ tr('实际串口收发数据 · CRC 自动校验', 'Raw serial traffic · automatic CRC validation') }}</small></div></div><div class="log-toolbar"><span class="frame-counter mono">{{ logs.length }} FRAMES</span><div class="log-actions"><button class="btn btn-sm" :class="{ active: logPaused }" @click="logPaused = !logPaused">{{ logPaused ? tr('继续', 'Resume') : tr('暂停', 'Pause') }}</button><button class="btn btn-sm" @click="logs = []">{{ tr('清空', 'Clear') }}</button><button class="btn btn-sm" :disabled="!logs.length" @click="exportLogs">{{ tr('导出', 'Export') }}</button></div></div></div>
-      <div ref="logPanel" class="frame-log"><div v-for="(entry, index) in logs" :key="`${entry.timestamp}-${index}`" class="frame-row" :class="entry.direction"><span class="frame-time">{{ formatTime(entry.timestamp) }}</span><span class="frame-direction">{{ (entry.direction || entry.event).toUpperCase() }}</span><span class="frame-body mono">{{ entry.hex || entry.message || summarizeEvent(entry) }}</span><span v-if="entry.crc_ok !== undefined && entry.crc_ok !== null" class="crc" :class="entry.crc_ok ? 'ok' : 'bad'">CRC {{ entry.crc_ok ? 'OK' : 'ERR' }}</span></div><div v-if="!logs.length" class="empty-state">{{ tr('连接后发送请求，TX/RX 原始帧会显示在这里。', 'Connect and send a request to view raw TX/RX frames.') }}</div></div>
+      <div ref="logPanel" class="frame-log"><div v-for="entry in logs" :key="entry.rowId" class="frame-row" :class="entry.direction"><span class="frame-time">{{ formatTime(entry.timestamp) }}</span><span class="frame-direction">{{ (entry.direction || entry.event).toUpperCase() }}</span><span class="frame-body mono">{{ entry.hex || entry.message || summarizeEvent(entry) }}</span><span v-if="entry.crc_ok !== undefined && entry.crc_ok !== null" class="crc" :class="entry.crc_ok ? 'ok' : 'bad'">CRC {{ entry.crc_ok ? 'OK' : 'ERR' }}</span></div><div v-if="!logs.length" class="empty-state">{{ tr('连接后发送请求，TX/RX 原始帧会显示在这里。', 'Connect and send a request to view raw TX/RX frames.') }}</div></div>
     </section>
   </div>
 </template>
@@ -110,6 +119,7 @@ import { requestError } from '../../lib/requestError'
 import { frontendFetch as fetch } from '../../lib/frontendControl'
 
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { RefreshCw } from '@lucide/vue'
 import { useUartBaudrates } from '../../composables/useUartBaudrates'
 import { useMklinkApi } from '../../composables/useMklinkApi'
 import { useToast } from '../../composables/useToast'
@@ -144,9 +154,14 @@ watch([baudrates, running, stopping, portsLoaded, () => settings.port], () => {
 interface LoopStatus { revision: number; running: boolean; completed: number; errors: number }
 const loopStatus = ref<LoopStatus>({ revision: -1, running: false, completed: 0, errors: 0 })
 const lastResult = ref<TransactionResult | null>(null)
-const logs = ref<LogEntry[]>([])
+const logs = ref<Array<LogEntry & { rowId: number }>>([])
+let nextRowId = 0
 const logPanel = ref<HTMLElement | null>(null)
 let es: EventSource | null = null
+let disposed = false
+let connectionVersion = 0
+const requestErrorMessage = ref('')
+const dismissedError = ref('')
 
 const isRead = computed(() => READ_FUNCTIONS.has(Number(settings.fc)))
 const isBit = computed(() => BIT_FUNCTIONS.has(Number(settings.fc)))
@@ -161,7 +176,24 @@ async function api(path: string, body?: unknown) {
   if (!response.ok) { const detail = payload?.detail; throw new Error(requestError(detail, response.status, 'Modbus')) }
   return payload
 }
-async function refreshPorts() { refreshingPorts.value = true; try { ports.value = orderUartPorts(await fetchPorts(), 'mklink_rs485'); if (!running.value && !stopping.value && !ports.value.some(item => item.device === settings.port)) settings.port = ports.value[0]?.device || '' } catch (error) { toast.error(String(error)) } finally { refreshingPorts.value = false; portsLoaded.value = true } }
+function selectAvailablePort() {
+  if (!running.value && !stopping.value && !ports.value.some(port => port.device === settings.port)) {
+    settings.port = ports.value[0]?.device || ''
+  }
+}
+async function refreshPorts() {
+  if (refreshingPorts.value) return
+  refreshingPorts.value = true
+  try {
+    ports.value = orderUartPorts(await fetchPorts(), 'mklink_rs485')
+    selectAvailablePort()
+  } catch (error) {
+    if (!disposed) toast.error(String(error))
+  } finally {
+    refreshingPorts.value = false
+    portsLoaded.value = true
+  }
+}
 function applyLoopStatus(status: LoopStatus): void {
   // HTTP replies and SSE share an order; completion can precede a start reply.
   if (!running.value || !status || !Number.isSafeInteger(status.revision) || status.revision < loopStatus.value.revision) return
@@ -183,22 +215,48 @@ function applyStatus(status: any): void {
   }
 }
 async function restoreStatus() {
+  const version = connectionVersion
   try {
-    applyStatus(await api('/api/dash/modbus/status'))
+    const status = await api('/api/dash/modbus/status')
+    if (disposed || version !== connectionVersion) return
+    applyStatus(status)
     if (running.value) connectSSE()
   } catch { /* Preserve the last confirmed state while the backend is unavailable. */ }
 }
-async function connect() { if (!settings.port || !validBaudrate.value || readingBaudrates.value || connecting.value) return; connecting.value = true; try { await api('/api/dash/modbus/start', { port: settings.port, slave: settings.slave, baudrate: settings.baudrate, bytesize: settings.bytesize, parity: settings.parity, stopbits: settings.stopbits, timeout: settings.timeout, retries: settings.retries, local_echo: settings.localEcho, registers: [], interval: Math.max(0.02, settings.loopIntervalMs / 1000) }); running.value = true; stopping.value = false; connectSSE(); toast.success(tr('Modbus 已连接', 'Modbus connected')) } catch (error) { toast.error(tr('连接失败: ', 'Connection failed: ') + String(error)) } finally { connecting.value = false } }
+async function connect() {
+  if (!settings.port || !validBaudrate.value || readingBaudrates.value || refreshingPorts.value || connecting.value) return
+  connecting.value = true
+  connectionVersion++
+  try {
+    await api('/api/dash/modbus/start', {
+      port: settings.port, slave: settings.slave, baudrate: settings.baudrate, bytesize: settings.bytesize,
+      parity: settings.parity, stopbits: settings.stopbits, timeout: settings.timeout, retries: settings.retries,
+      local_echo: settings.localEcho, registers: [], interval: Math.max(0.02, settings.loopIntervalMs / 1000),
+    })
+    if (disposed) return
+    running.value = true
+    stopping.value = false
+    requestErrorMessage.value = dismissedError.value = ''
+    connectSSE()
+    toast.success(tr('Modbus 已连接', 'Modbus connected'))
+  } catch (error) {
+    if (!disposed) toast.error(tr('连接失败: ', 'Connection failed: ') + String(error))
+  } finally { connecting.value = false }
+}
 async function disconnect() {
+  if (disconnecting.value) return
+  connectionVersion++
   disconnecting.value = true
   stopping.value = true
+  stopEventSource()
   try {
     await api('/api/dash/modbus/stop', {})
-    stopEventSource()
     running.value = false
     stopping.value = false
     loopRunning.value = false
     loopStatus.value = { ...loopStatus.value, running: false, completed: 0, errors: 0 }
+    requestErrorMessage.value = dismissedError.value = ''
+    selectAvailablePort()
     toast.info(tr('Modbus 已断开', 'Modbus disconnected'))
   } catch (error) {
     toast.error(tr('停止未完成: ', 'Stop did not complete: ') + String(error))
@@ -208,27 +266,81 @@ async function disconnect() {
   }
 }
 function requestPayload() { return buildTransaction(settings) }
-async function sendOnce() { sending.value = true; try { lastResult.value = await api('/api/dash/modbus/transaction', requestPayload()) } catch (error) { toast.error(tr('请求失败: ', 'Request failed: ') + String(error)) } finally { sending.value = false } }
-async function startLoop() {
+async function sendOnce() {
+  const version = connectionVersion
+  sending.value = true
+  requestErrorMessage.value = dismissedError.value = ''
   try {
-    applyLoopStatus(await api('/api/dash/modbus/loop/start', {
-      ...requestPayload(), interval: settings.loopIntervalMs / 1000, count: settings.loopCount,
-    }))
+    const result = await api('/api/dash/modbus/transaction', requestPayload())
+    if (!disposed && version === connectionVersion) lastResult.value = result
   } catch (error) {
+    if (!disposed && version === connectionVersion) requestErrorMessage.value = tr('请求失败: ', 'Request failed: ') + String(error)
+  } finally { sending.value = false }
+}
+async function startLoop() {
+  const version = connectionVersion
+  requestErrorMessage.value = dismissedError.value = ''
+  try {
+    const status = await api('/api/dash/modbus/loop/start', {
+      ...requestPayload(), interval: settings.loopIntervalMs / 1000, count: settings.loopCount,
+    })
+    if (!disposed && version === connectionVersion) applyLoopStatus(status)
+  } catch (error) {
+    if (disposed || version !== connectionVersion) return
     toast.error(tr('循环启动失败: ', 'Loop start failed: ') + String(error))
     await restoreStatus()
   }
 }
 async function stopLoop() {
+  const version = connectionVersion
   try {
     const status = await api('/api/dash/modbus/loop/stop', {})
-    applyLoopStatus(status)
+    if (!disposed && version === connectionVersion) applyLoopStatus(status)
   } catch (error) {
+    if (disposed || version !== connectionVersion) return
     toast.error(tr('循环停止未完成: ', 'Loop stop did not complete: ') + String(error))
     await restoreStatus()
   }
 }
-function connectSSE() { stopEventSource(); es = new EventSource(`${API_BASE}/api/dash/modbus/stream`); es.onmessage = event => { try { const value = JSON.parse(event.data); if (value.event === 'status') applyStatus(value); if (value.event === 'transaction') lastResult.value = value; if (value.event === 'loop') applyLoopStatus(value); if (value.event === 'stopped') { running.value = false; stopping.value = false; loopRunning.value = false; stopEventSource() }; if (value.event === 'error') toast.error(value.message); if (value.event === 'history') { if (!logPaused.value) logs.value = [...logs.value, ...(value.points || []).filter((item: LogEntry) => ['frame', 'error'].includes(item.event))].slice(-500) } else if (!logPaused.value && ['frame', 'error'].includes(value.event)) logs.value = [...logs.value, value].slice(-500); nextTick(() => { if (logPanel.value) logPanel.value.scrollTop = logPanel.value.scrollHeight }) } catch { /* malformed event */ } } }
+function connectSSE() {
+  stopEventSource()
+  if (disposed) return
+  const source = new EventSource(`${API_BASE}/api/dash/modbus/stream`)
+  es = source
+  source.onmessage = event => {
+    if (es !== source) return
+    let value
+    try { value = JSON.parse(event.data) } catch { return }
+    if (!value) return
+    switch (value.event) {
+      case 'status': applyStatus(value); return
+      case 'transaction': lastResult.value = value; return
+      case 'loop': applyLoopStatus(value); return
+      case 'stopped':
+        connectionVersion++
+        running.value = stopping.value = loopRunning.value = false
+        requestErrorMessage.value = dismissedError.value = ''
+        selectAvailablePort()
+        stopEventSource()
+        return
+      case 'error':
+        requestErrorMessage.value = value.message
+        break
+      case 'frame':
+      case 'history':
+        break
+      default: return
+    }
+    if (logPaused.value) return
+    const entries: LogEntry[] = value.event === 'history'
+      ? (value.points || []).filter((item: LogEntry) => ['frame', 'error'].includes(item.event))
+      : [value]
+    if (!entries.length) return
+    const rows = entries.map(entry => ({ ...entry, timestamp: entry.timestamp ?? Date.now() / 1000, rowId: nextRowId++ }))
+    logs.value = [...logs.value, ...rows].slice(-500)
+    nextTick(() => { if (logPanel.value) logPanel.value.scrollTop = logPanel.value.scrollHeight })
+  }
+}
 function stopEventSource() { if (es) { es.close(); es = null } }
 function formatAddress(value: number | null | undefined) { return value == null ? '—' : `${value} / 0x${value.toString(16).toUpperCase().padStart(4, '0')}` }
 function formatHex(value: number | boolean) { const n = typeof value === 'boolean' ? Number(value) : value; return `0x${n.toString(16).toUpperCase().padStart(4, '0')}` }
@@ -238,10 +350,12 @@ function formatTime(timestamp: number) { const date = new Date(timestamp * 1000)
 function summarizeEvent(entry: LogEntry) { return entry.event === 'error' ? entry.message || '' : JSON.stringify(entry) }
 function exportLogs() { const content = logs.value.map(entry => `${formatTime(entry.timestamp)} ${(entry.direction || entry.event).toUpperCase()} ${entry.hex || entry.message || summarizeEvent(entry)}`).join('\n'); const url = URL.createObjectURL(new Blob([content], { type: 'text/plain;charset=utf-8' })); const link = document.createElement('a'); link.href = url; link.download = `mklink-modbus-${Date.now()}.log`; link.click(); URL.revokeObjectURL(url) }
 onMounted(async () => { await refreshPorts(); await restoreStatus() })
-onUnmounted(stopEventSource)
+onUnmounted(() => { disposed = true; stopEventSource() })
 </script>
 
 <style scoped>
 .baud-read { margin-top: 8px; }
+.port-field { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 4px; }
+.refresh-ports { display: grid; place-items: center; height: 34px; width: 32px; padding: 0; }
 .modbus-workbench{display:grid;gap:14px;max-width:1480px;margin:0 auto;padding:2px}.workbench-hero{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;padding:10px 4px 4px}.hero-copy{display:grid;gap:4px}.eyebrow{color:var(--accent);font:700 10px/1 var(--font-mono);letter-spacing:.16em}.hero-copy h2{margin:0;color:var(--fg);font-size:22px;letter-spacing:-.02em}.hero-copy p{margin:0;color:var(--muted);font-size:12px}.hero-status{display:flex;align-items:center;gap:7px}.protocol-tag,.mode-badge{padding:5px 8px;border:1px solid var(--border);border-radius:4px;background:color-mix(in srgb,var(--bg) 72%,transparent);color:var(--muted);font:700 10px/1 var(--font-mono);letter-spacing:.08em}.state-pill{display:inline-flex;align-items:center;gap:7px;margin-left:4px;padding:6px 10px;border:1px solid var(--border);border-radius:999px;background:var(--surface);color:var(--muted);font-size:11px;font-weight:600}.state-pill i{width:7px;height:7px;border-radius:50%;background:var(--dim)}.state-pill.online{color:var(--success);border-color:color-mix(in srgb,var(--success) 35%,var(--border));background:color-mix(in srgb,var(--success) 7%,var(--surface))}.state-pill.online i{background:var(--success);box-shadow:0 0 0 4px color-mix(in srgb,var(--success) 13%,transparent)}.workbench-card{min-width:0;overflow:hidden;border:1px solid var(--border);border-radius:8px;background:var(--surface);box-shadow:0 1px 2px rgb(25 28 30 / 3%)}.card-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:48px;padding:10px 14px;border-bottom:1px solid var(--border-subtle);background:color-mix(in srgb,var(--surface) 94%,var(--bg))}.title-stack{display:flex;align-items:center;gap:10px}.title-stack>div{display:grid;gap:2px}.title-stack strong{font-size:13px}.title-stack small{color:var(--muted);font-size:10px}.step-index{display:grid;place-items:center;width:25px;height:25px;border:1px solid color-mix(in srgb,var(--accent) 30%,var(--border));border-radius:5px;background:color-mix(in srgb,var(--accent) 7%,var(--surface));color:var(--accent);font:700 10px var(--font-mono)}.connection-summary{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:10px}.connection-summary b{color:var(--border)}.connection-layout{display:grid;grid-template-columns:minmax(260px,1.5fr) minmax(250px,1fr) minmax(270px,1fr) minmax(150px,.65fr);align-items:stretch}.config-group,.connect-block{padding:13px 14px}.config-group+.config-group,.connect-block{border-left:1px solid var(--border-subtle)}.group-label{display:block;margin-bottom:8px;color:var(--dim);font:700 9px/1 var(--font-mono);letter-spacing:.13em}.link-grid{display:grid;grid-template-columns:minmax(160px,1.6fr) minmax(100px,.8fr);gap:9px}.serial-grid,.protocol-grid{display:grid;grid-template-columns:repeat(3,minmax(65px,1fr));gap:8px}label{display:grid;min-width:0;gap:5px;color:var(--muted);font-size:10px}label>span{font-weight:600}.form-input{width:100%;min-width:0;height:34px;box-sizing:border-box;border-radius:5px!important}.input-unit{position:relative}.input-unit input{padding-right:24px}.input-unit>span{position:absolute;right:9px;top:50%;transform:translateY(-50%);color:var(--dim);font:10px var(--font-mono)}.connect-block{display:grid;gap:9px;align-content:end;background:color-mix(in srgb,var(--bg) 50%,var(--surface))}.echo-toggle{display:flex;align-items:center;gap:8px;cursor:pointer}.echo-toggle input{margin:0}.echo-toggle>span{display:grid;gap:1px}.echo-toggle b{color:var(--fg);font-size:10px}.echo-toggle small{color:var(--muted);font-size:9px;font-weight:400}.connection-action{display:flex;align-items:center;justify-content:center;gap:7px;height:34px;white-space:nowrap}.workbench-columns{display:grid;grid-template-columns:minmax(400px,.92fr) minmax(400px,1.08fr);gap:14px}.request-card,.response-card{min-height:340px}.request-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px}.wide{grid-column:1/-1}.function-field select{height:38px;font-weight:600;color:var(--fg)}.mono{font-family:var(--font-mono)}.value-input{min-height:70px;resize:vertical}.request-preview{display:flex;gap:18px;margin:0 14px;padding:8px 10px;border:1px dashed var(--border);border-radius:5px;background:var(--bg);color:var(--muted);font-size:9px;letter-spacing:.03em}.request-preview b{color:var(--fg);font-weight:600}.request-actions{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;padding:12px 14px 14px;flex-wrap:wrap}.send-button{display:flex;align-items:center;justify-content:space-between;gap:18px;min-width:128px}.send-button span{font-size:15px}.loop-controls{display:flex;align-items:flex-end;gap:7px;flex-wrap:wrap}.loop-controls label{width:108px}.loop-summary{margin:0 14px 13px;color:var(--muted);font:10px var(--font-mono)}.result-meta{display:flex;gap:8px;padding:10px 14px 0;color:var(--muted);font-size:10px}.result-meta span{padding:4px 7px;border-radius:4px;background:var(--bg)}.duration-badge{padding:5px 8px;border-radius:4px;background:color-mix(in srgb,var(--success) 9%,var(--surface));color:var(--success);font:10px var(--font-mono)}.duration-badge b{font-size:12px}.result-table-wrap{overflow:auto;max-height:280px;margin:10px 14px 14px;border:1px solid var(--border-subtle);border-radius:5px}.result-table{border-collapse:collapse;width:100%;font-size:11px}.result-table th,.result-table td{border-bottom:1px solid var(--border-subtle);text-align:left;padding:7px 9px}.result-table th{position:sticky;top:0;background:var(--bg);color:var(--muted);font:700 9px var(--font-mono);letter-spacing:.08em}.result-table tbody tr:hover{background:color-mix(in srgb,var(--accent) 4%,transparent)}.result-table tbody tr:last-child td{border-bottom:0}.empty-state{color:var(--muted);font-size:12px;padding:24px 10px;text-align:center}.response-empty{display:flex;min-height:230px;flex-direction:column;align-items:center;justify-content:center;gap:7px}.response-empty strong{color:var(--fg);font-size:12px}.response-empty small{max-width:300px;line-height:1.5}.empty-glyph{display:grid;place-items:center;width:62px;height:42px;margin-bottom:3px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--dim);font-size:11px}.log-card{background:#151a1f;border-color:#252d34}.log-heading{background:#1b2127;border-color:#293139;color:#e7ebee}.log-heading .title-stack small{color:#87929d}.terminal-lights{display:flex;gap:5px}.terminal-lights i{width:7px;height:7px;border-radius:50%;background:#4f5963}.terminal-lights i:first-child{background:#d2675b}.terminal-lights i:nth-child(2){background:#d4a548}.terminal-lights i:last-child{background:#55a875}.log-toolbar,.log-actions{display:flex;align-items:center;gap:6px}.frame-counter{margin-right:5px;color:#707c87;font-size:9px}.log-actions .btn{border-color:#343e47;background:#20272e;color:#aeb7bf}.log-actions .btn:hover:not(:disabled),.log-actions .btn.active{background:#2a333c;color:#fff}.frame-log{min-height:180px;max-height:300px;overflow:auto;background:#11161a}.frame-row{display:grid;grid-template-columns:94px 38px minmax(0,1fr) 66px;gap:9px;align-items:center;padding:6px 12px;border-bottom:1px solid #20272d;color:#bdc5cc;font-size:11px}.frame-row:hover{background:#171e23}.frame-time{color:#626e78}.frame-direction{font-weight:800;letter-spacing:.05em}.frame-row.tx .frame-direction{color:#63a8e7}.frame-row.rx .frame-direction{color:#65bd8c}.frame-body{overflow-wrap:anywhere;color:#d4d9dd;letter-spacing:.015em}.crc{font:700 9px var(--font-mono)}.crc.ok{color:#65bd8c}.crc.bad{color:#e17268}.frame-log .empty-state{color:#65717b}.btn-sm{font-size:10px;padding:4px 8px}@media(max-width:1280px){.connection-layout{grid-template-columns:1fr 1fr}.protocol-config,.connect-block{border-top:1px solid var(--border-subtle)}.protocol-config{border-left:0!important}.workbench-columns{grid-template-columns:1fr 1fr}}@media(max-width:980px){.workbench-columns{grid-template-columns:1fr}}@media(max-width:700px){.workbench-hero{align-items:flex-start;flex-direction:column}.connection-layout{grid-template-columns:1fr}.config-group+.config-group,.connect-block{border-left:0;border-top:1px solid var(--border-subtle)}.hero-status{flex-wrap:wrap}.connection-summary{display:none}.link-grid,.serial-grid,.protocol-grid,.request-grid{grid-template-columns:1fr}.wide{grid-column:auto}.request-preview{flex-wrap:wrap;gap:9px}.request-actions{align-items:stretch;flex-direction:column}.send-button{width:100%}.loop-controls{display:grid;grid-template-columns:1fr 1fr}.loop-controls label{width:auto}.frame-row{grid-template-columns:76px 32px minmax(0,1fr)}.crc{display:none}.log-heading{align-items:flex-start;flex-direction:column}.log-toolbar{width:100%;justify-content:space-between}}
 </style>

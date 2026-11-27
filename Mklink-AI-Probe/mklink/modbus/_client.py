@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from threading import Event
 
 from pymodbus.client import ModbusSerialClient
 from pymodbus import FramerType, ModbusException
@@ -28,7 +29,12 @@ class ModbusSlaveError(ModbusError):
 class _ExplicitSerialClient(ModbusSerialClient):
     """pymodbus requests may check connectivity, but must never reopen a COM port."""
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.stop_requested = Event()
+
     def open_port(self) -> bool:
+        self.stop_requested.clear()
         if not super().connect():
             return False
         self.socket.write_timeout = self.comm_params.timeout_connect
@@ -36,6 +42,12 @@ class _ExplicitSerialClient(ModbusSerialClient):
 
     def connect(self) -> bool:
         return bool(self.socket and self.socket.is_open)
+
+    def _in_waiting(self):
+        # pymodbus polls this during receive and before sending a retry.
+        if self.stop_requested.is_set():
+            raise ModbusError("Modbus disconnected during request; result unknown")
+        return super()._in_waiting()
 
 
 class ModbusClient:
@@ -102,6 +114,18 @@ class ModbusClient:
                 raise
             print(f"[FAIL] 无法打开端口 {self._port}: {e}")
             return False
+
+    def cancel_pending_io(self) -> None:
+        """Interrupt the current wait without releasing the serial port lock."""
+        self._client.stop_requested.set()
+        port = self._client.socket
+        for name in ('cancel_read', 'cancel_write'):
+            cancel = getattr(port, name, None)
+            if cancel is not None:
+                try:
+                    cancel()
+                except (OSError, NotImplementedError):
+                    pass  # The worker still observes stop_requested when polling.
 
     def close(self) -> None:
         """关闭串口连接。"""
