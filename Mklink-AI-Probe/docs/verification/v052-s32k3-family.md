@@ -1,6 +1,6 @@
 # S32K3 上位机型号与验收
 
-桌面和 Web 加载 ELF/AXF/OUT 后可以自动识别下表的 22 个型号。CLI 和共享 MCP 使用同一解析器，在线烧录按芯片匹配供应商算法。连接后检查 Cortex-M7 主核与型号，返回规范名和 MEM-AP 4。当前实板覆盖 S32K314、S32K344。其余型号可以按手册配置使用。
+USB SWD 调试通过下载器和目标芯片识别下表 22 个型号。桌面、Web、CLI 和 MCP 共享同一连接。ELF、AXF 和 IAR OUT 提供调试符号。表格列出在线算法及此前的实板覆盖，本次硬件识别的验收范围单列于下。
 
 | 型号 | 内置在线算法 | 实板覆盖 |
 | --- | --- | --- |
@@ -11,13 +11,42 @@
 
 ## 选择与识别
 
-共享 MCP 调用 `list_target_profiles()`，再用 `connect(probe=…, mcu="S32K344", project_root=…)` 连接。回执应含 `target_attach.profile="S32K344"` 和 `mem_ap=4`。后续读变量、RTT、SuperWatch、MEM 复用这一会话。CLI 使用 `mklink target-profiles` 和 `mklink device-status --probe … --mcu s32k344`。桌面与 Web 在配置页选择探针，在“文件来源”打开原始 ELF、AXF 或 OUT。加载回执的 `image_target` 给出文件中的型号及识别依据。在线烧录页使用单独的 CMSIS-DAP 会话，同样先核对型号和主核。
+共享 MCP 调用 `connect(probe=…, project_root=…)`，CLI 使用 `mklink device-status --probe …`。回执 `target_attach` 含实际型号、MEM-AP、DPIDR、TARGETID 和原始 MIDR1。可选 `mcu` 要求实物符合指定型号。后续读变量、RTT、SuperWatch、MEM 复用该会话。在线烧录独立校验所选芯片、主核、FLM 及其地址范围。
 
 文件可以通过 ELF 非加载节 `.mklink.target` 的版本 1 JSON（`schema_version` 和 `device`）、明确的 ARM 属性、DWARF 编译单元或行表中的器件文件名声明型号。使用构建旁证时，Keil `.uvprojx` 和 IAR `.ewp` 逐个目标或配置核对输出目录和文件名，CMSIS `.cbuild-run.yml` 核对 `output[].file` 和 `type: elf`，GNU 构建可使用同名 `.map` 中带具体型号的启动对象。关联工程只解析数据。独立交付的 ELF 可使用 `<文件名>.mklink.json`，以整个 ELF 的 SHA-256 绑定型号。浏览器上传单文件时，可用依据仅来自文件内部。[CMSIS 构建信息格式](https://open-cmsis-pack.github.io/cmsis-toolbox/YML-CBuild-Format/)
 
-离线检查使用 `mklink image-target <文件>`。只有 Cortex-M7 或地址时沿用普通连接。有冲突的专用配置给出 `image_target_conflict`，可检查证据或显式传入 `mcu`。硬件连接完成后以 `target_attach` 确认实际绑定。已连接时切换到需要另一配置的文件会关闭原连接，重新校验同一探针上的目标，失败时停止访问。
+`mklink image-target <文件>` 可离线查看文件标注的型号及来源。连接后打开或更换符号文件沿用同一 AP4。文件资料冲突记录在 `axf.image_target`，有明确文件型号时 `matches_hardware` 表示它与当前目标是否相符。
 
 两本参考手册的 MIDR1 枚举给出每个型号的独立 PART_NO。上位机检查 SIUL2.MIDR1 的位 31–26 为 K 系列值 0x0B，位 25–16 为所选型号的十进制数字。封装和硅修订位不用于区分 SKU。两册分别给出 M7_0、MDM、SDA 的 AP4、AP6、AP7 拓扑。仅绑定主核；其他内核和 AP 的数量按器件而不同。[NXP S32K3xx RM Rev.11，第 352–353 页、表 827](https://mm.digikey.com/Volume0/opasdata/d220001/medias/docus/7161/S32K3xx-Manual.pdf)；[NXP S32K39/37/36 RM Rev.4，第 208 页、表 753](https://mm.digikey.com/Volume0/opasdata/d220001/medias/docus/6487/S32K3_Reference%20Manual.pdf)
+
+## 硬件识别验收（2026-11-27）
+
+上位机功能提交 `17ddf0ac`。原生 MUX HELLO 要求 0x2000 和 0x4000。0x19 只读 SWD DPIDR 和 TARGETID。系列筛选使用手册表 829 与表 755 的设计者和部件号，容许 TREVISION 不同。系列命中后在同一 claim 的 0x18 中复核完整 TARGETID，核对 AP4/6/7 和已有调试权限，执行 AP7 更新及 CPUID 检查，最后采集 AP4 SIUL2.MIDR1。固件把型号位固定在绑定中，目标更换后拒绝旧绑定。未命中系列时退出探测，使用普通连接。
+
+主机与固件 C 调度器联测覆盖目录全部 22 个 MIDR1、模拟换板拒绝旧会话、无关 TARGETID 零 AP 访问。型号覆盖是模型测试，S32K3 新时序的冷启动实板验证待补。配套固件来源为 [MicroLink_Plus PR #29](https://github.com/Aladdin-Wang/MicroLink_Plus/pull/29)。
+
+固件会话在配套 MicroLink V4.7.5 与 STM32F103 实板上读到 DPIDR 0x1BA01477、TARGETID 0；线缆记录含一次普通 0x13、零次 0x18。Flash 回读 118272 字节与 AXF 相同，变量写回后恢复。RTT 收 2523 字节，同时 SuperWatch 交付 61 项、零丢弃。原始记录位于 `F:/MKLink-Build/runs/s32k3-hw-discovery-20261127/STM32F103-physical.json`。
+
+## 0.5.2 Windows、完整 Skill 与 Web GUI
+
+桌面、共享后台、Skill 与 Web 版本均为 0.5.2。功能与版本源为 `5904f9b6`，从该版构建的 Web 资源收录于 `8c8423e9`。完整 Skill ZIP 和 NSIS 自带 92 个相同的前端文件。客户包存放于 `F:/MKLink-Build/artifacts/V0.5.2-Customer-5904f9b6/`，两个 SHA-256 列入同目录的 `SHA256SUMS.txt`。
+
+| 客户验证包 | SHA-256 |
+| --- | --- |
+| Windows x64 NSIS | `f8299da241bc7f024475e3844b24f49693c7e98838681a3e860a2d6d15b3fa48` |
+| 完整 Skill ZIP | `43676c2cb79feb77e0fff78280c79b2a4b4918c64c15c298d17add6b2b58ce2a` |
+
+本轮软件回归通过 1996 项 Python 测试及 62 项前端测试。本机在原目录覆盖安装 Windows 版后逐文件核对 3756 项，保留原设置和快捷方式。安装目录的桌面、Web、CLI 与真实 stdio MCP 验证通过。固件 C 模型与安装包内代码再次对接 22 种 MIDR1，并验证换型号后旧会话拒绝访问。
+
+完整 Skill 由 0.5.1 覆盖至 0.5.2，核对全部 2751 个文件，独立 Python 运行环境的元数据与实际导入目录一致。包中含 7059 条算法目录记录、2224 个去重 FLM 文件和覆盖 4800 个目标的外设资源。实际安装的 Skill MCP 启动并列出 60 个工具。Edge 打开其 Web GUI，在模拟 S32K344 上加载标注 S32K312 的符号文件，同时显示了文件型号和实际硬件型号。窗口生产资源、安装记录和截图见 `F:/MKLink-Build/reports/s32k3-customer-5904f9b6/`。
+
+## 先前精确型号连接的现场诊断
+
+一次现场截图显示请求 S32K312，MUX 返回 `step=7, reason=8, actual=0x2D580000`。这次失败的操作是 AP4 上的 SIUL2.MIDR1 比较，地址为 `0x40290004`，期望值为 `0x2D380000`，掩码为 `0xFFFF0000`。按 NXP 手册中的产品线和 PART_NO 字段，实读值中的 `0x158` 对应 S32K344。上位机显示“本次配置 S32K312，目标寄存器报告 S32K344”，并提供已知的配置来源和原始失败回执。查看截图时无法追溯当时的配置来源。
+
+客户随后反馈接的是 S32K312，此前选错了 ELF。更换 ELF 后，同一块板的原始读数待补。此前 S32K344 台架的读数来自另一块板。
+
+`92ee8eed` 回放了这条原始报文。当前调试连接直接采集型号，在线烧录仍对显式目标执行精确比较。
 
 ## 在线擦写与复位
 

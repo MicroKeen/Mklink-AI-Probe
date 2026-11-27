@@ -6,10 +6,10 @@
 
 - 更新时间：`2026-11-27`
 - 分支：`codex/v0.5.2-fixes`
-- HEAD：`8c75180e`
-- 远端 HEAD：`8c75180e`
-- 工作树：功能提交，交接另提交。main 11202db0。0.5.1 首发 595544d9，腾讯云 Windows/Skill 修订 r20261125。
-- 当前任务：[ELF 自动识别、Windows 验证包及 S32K3 实测](../verification/v052-s32k3-family.md)。
+- HEAD：`8c8423e9`
+- 远端 HEAD：`8c8423e9`
+- 工作树：上位机 0.5.2 客户验证版源码 5904f9b6，Web 资源 8c8423e9。正式渠道仍为 0.5.1。
+- 当前任务：[S32K3 硬件识别及 0.5.2 安装验收](../verification/v052-s32k3-family.md)。22 型号模型联测及 STM32F103 实板回归通过。新识别流程的 S32K3 冷启动实板待验。
 - 状态：`0.5.2 开发见 [PR #98](https://github.com/MicroKeen/Mklink-AI-Probe/pull/98)。0.5.1 发布和三平台验证见 [PR #97](https://github.com/MicroKeen/Mklink-AI-Probe/pull/97)。`
 
 ## 里程碑
