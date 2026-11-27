@@ -77,6 +77,10 @@ const parserBackend = computed(() => {
       <template v-if="symbolStatus.image_target?.device">
         <span>{{ tr('文件标识的芯片', 'Image target') }}</span>
         <code data-testid="image-target">{{ symbolStatus.image_target.device }}</code>
+        <template v-if="symbolStatus.image_target.matches_hardware === false">
+          <span>{{ tr('当前硬件型号', 'Connected hardware') }}</span>
+          <code data-testid="hardware-target">{{ symbolStatus.image_target.hardware_model }}</code>
+        </template>
       </template>
       <span>{{ tr('解析后端', 'Parser') }}</span>
       <code data-testid="symbol-parser-backend">{{ parserBackend }}</code>

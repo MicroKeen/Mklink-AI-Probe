@@ -9,6 +9,21 @@ export interface ReleaseHistoryEntry {
 
 export const releaseHistory: ReleaseHistoryEntry[] = [
   {
+    version: '0.5.2', date: '2026-11-27',
+    summary: 'S32K3 硬件识别与在线烧录校验',
+    summaryEn: 'S32K3 hardware identification and online flash checks',
+    changes: [
+      '配套 V4 固件可从目标芯片读取 S32K3 型号。桌面、Web、CLI 和 MCP 共用同一个 MEM-AP 4 连接。',
+      '连接时可省略 ELF。加载或切换符号文件时保留硬件连接；文件标注与实物不一致时，“文件来源”显示两个型号。',
+      '在线烧录核对所选芯片及算法。S32K3 目录覆盖 22 个型号，内置 Code/Data 算法覆盖其中 6 个。',
+    ],
+    changesEn: [
+      'With compatible V4 firmware, desktop, Web, CLI and MCP identify S32K3 devices in hardware and share the MEM-AP 4 connection.',
+      'Connect without an ELF or switch symbols on the existing connection. File Sources shows both models when the file and hardware differ.',
+      'Online flashing checks the selected target and algorithm. The catalog covers 22 S32K3 models, including six with bundled Code and Data algorithms.',
+    ],
+  },
+  {
     version: '0.5.1', date: '2026-11-23',
     summary: '共享采集、SuperWatch 配置与终端查找',
     summaryEn: 'Shared capture, SuperWatch profiles and terminal search',
