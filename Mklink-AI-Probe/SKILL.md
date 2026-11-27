@@ -14,7 +14,7 @@ description: 使用 MKLink/MicroLink 调试目标 MCU，通过实板信号和事
 - **下载后端**：除 HPM ROM 或用户指定方式外，依次选 IDE、pyOCD、脱机。
   先读[下载优先级](references/firmware-download-priority.md)，复用 Keil 配置；工程初始化可选。
 - 优先共享 MCP，先读[共享后台](references/shared-runtime.md)。
-  S32K3 可直接用 `connect(probe=...)`，从 `target_attach.profile`、`midr1`、`mem_ap` 核对实物。ELF 提供符号，`mcu` 可显式要求匹配指定型号。
+  S32K3 用 `connect(probe=...)` 识别实物，ELF 提供符号。
   **GUI 共用连接**：`connect(probe=...)` 复用工程/符号；`gui_call` 调用共享能力。
   RTT 已运行时无参数 `rtt_start()` 订阅，用 `rtt_read_channel` 读取。
   不发送旧 `RTTView.start/stop`，不另开串口；缺能力不退回独占。
