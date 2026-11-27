@@ -14,7 +14,7 @@
   },
   "current_session": {
     "status": "0.5.2 开发见 [PR #98](https://github.com/MicroKeen/Mklink-AI-Probe/pull/98)。0.5.1 发布和三平台验证见 [PR #97](https://github.com/MicroKeen/Mklink-AI-Probe/pull/97)。",
-    "current_task": "[重编译提示与 SuperWatch 实时数值](../verification/v052-web-symbol-rebuild.md)；[S32K344 烧录](../verification/v052-s32k344-online-flash.md)。"
+    "current_task": "[重编译提示与 S32K344 整包验收](../verification/v052-web-symbol-rebuild.md)；[S32K344 烧录](../verification/v052-s32k344-online-flash.md)。"
   },
   "milestones": [
     {

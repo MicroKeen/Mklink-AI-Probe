@@ -30,3 +30,11 @@
 - 从 NSIS 单独解包后，用包内 sidecar 在隔离目录启动共享后台，与包内 Web GUI 在 Edge 上重复验证两种格式、两个面板及重新打开页面。记录见 `edge-package.log`。源码后台模拟采样的真实 Edge 变量栏和 REST 亦显示相同数值，见 `edge-source.log`。
 - 固件会话用同一安装包和 COM62 上的 S32K344 实板验证了 `74565` 与 `614947609`。两个变量的 MEM 读回、共享最新值、Edge 实际显示三者一致，原始数据和截图分别为 `F:/MKLink-Build/runs/s32k344-field-flash-20261127/full-acceptance-a8ff1de0/final-precision.log`、同目录 `superwatch-number-f643032b.png`。
 - 原始记录和测试程序在 `F:/MKLink-Build/reports/web-symbol-precision-20261127/`。
+
+## S32K344 实板验收
+
+固件会话在 ROX R11、HPMLink V4.7.5、10 MHz SWD 上使用同一客户包完成验收。
+
+- 在线烧录作业将两份不同的 1 MiB 镜像依次写入 128 个扇区。BIN 用时 14.88 秒，HEX 用时 14.91 秒。每次重新连接后逐字节读回全部镜像，主启动区及相邻保护扇区均通过比对。目标计算的镜像 B 数据段 CRC32 为 0x349A4372，与主机一致。
+- RTT 和 25 ms SuperWatch 同时采集。按游标读取的 568 条 RTT 记录连续，文本及二进制下行读回通过。点击 MCU 复位后两路均收到新数据。GUI 和两个 MCP 客户端共用同一探针，全局断开和 GUI 重新连接通过。
+- 证据保存在 F:/MKLink-Build/runs/s32k344-field-flash-20261127/full-acceptance-a8ff1de0/S32K344-最终验收.md。实测采用台架测试镜像，擦写范围由镜像覆盖的扇区确定。
