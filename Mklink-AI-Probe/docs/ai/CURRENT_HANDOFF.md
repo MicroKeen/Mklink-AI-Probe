@@ -6,10 +6,10 @@
 
 - 更新时间：`2026-11-27`
 - 分支：`codex/v0.5.2-fixes`
-- HEAD：`66a6d191`
-- 远端 HEAD：`66a6d191`
-- 工作树：0.5.2 单文件记录源码 613146a9，Web 资源 66a6d191。正式渠道 0.5.1。
-- 当前任务：已完成[单文件回放](../verification/v052-indexed-recordings.md)。等待后续修复，暂缓打包。
+- HEAD：`1fbcb794`
+- 远端 HEAD：`1fbcb794`
+- 工作树：0.5.2 Modbus 工作台修复 08bddf6f，交付 Web 资源 1fbcb794。正式渠道 0.5.1。
+- 当前任务：[单文件回放](../verification/v052-indexed-recordings.md)及 [Modbus 修复](../verification/v052-modbus-disconnect.md)已验证，暂缓打包。
 - 状态：`0.5.2 开发见 [PR #98](https://github.com/MicroKeen/Mklink-AI-Probe/pull/98)。0.5.1 发布和三平台验证见 [PR #97](https://github.com/MicroKeen/Mklink-AI-Probe/pull/97)。`
 
 ## 里程碑

@@ -5,16 +5,16 @@
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.5.2-fixes",
-    "head": "66a6d191",
-    "remote_head": "66a6d191",
-    "working_tree": "0.5.2 单文件记录源码 613146a9，Web 资源 66a6d191。正式渠道 0.5.1。"
+    "head": "1fbcb794",
+    "remote_head": "1fbcb794",
+    "working_tree": "0.5.2 Modbus 工作台修复 08bddf6f，交付 Web 资源 1fbcb794。正式渠道 0.5.1。"
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
     "status": "0.5.2 开发见 [PR #98](https://github.com/MicroKeen/Mklink-AI-Probe/pull/98)。0.5.1 发布和三平台验证见 [PR #97](https://github.com/MicroKeen/Mklink-AI-Probe/pull/97)。",
-    "current_task": "已完成[单文件回放](../verification/v052-indexed-recordings.md)。等待后续修复，暂缓打包。"
+    "current_task": "[单文件回放](../verification/v052-indexed-recordings.md)及 [Modbus 修复](../verification/v052-modbus-disconnect.md)已验证，暂缓打包。"
   },
   "milestones": [
     {
