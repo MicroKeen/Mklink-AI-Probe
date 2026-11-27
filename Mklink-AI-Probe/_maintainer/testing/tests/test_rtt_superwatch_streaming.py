@@ -1348,7 +1348,8 @@ def test_superwatch_prearmed_recording_survives_capture_start(monkeypatch, tmp_p
     result = manager.recording_status()
     assert result['path'] == initial['path']
     assert result['state'] == 'completed' and result['samples'] == 1
-    assert json.loads(next(tmp_path.glob('*.jsonl')).read_text(encoding='utf-8')) == {'a': 42.0, '_t': 0.0}
+    from mklink.recording_file import capture_rows
+    assert list(capture_rows(next(tmp_path.glob('*.mklog')))) == [{'a': 42.0, '_t': 0.0}]
 
 
 def test_superwatch_concurrent_poll_add_remove_pressure_keeps_batches_aligned(monkeypatch):

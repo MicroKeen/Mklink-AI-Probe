@@ -640,7 +640,7 @@ def build_server():
         snapshot_select uses name, start_index, count for the same array view as GUI;
         snapshot_clear removes that shared array view. Neither starts acquisition.
         recording_start accepts directory (existing absolute path on the backend computer).
-        recording_status/recording_stop inspect or drain the same continuous JSONL recorder as GUI.
+        recording_status/recording_stop inspect or drain the same single-file indexed recorder as GUI.
         recording_export explicitly converts the closed recording to Excel; pass path from recording_status.
         Stopping never converts automatically. Read export_state/export_path for the separate job result.
         profile/profile_save, workspace/workspace_save and pins/pins_save share the AXF/ELF-adjacent

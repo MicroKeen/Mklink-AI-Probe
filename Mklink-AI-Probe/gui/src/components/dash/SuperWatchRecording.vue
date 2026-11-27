@@ -13,8 +13,8 @@
         <div class="record-path"><input v-model="directory" data-testid="sw-record-directory" :aria-label="tr('保存目录', 'Save directory')"><button type="button" @click="browse(directory)">{{ tr('浏览', 'Browse') }}</button></div>
         <div class="record-drives"><button v-for="drive in drives" :key="drive" type="button" @click="browse(drive)">{{ drive }}</button><button type="button" @click="browse(parent)">↑ {{ tr('上一级', 'Parent') }}</button></div>
         <div class="record-folders"><button v-for="dir in dirs" :key="dir.path" type="button" @click="browse(dir.path)">▸ {{ dir.name }}</button></div>
-        <p>{{ tr('自动分段保存 JSONL，可在“日志回放”中按编号加载查看。', 'JSONL parts are saved automatically; open numbered parts in Log replay.') }}</p>
-        <p v-if="name !== 'Serial'">{{ name === 'SuperWatch' ? tr('停止后可手动转换为 Excel，时间和变量分列显示；原始 JSONL 保留。', 'After stopping, manually convert to Excel with time and variable columns. Original JSONL is retained.') : tr('停止后可手动转换为带时间戳的 TXT；原始 JSONL 保留。', 'After stopping, manually convert to timestamped TXT. Original JSONL is retained.') }}</p>
+        <p>{{ tr('每次记录保存为一个 .mklog 文件，回放时可直接跳到需要的时间段。', 'Each recording creates one .mklog file. Seek directly to the interval you need.') }}</p>
+        <p v-if="name !== 'Serial'">{{ name === 'SuperWatch' ? tr('停止后可手动转换为 Excel，时间和变量分列显示；原始记录保留。', 'After stopping, manually convert to Excel with time and variable columns. The original recording is retained.') : tr('停止后可手动转换为带时间戳的 TXT；原始记录保留。', 'After stopping, manually convert to timestamped TXT. The original recording is retained.') }}</p>
         <p v-if="error" role="alert" class="record-error">{{ error }}</p>
         <footer><button type="button" @click="dialog?.close()">{{ tr('取消', 'Cancel') }}</button><button data-testid="sw-record-confirm" :disabled="busy || !directory.trim()">{{ tr('开始记录', 'Start recording') }}</button></footer>
       </form>

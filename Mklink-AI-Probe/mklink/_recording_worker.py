@@ -85,8 +85,9 @@ class RecordingWorker:
         self._send(HEADER.pack(len(metadata), len(values), len(times)) + metadata + values + times)
         return self._reply()
 
-    def finish(self):
-        self._send(HEADER.pack(0, 0, 0))
+    def finish(self, error=''):
+        # A parent-side queue overflow must also mark the on-disk footer incomplete.
+        self._send(HEADER.pack(0, 4 if error else 0, 0))
         result = self._reply()
         self.process.wait(timeout=10)
         return result
@@ -139,8 +140,11 @@ def main(arguments=None):
                     or value_size % 4 or time_size % 8):
                 raise ValueError('Invalid recording batch header')
             if not metadata_size:
-                if value_size or time_size:
+                if value_size not in (0, 4) or time_size:
                     raise ValueError('Invalid recording finalization')
+                if value_size:
+                    with recorder._condition:
+                        recorder._status['error'] = 'Acquisition queue overflow; recording is incomplete'
                 reply(recorder.stop())
                 return 0
             names, boundaries = json.loads(read_exact(metadata_size))

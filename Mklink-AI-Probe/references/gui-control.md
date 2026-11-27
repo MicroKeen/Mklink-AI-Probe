@@ -72,8 +72,8 @@ Web 的记录目录对话框使用普通输入/浏览控件。导出/转换优�
   用 controls 操作播放/暂停、倍速、重新播放和返回实时；snapshot.panels.systemview.replay
   给出文件、进度、状态与解析错误。Timeline 显示动作继续可用。
   导入只让该窗口退订实时流，其他窗口仍可采集；返回实时重新订阅已有采集。
-- **RTT**：导航 rtt，展开目标通道“日志”，选择其中的 JSONL file_picker。
-  当前兼容流量日志分段上限16 MiB；用播放/暂停、回放速度、日志通道、位置及退出
+- **RTT**：导航 rtt，展开目标通道“日志”，选择其中的 .mklog 回放文件。
+  每次记录共用一个时间轴。用播放/暂停、回放速度、日志通道、位置及退出
   控件操作。`panels["rtt.replay.<通道>"]` 返回 cursor/frames/source/speed/playing。
   RX/TX 都仅作历史显示，绝不重发捕获的 TX。
 - **SuperWatch**：导航 superwatch，使用日志回放文件输入及原有播放/速度/定位/返回实时

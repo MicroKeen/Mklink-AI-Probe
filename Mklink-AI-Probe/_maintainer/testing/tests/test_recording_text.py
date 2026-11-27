@@ -96,7 +96,7 @@ def test_superwatch_manual_excel_preserves_columns_time_and_boundaries(tmp_path)
     assert [float(rows[i][0][1]) for i in (1, 2, 4)] == [1e-6, 2e-6, 1.234567]
     assert [float(rows[i][1][1]) for i in (1, 2, 4)] == [1.25, -2.5, 3.75]
     assert rows[3] == [('inlineStr', 'DISCONTINUITY reason=2')]
-    assert status['export_parts'] == status['parts'] == 2
+    assert status['export_parts'] == status['parts'] == 1
     assert not list(tmp_path.glob('*.txt'))
 
 
@@ -112,7 +112,7 @@ def test_rtt_joins_unicode_lines_across_chunks_and_parts_with_rx_tx_and_loss(tmp
     finally:
         recorder.stop()
     status = exported(recorder)
-    assert status['export_state'] == 'completed' and status['parts'] == 2
+    assert status['export_state'] == 'completed' and status['parts'] == 1
     text = ''.join(p.read_text(encoding='utf-8') for p in sorted(tmp_path.glob('*.txt')))
     assert 'first 中' in text and '�' not in text
     assert 'CH2 RX' in text and 'CH2 TX' in text
@@ -120,7 +120,7 @@ def test_rtt_joins_unicode_lines_across_chunks_and_parts_with_rx_tx_and_loss(tmp
     assert text.count('# session=s1\n') == 1
     assert all('session=' not in line for line in text.splitlines() if not line.startswith('#'))
     assert '.125000' in text
-    assert all(p.with_suffix('.jsonl').is_file() for p in tmp_path.glob('*.txt'))
+    assert all(p.with_suffix('.mklog').is_file() for p in tmp_path.glob('*.txt'))
 
 
 def test_text_failure_does_not_change_successful_json_recording_or_overwrite(tmp_path):
@@ -133,9 +133,10 @@ def test_text_failure_does_not_change_successful_json_recording_or_overwrite(tmp
     assert status['state'] == 'completed'
     assert status['export_state'] == 'failed' and status['export_error']
     assert path.read_text(encoding='utf-8') == 'user data'
-    rows = [json.loads(line) for line in path.with_suffix('.jsonl').read_text().splitlines()]
-    assert rows[-1]['complete'] is True
-    assert bytes.fromhex(rows[1]['hex']) == b'hello\n'
+    from mklink.recording_file import capture_rows
+    rows = list(capture_rows(path.with_suffix('.mklog')))
+    assert len(rows) == 1
+    assert bytes.fromhex(rows[0]['hex']) == b'hello\n'
 
 
 def test_failed_recording_exports_valid_prefix_with_incomplete_warning(tmp_path):
@@ -198,14 +199,15 @@ def test_rtt_part_headers_keep_session_for_interleaved_streams_and_pending_utf8(
     recorder.append(0, b'command\n', 'TX', 's1', 1700000004)
     recorder.append(0, b'restarted\n', 'RX', 's2', 1700000005)
     recorder.stop()
-    raw = {p: p.read_bytes() for p in tmp_path.glob('*.jsonl')}
+    raw = {p: p.read_bytes() for p in tmp_path.glob('*.mklog')}
     assert exported(recorder)['export_state'] == 'completed'
-    first, second = [p.read_text(encoding='utf-8') for p in sorted(tmp_path.glob('*.txt'))]
-    assert first.count('# session=s1\n') == second.count('# session=s1\n') == 1
-    assert 'CH0 RX first' in first and 'CH1 RX other channel' in first
-    assert 'CH0 RX 中' in second and 'CH0 TX command' in second
-    assert second.index('# session=s1\n') < second.index('CH0 RX 中')
-    assert second.index('CH0 TX command') < second.index('# session=s2\n') < second.index('CH0 RX restarted')
+    output, = tmp_path.glob('*.txt')
+    text = output.read_text(encoding='utf-8')
+    assert text.count('# session=s1\n') == 1
+    assert 'CH0 RX first' in text and 'CH1 RX other channel' in text
+    assert 'CH0 RX 中' in text and 'CH0 TX command' in text
+    assert text.index('# session=s1\n') < text.index('CH0 RX 中')
+    assert text.index('CH0 TX command') < text.index('# session=s2\n') < text.index('CH0 RX restarted')
     assert all(p.read_bytes() == data for p, data in raw.items())
 
 
@@ -313,7 +315,7 @@ def test_excel_existing_file_is_preserved_and_manual_request_is_idempotent(tmp_p
     recorder = SuperWatchRecorder(tmp_path)
     recorder.append(array('f', [1]), array('d', [0]), [{'name': 'a'}])
     status = recorder.stop()
-    path = Path(status['path'][:-11] + '.xlsx')
+    path = Path(status['path']).with_suffix('.xlsx')
     path.write_bytes(b'user workbook')
     result = exported(recorder)
     assert result['export_state'] == 'failed' and path.read_bytes() == b'user workbook'
@@ -334,21 +336,18 @@ def test_rtt_retry_after_second_part_conflict_preserves_both_originals(tmp_path)
     recorder.append(0, b'first ', 'RX', 'one')
     recorder.append(0, b'line\\n', 'RX', 'one')
     status = recorder.stop()
-    assert status['parts'] == 2
+    assert status['parts'] == 1
     occupied = Path(status['path']).with_suffix('.txt')
-    assert occupied.name.endswith('0002.txt')
     occupied.write_bytes(b'existing')
-    originals = {p: p.read_bytes() for p in tmp_path.glob('*.jsonl')}
+    originals = {p: p.read_bytes() for p in tmp_path.glob('*.mklog')}
     failed = exported(recorder)
-    assert failed['export_state'] == 'failed' and failed['export_parts'] == 1
-    first_output = Path(failed['export_path'])
-    first_bytes = first_output.read_bytes()
+    assert failed['export_state'] == 'failed' and failed['export_parts'] == 0
     recorder.export()
     deadline = time.monotonic() + 10
     while recorder.status()['export_state'] == 'generating' and time.monotonic() < deadline:
         time.sleep(.01)
     result = recorder.status()
-    assert result['export_state'] == 'completed' and result['export_parts'] == 2
+    assert result['export_state'] == 'completed' and result['export_parts'] == 1
     assert 'first line' in Path(result['export_path']).read_text(encoding='utf-8')
-    assert first_output.read_bytes() == first_bytes and occupied.read_bytes() == b'existing'
+    assert occupied.read_bytes() == b'existing'
     assert originals == {p: p.read_bytes() for p in originals}

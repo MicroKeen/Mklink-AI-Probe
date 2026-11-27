@@ -6,7 +6,7 @@ export function mountReplayButton(host, options = {}) {
   open.type = 'button'; open.className = 'panel-btn'; open.dataset.testid = 'open-superwatch-replay';
   open.textContent = tr('加载日志', 'Load log');
   const input = document.createElement('input');
-  input.type = 'file'; input.accept = '.csv,.txt,.log,.jsonl,.ndjson'; input.hidden = true; input.dataset.testid = 'replay-file';
+  input.type = 'file'; input.accept = '.mklog,.csv,.txt,.log,.jsonl,.ndjson'; input.hidden = true; input.dataset.testid = 'replay-file';
   host.append(open, input);
   const bar = document.createElement('div');
   bar.className = 'sw-replay-inline'; bar.hidden = true;
@@ -82,7 +82,7 @@ export function mountReplayButton(host, options = {}) {
         if (data.type === 'progress') message.textContent = `${tr('正在读取', 'Loading')} ${Math.round(data.fraction * 100)}%`;
         else if (data.type === 'loaded') {
           if (!viewer()?.beginReplay?.(data, control)) { error(tr('波形界面尚未就绪', 'Chart is not ready')); return; }
-          metadata = data; seek.max = String(data.duration); message.textContent = ''; announce(data.channels.map(c => c.name)); paint();
+          metadata = data; seek.max = String(data.duration); message.textContent = data.incomplete ? tr('记录未正常结束，已恢复完整数据块。', 'Recording interrupted. Showing complete blocks.') : ''; announce(data.channels.map(c => c.name)); paint();
           pendingLoad?.resolve(read()); pendingLoad = null;
         } else if (data.type === 'view' && data.id === inFlight) {
           inFlight = null;
