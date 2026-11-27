@@ -84,6 +84,8 @@ def test_explicit_connect_rediscovers_bound_runtime_without_replaying_work(monke
     def request(info, method, path, body=None, **options):
         calls.append((dict(info), path, body))
         if path == '/_runtime/status':
+            if info == new:
+                return {'instance_id': 'new', 'hardware_target_version': 1}
             if failure == 'offline':
                 raise transport.RuntimeErrorResponse('Shared runtime unavailable')
             return {'instance_id': 'another-instance'}

@@ -76,7 +76,7 @@ def test_cross_ide_outputs_and_core_only(tmp_path):
     assert resolve_image_target(other)["device"] == "S32K344"
 
 
-def test_switch_image_on_live_device_releases_old_claim(tmp_path, monkeypatch):
+def test_switch_image_on_live_device_keeps_physical_claim(tmp_path, monkeypatch):
     first, second = image(tmp_path, "one.elf"), image(tmp_path, "two.elf")
     bind_file(first, "S32K314")
     bind_file(second, "S32K344")
@@ -89,8 +89,9 @@ def test_switch_image_on_live_device_releases_old_claim(tmp_path, monkeypatch):
     open_probe = Mock(side_effect=RuntimeError("physical signature mismatch"))
     monkeypatch.setattr(device, "_connect", open_probe)
     monkeypatch.setattr(device, "_prepare_axf_catalog", lambda *args: (str(second), "builtin", "builtin", object(), object()))
-    with pytest.raises(RuntimeError, match="physical signature mismatch"):
-        device.reparse_axf_atomically(str(second))
-    close.assert_called_once()
-    assert open_probe.call_count == 1 and open_probe.call_args.kwargs["binding"][1].name == "S32K344"
-    assert not device.connected and device.symbol_catalog is None and device.axf_path == str(second)
+    device.reparse_axf_atomically(str(second))
+    close.assert_not_called()
+    open_probe.assert_not_called()
+    assert device.connected and device.symbol_catalog is not None and device.axf_path == str(second)
+    assert device._image_target['device'] == 'S32K344'
+    assert device._attach_profile.name == 'S32K314'

@@ -8,23 +8,19 @@ ESP32-S3 无线工作台通过传输适配复用本后台，接入步骤见
 
 ## 连接与选择
 
-S32K3 目录中的 22 个型号可在无 GUI 的环境连接。在共享 MCP 调用 `list_target_profiles()` 查询型号键与阶段支持，
-再调用 `connect(probe="已确认的探针ID", mcu="s32k314", project_root="目标工程绝对路径")`。
-S32K344 使用 `mcu="s32k344"`，回执应为 S32K344、MEM-AP 4。S32K314 工程或 `mcu` 参数也可使用目录中的别名 `S32K314HMS`、`NXPS32K314HMS`。
-成功回执中的 `target_attach` 给出 `profile="S32K314"` 和 `mem_ap=4`。随后可用同一 MCP 会话的
-`read_memory`、`write_memory` 和采集工具。CLI 使用相同目录和共享后台，例如：
+S32K3 调试连接可以直接调用 `connect(probe="已确认的探针ID", project_root="目标工程绝对路径")`。USB MUX 通过 SWD TARGETID 和 AP 特征确认系列，再从 AP4 采集 SIUL2.MIDR1。回执 `target_attach` 包含实际型号 `profile`、`mem_ap`、`midr1` 和 `target_id`。目录支持解码 22 个型号。RTT、SuperWatch 和内存访问复用同一连接。
 
 ```powershell
 python -B -m mklink target-profiles
 $probe = Read-Host '目标探针 ID'
 $project = Read-Host '目标工程绝对路径'
-python -B -m mklink device-status --probe $probe --mcu s32k314 --project-root $project
-python -B -m mklink read-ram --probe $probe --mcu s32k314 --addr 0xE000ED00 --size 4
+python -B -m mklink device-status --probe $probe --project-root $project
+python -B -m mklink read-ram --probe $probe --addr 0xE000ED00 --size 4
 ```
 
-缺少 MUX HELLO 0x2000 时按提示升级匹配的下载器固件。芯片检查失败时查看从 0 开始的
-`step`、`reason` 和 `actual`。绑定失效后需显式重新连接，结果不确定的写入不要重放。
-`unsupported_hook` 表示主机暂未实现配置声明的阶段。桌面与 Web 打开后端可访问的 ELF、AXF 或 IAR OUT 后自动识别芯片。CLI 与 MCP 可直接传入 `axf`，也可以用 `mcu` 显式覆盖。运行 `mklink image-target <文件>` 可离线查看判定及其依据。独立文件可配同目录的 `<完整文件名>.mklink.json`，内容示例为 `{"schema_version":1,"device":"S32K344","sha256":"整个 ELF 的 64 位十六进制 SHA-256"}`。浏览器上传单个文件时只能使用文件内部信息，要利用相邻文件请选本机后端上的原文件路径。
+`axf` 可选，提供 ELF、AXF 或 IAR OUT 的符号。加载或更换符号沿用当前硬件连接。用 `mklink image-target <文件>` 查看文件标注的器件及工程依据。要限定实物型号可传 `mcu="s32k312"`；在线烧录另外校验所选目标及算法。
+
+硬件识别要求 HELLO 能力位 0x2000 和 0x4000。显式要求 S32K3 且固件缺能力时会提示升级。新会话若读不到已知系列 TARGETID，默认连接继续普通路径。芯片报错保留 `step`、`reason`、`actual`；失效的绑定需显式重连。
 
 Skill 首次加载以 `ping(force_update_check=True, background_update_check=True)` 发起客户端
 版本检查，继续任务，后续用 `ping(background_update_check=True)` 取结果。发现 Skill 新版

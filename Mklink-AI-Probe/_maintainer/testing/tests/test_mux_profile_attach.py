@@ -72,6 +72,67 @@ def profile_bridge(tmp_path, *, caps=0x2003, port=1, reply=None, profile=PROFILE
     return bridge, calls
 
 
+@pytest.mark.parametrize('part,target_id', [
+    (310, 0x0996c01d), (311, 0x0996c01d), (312, 0x1996801d), (314, 0x0996001d),
+    (322, 0x0996401d), (324, 0x0996001d), (328, 0x1995e01d), (338, 0x1995e01d),
+    (341, 0x0996401d), (342, 0x0996401d), (344, 0x0995c01d), (348, 0x1995e01d),
+    (356, 0x1995e01d), (358, 0x1995e01d), (364, 0x1995601d), (366, 0x1995601d),
+    (374, 0x1995601d), (376, 0x1995601d), (388, 0x0995a01d), (389, 0x0996201d),
+    (394, 0x1995601d), (396, 0x1995601d),
+])
+def test_hardware_identification_uses_captured_midr1(tmp_path, part, target_id):
+    midr1 = 0x2c000a51 | (part << 16)
+    bridge, calls = profile_bridge(tmp_path, caps=0x6003, profile=None, reply={
+        0x19: b'\0' + struct.pack('<II', 0x6ba02477, target_id),
+        0x18: b'\0' + struct.pack('<BBBBI', 1, 4, 255, 0, midr1),
+    })
+    assert bridge.identify_swd_target() == dict(profile=f'S32K{part}', mem_ap=4, source='SIUL2.MIDR1',
+                                                midr1=midr1, target_id=target_id, dpidr=0x6ba02477)
+    mux = bridge.enable_multiplex()
+    assert mux.read_memory(0x20000000, 4) == b'ABCD'
+    assert [op for op, _ in calls] == [1, 4, 0x19, 0x18, 0x11]
+    assert calls[2][1] == mux.nonce
+    steps = list(struct.iter_unpack('<BBHIII', calls[3][1][12:]))
+    assert steps[0] == (5, 0, 0, 0, 0xffffffff, target_id)
+    assert [s[1] for s in steps[1:4]] == [4, 6, 7]
+    assert steps[-1] == (4, 4, 0, 0x40290004, 0xffff0000, 0)
+
+
+@pytest.mark.parametrize('caps,identity', [
+    (0x2003, b''), (0x6003, b'\x01'), (0x6003, b'\x05'), (0x6003, b'\x06'),
+    (0x6003, b'\0short'), (0x6003, b'\0' + struct.pack('<II', 0x2ba01477, 0)),
+    (0x6003, b'\0' + struct.pack('<II', 0x6ba02477, 0x0995801d)),
+    (0x6003, b'\0' + struct.pack('<II', 0x6ba02477, 0x09968029)),
+])
+def test_other_targets_leave_read_only_claim_then_use_legacy_attach(tmp_path, caps, identity):
+    bridge, calls = profile_bridge(tmp_path, caps=caps, profile=None, reply={0x19: identity})
+    assert bridge.identify_swd_target() is None
+    assert bridge._mux is None and bridge.attach_profile is None
+    assert [op for op, _ in calls] == ([1, 4, 0x19, 3] if caps & 0x4000 else [1, 4, 3])
+    bridge.enable_multiplex()
+    assert [op for op, _ in calls[-4:]] == [1, 4, 0x10, 0x13]
+
+
+@pytest.mark.parametrize('step,reason,safe', [(0, 12, True), (2, 3, True), (3, 4, True),
+                                               (4, 4, False), (6, 5, False), (8, 7, False)])
+def test_only_read_only_identity_failures_release_for_generic_attach(tmp_path, step, reason, safe):
+    bridge, calls = profile_bridge(tmp_path, caps=0x6003, profile=None, reply={
+        0x19: b'\0' + struct.pack('<II', 0x6ba02477, 0x0996801d),
+        0x18: b'\x05' + struct.pack('<BBBBI', 1, 4, step, reason, 0),
+    })
+    if safe:
+        assert bridge.identify_swd_target() is None
+        assert bridge._mux is None
+        assert calls[-1][0] == 3
+    else:
+        with pytest.raises(MuxProfileError):
+            bridge.identify_swd_target()
+        with pytest.raises(RuntimeError, match='unconfirmed'):
+            bridge.enable_multiplex()
+    assert [op for op, _ in calls].count(0x18) == 1
+    assert all(op != 0x13 for op, _ in calls)
+
+
 def test_profile_attach_max_frame_and_shared_binding(tmp_path):
     profile = replace(PROFILE, steps=(IDR,) * 14 + (UPDATE, MEM))
     bridge, calls = profile_bridge(tmp_path, profile=profile)

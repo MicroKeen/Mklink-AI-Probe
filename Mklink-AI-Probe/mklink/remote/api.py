@@ -327,7 +327,7 @@ def check_live_attach_profile(device, mcu: str | None) -> bool:
         raise HTTPException(422, exc.detail) from exc
     if requested is None and active is None:
         return False
-    if active and requested == getattr(device, "_attach_profile", None):
+    if active and requested and active["profile"] == requested.name and active["mem_ap"] == requested.mem_ap:
         return True
     raise HTTPException(409, {
         "code": "mux_profile_conflict", "requested": mcu, "target_attach": active,
@@ -350,15 +350,10 @@ def remember_device_connection(
     except Exception:
         axf_status = {}
     device_state = getattr(device, "__dict__", {})
-    from mklink.device import target_attach_status
-    profile = target_attach_status(device)
-    # Restore an explicit override; an image-derived binding is re-evaluated
-    # against the selected artifact (even if its path has not changed).
-    inferred = device_state.get("_image_target") is not None and not device_state.get("_mcu_hint")
     details = {
         "port": getattr(device, "port", None),
         "axf": axf_status.get("axf_path") or device_state.get("_axf"),
-        "mcu": None if inferred else (profile["profile"] if profile else (mcu or device_state.get("_mcu_hint"))),
+        "mcu": mcu or device_state.get("_mcu_hint"),
         "elf_backend": (
             axf_status.get("elf_backend")
             or device_state.get("_elf_backend")
@@ -371,6 +366,17 @@ def remember_device_connection(
 
 def prepare_online_flash_connect(state: dict[str, Any], request) -> None:
     """Release shared CDC ownership before jobs that require the command bridge."""
+    from mklink.device import target_attach_status
+    from mklink.profiles import resolve_attach_profile
+    device = state.get("device")
+    hardware = target_attach_status(device)
+    if hardware and hardware.get("source") == "SIUL2.MIDR1" and request.target_part and request.probe_id:
+        from mklink.probes import select_probe
+        serial = select_probe(device.port).get("serial_number")
+        if serial and serial.casefold() == request.probe_id.casefold():
+            required = resolve_attach_profile(request.target_part)
+            if required is None or required.name != hardware["profile"]:
+                raise ValueError(f"烧录目标 {request.target_part} 与实读 {hardware['profile']} 不匹配")
     from mklink.hpm_config import is_hpm_target
 
     if (
@@ -382,7 +388,6 @@ def prepare_online_flash_connect(state: dict[str, Any], request) -> None:
     from mklink.remote.dashboards import stop_bridge_dashboards
 
     stop_bridge_dashboards(resource_manager=state["resource_manager"])
-    device = state.get("device")
     if device is None:
         return
     device.close()
@@ -1094,23 +1099,7 @@ def create_app(
                         await run_in_threadpool(stop_dashboard_manager, _state, name, manager)
                         if _dashboard_worker_alive(manager):
                             raise DashboardStopPending(name)
-                device = _state.get("device")
-                previous_bridge = getattr(device, "_bridge", None)
-                try:
-                    lease = target_debug_lease(_state, "image-target") if previous_bridge is not None else nullcontext()
-                    with lease:
-                        result = await _reparse_active_symbols(axf, elf_backend, error_status=error_status)
-                finally:
-                    if previous_bridge is not None and getattr(device, "_bridge", None) is not previous_bridge:
-                        # The image required a new physical claim. Retire leases
-                        # and buffers even when the new binding was rejected.
-                        _state["symbol_device"] = device
-                        _retire_target_connection(runtime)
-                        _state.pop("requested_attach_profile", None)
-                        if device.connected:
-                            remember_device_connection(_state, device)
-                        else:
-                            _state["last_device_connection"] = {"port": device.port, "axf": device.axf_path}
+                result = await _reparse_active_symbols(axf, elf_backend, error_status=error_status)
                 path = result.get("axf_path")
                 if display_name and path:
                     name = display_name.replace("\\", "/").rsplit("/", 1)[-1]
@@ -1877,9 +1866,6 @@ def create_app(
                     previous = _state.get('last_device_connection') or {}
                     _state['last_device_connection'] = {
                         k: previous[k] for k in ('axf', 'elf_backend') if k in previous}
-                    pending = _state.get('requested_attach_profile')
-                    if pending and pending[0] != selected['probe_id']:
-                        _state.pop('requested_attach_profile')
                 result = None
                 if 'connect' in body:
                     options = {k: v for k, v in body['connect'].items()
@@ -2058,7 +2044,6 @@ def create_app(
         from mklink.device import target_attach_status
         runtime = getattr(app.state, "shared_runtime", None)
         port_changed = False
-        explicit_mcu = mcu is not None
         current = _state.get("device")
         if runtime is not None:
             from mklink.probes import select_probe
@@ -2153,27 +2138,8 @@ def create_app(
             )
 
         async with async_target_debug_lease(_state, "connect"):
-            if runtime is not None:
-                # A failed profile attach never publishes a Device. Retain
-                # explicit selection by physical identity across that failure
-                # so a later client without a model cannot enter generic SWD.
-                probe_id = _state["shared_probe_id"]
-                pending = _state.get("requested_attach_profile")
-                pending_image = _state.get("requested_attach_image")
-                if not explicit_mcu and not axf and pending_image and pending_image[0] == probe_id:
-                    axf = pending_image[1]
-                if not explicit_mcu and not axf and pending and pending[0] == probe_id:
-                    mcu = pending[1]
-                if axf and not mcu:
-                    _state["requested_attach_image"] = (probe_id, axf)
-                else:
-                    _state.pop("requested_attach_image", None)
             device = None
             try:
-                if runtime is not None and mcu is not None:
-                    from mklink.profiles import resolve_attach_profile
-                    profile = resolve_attach_profile(mcu)
-                    _state["requested_attach_profile"] = (probe_id, profile.name) if profile else None
                 device = await loop.run_in_executor(None, _connect)
                 await run_in_threadpool(get_managers()["superwatch"].prepare, device)
                 await activate_watch_profile(device)
@@ -2193,8 +2159,6 @@ def create_app(
                     detail, status_code = exc.to_detail(), 409
                 elif isinstance(exc, TargetProfileError):
                     detail, status_code = exc.detail, 422
-                    if runtime is not None and mcu:
-                        _state["requested_attach_profile"] = (probe_id, mcu)
                 elif isinstance(exc, HilLockHeld):
                     detail, status_code = {"code": "PROBE_BUSY", "message": str(exc)}, 409
                 if device is not None:
@@ -2214,12 +2178,7 @@ def create_app(
             _state["device"] = device
             _state["dispatcher"] = dispatcher
             remember_device_connection(_state, device, mcu=mcu)
-            _state.pop("requested_attach_image", None)
             target_attach = target_attach_status(device)
-            if runtime is not None and axf and not mcu:
-                _state.pop('requested_attach_profile', None)
-            elif target_attach and runtime is not None:
-                _state["requested_attach_profile"] = (_state["shared_probe_id"], target_attach["profile"])
 
         async def _initialize_target_later():
             try:

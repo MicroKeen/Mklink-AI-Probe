@@ -66,6 +66,9 @@ def target_attach_status(device):
     if isinstance(profile, MuxAttachProfile) and device.connected:
         mux = getattr(getattr(device, "_bridge", None), "_mux", None)
         if getattr(mux, "attach_profile", None) == profile:
+            detected = getattr(device, "_hardware_target", None)
+            if isinstance(detected, dict):
+                return dict(detected)
             return {"profile": profile.name, "mem_ap": profile.mem_ap}
     return None
 
@@ -275,7 +278,8 @@ def initialize_target(
         # 2) project config mcu_key
         cfg = load_config(project_root) or {}
         cfg_mcu = cfg.get("mcu_key")
-        if cfg_mcu and profiles.get(cfg_mcu):
+        from mklink.s32k3 import MODELS
+        if cfg_mcu and profiles.get(cfg_mcu) and profiles[cfg_mcu]["name"] not in MODELS:
             bridge._ctx.current_mcu = profiles[cfg_mcu].get("name", cfg_mcu)
             return idcode
         # 3) last resort: match by idcode
@@ -338,6 +342,7 @@ class Device:
         self._axf = axf
         self._mcu_hint = mcu
         self._attach_profile = None
+        self._hardware_target = None
         self._image_target = None
         self._project_root = project_root
         self._elf_backend_requested = elf_backend
@@ -370,18 +375,15 @@ class Device:
     # ------------------------------------------------------------------
     # Connection
     # ------------------------------------------------------------------
-    def _connect(self, *, load_symbols: bool = True, binding=None) -> None:
+    def _connect(self) -> None:
         from mklink.discovery import find_mklink_cdc_port
         from mklink.flash import MKLinkFlash, FlashError
         from mklink.mux import MuxProfileError
         from mklink.project_config import load_config
 
         config = load_config(self._project_root) or {}
-        if binding is not None or self._axf:
-            from mklink.image_target import image_binding
-            self._image_target, self._attach_profile = binding or image_binding(self._axf, self._mcu_hint)
-        else:
-            self._attach_profile = resolve_attach_profile(self._mcu_hint, project_root=self._project_root, config=config)
+        self._hardware_target = None
+        self._attach_profile = resolve_attach_profile(self._mcu_hint)
         # COM numbers saved in a project are neither an identity nor permission
         # to switch probes. Shared callers already supply the selected port.
         candidate = self._port or self._preferred_port or find_mklink_cdc_port()
@@ -391,30 +393,31 @@ class Device:
             )
         from mklink.transport_factory import create_bridge
         bridge = create_bridge(candidate)
-        if self._attach_profile is not None:
+        identify = getattr(type(bridge), "identify_swd_target", None)
+        from mklink.s32k3 import MODELS
+        hardware_discovery = identify is not None and (
+            self._attach_profile is None or self._attach_profile.name in MODELS)
+        if hardware_discovery or self._attach_profile is not None:
             # The profile can update the target during connect. Honor external
             # HIL ownership before opening the handle or submitting any step.
             self._hold_hil_lock(bridge, candidate)
         try:
-            if self._attach_profile is not None:
+            if self._attach_profile is not None and not hardware_discovery:
                 bridge.attach_profile = self._attach_profile
                 # A profile can update the target. Re-entry requires an explicit connection.
                 bridge.auto_recovery = False
             if not bridge.connect():
                 reason = getattr(bridge, 'last_connect_error', None) or 'Command-port handshake failed'
                 raise DeviceNotConnectedError(f'Failed to connect to selected MKLink port {candidate}: {reason}; no fallback attempted')
-            if self._attach_profile is not None:
+            if hardware_discovery:
+                expected = self._attach_profile.name if self._attach_profile else None
+                self._hardware_target = identify(bridge, expected)
+                self._attach_profile = bridge.attach_profile
+            elif self._attach_profile is not None:
                 try:
                     mux = bridge.enable_multiplex()
                 except MuxProfileError as error:
-                    if self._mcu_hint:
-                        sources = ["连接参数 mcu"]
-                    elif self._image_target:
-                        sources = [item["source"] for item in self._image_target["evidence"]]
-                    else:
-                        sources = [".mklink/config.json (mcu_key)" if config.get("mcu_key")
-                                   else ".mklink/project_info.json"]
-                    error.record_selection_sources(sources)
+                    error.record_selection_sources(["连接参数 mcu"])
                     raise
                 if getattr(mux, 'attach_profile', None) != self._attach_profile:
                     raise DeviceNotConnectedError('Probe did not confirm the requested MUX target profile')
@@ -426,7 +429,7 @@ class Device:
             self.clock_warning = None
             if self._attach_profile is not None:
                 # Legacy identity/clock commands would leave the verified MUX binding.
-                if self._axf and load_symbols:
+                if self._axf:
                     self._load_dwarf_info()
                 return
         except BaseException as error:
@@ -436,7 +439,7 @@ class Device:
                 try:
                     bridge.close()
                 finally:
-                    if self._attach_profile is not None:
+                    if hardware_discovery or self._attach_profile is not None:
                         self._release_hil_lock()
             except Exception as cleanup_error:
                 # Keep the handle reachable for an explicit close after an
@@ -489,7 +492,7 @@ class Device:
                 project_root=self._project_root,
             )
 
-        if self._axf and load_symbols:
+        if self._axf:
             self._load_dwarf_info()
 
         # A new connection uses the configuration page's default 10 MHz for
@@ -790,27 +793,9 @@ class Device:
 
     def reparse_axf_atomically(self, axf_path: str | None = None, elf_backend: str | None = None):
         candidate, requested, effective, info, catalog = self._prepare_axf_catalog(axf_path, elf_backend)
-        from mklink.image_target import image_binding
-        override = getattr(self, "_mcu_hint", None)
-        # An explicit attach applies to that image. Opening a different file
-        # starts a fresh selection, including a return to the generic path.
-        if axf_path and self._axf and Path(candidate).absolute() != Path(self._axf).absolute():
-            override = None
-        identity, profile = image_binding(candidate, override)
+        from mklink.image_target import resolve_image_target
+        identity = resolve_image_target(candidate)
         with self._symbol_lock:
-            if self.connected and profile != self._attach_profile:
-                # Reopen this exact port once. If verification fails the old
-                # claim stays closed and no symbols from the new image go live.
-                self.close()
-                self._mcu_hint = override
-                try:
-                    self._connect(load_symbols=False, binding=(identity, profile))
-                except Exception:
-                    self._axf = candidate
-                    self._symbol_catalog = self._dwarf_info = None
-                    self._image_target = identity
-                    raise
-            self._mcu_hint = override
             self._image_target = identity
             self._axf = candidate
             self._dwarf_info = info
@@ -940,6 +925,10 @@ class Device:
                 self._axf_error = str(exc)
         if getattr(self, "_image_target", None) is not None:
             tc["image_target"] = self._image_target
+            hardware = target_attach_status(self)
+            if hardware and hardware.get("source") == "SIUL2.MIDR1" and self._image_target.get("device"):
+                tc["image_target"] = {**self._image_target, "hardware_model": hardware["profile"],
+                                      "matches_hardware": self._image_target["device"] == hardware["profile"]}
         if not self._dwarf_info:
             out: dict = {"loaded": False, "axf_path": self._axf, **tc}
             if self._axf_error:
@@ -1026,6 +1015,16 @@ class Device:
             or project_info.get("target_part")
             or ""
         ).strip()
+        hardware = target_attach_status(self)
+        if hardware and hardware.get("source") == "SIUL2.MIDR1":
+            requested = requested_target or resolved_key
+            if requested:
+                required = resolve_attach_profile(requested)
+                if required is None or required.name != hardware["profile"]:
+                    raise DeviceError(f"烧录目标 {requested} 与实读 {hardware['profile']} 不匹配")
+            requested_target = hardware["profile"]
+            resolved_key = hardware["profile"].lower()
+            mcu_profile = profiles[resolved_key]
         if not mcu_profile and requested_target:
             target_profile_key = match_mcu_by_device(requested_target, profiles)
             if target_profile_key:
@@ -1522,6 +1521,9 @@ class Device:
     def _get_mcu_profile(self) -> dict | None:
         from mklink.profiles import load_mcu_profiles, match_mcu_by_idcode, match_mcu_by_device
         profiles = load_mcu_profiles()
+        detected = getattr(self, "_hardware_target", None)
+        if isinstance(detected, dict) and self.connected:
+            return profiles.get(detected["profile"].lower())
         if self._bridge.idcode:
             key = match_mcu_by_idcode(self._bridge.idcode, profiles)
             if key:

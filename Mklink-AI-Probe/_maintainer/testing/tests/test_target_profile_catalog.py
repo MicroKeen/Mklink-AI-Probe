@@ -148,7 +148,7 @@ def test_unconfirmed_profile_cannot_reuse_old_client_session(monkeypatch, servic
     def request(info, method, path, payload=None, **kwargs):
         paths.append(path)
         if path == "/_runtime/status":
-            return {"target_attach_version": service_version}
+            return {"target_attach_version": service_version, "hardware_target_version": 1}
         assert path == "/_runtime/attach"
         return {"session_id": "unconfirmed", "target_attach": receipt}
     monkeypatch.setattr(runtime, "request", request)
@@ -168,10 +168,12 @@ def test_explicit_project_model_cannot_attach_through_old_host(tmp_path, monkeyp
     save_project_info(str(tmp_path), {"device": "S32K314"})
     def status_only(info, method, path, **kwargs):
         assert (method, path) == ("GET", "/_runtime/status")
-        return {}
+        return {"image_target_version": 1, "protocol": runtime.PROTOCOL, "version": runtime.VERSION}
     monkeypatch.setattr(runtime, "request", status_only)
     with pytest.raises(runtime.RuntimeErrorResponse, match="Shared backend"):
         options = {"project_root": str(tmp_path)}
-        runtime.RuntimeClient(info={"port": 8765}, **(options if set_in_constructor else {})).connect(
+        client = runtime.RuntimeClient(**(options if set_in_constructor else {}))
+        monkeypatch.setattr(runtime, "ensure_runtime", lambda **kwargs: {"port": 8765, "probe_id": "test"})
+        client.connect(
             **({} if set_in_constructor else options)
         )

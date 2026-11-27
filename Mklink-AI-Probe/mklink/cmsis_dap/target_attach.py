@@ -76,6 +76,14 @@ class ProfileAttachDelegate:
         power_ack = dap.CDBGPWRUPACK | dap.CSYSPWRUPACK
         if control == 0xffffffff or control & power_ack != power_ack:
             raise self._error('dp_power', 'DP power-up is unconfirmed', actual=control)
+        from mklink.s32k3 import MODELS, is_family_target_id
+        if self.profile.name in MODELS:
+            try:
+                identity = dp.read_dp(dap.DP_TARGETID)
+            except Exception as exc:
+                raise self._error('targetid_read', f'SWD TARGETID read failed: {exc}') from exc
+            if not is_family_target_id(identity):
+                raise self._error('targetid_mismatch', 'SWD TARGETID does not identify S32K3', actual=identity)
         for index, step in enumerate(self.profile.steps):
             self._run_step(dp, regs, index, step)
         dp.valid_aps = [self.profile.mem_ap]

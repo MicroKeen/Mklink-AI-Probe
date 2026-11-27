@@ -28,12 +28,14 @@ SLEEP_READ_MAX = 480
 SLEEP_WRITE_MAX = 477
 PROFILE_ATTACH_COMMAND = 0x18
 PROFILE_ATTACH_CAPABILITY = 1 << 13
+HARDWARE_ID_CAPABILITY = 1 << 14
+SWD_IDENTITY_COMMAND = 0x19
 PROFILE_MAX_STEPS = 16
 PROFILE_STEP = struct.Struct('<BBHIII')
 PROFILE_DIAGNOSTIC = struct.Struct('<BBBBI')
 PROFILE_REASONS = ('success', 'format', 'DP initialization', 'AP read', 'AP value',
                    'AP write', 'AP write verification', 'memory read', 'memory value',
-                   'AP binding', 'target or binding lost')
+                   'AP binding', 'target or binding lost', 'TARGETID read', 'TARGETID mismatch')
 
 
 def encode_attach_profile(profile):
@@ -41,21 +43,26 @@ def encode_attach_profile(profile):
     if type(profile.mem_ap) is not int or not 0 <= profile.mem_ap <= 255:
         raise ValueError('Invalid profile memory AP')
     steps = profile.steps
-    if not 1 <= len(steps) <= PROFILE_MAX_STEPS or steps[-1].kind != 3:
-        raise ValueError('Profile requires 1–16 steps ending with MEM32_CHECK')
+    if not 1 <= len(steps) <= PROFILE_MAX_STEPS or steps[-1].kind not in (3, 4):
+        raise ValueError('Profile requires 1–16 steps ending with MEM32_CHECK or MEM32_CAPTURE')
     encoded = bytearray(struct.pack('<BBBB', 1, profile.mem_ap, len(steps), 0))
     identified_aps = set()
     checking_memory = False
     for index, step in enumerate(steps):
         kind, ap, addr, mask, value = step.kind, step.ap, step.address, step.mask, step.value
         if (any(type(v) is not int for v in (kind, ap, addr, mask, value))
-                or kind not in (1, 2, 3) or not 0 <= ap <= 255
+                or kind not in (1, 2, 3, 4, 5) or not 0 <= ap <= 255
                 or not 0 <= addr <= 0xffffffff or addr % 4
                 or not 0 < mask <= 0xffffffff or value < 0 or value & ~mask):
             raise ValueError(f'Invalid profile fields at step {index}')
-        if kind == 3:
+        if kind == 5:
+            if index != 0 or ap or addr:
+                raise ValueError('DP_TARGETID_CHECK must be first with zero AP and address')
+        elif kind in (3, 4):
             if ap != profile.mem_ap:
                 raise ValueError(f'MEM32_CHECK must use the selected memory AP at step {index}')
+            if kind == 4 and (index != len(steps) - 1 or value):
+                raise ValueError('MEM32_CAPTURE must be last with zero value')
             checking_memory = True
         elif checking_memory:
             raise ValueError(f'AP operations must precede memory checks at step {index}')
@@ -133,10 +140,10 @@ def _profile_error_diagnostic(profile, status, response):
     if step == 0xff:
         return (step, reason, actual) if reason in (2, 9, 10) and actual == 0 else None
     # A step-specific reason must identify an operation that could produce it.
-    step_kinds = {3: (1, 2), 4: (1,), 5: (2,), 6: (2,), 7: (3,), 8: (3,)}
+    step_kinds = {3: (1, 2), 4: (1,), 5: (2,), 6: (2,), 7: (3, 4), 8: (3,), 11: (5,), 12: (5,)}
     if profile.steps[step].kind not in step_kinds.get(reason, ()):
         return None
-    if reason in (3, 7) and actual != 0:
+    if reason in (3, 7, 11) and actual != 0:
         return None
     return step, reason, actual
 
@@ -379,9 +386,14 @@ class MuxTransport:
             if not self.capabilities & PROFILE_ATTACH_CAPABILITY:
                 self._profile_failed = True
                 raise FirmwareUpgradeRequired('Profile-based SWD attach', 'MUX HELLO 0x2000')
+            payload = encode_attach_profile(profile)
+            capture = profile.steps[-1].kind == 4
+            if (capture or profile.steps[0].kind == 5) and not self.capabilities & HARDWARE_ID_CAPABILITY:
+                raise FirmwareUpgradeRequired('SWD hardware identification', 'MUX HELLO 0x4000')
             try:
-                answer = self.request(PROFILE_ATTACH_COMMAND, encode_attach_profile(profile))
-                if answer != PROFILE_DIAGNOSTIC.pack(1, profile.mem_ap, 0xff, 0, 0):
+                answer = self.request(PROFILE_ATTACH_COMMAND, payload)
+                actual = int.from_bytes(answer[4:], 'little') if capture else 0
+                if len(answer) != 8 or answer != PROFILE_DIAGNOSTIC.pack(1, profile.mem_ap, 0xff, 0, actual):
                     raise MuxError(f'Invalid PROFILE_ATTACH success response {answer.hex()}; '
                                    'binding unconfirmed, do not replay the profile')
             except MuxTargetError as error:
@@ -393,6 +405,7 @@ class MuxTransport:
             with self._condition:
                 self._check()
                 self.attach_profile = profile
+            return actual if capture else None
 
     def _wait(self, deadline=None):
         self._check()

@@ -16,6 +16,30 @@ MIDR1_MODEL_MASK = 0xFFFF0000
 # E_LETTER[31:26] = 0x0B (K), PART_NO[25:16] is the numeric part number.
 MIDR1_MODELS = {(0x0B << 26) | (number << 16): f"S32K{number}" for number in PART_NUMBERS}
 
+# Designer and part fields from S32K3XXRM table 829 and S32K396RM table 755.
+# The JTAG ID column differs on 344. Some SKUs share silicon and a Target ID.
+TARGET_ID_PARTS = frozenset({
+    0x0995C01D, 0x0996001D, 0x0996C01D, 0x0996801D, 0x0996401D,
+    0x0995E01D, 0x0995A01D, 0x0996201D, 0x0995601D,
+})
+
+
+def is_family_target_id(target_id):
+    return (target_id & 0x0fffffff) in TARGET_ID_PARTS
+
+
+def hardware_profile(target_id):
+    """Only a documented SWD TARGETID may authorize the family AP sequence."""
+    if not is_family_target_id(target_id):
+        return None
+    from dataclasses import replace
+    from mklink.profiles import MuxAttachStep, _read_profile_catalog, compile_attach_profile
+
+    common = compile_attach_profile("S32K3", _read_profile_catalog()["s32k3_primary_core"])
+    guard = MuxAttachStep(5, 0, 0, 0xffffffff, target_id)
+    capture = MuxAttachStep(4, common.mem_ap, MIDR1_ADDRESS, MIDR1_MODEL_MASK, 0)
+    return replace(common, steps=(guard, *common.steps, capture))
+
 
 def midr1_model_mismatch(profile, step, actual):
     """Interpret a failed read comparison only for the catalog's AP4 identity check."""

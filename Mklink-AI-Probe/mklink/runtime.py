@@ -451,7 +451,7 @@ class RuntimeClient:
             raise ValueError('Session scope must be target or uart')
         if scope == 'uart' and any(value is not None for value in (port, axf, mcu, elf_backend)):
             raise ValueError('UART-only attachment accepts a probe selector, not target connection settings')
-        with self._attach_guard(mcu, project_root, scope, axf) as profile:
+        with self._attach_guard(mcu, scope) as profile:
             self._close_memory_channel()
             self._memory_transport = False
             self._check_sleep_budget = False
@@ -500,14 +500,16 @@ class RuntimeClient:
                         self._stop_heartbeat()
                         self.session_id = None
                         self.info = {**self.info, 'probe_id': selected['probe_id']}
-            if profile is not None:
+            if scope == 'target' and (self.info.get('probe_id') or profile is not None or axf):
                 service = health or request(self.info, 'GET', '/_runtime/status', timeout=2)
-                self._require_profile_service(service)
-                if axf and not mcu and service.get('image_target_version') != 1:
-                    raise RuntimeErrorResponse('Restart the shared backend with ELF target identification support')
+                if profile is not None:
+                    self._require_profile_service(service)
+                needs_hardware_identity = service.get('image_target_version') or profile is not None or axf
+                if needs_hardware_identity and service.get('hardware_target_version') != 1:
+                    raise RuntimeErrorResponse('Shared backend requires a restart for hardware target identification')
             result = request(self.info, "POST", "/_runtime/attach", {
                 "project_root": project_root, "port": port, "axf": axf,
-                "mcu": profile.name if profile is not None and (mcu or not axf) else mcu,
+                "mcu": profile.name if profile is not None else mcu,
                 "elf_backend": elf_backend, "session_id": self.session_id,
                 'probe_id': self.info.get('probe_id'),
                 'kind': self.kind, 'name': self.name, 'scope': scope,
@@ -537,24 +539,18 @@ class RuntimeClient:
                                        'restart with a matching host before connecting')
 
     @contextmanager
-    def _attach_guard(self, mcu, project_root, scope, axf=None):
-        from mklink.profiles import resolve_attach_profile, TargetProfileError
+    def _attach_guard(self, mcu, scope):
+        from mklink.profiles import resolve_attach_profile
         with self._lock:
             profile = None
             try:
                 if scope == 'target':
-                    if not project_root and (self.info is None or self.project_root != '.'):
-                        project_root = self.project_root
-                    if axf:
-                        from mklink.image_target import image_binding
-                        _, profile = image_binding(axf, mcu)
-                    else:
-                        profile = resolve_attach_profile(mcu, project_root=project_root)
+                    profile = resolve_attach_profile(mcu)
                 yield profile
-            except BaseException as exc:
+            except BaseException:
                 # Another client can keep its own valid binding. This client must
                 # never issue the next operation on its previous target by mistake.
-                if profile is not None or isinstance(exc, TargetProfileError):
+                if scope == 'target':
                     self.session_id = None
                     self._stop_heartbeat()
                     self._close_memory_channel()

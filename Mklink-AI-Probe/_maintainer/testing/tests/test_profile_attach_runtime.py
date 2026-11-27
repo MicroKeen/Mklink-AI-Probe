@@ -18,7 +18,16 @@ from mklink.runtime_api import install_runtime
 @pytest.fixture
 def shared(tmp_path, monkeypatch):
     monkeypatch.setattr('mklink.hil_lock.LOCK_ROOT', tmp_path / 'hil-locks')
-    bridge = SimpleNamespace(
+    class HardwareBridge(SimpleNamespace):
+        def identify_swd_target(self, expected=None):
+            from mklink.s32k3 import hardware_profile
+            self.attach_profile = hardware_profile(0x0996001d)
+            self.enable_multiplex()
+            self.auto_recovery = False
+            return dict(profile=self.current_mcu, mem_ap=4, source='SIUL2.MIDR1',
+                        midr1=(0x2c00 | int(self.current_mcu[-3:])) << 16)
+
+    bridge = HardwareBridge(
         state=DeviceState.READY, idcode=0, current_mcu='S32K314',
         _ctx=DeviceContext(), _transport_error=None, _mux=None,
         connect=Mock(return_value=True), close=Mock(),
@@ -57,16 +66,16 @@ def test_headless_attach_reuses_acknowledged_ap_for_all_clients(tmp_path, shared
     client, _, state, bridge, transport = shared
     body = {'kind': 'mcp'}
     if selection == 'config':
-        save_config(str(tmp_path), {'mcu_key': 's32k314', 'clock_interface': 'SWD'})
+        save_config(str(tmp_path), {'mcu_key': 's32k312', 'clock_interface': 'SWD'})
     elif selection == 'project_info':
-        save_project_info(str(tmp_path), {'device': 'S32K314'})
+        save_project_info(str(tmp_path), {'device': 'S32K312'})
     else:
         save_config(str(tmp_path), {'mcu_key': 'stm32f1'})
         body['mcu'] = 's32k314'
     assert client.get('/_runtime/status').json()['target_attach_version'] == 1
     result = client.post('/_runtime/attach', json=body)
     assert result.status_code == 200, result.text
-    expected = {'profile': 'S32K314', 'mem_ap': 4}
+    expected = {'profile': 'S32K314', 'mem_ap': 4, 'midr1': 0x2d3a0000, 'source': 'SIUL2.MIDR1'}
     assert result.json()['target_attach'] == expected
     assert result.json()['idcode'] == '0x0'
     session = result.json()['session_id']
@@ -79,7 +88,7 @@ def test_headless_attach_reuses_acknowledged_ap_for_all_clients(tmp_path, shared
     rejected = client.post('/api/device/connect', json={'mcu': 'stm32f1', 'reuse_connected': True})
     assert rejected.status_code == 409
     assert client.post('/_runtime/attach', json={'mcu': 'stm32f1'}).status_code == 409
-    assert state['last_device_connection']['mcu'] == 'S32K314'
+    assert state['last_device_connection']['mcu'] == body.get('mcu')
     read = client.post('/_runtime/call', json={'session_id': session, 'capability': 'read_memory',
                                               'arguments': {'address': '0x20000000', 'size': 4}})
     assert read.status_code == 200, read.text
@@ -111,7 +120,7 @@ def test_failed_profile_details_reach_headless_client_and_are_never_downgraded(s
         else:
             assert error['code'] == 'mux_profile_attach_failed'
             assert (error['profile'], error['mem_ap'], error['step'], error['reason'], error['actual']) == (
-                'S32K314', 4, 3, 4, 0x1300)
+                'S32K3', 4, 3, 4, 0x1300)
         assert state['device'] is state['dispatcher'] is None
         assert not control.target_sessions
     assert bridge.close.call_count == 2
@@ -133,6 +142,18 @@ def test_cpu_register_access_uses_selected_ap(shared):
     bridge.send_command.assert_not_called()
 
 
+def test_flash_rejects_wrong_target_on_the_same_probe_before_driver_open(shared):
+    from mklink.remote.api import prepare_online_flash_connect
+    client, _, state, bridge, _ = shared
+    assert client.post('/_runtime/attach', json={}).status_code == 200
+    req = SimpleNamespace(target_part='S32K312', reset_mode='software', probe_id='TEST')
+    with pytest.raises(ValueError, match='S32K312.*S32K314'):
+        prepare_online_flash_connect(state, req)
+    req.probe_id = 'other'
+    prepare_online_flash_connect(state, req)
+    bridge.close.assert_not_called()
+
+
 def test_unsupported_hook_is_visible_before_probe_open(shared, monkeypatch):
     from mklink.profiles import load_mcu_profiles
     client, _, state, bridge, _ = shared
@@ -140,7 +161,7 @@ def test_unsupported_hook_is_visible_before_probe_open(shared, monkeypatch):
     recipe = catalog['s32k314']['mux_attach']
     recipe['hooks']['BeforeResetTarget'] = [{'kind': 'unsupported'}]
     monkeypatch.setattr('mklink.profiles.load_mcu_profiles', lambda: catalog)
-    for body in ({'mcu': 'S32K314'}, {}):
+    for body in ({'mcu': 'S32K314'}, {'mcu': 'NXPS32K314HMS'}):
         result = client.post('/_runtime/attach', json=body)
         assert result.status_code == 422, result.text
         detail = result.json()['detail']
@@ -244,37 +265,28 @@ def test_shared_image_connect_without_model(tmp_path, shared, monkeypatch, open_
     body = {} if open_first else {"axf": str(target)}
     result = client.post("/_runtime/attach", json={"kind": "mcp", **body})
     assert result.status_code == 200, result.text
-    assert result.json()["target_attach"] == {"profile": "S32K344", "mem_ap": 4}
+    assert result.json()["target_attach"]["profile"] == "S32K314"
     assert state["last_device_connection"]["mcu"] is None
     bridge.enable_multiplex.assert_called_once()
     bridge.send_command.assert_not_called()
 
 
 @pytest.mark.parametrize('route', ['/api/device/connect', '/_runtime/attach'])
-def test_customer_image_mismatch_reports_elf_source_without_retry(tmp_path, shared, route):
+def test_customer_image_names_312_but_hardware_reports_344(tmp_path, shared, route, monkeypatch):
     from test_image_target import bind_file, image
-    client, control, state, bridge, _ = shared
+    from mklink.dwarf_parser import DwarfInfo
+    client, _, state, bridge, _ = shared
+    bridge.current_mcu = "S32K344"
     target = image(tmp_path, "firmware.elf")
     bind_file(target, "S32K312")
-    diagnostic = PROFILE_DIAGNOSTIC.pack(1, 4, 7, 8, 0x2D580000)
-
-    def reject():
-        raise MuxProfileError(bridge.attach_profile, 5, diagnostic)
-
-    bridge.enable_multiplex.side_effect = reject
+    monkeypatch.setattr("mklink.dwarf_parser.load_dwarf_info", lambda *a, **kw: DwarfInfo())
     response = client.post(route, json={"axf": str(target)})
-    assert response.status_code == 409, response.text
-    detail = response.json()["detail"]
-    mismatch = detail["model_mismatch"]
-    assert (mismatch["requested_model"], mismatch["reported_model"]) == ("S32K312", "S32K344")
-    assert mismatch["selection_sources"] == ["firmware.elf.mklink.json"]
-    assert (mismatch["address"], mismatch["expected"], mismatch["mask"], mismatch["part_no"]) == (
-        0x40290004, 0x2D380000, 0xFFFF0000, 0x158)
-    assert (detail["status"], detail["mem_ap"], detail["step"], detail["reason"], detail["actual"],
-            detail["response_hex"]) == (5, 4, 7, 8, 0x2D580000, diagnostic.hex())
-    assert "本次配置 S32K312，目标寄存器报告 S32K344" in detail["message"]
-    assert "firmware.elf.mklink.json" in detail["message"]
-    assert not control.target_sessions and state["device"] is None
+    assert response.status_code == 200, response.text
+    actual = response.json()["target_attach"]
+    assert actual["profile"] == "S32K344" and actual["midr1"] == 0x2d580000
+    symbols = state["device"].axf_status["image_target"]
+    assert symbols["device"] == "S32K312" and not symbols["matches_hardware"]
+    assert symbols["hardware_model"] == "S32K344"
     bridge.connect.assert_called_once()
     bridge.enable_multiplex.assert_called_once()
     bridge.send_command.assert_not_called()

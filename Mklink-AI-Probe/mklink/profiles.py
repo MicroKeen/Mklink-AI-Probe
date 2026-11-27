@@ -11,8 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-def load_mcu_profiles(profile_path: str | None = None) -> dict:
-    """加载 MCU 配置文件。"""
+def _read_profile_catalog(profile_path=None):
     if profile_path is None:
         profile_path = str(Path(__file__).parent / "mcu_profiles.json")
 
@@ -25,7 +24,12 @@ def load_mcu_profiles(profile_path: str | None = None) -> dict:
         return result
 
     with open(profile_path, "r", encoding="utf-8") as f:
-        data = json.load(f, object_pairs_hook=unique_fields)
+        return json.load(f, object_pairs_hook=unique_fields)
+
+
+def load_mcu_profiles(profile_path: str | None = None) -> dict:
+    """加载 MCU 配置文件。"""
+    data = _read_profile_catalog(profile_path)
     models = data.get("mcus", {})
     if "s32k3_primary_core" in data:
         from mklink.s32k3 import expand_profiles

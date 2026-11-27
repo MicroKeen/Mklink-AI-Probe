@@ -457,7 +457,86 @@ class MKLinkSerialBridge:
             return None
         return (self._diagnostic_id, id(self._serial), self._port.casefold())
 
-    def enable_multiplex(self):
+    def identify_swd_target(self, expected=None):
+        """Discover before target attach on a freshly opened native command port."""
+        import struct
+        from mklink.firmware_compatibility import FirmwareUpgradeRequired
+        from mklink.mux import (HARDWARE_ID_CAPABILITY, PROFILE_ATTACH_CAPABILITY,
+                                SWD_IDENTITY_COMMAND, MuxError, MuxProfileError, MuxTargetError)
+        from mklink.profiles import TargetProfileError
+        from mklink.s32k3 import MIDR1_MODEL_MASK, MIDR1_MODELS, hardware_profile
+
+        if self._mux is not None:
+            raise RuntimeError('Hardware discovery requires a fresh command connection')
+        required = HARDWARE_ID_CAPABILITY | PROFILE_ATTACH_CAPABILITY
+        profile = None
+        try:
+            transport = self.enable_multiplex(identity_only=True)
+            if transport is None or transport.capabilities & required != required:
+                if expected:
+                    raise FirmwareUpgradeRequired('SWD hardware identification', 'MUX HELLO 0x2000 + 0x4000')
+            else:
+                data = transport.request(SWD_IDENTITY_COMMAND)
+                if len(data) != 8:
+                    raise MuxError('Invalid SWD identity reply')
+                dpidr, target_id = struct.unpack('<II', data)
+                if (dpidr >> 12) & 0xf == 2 and dpidr & 1:
+                    profile = hardware_profile(target_id)
+        except FirmwareUpgradeRequired:
+            raise
+        except (MuxTargetError, ConnectionError, TimeoutError, serial.SerialException) as error:
+            # No profile command has been sent. A target with no readable DP
+            # must still support the normal USB configuration and serial tools.
+            if expected:
+                raise
+            logging.getLogger(__name__).debug('Optional SWD identification unavailable: %s', error)
+        if profile is None:
+            if expected:
+                raise TargetProfileError('swd_identity_unconfirmed', f'No documented S32K3 TARGETID for {expected}')
+            self._finish_read_only_probe()
+            return None
+
+        # From here on a write may have been submitted. Never retry or fall
+        # through to a generic attach, including on a malformed response.
+        self._mux_selected_profile = self.attach_profile = profile
+        try:
+            midr1 = transport.bind_attach_profile(profile)
+        except MuxProfileError as exc:
+            step, reason = exc.detail['step'], exc.detail['reason']
+            if expected or not ((step == 0 and reason in (11, 12))
+                                or (step in (1, 2, 3) and reason in (3, 4))):
+                raise
+            # A validated diagnostic identifies a failed read-only identity
+            # guard before any AP_UPDATE. Release even this failed claim.
+            self._mux_selected_profile = self.attach_profile = None
+            self._finish_read_only_probe()
+            return None
+        self.auto_recovery = False
+        model = MIDR1_MODELS.get(midr1 & MIDR1_MODEL_MASK)
+        if not model:
+            raise TargetProfileError('unknown_hardware_model', f'Unknown AP4 SIUL2.MIDR1 0x{midr1:08X}')
+        if expected and expected != model:
+            raise TargetProfileError('hardware_model_mismatch',
+                                     f'本次配置 {expected}，目标寄存器报告 {model}。AP4 SIUL2.MIDR1=0x{midr1:08X}')
+        self._ctx.clock_interface = 'SWD'
+        self._ctx.idcode = dpidr
+        self._ctx.current_mcu = model
+        return dict(profile=model, mem_ap=profile.mem_ap, source='SIUL2.MIDR1',
+                    midr1=midr1, target_id=target_id, dpidr=dpidr)
+
+    def _finish_read_only_probe(self):
+        if self._mux is None:
+            return
+        try:
+            self._mux._check()
+            self._leave_multiplex()
+        except (ConnectionError, TimeoutError, serial.SerialException):
+            # Keep the durable MUX marker until a fresh prompt is confirmed.
+            self.close()
+            if not self.connect():
+                raise ConnectionError('Could not restore the command connection after read-only discovery')
+
+    def enable_multiplex(self, *, identity_only=False):
         from mklink.firmware_compatibility import FirmwareUpgradeRequired
         from mklink.mux import MuxTargetError, MuxTransport
         with self._cmd_lock:
@@ -496,6 +575,8 @@ class MKLinkSerialBridge:
             except Exception as exc:
                 transport.fail(exc)
                 raise  # No text-mode fallback after a failed protocol transition.
+            if identity_only:
+                return transport
             try:
                 status = transport.request(0x10)
                 if len(status) != 16 or status[15] not in (1, 2):

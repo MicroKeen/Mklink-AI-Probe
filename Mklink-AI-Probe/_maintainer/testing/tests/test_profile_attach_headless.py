@@ -74,7 +74,7 @@ class ProfileSerial:
 
     def command(self, op, payload):
         if op == 1:
-            return b'\0' + struct.pack('<IHH', 3 if self.peer.mode == 'old' else 0x2003, 256, 1)
+            return b'\0' + struct.pack('<IHH', 0x2003 if self.peer.mode == 'old' else 0x6003, 256, 1)
         if op == 4:
             self.nonce = payload
             return b'\0' + payload
@@ -82,14 +82,17 @@ class ProfileSerial:
             return b'\0'
         if op == 0x10:
             return bytes(16) + b'\x01'
+        if op == 0x19:
+            assert payload == self.nonce
+            return b'\0' + struct.pack('<II', 0x6ba02477, 0x0995c01d)
         if op == 0x18:
-            assert payload[8:12] == bytes([1, 4, 8, 0])
+            assert payload[8:12] == bytes([1, 4, 9, 0])
+            assert struct.unpack_from('<BBHIII', payload, 12) == (5, 0, 0, 0, 0xffffffff, 0x0995c01d)
             assert struct.unpack_from('<BBHIII', payload, len(payload) - 16) == (
-                3, 4, 0, 0x40290004, 0xffff0000, self.peer.midr)
-            self.bound = self.peer.mode != 'wrong'
-            if not self.bound:
-                return b'\x05' + struct.pack('<BBBBI', 1, 4, 7, 8, self.peer.reported_midr)
-            return b'\0' + struct.pack('<BBBBI', 1, 4, 0xff, 0, 0)
+                4, 4, 0, 0x40290004, 0xffff0000, 0)
+            self.bound = True
+            actual = self.peer.reported_midr if self.peer.mode == 'wrong' else self.peer.midr
+            return b'\0' + struct.pack('<BBBBI', 1, 4, 0xff, 0, actual)
         assert self.bound and op in (0x11, 0x12), f'unbound or unexpected command {op:#x}'
         address, = struct.unpack_from('<I', payload, 8)
         assert address == 0x20000000
@@ -102,7 +105,7 @@ class ProfileSerial:
 
 @pytest.mark.parametrize('part,midr', [('S32K314', 0x2D3A0000), ('S32K344', 0x2D580000), ('S32K312', 0x2D380000)])
 def test_headless_profile_stdio_shared_runtime(tmp_path, monkeypatch, part, midr):
-    reported_midr = 0x2D580000 if part == 'S32K312' else 0xBAD00000
+    reported_midr = 0x2D580000 if part == 'S32K312' else 0x2D380000
     peer = SimpleNamespace(midr=midr, reported_midr=reported_midr, mode='old', memory=b'ABCD', ops=[], text=[])
     probe_id = 'usb-' + 'b' * 24
     port = 'TEST_HEADLESS_PROFILE'
@@ -152,7 +155,7 @@ build_server().run()
                 assert model['aliases'] == ['S32K314HMS', 'NXPS32K314HMS']
             assert not peer.ops and not peer.text
             selection = dict(mcu=model['key'], project_root=str(tmp_path))
-            for mode, expected in [('old', '0x2000'), ('wrong', f'actual=0x{reported_midr:08X}')]:
+            for mode, expected in [('old', '0x4000'), ('wrong', f'SIUL2.MIDR1=0x{reported_midr:08X}')]:
                 peer.mode = mode
                 failure = await mcp.call_tool('connect', selection, raise_on_error=False)
                 assert failure.is_error and expected.casefold() in str(failure.content).casefold()
@@ -162,10 +165,16 @@ build_server().run()
                 assert app.state.mklink_state['device'] is None
                 assert peer.ops.count(0x18) == int(mode == 'wrong')
             peer.mode = 'ok'
-            selection['mcu'] = model.get('aliases', [part])[-1]
+            del selection['mcu']
+            if part == 'S32K344':
+                from test_image_target import bind_file, image
+                wrong_image = image(tmp_path, 'symbols-for-312.elf')
+                bind_file(wrong_image, 'S32K312')
+                selection['axf'] = str(wrong_image)
             result = (await mcp.call_tool('connect', selection)).data
             assert result['target_attach']['profile'] == part
             assert result['target_attach']['mem_ap'] == 4
+            assert result['target_attach']['midr1'] == midr
             read = dict(address=0x20000000, size=4)
             write = dict(address=0x20000000, data_hex='1234abcd')
             data = (await mcp.call_tool('read_memory', read)).data

@@ -52,6 +52,7 @@ class FakeDP:
     def __init__(self):
         self.adi_version = ADIVersion.ADIv5
         self.power = CDBGPWRUPACK | CSYSPWRUPACK
+        self.target_id = 0x0996001d
         self.regs = {MEM_AP | 0xfc: 0x84770001, 6 << 24 | 0xfc: 0x001c0030,
                      7 << 24 | 0xfc: 0x001c0040, 7 << 24: 0x40000000,
                      6 << 24: 0, ENABLE: 0x80000100, MEM_AP | MEM_AP_CSW: 0xa0000011}
@@ -61,6 +62,8 @@ class FakeDP:
         self.flushes = 0
 
     def read_dp(self, address):
+        if address == 0x24:
+            return self.target_id
         assert address == DP_CTRL_STAT
         return self.power
 
@@ -174,6 +177,14 @@ def test_online_model_diagnostic_stops_before_discovery():
     assert failed.value.details['model_mismatch']['register'] == 'SIUL2.MIDR1'
     assert failed.value.details['step'] == 7 and failed.value.details['actual'] == 0x2D580000
     assert not target.delegate.bound and target.events == ['dp']
+
+
+def test_online_wrong_family_with_similar_aps_never_writes():
+    target = SequenceTarget(resolve_attach_profile('S32K312'))
+    target.dp.target_id = 0x1234501d
+    with pytest.raises(FlashError, match='TARGETID'):
+        target.init()
+    assert target.dp.writes == [] and not target.delegate.bound
 
 
 def test_profile_uses_compiled_ap_and_preserves_general_mask_semantics():
