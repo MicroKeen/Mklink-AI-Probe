@@ -1907,6 +1907,9 @@ class SuperWatchTransactionError(RuntimeError):
 
     def to_detail(self) -> dict:
         from mklink.firmware_compatibility import FirmwareUpgradeRequired
+        from mklink.mux import MuxProfileError
+        if isinstance(self.cause, MuxProfileError):
+            return {**self.cause.detail, 'phase': self.phase}
         if isinstance(self.cause, FirmwareUpgradeRequired):
             return {**self.cause.to_detail(), 'phase': self.phase}
         return {

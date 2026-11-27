@@ -248,3 +248,33 @@ def test_shared_image_connect_without_model(tmp_path, shared, monkeypatch, open_
     assert state["last_device_connection"]["mcu"] is None
     bridge.enable_multiplex.assert_called_once()
     bridge.send_command.assert_not_called()
+
+
+@pytest.mark.parametrize('route', ['/api/device/connect', '/_runtime/attach'])
+def test_customer_image_mismatch_reports_elf_source_without_retry(tmp_path, shared, route):
+    from test_image_target import bind_file, image
+    client, control, state, bridge, _ = shared
+    target = image(tmp_path, "firmware.elf")
+    bind_file(target, "S32K312")
+    diagnostic = PROFILE_DIAGNOSTIC.pack(1, 4, 7, 8, 0x2D580000)
+
+    def reject():
+        raise MuxProfileError(bridge.attach_profile, 5, diagnostic)
+
+    bridge.enable_multiplex.side_effect = reject
+    response = client.post(route, json={"axf": str(target)})
+    assert response.status_code == 409, response.text
+    detail = response.json()["detail"]
+    mismatch = detail["model_mismatch"]
+    assert (mismatch["requested_model"], mismatch["reported_model"]) == ("S32K312", "S32K344")
+    assert mismatch["selection_sources"] == ["firmware.elf.mklink.json"]
+    assert (mismatch["address"], mismatch["expected"], mismatch["mask"], mismatch["part_no"]) == (
+        0x40290004, 0x2D380000, 0xFFFF0000, 0x158)
+    assert (detail["status"], detail["mem_ap"], detail["step"], detail["reason"], detail["actual"],
+            detail["response_hex"]) == (5, 4, 7, 8, 0x2D580000, diagnostic.hex())
+    assert "本次配置 S32K312，目标寄存器报告 S32K344" in detail["message"]
+    assert "firmware.elf.mklink.json" in detail["message"]
+    assert not control.target_sessions and state["device"] is None
+    bridge.connect.assert_called_once()
+    bridge.enable_multiplex.assert_called_once()
+    bridge.send_command.assert_not_called()

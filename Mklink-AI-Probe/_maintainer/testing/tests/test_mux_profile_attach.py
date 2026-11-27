@@ -8,7 +8,7 @@ from mklink._types import DeviceState
 from mklink.bridge import MKLinkSerialBridge
 from mklink.firmware_compatibility import FirmwareUpgradeRequired
 from mklink.mux import MuxError, MuxProfileError, MuxTargetError, encode_attach_profile, packet
-from mklink.profiles import MuxAttachProfile, MuxAttachStep
+from mklink.profiles import MuxAttachProfile, MuxAttachStep, resolve_attach_profile
 
 
 IDR = MuxAttachStep(1, 7, 0xfc, 0xffffffff, 0x001c0040)
@@ -16,6 +16,34 @@ UPDATE = MuxAttachStep(2, 7, 0x80, 0x300000f0, 0x300000f0)
 MEM = MuxAttachStep(3, 4, 0xe000ed00, 0xff0ffff0, 0x410fc270)
 PROFILE = MuxAttachProfile('test profile', 4, (IDR, UPDATE, MEM))
 ACK = struct.pack('<BBBBI', 1, 4, 0xff, 0, 0)
+
+
+@pytest.mark.parametrize('index,reason,actual', [
+    (6, 8, 0x2D580000),  # CPUID comparison, even though the value resembles a valid MIDR1
+    (7, 7, 0), (7, 8, 0x2D380123), (7, 8, 0x29580000), (7, 8, 0x2D590000),
+])
+def test_profile_diagnostic_only_names_a_distinct_documented_midr1(index, reason, actual):
+    profile = resolve_attach_profile('S32K312')
+    error = MuxProfileError(profile, 5, struct.pack('<BBBBI', 1, 4, index, reason, actual))
+    assert 'model_mismatch' not in error.detail
+    assert '目标寄存器报告' not in str(error)
+
+
+def test_model_diagnostic_follows_the_compiled_step_not_its_position():
+    profile = resolve_attach_profile('S32K312')
+    diagnostic = struct.pack('<BBBBI', 1, 4, 0, 8, 0x2D581234)
+    signature = profile.steps[-1]
+    relocated = replace(profile, steps=(signature,))
+    error = MuxProfileError(relocated, 5, diagnostic)
+    assert error.detail['model_mismatch']['reported_model'] == 'S32K344'
+    assert error.detail['actual'] == 0x2D581234
+    for step in (replace(signature, address=0x40290008), replace(signature, mask=0xFFFFFFFF),
+                 replace(signature, value=0x2D3A0000)):
+        other = MuxProfileError(replace(profile, steps=(step,)), 5, diagnostic)
+        assert 'model_mismatch' not in other.detail
+    wrong_ap = MuxProfileError(replace(profile, mem_ap=1, steps=(replace(signature, ap=1),)), 5,
+                               struct.pack('<BBBBI', 1, 1, 0, 8, 0x2D580000))
+    assert 'model_mismatch' not in wrong_ap.detail
 
 
 def profile_bridge(tmp_path, *, caps=0x2003, port=1, reply=None, profile=PROFILE):

@@ -373,6 +373,7 @@ class Device:
     def _connect(self, *, load_symbols: bool = True, binding=None) -> None:
         from mklink.discovery import find_mklink_cdc_port
         from mklink.flash import MKLinkFlash, FlashError
+        from mklink.mux import MuxProfileError
         from mklink.project_config import load_config
 
         config = load_config(self._project_root) or {}
@@ -403,7 +404,18 @@ class Device:
                 reason = getattr(bridge, 'last_connect_error', None) or 'Command-port handshake failed'
                 raise DeviceNotConnectedError(f'Failed to connect to selected MKLink port {candidate}: {reason}; no fallback attempted')
             if self._attach_profile is not None:
-                mux = bridge.enable_multiplex()
+                try:
+                    mux = bridge.enable_multiplex()
+                except MuxProfileError as error:
+                    if self._mcu_hint:
+                        sources = ["连接参数 mcu"]
+                    elif self._image_target:
+                        sources = [item["source"] for item in self._image_target["evidence"]]
+                    else:
+                        sources = [".mklink/config.json (mcu_key)" if config.get("mcu_key")
+                                   else ".mklink/project_info.json"]
+                    error.record_selection_sources(sources)
+                    raise
                 if getattr(mux, 'attach_profile', None) != self._attach_profile:
                     raise DeviceNotConnectedError('Probe did not confirm the requested MUX target profile')
                 bridge._ctx.current_mcu = self._attach_profile.name
@@ -888,12 +900,17 @@ class Device:
         elf_backend: str | None = None,
     ) -> dict:
         """手动触发 AXF 解析。返回解析结果摘要。"""
+        from mklink.mux import MuxProfileError
+
         try:
             self.reparse_axf_atomically(axf_path, elf_backend=elf_backend)
             return self.axf_status
         except Exception as e:
             self._axf_error = str(e)
-            return {"loaded": False, "error": str(e), "active": self.axf_status}
+            result = {"loaded": False, "error": str(e), "active": self.axf_status}
+            if isinstance(e, MuxProfileError):
+                result["detail"] = e.detail
+            return result
 
     @property
     def axf_path(self) -> str | None:

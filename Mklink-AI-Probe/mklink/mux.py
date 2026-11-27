@@ -145,11 +145,17 @@ class MuxProfileError(MuxTargetError):
     def __init__(self, profile, status, response):
         super().__init__(status, PROFILE_ATTACH_COMMAND, response=response)
         step = reason = actual = None
+        mismatch = None
         message = f'{profile.name} PROFILE_ATTACH failed (status {status})'
         diagnostic = _profile_error_diagnostic(profile, status, response)
         if diagnostic is not None:
             step, reason, actual = diagnostic
             message += f': step={step}, reason={reason} ({PROFILE_REASONS[reason]}), actual=0x{actual:08X}'
+            if reason == 8:
+                from mklink.s32k3 import midr1_model_mismatch
+                mismatch = midr1_model_mismatch(profile, profile.steps[step], actual)
+                if mismatch:
+                    message = mismatch['message'] + ' ' + message
         elif response or status in (2, 5):
             message += f': missing or invalid diagnostic ({response.hex()})'
         if status == 1:
@@ -169,9 +175,18 @@ class MuxProfileError(MuxTargetError):
         self.detail = dict(code='mux_profile_attach_failed', message=message, profile=profile.name,
                            status=status, mem_ap=profile.mem_ap, step=step, reason=reason,
                            actual=actual, response_hex=response.hex())
+        if mismatch:
+            self.detail['model_mismatch'] = mismatch
         if status == 1:
             self.detail.update(code='firmware_upgrade_required', action='upgrade_probe_firmware',
                                feature='Profile-based SWD attach', required='MUX command 0x18')
+
+    def record_selection_sources(self, sources):
+        if sources and 'model_mismatch' in self.detail:
+            self.detail['model_mismatch']['selection_sources'] = sources
+            message = self.detail['message'] + ' 本次配置来源为 ' + '、'.join(sources) + '。'
+            self.args = (message,)
+            self.detail['message'] = message
 
 
 class MuxWatchEvent(bytes):

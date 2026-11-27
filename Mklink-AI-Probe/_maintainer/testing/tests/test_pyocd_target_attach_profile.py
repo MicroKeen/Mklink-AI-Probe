@@ -166,6 +166,16 @@ def test_failed_attach_never_publishes_or_replays(case, step, reason, actual):
     target.next_delegate.unlock_device.assert_not_called()
 
 
+def test_online_model_diagnostic_stops_before_discovery():
+    target = SequenceTarget(resolve_attach_profile('S32K312'))
+    target.dp.memory[0x40290004] = 0x2D580000
+    with pytest.raises(FlashError, match='本次配置 S32K312，目标寄存器报告 S32K344') as failed:
+        target.init()
+    assert failed.value.details['model_mismatch']['register'] == 'SIUL2.MIDR1'
+    assert failed.value.details['step'] == 7 and failed.value.details['actual'] == 0x2D580000
+    assert not target.delegate.bound and target.events == ['dp']
+
+
 def test_profile_uses_compiled_ap_and_preserves_general_mask_semantics():
     profile = MuxAttachProfile('other', 11, (
         MuxAttachStep(1, 9, 0, 0x8, 0x8),

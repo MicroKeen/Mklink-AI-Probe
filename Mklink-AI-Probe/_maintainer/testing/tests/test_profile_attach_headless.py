@@ -88,7 +88,7 @@ class ProfileSerial:
                 3, 4, 0, 0x40290004, 0xffff0000, self.peer.midr)
             self.bound = self.peer.mode != 'wrong'
             if not self.bound:
-                return b'\x05' + struct.pack('<BBBBI', 1, 4, 7, 8, 0xbad00000)
+                return b'\x05' + struct.pack('<BBBBI', 1, 4, 7, 8, self.peer.reported_midr)
             return b'\0' + struct.pack('<BBBBI', 1, 4, 0xff, 0, 0)
         assert self.bound and op in (0x11, 0x12), f'unbound or unexpected command {op:#x}'
         address, = struct.unpack_from('<I', payload, 8)
@@ -100,9 +100,10 @@ class ProfileSerial:
         return b'\x05' if self.peer.mode == 'lost' else b'\0'
 
 
-@pytest.mark.parametrize('part,midr', [('S32K314', 0x2D3A0000), ('S32K344', 0x2D580000)])
+@pytest.mark.parametrize('part,midr', [('S32K314', 0x2D3A0000), ('S32K344', 0x2D580000), ('S32K312', 0x2D380000)])
 def test_headless_profile_stdio_shared_runtime(tmp_path, monkeypatch, part, midr):
-    peer = SimpleNamespace(midr=midr, mode='old', memory=b'ABCD', ops=[], text=[])
+    reported_midr = 0x2D580000 if part == 'S32K312' else 0xBAD00000
+    peer = SimpleNamespace(midr=midr, reported_midr=reported_midr, mode='old', memory=b'ABCD', ops=[], text=[])
     probe_id = 'usb-' + 'b' * 24
     port = 'TEST_HEADLESS_PROFILE'
     monkeypatch.setattr('serial.Serial', lambda name, *args, **kw: ProfileSerial(peer) if name == port else None)
@@ -151,10 +152,13 @@ build_server().run()
                 assert model['aliases'] == ['S32K314HMS', 'NXPS32K314HMS']
             assert not peer.ops and not peer.text
             selection = dict(mcu=model['key'], project_root=str(tmp_path))
-            for mode, expected in [('old', '0x2000'), ('wrong', 'actual=0xBAD00000')]:
+            for mode, expected in [('old', '0x2000'), ('wrong', f'actual=0x{reported_midr:08X}')]:
                 peer.mode = mode
                 failure = await mcp.call_tool('connect', selection, raise_on_error=False)
                 assert failure.is_error and expected.casefold() in str(failure.content).casefold()
+                if mode == 'wrong' and part == 'S32K312':
+                    assert '本次配置 S32K312，目标寄存器报告 S32K344' in failure.content[0].text
+                    assert 'SIUL2.MIDR1' in failure.content[0].text
                 assert app.state.mklink_state['device'] is None
                 assert peer.ops.count(0x18) == int(mode == 'wrong')
             peer.mode = 'ok'

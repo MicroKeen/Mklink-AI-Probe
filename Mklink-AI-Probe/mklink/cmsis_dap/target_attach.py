@@ -28,6 +28,12 @@ class ProfileAttachDelegate:
             message += f' (step={step})'
         if actual is not None:
             message += f', actual=0x{actual:08X}'
+        if reason == 'memory_check':
+            from mklink.s32k3 import midr1_model_mismatch
+            mismatch = midr1_model_mismatch(self.profile, self.profile.steps[step], actual)
+            if mismatch:
+                details['model_mismatch'] = mismatch
+                message = mismatch['message'] + ' ' + message
         return FlashError(FlashErrorCode.CONNECT_FAIL, message, details)
 
     def will_init_target(self, target, init_sequence):

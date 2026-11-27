@@ -1041,6 +1041,8 @@ def create_app(
             raise HTTPException(status_code=409, detail=exc.to_detail()) from exc
 
         if result.get("error"):
+            if result.get("detail"):
+                raise HTTPException(status_code=409, detail=result["detail"])
             raise HTTPException(status_code=error_status, detail=result["error"])
         active_axf = result.get("axf_path")
         if axf and not _same_file_source_path(axf, active_axf):
