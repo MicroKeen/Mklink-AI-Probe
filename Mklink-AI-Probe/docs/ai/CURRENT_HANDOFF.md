@@ -6,10 +6,10 @@
 
 - 更新时间：`2026-11-27`
 - 分支：`codex/v0.5.2-fixes`
-- HEAD：`14bf3353`
-- 远端 HEAD：`14bf3353`
-- 工作树：0.5.2 共享连接与复位源码 57e0cb8c，配套 Web 资源 14bf3353。正式渠道仍为 0.5.1。
-- 当前任务：0.5.2 共享连接与复位已修复。等待新问题，暂缓打包。[验收范围](../verification/v052-s32k3-family.md)。
+- HEAD：`66a6d191`
+- 远端 HEAD：`66a6d191`
+- 工作树：0.5.2 单文件记录源码 613146a9，Web 资源 66a6d191。正式渠道 0.5.1。
+- 当前任务：已完成[单文件回放](../verification/v052-indexed-recordings.md)。等待后续修复，暂缓打包。
 - 状态：`0.5.2 开发见 [PR #98](https://github.com/MicroKeen/Mklink-AI-Probe/pull/98)。0.5.1 发布和三平台验证见 [PR #97](https://github.com/MicroKeen/Mklink-AI-Probe/pull/97)。`
 
 ## 里程碑
@@ -26,7 +26,7 @@
 - **ELF 解析与完整 UART 波特率**：ELF 可写范围合并 PT_LOAD，客户 ELF 的结构体成员恢复，400 项解析/共享关联及真实浏览器通过，未操作客户板，见[ELF 报告](../verification/v050-elf-load-segments.md)。串口助手/Modbus 按 UART、RS485 独立声明使用 34 档至 10M，870 后端/25 GUI/69 Skill 及双 V4 实读通过，未发高速载荷，见[波特率报告](../verification/v050-uart-baud.md)。两项已随 ad00c962 普通用户覆盖并复验，见[覆盖报告](../verification/v050-elf-baud-overwrite.md)。
 - **固件能力提醒与采集中写入**：同一V4/STM32F103RC实测V4.7.3与V4.7.4写入前后最大采样间隔0.195/0.208/0.192ms；RTT并行为1.562ms，各轮10次写入成功且无序号/读错。真实Web写入保持约15.9kHz，三端警告一致，状态检查无设备I/O，见[能力报告](../verification/v050-firmware-capabilities.md)。V2.9.4与云端V2.9.3不误报降级；版本缓存/提醒/跳转验收见[提醒报告](../verification/v050-firmware-update-notice.md)。客户端先行、MCP重载与重启失败互斥恢复见[更新顺序](../verification/v050-update-order.md)。专项用例有重叠，最终全量结果以发布交接为准。 V3/V4拔插恢复既有实物证据见[恢复报告](../verification/v050-superwatch-swclk.md)。
 - **macOS 兼容性与跨平台回归**：最终原生包源8d532019；Mac ARM/Intel DMG与Linux AppImage/DEB的冻结后台、真实WebView/MCP操作、错误签名拒绝、有效更新与重启通过。USB各73项通过/1项Windows专属跳过。Windows Python7175/2跳过、GUI1291和生产构建通过；两渠道13附件及5平台索引验证完成。设施边界见[原生验收](../verification/v050-native-release.md)。
-- **SuperWatch 配置与手动日志转换**：Excel 1,114,032组/4,456,128值、RTT 505行，对照[转换](../verification/v050-manual-recording-export.md)、[配置](../verification/v050-superwatch-profile.md)及[TXT](../verification/v050-rtt-txt-readable.md)。0.5.1修复导出，仪表盘可打开AXF，分组勾选控制采集；波形或日志有助判断时Skill主动展示，见[Windows验收](../verification/v051-superwatch-export-profile.md)。 RTT/SuperWatch 显示活动 AXF/ELF 的原文件名并可重新选择，Agent 请求位于灵活面板。Windows 安装、桌面/Web/CLI/MCP、终端查找、TTL 双向及 Modbus 见[验收](../verification/v051-f103-desktop-uart.md)。
+- **SuperWatch 配置与手动日志转换**：Excel 1,114,032组/4,456,128值、RTT 505行，对照[转换](../verification/v050-manual-recording-export.md)、[配置](../verification/v050-superwatch-profile.md)及[TXT](../verification/v050-rtt-txt-readable.md)。0.5.1修复导出，仪表盘可打开AXF，分组勾选控制采集；波形或日志有助判断时Skill主动展示，见[Windows验收](../verification/v051-superwatch-export-profile.md)。 Windows 安装、桌面/Web/CLI/MCP、终端查找、TTL 双向及 Modbus 见[验收](../verification/v051-f103-desktop-uart.md)。 0.5.2 回放：832 万值、RTT/串口各 2.4 万条，Edge 跳转及启停分文件通过。
 - **V0.5.0 发布、安装与升级**：首发源1097f98e的安装、四类回放、冻结MCP与双渠道发布见[首发交接](../verification/v050-release-handoff.md)；PR #84 main ed5d55aa的安装路径、脱机静默刷新与工程日志修订，及V2.9.5双渠道发布/归档见[修订发布](../verification/v050-revision-release.md)。本轮最新Windows/Skill修订见本页首项；原标签与其他平台保留。
 
 ## 架构决策
@@ -53,7 +53,7 @@
 
 ## 下一动作
 
-1. 等待用户下一组问题，暂缓后续打包与覆盖安装。NXP 实板复位、掉电后恢复、344 在线完整擦写、Data Flash 和其余型号实板仍待验。HPM6E80 OTP Word 72 永久写入继续暂停。
+1. 等待下一组问题，暂缓打包。NXP 实板复位、掉电后恢复、344 在线完整擦写、Data Flash 和其余型号实板仍待验。HPM6E80 OTP Word 72 永久写入继续暂停。
 2. 覆盖安装会结束当前用户旧MKLink及Skill/MCP活动任务，安装后由AI宿主重载MCP。保留损坏历史备份；异常收集installation-history-report.json、history-backups及诊断包，区分权限、占用和格式，不删除有效未知结果或重放烧录。
 3. 客户SystemView先核对实际CH、目标IRQ锁及元数据。1µs三路溢出先采集0x40 CH2设备时间戳/长度/序号与主机单调到达时间，低频读0x10错误和0x14批次耗时；诊断开销保持一致，再判断背压、重试或调度，不直接假定80ms停读或给CH2固定优先级。多视图假离线已完成修复与安装版六窗口复验。保留目标构建快照供AXF源码路径使用，原工程重编后再清理；见[静态补充](../verification/v050-systemview-loss-reboot.md)。
 4. 有Linux/Mac实物后补验真实USB、Gatekeeper首次安装和交互式提权；不能把本轮CI结果当作这些硬件/系统验收。
