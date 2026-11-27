@@ -160,3 +160,34 @@ def test_remote_service_proxy_allowlist_preserves_internal_runtime_boundary():
         assert client.options('/_runtime/remote-windows/'+'a'*32+'/call',headers={**headers,'Access-Control-Request-Method':'DELETE'}).status_code==403
         assert client.options('/_runtime/stop',headers={**headers,'Access-Control-Request-Method':'POST'}).status_code==403
         assert client.post('/_runtime/remote-service',json={},headers={'Origin':'https://untrusted.invalid'}).status_code==403
+
+
+def test_idle_desktop_follows_live_owner_without_a_second_connect(monkeypatch):
+    from mklink import runtime
+    owner = dict(port=9112, token='owner-token', instance_id='owner', probe_id='usb-b')
+    monkeypatch.setattr(runtime, 'discover', lambda key: owner if key == 'usb-b' else None)
+    seen = []
+    def handle(req):
+        path = req.url.path
+        seen.append((req.url.port, path))
+        if path == '/api/runtime/select':
+            return httpx.Response(200, json={'joined_owner': True, 'probe_id': 'usb-b', 'owner_instance': 'owner',
+                                            'device_generation': 2, 'owner_url': 'not returned to native client'})
+        if path == '/api/device/status':
+            if req.url.port == 9111:
+                return httpx.Response(200, json={'connected': False, 'probe_id': 'lobby'})
+            assert req.url.port == 9112 and req.headers['x-auth-token'] == 'owner-token'
+            return httpx.Response(200, json={'connected': True, 'probe_id': 'usb-b', 'device_generation': 2})
+        return httpx.Response(200, json={'ok': True})
+    info = dict(port=9111, token='lobby-token', instance_id='idle', probe_id='lobby')
+    app = create_proxy(info, port=8766, instance_id='window', transport=httpx.MockTransport(handle))
+    with TestClient(app, base_url='http://127.0.0.1:8766') as client:
+        result = client.post('/api/runtime/select', json={'port':'TEST', 'connect':{'reuse_connected':True}})
+        join = result.json()
+        assert join['joined_owner'] and join['probe_id'] == 'usb-b' and join['desktop_instance'] == 'window'
+        assert 'owner_url' not in join and 'token' not in join
+        assert client.post('/api/device/reset').status_code == 409
+        assert (9112, '/api/device/reset') not in seen
+        assert client.get('/_view/' + join['desktop_view'] + '/api/health').status_code == 200
+        assert (9112, '/api/health') in seen
+    assert not any(path == '/api/device/connect' for _, path in seen)

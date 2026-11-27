@@ -51,8 +51,11 @@ export function applyBackendEndpoint(endpoint: BackendEndpoint): void {
   if (!Number.isInteger(endpoint.port) || endpoint.port < 1 || endpoint.port > 65535) {
     throw new Error('Invalid backend port')
   }
-  API_BASE = `http://127.0.0.1:${endpoint.port}${remoteSuffix}`
-  WS_BASE = `ws://127.0.0.1:${endpoint.port}${remoteSuffix}`
+  const query = new URLSearchParams(window.location.search)
+  const key = query.get('mklink_view') || ''
+  const view = query.get('mklink_adapter') === endpoint.instanceId && /^[a-f0-9]{32}$/.test(key) ? '/_view/' + key : ''
+  API_BASE = `http://127.0.0.1:${endpoint.port}${view}${remoteSuffix}`
+  WS_BASE = `ws://127.0.0.1:${endpoint.port}${view}${remoteSuffix}`
   backendPort.value = endpoint.port
   backendStartupError.value = ''
 }

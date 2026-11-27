@@ -1880,6 +1880,15 @@ def create_app(
             if isinstance(exc.detail, dict):
                 from mklink.connection_diagnostics import event
                 event('probe.selection_failed', **exc.detail)
+                if (exc.detail.get('reason') == 'probe_in_use' and _state.get('shared_probe_id') == 'lobby'
+                        and (body.get('connect') or {}).get('reuse_connected') is True):
+                    from fastapi.responses import JSONResponse
+                    from mklink.runtime_gui import existing_probe_view
+                    try:
+                        owner = await run_in_threadpool(existing_probe_view, exc.detail['probe_id'], require_connected=True)
+                    except RuntimeErrorResponse as unavailable:
+                        raise HTTPException(409, unavailable.detail) from unavailable
+                    return JSONResponse({'joined_owner': True, **owner}, headers={'Cache-Control': 'no-store'})
             raise HTTPException(409, exc.detail) from exc
 
     @app.get("/api/ports/discover")
@@ -1967,20 +1976,29 @@ def create_app(
         mcu: str | None = None
         elf_backend: str | None = None
 
-    async def _disconnect_shared_device() -> dict[str, object]:
+    async def _disconnect_shared_device(*, all_captures=False) -> dict[str, object]:
         """Stop bridge dashboards and release the GUI-owned Device."""
         async with _dashboard_start_lock(_state):
             async with device_disconnect_lock:
                 from mklink.remote.dashboards import BRIDGE_DASHBOARD_TYPES
 
                 stopped = []
-                for name in BRIDGE_DASHBOARD_TYPES:
+                stop_errors = {}
+                streams = (*BRIDGE_DASHBOARD_TYPES, "serial", "modbus") if all_captures else BRIDGE_DASHBOARD_TYPES
+                for name in streams:
                     manager = dashboard_managers.get(name)
-                    if manager is not None and _dashboard_worker_alive(manager):
-                        await run_in_threadpool(manager.stop)
+                    was_running = manager is not None and _dashboard_worker_alive(manager)
+                    if was_running or (manager is not None and name in ("serial", "modbus")):
+                        try:
+                            await run_in_threadpool(manager.stop)
+                        except Exception as error:
+                            if not all_captures or _dashboard_worker_alive(manager):
+                                raise
+                            stop_errors[name] = str(error)
                         if _dashboard_worker_alive(manager):
                             raise DashboardStopPending(name)
-                        stopped.append(name)
+                        if was_running:
+                            stopped.append(name)
                     _state["resource_manager"].release(f"user:dashboard:{name}")
 
                 device = _state["device"]
@@ -1990,7 +2008,10 @@ def create_app(
                     _state['symbol_device'] = device
                     _state["device"] = None
                     _state["dispatcher"] = None
-                return {"status": "disconnected", "stopped": stopped}
+                result = {"status": "disconnected", "stopped": stopped}
+                if stop_errors:
+                    result["stop_errors"] = stop_errors
+                return result
 
     def _reset_probe_dashboards():
         """Retire all target data after workers stop, retaining independent UART."""
@@ -2032,6 +2053,14 @@ def create_app(
             for name in BRIDGE_DASHBOARD_TYPES:
                 runtime.created_streams.pop(name, None)
 
+    async def verify_profile_target(device):
+        if isinstance(getattr(device, '_hardware_target', None), dict):
+            try:
+                await run_in_threadpool(device.verify_capture_target)
+            except Exception as error:
+                raise HTTPException(409, {"code": "target_binding_unavailable",
+                    "message": f"目标未确认，请检查目标供电后重新开始采集。{error}"}) from error
+
     @app.post("/api/device/connect")
     async def connect_device(
         port: str | None = Body(default=None),
@@ -2058,6 +2087,15 @@ def create_app(
                 raise HTTPException(409, exc.detail) from exc
             runtime.prune()
             port_changed = bool(current and current.port and current.port.casefold() != port.casefold())
+        from mklink.device import probe_session_connected
+        if current and probe_session_connected(current) and not current.connected and not port_changed:
+            if mcu and isinstance(getattr(current, '_hardware_target', None), dict):
+                from mklink.profiles import resolve_attach_profile
+                requested = resolve_attach_profile(mcu)
+                if requested is None or requested.name != current._hardware_target['profile']:
+                    raise HTTPException(409, 'Explicit model differs from the previously identified target')
+            if port is None or port.casefold() == (current.port or '').casefold():
+                await verify_profile_target(current)
         if current and current.connected and not port_changed:
             matching_profile = check_live_attach_profile(current, mcu)
             if runtime is not None:
@@ -2219,8 +2257,17 @@ def create_app(
     async def disconnect_device():
         runtime = getattr(app.state, 'shared_runtime', None)
         async with _async_target_lock():
-            result = await _disconnect_shared_device()
-        _retire_target_connection(runtime)
+            result = await _disconnect_shared_device(all_captures=True)
+            if runtime is not None:
+                runtime.sessions.clear()
+                runtime.created_streams.clear()
+            _retire_target_connection(runtime)
+            from mklink.remote.stream_hub import StreamHub
+            stream_registry['serial'] = StreamHub(stream_api.SERIAL_BATCHES_PER_CLIENT)
+            serial = dashboard_managers.get('serial')
+            if hasattr(serial, 'set_stream_hub'):
+                serial.set_stream_hub(stream_registry['serial'])
+            _state['disconnect_generation'] = _state.get('disconnect_generation', 0) + 1
         if runtime is not None and getattr(runtime, 'binding', None) is not None:
             # Keep the window and last connection preferences, release physical
             # ownership so another independent window can connect this probe.
@@ -2231,16 +2278,19 @@ def create_app(
 
     @app.get("/api/device/status")
     async def device_status():
-        from mklink.device import target_attach_status
+        from mklink.device import probe_session_connected, target_attach_status
         from mklink.firmware_compatibility import compatibility_snapshot
         if not _state["device"]:
             symbols = _state.get('symbol_device')
             return {"connected": False, "probe_product": "MKLink", "state": "disconnected", "axf": active_symbol_status(symbols),
                     "probe_id": _state.get('shared_probe_id'),
+                    "disconnect_generation": _state.get('disconnect_generation', 0),
                     "device_generation": _state.get('device_generation', 0)}
         dev = _state["device"]
         return {
-            "connected": dev.connected,
+            "connected": probe_session_connected(dev),
+            "target_binding_lost": probe_session_connected(dev) and not dev.connected,
+            "disconnect_generation": _state.get('disconnect_generation', 0),
             "probe_id": _state.get('shared_probe_id'),
             "probe_product": getattr(dev, 'probe_product', 'MKLink') if dev.connected else 'MKLink',
             "connection_recovery": _state.get('connection_recovery'),
@@ -2461,6 +2511,20 @@ def create_app(
     async def reset_device():
         from mklink.remote.dashboards import active_bridge_dashboards
         from mklink.runtime_capabilities import capture_reset_supported, capture_reset_hint
+        device = _state.get('device')
+        if isinstance(getattr(device, '_hardware_target', None), dict):
+            from mklink.remote.acquisition import suspend_acquisition
+            if not device.connected:
+                raise HTTPException(409, '目标绑定已失效，请先重新确认目标。')
+            async with suspend_acquisition(_state, getattr(app.state, 'shared_runtime', None), allow_reconnect=False) as report:
+                async with async_target_debug_lease(_state, 'reset'):
+                    try:
+                        await run_in_threadpool(device.reset)
+                    except Exception as error:
+                        raise HTTPException(409, {"code": "functional_reset_unconfirmed",
+                            "message": f"功能复位未确认。{error}。未重发复位。",
+                            "diagnostic": getattr(error, "details", None)}) from error
+            return {"status": "ok", "method": "FunctionalReset", "acquisition": report}
         async with _dashboard_start_lock(_state):
             device = _state.get('device')
             if device is None or not device.connected:
@@ -2808,6 +2872,8 @@ def create_app(
             encoding = normalize_rtt_encoding(encoding)
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+        if not get_managers()["rtt"].running:
+            await verify_profile_target(_state.get("device"))
         if not _state["device"] or not _state["device"].connected:
             raise HTTPException(
                 status_code=400,
@@ -2999,6 +3065,8 @@ def create_app(
                 status_code=400,
                 detail=f"mode 必须是 0 或 1，得到 {mode}",
             )
+        if not get_managers()["systemview"].running:
+            await verify_profile_target(_state.get("device"))
         if not _state["device"] or not _state["device"].connected:
             raise HTTPException(status_code=400, detail="Device not connected")
         try:
@@ -3171,6 +3239,8 @@ def create_app(
         interval: float | None = Body(None, embed=True, ge=SUPERWATCH_MIN_INTERVAL, le=60),
         profile: str | None = Body(None),
     ):
+        if not get_managers()["superwatch"].running:
+            await verify_profile_target(_state.get("device"))
         if not _state["device"] or not _state["device"].connected:
             raise HTTPException(status_code=400, detail="Device not connected")
         managers = get_managers()
@@ -4019,6 +4089,8 @@ def create_app(
         channels: catalog {path, name?, type?} or raw {addr, type?, size?, name?}.
         addr can be hex string or int. type defaults to "float", size to 4.
         """
+        if not get_managers()["vofa"].running:
+            await verify_profile_target(_state.get("device"))
         if not _state["device"] or not _state["device"].connected:
             raise HTTPException(status_code=400, detail="Device not connected")
         from mklink.remote.dashboards import normalize_vofa_interval

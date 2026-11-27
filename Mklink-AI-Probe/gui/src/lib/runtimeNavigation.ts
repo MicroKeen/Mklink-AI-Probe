@@ -6,5 +6,6 @@ export function navigateToRuntime(href = window.location.href): void {
   const target = new URL(href, window.location.href)
   target.searchParams.set('runtime_transition', 'probe')
   navigating = true
-  window.location.replace(target.href)
+  if (target.href === window.location.href) window.location.reload()
+  else window.location.replace(target.href)
 }

@@ -102,6 +102,7 @@ class MKLinkSerialBridge:
         self._buffer_lock = threading.Lock()
         self._cmd_lock = threading.RLock()  # Includes explicit framed/legacy transitions.
         self._mux = None
+        self._profile_renewal_required = False
         self.attach_profile = None  # Selected by the physical connection owner, before MUX entry.
         self._mux_selected_profile = None
         self._mux_supported = None
@@ -524,6 +525,53 @@ class MKLinkSerialBridge:
         return dict(profile=model, mem_ap=profile.mem_ap, source='SIUL2.MIDR1',
                     midr1=midr1, target_id=target_id, dpidr=dpidr)
 
+    def release_profile_claim(self):
+        """Exit MUX without giving up the serial handle or the probe ownership lock."""
+        with self._cmd_lock:
+            if self._mux is not None:
+                if self._mux.sampling:
+                    raise RuntimeError('Stop active captures before renewing the target binding')
+                self._mux._check()
+                self._mux.close()
+                self._mux = None
+                self._mux_marker.unlink(missing_ok=True)
+            self._mux_selected_profile = None
+            self._profile_renewal_required = True
+            # Retain the selected profile so an implicit general attach is impossible.
+
+    def renew_profile_binding(self, previous, hardware):
+        """Use a fresh claim on the same CDC and pin the original target before sharing it."""
+        import struct
+        from dataclasses import replace
+        from mklink.mux import HARDWARE_ID_CAPABILITY, PROFILE_ATTACH_CAPABILITY, SWD_IDENTITY_COMMAND
+        from mklink.profiles import TargetProfileError
+        from mklink.s32k3 import MIDR1_ADDRESS, MIDR1_MODEL_MASK
+
+        with self._cmd_lock:
+            self.release_profile_claim()
+            mux = self.enable_multiplex(identity_only=True)
+            if mux is None:
+                raise ConnectionError('Selected probe no longer provides MUX')
+            try:
+                required = HARDWARE_ID_CAPABILITY | PROFILE_ATTACH_CAPABILITY
+                if mux.capabilities & required != required:
+                    raise ConnectionError('SWD hardware identification requires MUX HELLO 0x2000 + 0x4000')
+                identity = mux.request(SWD_IDENTITY_COMMAND)
+                if identity != struct.pack('<II', hardware['dpidr'], hardware['target_id']):
+                    raise TargetProfileError('hardware_model_mismatch', 'SWD identity changed; target binding refused')
+                signature = previous.steps[-1]
+                if signature.address != MIDR1_ADDRESS or signature.mask != MIDR1_MODEL_MASK:
+                    raise RuntimeError('Missing hardware identity check in the selected profile')
+                pinned = replace(previous, steps=(*previous.steps[:-1], replace(signature, kind=3,
+                                 value=hardware['midr1'] & MIDR1_MODEL_MASK)))
+                mux.bind_attach_profile(pinned)
+                self._mux_selected_profile = self.attach_profile = pinned
+                self._profile_renewal_required = False
+                return pinned
+            except BaseException:
+                mux.invalidate_target_binding()
+                raise
+
     def _finish_read_only_probe(self):
         if self._mux is None:
             return
@@ -540,6 +588,8 @@ class MKLinkSerialBridge:
         from mklink.firmware_compatibility import FirmwareUpgradeRequired
         from mklink.mux import MuxTargetError, MuxTransport
         with self._cmd_lock:
+            if self._profile_renewal_required and not identity_only:
+                raise RuntimeError('Target binding is unconfirmed; verify the original target before access')
             if self._mux is not None:
                 self._mux._check()
                 if self._mux_selected_profile != self.attach_profile:

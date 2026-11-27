@@ -99,7 +99,7 @@ export function useDashboardSetup() {
     connectionError.value = ''
     try {
       await api.disconnectDevice()
-      toast.info(tr('设备已断开，串口助手和 Modbus 不受影响', 'Device disconnected. Serial Assistant and Modbus keep running.'))
+      toast.info(tr('设备已断开，所有采集已停止', 'Device disconnected. All captures stopped.'))
       return true
     } catch (cause) {
       connectionError.value = cause instanceof Error ? cause.message : String(cause)

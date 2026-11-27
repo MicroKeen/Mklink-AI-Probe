@@ -4,6 +4,7 @@
       <span :class="['status-dot', connected ? 'dot-ok' : 'dot-err']"></span>
       <span class="status-text">{{ connected ? tr('已连接', 'Connected') : tr('未连接', 'Disconnected') }}</span>
     </div>
+    <span v-if="deviceStatus.target_binding_lost" class="icon-warn">{{ tr('目标待确认', 'Target unconfirmed') }}</span>
     <div class="status-divider"></div>
     <div class="status-item">
       <span v-if="configValid && !warningCount" class="status-icon icon-ok">✓</span>

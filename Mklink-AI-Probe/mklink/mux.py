@@ -340,10 +340,23 @@ class MuxTransport:
             self.fail(exc)
             raise
 
+    def invalidate_target_binding(self):
+        """Retire the target data while keeping the claimed USB transport usable for STOP/EXIT."""
+        with self._condition:
+            self.attach_profile = None
+            self._profile_failed = True
+            self._queues.clear()
+            self._sizes.clear()
+            self._condition.notify_all()
+
+    def check_capture_binding(self):
+        if self._profile_failed:
+            raise MuxError('Target binding lost; stop capture and start again to verify the target')
+
     def request(self, op, payload=b'', *, deadline=None):
         with self._commands, self._condition:
             self._check()
-            if self._profile_failed and op >= 0x10:
+            if self._profile_failed and op >= 0x10 and op not in (0x22, 0x31, 0x35):
                 raise MuxError('Profile AP binding is unavailable; reconnect explicitly')
             if self.attach_profile is not None and op in (1, 4, 0x13, PROFILE_ATTACH_COMMAND):
                 raise MuxError('Changing a profile AP binding requires an explicit reconnect')
@@ -370,9 +383,7 @@ class MuxTransport:
                 self._check()
             if answer[0]:
                 error = MuxTargetError(answer[0], op, payload, response=answer[1:])
-                if self.attach_profile is not None and answer[0] == 5:
-                    self.attach_profile = None
-                    self._profile_failed = True
+                if self._profile_failed and answer[0] == 5:
                     error.args = (str(error) + ' Profile AP binding is unconfirmed; reconnect explicitly.',)
                 raise error
             return answer[1:]
@@ -562,6 +573,8 @@ class MuxTransport:
                         # the limit here before parsing the next frame, not in
                         # the requesting thread after request() returns.
                         self.transfer_quantum = self._pending_quantum
+                    if self.attach_profile is not None and payload[:1] == b'\x05':
+                        self.invalidate_target_binding()
                     heartbeat = self._pending[3]
                     self._last_reply = time.monotonic()
                     self._reply = payload
@@ -582,6 +595,11 @@ class MuxTransport:
                     if op != 0x42 and payload[0] >= (8 if op == 0x40 else 15):
                         self.fail('Invalid event channel')
                         return
+                    status = payload[38] if op == 0x42 else payload[1]
+                    if self.attach_profile is not None and status in (5, 7, 8):
+                        self.invalidate_target_binding()
+                    if self._profile_failed:
+                        continue
                     if self._event_id is not None:
                         missing = (req-self._event_id-1) & 0xffffffff
                         self.event_gaps += missing
@@ -635,6 +653,7 @@ class MuxTransport:
     def drain(self, op, channel, *, max_bytes=None):
         with self._condition:
             self._check()
+            self.check_capture_binding()
             key = (op, channel)
             if max_bytes is None:
                 frames = list(self._queues.pop(key, ()))

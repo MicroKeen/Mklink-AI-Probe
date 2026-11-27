@@ -551,7 +551,11 @@ def test_lifecycle_stops_shared_capture_and_revokes_old_target_sessions(window, 
     assert response.status_code == 200, response.text
     assert not manager.running and state['device'] is None
     assert state['device_generation'] == 1
-    assert set(control.sessions) == {'uart'} and control.created_streams == {'serial': 'uart'}
+    if endpoint == '/api/runtime/select':
+        assert set(control.sessions) == {'uart'} and control.created_streams == {'serial': 'uart'}
+    else:
+        assert not control.sessions and not control.created_streams
+        assert client.post('/_runtime/heartbeat', json={'session_id': 'uart'}).status_code == 409
     assert client.post('/_runtime/call', json={'session_id': 'target', 'capability': 'write_memory',
         'arguments': {'address':'0x20000020','data_hex':'01'}}).status_code == 409
     device.close.assert_called_once()
@@ -709,3 +713,21 @@ def test_slow_old_request_body_cannot_cross_completed_switch(window):
             response=await old
             assert response.status_code==409 and 'connection changed' in response.text
     client.portal.call(scenario)
+
+
+def test_idle_gui_joins_owner_without_connecting_another_port(window, monkeypatch):
+    client, control, device, state = window
+    assert client.post('/api/device/disconnect').status_code == 200
+    link = {'joined_owner': True, 'owner_instance': 'owner', 'probe_id': B,
+            'owner_url': 'http://127.0.0.1:9999/_runtime/open#gui-once', 'device_generation': 7}
+    issuer = Mock(return_value=link)
+    monkeypatch.setattr('mklink.runtime_gui.existing_probe_view', issuer)
+    connect = Mock(side_effect=AssertionError('GUI attempted duplicate port open'))
+    monkeypatch.setattr('mklink.connect', connect)
+    with runtime.runtime_lock('owner.lock', B):
+        result = client.post('/api/runtime/select', json={'port': 'COM2', 'connect': {'reuse_connected': True}})
+    assert result.status_code == 200 and result.json() == link, result.text
+    assert result.headers['Cache-Control'] == 'no-store'
+    issuer.assert_called_once_with(B, require_connected=True)
+    assert state['device'] is None and control.info['probe_id'] == 'lobby'
+    connect.assert_not_called()

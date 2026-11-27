@@ -82,6 +82,8 @@ export interface FirmwareCompatibility {
 }
 
 export interface DeviceStatus {
+  target_binding_lost?: boolean
+  disconnect_generation?: number
   probe_id?: string | null
   target_attach?: { profile: string; mem_ap: number } | null
   firmware_update?: FirmwareUpdateNotice | null

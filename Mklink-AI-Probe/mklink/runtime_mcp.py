@@ -424,9 +424,9 @@ def build_server():
 
     @server.tool()
     def disconnect() -> dict:
-        """Stop shared target acquisition and disconnect the physical probe.
+        """Stop all acquisitions on this backend and disconnect the physical probe.
 
-        Drains admitted hardware work first. All target clients lose their old
+        Drains admitted hardware work first. All clients on this backend lose their old
         attachment; GUI pages update. Use detach for session-only cleanup.
         """
         result = client().disconnect()

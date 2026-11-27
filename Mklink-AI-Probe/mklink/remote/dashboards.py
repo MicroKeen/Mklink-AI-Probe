@@ -3107,6 +3107,10 @@ class SuperWatchStreamManager:
         boundaries = self._pending_boundaries
         self._pending_boundaries = []
         channel_count = self._pending_channel_count
+        if isinstance(getattr(self._device, '_hardware_target', None), dict) and not self._device.connected:
+            self._pending_sample_count = self._pending_channel_count = 0
+            self._pending_started_at = self._latest_sample = None
+            return False
         first_sequence = self._latest_sample_sequence
         self._latest_sample_sequence += sample_count
         self._latest_sample = {
@@ -3149,6 +3153,9 @@ class SuperWatchStreamManager:
     def get_latest_sample(self) -> dict:
         """Return the last acquisition row without starting another hardware read."""
         with self._read_lock:
+            device = self._device
+            if isinstance(getattr(device, '_hardware_target', None), dict) and not device.connected:
+                return {"sample": None, "running": False, "target_binding_lost": True}
             sample = self._latest_sample
             if sample is None or sample["metadata_version"] != self._metadata_cache[2]:
                 return {"sample": None, "running": self.running}

@@ -265,3 +265,16 @@ def test_gui_handoff_never_spawns_another_backend_after_instance_loss(monkeypatc
     client = runtime.RuntimeClient(info=info(tmp_path))
     with pytest.raises(runtime.RuntimeErrorResponse, match='changed or exited'):
         client.connect(scope='uart', existing_only=True)
+
+
+def test_owner_view_ticket_expires_when_device_generation_changes(backend):
+    http, control, *_ = backend
+    session = attach(http)
+    state = control.app.state.mklink_state
+    body = {'session_id': session, 'probe_id': control.info.get('probe_id'),
+            'device_generation': state.get('device_generation', 0)}
+    link = http.post('/_runtime/gui-link', json=body)
+    assert link.status_code == 200, link.text
+    state['device_generation'] = body['device_generation'] + 1
+    assert http.post('/_runtime/login', json={'token': link.json()['ticket']}).status_code == 409
+    assert http.post('/_runtime/gui-link', json=body).status_code == 409

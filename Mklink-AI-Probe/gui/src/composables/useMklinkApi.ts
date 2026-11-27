@@ -1,5 +1,6 @@
 import { frontendFetch as fetch } from '../lib/frontendControl'
 import type { SemanticExecutionContext } from '../lib/frontendControl'
+import { navigateToRuntime } from '../lib/runtimeNavigation'
 import { requestError } from '../lib/requestError'
 import { ref, readonly } from 'vue'
 import { tr } from './useLanguage'
@@ -233,9 +234,10 @@ export function useMklinkApi(context?: SemanticExecutionContext) {
   }
 
   async function connectDevice(req: ConnectRequest): Promise<DeviceStatus> {
-    const { probe, ...connection } = req
+    const { probe, ...settings } = req
+    const connection = sharedRuntime.value ? { ...settings, reuse_connected: true } : settings
     if (sharedRuntime.value) {
-      let selection: { switched?: boolean; connection?: DeviceStatus }
+      let selection: { switched?: boolean; joined_owner?: boolean; owner_url?: string; desktop_view?: string; desktop_instance?: string; connection?: DeviceStatus }
       try {
         selection = await api('/api/runtime/select', {
           method: 'POST', body: JSON.stringify({ probe, port: req.port, connect: connection }),
@@ -244,6 +246,17 @@ export function useMklinkApi(context?: SemanticExecutionContext) {
         // Also clear the old target after a switch whose new connection failed.
         await refreshStatus()
         throw error
+      }
+      if (selection.joined_owner) {
+        if (selection.desktop_view && selection.desktop_instance) {
+          const target = new URL(window.location.href)
+          target.searchParams.set('mklink_view', selection.desktop_view)
+          target.searchParams.set('mklink_adapter', selection.desktop_instance)
+          navigateToRuntime(target.href)
+        } else if (selection.owner_url) {
+          navigateToRuntime(selection.owner_url)
+        }
+        return deviceStatus.value
       }
       if (selection.switched) {
         await refreshStatus()

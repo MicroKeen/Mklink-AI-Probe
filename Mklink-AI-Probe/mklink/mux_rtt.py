@@ -92,11 +92,12 @@ class MuxRTTManager:
                 if up & (1 << channel):
                     down |= 1 << channel
                 else:
-                    session.send_input(b'\x02', channel=channel)
+                    if not t._profile_failed:
+                        session.send_input(b'\x02', channel=channel)
                     self.recorders.discard(channel)
             if len(self.consumers) == 1:
                 self._configure(0x22)
-            elif (up, down) != (self.up, self.down):
+            elif not t._profile_failed and (up, down) != (self.up, self.down):
                 self._configure(0x23, bytes([up, down]))
             with t._condition:
                 del self.consumers[session]
@@ -166,6 +167,7 @@ class MuxRTTSession:
         with t._condition:
             while True:
                 t._check()
+                t.check_capture_binding()
                 if not self._running:
                     raise RuntimeError('RTT not started')
                 if self._status == 7:

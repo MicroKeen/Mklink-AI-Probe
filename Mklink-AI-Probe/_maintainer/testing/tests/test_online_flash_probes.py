@@ -1034,7 +1034,7 @@ def test_rtt_encoding_routes_validate_and_update_the_shared_manager():
     managers["rtt"].set_encoding.assert_called_once_with("gbk")
 
 
-def test_disconnect_stops_only_mklink_dashboards_and_preserves_serial_resources(monkeypatch):
+def test_explicit_disconnect_stops_all_runtime_captures_and_releases_ports(monkeypatch):
     from mklink.remote import dashboards
     from mklink.remote.resource_manager import ResourceGroup
 
@@ -1043,7 +1043,9 @@ def test_disconnect_stops_only_mklink_dashboards_and_preserves_serial_resources(
     monkeypatch.setattr(dashboards, "_managers", {})
     managers = dashboards.get_managers()
     for name in ("serial", "modbus"):
-        managers[name] = SimpleNamespace(running=True, start=MagicMock(), stop=MagicMock())
+        manager = SimpleNamespace(running=True, start=MagicMock())
+        manager.stop = MagicMock(side_effect=lambda m=manager: setattr(m, 'running', False))
+        managers[name] = manager
     original = dict(managers)
     original["rtt"]._running = True
     original["rtt"].stop = MagicMock(wraps=original["rtt"].stop)
@@ -1070,10 +1072,10 @@ def test_disconnect_stops_only_mklink_dashboards_and_preserves_serial_resources(
     assert state["device_generation"] == 1
     assert managers["serial"] is original["serial"]
     assert managers["modbus"] is original["modbus"]
-    managers["serial"].stop.assert_not_called()
-    managers["modbus"].stop.assert_not_called()
+    managers["serial"].stop.assert_called_once_with()
+    managers["modbus"].stop.assert_called_once_with()
     status = state["resource_manager"].get_status()
-    assert status["serial_port"]["owner"] == "user:dashboard:serial"
+    assert "serial_port" not in status
     assert "target_debug" not in status
 
 

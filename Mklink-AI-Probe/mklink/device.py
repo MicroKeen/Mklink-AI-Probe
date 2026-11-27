@@ -60,6 +60,12 @@ class DeviceNotConnectedError(DeviceError):
     pass
 
 
+def probe_session_connected(device):
+    """Generic transports report their ordinary connection; USB profile readiness is separate."""
+    physical = getattr(device, "probe_connected", None)
+    return physical if type(physical) is bool else bool(device and device.connected)
+
+
 def target_attach_status(device):
     """Return the live, acknowledged profile for this physical connection."""
     profile = getattr(device, "_attach_profile", None)
@@ -650,11 +656,14 @@ class Device:
 
     @property
     def connected(self) -> bool:
-        bridge = self._bridge
-        if not self._connected or bridge is None:
-            return False
         profile = getattr(self, "_attach_profile", None)
-        if profile is not None and getattr(getattr(bridge, "_mux", None), "attach_profile", None) != profile:
+        return self.probe_connected and (profile is None or
+            getattr(getattr(self._bridge, "_mux", None), "attach_profile", None) == profile)
+
+    @property
+    def probe_connected(self) -> bool:
+        bridge = self._bridge
+        if not self._connected or bridge is None or getattr(bridge, 'transport_healthy', None) is False:
             return False
         transport_error = getattr(bridge, "_transport_error", None)
         if isinstance(transport_error, BaseException):
@@ -663,6 +672,29 @@ class Device:
             DeviceState.DISCONNECTED,
             DeviceState.ERROR,
         )
+
+    def verify_capture_target(self):
+        """Verify a hardware-selected target on explicit start, keeping the USB session."""
+        from mklink.mux import MuxTargetError
+        from mklink.s32k3 import MIDR1_ADDRESS, MIDR1_MODEL_MASK
+        hardware = self._hardware_target
+        if not hardware:
+            return
+        bridge = self._bridge
+        with bridge._cmd_lock:
+            mux = bridge._mux
+            if mux is not None and self.connected:
+                try:
+                    raw = mux.read_memory(MIDR1_ADDRESS, 4)
+                except MuxTargetError as exc:
+                    if exc.status != 5:
+                        raise
+                else:
+                    if int.from_bytes(raw, 'little') & MIDR1_MODEL_MASK == hardware['midr1'] & MIDR1_MODEL_MASK:
+                        return
+                    mux.invalidate_target_binding()
+                    raise DeviceError('SIUL2.MIDR1 changed; target binding refused')
+            self._attach_profile = bridge.renew_profile_binding(self._attach_profile, hardware)
 
     def _require_connected(self) -> None:
         if not self.connected:
@@ -1410,6 +1442,9 @@ class Device:
     def reset(self) -> None:
         """Reset the target MCU while keeping the probe session connected."""
         self._require_connected()
+        if getattr(self, "_hardware_target", None):
+            self._reset_hardware_profile()
+            return
         from contextlib import nullcontext
         from mklink.mux import MuxTransport, SLEEP_COMMAND_TIMEOUT
         from mklink.sleep_debug import advertised_atomic_sleep, slow_control
@@ -1442,6 +1477,33 @@ class Device:
         receipts = [line.strip() for line in response.splitlines() if line.strip().startswith('MKLINK_RESET_RC=')]
         if receipts != ['MKLINK_RESET_RC=0']:
             raise DeviceError(f'Software reset not confirmed by the probe; outcome unknown, do not replay: {response.strip()}')
+
+    def _reset_hardware_profile(self):
+        from mklink.cmsis_dap.backend import PyOcdBackend
+        from mklink.probes import select_probe
+        from mklink.s32k3 import MIDR1_ADDRESS, MIDR1_MODEL_MASK
+        hardware = self._hardware_target
+        profile = resolve_attach_profile(hardware['profile'])
+        if profile is None or profile.online_system_reset == 'default':
+            raise DeviceError('Hardware profile has no confirmed system reset strategy')
+        selected = select_probe(self.port)
+        serial = selected.get('serial_number')
+        if not serial or selected['port'].casefold() != self.port.casefold():
+            raise DeviceError('Cannot match the command port to a unique CMSIS-DAP serial number')
+        frequency = self.clock_hz or 1_000_000
+        backend = PyOcdBackend()
+        bridge = self._bridge
+        with bridge._cmd_lock:
+            bridge.release_profile_claim()
+            try:
+                backend.connect(probe=serial, target=profile.name, frequency=frequency, connect_mode='attach')
+                actual = int.from_bytes(backend.read_memory(MIDR1_ADDRESS, 4), 'little')
+                if actual & MIDR1_MODEL_MASK != hardware['midr1'] & MIDR1_MODEL_MASK:
+                    raise DeviceError('Target identity changed before functional reset')
+                backend.reset_run('software')  # Exactly once; post-reset checks never replay this call.
+            finally:
+                backend.disconnect()
+            self._attach_profile = bridge.renew_profile_binding(self._attach_profile, hardware)
 
     def _stop_active_probe_streams(self) -> None:
         if self._rtt_session and self._rtt_session._running:
@@ -2318,7 +2380,8 @@ class Device:
     def rtt_stop(self) -> str:
         session = self._rtt_session
         try:
-            self._require_connected()
+            if not (self.probe_connected and _live_mux_capture(session)):
+                self._require_connected()
             if not session:
                 return ""
             return session.stop()
@@ -2549,7 +2612,8 @@ class Device:
         """停止 SystemView 采集。"""
         session = self._systemview_session
         try:
-            self._require_connected()
+            if not (self.probe_connected and _live_mux_capture(session)):
+                self._require_connected()
             if session:
                 session.stop()
         finally:

@@ -27,6 +27,7 @@
     <span :class="['badge', deviceStatus.connected ? 'badge-ok' : 'badge-err']">
       {{ recoveryLabel || (deviceStatus.connected ? tr('已连接', 'Connected') : tr('未连接', 'Disconnected')) }}
     </span>
+    <span v-if="deviceStatus.target_binding_lost" class="badge badge-err">{{ tr('目标待确认', 'Target unconfirmed') }}</span>
     <span v-if="deviceStatus.connection_recovery?.errors?.length" class="badge badge-err" :title="deviceStatus.connection_recovery.errors.join('\n')">{{ tr('连接已恢复，采集待确认', 'Connected; review capture') }}</span>
     <span v-if="deviceStatus.idcode" class="badge badge-info">{{ deviceStatus.idcode }}</span>
   </div>

@@ -46,9 +46,9 @@ describe('RTT API contracts', () => {
     fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ same_runtime: true }) })
     await useMklinkApi().connectDevice({ probe: 'usb-selected', port: 'COM9' })
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
-      probe: 'usb-selected', port: 'COM9', connect: { port: 'COM9' },
+      probe: 'usb-selected', port: 'COM9', connect: { port: 'COM9', reuse_connected: true },
     })
-    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({})
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ reuse_connected: true })
   })
 
   it('switches in place and refreshes target generation without navigation or duplicate connect', async () => {
@@ -81,7 +81,7 @@ describe('RTT API contracts', () => {
     }) })
     fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ connected: true, port: 'COM10' }) })
     const result = await useMklinkApi().connectDevice({ restore_last: true })
-    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ connect: { restore_last: true } })
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ connect: { restore_last: true, reuse_connected: true } })
     expect(fetchMock.mock.calls.map(call => call[0])).toEqual(['/api/runtime/select', '/api/device/status'])
     expect(result.port).toBe('COM10')
     expect(useMklinkApi().deviceStatus.value.connected).toBe(true)
