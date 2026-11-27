@@ -1956,6 +1956,7 @@ class SuperWatchStreamManager:
         self._batch_max_latency = max(0.001, float(batch_max_latency))
         self._clock = clock
         self._pending_values = array("f")
+        self._pending_latest_row = ()
         self._pending_sample_times = array("d")
         self._pending_boundaries = []
         self._pending_sample_count = 0
@@ -3036,6 +3037,7 @@ class SuperWatchStreamManager:
             )
         except (OverflowError, TypeError, ValueError):
             return False
+        self._pending_latest_row = values[:channel_count]
         if break_before:
             self._pending_boundaries.append((self._pending_sample_count, break_before))
         self._pending_sample_count += 1
@@ -3111,13 +3113,14 @@ class SuperWatchStreamManager:
             self._pending_sample_count = self._pending_channel_count = 0
             self._pending_started_at = self._latest_sample = None
             return False
+        latest = self._pending_latest_row
         first_sequence = self._latest_sample_sequence
         self._latest_sample_sequence += sample_count
         self._latest_sample = {
             "sequence": self._latest_sample_sequence,
             "metadata_version": self._metadata_cache[2],
             "channels": json.loads(self._metadata_cache[1]),
-            "values": [value if math.isfinite(value) else None for value in values[-channel_count:]],
+            "values": list(latest),
             "sample_time_ms": float(times[-1]) if times and math.isfinite(times[-1]) else None,
             "received_monotonic": time.monotonic(),
         }
@@ -3129,6 +3132,9 @@ class SuperWatchStreamManager:
                 self._recorder.append(values, times, self._latest_sample['channels'], boundaries=boundaries)
             if self._stream_hub is None:
                 raise RuntimeError("SuperWatch binary stream hub is unavailable")
+            # Only clients requesting exact live readouts receive the extra row.
+            exact_row = (struct.pack(f'<{channel_count}d', *latest)
+                         if any(a != b for a, b in zip(latest, values[-channel_count:])) else b'')
             if sys.byteorder != "little":
                 values.byteswap()
                 times.byteswap()
@@ -3142,6 +3148,7 @@ class SuperWatchStreamManager:
             self._stream_hub.publish(
                 payload, item_count=sample_count, flags=flags,
                 stream_type=StreamType.SUPERWATCH,
+                **({"latest_f64": exact_row} if exact_row else {}),
             )
         except Exception as exc:
             self._binary_dropped_batches += 1

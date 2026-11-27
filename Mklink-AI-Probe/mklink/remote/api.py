@@ -1074,7 +1074,7 @@ def create_app(
             return {**status, "display_name": name}
         return status
 
-    async def _load_symbol_file(axf=None, elf_backend=None, *, error_status=500, preserve_capture=False, display_name=None):
+    async def _load_symbol_file(axf=None, elf_backend=None, *, error_status=500, preserve_capture=False, display_name=None, expected_axf=None):
         nonlocal symbol_display_source
         # Explicit file loading owns admission and drains capture workers before
         # rebinding addresses. It never resumes acquisition on the new layout.
@@ -1085,6 +1085,9 @@ def create_app(
             runtime.require_symbol_change(stop_acquisition=True)
         async with _dashboard_start_lock(_state):
             async with _async_target_lock():
+                active = _state.get("device") or _state.get("symbol_device")
+                if expected_axf and not _same_file_source_path(expected_axf, getattr(active, '_axf', None)):
+                    raise HTTPException(409, 'The active symbol source changed; select it again before reloading')
                 from mklink.remote.dashboards import BRIDGE_DASHBOARD_TYPES
                 managers = get_managers()
                 if preserve_capture:
@@ -1268,12 +1271,16 @@ def create_app(
         device = _state.get('device') or _state.get('symbol_device')
         if source_path and not _same_file_source_path(expected_axf, getattr(device, '_axf', None)):
             raise HTTPException(409, 'The active symbol source changed; select it again before reloading')
-        result = await _load_symbol_file(source_path)
+        name = active_symbol_status(device).get("display_name") if source_path and device else None
+        result = await _load_symbol_file(source_path, display_name=name, expected_axf=expected_axf)
+        active_path = result.get('axf_path')
+        from mklink.rtt_addr import diagnose_rtt_addr
+        rtt_addr = (await run_in_threadpool(diagnose_rtt_addr, active_path)).addr if active_path else None
         device = _state.get('device') or _state.get('symbol_device')
         source_monitor.acknowledge(device, dict(source_monitor.pending))
         reload_captures.clear()
         event = {'sequence': time.time_ns(), 'state': 'applied', 'pending': False,
-                 'symbols_reloaded': True, 'axf_path': result.get('axf_path'),
+                 'symbols_reloaded': True, 'axf_path': active_path, 'rtt_addr': rtt_addr,
                  'rebind': result.get('rebind', {}), 'rtt_restarted': False}
         _state['file_source_change'] = event
         return event

@@ -84,6 +84,8 @@ class GuiBridge:
         headers['X-MKLink-Device-Generation'] = str(self.device_generation)
         try:
             if mode == 'ws':
+                if path == '/ws/streams/superwatch' and p.get('latest64') is True:
+                    path += '?continuity=1&latest64=1'
                 from websockets.legacy.client import connect
                 async with connect(f"ws://127.0.0.1:{self.info['port']}{path}", extra_headers=headers,
                                    max_size=4*1024*1024, max_queue=4, compression=None) as upstream:

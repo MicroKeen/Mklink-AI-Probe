@@ -34,6 +34,8 @@ SUPERWATCH_TIMESTAMPED_FLOAT32 = 0x03
 # then the v3 times/values, then <II> sample index + reason for each boundary.
 # Reason bit 1 is confirmed loss/read failure; bit 2 is unknown wire continuity.
 SUPERWATCH_CONTINUITY_FLOAT32 = 0x04
+# Negotiated Float64 copy of the last row, appended after the plotting data.
+SUPERWATCH_LATEST_FLOAT64 = 0x08
 SUPERWATCH_CONTINUITY_HEADER = struct.Struct('<QII')
 MEMORY_JSON_V1 = 0x01
 MAX_MEMORY_CHUNK_BYTES = 256

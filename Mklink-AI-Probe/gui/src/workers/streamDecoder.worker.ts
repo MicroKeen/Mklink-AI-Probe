@@ -1,7 +1,7 @@
 import {
   decodeFrame, RTT_RAW_UTF8_LINES, RTT_TERMINAL_UTF8, SERIAL_RX_BYTES, SERIAL_TX_BYTES,
   StreamType, SUPERWATCH_METADATA_JSON,
-  SUPERWATCH_SAMPLE_MAJOR_FLOAT32, SUPERWATCH_TIMESTAMPED_FLOAT32, SUPERWATCH_CONTINUITY_FLOAT32,
+  SUPERWATCH_SAMPLE_MAJOR_FLOAT32, SUPERWATCH_TIMESTAMPED_FLOAT32, SUPERWATCH_CONTINUITY_FLOAT32, SUPERWATCH_LATEST_FLOAT64,
   WAVEFORM_SAMPLE_MAJOR_FLOAT32, type StreamFrame,
 } from '../lib/stream/protocol'
 import { signalFormula } from '../lib/signalFormula'
@@ -88,6 +88,7 @@ export type WorkerOutput =
       bufferStartMs: number | null
       bufferEndMs: number | null
       latestTimeMs: number
+      exactLatestValues?: number[]
       latestValues: ArrayBuffer
     }
   | {
@@ -635,9 +636,11 @@ export class StreamDecoder {
       this.post({ type: 'superwatch-metadata', version, channels })
       return
     }
-    const continuity = decoded.flags === SUPERWATCH_CONTINUITY_FLOAT32
-    const timestamped = continuity || decoded.flags === SUPERWATCH_TIMESTAMPED_FLOAT32
-    if ((!timestamped && decoded.flags !== SUPERWATCH_SAMPLE_MAJOR_FLOAT32) || this.superwatchMetadataVersion <= 0) {
+    const hasLatest = Boolean(decoded.flags & SUPERWATCH_LATEST_FLOAT64)
+    const layout = decoded.flags & ~SUPERWATCH_LATEST_FLOAT64
+    const continuity = layout === SUPERWATCH_CONTINUITY_FLOAT32
+    const timestamped = continuity || layout === SUPERWATCH_TIMESTAMPED_FLOAT32
+    if ((!timestamped && layout !== SUPERWATCH_SAMPLE_MAJOR_FLOAT32) || this.superwatchMetadataVersion <= 0) {
       throw new RangeError('SuperWatch samples require current metadata and sample-major Float32')
     }
     const ring = this.ring as TypedRingBuffer
@@ -649,9 +652,12 @@ export class StreamDecoder {
     const markerCount = continuity ? view.getUint32(8, true) : 0
     const dataBytes = timeBytes + decoded.itemCount * ring.channelCount * Float32Array.BYTES_PER_ELEMENT
     const expectedBytes = prefixBytes + dataBytes + markerCount * 8
-    if (decoded.itemCount <= 0 || decoded.payload.byteLength !== expectedBytes) {
+    const tailBytes = hasLatest ? ring.channelCount * 8 : 0
+    if (decoded.itemCount <= 0 || decoded.payload.byteLength !== expectedBytes + tailBytes) {
       throw new RangeError('SuperWatch payload does not match metadata channel alignment')
     }
+    const exactLatestValues = hasLatest ? Array.from({ length: ring.channelCount }, (_, index) => view.getFloat64(expectedBytes + index * 8, true)) : undefined
+    if (exactLatestValues && !exactLatestValues.every(Number.isFinite)) throw new RangeError('Invalid SuperWatch latest values')
     const boundaries = continuity ? new Uint8Array(decoded.itemCount) : undefined
     if (continuity) {
       if (view.getUint32(12, true) !== 0 || markerCount > decoded.itemCount
@@ -672,7 +678,7 @@ export class StreamDecoder {
       // CONTROL sequence numbers do not identify missing sample records.
       if (this.nextSampleOrdinal !== null && firstOrdinal! > this.nextSampleOrdinal) boundaries![0] |= 1
     }
-    const valueBuffer = timestamped ? decoded.payload.slice(prefixBytes + timeBytes, prefixBytes + dataBytes) : decoded.payload
+    const valueBuffer = (timestamped || hasLatest) ? decoded.payload.slice(prefixBytes + timeBytes, prefixBytes + dataBytes) : decoded.payload
     const values = new Float32Array(valueBuffer)
     for (let index = 0; index < values.length; index++) {
       if (!Number.isFinite(values[index])) throw new RangeError('SuperWatch samples must be finite')
@@ -704,7 +710,7 @@ export class StreamDecoder {
       decoded.sequence,
       timestamped ? BigInt(Math.round(timing.lastTimestamp! * 1_000_000)) : decoded.timestampNs,
       decoded.itemCount,
-      ring,
+      ring, exactLatestValues,
     )
     if (this.waveformSummaryOnly) return
     const output: Extract<WorkerOutput, { type: 'waveform-batch' }> = {
@@ -724,6 +730,7 @@ export class StreamDecoder {
     timestampNs: bigint,
     collectedItemCount: number,
     ring: TypedRingBuffer,
+    exactLatestValues?: number[],
   ): void {
     if (collectedItemCount <= 0 || ring.length <= 0) return
     const latestTimeMs = ring.timeAt(ring.length - 1)
@@ -742,6 +749,7 @@ export class StreamDecoder {
       bufferEndMs: latestTimeMs,
       latestTimeMs,
       latestValues: latestValues.buffer,
+      exactLatestValues,
     }
     this.post(output, [output.latestValues])
   }

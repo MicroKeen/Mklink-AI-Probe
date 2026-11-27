@@ -467,6 +467,27 @@ describe('StreamDecoder worker controller', () => {
     expect(transfers[messages.indexOf(batch)]).toEqual([batch.values, batch.times])
   })
 
+  it('separates an exact live uint32 from the float32 plotting row', () => {
+    const { decoder, messages } = setup()
+    decoder.handle({ type: 'configure', capacity: 3, channelCount: 1, waveformSummaryOnly: true })
+    const metadata = new TextEncoder().encode(JSON.stringify({ version: 1, channels: [{ name: 'mailbox' }] }))
+    const send = (n: number, items: number, bytes: Uint8Array, flags: number) => decoder.handle({
+      type: 'frame', buffer: frame(BigInt(n), items, bytes, StreamType.SUPERWATCH, BigInt(n), flags),
+      connectionGeneration: 1, frameTicket: n,
+    })
+    send(1, 0, metadata, 2)
+    const data = new Uint8Array(36)
+    const view = new DataView(data.buffer)
+    view.setFloat64(16, 25, true)
+    view.setFloat32(24, 0x24a75b19, true)
+    view.setFloat64(28, 0x24a75b19, true)
+    send(2, 1, data, 4 | 8)
+    const summary = messages.find(message => message.type === 'waveform-summary')
+    if (summary?.type !== 'waveform-summary') throw new Error('Missing exact summary')
+    expect(summary.exactLatestValues).toEqual([614947609])
+    expect(Array.from(new Float32Array(summary.latestValues))).toEqual([614947584])
+  })
+
   it('keeps full SuperWatch history in the Worker and emits only latest summaries normally', () => {
     const { decoder, messages, transfers } = setup()
     decoder.handle({

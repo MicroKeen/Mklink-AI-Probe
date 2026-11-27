@@ -16,7 +16,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from mklink.remote.stream_hub import StreamHub
 from mklink.remote.stream_protocol import (
     Frame, StreamType, encode_frame, SUPERWATCH_CONTINUITY_FLOAT32,
-    SUPERWATCH_CONTINUITY_HEADER, SUPERWATCH_TIMESTAMPED_FLOAT32,
+    SUPERWATCH_CONTINUITY_HEADER, SUPERWATCH_TIMESTAMPED_FLOAT32, SUPERWATCH_LATEST_FLOAT64,
 )
 
 logger = logging.getLogger(__name__)
@@ -81,7 +81,7 @@ async def _authenticate(websocket: WebSocket, auth_token: Optional[str]) -> bool
 
 
 def _encoded_data_frame(
-    stream_type: StreamType, batch, *, continuity: bool = False,
+    stream_type: StreamType, batch, *, continuity: bool = False, latest64: bool = False,
 ) -> bytes:
     batch_stream_type = batch.stream_type or stream_type
     flags, payload = batch.flags, batch.payload
@@ -89,6 +89,9 @@ def _encoded_data_frame(
         _, count, _ = SUPERWATCH_CONTINUITY_HEADER.unpack_from(payload)
         payload = payload[SUPERWATCH_CONTINUITY_HEADER.size:len(payload)-count*8]
         flags = SUPERWATCH_TIMESTAMPED_FLOAT32
+    if latest64 and batch_stream_type == StreamType.SUPERWATCH and batch.latest_f64:
+        payload += batch.latest_f64
+        flags |= SUPERWATCH_LATEST_FLOAT64
     return encode_frame(Frame(
         stream_type=batch_stream_type,
         flags=flags,
@@ -176,7 +179,7 @@ async def stream_websocket(
                 await websocket.send_bytes(
                     _encoded_data_frame(stream_type, batch, continuity=(
                         stream_type == StreamType.SUPERWATCH and websocket.query_params.get('continuity') == '1'
-                    ))
+                    ), latest64=(stream_type == StreamType.SUPERWATCH and websocket.query_params.get('latest64') == '1'))
                 )
             finally:
                 queue.task_done()

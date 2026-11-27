@@ -430,8 +430,10 @@ describe('WaveformViewer VOFA binary transport', () => {
     const config = wrapper.vm.read()
     const first = wrapper.vm.readValues()['signal:sensor.temperature']!
     expect(first).toMatchObject({ value: 21.5, sequence: '1', connected: true })
-    summary.value = { ...summary.value, sequence: 2n }
-    expect(wrapper.vm.readValues()['signal:sensor.temperature']?.sequence).toBe('2')
+    summary.value = { ...summary.value, sequence: 2n,
+      latestValues: Float32Array.of(614947609, 1).buffer, exactLatestValues: [614947609, 1] }
+    expect(wrapper.vm.readValues()['signal:sensor.temperature']).toMatchObject({ sequence: '2', value: 614947609 })
+    expect(wrapper.emitted('latest-values')?.at(-1)).toEqual([{ 'sensor.temperature': 614947609, 'sensor.valid': 1 }])
     expect(wrapper.vm.read()).toEqual(config)
     summary.value = { ...summary.value, sequence: 3n, collectedItemCount: 0 }
     expect(wrapper.vm.readValues()['signal:sensor.temperature']?.sequence).toBe('2')

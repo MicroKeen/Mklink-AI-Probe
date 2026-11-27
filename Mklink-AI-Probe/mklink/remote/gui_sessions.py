@@ -148,7 +148,7 @@ def install_remote_windows(app, api, *, client_factory=RemoteClient):
         await close(key)
         return {'closed': True}
 
-    async def tunnel(window, mode, path, method='GET', body=b''):
+    async def tunnel(window, mode, path, method='GET', body=b'', *, latest64=False):
         from websockets.legacy.client import connect as ws_connect
         if window.failed: raise HTTPException(410, 'Remote session disconnected; reconnect explicitly')
         if len(window.sockets) + window.opening >= 32: raise HTTPException(429, 'Too many remote GUI streams')
@@ -165,6 +165,7 @@ def install_remote_windows(app, api, *, client_factory=RemoteClient):
             if 'error' in hello: raise ValueError('Remote authentication failed')
             await socket.send(json.dumps({'jsonrpc':'2.0','id':2,'method':'gui.tunnel',
                 'params':{'mode':mode,'path':path,'method':method,
+                          **({'latest64': True} if latest64 else {}),
                           'instance_id':window.identity['runtime_instance_id'],
                           'body':base64.b64encode(body).decode('ascii')}}))
             response = json.loads(await asyncio.wait_for(socket.recv(), 35))
@@ -216,7 +217,8 @@ def install_remote_windows(app, api, *, client_factory=RemoteClient):
         window = None
         try:
             window = get(key)
-            socket, _ = await tunnel(window, 'ws', target)
+            socket, _ = await tunnel(window, 'ws', target, latest64=(
+                stream == 'superwatch' and websocket.query_params.get('latest64') == '1'))
             await websocket.accept()
             async def send_remote():
                 while True:

@@ -1,5 +1,7 @@
 <template>
   <div class="rtt-view-tab" @dblclick="fitPanels">
+    <SymbolReloadDialog v-if="reloadPromptOpen && sourcePending" rtt :busy="reloadingSources"
+      @later="reloadPromptOpen = false" @confirm="reloadSources" />
     <SetupHint
       v-if="!deviceConnected"
       kind="device"
@@ -56,6 +58,7 @@ const guiId = useGuiId()
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { trackedSymbolPending, reloadTrackedSymbolSource } from '../../lib/trackedSymbolSource'
 import { Search } from '@lucide/vue'
+import SymbolReloadDialog from './SymbolReloadDialog.vue'
 import SymbolFileButton from './SymbolFileButton.vue'
 import { CAPTURE_START_TIMEOUT_MS } from '../../lib/captureStartup'
 import { useDashboard } from '../../composables/useDashboard'
@@ -117,6 +120,8 @@ const statusRunning = ref(false)
 const backendSourcePending = ref(false)
 const sourcePending = computed(() => backendSourcePending.value || trackedSymbolPending.value > 0)
 const reloadingSources = ref(false)
+const reloadPromptOpen = ref(false)
+watch(trackedSymbolPending, revision => { if (revision) reloadPromptOpen.value = true }, { immediate: true })
 const statusKnown = ref(false)
 const downBuffers = ref<Array<{ channel?: number, active?: boolean }>>([])
 const runtimeError = ref<string | null>(null)
@@ -279,6 +284,7 @@ async function searchRttAddress(): Promise<void> {
 
 let lastSourceChange = 0
 async function reloadSources(): Promise<void> {
+  reloadPromptOpen.value = false
   reloadingSources.value = true
   try {
     await flushWatchProfile()
@@ -304,6 +310,7 @@ async function refreshStatus(): Promise<Record<string, any> | null> {
       backendSourcePending.value = changed?.state === 'awaiting-reload' || changed?.state === 'failed'
       if (changed && changed.sequence !== lastSourceChange) {
         lastSourceChange = changed.sequence
+        if (changed.state === 'awaiting-reload') reloadPromptOpen.value = true
         if (changed.error) toast.error(changed.error)
         if (!changed.pending && changed.state === 'applied') {
           rttAddress.value = changed.rtt_addr && isRttAddress(changed.rtt_addr) ? changed.rtt_addr : ''

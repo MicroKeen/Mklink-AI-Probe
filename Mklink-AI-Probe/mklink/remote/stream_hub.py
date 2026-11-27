@@ -25,6 +25,7 @@ class StreamBatch:
     timestamp_ns: int = field(default_factory=time.time_ns)
     flags: int = 0
     stream_type: object = None
+    latest_f64: bytes = b""
 
     def __bytes__(self) -> bytes:
         return self.payload
@@ -182,10 +183,10 @@ class StreamHub:
 
     def publish(
         self, batch: BytesLike, item_count: int, flags: int = 0,
-        stream_type=None,
+        stream_type=None, *, latest_f64: bytes = b"",
     ) -> int:
         with self._publish_lock:
-            published = self._prepare_batch(batch, item_count, flags, stream_type)
+            published = self._prepare_batch(batch, item_count, flags, stream_type, latest_f64)
             self._schedule_delivery(published)
         return published.sequence
 
@@ -235,7 +236,7 @@ class StreamHub:
 
     def _prepare_batch(
         self, batch: BytesLike, item_count: int, flags: int = 0,
-        stream_type=None,
+        stream_type=None, latest_f64: bytes = b"",
     ) -> StreamBatch:
         if not isinstance(batch, (bytes, bytearray, memoryview)):
             raise TypeError("batch must be bytes-like")
@@ -261,7 +262,7 @@ class StreamHub:
             self._produced_bytes += len(payload)
             sequence = self._last_sequence
         return StreamBatch(
-            payload, sequence, item_count, flags=flags, stream_type=stream_type,
+            payload, sequence, item_count, flags=flags, stream_type=stream_type, latest_f64=latest_f64,
         )
 
     def _schedule_delivery(self, batch: StreamBatch, *, initial=False) -> None:

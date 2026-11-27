@@ -6,16 +6,8 @@
         <RefreshCw :size="16" />{{ tr('重新加载变量', 'Reload variables') }}
       </button>
     </div>
-    <div v-if="reloadPromptOpen" class="modal-overlay" @click.self="reloadPromptOpen = false" @keydown.esc="reloadPromptOpen = false">
-      <section class="layout-modal" role="dialog" aria-modal="true" aria-labelledby="reload-symbols-title" data-testid="reload-symbols-dialog">
-        <h3 id="reload-symbols-title">{{ tr('固件文件已更新', 'Firmware file updated') }}</h3>
-        <p>{{ tr('是否重新加载变量列表？请先确认新固件已下载到目标板。', 'Reload the variable list? Make sure the new firmware is on the target first.') }}</p>
-        <div class="layout-modal-actions">
-          <button type="button" class="btn btn-secondary" data-testid="reload-symbols-later" @click="reloadPromptOpen = false">{{ tr('稍后', 'Later') }}</button>
-          <button type="button" class="btn btn-primary" data-testid="reload-symbols-confirm" :disabled="reloadingSources" @click="reloadSources">{{ tr('重新加载变量', 'Reload variables') }}</button>
-        </div>
-      </section>
-    </div>
+    <SymbolReloadDialog v-if="reloadPromptOpen && sourcePending" :busy="reloadingSources"
+      @later="reloadPromptOpen = false" @confirm="reloadSources()" />
 
     <div v-if="pinsError" class="stale-banner" role="alert">{{ pinsError }}</div>
 
@@ -385,6 +377,7 @@ import { useDashboardSetup } from '../../composables/useDashboardSetup'
 import { buildBrowseTree, buildSymbolTree, collectBranchKeys, visibleSymbolRows } from '../../lib/symbolTree'
 import type { SymbolDescriptor } from '../../types/mklink'
 import type { SymbolTreeNode, VisibleSymbolRow } from '../../lib/symbolTree'
+import SymbolReloadDialog from './SymbolReloadDialog.vue'
 import { tr } from '../../composables/useLanguage'
 import SetupHint from './SetupHint.vue'
 import VariablePath from './VariablePath.vue'
@@ -431,7 +424,7 @@ if (valueStream) {
   watch(valueStream.waveformSummary, summary => {
     const channels = valueStream.superwatchMetadata.value?.channels || []
     if (!summary || summary.channelCount !== channels.length) return
-    const values = new Float32Array(summary.latestValues)
+    const values = summary.exactLatestValues || new Float32Array(summary.latestValues)
     sampledValues.value = Object.fromEntries(channels.slice(0, 500).flatMap((channel, index) => Number.isFinite(values[index]) ? [[channel.name, values[index]]] : []))
   })
   watch(() => props.deviceConnected, connected => { if (connected) valueStream.start(); else { valueStream.stop(); sampledValues.value = {} } }, { immediate: true })

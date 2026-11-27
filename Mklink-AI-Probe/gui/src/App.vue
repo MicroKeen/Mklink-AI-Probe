@@ -153,7 +153,7 @@ const router = useRouter()
 // Keep the dashboard attached (hidden) rather than detaching it with KeepAlive.
 const DashboardView = defineAsyncComponent(() => import('./views/DashboardView.vue'))
 const route = useRoute()
-const { startStatusPolling, stopStatusPolling, deviceStatus } = useMklinkApi()
+const { startStatusPolling, stopStatusPolling, deviceStatus, restoreSymbolTracking } = useMklinkApi()
 const downloadViewKey = useDownloadViewKey(computed(() => deviceStatus.value.device_generation))
 const { backendState, sharedRuntime, authenticationRequired, backendStartupError, startHealthPolling, stopHealthPolling, restart, refreshHealth, isTauri } = useBackendHealth()
 const probeBrand = computed(() => backendState.value === 'alive'
@@ -241,6 +241,7 @@ function dismissStoreWithKeyboard(event: KeyboardEvent) {
 }
 
 onMounted(() => {
+  if (!isTauri) void restoreSymbolTracking()
   document.addEventListener('click', closeStoreFromOutside, true)
   document.addEventListener('focusin', closeStoreFromOutside, true)
   startHealthPolling(5000)

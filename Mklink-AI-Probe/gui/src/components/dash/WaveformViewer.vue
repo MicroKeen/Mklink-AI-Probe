@@ -359,7 +359,7 @@ watch(() => binary.waveformBatch.value, batch => {
 watch(() => binary.waveformSummary?.value, summary => {
   if (!summary || props.mode !== 'SuperWatch') return
   if (getViewer()?.isReplaying?.()) return
-  const values = new Float32Array(summary.latestValues)
+  const values = summary.exactLatestValues || new Float32Array(summary.latestValues)
   if (summary.channelCount === vofaChannels.length && values.length === summary.channelCount) {
     const latest: Record<string, number> = {}
     for (let channel = 0; channel < summary.channelCount; channel += 1) {
