@@ -9,24 +9,22 @@ export interface ReleaseHistoryEntry {
 
 export const releaseHistory: ReleaseHistoryEntry[] = [
   {
-    version: '0.5.2', date: '2026-11-27',
-    summary: 'S32K3 硬件识别与在线烧录校验',
-    summaryEn: 'S32K3 hardware identification and online flash checks',
+    version: '0.5.2', date: '2026-11-28',
+    summary: '共享连接、日志回放与烧录改进',
+    summaryEn: 'Shared connections, log playback and flashing',
     changes: [
-      '配套 V3.7.1、V4.7.5 固件可从目标芯片读取 S32K3 型号。桌面、Web、CLI 和 MCP 共用同一个 MEM-AP 4 连接。',
-      '桌面或 Web 再次连接同一下载器时可接入已有采集。任一窗口点击断开后，所有客户端停止采集，串口释放。',
-      'S32K3 使用型号配置中的功能复位。目标掉电时保留下载器连接，再次启动采集会重新核对硬件型号。',
-      'SuperWatch、RTT 和串口每次记录各保存一个 .mklog 文件，可按时间跳转。停止后再次记录会创建新文件。',
-      '连接时可省略 ELF。加载或切换符号文件时保留硬件连接；文件标注与实物不一致时，“文件来源”显示两个型号。',
-      '在线烧录核对所选芯片及算法。S32K3 目录覆盖 22 个型号，内置 Code/Data 算法覆盖其中 6 个。',
+      '桌面和 Web 可共用同一下载器。切出 RTT 页面会释放当前窗口的订阅，点击断开会停止全部采集并释放端口。',
+      'SuperWatch、RTT 和串口每次记录保存一个 .mklog 文件，回放可按时间跳转。停止后再次记录会新建文件。',
+      'ELF 或 AXF 重编译后，RTT 和 SuperWatch 可提示重新解析。SuperWatch 可准确显示 32 位整数。',
+      '脱机烧录按 HEX 地址段匹配算法，并按所选芯片的 Flash 区域预填 BIN 起始地址。',
+      '配套 V3.7.1 或 V4.7.5 固件可识别 22 个 S32K3 型号并执行功能复位，其中 6 个型号内置 Code Flash 和 Data Flash 算法。',
     ],
     changesEn: [
-      'With compatible V3.7.1 or V4.7.5 firmware, desktop, Web, CLI and MCP identify S32K3 devices in hardware and share the MEM-AP 4 connection.',
-      'Desktop and Web can join an active probe. Disconnect stops capture for all clients and releases the port.',
-      'S32K3 uses its configured functional reset. After target power loss, starting capture checks the hardware identity again.',
-      'SuperWatch, RTT and serial logs use one time-indexed .mklog file per recording. Stopping and starting creates a new file.',
-      'Connect without an ELF or switch symbols on the existing connection. File Sources shows both models when the file and hardware differ.',
-      'Online flashing checks the selected target and algorithm. The catalog covers 22 S32K3 models, including six with bundled Code and Data algorithms.',
+      'Desktop and Web share one probe connection. Switching away from RTT releases that window’s reader. Disconnecting stops all captures and releases the port.',
+      'Each SuperWatch, RTT or serial recording has one .mklog file. Seek by time during playback. Stopping and starting creates a new recording.',
+      'RTT and SuperWatch prompt to reload rebuilt ELF or AXF symbols. SuperWatch preserves the exact value of 32-bit integers.',
+      'Offline flashing matches HEX segments to the flash algorithm and suggests the BIN base address for the selected chip.',
+      'With compatible V3.7.1 or V4.7.5 firmware, hardware identification covers 22 S32K3 models and supports functional reset. Six models include Code and Data flash algorithms.',
     ],
   },
   {
