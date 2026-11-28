@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import importlib.util
 import hashlib
 import json
@@ -10,7 +11,7 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import urllib.request
-from zipfile import ZipFile
+from zipfile import ZIP_LZMA, ZipFile
 
 
 def download_sources(project_root: Path, output: Path) -> Path:
@@ -77,6 +78,35 @@ def validate_bundle(root: Path) -> dict:
     if not any(name.upper().startswith("STM32F407VE") for name in targets):
         raise ValueError("built-in peripherals must include STM32F407VE")
     return {**manifest, "svd_target_count": len(targets)}
+
+
+def compress_svd_members(source: Path, destination: Path) -> None:
+    """Keep ZIP member names and bytes. Use lossless LZMA for offline SVD reads."""
+    with ZipFile(source) as original, ZipFile(destination, 'w') as compact:
+        compact.comment = original.comment
+        for member in original.infolist():
+            data = original.read(member)
+            method = ZIP_LZMA if member.filename.lower().endswith('.svd') else member.compress_type
+            compact.writestr(copy.copy(member), data, compress_type=method)
+
+
+def stage_windows_packs(source: Path, destination: Path, manifest: dict) -> None:
+    """Stage only the Packs declared by the validated distributor manifest."""
+    destination.mkdir(parents=True)
+    staged = copy.deepcopy(manifest)
+    staged.pop('svd_target_count')  # Computed by validate_bundle, not part of the Pack manifest.
+
+    def stage(pack):
+        path = Path(pack['file'])
+        target = destination / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        compress_svd_members(source / path, target)
+        pack['sha256'] = hashlib.sha256(target.read_bytes()).hexdigest()
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        list(pool.map(stage, staged['packs']))
+    (destination / 'manifest.json').write_text(
+        json.dumps(staged, ensure_ascii=False, separators=(',', ':')) + '\n', encoding='utf-8')
 
 
 def prepare_bundle(project_root: Path) -> Path:
