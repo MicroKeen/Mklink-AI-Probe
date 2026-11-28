@@ -195,6 +195,7 @@ def discover_algorithms(paths: object, part_number: str, disk_root: Optional[Pat
         "flash_base": _hex(algorithm.flash_start),
         "ram_base": _hex(algorithm.ram_start),
         "flash_size": algorithm.flash_size,
+        "default": algorithm.default,
         "source_kind": "pack",
         "source_token": algorithm.source_token,
         "origin": algorithm.source_name,
@@ -215,7 +216,9 @@ def discover_algorithms(paths: object, part_number: str, disk_root: Optional[Pat
             candidate.get("flash_size"),
             candidate["source_token"] if str(candidate["source_token"]).startswith("custom:") else None,
         )
-        unique.setdefault(key, candidate)
+        previous = unique.setdefault(key, candidate)
+        if candidate.get("default"):
+            previous["default"] = True
     return list(unique.values())
 
 

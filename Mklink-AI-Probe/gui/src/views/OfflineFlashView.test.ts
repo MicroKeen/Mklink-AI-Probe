@@ -1125,7 +1125,7 @@ describe('OfflineFlashView', () => {
   it.each(['bin', 'hex'])('selects the only FLM covering the whole %s image', async format => {
     onlineMocks.searchTargets.mockResolvedValue([{ part_number: 'STM32F103RE', installed: true }])
     offlineMocks.listAlgorithms.mockResolvedValue([
-      { id: 'main', file_name: 'main.FLM', flash_base: '0x08000000', flash_size: 524288, available: true },
+      { id: 'main', file_name: 'main.FLM', flash_base: '0x08000000', flash_size: 524288, available: true, default: true },
       { id: 'opts', file_name: 'opts.FLM', flash_base: '0x1ffff800', flash_size: 16, available: true },
     ])
     onlineMocks.inspectImage.mockResolvedValue({ segments: [{ start: 0x08005000, end: 0x08021e00 }] })
@@ -1147,6 +1147,26 @@ describe('OfflineFlashView', () => {
       await base.setValue('0x0807fffe')
       expect(select.element.value).toBe('')
     }
+  })
+
+  it.each([
+    ['S32K344', '0x00400000'], ['nRF52840xxAA', '0x00000000'], ['XMC4500', '0x0C000000'],
+  ])('uses the selected %s program bank for a BIN, including address zero', async (part, base) => {
+    onlineMocks.searchTargets.mockResolvedValue([{ part_number: part, installed: true }])
+    offlineMocks.listAlgorithms.mockResolvedValue([
+      { id: 'code', file_name: 'Code.FLM', flash_base: base, flash_size: 32768, default: true, available: true },
+      { id: 'data', file_name: 'Data.FLM', flash_base: '0x10001000', flash_size: 256, available: true },
+    ])
+    const wrapper = mount(OfflineFlashView)
+    await flushPromises()
+    await wrapper.get('[data-testid="offline-firmware-drop-zone"]').trigger('drop', {
+      dataTransfer: { files: [new File(['image'], 'code.bin')] },
+    })
+    await wrapper.get('.target-result').trigger('click')
+    await flushPromises()
+    const row = wrapper.get('[data-testid="offline-firmware-row"]')
+    expect(row.get<HTMLInputElement>('input[placeholder="BIN 基地址"]').element.value).toBe(base)
+    expect(row.get<HTMLSelectElement>('select').element.value).toBe('code')
   })
 
   it('renders trigger output while the V4 command is still running', async () => {

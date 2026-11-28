@@ -104,3 +104,33 @@ def test_dwarf_density_macro_agrees_with_one_concrete_part(tmp_path, monkeypatch
     assert resolve_image_target(target)['device'] == 'STM32F103RE'
     target.with_suffix('.map').write_text('LOAD build/startup_STM32F103VE.o')
     assert resolve_image_target(target)['status'] == 'conflict'
+
+@pytest.mark.parametrize(("family", "concrete", "spelling"), [
+    ("STM32G0B1xE", "STM32G0B1RET6", "stm32g0b1xe"),
+    ("GD32F303xE", "GD32F303VET6", "GD32F303XE"),
+    ("AT32F403AxG", "AT32F403AVGT7", "at32f403axg"),
+    ("N32G031x8", "N32G031K8", "n32g031x8"),
+    ("PY32F030x8", "PY32F030K28T6", "PY32F030X8"),
+    ("XMC1100Q024x0008", "XMC1100Q024F0008", "xmc1100q024x0008"),
+    ("nRF52840xxAA", "nRF52840QIAA", "nRF52840_xxAA"),
+])
+def test_catalog_family_evidence(tmp_path, monkeypatch, family, concrete, spelling):
+    import mklink.image_target as resolver
+    (tmp_path / "manifest.json").write_text(json.dumps({"schema": 1, "targets": [{"part_number": family}]}))
+    monkeypatch.setenv("MKLINK_BUILTIN_FLM_ROOT", str(tmp_path))
+    monkeypatch.setattr(resolver, "_catalog_names", lambda: {family.upper(): family})
+    monkeypatch.setattr(resolver, "_elf_sources", lambda _: [("dwarf", spelling, False)])
+    target = image(tmp_path)
+    bind_file(target, concrete)
+    identity = resolve_image_target(target)
+    assert identity["device"] == concrete.upper()
+    assert len(identity["evidence"]) == 2
+
+
+def test_catalog_literal_x_does_not_generalize_to_another_device(tmp_path, monkeypatch):
+    import mklink.image_target as resolver
+    monkeypatch.setattr(resolver, "_catalog_names", lambda: {"MK66FX1M0": "MK66FX1M0"})
+    monkeypatch.setattr(resolver, "_elf_sources", lambda _: [("dwarf", "mk66fx1m0", False)])
+    target = image(tmp_path)
+    bind_file(target, "MK66FA1M0")
+    assert resolve_image_target(target)["status"] == "conflict"

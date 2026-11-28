@@ -5,16 +5,16 @@
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
     "branch": "codex/v0.5.2-fixes",
-    "head": "86ee9a97",
-    "remote_head": "86ee9a97",
-    "working_tree": "本轮修复基于 86ee9a97。本机覆盖包 a8174206，正式版 0.5.1。"
+    "head": "0008c585",
+    "remote_head": "0008c585",
+    "working_tree": "跨系列修订基于 0008c585。正式版 0.5.1。"
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
     "status": "0.5.2 开发见 [PR #98](https://github.com/MicroKeen/Mklink-AI-Probe/pull/98)。0.5.1 发布和三平台验证见 [PR #97](https://github.com/MicroKeen/Mklink-AI-Probe/pull/97)。",
-    "current_task": "[V4/F103 八项现场回归与脱机实写](../verification/v052-f103-field-regression.md)。安装基线及 S32K344 记录见该页链接。"
+    "current_task": "[跨系列修订、V4/F103 八项现场回归与脱机实写](../verification/v052-f103-field-regression.md)。安装基线及 S32K344 记录见该页链接。"
   },
   "milestones": [
     {

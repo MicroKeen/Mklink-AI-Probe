@@ -6,6 +6,7 @@ import json
 import os
 import re
 import xml.etree.ElementTree as ET
+from functools import lru_cache
 from itertools import islice
 from pathlib import Path
 
@@ -20,7 +21,7 @@ from mklink.profiles import TargetProfileError, load_mcu_profiles, model_key_ind
 
 # Only exact device tokens in a startup object, system source or device header
 # are evidence. A core name, arbitrary path component or memory address is not.
-_FILE = re.compile(r"(?:^|[^\w.-])(?P<prefix>startup[_-]|system[_-])?(?P<device>[a-z][a-z0-9-]*\d[a-z0-9-]*)\.(?:h|s|c|o|obj)(?=$|[^\w])", re.I)
+_FILE = re.compile(r"(?:^|[^\w.-])(?P<prefix>startup[_-]|system[_-])?(?P<device>[a-z][a-z0-9_-]*\d[a-z0-9_-]*)\.(?:h|s|c|o|obj)(?=$|[^\w])", re.I)
 _CORE = re.compile(r":Cortex-(?:[AMR]\d+\+?)(?:_(\d+))?$", re.I)
 _GENERIC = re.compile(r"(?:CORTEX|ARMV|RISCV|CORE|CMSIS)|(?:XX|XXX)$", re.I)
 _LIMIT = 8 * 1024 * 1024
@@ -117,11 +118,40 @@ def _elf_sources(elf):
                 yield "dwarf", match["device"], False
 
 
+@lru_cache(maxsize=1)
+def _catalog_names():
+    # These are the immutable resources shipped with this backend. Only load
+    # names when an image supplies a device token, never enumerate hardware.
+    from mklink.cmsis_dap.builtin_flm_bundle import load_builtin_flm_targets
+    from mklink.cmsis_dap.builtin_pack_bundle import load_builtin_pack_records
+    names = {record.part_number.upper(): record.part_number for record in load_builtin_pack_records()}
+    names.update((record.part_number.upper(), record.part_number) for record in load_builtin_flm_targets())
+    return names
+
+
+def _device_mask(name, catalog_name):
+    # Catalog spelling distinguishes literal X (e.g. XMC) from package 'x'.
+    # CMSIS headers may also omit package and density with a trailing xx.
+    spelling = catalog_name or name
+    first_digit = re.search(r"\d", spelling)
+    if not first_digit:
+        return None
+    tail = spelling[first_digit.end():]
+    if catalog_name and "x" in tail:
+        return spelling[:first_digit.end()] + tail.replace("x", "?")
+    if name.lower().endswith("xx") and (not catalog_name or catalog_name.endswith(("xx", "XX"))):
+        return re.sub("x+$", lambda m: "?" * len(m[0]), name, flags=re.I)
+    if not catalog_name and re.fullmatch(r"STM32[A-Z]\d{3}X[A-Z0-9]", name, re.I):
+        return name[:-2] + "?" + name[-1]
+    return None
+
+
 def resolve_image_target(path):
     """Return a JSON-ready identity and its evidence. Never access the target."""
     image = Path(path).absolute()
     evidence = set()
     issues = []
+    family_masks = {}
     models = load_mcu_profiles()
     index = model_key_index(models)
 
@@ -132,7 +162,21 @@ def resolve_image_target(path):
         core = _CORE.search(part)
         if core:
             part = part[:core.start()]
-        if not re.fullmatch(r"[a-z][a-z0-9_-]*", part, re.I) or not re.search(r"\d", part) or _GENERIC.search(part):
+        if not re.fullmatch(r"[a-z][a-z0-9_-]*", part, re.I) or not re.search(r"\d", part):
+            return
+        catalog = _catalog_names()
+        declared = catalog.get(part.upper())
+        if not declared and "_" in part:
+            # e.g. nRF52840_xxAA.h vs the catalog's nRF52840xxAA
+            declared = catalog.get(re.sub(r"_(?=xx)", "", part, flags=re.I).upper())
+            if declared:
+                part = declared
+        mask = _device_mask(part, declared) if not explicit else None
+        if mask and not declared and part.lower().endswith("xx"):
+            prefix = mask.split("?")[0].upper()
+            if len(prefix) < 4 or not any(name.startswith(prefix) for name in catalog):
+                mask = None
+        if _GENERIC.search(part) and not mask:
             return
         key = index.get(normalize_model_id(part))
         if key and "mux_attach" in models[key] and core and core[1] not in (None, "0"):
@@ -140,18 +184,25 @@ def resolve_image_target(path):
             return
         if key:
             part = models[key]["name"]
-        elif not explicit and not re.fullmatch(r"(?:STM32[A-Z]\d{3}[A-Z0-9]*|HPM\d{4}[A-Z0-9]*|(?:GD|N|AT)32[A-Z]\d{3}[A-Z0-9]*)", part, re.I):
+        elif not explicit and not (declared or mask) and not re.fullmatch(r"(?:STM32[A-Z]\d{3}[A-Z0-9]*|HPM\d{4}[A-Z0-9]*|(?:GD|N|AT)32[A-Z]\d{3}[A-Z0-9]*)", part, re.I):
             return
+        if mask and not key:
+            family_masks[part.upper()] = mask.upper()
         evidence.add((source, part.upper()))
 
     def result():
         devices = sorted({device for _, device in evidence})
-        # ST CMSIS density-group macros from headers can coexist with a specific
-        # package code in the project. Two different concrete parts still conflict.
-        families = {d for source, d in evidence if source == 'dwarf' and re.fullmatch(r'STM32[A-Z]\d{3}X[A-Z0-9]', d)}
-        devices = [d for d in devices if not (d in families and any(
-            len(other) == len(d) and other != d and other[:-2] == d[:-2] and other[-1] == d[-1]
-            for other in devices))]
+        concrete = set(devices) - family_masks.keys()
+        if concrete:
+            from mklink.cmsis_dap.builtin_flm_bundle import resolve_builtin_flm_parts
+            aliases = resolve_builtin_flm_parts(sorted(concrete)) if family_masks else {}
+            for family, mask in family_masks.items():
+                pattern = re.escape(mask).replace(r"\?", "[A-Z0-9]") + "[A-Z0-9]{0,4}"
+                if any(part.startswith(mask.split("?")[0]) and (re.fullmatch(pattern, part) or
+                       aliases.get(part.lower(), "").upper() == family) for part in concrete):
+                    devices.remove(family)
+        elif len(devices) == 1 and devices[0] in family_masks and devices[0].endswith("XX"):
+            devices = []  # A generic header alone cannot choose a package.
         status = "conflict" if len(devices) > 1 or issues else ("identified" if devices else "unknown")
         return {"status": status, "device": devices[0] if status == "identified" else None,
                 "evidence": [{"source": src, "device": d} for src, d in sorted(evidence)],
