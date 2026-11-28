@@ -91,7 +91,7 @@
       :on-firmware-page="currentTab === 'config' && route.query?.section === 'firmware'"
       @open-firmware="router.push({ name: 'config', query: { section: 'firmware' } })" />
     <div class="app-main" :inert="IS_REMOTE && backendState !== 'alive'">
-      <DashboardView v-if="initialBackendReady && dashboardVisited" v-show="currentTab === 'dashboard'" />
+      <DashboardView v-if="initialBackendReady && dashboardVisited" v-show="currentTab === 'dashboard'" :active="currentTab === 'dashboard'" />
       <router-view v-if="initialBackendReady" v-slot="{ Component, route: viewRoute }">
         <!-- Firmware selection keeps its pending result visible while a probe
              switch still invalidates both cached target download forms. -->
