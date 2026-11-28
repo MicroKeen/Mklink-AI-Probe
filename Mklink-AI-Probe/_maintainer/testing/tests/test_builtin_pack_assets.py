@@ -95,3 +95,16 @@ def test_windows_compaction_preserves_every_member_and_excludes_unlisted_packs(a
             assert after.read(name) == before.read(name)
         assert after.getinfo('SVD/chip.svd').compress_type == ZIP_LZMA
         assert after.getinfo('Vendor.pdsc').compress_type == before.getinfo('Vendor.pdsc').compress_type
+
+
+def test_pyocd_xml_named_svd_is_losslessly_compressed(assets, tmp_path):
+    from zipfile import ZIP_LZMA
+
+    original = tmp_path / 'pyocd.zip'
+    compact = tmp_path / 'compact.zip'
+    with ZipFile(original, 'w') as archive:
+        archive.writestr('LPC54114_cm4.xml', b'<device/>')
+    assets.compress_svd_members(original, compact)
+    with ZipFile(compact) as archive:
+        assert archive.getinfo('LPC54114_cm4.xml').compress_type == ZIP_LZMA
+        assert archive.read('LPC54114_cm4.xml') == b'<device/>'

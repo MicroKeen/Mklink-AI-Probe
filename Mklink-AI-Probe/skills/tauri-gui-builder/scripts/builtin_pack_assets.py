@@ -86,7 +86,7 @@ def compress_svd_members(source: Path, destination: Path) -> None:
         compact.comment = original.comment
         for member in original.infolist():
             data = original.read(member)
-            method = ZIP_LZMA if member.filename.lower().endswith('.svd') else member.compress_type
+            method = ZIP_LZMA if member.filename.lower().endswith(('.svd', '.xml')) else member.compress_type
             compact.writestr(copy.copy(member), data, compress_type=method)
 
 
