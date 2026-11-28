@@ -1783,3 +1783,18 @@ def test_transaction_readback_failure_rolls_back_or_preserves_recovery(tmp_path,
     else:
         assert destination.read_bytes() == b'original'
         assert not stage.exists()
+
+def test_exact_catalog_precedes_family_default_and_preserves_separate_banks(monkeypatch):
+    from types import SimpleNamespace
+    from mklink.remote import offline_download_api as api
+    def algorithm(name, address, size, source):
+        return SimpleNamespace(algorithm_id=source, source_name=source, source_token=source, file_name=name,
+                               flash_start=address, ram_start=0x20000000, flash_size=size)
+    main = "STM32F10x_512.FLM"
+    records = [algorithm(main, 0x08000000, 524288, "builtin"), algorithm(main, 0x08000000, 524288, "pack"),
+               algorithm("STM32F10x_OPT.FLM", 0x1ffff800, 16, "option")]
+    monkeypatch.setattr("mklink.cmsis_dap.algorithm_catalog.discover_flash_algorithms", lambda *a, **kw: records)
+    monkeypatch.setattr(api, "_profile_candidates", lambda *a: [
+        {"file_name": "STM32F10x_1024.FLM", "flash_base": api._hex(0x08000000)}])
+    choices = api.discover_algorithms(None, "STM32F103RE", None)
+    assert [(item["file_name"], item["flash_size"]) for item in choices] == [(main, 524288), ("STM32F10x_OPT.FLM", 16)]

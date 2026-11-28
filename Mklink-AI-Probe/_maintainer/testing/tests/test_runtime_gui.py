@@ -243,6 +243,7 @@ def test_mcp_gui_then_connect_keeps_same_backend_and_cleans_only_own_lease(monke
 
 def test_cli_probe_selection_connects_once_before_browser_handoff(monkeypatch):
     from mklink import cli
+    monkeypatch.setattr('mklink.runtime_gui.gui_link', lambda client: ('http://127.0.0.1:8765/_runtime/open#once', 60))
     selected = {'port': 8765}
     monkeypatch.setattr(runtime, 'ensure_runtime', lambda **kw: selected)
     connect = Mock()
@@ -278,3 +279,13 @@ def test_owner_view_ticket_expires_when_device_generation_changes(backend):
     state['device_generation'] = body['device_generation'] + 1
     assert http.post('/_runtime/login', json={'token': link.json()['ticket']}).status_code == 409
     assert http.post('/_runtime/gui-link', json=body).status_code == 409
+
+@pytest.mark.parametrize("option", ["--version", "-V"])
+def test_cli_version_matches_package(monkeypatch, capsys, option):
+    import sys
+    from mklink import __version__, cli
+    monkeypatch.setattr(sys, "argv", ["mklink", option])
+    with pytest.raises(SystemExit) as exit_status:
+        cli.main()
+    assert exit_status.value.code == 0
+    assert capsys.readouterr().out.strip().endswith(__version__)

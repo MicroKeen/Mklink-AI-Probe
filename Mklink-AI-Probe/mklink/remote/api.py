@@ -1403,9 +1403,20 @@ def create_app(
         return {"project_root": _state["project_root"]}
 
     @app.get("/api/project-root/browse")
-    async def browse_project_root(path: str = ""):
+    async def browse_project_root(path: str = "", recording: str = ""):
         import os
-        p = os.path.abspath(path) if path else os.getcwd()
+        suggested = None
+        if recording and not path:
+            if recording not in {'rtt', 'superwatch', 'serial'}:
+                raise HTTPException(422, 'Unknown recording type')
+            from mklink.systemview_logs import capture_project
+            try:
+                root = capture_project(_state["project_root"], getattr(_state.get("device"), "axf_path", None))
+                suggested = root / ".mklink" / "logs" / recording
+                path = str(next(p for p in (suggested, *suggested.parents) if p.is_dir()))
+            except ValueError:
+                path = str(Path.home())
+        p = os.path.abspath(path) if path else os.path.abspath(_state["project_root"])
         if not os.path.isdir(p):
             p = os.path.dirname(p) or os.path.sep
         parent = os.path.dirname(p)
@@ -1418,7 +1429,8 @@ def create_app(
         except PermissionError:
             pass
         available_drives = _project_root_drives()
-        return {"current": p, "parent": parent, "dirs": entries, "drives": available_drives}
+        return {"current": p, "parent": parent, "dirs": entries, "drives": available_drives,
+                "suggested": str(suggested) if suggested else None}
 
     @app.get("/api/project-history")
     async def get_project_history():
@@ -3028,7 +3040,14 @@ def create_app(
     @app.get("/api/dash/rtt/status")
     async def rtt_status():
         managers = get_managers()
-        return {**managers["rtt"].get_status(), "file_source_change": _state["file_source_change"]}
+        status = managers["rtt"].get_status()
+        control = getattr(app.state, 'shared_runtime', None)
+        if control:
+            readers = control.gui_reader_count('rtt')
+            status["clients"] = max(status.get("clients", 0), readers)
+            if status.get("stream") is not None:
+                status["stream"]["active_clients"] = max(status["stream"]["active_clients"], readers)
+        return {**status, "file_source_change": _state["file_source_change"]}
 
     @app.get("/api/dash/rtt/channels/read")
     async def rtt_read_channel(channel: int = 0, cursor: int = 0, session: str | None = None):
@@ -3063,7 +3082,7 @@ def create_app(
     @app.post("/api/dash/systemview/start")
     async def systemview_start(
         addr: str | None = Body(default=None),
-        channel: Annotated[StrictInt, Body()] = 1,
+        channel: Annotated[StrictInt | None, Body()] = None,
         mode: Annotated[StrictInt, Body()] = 0,
         search_size: Annotated[StrictInt, Body()] = 0,
     ):
@@ -3079,9 +3098,9 @@ def create_app(
         try:
             from mklink.device import DeviceError, _resolve_rtt_stream_parameters
 
-            addr, channel, search_size, mode = _resolve_rtt_stream_parameters(
+            addr, _, search_size, mode = _resolve_rtt_stream_parameters(
                 addr,
-                channel,
+                0 if channel is None else channel,
                 search_size,
                 mode,
                 _state["project_root"],

@@ -3,7 +3,8 @@ import { StreamClient } from '../lib/stream/streamClient'
 import type { StreamClientOptions, StreamClientState } from '../lib/stream/streamClient'
 import type { StreamTelemetry, WorkerOutput } from '../workers/streamDecoder.worker'
 import type { DecoderMode } from '../workers/streamDecoder.worker'
-import { API_BASE } from '../lib/runtimeEndpoint'
+import { runtimeWindowKey } from '../lib/sharedRuntimeView'
+import { API_BASE, IS_REMOTE } from '../lib/runtimeEndpoint'
 
 export type BinaryStreamName = 'systemview' | 'vofa' | 'rtt' | 'rtt-terminal' | `rtt-${number}` | `rtt-terminal-${number}` | 'serial' | 'superwatch'
 
@@ -42,16 +43,13 @@ type SerialLines = Extract<WorkerOutput, { type: 'serial-lines' }>
 type SerialTerminal = Extract<WorkerOutput, { type: 'serial-terminal' }>
 
 function streamUrl(stream: BinaryStreamName): string {
-  if (API_BASE) {
-    const base = new URL(API_BASE, window.location.href)
-    base.protocol = base.protocol === 'https:' ? 'wss:' : 'ws:'
-    base.pathname = `${base.pathname.replace(/\/+$/, '')}/ws/streams/${stream}`
-    base.search = stream === 'superwatch' ? '?continuity=1&latest64=1' : ''
-    base.hash = ''
-    return base.toString()
-  }
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  return `${protocol}//${window.location.host}/ws/streams/${stream}${stream === 'superwatch' ? '?continuity=1&latest64=1' : ''}`
+  const url = new URL(API_BASE || '/', window.location.href)
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
+  url.pathname = `${url.pathname.replace(/\/+$/, '')}/ws/streams/${stream}`
+  url.hash = ''
+  url.search = stream === 'superwatch' ? '?continuity=1&latest64=1' : ''
+  if (!IS_REMOTE && stream.startsWith('rtt')) url.searchParams.set('view', runtimeWindowKey())
+  return url.toString()
 }
 
 export function useBinaryStream(

@@ -1062,11 +1062,11 @@ def _register_systemview_tools(mcp: Any) -> None:
     @_exclusive_hardware_tool
     def systemview_start(
         addr: str | None = None,
-        channel: StrictInt = 1,
+        channel: StrictInt | None = None,
         search_size: StrictInt = 0,
         mode: str = "auto",
     ) -> dict:
-        """Start a SystemView RTOS-trace capture from RTT channel 1.
+        """Start a SystemView RTOS-trace capture from the detected RTT channel.
 
         The target RTOS must have SEGGER_SYSVIEW integrated (hooks writing
         trace packets into the RTT "SysView" up-buffer, channel 1 by default).
@@ -1077,11 +1077,11 @@ def _register_systemview_tools(mcp: Any) -> None:
         Args:
             addr: RTT control-block address (resolved from
                 .mklink/rtt_config.json when omitted, shared with RTT).
-            channel: SystemView up/down channel, 0..7 with shared MUX firmware (default 1).
+            channel: SystemView up/down channel. When omitted, resolve it from the target or project.
             search_size: Scan window in bytes; 0 (default) scans up to 1024 bytes within trusted RAM.
             mode: "auto"/"dynamic"/"static" — same semantics as rtt_start.
         """
-        if type(channel) is not int or not 0 <= channel < 3:
+        if channel is not None and (type(channel) is not int or not 0 <= channel < 3):
             raise ValueError(
                 "channel must be between 0 and 2 for V4 probe firmware"
             )

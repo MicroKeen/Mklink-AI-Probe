@@ -194,20 +194,26 @@ def discover_algorithms(paths: object, part_number: str, disk_root: Optional[Pat
         "file_name": algorithm.file_name,
         "flash_base": _hex(algorithm.flash_start),
         "ram_base": _hex(algorithm.ram_start),
+        "flash_size": algorithm.flash_size,
         "source_kind": "pack",
         "source_token": algorithm.source_token,
         "origin": algorithm.source_name,
         "available": True,
         "on_probe": False,
     } for algorithm in catalog]
-    combined = candidates + _profile_candidates(part_number, disk_root)
+    # A family-wide default is a fallback. For example the F10x profile's
+    # 1 MiB FLM cannot override the exact F103RE catalog's 512 KiB bank.
+    starts = {item["flash_base"] for item in candidates}
+    combined = candidates + [item for item in _profile_candidates(part_number, disk_root)
+                             if item["flash_base"] not in starts]
     unique = {}
     for candidate in combined:
         key = (
             candidate["file_name"].casefold(),
             candidate["flash_base"],
             candidate["ram_base"],
-            candidate["source_token"],
+            candidate.get("flash_size"),
+            candidate["source_token"] if str(candidate["source_token"]).startswith("custom:") else None,
         )
         unique.setdefault(key, candidate)
     return list(unique.values())

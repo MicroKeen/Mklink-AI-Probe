@@ -82,7 +82,7 @@
         </div>
       </div>
 
-      <RttViewTab :key="'RttViewTab-' + (deviceStatus.device_generation || 0)" v-show="tab === 'rtt'" :device-connected="deviceStatus.connected" />
+      <RttViewTab :key="'RttViewTab-' + (deviceStatus.device_generation || 0)" v-show="tab === 'rtt'" :active="tab === 'rtt'" :device-connected="deviceStatus.connected" />
 
       <HardFaultTab :key="'HardFaultTab-' + (deviceStatus.device_generation || 0)" v-if="tab === 'hardfault'" :device-connected="deviceStatus.connected" :symbol-loaded="deviceStatus.axf?.loaded === true" />
       <MemoryTab :key="'MemoryTab-' + (deviceStatus.device_generation || 0)" v-if="tab === 'memory'" :device-connected="deviceStatus.connected" />
@@ -300,12 +300,15 @@ async function quickRebootProbe() {
   min-width: 0;
 }
 .dashboard-nav-row .tabs-bar {
+  overflow-x: auto;
+  flex-wrap: nowrap;
   flex: 1 1 0;
   width: 0;
   min-width: 0;
   margin-bottom: 0;
   border-bottom: 0;
 }
+.dashboard-nav-row .tab-btn { flex: 0 0 auto; white-space: nowrap; }
 .title-right {
   position: relative;
   flex: 0 0 auto;

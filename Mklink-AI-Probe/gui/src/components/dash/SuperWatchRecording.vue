@@ -46,7 +46,8 @@ const emit = defineEmits<{ state: [state: string] }>()
 const tr = (zh: string, en: string) => language.value === 'en' ? en : zh
 type Recording = { active: boolean; state: string; samples?: number; path?: string; error?: string; export_state?: string; export_path?: string; export_error?: string; export_parts?: number }
 const status = ref<Recording>({ active: false, state: 'idle' })
-const directory = ref(localStorage.getItem(storageKey) || '')
+const directory = ref('')
+let projectStorageKey = storageKey
 const dialog = ref<HTMLDialogElement>()
 const dirs = ref<Array<{ name: string; path: string }>>([]), drives = ref<string[]>([]), parent = ref('')
 const busy = ref(false), error = ref('')
@@ -75,12 +76,18 @@ async function poll() {
   catch (caught) { if (!disposed && generation === statusGeneration) error.value = String(caught) }
   finally { if (!disposed) timer = setTimeout(poll, 1000) }
 }
-async function browse(path: string) {
+async function browse(path: string, initial = false) {
   const generation = ++browseGeneration
   try {
-    const data = await request(`/api/project-root/browse?path=${encodeURIComponent(path)}`)
+    const data = await request(`/api/project-root/browse?path=${encodeURIComponent(path)}${initial ? '&recording=' + props.name.toLowerCase() : ''}`)
     if (generation !== browseGeneration || disposed) return
-    directory.value = data.current; parent.value = data.parent; dirs.value = data.dirs; drives.value = data.drives
+    if (!data.current) return
+    if (initial) {
+      projectStorageKey = storageKey + ':' + (data.suggested || data.current)
+      const saved = localStorage.getItem(projectStorageKey)
+      if (saved && saved !== data.current && saved !== data.suggested) return browse(saved)
+    }
+    directory.value = initial ? (data.suggested || data.current) : data.current; parent.value = data.parent; dirs.value = data.dirs; drives.value = data.drives
     error.value = ''
   } catch (caught) { error.value = String(caught) }
 }
@@ -90,11 +97,12 @@ async function showPicker() {
   if (!isTauri() || IS_REMOTE) {
     // A browser/remote window cannot give the backend a local OS path.
     dialog.value?.showModal()
-    void browse(directory.value)
+    void browse('', true)
     return
   }
   busy.value = true
   try {
+    await browse('', true)
     const selected = await pickDirectory(tr('选择日志保存文件夹', 'Choose a log folder'), directory.value)
     if (!selected || disposed) return
     directory.value = selected
@@ -107,7 +115,7 @@ async function start(strict: unknown = false, context?: SemanticExecutionContext
   busy.value = true; error.value = ''
   try {
     update(await request(route('start'), { directory: directory.value, ...(props.name === 'SuperWatch' ? {} : { channel: props.channel }) }, context))
-    localStorage.setItem(storageKey, directory.value)
+    localStorage.setItem(projectStorageKey, directory.value)
     dialog.value?.close()
   } catch (caught) { error.value = String(caught); if (strict === true) throw caught }
   finally { busy.value = false }

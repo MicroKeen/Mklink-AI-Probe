@@ -8,6 +8,7 @@ pyserial 依赖的模块通过 lazy __getattr__ 按需加载。
 from __future__ import annotations
 
 # 纯模块（无需 pyserial）
+from mklink.runtime import VERSION as __version__
 from mklink._deps import check_dependencies, require_dependencies
 from mklink._types import (
     DEFAULT_BAUDRATE,

@@ -286,3 +286,10 @@ def test_next_init_replaces_independent_timestamp_source():
         payload = b''.join(_encode_u32(v) for v in (sys_freq, cpu_freq, 0, 0))
         parser.feed(bytes((EVTID_INIT, len(payload))) + payload + _encode_u32(0))
         assert parser.timestamp_freq == expected
+
+
+def test_plain_rtt_text_does_not_establish_systemview_sync():
+    parser = SystemViewParser()
+    for _ in range(10):
+        parser.feed(b'1234 Sensor data tick=5678 temperature=25\r\n')
+    assert not parser.synced

@@ -388,6 +388,7 @@ def test_gui_launcher_holds_existing_lease_until_handoff_and_always_releases(mon
     import time
     from types import SimpleNamespace
     from mklink import cli, runtime
+    monkeypatch.setattr("mklink.runtime_gui.gui_link", lambda client: ("http://127.0.0.1:8765/_runtime/open#once", 60))
     calls, clock = [], [0]
     class Client:
         def __init__(self, **kwargs): calls.append(("client", kwargs))

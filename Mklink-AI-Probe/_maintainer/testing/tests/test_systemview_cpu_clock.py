@@ -58,7 +58,7 @@ def test_systemview_start_reads_system_core_clock_before_stream(monkeypatch):
 
     monkeypatch.setattr(dev, "read_variable", read_variable)
 
-    result = dev.systemview_start(addr=0x20000000)
+    result = dev.systemview_start(channel=1, addr=0x20000000)
 
     assert result["cpu_freq_hint"] == 72_000_000
     assert dev._systemview_parser.cpu_freq == 72_000_000
@@ -111,7 +111,7 @@ def test_systemview_start_reads_hpm_core_clock_before_project_default(tmp_path, 
 
     monkeypatch.setattr(dev, "read_variable", read_variable)
 
-    result = dev.systemview_start(addr=0x0008E488)
+    result = dev.systemview_start(channel=1, addr=0x0008E488)
 
     assert result["cpu_freq_hint"] == 360_000_000
     assert result["cpu_freq_source"] == "hpm_core_clock"
@@ -162,7 +162,7 @@ def test_hpm_project_seeds_systemview_id_base_without_guessing_clock(tmp_path, m
     dev._connected = True
     _prime_validated_rtt_control_block(dev, 0x0008E488)
 
-    result = dev.systemview_start(addr=0x0008E488)
+    result = dev.systemview_start(channel=1, addr=0x0008E488)
 
     assert "cpu_freq_hint" not in result
     assert result["systemview_ram_base"] == "0x10000000"

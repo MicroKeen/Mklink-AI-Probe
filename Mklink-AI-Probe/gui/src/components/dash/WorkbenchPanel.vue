@@ -8,7 +8,7 @@
   <SymbolVariablePanel v-else-if="panel.type === 'variables'" ref="surface" :panel-id="panel.id" :view-paths="panel.source.signals"
     :device-connected="deviceConnected" :symbol-loaded="symbolLoaded" :symbol-error="symbolError" :latest-values="latestValues" :subscribe-values="true" :snapshot-path="snapshotPath" @snapshot-change="path => emit('snapshot', path)" />
   <RttChannelPanel v-else-if="panel.type === 'rtt'" ref="surface" :panel-id="panel.id" :channel="panel.source.channel || 0"
-    :running="rtt.running === true" :send-enabled="rtt.running === true && !rtt.runtime_error && rtt.down_buffers?.some((item: any) => item.channel === (panel.source.channel || 0) && item.active) === true" :session="rtt.session" :channel-status="rtt.channel_status?.[String(panel.source.channel || 0)]" />
+    :running="active && rtt.running === true" :send-enabled="rtt.running === true && !rtt.runtime_error && rtt.down_buffers?.some((item: any) => item.channel === (panel.source.channel || 0) && item.active) === true" :session="rtt.session" :channel-status="rtt.channel_status?.[String(panel.source.channel || 0)]" />
   <ControlPanel v-else-if="panel.type === 'controls'" ref="surface" :panel-id="panel.id" :widgets="panel.widgets || []" :active="active" :commit-widgets="commitWidgets" @transfer="event => emit('transfer', event)" />
   <CapabilityPanel v-else-if="panel.type === 'capability'" ref="surface" :panel-id="panel.id" />
   <WorkbenchToolPanel v-else-if="panel.type === 'tool'" ref="surface" :tool="panel.source.tool!" :active="active" :panel-id="panel.id" :device-connected="deviceConnected" :symbol-loaded="symbolLoaded" :symbol-error="symbolError" :latest-values="latestValues" />

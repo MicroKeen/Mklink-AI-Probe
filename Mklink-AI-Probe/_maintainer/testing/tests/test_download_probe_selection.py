@@ -160,3 +160,20 @@ def test_offline_profile_catalog_does_not_rediscover_unbound_disk(tmp_path, monk
     candidates = _profile_candidates('STM32F103RC', None)
     assert candidates and candidates[0]['available']
     assert not candidates[0]['on_probe']
+
+@pytest.mark.parametrize("stream", ["superwatch", "rtt"])
+def test_default_desktop_workspace_suggests_loaded_axf_project(tmp_path, stream):
+    desktop = tmp_path / "com.microkeen.mklink-ai-probe" / "workspace"
+    desktop.mkdir(parents=True)
+    project = tmp_path / "board"
+    image = project / "build" / "keil" / "Obj" / "test.axf"
+    image.parent.mkdir(parents=True)
+    image.touch()
+    (project / "board.uvprojx").touch()
+    app = create_app(project_root=str(desktop))
+    app.state.mklink_state["device"] = SimpleNamespace(axf_path=str(image))
+    with TestClient(app) as local:
+        response = local.get("/api/project-root/browse", params={"recording": stream})
+    assert response.status_code == 200, response.text
+    assert response.json()["suggested"] == str(project / ".mklink" / "logs" / stream)
+    assert response.json()["current"] == str(project)

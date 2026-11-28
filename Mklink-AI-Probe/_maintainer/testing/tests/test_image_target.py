@@ -95,3 +95,12 @@ def test_switch_image_on_live_device_keeps_physical_claim(tmp_path, monkeypatch)
     assert device.connected and device.symbol_catalog is not None and device.axf_path == str(second)
     assert device._image_target['device'] == 'S32K344'
     assert device._attach_profile.name == 'S32K314'
+
+
+def test_dwarf_density_macro_agrees_with_one_concrete_part(tmp_path, monkeypatch):
+    target = image(tmp_path)
+    monkeypatch.setattr('mklink.image_target._elf_sources', lambda _: [('dwarf', 'STM32F103XE', False)])
+    bind_file(target, 'STM32F103RE')
+    assert resolve_image_target(target)['device'] == 'STM32F103RE'
+    target.with_suffix('.map').write_text('LOAD build/startup_STM32F103VE.o')
+    assert resolve_image_target(target)['status'] == 'conflict'

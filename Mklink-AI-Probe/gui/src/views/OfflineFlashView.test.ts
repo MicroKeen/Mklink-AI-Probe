@@ -21,6 +21,7 @@ const offlineMocks = vi.hoisted(() => ({
 
 const onlineMocks = vi.hoisted(() => ({
   searchTargets: vi.fn(),
+  inspectImage: vi.fn(),
   installPack: vi.fn(),
 }))
 
@@ -1121,14 +1122,43 @@ describe('OfflineFlashView', () => {
     expect(unlock.element.checked).toBe(false)
   })
 
+  it.each(['bin', 'hex'])('selects the only FLM covering the whole %s image', async format => {
+    onlineMocks.searchTargets.mockResolvedValue([{ part_number: 'STM32F103RE', installed: true }])
+    offlineMocks.listAlgorithms.mockResolvedValue([
+      { id: 'main', file_name: 'main.FLM', flash_base: '0x08000000', flash_size: 524288, available: true },
+      { id: 'opts', file_name: 'opts.FLM', flash_base: '0x1ffff800', flash_size: 16, available: true },
+    ])
+    onlineMocks.inspectImage.mockResolvedValue({ segments: [{ start: 0x08005000, end: 0x08021e00 }] })
+    const wrapper = mount(OfflineFlashView)
+    await flushPromises()
+    await wrapper.get('.target-result').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="offline-firmware-drop-zone"]').trigger('drop', {
+      dataTransfer: { files: [new File(['data'], `main.${format}`)] },
+    })
+    await flushPromises()
+    const row = wrapper.get('[data-testid="offline-firmware-row"]')
+    const select = row.get<HTMLSelectElement>('select')
+    expect(select.element.value).toBe('main')
+    if (format === 'bin') {
+      const base = row.get('input[placeholder="BIN 基地址"]')
+      await base.setValue('0x1ffff800')
+      expect(select.element.value).toBe('opts')
+      await base.setValue('0x0807fffe')
+      expect(select.element.value).toBe('')
+    }
+  })
+
   it('renders trigger output while the V4 command is still running', async () => {
     offlineMocks.preview.mockResolvedValue({
       model: 'V4', script_name: 'factory-download.py', script: '# preview',
     })
+    let append!: (line: string) => void
+    let finish!: () => void
     offlineMocks.trigger.mockImplementation(async (_model, _script, onLine) => {
+      append = onLine
       onLine('erase started')
-      await Promise.resolve()
-      onLine('program finished')
+      await new Promise<void>(resolve => { finish = resolve })
       return { status: 'completed', lines: ['erase started', 'program finished'] }
     })
     onlineMocks.searchTargets.mockResolvedValue([{
@@ -1157,8 +1187,24 @@ describe('OfflineFlashView', () => {
     await wrapper.get('[data-testid="offline-trigger"]').trigger('click')
     await flushPromises()
 
-    expect(wrapper.get('.trigger-log').text()).toContain('erase started')
-    expect(wrapper.get('.trigger-log').text()).toContain('program finished')
+    const log = wrapper.get<HTMLElement>('.trigger-log')
+    expect(log.text()).toContain('erase started')
+    Object.defineProperties(log.element, { scrollHeight: { value: 500 }, clientHeight: { value: 100 } })
+    append('program 25%')
+    await flushPromises()
+    expect(log.element.scrollTop).toBe(500)
+    log.element.scrollTop = 100
+    await log.trigger('scroll')
+    append('program 75%')
+    await flushPromises()
+    expect(log.element.scrollTop).toBe(100)
+    log.element.scrollTop = 400
+    await log.trigger('scroll')
+    append('program finished')
+    finish()
+    await flushPromises()
+    expect(log.text()).toContain('program finished')
+    expect(log.element.scrollTop).toBe(500)
   })
 
   it.each(['HPM5301xEGx', 'HPM5300', 'HPM5E31', 'HPM6280', 'HPM6E80', 'HPM6750', 'HPM6880', 'HPM6P81'])('previews and deploys %s ISP images with offset addresses and voltage presets', async part => {

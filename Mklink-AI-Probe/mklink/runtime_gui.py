@@ -32,7 +32,7 @@ def existing_probe_view(probe_id, *, require_connected=False):
             if status.get('probe_id') != probe_id or status.get('connected') is not True:
                 raise runtime.RuntimeErrorResponse('Selected probe has no live connection to reuse')
             expected = {'probe_id': probe_id, 'device_generation': status['device_generation']}
-        url, _ = _gui_link(client, **expected)
+        url, _ = gui_link(client, **expected)
         return {'owner_url': url, 'owner_instance': info['instance_id'], 'probe_id': probe_id, **expected}
     finally:
         client.close()
@@ -49,7 +49,7 @@ def open_existing_probe_window(probe_id):
     return {'browser_requested': True}
 
 
-def _gui_link(client, **expected):
+def gui_link(client, **expected):
     link = runtime.request(client.info, 'POST', '/_runtime/gui-link', {'session_id': client.session_id, **expected})
     return f"http://127.0.0.1:{client.info['port']}/_runtime/open#{link['ticket']}", link['expires_in']
 
@@ -132,7 +132,7 @@ class GuiLaunch:
         if not result['gui_launch_supported']:
             raise runtime.RuntimeErrorResponse('This backend lacks GUI launch links; update and explicitly restart it, or open its installed GUI. No second backend was started')
         if self.pending is None or self.pending['expires'] <= time.monotonic():
-            url, ttl = _gui_link(client)
+            url, ttl = gui_link(client)
             self.pending = {'url': url, 'expires': time.monotonic() + ttl, 'attempted': False}
         pending = self.pending
         if open_browser and not pending['attempted']:

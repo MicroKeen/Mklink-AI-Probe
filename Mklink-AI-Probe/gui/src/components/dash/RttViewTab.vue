@@ -41,7 +41,7 @@
       <div ref="channelGrid" class="rtt-channel-grid" :class="{ 'auto-fit': autoFit, multiple: activeChannels.filter(ch => !hiddenChannels.has(ch)).length > 1 }">
         <RttChannelPanel v-for="ch in activeChannels" :key="ch" :ref="el => setChannelSurface(ch, el)" :channel="ch" :panel-id="panelId ? `${panelId}-rtt-${ch}` : undefined"
           v-show="!hiddenChannels.has(ch)"
-          :running="statusRunning && !runtimeError" :session="captureSession" :channel-status="channelStatus[String(ch)]"
+          :running="active !== false && !hiddenChannels.has(ch) && statusRunning && !runtimeError" :session="captureSession" :channel-status="channelStatus[String(ch)]"
           :send-enabled="!stopping && !runtimeError && downBuffers.some(b => b.channel === ch && b.active)" />
       </div>
   </div>
@@ -74,7 +74,7 @@ import { tr } from '../../composables/useLanguage'
 import { API_BASE } from '../../lib/runtimeEndpoint'
 import type { DeviceStatus } from '../../types/mklink'
 import { useToast } from '../../composables/useToast'
-const props = defineProps<{ deviceConnected: boolean; panelId?: string }>()
+const props = withDefaults(defineProps<{ deviceConnected: boolean; panelId?: string; active?: boolean }>(), { active: true })
 const channelSurfaces = new Map<number, SemanticSurface>()
 let restoredChannels: JsonObject = {}
 function setChannelSurface(channel: number, surface: unknown) {

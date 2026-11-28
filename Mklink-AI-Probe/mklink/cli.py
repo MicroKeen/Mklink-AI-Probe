@@ -1832,7 +1832,11 @@ def _cli_gui(args):
         print(f"[MKLink] Shared CDC runtime: http://127.0.0.1:{info['port']}")
         print("[MKLink] Waiting up to 60 seconds for a GUI window. Ctrl+C cancels this launcher.")
         print("[MKLink] After handoff, the runtime exits after about 5 seconds without clients or active jobs.")
-        if not args.no_browser:
+        if args.no_browser:
+            from mklink.runtime_gui import gui_link
+            url, seconds = gui_link(client)
+            print(f"[MKLink] Open within {seconds}s: {url}", flush=True)
+        else:
             webbrowser.open(browser_url(info))
     if not handoff_gui(info, prepare):
         print("[MKLink] No GUI window connected; launcher released. Run mklink gui again to open it.")
@@ -2075,6 +2079,8 @@ def main():
         prog="mklink",
         description="MKLink Flash Programmer CLI",
     )
+    from mklink.runtime import VERSION
+    parser.add_argument("--version", "-V", action="version", version=VERSION)
     subparsers = parser.add_subparsers(dest="command")
     subparsers.add_parser("image-target", help="从本地 ELF/AXF/OUT 和关联文件识别目标芯片").add_argument("image")
     subparsers.add_parser("target-profiles", help="离线列出可用于 --mcu 的型号、别名和专用 MEM-AP")
@@ -2234,7 +2240,7 @@ def main():
     _add_project_root_arg(sv_parser)
     sv_parser.add_argument("--port", help="COM 端口（默认自动检测）")
     sv_parser.add_argument("--duration", type=float, default=10.0, help="读取时长（秒，默认 10）")
-    sv_parser.add_argument("--channel", type=int, default=1, help="SystemView 上行通道（SEGGER 默认 1）")
+    sv_parser.add_argument("--channel", type=int, help="SystemView 上行通道（省略时从目标或工程识别）")
     sv_parser.add_argument("--addr", help="RTT 控制块地址（默认从 rtt_config.json 读）")
     sv_parser.add_argument("--visualize", action="store_true", help="提示用 mklink gui 查看可视化")
 

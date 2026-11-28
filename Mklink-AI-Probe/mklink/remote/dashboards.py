@@ -985,7 +985,7 @@ class SystemViewStreamManager:
     def set_stream_hub(self, stream_hub) -> None:
         self._stream_hub = stream_hub
 
-    def start(self, device, *, addr: str | None = None, channel: int = 1,
+    def start(self, device, *, addr: str | None = None, channel: int | None = None,
               mode: int = 0, search_size: int = 0,
               duration: float = 86400) -> None:
         """Start SystemView polling in a background thread."""
@@ -1043,6 +1043,7 @@ class SystemViewStreamManager:
         failure_callback = self._start_failure_callback
 
         def _poll():
+            selected_channel = channel
             initialized = False
             start_failure = None
             try:
@@ -1050,6 +1051,10 @@ class SystemViewStreamManager:
                     addr, channel=channel, mode=mode, search_size=search_size,
                 )
                 initialized = True
+                if isinstance(start_result, dict) and start_result.get('channel') is not None:
+                    selected_channel = start_result['channel']
+                    self._start_options['channel'] = selected_channel
+                    self._recording_meta['channel'] = selected_channel
                 self._apply_cpu_freq_hint(device, start_result)
                 startup.ready()
                 shared_mux = isinstance(start_result, dict) and start_result.get('transport') == 'cdc-mux'
@@ -1164,7 +1169,7 @@ class SystemViewStreamManager:
                                 })
                                 try:
                                     retry_result = device.systemview_start(
-                                        addr, channel=channel, mode=mode,
+                                        addr, channel=selected_channel, mode=mode,
                                         search_size=search_size,
                                     )
                                     self._apply_cpu_freq_hint(
@@ -1237,7 +1242,7 @@ class SystemViewStreamManager:
                     self._note_init_cpu_freq(evs)
                     self._ensure_event_time_fields(evs)
                     if self._maybe_resolve_task_names(
-                        device, evs, addr=addr, channel=channel,
+                        device, evs, addr=addr, channel=selected_channel,
                         mode=mode, search_size=search_size,
                     ):
                         # 解析内部 stop/start 耗时 ~5-12s 且期间无数据可读,

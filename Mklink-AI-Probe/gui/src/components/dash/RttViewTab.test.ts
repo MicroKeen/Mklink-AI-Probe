@@ -209,6 +209,19 @@ describe('RttViewTab binary migration', () => {
     wrapper.unmount()
   })
 
+  it('subscribes only while the RTT panel is visible', async () => {
+    mocks.status = { running: true, channels: [0], down_buffers: [] }
+    const wrapper = mount(RttViewTab, { props: { active: false, deviceConnected: true } })
+    await flushPromises()
+    const panel = wrapper.getComponent({ name: 'RttChannelPanel' })
+    expect(panel.props('running')).toBe(false)
+    await wrapper.setProps({ active: true })
+    expect(panel.props('running')).toBe(true)
+    await wrapper.setProps({ active: false })
+    expect(panel.props('running')).toBe(false)
+    wrapper.unmount()
+  })
+
   it('fits manually resized panels on blank double-click without resetting on controls', async () => {
     mocks.status = { running: false, channels: [0, 1] }
     const wrapper = mount(RttViewTab, { props: { deviceConnected: true } })

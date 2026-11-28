@@ -146,6 +146,12 @@ def resolve_image_target(path):
 
     def result():
         devices = sorted({device for _, device in evidence})
+        # ST CMSIS density-group macros from headers can coexist with a specific
+        # package code in the project. Two different concrete parts still conflict.
+        families = {d for source, d in evidence if source == 'dwarf' and re.fullmatch(r'STM32[A-Z]\d{3}X[A-Z0-9]', d)}
+        devices = [d for d in devices if not (d in families and any(
+            len(other) == len(d) and other != d and other[:-2] == d[:-2] and other[-1] == d[-1]
+            for other in devices))]
         status = "conflict" if len(devices) > 1 or issues else ("identified" if devices else "unknown")
         return {"status": status, "device": devices[0] if status == "identified" else None,
                 "evidence": [{"source": src, "device": d} for src, d in sorted(evidence)],

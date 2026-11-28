@@ -11,6 +11,7 @@ from pathlib import Path
 import secrets
 import time
 
+from starlette.datastructures import QueryParams
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount
@@ -104,7 +105,7 @@ class RuntimeControl:
         self.shutdown = None
         self.stopping = False
         self.views = {}
-        self.gui_stream_readers = Counter()
+        self.view_stream_readers = Counter()
         self.current_operation = None
         self.last_operation = None
         self.uart_operations: dict[asyncio.Task, str] = {}
@@ -140,12 +141,17 @@ class RuntimeControl:
         return {'kind': 'client', 'active': session is not None,
                 'client_id': session.public_id if session else None}
 
+    def gui_reader_count(self, stream):
+        # A window may show both terminal and waveform for the same stream.
+        return sum(1 if window else count for (window, name), count in self.view_stream_readers.items()
+                   if name == stream)
+
     def require_acquisition_control(self, stream, session_id):
         self.prune()
         recover = False
         if session_id:
             session = self.validate_session(session_id, target=stream in STREAMS)
-            if self.gui_stream_readers[stream]:
+            if self.gui_reader_count(stream):
                 raise HTTPException(409, 'A GUI is reading this acquisition; detach to keep it running')
             owner = self.created_streams.get(stream)
             # An explicit control command may recover an abandoned acquisition.
@@ -291,7 +297,8 @@ class RuntimeControl:
         clients = [{'id': s.public_id, 'kind': s.kind, 'name': s.name, 'scope': s.scope, 'streams': sorted(s.streams),
                     'age_seconds': now-s.joined, 'expires_in': max(0, s.expires-now)} for s in self.sessions.values()]
         represented = {view.get('owner') for view in self.views.values() if view.get('live')}
-        clients += [{'id': key, 'kind': 'gui', 'name': view['name'], 'streams': [],
+        clients += [{'id': key, 'kind': 'gui', 'name': view['name'],
+                     'streams': sorted(stream for (window, stream), count in self.view_stream_readers.items() if window == view.get('reader', key) and count),
                      'age_seconds': now-view['joined'], 'expires_in': None if view.get('live') else max(0, view['expires']-now)}
                     for key, view in self.views.items() if key not in represented]
         device = self.app.state.mklink_state.get('device')
@@ -637,11 +644,15 @@ class RuntimeGate:
         if not hardware or (method == 'POST' and path in LOCAL_IMAGE_INSPECTION_PATHS | LOCAL_RECORDING_EXPORT_PATHS):
             stream = GUI_STREAM_PATHS.get(path)
             if stream and (origin or headers.get(b'cookie') or headers.get(b'x-mklink-view-owner')):
-                c.gui_stream_readers[stream] += 1
+                window = QueryParams(scope.get('query_string', b'')).get('view', '')
+                key = (window, stream)
+                c.view_stream_readers[key] += 1
                 try:
                     return await self.app(scope, receive, send)
                 finally:
-                    c.gui_stream_readers[stream] -= 1
+                    c.view_stream_readers[key] -= 1
+                    if not c.view_stream_readers[key]:
+                        del c.view_stream_readers[key]
             return await self.app(scope, receive, send)
         session_id = headers.get(b"x-mklink-session", b"").decode()
         expected_probe = headers.get(b'x-mklink-probe', b'').decode()

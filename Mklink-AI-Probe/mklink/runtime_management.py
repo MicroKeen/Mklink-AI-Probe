@@ -93,6 +93,7 @@ def install_management(app, control):
             await socket.close(code=1008)
             return
         record = {'joined': time.monotonic(), 'expires': float('inf'), 'name': 'GUI window', 'live': True}
+        record['reader'] = (socket.query_params.get('reader') or key)[:128]
         owner = socket.headers.get('x-mklink-view-owner')
         if owner and owner.startswith('desktop-') and len(owner) <= 128:
             record['owner'] = owner

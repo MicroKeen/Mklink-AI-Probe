@@ -22,7 +22,7 @@ symbols、peripherals、modbus、online-flash、offline-flash、files、firmware
    列出后台，按实际项目与用户目标选择 `runtime_id`，多实例不得默认取第一项。
 2. 展示实时曲线、RTT 或用户指定的界面时，`gui_open(runtime_id=...)` 复用该后台；没有实例时按
    [安装说明](install.md)使用实际运行目录的解释器，以
-   `python -m mklink gui --project-root <项目绝对目录> --no-browser` 启动。
+   `python -m mklink gui --project-root <项目绝对目录> --no-browser` 启动。打开终端输出的 60 秒一次性登录链接；可用 `python -m mklink --version` 核对当前解释器。
    打开启动返回的本地入口；私有登录链接不放入公开文档或提交。
    `gui_open` 不连接设备，当前 MCP 持有 GUI 附着直到 `detach`。
 3. `gui_control(action="windows")` 获取窗口，明确选择 `window_id`，确认

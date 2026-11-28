@@ -2030,6 +2030,7 @@ class Device:
         return {
             "channel": channel,
             "direction": direction,
+            "name_address": int.from_bytes(raw[:4], "little"),
             "buffer_address": buffer_address,
             "size": size,
             "write_offset": write_offset,
@@ -2429,36 +2430,75 @@ class Device:
     # ------------------------------------------------------------------
     # SystemView（RTOS 跟踪：RTT 通道 1 二进制流 → SEGGER 事件解码）
     # ------------------------------------------------------------------
+    def _systemview_channel(self, control_info):
+        """Identify the trace channel without reading arbitrary target pointers."""
+        from mklink.elf_backend import get_elf_backend
+        ranges = list(self._target_writable_ram_ranges())
+        if self._axf:
+            try:
+                backend = get_elf_backend(self._elf_backend, project_root=self._project_root)
+                segments = backend.segments(self._axf)
+            except Exception:
+                # An optional symbol file can disappear during a rebuild.
+                segments = []
+            ranges.extend((s.address, s.address + s.size) for s in segments
+                          if s.segment_type == 'PT_LOAD' and s.flags & 4)
+        matches = []
+        for item in control_info['up_buffers']:
+            if not item['active']:
+                continue
+            pointer = item.get('name_address', 0)
+            limit = next((end for start, end in ranges if start <= pointer < end), 0)
+            if pointer and limit:
+                raw = self.read_memory(pointer, min(32, limit - pointer))
+                name, nul, _ = raw.partition(b'\0')
+                if nul and name.isascii():
+                    item['name'] = name.decode('ascii')
+            if item.get('name', '').casefold() in ('sysview', 'systemview', 'segger sysview', 'segger systemview'):
+                matches.append(item['channel'])
+        if len(matches) == 1:
+            return matches[0]
+        from mklink.project_config import load_rtt_config
+        config = load_rtt_config(self._project_root) or {}
+        configured = config.get('systemview_channel')
+        if type(configured) is not int:
+            header = Path(self._project_root) / 'rtconfig.h'
+            if header.is_file():
+                values = re.findall(r'^\s*#\s*define\s+PKG_SEGGER_SYSVIEW_RTT_CHANNEL\s+([0-7])\b',
+                                    header.read_text(encoding='utf-8', errors='replace'), re.M)
+                configured = int(values[0]) if len(set(values)) == 1 else None
+        if type(configured) is int and 0 <= configured < 8 and (not matches or configured in matches):
+            return configured
+        raise DeviceError('Cannot identify a unique SystemView RTT channel; specify channel explicitly')
+
     @_with_ram_snapshot
     def systemview_start(
         self,
         addr: str | int | None = None,
         *,
-        channel: int = 1,
+        channel: int | None = None,
         search_size: int = 0,
         mode: int | None = None,
     ) -> dict:
-        """启动 SystemView 采集（RTT 通道 1，二进制）。
+        """启动 SystemView 二进制采集。
 
         Args:
             addr: RTT 控制块地址（None 时从 rtt_config.json 读，与 RTT 共用）。
-            channel: SystemView 上行通道号（SEGGER 默认 1）。
+            channel: SystemView 上行通道号，省略时从 RTT 描述符或工程配置识别。
             search_size: 探针扫描字节数（仅 mode=0 生效）。
             mode: 0=动态搜寻 / 1=静态编译。None 时从 rtt_config.json 读。
         """
         self._require_connected()
         if getattr(self._bridge, '_sleep_debug_atomic', False) is True:
             raise DeviceError('SystemView requires an RTT stream, which is unavailable in atomic sleep access mode')
-        addr, channel, search_size, mode = _resolve_rtt_stream_parameters(
+        addr, _, search_size, mode = _resolve_rtt_stream_parameters(
             addr,
-            channel,
+            0 if channel is None else channel,
             search_size,
             mode,
             self._project_root,
             source_path=self._axf,
         )
-        if not 0 <= channel < 8:
-            raise DeviceError('SystemView supports channels 0..7')
         if not self._prepare_rtt_transport():
             raise DeviceError('SystemView requires shared MUX firmware; update the probe firmware')
         from mklink.mux import MuxTransport
@@ -2488,6 +2528,8 @@ class Device:
         else:
             control_block_addr = requested_addr
         control_info = self._read_rtt_control_block(control_block_addr)
+        if channel is None:
+            channel = self._systemview_channel(control_info)
         self._validate_rtt_channel(control_info, channel, require_down=True)
 
         # SystemView firmware always scans even in static mode.  Passing the
@@ -2522,6 +2564,7 @@ class Device:
                 raise DeviceError(
                     "Probe SystemView address does not match the host-validated control block"
                 )
+            result["channel"] = channel
             result["up_buffers"] = [
                 self._public_rtt_buffer(item)
                 for item in control_info["up_buffers"]

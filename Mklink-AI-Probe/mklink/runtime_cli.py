@@ -354,10 +354,10 @@ def run(args):
                     if args.period is not None:
                         client.call('superwatch_interval', {'interval': args.period})
             if stream == 'systemview' and not running:
-                options = {'channel': args.channel}
+                options = {} if args.channel is None else {'channel': args.channel}
                 if args.addr:
                     options['addr'] = args.addr
-            elif stream == 'systemview' and running and (args.addr or args.channel != 1):
+            elif stream == 'systemview' and running and (args.addr or args.channel is not None):
                 raise RuntimeErrorResponse('Capture already running; omit configuration to subscribe')
             started = client.call(stream+'_start', options)
             if not started.get('reused'):

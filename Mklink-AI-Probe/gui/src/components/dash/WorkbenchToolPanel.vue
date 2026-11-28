@@ -17,7 +17,7 @@ const componentProps = computed(() => {
   if (props.tool === 'superwatch') return { panelId: props.panelId, deviceConnected: props.deviceConnected, symbolLoaded: props.symbolLoaded, symbolError: props.symbolError }
   if (props.tool === 'peripherals') return { deviceConnected: props.deviceConnected, latestValues: props.latestValues }
   if (['symbols', 'hardfault'].includes(props.tool)) return { deviceConnected: props.deviceConnected, symbolLoaded: props.symbolLoaded, symbolError: props.symbolError }
-  if (props.tool === 'rtt') return { deviceConnected: props.deviceConnected, panelId: props.panelId }
+  if (props.tool === 'rtt') return { deviceConnected: props.deviceConnected, panelId: props.panelId, active: props.active }
   if (props.tool === 'trace') return { deviceConnected: props.deviceConnected, active: props.active ?? true }
   if (props.tool === 'memory') return { deviceConnected: props.deviceConnected }
   return {}
