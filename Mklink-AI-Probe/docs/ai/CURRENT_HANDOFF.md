@@ -4,13 +4,13 @@
 
 ## 当前断点
 
-- 更新时间：`2026-11-28`
-- 分支：`codex/v0.5.2-fixes`
-- HEAD：`6f908307`
-- 远端 HEAD：`6f908307`
-- 工作树：Windows/Skill 候选 806dbdc8，正式版 0.5.1。
-- 当前任务：[0.5.2 候选、V3 实板](../verification/v052-windows-v3-release.md)；[V4 八项](../verification/v052-f103-field-regression.md)。
-- 状态：`0.5.2 开发见 [PR #98](https://github.com/MicroKeen/Mklink-AI-Probe/pull/98)。0.5.1 发布和三平台验证见 [PR #97](https://github.com/MicroKeen/Mklink-AI-Probe/pull/97)。`
+- 更新时间：`2026-11-29`
+- 分支：`main`
+- HEAD：`480743f0`
+- 远端 HEAD：`480743f0`
+- 工作树：v0.5.2 正式发布基线。
+- 当前任务：实板范围见 [V3](../verification/v052-windows-v3-release.md)、[V4](../verification/v052-f103-field-regression.md)。
+- 状态：`[0.5.2 正式发布](../verification/v052-release-handoff.md)，Windows、macOS、Linux、Skill 及 V3.7.1/V4.7.5 已上线。`
 
 ## 里程碑
 
@@ -53,7 +53,7 @@
 
 ## 下一动作
 
-1. 0.5.2 待发布。V3/S32K3 冷启动、擦写，Data Flash 和客户复位/掉电待验。HPM6E80 OTP Word 72 继续暂停。
+1. V3/S32K3 冷启动、擦写，Data Flash 和客户复位/掉电待验。HPM6E80 OTP Word 72 继续暂停。
 2. 覆盖安装会结束当前用户旧MKLink及Skill/MCP活动任务，安装后由AI宿主重载MCP。保留损坏历史备份；异常收集installation-history-report.json、history-backups及诊断包，区分权限、占用和格式，不删除有效未知结果或重放烧录。
 3. 客户SystemView先核对实际CH、目标IRQ锁及元数据。1µs三路溢出先采集0x40 CH2设备时间戳/长度/序号与主机单调到达时间，低频读0x10错误和0x14批次耗时；诊断开销保持一致，再判断背压、重试或调度，不直接假定80ms停读或给CH2固定优先级。多视图假离线已完成修复与安装版六窗口复验。保留目标构建快照供AXF源码路径使用，原工程重编后再清理；见[静态补充](../verification/v050-systemview-loss-reboot.md)。
 4. 有Linux/Mac实物后补验真实USB、Gatekeeper首次安装和交互式提权；不能把本轮CI结果当作这些硬件/系统验收。
