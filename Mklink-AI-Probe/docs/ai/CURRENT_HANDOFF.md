@@ -9,7 +9,7 @@
 - HEAD：`a8174206`
 - 远端 HEAD：`a8174206`
 - 工作树：0.5.2 Windows 验证包 a8174206，正式版 0.5.1。
-- 当前任务：[Windows 芯片资源精简](../verification/v052-windows-chip-resources.md)；[S32K344 验收](../verification/v052-web-symbol-rebuild.md)。
+- 当前任务：[资源精简、覆盖安装与 F103 实测](../verification/v052-windows-chip-resources.md)；[S32K344 验收](../verification/v052-web-symbol-rebuild.md)。
 - 状态：`0.5.2 开发见 [PR #98](https://github.com/MicroKeen/Mklink-AI-Probe/pull/98)。0.5.1 发布和三平台验证见 [PR #97](https://github.com/MicroKeen/Mklink-AI-Probe/pull/97)。`
 
 ## 里程碑
