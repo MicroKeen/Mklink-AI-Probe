@@ -6,10 +6,10 @@
 
 - 更新时间：`2026-11-28`
 - 分支：`codex/v0.5.2-fixes`
-- HEAD：`0008c585`
-- 远端 HEAD：`0008c585`
-- 工作树：跨系列修订基于 0008c585。正式版 0.5.1。
-- 当前任务：[跨系列修订、V4/F103 八项现场回归与脱机实写](../verification/v052-f103-field-regression.md)。安装基线及 S32K344 记录见该页链接。
+- HEAD：`3384333a`
+- 远端 HEAD：`3384333a`
+- 工作树：0.5.2 客户验证包 3384333a 已覆盖桌面和完整 Skill。正式版 0.5.1。
+- 当前任务：[跨系列修订、完整包覆盖与 V4/F103 八项回归](../verification/v052-f103-field-regression.md)。安装基线及 S32K344 记录见该页链接。
 - 状态：`0.5.2 开发见 [PR #98](https://github.com/MicroKeen/Mklink-AI-Probe/pull/98)。0.5.1 发布和三平台验证见 [PR #97](https://github.com/MicroKeen/Mklink-AI-Probe/pull/97)。`
 
 ## 里程碑
