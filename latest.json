@@ -1,45 +1,45 @@
 {
   "schema": "mklink-firmware-v1",
-  "published_at": "2026-11-14T17:11:07Z",
+  "published_at": "2026-11-28T16:13:59Z",
   "firmwares": [
     {
       "family": "hpmlink",
       "model": "V4",
-      "version": "V4.7.4",
-      "name": "HPMLink_V4.7.4.uf2",
-      "size": 1650176,
-      "sha256": "a3c6f34c4179d54a46f28bc3e28b30a4da8d0622903d424ec3831a9d873f136b",
-      "uf2_blocks": 3223,
+      "version": "V4.7.5",
+      "name": "HPMLink_V4.7.5.uf2",
+      "size": 1648128,
+      "sha256": "a87e39ccf6584ab99b4d2c3f0cbe00436444ef39e19d83de71cef412b5a7aee7",
+      "uf2_blocks": 3219,
       "urls": {
-        "github": "https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/firmware-assets/HPMLink_V4.7.4.uf2"
+        "github": "https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/firmware-assets/HPMLink_V4.7.5.uf2"
       },
-      "build_id": "2026-11-14T11:35:00"
+      "build_id": "2026-11-27T10:49:12"
     },
     {
       "family": "microlink",
       "model": "V3",
-      "version": "V3.7.0",
-      "name": "MicroLink_V3.7.0.uf2",
-      "size": 851968,
-      "sha256": "c41cdb180f2365d6a5929b1ee595de80aa3ed3a1759d20aa2bafc32c35e723f3",
-      "uf2_blocks": 1664,
+      "version": "V3.7.1",
+      "name": "MicroLink_V3.7.1.uf2",
+      "size": 861184,
+      "sha256": "95096e9420b7b3047310d55f36cb996b42f3f1333e9edc0bae18e856ea4eb04d",
+      "uf2_blocks": 1682,
       "urls": {
-        "github": "https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/firmware-assets/MicroLink_V3.7.0.uf2"
+        "github": "https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/firmware-assets/MicroLink_V3.7.1.uf2"
       },
-      "build_id": "2026-11-13T15:18:58"
+      "build_id": "2026-11-27T11:42:36"
     },
     {
       "family": "microlink",
       "model": "V4",
-      "version": "V4.7.4",
-      "name": "MicroLink_V4.7.4.uf2",
-      "size": 1649664,
-      "sha256": "82d86c9f5de1611ee101f8ccd349deb8ee73b065340cb3a4958ac4c69f886917",
-      "uf2_blocks": 3222,
+      "version": "V4.7.5",
+      "name": "MicroLink_V4.7.5.uf2",
+      "size": 1648640,
+      "sha256": "3b20da792da9c72779ded64f88e9e1f7cf9bebcc43e335ac908607ebb77cf638",
+      "uf2_blocks": 3220,
       "urls": {
-        "github": "https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/firmware-assets/MicroLink_V4.7.4.uf2"
+        "github": "https://github.com/MicroKeen/Mklink-AI-Probe/releases/download/firmware-assets/MicroLink_V4.7.5.uf2"
       },
-      "build_id": "2026-11-14T11:33:15"
+      "build_id": "2026-11-27T10:49:12"
     }
   ]
 }
