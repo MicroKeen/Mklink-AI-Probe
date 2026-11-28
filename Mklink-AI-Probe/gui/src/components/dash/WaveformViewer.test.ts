@@ -548,6 +548,31 @@ describe('WaveformViewer VOFA binary transport', () => {
     }
   })
 
+  it('releases the hidden waveform reader and ignores late status and producer starts until visible again', async () => {
+    let resolveStatus!: (value: Response) => void
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+      .mockImplementationOnce(() => new Promise<Response>(resolve => { resolveStatus = resolve }))
+    const wrapper = mount(WaveformViewer, {
+      props: { mode: 'SuperWatch', deviceConnected: true, active: false },
+    })
+    try {
+      expect(mocks.binary.start).not.toHaveBeenCalled()
+      await wrapper.setProps({ active: true })
+      await wrapper.setProps({ active: false })
+      expect(mocks.binary.stop).toHaveBeenCalledOnce()
+      resolveStatus(new Response(JSON.stringify({ items: [] })))
+      window.dispatchEvent(new CustomEvent('mklink:vofa-stream-state', { detail: 'running' }))
+      await new Promise(resolve => setTimeout(resolve, 0))
+      expect(mocks.binary.start).not.toHaveBeenCalled()
+      await wrapper.setProps({ active: true })
+      await new Promise(resolve => setTimeout(resolve, 0))
+      expect(mocks.binary.start).toHaveBeenCalledOnce()
+    } finally {
+      wrapper.unmount()
+      fetchMock.mockRestore()
+    }
+  })
+
   it('keeps SuperWatch subscribed after stop so another GUI can restart it', async () => {
     const resetBinaryStream = vi.fn()
     ;(window as any).__waveformViewers.SuperWatch = { resetBinaryStream }

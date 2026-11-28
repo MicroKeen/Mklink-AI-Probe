@@ -14,7 +14,7 @@ const props = defineProps<{ tool: WorkbenchTool; active?: boolean; panelId: stri
 const surface = ref<SemanticSurface | null>(null)
 const componentProps = computed(() => {
   if (['connection', 'files', 'firmware', 'runtime'].includes(props.tool)) return { embedded: true, section: props.tool === 'connection' ? 'local' : props.tool }
-  if (props.tool === 'superwatch') return { panelId: props.panelId, deviceConnected: props.deviceConnected, symbolLoaded: props.symbolLoaded, symbolError: props.symbolError }
+  if (props.tool === 'superwatch') return { active: props.active ?? true, panelId: props.panelId, deviceConnected: props.deviceConnected, symbolLoaded: props.symbolLoaded, symbolError: props.symbolError }
   if (props.tool === 'peripherals') return { deviceConnected: props.deviceConnected, latestValues: props.latestValues }
   if (['symbols', 'hardfault'].includes(props.tool)) return { deviceConnected: props.deviceConnected, symbolLoaded: props.symbolLoaded, symbolError: props.symbolError }
   if (props.tool === 'rtt') return { deviceConnected: props.deviceConnected, panelId: props.panelId, active: props.active }

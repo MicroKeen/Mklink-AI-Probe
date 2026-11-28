@@ -401,8 +401,10 @@ const props = withDefaults(defineProps<{
   snapshotPath?: string | null
   panelId?: string
   viewPaths?: string[]
+  active?: boolean
   subscribeValues?: boolean
 }>(), {
+  active: true,
   symbolLoaded: true,
   symbolError: '',
   snapshotPath: null,
@@ -427,7 +429,13 @@ if (valueStream) {
     const values = summary.exactLatestValues || new Float32Array(summary.latestValues)
     sampledValues.value = Object.fromEntries(channels.slice(0, 500).flatMap((channel, index) => Number.isFinite(values[index]) ? [[channel.name, values[index]]] : []))
   })
-  watch(() => props.deviceConnected, connected => { if (connected) valueStream.start(); else { valueStream.stop(); sampledValues.value = {} } }, { immediate: true })
+  watch(() => props.active && props.deviceConnected, visible => {
+    if (visible) valueStream.start()
+    else {
+      valueStream.stop()
+      sampledValues.value = {}
+    }
+  }, { immediate: true })
 }
 const displayPrefs = useWatchWorkspace()
 const toast = useToast()

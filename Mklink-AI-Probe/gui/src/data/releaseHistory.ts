@@ -13,14 +13,14 @@ export const releaseHistory: ReleaseHistoryEntry[] = [
     summary: '共享连接、日志回放与烧录改进',
     summaryEn: 'Shared connections, log playback and flashing',
     changes: [
-      '桌面和 Web 可共用同一下载器。切出 RTT 页面会释放当前窗口的订阅，点击断开会停止全部采集并释放端口。',
+      '桌面和 Web 可共用同一下载器。切出 RTT 或 SuperWatch 页面会释放当前窗口的订阅，点击断开会停止全部采集并释放端口。',
       'SuperWatch、RTT 和串口每次记录保存一个 .mklog 文件，回放可按时间跳转。停止后再次记录会新建文件。',
       'ELF 或 AXF 重编译后，RTT 和 SuperWatch 可提示重新解析。SuperWatch 可准确显示 32 位整数。',
       '脱机烧录按 HEX 地址段匹配算法，并按所选芯片的 Flash 区域预填 BIN 起始地址。',
       '配套 V3.7.1 或 V4.7.5 固件可识别 22 个 S32K3 型号并执行功能复位，其中 6 个型号内置 Code Flash 和 Data Flash 算法。',
     ],
     changesEn: [
-      'Desktop and Web share one probe connection. Switching away from RTT releases that window’s reader. Disconnecting stops all captures and releases the port.',
+      'Desktop and Web share one probe connection. Switching away from RTT or SuperWatch releases that window’s reader. Disconnecting stops all captures and releases the port.',
       'Each SuperWatch, RTT or serial recording has one .mklog file. Seek by time during playback. Stopping and starting creates a new recording.',
       'RTT and SuperWatch prompt to reload rebuilt ELF or AXF symbols. SuperWatch preserves the exact value of 32-bit integers.',
       'Offline flashing matches HEX segments to the flash algorithm and suggests the BIN base address for the selected chip.',

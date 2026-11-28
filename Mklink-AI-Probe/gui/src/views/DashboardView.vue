@@ -86,7 +86,7 @@
 
       <HardFaultTab :key="'HardFaultTab-' + (deviceStatus.device_generation || 0)" v-if="tab === 'hardfault'" :device-connected="deviceStatus.connected" :symbol-loaded="deviceStatus.axf?.loaded === true" />
       <MemoryTab :key="'MemoryTab-' + (deviceStatus.device_generation || 0)" v-if="tab === 'memory'" :device-connected="deviceStatus.connected" />
-      <SuperWatchTab ref="superwatchSurface" :key="'SuperWatchTab-' + (deviceStatus.device_generation || 0)" v-show="tab === 'superwatch'" :device-connected="deviceStatus.connected" :symbol-loaded="deviceStatus.axf?.loaded === true" :symbol-error="deviceStatus.axf?.error" />
+      <SuperWatchTab ref="superwatchSurface" :key="'SuperWatchTab-' + (deviceStatus.device_generation || 0)" v-show="tab === 'superwatch'" :active="active && tab === 'superwatch'" :device-connected="deviceStatus.connected" :symbol-loaded="deviceStatus.axf?.loaded === true" :symbol-error="deviceStatus.axf?.error" />
       <WorkbenchTab v-if="workbenchOpened" v-show="tab === 'workbench'" ref="workbenchSurface" :agent-feedback="frontend.feedback.value" :key="'workbench-' + frontend.sessionEpoch.value" :active="active && tab === 'workbench'" :device-connected="deviceStatus.connected" :symbol-loaded="deviceStatus.axf?.loaded === true" :symbol-error="deviceStatus.axf?.error" @intent="askAgent">
         <template #agent-action>
           <button type="button" class="device-quick-action" aria-haspopup="dialog" :title="frontend.error.value || tr('打开 Agent 协作请求', 'Open Agent request')" @click="askAgent('workbench')"><span class="status-dot" :class="frontend.connected.value ? 'dot-user' : ''"></span>Agent</button>
