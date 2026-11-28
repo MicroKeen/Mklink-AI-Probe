@@ -10,12 +10,12 @@ beforeEach(() => { vi.useFakeTimers(); const values = new Map<string, string>();
 afterEach(() => { vi.clearAllTimers(); vi.useRealTimers(); vi.unstubAllGlobals() })
 
 describe('browser symbol tracking', () => {
-  async function setup() {
+  async function setup(sourceKind?: 'local') {
     const original = new File(['old'], 'app.axf', { lastModified: 1 })
     const rebuilt = new File(['new'], 'app.axf', { lastModified: 1 })
     const getFile = vi.fn().mockResolvedValue(rebuilt)
     handles.set(original, { getFile })
-    const source = { path: '/cache/old.axf', name: 'app.axf', size: 3, sha256: await fileContentStamp(original) }
+    const source = { source_kind: sourceKind, path: '/cache/old.axf', name: 'app.axf', size: 3, sha256: await fileContentStamp(original) }
     const upload = vi.fn().mockResolvedValue({ ...source, path: '/cache/new.axf', sha256: await fileContentStamp(rebuilt) })
     const actions = { upload, reload: vi.fn().mockResolvedValue({ state: 'applied', rtt_addr: '0x20000040' }) }
     saveDesktopSettings(window.localStorage, { ...loadDesktopSettings(window.localStorage), symbolPath: source.path, rttAddress: '0x20000020' })
@@ -39,6 +39,26 @@ describe('browser symbol tracking', () => {
     expect(trackedSymbolPending.value).toBe(0)
     await vi.advanceTimersByTimeAsync(2000)
     expect(actions.upload).toHaveBeenCalledOnce()
+  })
+
+  it('continues watching the chosen browser file when identical bytes matched a backend path', async () => {
+    const { actions, getFile } = await setup('local')
+    await vi.advanceTimersByTimeAsync(3100)
+    expect(trackedSymbolPending.value).toBeGreaterThan(0)
+    getFile.mockResolvedValue(new File(['third'], 'app.axf', { lastModified: 3 }))
+    await expect(reloadTrackedSymbolSource()).rejects.toThrow('changed again')
+    expect(actions.upload).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(3100)
+    expect(await reloadTrackedSymbolSource()).toBe(true)
+    expect(await actions.upload.mock.calls[0]![0].text()).toBe('third')
+  })
+
+  it('withdraws a change that reverts to the loaded file', async () => {
+    const { getFile } = await setup()
+    await vi.advanceTimersByTimeAsync(3100)
+    getFile.mockResolvedValue(new File(['old'], 'app.axf', { lastModified: 1 }))
+    await vi.advanceTimersByTimeAsync(1100)
+    expect(trackedSymbolPending.value).toBe(0)
   })
 
   it('does not replace a different source chosen while an upload is pending', async () => {

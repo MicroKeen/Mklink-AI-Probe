@@ -1832,7 +1832,11 @@ def _cli_gui(args):
         print(f"[MKLink] Shared CDC runtime: http://127.0.0.1:{info['port']}")
         print("[MKLink] Waiting up to 60 seconds for a GUI window. Ctrl+C cancels this launcher.")
         print("[MKLink] After handoff, the runtime exits after about 5 seconds without clients or active jobs.")
-        if not args.no_browser:
+        if args.no_browser:
+            from mklink.runtime_gui import gui_link
+            url, seconds = gui_link(client)
+            print(f"[MKLink] Open within {seconds}s: {url}", flush=True)
+        else:
             webbrowser.open(browser_url(info))
     if not handoff_gui(info, prepare):
         print("[MKLink] No GUI window connected; launcher released. Run mklink gui again to open it.")
@@ -1959,11 +1963,12 @@ def _cli_runtime(args):
             client = RuntimeClient(info=info, project_root=args.project_root or ".", kind='cli', name='CLI runtime call')
             try:
                 if gui_only:
-                    if args.axf or args.device_port or args.project_root:
+                    if args.axf or args.device_port or args.project_root or args.mcu:
                         raise ValueError('GUI display calls do not configure hardware or files')
                     client.connect(scope='uart', existing_only=True)
                 else:
-                    client.connect(project_root=args.project_root, probe=args.probe, port=args.device_port, axf=args.axf)
+                    client.connect(project_root=args.project_root, probe=args.probe, port=args.device_port,
+                                   axf=args.axf, mcu=args.mcu)
                 result = client.call(args.capability, json.loads(args.arguments))
             finally:
                 client.close()
@@ -2074,7 +2079,11 @@ def main():
         prog="mklink",
         description="MKLink Flash Programmer CLI",
     )
+    from mklink.runtime import VERSION
+    parser.add_argument("--version", "-V", action="version", version=VERSION)
     subparsers = parser.add_subparsers(dest="command")
+    subparsers.add_parser("image-target", help="从本地 ELF/AXF/OUT 和关联文件识别目标芯片").add_argument("image")
+    subparsers.add_parser("target-profiles", help="离线列出可用于 --mcu 的型号、别名和专用 MEM-AP")
     from mklink.peripheral_cli import add_parser as add_peripheral_parser
 
     add_peripheral_parser(subparsers)
@@ -2231,7 +2240,7 @@ def main():
     _add_project_root_arg(sv_parser)
     sv_parser.add_argument("--port", help="COM 端口（默认自动检测）")
     sv_parser.add_argument("--duration", type=float, default=10.0, help="读取时长（秒，默认 10）")
-    sv_parser.add_argument("--channel", type=int, default=1, help="SystemView 上行通道（SEGGER 默认 1）")
+    sv_parser.add_argument("--channel", type=int, help="SystemView 上行通道（省略时从目标或工程识别）")
     sv_parser.add_argument("--addr", help="RTT 控制块地址（默认从 rtt_config.json 读）")
     sv_parser.add_argument("--visualize", action="store_true", help="提示用 mklink gui 查看可视化")
 
@@ -2807,6 +2816,8 @@ def main():
     runtime_call.add_argument("--axf", default=None)
     runtime_call.add_argument("--probe", default=None)
     runtime_call.add_argument("--runtime-id", default=None, help="GUI 显示调用选择已有后台，不连接硬件")
+    mcu_help = "目标 MCU 配置键或别名（见 target-profiles），例如 s32k314"
+    runtime_call.add_argument("--mcu", help=mcu_help)
 
     probes_parser = subparsers.add_parser("probes", help="被动列出下载器、设置本机别名")
     probes_sub = probes_parser.add_subparsers(dest="probes_command", required=True)
@@ -2898,9 +2909,23 @@ def main():
             entry.add_argument('name', help='变量名')
         if name == 'write-variable':
             entry.add_argument('value', help='整数值，支持 0x 前缀')
+    for name in ('device-status', 'read-ram', 'write-ram', 'flush-memory', 'read-variable', 'write-variable',
+                 'read-reg', 'read-flash', 'dump-memory', 'dump-benchmark', 'rtt', 'superwatch', 'systemview',
+                 'watch', 'vofa', 'halt', 'resume', 'step', 'break', 'hardfault', 'debug-speed', 'reset'):
+        subparsers.choices[name].add_argument('--mcu', help=mcu_help)
     subparsers.add_parser('remote-mcp', help='Existing remote Site Agent MCP over stdio')
     subparsers.add_parser('s3-workbench', help='Private stdio client for the S3 wireless workbench')
     args = parser.parse_args()
+    if args.command == 'image-target':
+        import json
+        from mklink.image_target import resolve_image_target
+        print(json.dumps(resolve_image_target(args.image), ensure_ascii=False, indent=2))
+        return
+    if args.command == 'target-profiles':
+        import json
+        from mklink.profiles import target_profile_catalog
+        print(json.dumps(target_profile_catalog(), ensure_ascii=False, indent=2))
+        return
     if args.command == 'remote-mcp':
         from mklink.remote.mcp import main as remote_mcp_main
         return remote_mcp_main()

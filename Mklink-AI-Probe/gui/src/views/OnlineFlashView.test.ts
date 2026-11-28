@@ -765,6 +765,23 @@ async function readyAndStart(wrapper: ReturnType<typeof mount>) {
 }
 
 describe('online flash task workspace behavior', () => {
+  it('keeps reading available and requires an algorithm to erase a profile-only device', async () => {
+    const target = { ...installedTarget, part_number: 'S32K396', source: 'target-profile' }
+    const fallback = viewFetch([target])
+    vi.stubGlobal('fetch', (input: RequestInfo | URL, options?: RequestInit) => {
+      if (String(input).includes('/targets/S32K396/algorithms')) return Promise.resolve(new Response('[]'))
+      return fallback(input, options)
+    })
+    const wrapper = mount(await onlineFlashView())
+    await vi.waitFor(() => expect(wrapper.find('[data-testid="target-S32K396"]').exists()).toBe(true))
+    await wrapper.get('[data-testid="target-S32K396"]').trigger('click')
+    await vi.waitFor(() => expect(wrapper.text()).toContain('供应商 Pack 或 FLM'))
+    expect(wrapper.get('[data-testid="start-job"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="chip-erase"]').attributes('disabled')).toBeDefined()
+    await vi.waitFor(() => expect(wrapper.get('[data-testid="memory-read-submit"]').attributes('disabled')).toBeUndefined())
+    wrapper.unmount()
+  })
+
   it('binds a conflicting FLM choice to inspection and the flash job', async () => {
     const target = { ...installedTarget, part_number: 'STM32F767xG', source: 'daplink-builtin' }
     const fallback = viewFetch([target])
@@ -2853,6 +2870,28 @@ describe('online flash explicit algorithm mapping', () => {
     await vi.waitFor(() => expect(fetch.mock.calls.some(([url, options]) => String(url).endsWith('/jobs') && options?.method === 'POST')).toBe(true))
     const job = fetch.mock.calls.find(([url, options]) => String(url).endsWith('/jobs') && options?.method === 'POST')!
     expect(JSON.parse(String(job[1]!.body)).algorithm_ids).toEqual(['pack-1', 'external-1'])
+    wrapper.unmount()
+  })
+
+  it('confirms the selected S32K3 algorithm interval for a standalone sector erase', async () => {
+    const fetch = viewFetch([{ ...installedTarget, part_number: 'S32K344' }])
+    vi.stubGlobal('fetch', fetch)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const wrapper = mount(await onlineFlashView())
+    await vi.waitFor(() => expect(wrapper.find('[data-testid="target-S32K344"]').exists()).toBe(true))
+    await wrapper.get('[data-testid="target-S32K344"]').trigger('click')
+    await vi.waitFor(() => expect(wrapper.find('[data-testid="flash-algorithm-pack-1"] input').exists()).toBe(true))
+    const erase = wrapper.get('[data-testid="chip-erase"]')
+    expect(erase.text()).toContain('擦除算法范围')
+    expect(erase.attributes('disabled')).toBeDefined()
+    await wrapper.get('[data-testid="flash-algorithm-pack-1"] input').setValue(true)
+    await erase.trigger('click')
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('0x8000000 – 0x807FFFF'))
+    await vi.waitFor(() => expect(fetch.mock.calls.some(([url, options]) =>
+      String(url).endsWith('/jobs') && options?.method === 'POST')).toBe(true))
+    const call = fetch.mock.calls.find(([url, options]) => String(url).endsWith('/jobs') && options?.method === 'POST')!
+    expect(JSON.parse(String(call[1]!.body))).toMatchObject({ actions: ['connect', 'erase', 'disconnect'],
+      algorithm_ids: ['pack-1'], algorithm_erase_range: [0x08000000, 0x08080000], sector_addresses: [], flash_prepare_reset: true })
     wrapper.unmount()
   })
 })

@@ -84,6 +84,17 @@ describe('DashboardView layout classes', () => {
     expect((wrapper.get('.workbench').element as HTMLElement).style.display).toBe('none')
     wrapper.unmount()
   })
+  it('releases RTT and SuperWatch readers when the whole dashboard is hidden', async () => {
+    const wrapper = shallowMount(DashboardView)
+    for (const [label, component] of [['RTT View', 'RttViewTab'], ['SuperWatch', 'SuperWatchTab'], ['灵活面板', 'WorkbenchTab']]) {
+      await wrapper.findAll('.tab-btn').find(button => button.text() === label)!.trigger('click')
+      expect(wrapper.getComponent({ name: component }).props('active')).toBe(true)
+      await wrapper.setProps({ active: false })
+      expect(wrapper.getComponent({ name: component }).props('active')).toBe(false)
+      await wrapper.setProps({ active: true })
+    }
+    wrapper.unmount()
+  })
   it('retains the same stream components and their DOM data across tab switches', async () => {
     const wrapper = shallowMount(DashboardView)
     const names = ['RttViewTab', 'SuperWatchTab', 'SerialMonitorTab']

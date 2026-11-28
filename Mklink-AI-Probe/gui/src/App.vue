@@ -91,7 +91,7 @@
       :on-firmware-page="currentTab === 'config' && route.query?.section === 'firmware'"
       @open-firmware="router.push({ name: 'config', query: { section: 'firmware' } })" />
     <div class="app-main" :inert="IS_REMOTE && backendState !== 'alive'">
-      <DashboardView v-if="initialBackendReady && dashboardVisited" v-show="currentTab === 'dashboard'" />
+      <DashboardView v-if="initialBackendReady && dashboardVisited" v-show="currentTab === 'dashboard'" :active="currentTab === 'dashboard'" />
       <router-view v-if="initialBackendReady" v-slot="{ Component, route: viewRoute }">
         <!-- Firmware selection keeps its pending result visible while a probe
              switch still invalidates both cached target download forms. -->
@@ -153,7 +153,7 @@ const router = useRouter()
 // Keep the dashboard attached (hidden) rather than detaching it with KeepAlive.
 const DashboardView = defineAsyncComponent(() => import('./views/DashboardView.vue'))
 const route = useRoute()
-const { startStatusPolling, stopStatusPolling, deviceStatus } = useMklinkApi()
+const { startStatusPolling, stopStatusPolling, deviceStatus, restoreSymbolTracking } = useMklinkApi()
 const downloadViewKey = useDownloadViewKey(computed(() => deviceStatus.value.device_generation))
 const { backendState, sharedRuntime, authenticationRequired, backendStartupError, startHealthPolling, stopHealthPolling, restart, refreshHealth, isTauri } = useBackendHealth()
 const probeBrand = computed(() => backendState.value === 'alive'
@@ -241,6 +241,7 @@ function dismissStoreWithKeyboard(event: KeyboardEvent) {
 }
 
 onMounted(() => {
+  if (!isTauri) void restoreSymbolTracking()
   document.addEventListener('click', closeStoreFromOutside, true)
   document.addEventListener('focusin', closeStoreFromOutside, true)
   startHealthPolling(5000)

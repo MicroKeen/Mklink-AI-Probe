@@ -196,7 +196,8 @@ def run(args):
     owned_stream = None
     try:
         client.connect(project_root=project, port=getattr(args, 'port', None), probe=getattr(args, 'probe', None),
-                       axf=getattr(args, 'source', None), elf_backend=getattr(args, 'elf_backend', None))
+                       mcu=getattr(args, 'mcu', None), axf=getattr(args, 'source', None),
+                       elf_backend=getattr(args, 'elf_backend', None))
         if args.command in {'flash', 'erase', 'reset'}:
             arguments = {}
             if args.command == 'flash':
@@ -353,10 +354,10 @@ def run(args):
                     if args.period is not None:
                         client.call('superwatch_interval', {'interval': args.period})
             if stream == 'systemview' and not running:
-                options = {'channel': args.channel}
+                options = {} if args.channel is None else {'channel': args.channel}
                 if args.addr:
                     options['addr'] = args.addr
-            elif stream == 'systemview' and running and (args.addr or args.channel != 1):
+            elif stream == 'systemview' and running and (args.addr or args.channel is not None):
                 raise RuntimeErrorResponse('Capture already running; omit configuration to subscribe')
             started = client.call(stream+'_start', options)
             if not started.get('reused'):

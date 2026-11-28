@@ -151,8 +151,8 @@ def _get_known_mcu_keys() -> set[str]:
     """Lazy-load known MCU keys from mcu_profiles.json."""
     global _KNOWN_MCU_KEYS
     if _KNOWN_MCU_KEYS is None:
-        from mklink.profiles import load_mcu_profiles
-        _KNOWN_MCU_KEYS = set(load_mcu_profiles().keys())
+        from mklink.profiles import load_mcu_profiles, model_key_index
+        _KNOWN_MCU_KEYS = set(model_key_index(load_mcu_profiles()))
     return _KNOWN_MCU_KEYS
 
 
@@ -172,8 +172,9 @@ def lint_config_semantic(project_root: str) -> list[str]:
 
         mcu = config.get("mcu_key", "")
         if mcu:
+            from mklink.profiles import normalize_model_id
             known = _get_known_mcu_keys()
-            if mcu not in known:
+            if not isinstance(mcu, str) or normalize_model_id(mcu) not in known:
                 warnings.append(
                     f"config.json: mcu_key '{mcu}' 不在已知配置中"
                     f"（已知: {', '.join(sorted(known))}）"

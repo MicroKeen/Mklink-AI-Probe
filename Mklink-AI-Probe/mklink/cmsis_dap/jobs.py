@@ -9,7 +9,7 @@ import uuid
 from collections import deque
 from concurrent.futures import Future
 from dataclasses import dataclass, field
-from typing import Callable, Deque, Dict, Iterator, List, Optional, Sequence
+from typing import Callable, Deque, Dict, Iterator, List, Mapping, Optional, Sequence
 
 from .errors import FlashError, FlashErrorCode
 from .daemon_executor import DaemonSingleExecutor
@@ -67,6 +67,7 @@ class _Job:
     image: Optional[ImageInspection] = None
     error_code: Optional[str] = None
     error_message: Optional[str] = None
+    error_details: Optional[Mapping[str, object]] = None
     cancel_requested: bool = False
     completed_actions: int = 0
     sequence: int = 0
@@ -418,6 +419,11 @@ class OnlineFlashJobManager:
                                     connect_options["reset_voltage_mv"] = (
                                         job.request.reset_voltage_mv
                                     )
+                                from mklink.s32k3 import MODELS
+                                if (job.request.target_part in MODELS and ("reset" in job.request.actions or job.request.flash_prepare_reset)
+                                        and "erase" in job.request.actions
+                                        and job.request.reset_mode in ("default", "software", "system", "hardware")):
+                                    connect_options["allow_flash_prepare_reset"] = True
                                 if job.request.security_family is not None:
                                     connect_options.update(
                                         security_family=job.request.security_family,
@@ -448,7 +454,12 @@ class OnlineFlashJobManager:
                                             "log",
                                             message="erase in progress (completed by HPM ROM during program)",
                                         )
-                                if job.request.sector_addresses:
+                                if job.request.algorithm_erase_range is not None:
+                                    start, end = job.request.algorithm_erase_range
+                                    with self._condition:
+                                        self._emit_locked(job, "log", message=f"FLM sector erase 0x{start:08X}..0x{end-1:08X}")
+                                    backend.erase_algorithm_range(start, end, job.request.custom_flm_digests[0])
+                                elif job.request.sector_addresses:
                                     backend.erase_sectors(job.request.sector_addresses)
                                 else:
                                     backend.erase_chip()
@@ -758,6 +769,7 @@ class OnlineFlashJobManager:
     def _fail_locked(self, job: _Job, error: FlashError) -> None:
         job.error_code = error.code.value
         job.error_message = error.message
+        job.error_details = error.details
         self._emit_locked(job, "error", message=error.message, state=JobState.FAILED)
         self._transition_locked(job, JobState.FAILED)
 
@@ -780,6 +792,7 @@ class OnlineFlashJobManager:
                 message=message,
                 state=state,
                 progress=progress,
+                error_details=job.error_details if event == "error" else None,
             )
         )
         self._condition.notify_all()
@@ -852,6 +865,7 @@ class OnlineFlashJobManager:
             elapsed_seconds=max(0.0, elapsed_end - job.created_at),
             error_code=job.error_code,
             error_message=job.error_message,
+            error_details=job.error_details,
         )
 
     def _require_job(self, job_id: str) -> _Job:
@@ -874,6 +888,14 @@ class OnlineFlashJobManager:
             raise ValueError("program and verify require an image")
         if request.sector_addresses and "erase" not in actions:
             raise ValueError("sector addresses require erase")
+        if request.algorithm_erase_range is not None:
+            if ("erase" not in actions or set(actions) - {"connect", "erase", "reset", "disconnect"}
+                    or request.sector_addresses or request.image_id or len(request.custom_flm_digests) != 1
+                    or len(request.custom_flm_regions) != 1):
+                raise ValueError("bounded erase requires one validated FLM in a standalone erase job")
+            start, size = request.custom_flm_regions[0]
+            if request.algorithm_erase_range != (start, start + size):
+                raise ValueError("requested erase range differs from selected algorithm")
         if request.reset_mode == "power-cycle":
             if request.reset_voltage_mv not in {1800, 3300, 5000}:
                 raise ValueError(

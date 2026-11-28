@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Any
 
 from mklink._types import DeviceState, DEFAULT_BAUDRATE
+from mklink.profiles import MuxAttachProfile, resolve_attach_profile
 from mklink.transport_factory import file_transfer_hook
 from mklink.sleep_debug import memory_transport, preserve_access_clock, selected_clock, set_mode
 
@@ -57,6 +58,25 @@ class DeviceError(Exception):
 
 class DeviceNotConnectedError(DeviceError):
     pass
+
+
+def probe_session_connected(device):
+    """Generic transports report their ordinary connection; USB profile readiness is separate."""
+    physical = getattr(device, "probe_connected", None)
+    return physical if type(physical) is bool else bool(device and device.connected)
+
+
+def target_attach_status(device):
+    """Return the live, acknowledged profile for this physical connection."""
+    profile = getattr(device, "_attach_profile", None)
+    if isinstance(profile, MuxAttachProfile) and device.connected:
+        mux = getattr(getattr(device, "_bridge", None), "_mux", None)
+        if getattr(mux, "attach_profile", None) == profile:
+            detected = getattr(device, "_hardware_target", None)
+            if isinstance(detected, dict):
+                return dict(detected)
+            return {"profile": profile.name, "mem_ap": profile.mem_ap}
+    return None
 
 
 class _InvalidRTTControlBlock(DeviceError):
@@ -232,11 +252,10 @@ def initialize_target(
     the reported identity and resolve ``current_mcu`` with priority
     ``mcu_hint > .mklink/config.json:mcu_key > idcode match``.
 
-    Call this on a freshly ``bridge.connect()``-ed session for **every path
-    that establishes a target *debug* session** — ``Device._connect``,
-    direct-bridge CLI ops, ``memory_access.read_memory``. Do NOT call it for
-    probe-only paths (``version``, ``firmware_check``, port detection, Modbus,
-    generic serial): those must work without a target MCU attached.
+    Call this on a fresh generic target debug session. A configured native
+    MUX attach establishes its own AP binding and must skip this text query.
+    Probe-only operations (version, firmware checks, port detection, Modbus,
+    serial) must also work without a target MCU attached.
 
     Best-effort / tolerant by design: if IDCODE cannot be read (no target,
     broken SWD, timeout, or a mock bridge in tests), the bridge context keeps
@@ -265,7 +284,8 @@ def initialize_target(
         # 2) project config mcu_key
         cfg = load_config(project_root) or {}
         cfg_mcu = cfg.get("mcu_key")
-        if cfg_mcu and profiles.get(cfg_mcu):
+        from mklink.s32k3 import MODELS
+        if cfg_mcu and profiles.get(cfg_mcu) and profiles[cfg_mcu]["name"] not in MODELS:
             bridge._ctx.current_mcu = profiles[cfg_mcu].get("name", cfg_mcu)
             return idcode
         # 3) last resort: match by idcode
@@ -327,6 +347,9 @@ class Device:
         self._preferred_port = preferred_port
         self._axf = axf
         self._mcu_hint = mcu
+        self._attach_profile = None
+        self._hardware_target = None
+        self._image_target = None
         self._project_root = project_root
         self._elf_backend_requested = elf_backend
         self._initialize_target_now = initialize_target_now
@@ -358,12 +381,15 @@ class Device:
     # ------------------------------------------------------------------
     # Connection
     # ------------------------------------------------------------------
-    def _connect(self, *, load_symbols: bool = True) -> None:
-        from mklink.bridge import MKLinkSerialBridge
+    def _connect(self) -> None:
         from mklink.discovery import find_mklink_cdc_port
+        from mklink.flash import MKLinkFlash, FlashError
+        from mklink.mux import MuxProfileError
         from mklink.project_config import load_config
 
         config = load_config(self._project_root) or {}
+        self._hardware_target = None
+        self._attach_profile = resolve_attach_profile(self._mcu_hint)
         # COM numbers saved in a project are neither an identity nor permission
         # to switch probes. Shared callers already supply the selected port.
         candidate = self._port or self._preferred_port or find_mklink_cdc_port()
@@ -373,20 +399,61 @@ class Device:
             )
         from mklink.transport_factory import create_bridge
         bridge = create_bridge(candidate)
+        identify = getattr(type(bridge), "identify_swd_target", None)
+        from mklink.s32k3 import MODELS
+        hardware_discovery = identify is not None and (
+            self._attach_profile is None or self._attach_profile.name in MODELS)
+        if hardware_discovery or self._attach_profile is not None:
+            # The profile can update the target during connect. Honor external
+            # HIL ownership before opening the handle or submitting any step.
+            self._hold_hil_lock(bridge, candidate)
         try:
+            if self._attach_profile is not None and not hardware_discovery:
+                bridge.attach_profile = self._attach_profile
+                # A profile can update the target. Re-entry requires an explicit connection.
+                bridge.auto_recovery = False
             if not bridge.connect():
                 reason = getattr(bridge, 'last_connect_error', None) or 'Command-port handshake failed'
                 raise DeviceNotConnectedError(f'Failed to connect to selected MKLink port {candidate}: {reason}; no fallback attempted')
-        except BaseException:
-            bridge.close()
+            if hardware_discovery:
+                expected = self._attach_profile.name if self._attach_profile else None
+                self._hardware_target = identify(bridge, expected)
+                self._attach_profile = bridge.attach_profile
+            elif self._attach_profile is not None:
+                try:
+                    mux = bridge.enable_multiplex()
+                except MuxProfileError as error:
+                    error.record_selection_sources(["连接参数 mcu"])
+                    raise
+                if getattr(mux, 'attach_profile', None) != self._attach_profile:
+                    raise DeviceNotConnectedError('Probe did not confirm the requested MUX target profile')
+                bridge._ctx.current_mcu = self._attach_profile.name
+            self._bridge = bridge
+            self._port = candidate
+            self._connected = True
+            self._flash = MKLinkFlash(bridge)
+            self.clock_warning = None
+            if self._attach_profile is not None:
+                # Legacy identity/clock commands would leave the verified MUX binding.
+                if self._axf:
+                    self._load_dwarf_info()
+                return
+        except BaseException as error:
+            self._connected = False
+            self._flash = None
+            try:
+                try:
+                    bridge.close()
+                finally:
+                    if hardware_discovery or self._attach_profile is not None:
+                        self._release_hil_lock()
+            except Exception as cleanup_error:
+                # Keep the handle reachable for an explicit close after an
+                # unconfirmed shutdown. A failed connection can never do I/O.
+                self._bridge = bridge
+                raise error from cleanup_error
+            self._bridge = None
             raise
-        self._bridge = bridge
-        self._port = candidate
-        self._connected = True
-
-        from mklink.flash import MKLinkFlash, FlashError
-        self._flash = MKLinkFlash(self._bridge)
-        self.clock_warning = None
 
         # Negotiate once per USB connection, before applying a saved clock or
         # entering MUX. Dashboard status only reads this cache, never USB.
@@ -431,7 +498,7 @@ class Device:
                 project_root=self._project_root,
             )
 
-        if self._axf and load_symbols:
+        if self._axf:
             self._load_dwarf_info()
 
         # A new connection uses the configuration page's default 10 MHz for
@@ -517,6 +584,31 @@ class Device:
         hz = getattr(context, 'swd_clock_hz', None)
         return hz if self.connected and type(hz) is int and hz > 0 else None
 
+    def _hold_hil_lock(self, bridge, port):
+        from mklink.hil_lock import HilFileLock, transport_lock_name
+
+        lock = HilFileLock(
+            transport_lock_name(getattr(bridge, 'transport_kind', 'usb-serial'), port),
+            owner_id=f"mklink-{os.getpid()}",
+        )
+        stop = threading.Event()
+
+        def renew():
+            while not stop.wait(lock.lease_s / 3):
+                if not lock.renew():
+                    return
+
+        worker = threading.Thread(target=renew, daemon=True, name="hil-lock-renew")
+        lock.acquire()
+        try:
+            worker.start()
+        except BaseException:
+            lock.release()
+            raise
+        self._hil_lock = lock
+        self._hil_renew_stop = stop
+        self._hil_renew_thread = worker
+
     def close(self) -> None:
         if self._rtt_session and self._rtt_session._running:
             try:
@@ -545,6 +637,9 @@ class Device:
         self._systemview_session = None
         self._systemview_parser = None
         self._connected = False
+        self._release_hil_lock()
+
+    def _release_hil_lock(self):
         # HIL-Infra lockd 协议互操作锁（connect 时获取）：断连即释放
         renew_stop = getattr(self, "_hil_renew_stop", None)
         if renew_stop is not None:
@@ -561,8 +656,14 @@ class Device:
 
     @property
     def connected(self) -> bool:
+        profile = getattr(self, "_attach_profile", None)
+        return self.probe_connected and (profile is None or
+            getattr(getattr(self._bridge, "_mux", None), "attach_profile", None) == profile)
+
+    @property
+    def probe_connected(self) -> bool:
         bridge = self._bridge
-        if not self._connected or bridge is None:
+        if not self._connected or bridge is None or getattr(bridge, 'transport_healthy', None) is False:
             return False
         transport_error = getattr(bridge, "_transport_error", None)
         if isinstance(transport_error, BaseException):
@@ -572,8 +673,35 @@ class Device:
             DeviceState.ERROR,
         )
 
+    def verify_capture_target(self):
+        """Verify a hardware-selected target on explicit start, keeping the USB session."""
+        from mklink.mux import MuxTargetError
+        from mklink.s32k3 import MIDR1_ADDRESS, MIDR1_MODEL_MASK
+        hardware = self._hardware_target
+        if not hardware:
+            return
+        bridge = self._bridge
+        with bridge._cmd_lock:
+            mux = bridge._mux
+            if mux is not None and self.connected:
+                try:
+                    raw = mux.read_memory(MIDR1_ADDRESS, 4)
+                except MuxTargetError as exc:
+                    if exc.status != 5:
+                        raise
+                else:
+                    if int.from_bytes(raw, 'little') & MIDR1_MODEL_MASK == hardware['midr1'] & MIDR1_MODEL_MASK:
+                        return
+                    mux.invalidate_target_binding()
+                    raise DeviceError('SIUL2.MIDR1 changed; target binding refused')
+            self._attach_profile = bridge.renew_profile_binding(self._attach_profile, hardware)
+
     def _require_connected(self) -> None:
         if not self.connected:
+            if getattr(self, "_attach_profile", None) is not None:
+                raise DeviceNotConnectedError(
+                    f"{self._attach_profile.name} MUX binding is unavailable; reconnect explicitly before target access"
+                )
             raise DeviceNotConnectedError("Device not connected")
 
     @property
@@ -697,7 +825,10 @@ class Device:
 
     def reparse_axf_atomically(self, axf_path: str | None = None, elf_backend: str | None = None):
         candidate, requested, effective, info, catalog = self._prepare_axf_catalog(axf_path, elf_backend)
+        from mklink.image_target import resolve_image_target
+        identity = resolve_image_target(candidate)
         with self._symbol_lock:
+            self._image_target = identity
             self._axf = candidate
             self._dwarf_info = info
             self._symbol_catalog = catalog
@@ -786,12 +917,17 @@ class Device:
         elf_backend: str | None = None,
     ) -> dict:
         """手动触发 AXF 解析。返回解析结果摘要。"""
+        from mklink.mux import MuxProfileError
+
         try:
             self.reparse_axf_atomically(axf_path, elf_backend=elf_backend)
             return self.axf_status
         except Exception as e:
             self._axf_error = str(e)
-            return {"loaded": False, "error": str(e), "active": self.axf_status}
+            result = {"loaded": False, "error": str(e), "active": self.axf_status}
+            if isinstance(e, MuxProfileError):
+                result["detail"] = e.detail
+            return result
 
     @property
     def axf_path(self) -> str | None:
@@ -819,6 +955,12 @@ class Device:
             }
             if not self._axf_error:
                 self._axf_error = str(exc)
+        if getattr(self, "_image_target", None) is not None:
+            tc["image_target"] = self._image_target
+            hardware = target_attach_status(self)
+            if hardware and hardware.get("source") == "SIUL2.MIDR1" and self._image_target.get("device"):
+                tc["image_target"] = {**self._image_target, "hardware_model": hardware["profile"],
+                                      "matches_hardware": self._image_target["device"] == hardware["profile"]}
         if not self._dwarf_info:
             out: dict = {"loaded": False, "axf_path": self._axf, **tc}
             if self._axf_error:
@@ -905,6 +1047,16 @@ class Device:
             or project_info.get("target_part")
             or ""
         ).strip()
+        hardware = target_attach_status(self)
+        if hardware and hardware.get("source") == "SIUL2.MIDR1":
+            requested = requested_target or resolved_key
+            if requested:
+                required = resolve_attach_profile(requested)
+                if required is None or required.name != hardware["profile"]:
+                    raise DeviceError(f"烧录目标 {requested} 与实读 {hardware['profile']} 不匹配")
+            requested_target = hardware["profile"]
+            resolved_key = hardware["profile"].lower()
+            mcu_profile = profiles[resolved_key]
         if not mcu_profile and requested_target:
             target_profile_key = match_mcu_by_device(requested_target, profiles)
             if target_profile_key:
@@ -1290,6 +1442,9 @@ class Device:
     def reset(self) -> None:
         """Reset the target MCU while keeping the probe session connected."""
         self._require_connected()
+        if getattr(self, "_hardware_target", None):
+            self._reset_hardware_profile()
+            return
         from contextlib import nullcontext
         from mklink.mux import MuxTransport, SLEEP_COMMAND_TIMEOUT
         from mklink.sleep_debug import advertised_atomic_sleep, slow_control
@@ -1322,6 +1477,33 @@ class Device:
         receipts = [line.strip() for line in response.splitlines() if line.strip().startswith('MKLINK_RESET_RC=')]
         if receipts != ['MKLINK_RESET_RC=0']:
             raise DeviceError(f'Software reset not confirmed by the probe; outcome unknown, do not replay: {response.strip()}')
+
+    def _reset_hardware_profile(self):
+        from mklink.cmsis_dap.backend import PyOcdBackend
+        from mklink.probes import select_probe
+        from mklink.s32k3 import MIDR1_ADDRESS, MIDR1_MODEL_MASK
+        hardware = self._hardware_target
+        profile = resolve_attach_profile(hardware['profile'])
+        if profile is None or profile.online_system_reset == 'default':
+            raise DeviceError('Hardware profile has no confirmed system reset strategy')
+        selected = select_probe(self.port)
+        serial = selected.get('serial_number')
+        if not serial or selected['port'].casefold() != self.port.casefold():
+            raise DeviceError('Cannot match the command port to a unique CMSIS-DAP serial number')
+        frequency = self.clock_hz or 1_000_000
+        backend = PyOcdBackend()
+        bridge = self._bridge
+        with bridge._cmd_lock:
+            bridge.release_profile_claim()
+            try:
+                backend.connect(probe=serial, target=profile.name, frequency=frequency, connect_mode='attach')
+                actual = int.from_bytes(backend.read_memory(MIDR1_ADDRESS, 4), 'little')
+                if actual & MIDR1_MODEL_MASK != hardware['midr1'] & MIDR1_MODEL_MASK:
+                    raise DeviceError('Target identity changed before functional reset')
+                backend.reset_run('software')  # Exactly once; post-reset checks never replay this call.
+            finally:
+                backend.disconnect()
+            self._attach_profile = bridge.renew_profile_binding(self._attach_profile, hardware)
 
     def _stop_active_probe_streams(self) -> None:
         if self._rtt_session and self._rtt_session._running:
@@ -1401,6 +1583,9 @@ class Device:
     def _get_mcu_profile(self) -> dict | None:
         from mklink.profiles import load_mcu_profiles, match_mcu_by_idcode, match_mcu_by_device
         profiles = load_mcu_profiles()
+        detected = getattr(self, "_hardware_target", None)
+        if isinstance(detected, dict) and self.connected:
+            return profiles.get(detected["profile"].lower())
         if self._bridge.idcode:
             key = match_mcu_by_idcode(self._bridge.idcode, profiles)
             if key:
@@ -1845,6 +2030,7 @@ class Device:
         return {
             "channel": channel,
             "direction": direction,
+            "name_address": int.from_bytes(raw[:4], "little"),
             "buffer_address": buffer_address,
             "size": size,
             "write_offset": write_offset,
@@ -2195,7 +2381,8 @@ class Device:
     def rtt_stop(self) -> str:
         session = self._rtt_session
         try:
-            self._require_connected()
+            if not (self.probe_connected and _live_mux_capture(session)):
+                self._require_connected()
             if not session:
                 return ""
             return session.stop()
@@ -2243,36 +2430,75 @@ class Device:
     # ------------------------------------------------------------------
     # SystemView（RTOS 跟踪：RTT 通道 1 二进制流 → SEGGER 事件解码）
     # ------------------------------------------------------------------
+    def _systemview_channel(self, control_info):
+        """Identify the trace channel without reading arbitrary target pointers."""
+        from mklink.elf_backend import get_elf_backend
+        ranges = list(self._target_writable_ram_ranges())
+        if self._axf:
+            try:
+                backend = get_elf_backend(self._elf_backend, project_root=self._project_root)
+                segments = backend.segments(self._axf)
+            except Exception:
+                # An optional symbol file can disappear during a rebuild.
+                segments = []
+            ranges.extend((s.address, s.address + s.size) for s in segments
+                          if s.segment_type == 'PT_LOAD' and s.flags & 4)
+        matches = []
+        for item in control_info['up_buffers']:
+            if not item['active']:
+                continue
+            pointer = item.get('name_address', 0)
+            limit = next((end for start, end in ranges if start <= pointer < end), 0)
+            if pointer and limit:
+                raw = self.read_memory(pointer, min(32, limit - pointer))
+                name, nul, _ = raw.partition(b'\0')
+                if nul and name.isascii():
+                    item['name'] = name.decode('ascii')
+            if item.get('name', '').casefold() in ('sysview', 'systemview', 'segger sysview', 'segger systemview'):
+                matches.append(item['channel'])
+        if len(matches) == 1:
+            return matches[0]
+        from mklink.project_config import load_rtt_config
+        config = load_rtt_config(self._project_root) or {}
+        configured = config.get('systemview_channel')
+        if type(configured) is not int:
+            header = Path(self._project_root) / 'rtconfig.h'
+            if header.is_file():
+                values = re.findall(r'^\s*#\s*define\s+PKG_SEGGER_SYSVIEW_RTT_CHANNEL\s+([0-7])\b',
+                                    header.read_text(encoding='utf-8', errors='replace'), re.M)
+                configured = int(values[0]) if len(set(values)) == 1 else None
+        if type(configured) is int and 0 <= configured < 8 and (not matches or configured in matches):
+            return configured
+        raise DeviceError('Cannot identify a unique SystemView RTT channel; specify channel explicitly')
+
     @_with_ram_snapshot
     def systemview_start(
         self,
         addr: str | int | None = None,
         *,
-        channel: int = 1,
+        channel: int | None = None,
         search_size: int = 0,
         mode: int | None = None,
     ) -> dict:
-        """启动 SystemView 采集（RTT 通道 1，二进制）。
+        """启动 SystemView 二进制采集。
 
         Args:
             addr: RTT 控制块地址（None 时从 rtt_config.json 读，与 RTT 共用）。
-            channel: SystemView 上行通道号（SEGGER 默认 1）。
+            channel: SystemView 上行通道号，省略时从 RTT 描述符或工程配置识别。
             search_size: 探针扫描字节数（仅 mode=0 生效）。
             mode: 0=动态搜寻 / 1=静态编译。None 时从 rtt_config.json 读。
         """
         self._require_connected()
         if getattr(self._bridge, '_sleep_debug_atomic', False) is True:
             raise DeviceError('SystemView requires an RTT stream, which is unavailable in atomic sleep access mode')
-        addr, channel, search_size, mode = _resolve_rtt_stream_parameters(
+        addr, _, search_size, mode = _resolve_rtt_stream_parameters(
             addr,
-            channel,
+            0 if channel is None else channel,
             search_size,
             mode,
             self._project_root,
             source_path=self._axf,
         )
-        if not 0 <= channel < 8:
-            raise DeviceError('SystemView supports channels 0..7')
         if not self._prepare_rtt_transport():
             raise DeviceError('SystemView requires shared MUX firmware; update the probe firmware')
         from mklink.mux import MuxTransport
@@ -2302,6 +2528,8 @@ class Device:
         else:
             control_block_addr = requested_addr
         control_info = self._read_rtt_control_block(control_block_addr)
+        if channel is None:
+            channel = self._systemview_channel(control_info)
         self._validate_rtt_channel(control_info, channel, require_down=True)
 
         # SystemView firmware always scans even in static mode.  Passing the
@@ -2336,6 +2564,7 @@ class Device:
                 raise DeviceError(
                     "Probe SystemView address does not match the host-validated control block"
                 )
+            result["channel"] = channel
             result["up_buffers"] = [
                 self._public_rtt_buffer(item)
                 for item in control_info["up_buffers"]
@@ -2426,7 +2655,8 @@ class Device:
         """停止 SystemView 采集。"""
         session = self._systemview_session
         try:
-            self._require_connected()
+            if not (self.probe_connected and _live_mux_capture(session)):
+                self._require_connected()
             if session:
                 session.stop()
         finally:
@@ -2906,7 +3136,8 @@ def connect(
         port: Explicit COM port. Auto-detected if not specified.
         preferred_port: Previously selected port; a failed connection never falls back.
         axf: Path to AXF/ELF file for symbol resolution.
-        mcu: MCU profile hint (e.g. "stm32f4").
+        mcu: MCU model key. A model with a native MUX profile (e.g.
+            "s32k314") requires a verified attachment to its configured AP.
         project_root: Project root for .mklink/ config lookup.
         elf_backend: Explicit ELF parser backend (builtin or external).
     """
@@ -2920,31 +3151,12 @@ def connect(
         initialize_target_now=initialize_target_now,
     )
     dev._connect()
-    # HIL-Infra lockd 协议互操作：connect 成功即持有 transport_usb-serial_<COM>，
-    # close() 释放；与 hil_core.lockd 编排器在同一锁名上互斥（T5 原生对齐）。
-    from mklink.hil_lock import HilFileLock, transport_lock_name
-    hil_lock = HilFileLock(
-        transport_lock_name(getattr(dev._bridge, 'transport_kind', 'usb-serial'), dev.port),
-        owner_id=f"mklink-{os.getpid()}",
-    )
-    try:
-        hil_lock.acquire()
-    except Exception:
-        dev.close()
-        raise
-    dev._hil_lock = hil_lock
-    # 长会话自动续租：按 lease/3 心跳防止超时会话的锁被回收；close 停止
-    renew_stop = threading.Event()
-
-    def _hil_renew_loop():
-        while not renew_stop.wait(hil_lock.lease_s / 3):
-            if not hil_lock.renew():
-                return  # 所有权丢失（被回收）——停止续租，断连时如实释放
-
-    dev._hil_renew_stop = renew_stop
-    dev._hil_renew_thread = threading.Thread(target=_hil_renew_loop,
-                                             daemon=True, name="hil-lock-renew")
-    dev._hil_renew_thread.start()
+    if getattr(dev, '_hil_lock', None) is None:
+        try:
+            dev._hold_hil_lock(dev._bridge, dev.port)
+        except Exception:
+            dev.close()
+            raise
     return dev
 
 

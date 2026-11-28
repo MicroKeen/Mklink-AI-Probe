@@ -7,7 +7,7 @@ import type { FirmwareUpdateNotice } from './types/mklink'
 
 const deviceStatus = ref<{ device_generation: number; connected?: boolean; firmware_update?: FirmwareUpdateNotice }>({ device_generation: 0 })
 vi.mock('./composables/useMklinkApi', () => ({
-  useMklinkApi: () => ({ startStatusPolling: vi.fn(), stopStatusPolling: vi.fn(), deviceStatus }),
+  useMklinkApi: () => ({ restoreSymbolTracking: vi.fn(), startStatusPolling: vi.fn(), stopStatusPolling: vi.fn(), deviceStatus }),
 }))
 vi.mock('./composables/useBackendHealth', () => ({
   useBackendHealth: () => ({ backendState: ref('alive'), startHealthPolling: vi.fn(),

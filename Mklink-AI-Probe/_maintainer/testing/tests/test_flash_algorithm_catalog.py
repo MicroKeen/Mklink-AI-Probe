@@ -2,6 +2,7 @@ import hashlib
 import json
 from pathlib import Path
 from zipfile import ZipFile
+import pytest
 
 from mklink.cmsis_dap.algorithm_catalog import (
     deploy_algorithm_to_probe,
@@ -11,6 +12,33 @@ from mklink.cmsis_dap.algorithm_catalog import (
 )
 from mklink.cmsis_dap.models import TargetRecord
 from mklink.cmsis_dap.paths import PackPaths
+
+
+@pytest.mark.parametrize("data_present", [True, False])
+def test_s32k314_pack_keeps_available_code_and_independent_data_geometry(tmp_path, monkeypatch, data_present):
+    from mklink.cmsis_dap import s32k3_flm
+
+    code, data = b"fixture Code FLM", b"fixture Data FLM"
+    monkeypatch.setattr(s32k3_flm, "CODE_SHA256", hashlib.sha256(code).hexdigest())
+    path = tmp_path / "s32k314.pack"
+    with ZipFile(path, "w") as archive:
+        archive.writestr("Test.S32K3xx_DFP.pdsc", """<package schemaVersion="1.7.0">
+          <vendor>Test</vendor><name>S32K3xx_DFP</name><releases><release version="1.0.1">Test</release></releases>
+          <devices><family Dfamily="S32K" Dvendor="Test:1"><processor Dcore="Cortex-M7" Dendian="Little-endian"/>
+          <device Dname="S32K314"><memory name="SRAM" start="0x20400000" size="0x28000" access="rwx"/>
+          <algorithm name="Flash/Code.FLM" start="0x00400000" size="0x400000" RAMstart="0x20400000" RAMsize="0x10000"/>
+          <algorithm name="Flash/Data.FLM" start="0x10000000" size="0x20000" RAMstart="0x20400000" RAMsize="0x10000"/>
+          </device></family></devices></package>""")
+        archive.writestr("Flash/Code.FLM", code)
+        if data_present:
+            archive.writestr("Flash/Data.FLM", data)
+    target = TargetRecord("S32K314", "Test", pack_id="Test.S32K3xx_DFP", pack_version="1.0.1",
+                          pack_path=str(path), installed=True, source="bundle")
+    algs = discover_flash_algorithms("S32K314", paths=PackPaths(tmp_path / "packs"),
+                                    builtin_provider=lambda: [target], daplink_provider=lambda _: [])
+    assert [(row.flash_start, row.flash_size) for row in algs] == (
+        [(0x00400000, 0x3E0000), (0x10000000, 0x20000)] if data_present else [(0x00400000, 0x3E0000)])
+    assert [extract_algorithm(a) for a in algs] == ([code, data] if data_present else [code])
 
 
 def _pack(path: Path, version: str, internal: bytes, external: bytes) -> Path:

@@ -240,7 +240,6 @@ def build_sidecar(force=False):
 
     with TemporaryDirectory(prefix="mklink-builtin-packs-") as temporary:
         roots = builtin_pack_roots()
-        builtin_args = []
         if roots:
             bundle_dir = Path(temporary) / "builtin_packs"
             manifest = build_builtin_pack_bundle(
@@ -249,14 +248,15 @@ def build_sidecar(force=False):
                 bundle_dir,
             )
             print("[OK] Built builtin Pack bundle: {} targets".format(manifest["target_count"]))
-            builtin_args = [
-                "--add-data",
-                "{}{}mklink/builtin_packs".format(bundle_dir, os.pathsep),
-            ]
         else:
             bundle_dir = require_builtin_pack_bundle()
-            builtin_args = ["--add-data", "{}{}mklink/builtin_packs".format(bundle_dir, os.pathsep)]
-        pack_manifest = load_builtin_pack_assets().validate_bundle(bundle_dir)
+        pack_assets = load_builtin_pack_assets()
+        pack_manifest = pack_assets.validate_bundle(bundle_dir)
+        if IS_WINDOWS:
+            compact_dir = Path(temporary) / "windows_packs"
+            pack_assets.stage_windows_packs(bundle_dir, compact_dir, pack_manifest)
+            bundle_dir = compact_dir
+        builtin_args = ["--add-data", "{}{}mklink/builtin_packs".format(bundle_dir, os.pathsep)]
         print("[OK] Verified built-in peripherals: {} targets".format(pack_manifest["svd_target_count"]))
         flm_dir = builtin_flm_root()
         if (flm_dir / "manifest.json").is_file():
@@ -268,6 +268,15 @@ def build_sidecar(force=False):
                     flm_manifest["release_note"],
                 )
             )
+            if IS_WINDOWS:
+                staged_flm = Path(temporary) / "windows_flm"
+                staged_flm.mkdir()
+                shutil.copy2(flm_dir / "manifest.json", staged_flm)
+                for blob in flm_manifest["blobs"]:
+                    destination = staged_flm / blob["file"]
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(flm_dir / blob["file"], destination)
+                flm_dir = staged_flm
             builtin_args.extend([
                 "--add-data",
                 "{}{}mklink/builtin_flm".format(flm_dir, os.pathsep),
@@ -297,7 +306,10 @@ def build_sidecar(force=False):
             "--collect-data", "docket",
             "--collect-all", "burner_redis",
             "--collect-all", "elftools",
-            "--collect-all", "pyocd",
+            # Include every target/plugin in PYZ once. The sequence grammar and
+            # SVD archive are package data, not Python source.
+            *(["--collect-submodules", "pyocd", "--collect-data", "pyocd", "--collect-binaries", "pyocd"]
+              if IS_WINDOWS else ["--collect-all", "pyocd"]),
             "--copy-metadata", "pyocd",
             "--collect-all", "cmsis_pack_manager",
             "--collect-all", "hid",
@@ -310,6 +322,11 @@ def build_sidecar(force=False):
 
     sidecar_dir.mkdir(parents=True, exist_ok=True)
     if built.exists():
+        if IS_WINDOWS:
+            svd_zip = built.parent / "_internal/pyocd/debug/svd/svd_data.zip"
+            compact_zip = svd_zip.with_suffix(".compact.zip")
+            pack_assets.compress_svd_members(svd_zip, compact_zip)
+            compact_zip.replace(svd_zip)
         shutil.copy2(str(built), str(sidecar_exe))
         print(f"[OK] Sidecar copied to {sidecar_exe}")
         return True

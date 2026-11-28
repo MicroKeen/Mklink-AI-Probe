@@ -75,7 +75,9 @@ def test_recording_worker_entries_finalize_empty_file(entry, tmp_path):
     status = [json.loads(line) for line in result.stdout.splitlines()]
     assert [s['state'] for s in status] == ['recording', 'completed']
     assert status[-1]['samples'] == 0
-    assert Path(status[-1]['path']).read_bytes() == b''
+    from mklink.recording_file import capture_rows
+    path = Path(status[-1]['path'])
+    assert path.suffix == '.mklog' and list(capture_rows(path)) == []
 
 
 def test_recording_worker_filename_launch_without_pythonpath(tmp_path):

@@ -13,8 +13,8 @@
         <div class="record-path"><input v-model="directory" data-testid="sw-record-directory" :aria-label="tr('保存目录', 'Save directory')"><button type="button" @click="browse(directory)">{{ tr('浏览', 'Browse') }}</button></div>
         <div class="record-drives"><button v-for="drive in drives" :key="drive" type="button" @click="browse(drive)">{{ drive }}</button><button type="button" @click="browse(parent)">↑ {{ tr('上一级', 'Parent') }}</button></div>
         <div class="record-folders"><button v-for="dir in dirs" :key="dir.path" type="button" @click="browse(dir.path)">▸ {{ dir.name }}</button></div>
-        <p>{{ tr('自动分段保存 JSONL，可在“日志回放”中按编号加载查看。', 'JSONL parts are saved automatically; open numbered parts in Log replay.') }}</p>
-        <p v-if="name !== 'Serial'">{{ name === 'SuperWatch' ? tr('停止后可手动转换为 Excel，时间和变量分列显示；原始 JSONL 保留。', 'After stopping, manually convert to Excel with time and variable columns. Original JSONL is retained.') : tr('停止后可手动转换为带时间戳的 TXT；原始 JSONL 保留。', 'After stopping, manually convert to timestamped TXT. Original JSONL is retained.') }}</p>
+        <p>{{ tr('每次记录保存为一个 .mklog 文件，回放时可直接跳到需要的时间段。', 'Each recording creates one .mklog file. Seek directly to the interval you need.') }}</p>
+        <p v-if="name !== 'Serial'">{{ name === 'SuperWatch' ? tr('停止后可手动转换为 Excel，时间和变量分列显示；原始记录保留。', 'After stopping, manually convert to Excel with time and variable columns. The original recording is retained.') : tr('停止后可手动转换为带时间戳的 TXT；原始记录保留。', 'After stopping, manually convert to timestamped TXT. The original recording is retained.') }}</p>
         <p v-if="error" role="alert" class="record-error">{{ error }}</p>
         <footer><button type="button" @click="dialog?.close()">{{ tr('取消', 'Cancel') }}</button><button data-testid="sw-record-confirm" :disabled="busy || !directory.trim()">{{ tr('开始记录', 'Start recording') }}</button></footer>
       </form>
@@ -46,7 +46,8 @@ const emit = defineEmits<{ state: [state: string] }>()
 const tr = (zh: string, en: string) => language.value === 'en' ? en : zh
 type Recording = { active: boolean; state: string; samples?: number; path?: string; error?: string; export_state?: string; export_path?: string; export_error?: string; export_parts?: number }
 const status = ref<Recording>({ active: false, state: 'idle' })
-const directory = ref(localStorage.getItem(storageKey) || '')
+const directory = ref('')
+let projectStorageKey = storageKey
 const dialog = ref<HTMLDialogElement>()
 const dirs = ref<Array<{ name: string; path: string }>>([]), drives = ref<string[]>([]), parent = ref('')
 const busy = ref(false), error = ref('')
@@ -75,12 +76,18 @@ async function poll() {
   catch (caught) { if (!disposed && generation === statusGeneration) error.value = String(caught) }
   finally { if (!disposed) timer = setTimeout(poll, 1000) }
 }
-async function browse(path: string) {
+async function browse(path: string, initial = false) {
   const generation = ++browseGeneration
   try {
-    const data = await request(`/api/project-root/browse?path=${encodeURIComponent(path)}`)
+    const data = await request(`/api/project-root/browse?path=${encodeURIComponent(path)}${initial ? '&recording=' + props.name.toLowerCase() : ''}`)
     if (generation !== browseGeneration || disposed) return
-    directory.value = data.current; parent.value = data.parent; dirs.value = data.dirs; drives.value = data.drives
+    if (!data.current) return
+    if (initial) {
+      projectStorageKey = storageKey + ':' + (data.suggested || data.current)
+      const saved = localStorage.getItem(projectStorageKey)
+      if (saved && saved !== data.current && saved !== data.suggested) return browse(saved)
+    }
+    directory.value = initial ? (data.suggested || data.current) : data.current; parent.value = data.parent; dirs.value = data.dirs; drives.value = data.drives
     error.value = ''
   } catch (caught) { error.value = String(caught) }
 }
@@ -90,11 +97,12 @@ async function showPicker() {
   if (!isTauri() || IS_REMOTE) {
     // A browser/remote window cannot give the backend a local OS path.
     dialog.value?.showModal()
-    void browse(directory.value)
+    void browse('', true)
     return
   }
   busy.value = true
   try {
+    await browse('', true)
     const selected = await pickDirectory(tr('选择日志保存文件夹', 'Choose a log folder'), directory.value)
     if (!selected || disposed) return
     directory.value = selected
@@ -107,7 +115,7 @@ async function start(strict: unknown = false, context?: SemanticExecutionContext
   busy.value = true; error.value = ''
   try {
     update(await request(route('start'), { directory: directory.value, ...(props.name === 'SuperWatch' ? {} : { channel: props.channel }) }, context))
-    localStorage.setItem(storageKey, directory.value)
+    localStorage.setItem(projectStorageKey, directory.value)
     dialog.value?.close()
   } catch (caught) { error.value = String(caught); if (strict === true) throw caught }
   finally { busy.value = false }

@@ -51,7 +51,7 @@
       </div>
       <WaveformViewer
         ref="waveformPanel" :panel-id="panelId" :signals="viewPaths"
-        mode="SuperWatch"
+        mode="SuperWatch" :active="active"
         :device-connected="deviceConnected"
         :hidden-channels="replayChannels ? replayHidden : hiddenChannels"
         :array-snapshot-path="snapshotPath"
@@ -87,12 +87,14 @@ import { domainAction, pathArg, boolArg, requireDomain, type DomainArgs } from '
 import { flushWatchProfile, useWatchProfile } from '../../composables/useWatchProfile'
 
 const props = withDefaults(defineProps<{
+  active?: boolean
   deviceConnected: boolean
   symbolLoaded?: boolean
   symbolError?: string
   panelId?: string
   viewPaths?: string[]
 }>(), {
+  active: true,
   symbolLoaded: true,
   symbolError: '',
 })

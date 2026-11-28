@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => {
     deviceStatus,
     api: {
       listPorts: vi.fn(),
+      getProfiles: vi.fn(),
       getConfig: vi.fn(),
       updateConfig: vi.fn(),
       refreshStatus: vi.fn(),
@@ -114,6 +115,40 @@ describe('ConfigView', () => {
       { device: 'TEST_PORT_B', probe_id: 'usb-b', description: 'Probe B', manufacturer: 'MicroKeen' },
     ]
   }
+
+  it('opens a local connection without a model selector or MCU override', async () => {
+    sharedRuntime.value = true
+    mocks.api.listPorts.mockResolvedValue(identifiedPorts())
+    const wrapper = await mountView()
+    expect(wrapper.find('[data-testid="connection-mcu"]').exists()).toBe(false)
+    await wrapper.get('[data-testid="local-port"]').setValue('TEST_PORT_B')
+    await wrapper.get('[data-testid="connect-local"]').trigger('click')
+    await flushPromises()
+    expect(mocks.api.connectDevice).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      port: 'TEST_PORT_B', probe: 'usb-b',
+    }))
+    expect(mocks.api.connectDevice.mock.lastCall![0]).not.toHaveProperty('mcu')
+    wrapper.unmount()
+  })
+
+  it('shows the connected target from device status and restores its own profile after port re-enumeration', async () => {
+    sharedRuntime.value = true
+    Object.assign(mocks.deviceStatus, { connected: true, port: 'TEST_PORT_B', probe_id: 'usb-b', mcu: 'S32K314' })
+    mocks.api.listPorts.mockResolvedValue(identifiedPorts())
+    const wrapper = await mountView()
+    expect(wrapper.get('[data-testid="connected-mcu"]').text()).toContain('S32K314')
+    expect(wrapper.find('[data-testid="connection-mcu"]').exists()).toBe(false)
+    mocks.api.listPorts.mockResolvedValue([{ ...identifiedPorts()[1], device: 'TEST_PORT_NEW' }])
+    reactive(mocks.deviceStatus).connected = false
+    await flushPromises()
+    await wrapper.get('[data-testid="connect-local"]').trigger('click')
+    await flushPromises()
+    expect(mocks.api.connectDevice).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      port: 'TEST_PORT_NEW', probe: 'usb-b', restore_last: true,
+    }))
+    expect(mocks.api.connectDevice.mock.lastCall![0]).not.toHaveProperty('mcu')
+    wrapper.unmount()
+  })
 
   it('pins the lost connected device instead of searching for the remaining other probe', async () => {
     sharedRuntime.value = true
@@ -218,7 +253,7 @@ describe('ConfigView', () => {
   })
 
   it('places shared clock selection in connection settings without resubmitting it when saving a port', async () => {
-    mocks.api.getConfig.mockResolvedValue({ com_port: 'TEST_PORT_A', swd_clock: '4000000', debug_speed: 'low' })
+    mocks.api.getConfig.mockResolvedValue({ com_port: 'TEST_PORT_A', swd_clock: '4000000', debug_speed: 'low', mcu_key: 'stm32f1' })
     const wrapper = await mountView()
     expect(wrapper.find('[data-testid="local-device-panel"] connection-clock-control-stub').exists()).toBe(true)
     expect(wrapper.find('[data-testid="dashboard-clock-location"]').exists()).toBe(false)
@@ -227,6 +262,7 @@ describe('ConfigView', () => {
     expect(mocks.api.updateConfig).toHaveBeenCalledTimes(1)
     expect(mocks.api.updateConfig.mock.calls[0]![0]).not.toHaveProperty('swd_clock')
     expect(mocks.api.updateConfig.mock.calls[0]![0]).not.toHaveProperty('debug_speed')
+    expect(mocks.api.updateConfig.mock.calls[0]![0]).not.toHaveProperty('mcu_key')
     wrapper.unmount()
   })
 
@@ -322,6 +358,7 @@ describe('ConfigView', () => {
       { device: 'TEST_PORT_B', description: 'MKLink', manufacturer: 'MicroLink', vid: 1, pid: 2 },
     ])
     mocks.api.getConfig.mockResolvedValue({ com_port: 'TEST_PORT_A', swd_clock: '2000000' })
+    mocks.api.getProfiles.mockResolvedValue([{ key: 's32k314', name: 'S32K314' }])
     mocks.api.updateConfig.mockResolvedValue({})
     mocks.api.connectDevice.mockResolvedValue({})
     mocks.api.disconnectDevice.mockResolvedValue(undefined)

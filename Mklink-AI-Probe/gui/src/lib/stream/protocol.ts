@@ -21,6 +21,7 @@ export const SUPERWATCH_SAMPLE_MAJOR_FLOAT32 = 0x01
 export const SUPERWATCH_METADATA_JSON = 0x02
 export const SUPERWATCH_TIMESTAMPED_FLOAT32 = 0x03
 export const SUPERWATCH_CONTINUITY_FLOAT32 = 0x04
+export const SUPERWATCH_LATEST_FLOAT64 = 0x08
 
 export type StreamType = (typeof StreamType)[keyof typeof StreamType]
 

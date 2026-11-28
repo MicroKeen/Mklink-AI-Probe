@@ -236,12 +236,18 @@ def test_cli_owner_leaves_the_stream_running_for_a_gui_reader(runtime, name, hea
     app.include_router(create_stream_router(create_stream_registry(), STREAM_TYPES, None))
     owner = attach(client)
     assert call(client, owner, 'rtt_start').status_code == 200
-    with client.websocket_connect('ws://127.0.0.1:8765/ws/streams/'+name, headers=header) as socket:
+    control.views['gui-test'] = {'name': 'Test', 'joined': 0, 'expires': float('inf'), 'live': True, 'reader': 'window-1'}
+    def gui_streams():
+        return next(c['streams'] for c in client.get('/api/runtime/control/status').json()['clients'] if c['id'] == 'gui-test')
+    assert gui_streams() == []
+    with client.websocket_connect('ws://127.0.0.1:8765/ws/streams/'+name+'?view=window-1', headers=header) as socket:
         socket.receive_bytes()
+        assert gui_streams() == ['rtt' if protected else 'systemview']
         response = call(client, owner, 'rtt_stop')
         assert response.status_code == (409 if protected else 200)
         if protected:
             assert calls == ['start']
+    assert gui_streams() == []
     if protected:
         assert call(client, owner, 'rtt_stop').status_code == 200
     assert calls == ['start', 'stop']

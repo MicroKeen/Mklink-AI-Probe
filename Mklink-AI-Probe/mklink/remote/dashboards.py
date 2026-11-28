@@ -985,7 +985,7 @@ class SystemViewStreamManager:
     def set_stream_hub(self, stream_hub) -> None:
         self._stream_hub = stream_hub
 
-    def start(self, device, *, addr: str | None = None, channel: int = 1,
+    def start(self, device, *, addr: str | None = None, channel: int | None = None,
               mode: int = 0, search_size: int = 0,
               duration: float = 86400) -> None:
         """Start SystemView polling in a background thread."""
@@ -1043,6 +1043,7 @@ class SystemViewStreamManager:
         failure_callback = self._start_failure_callback
 
         def _poll():
+            selected_channel = channel
             initialized = False
             start_failure = None
             try:
@@ -1050,6 +1051,10 @@ class SystemViewStreamManager:
                     addr, channel=channel, mode=mode, search_size=search_size,
                 )
                 initialized = True
+                if isinstance(start_result, dict) and start_result.get('channel') is not None:
+                    selected_channel = start_result['channel']
+                    self._start_options['channel'] = selected_channel
+                    self._recording_meta['channel'] = selected_channel
                 self._apply_cpu_freq_hint(device, start_result)
                 startup.ready()
                 shared_mux = isinstance(start_result, dict) and start_result.get('transport') == 'cdc-mux'
@@ -1164,7 +1169,7 @@ class SystemViewStreamManager:
                                 })
                                 try:
                                     retry_result = device.systemview_start(
-                                        addr, channel=channel, mode=mode,
+                                        addr, channel=selected_channel, mode=mode,
                                         search_size=search_size,
                                     )
                                     self._apply_cpu_freq_hint(
@@ -1237,7 +1242,7 @@ class SystemViewStreamManager:
                     self._note_init_cpu_freq(evs)
                     self._ensure_event_time_fields(evs)
                     if self._maybe_resolve_task_names(
-                        device, evs, addr=addr, channel=channel,
+                        device, evs, addr=addr, channel=selected_channel,
                         mode=mode, search_size=search_size,
                     ):
                         # 解析内部 stop/start 耗时 ~5-12s 且期间无数据可读,
@@ -1907,6 +1912,9 @@ class SuperWatchTransactionError(RuntimeError):
 
     def to_detail(self) -> dict:
         from mklink.firmware_compatibility import FirmwareUpgradeRequired
+        from mklink.mux import MuxProfileError
+        if isinstance(self.cause, MuxProfileError):
+            return {**self.cause.detail, 'phase': self.phase}
         if isinstance(self.cause, FirmwareUpgradeRequired):
             return {**self.cause.to_detail(), 'phase': self.phase}
         return {
@@ -1953,6 +1961,7 @@ class SuperWatchStreamManager:
         self._batch_max_latency = max(0.001, float(batch_max_latency))
         self._clock = clock
         self._pending_values = array("f")
+        self._pending_latest_row = ()
         self._pending_sample_times = array("d")
         self._pending_boundaries = []
         self._pending_sample_count = 0
@@ -3033,6 +3042,7 @@ class SuperWatchStreamManager:
             )
         except (OverflowError, TypeError, ValueError):
             return False
+        self._pending_latest_row = values[:channel_count]
         if break_before:
             self._pending_boundaries.append((self._pending_sample_count, break_before))
         self._pending_sample_count += 1
@@ -3104,13 +3114,18 @@ class SuperWatchStreamManager:
         boundaries = self._pending_boundaries
         self._pending_boundaries = []
         channel_count = self._pending_channel_count
+        if isinstance(getattr(self._device, '_hardware_target', None), dict) and not self._device.connected:
+            self._pending_sample_count = self._pending_channel_count = 0
+            self._pending_started_at = self._latest_sample = None
+            return False
+        latest = self._pending_latest_row
         first_sequence = self._latest_sample_sequence
         self._latest_sample_sequence += sample_count
         self._latest_sample = {
             "sequence": self._latest_sample_sequence,
             "metadata_version": self._metadata_cache[2],
             "channels": json.loads(self._metadata_cache[1]),
-            "values": [value if math.isfinite(value) else None for value in values[-channel_count:]],
+            "values": list(latest),
             "sample_time_ms": float(times[-1]) if times and math.isfinite(times[-1]) else None,
             "received_monotonic": time.monotonic(),
         }
@@ -3122,6 +3137,9 @@ class SuperWatchStreamManager:
                 self._recorder.append(values, times, self._latest_sample['channels'], boundaries=boundaries)
             if self._stream_hub is None:
                 raise RuntimeError("SuperWatch binary stream hub is unavailable")
+            # Only clients requesting exact live readouts receive the extra row.
+            exact_row = (struct.pack(f'<{channel_count}d', *latest)
+                         if any(a != b for a, b in zip(latest, values[-channel_count:])) else b'')
             if sys.byteorder != "little":
                 values.byteswap()
                 times.byteswap()
@@ -3135,6 +3153,7 @@ class SuperWatchStreamManager:
             self._stream_hub.publish(
                 payload, item_count=sample_count, flags=flags,
                 stream_type=StreamType.SUPERWATCH,
+                **({"latest_f64": exact_row} if exact_row else {}),
             )
         except Exception as exc:
             self._binary_dropped_batches += 1
@@ -3146,6 +3165,9 @@ class SuperWatchStreamManager:
     def get_latest_sample(self) -> dict:
         """Return the last acquisition row without starting another hardware read."""
         with self._read_lock:
+            device = self._device
+            if isinstance(getattr(device, '_hardware_target', None), dict) and not device.connected:
+                return {"sample": None, "running": False, "target_binding_lost": True}
             sample = self._latest_sample
             if sample is None or sample["metadata_version"] != self._metadata_cache[2]:
                 return {"sample": None, "running": self.running}
@@ -4057,7 +4079,8 @@ class ModbusStreamManager:
                     self._record_event({'event': 'data', **result})
                 except Exception as error:
                     if not self._stop_event.is_set():
-                        self._bridge.put({'event': 'error', 'message': str(error)})
+                        self._record_event({'event': 'error', 'scope': 'poll',
+                                            'timestamp': time.time(), 'message': str(error)})
                 self._stop_event.wait(self._interval)
         finally:
             # Session/port ownership ends only after stop joins every worker.
@@ -4073,6 +4096,9 @@ class ModbusStreamManager:
             threads = (self._thread, self._loop_thread)
             if worker is not None:
                 worker.request_stop()
+                cancel = getattr(client, 'cancel_pending_io', None)
+                if cancel is not None:
+                    cancel()
         deadline = time.monotonic() + self._stop_timeout
         for thread in threads:
             if thread is not None and thread.ident is not None and thread is not threading.current_thread():

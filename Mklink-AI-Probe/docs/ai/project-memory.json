@@ -1,20 +1,20 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-25",
+  "updated_at": "2026-11-28",
   "repository": {
     "url": "https://github.com/MicroKeen/Mklink-AI-Probe",
     "project_root": "Mklink-AI-Probe",
-    "branch": "main",
-    "head": "595544d9",
-    "remote_head": "595544d9",
-    "working_tree": "0.5.1 已从 595544d9 正式发布。Windows 与 Skill 的同版本修订在独立 PR 验收。"
+    "branch": "codex/v0.5.2-fixes",
+    "head": "6f908307",
+    "remote_head": "6f908307",
+    "working_tree": "Windows/Skill 候选 806dbdc8，正式版 0.5.1。"
   },
   "mission": {
     "product": "维护 MKLink 烧录、调试、桌面/Web、Skill/CLI/MCP。"
   },
   "current_session": {
-    "status": "0.5.1 首发已上线。此次同版本修订仅替换腾讯云 Windows 与 Skill，验收后切换索引。",
-    "current_task": "桌面立即安装与固件互斥；[0.5.1 首发交接](https://github.com/MicroKeen/Mklink-AI-Probe/pull/95)。"
+    "status": "0.5.2 开发见 [PR #98](https://github.com/MicroKeen/Mklink-AI-Probe/pull/98)。0.5.1 发布和三平台验证见 [PR #97](https://github.com/MicroKeen/Mklink-AI-Probe/pull/97)。",
+    "current_task": "[0.5.2 候选、V3 实板](../verification/v052-windows-v3-release.md)；[V4 八项](../verification/v052-f103-field-regression.md)。"
   },
   "milestones": [
     {
@@ -40,7 +40,7 @@
     },
     {
       "area": "GUI共享控制、回放与多窗口健康",
-      "result": "多窗口桌面/Web、暂停回放、探针后台复用、SystemView与同步采集验收见[共享控制](../verification/v050-gui-control.md)、[IRQ锁与重启](../verification/v050-systemview-loss-reboot.md)、[刷新](../verification/v050-systemview-refresh.md)。0.5.1 修复公式保存时保留曲线颜色、视口固定网格、悬浮读数避边与拖动换组，已在 Edge/WebView2 验证。"
+      "result": "多窗口桌面/Web、暂停回放、探针后台复用、SystemView与同步采集验收见[共享控制](../verification/v050-gui-control.md)、[IRQ锁与重启](../verification/v050-systemview-loss-reboot.md)、[刷新](../verification/v050-systemview-refresh.md)。0.5.1 修复公式保存时保留曲线颜色、视口固定网格、悬浮读数避边与拖动换组，已在 Edge/WebView2 验证。 0.5.2 全局断开通过 STM32F103 实测。"
     },
     {
       "area": "HPM Flash 配置、连接设置与脱机 OTP",
@@ -60,7 +60,7 @@
     },
     {
       "area": "SuperWatch 配置与手动日志转换",
-      "result": "Excel 1,114,032组/4,456,128值、RTT 505行，对照[转换](../verification/v050-manual-recording-export.md)、[配置](../verification/v050-superwatch-profile.md)及[TXT](../verification/v050-rtt-txt-readable.md)。0.5.1修复导出，仪表盘可打开AXF，分组勾选控制采集；波形或日志有助判断时Skill主动展示，见[Windows验收](../verification/v051-superwatch-export-profile.md)。 RTT/SuperWatch 显示活动 AXF/ELF 的原文件名并可重新选择，Agent 请求位于灵活面板。Windows 安装、桌面/Web/CLI/MCP、终端查找、TTL 双向及 Modbus 见[验收](../verification/v051-f103-desktop-uart.md)。"
+      "result": "Excel 1,114,032组/4,456,128值、RTT 505行，对照[转换](../verification/v050-manual-recording-export.md)、[配置](../verification/v050-superwatch-profile.md)及[TXT](../verification/v050-rtt-txt-readable.md)。0.5.1修复导出，仪表盘可打开AXF，分组勾选控制采集；波形或日志有助判断时Skill主动展示，见[Windows验收](../verification/v051-superwatch-export-profile.md)。 Windows 安装、桌面/Web/CLI/MCP、终端查找、TTL 双向及 Modbus 见[验收](../verification/v051-f103-desktop-uart.md)。 0.5.2 回放：832 万值、RTT/串口各 2.4 万条，Edge 跳转及启停分文件通过。"
     },
     {
       "area": "V0.5.0 发布、安装与升级",
@@ -98,7 +98,7 @@
     "ELF与34档波特率已在Windows候选包含；客户ELF仅离线解析/配置，未操作客户板。本轮没有高速串口/Modbus物理验收；固件会话RS485双V4测试不等同本轮/客户快速应答验证，10Mbps大帧丢包边界仍保留，第三方驱动可拒绝高档位。"
   ],
   "next_actions": [
-    "完成 Windows 与 Skill 修订包验签、覆盖安装及腾讯云回读。HPM6E80 永久写入暂停。",
+    "0.5.2 待发布。V3/S32K3 冷启动、擦写，Data Flash 和客户复位/掉电待验。HPM6E80 OTP Word 72 继续暂停。",
     "覆盖安装会结束当前用户旧MKLink及Skill/MCP活动任务，安装后由AI宿主重载MCP。保留损坏历史备份；异常收集installation-history-report.json、history-backups及诊断包，区分权限、占用和格式，不删除有效未知结果或重放烧录。",
     "客户SystemView先核对实际CH、目标IRQ锁及元数据。1µs三路溢出先采集0x40 CH2设备时间戳/长度/序号与主机单调到达时间，低频读0x10错误和0x14批次耗时；诊断开销保持一致，再判断背压、重试或调度，不直接假定80ms停读或给CH2固定优先级。多视图假离线已完成修复与安装版六窗口复验。保留目标构建快照供AXF源码路径使用，原工程重编后再清理；见[静态补充](../verification/v050-systemview-loss-reboot.md)。",
     "有Linux/Mac实物后补验真实USB、Gatekeeper首次安装和交互式提权；不能把本轮CI结果当作这些硬件/系统验收。",

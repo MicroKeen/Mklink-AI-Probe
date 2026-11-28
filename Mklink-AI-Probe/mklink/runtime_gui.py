@@ -12,8 +12,8 @@ def public_runtime(info):
     return {key: info.get(key) for key in ('runtime_id', 'instance_id', 'probe_id', 'project_root')}
 
 
-def open_existing_probe_window(probe_id):
-    """Open a browser view of an existing owner without claiming the target."""
+def existing_probe_view(probe_id, *, require_connected=False):
+    """Issue a short-lived view of the selected owner without opening another CDC."""
     from mklink.probes import select_probe
     if select_probe(probe_id)['probe_id'] != probe_id:
         raise runtime.RuntimeErrorResponse('Select the exact probe again')
@@ -26,20 +26,31 @@ def open_existing_probe_window(probe_id):
         health = runtime.request(info, 'GET', '/_runtime/status')
         if health.get('instance_id') != info['instance_id'] or health.get('probe_id') != probe_id:
             raise runtime.RuntimeErrorResponse('The selected probe changed. Refresh the device list.')
-        url, _ = _gui_link(client)
-        try:
-            opened = webbrowser.open_new_tab(url)
-        except Exception:
-            opened = False  # Browser errors can contain the ticket.
-        if not opened:
-            raise runtime.RuntimeErrorResponse('Could not open the system browser')
-        return {'browser_requested': True}
+        expected = {}
+        if require_connected:
+            status = runtime.request(info, 'GET', '/api/device/status')
+            if status.get('probe_id') != probe_id or status.get('connected') is not True:
+                raise runtime.RuntimeErrorResponse('Selected probe has no live connection to reuse')
+            expected = {'probe_id': probe_id, 'device_generation': status['device_generation']}
+        url, _ = gui_link(client, **expected)
+        return {'owner_url': url, 'owner_instance': info['instance_id'], 'probe_id': probe_id, **expected}
     finally:
         client.close()
 
 
-def _gui_link(client):
-    link = runtime.request(client.info, 'POST', '/_runtime/gui-link', {'session_id': client.session_id})
+def open_existing_probe_window(probe_id):
+    view = existing_probe_view(probe_id)
+    try:
+        opened = webbrowser.open_new_tab(view['owner_url'])
+    except Exception:
+        opened = False  # Browser errors can contain the ticket.
+    if not opened:
+        raise runtime.RuntimeErrorResponse('Could not open the system browser')
+    return {'browser_requested': True}
+
+
+def gui_link(client, **expected):
+    link = runtime.request(client.info, 'POST', '/_runtime/gui-link', {'session_id': client.session_id, **expected})
     return f"http://127.0.0.1:{client.info['port']}/_runtime/open#{link['ticket']}", link['expires_in']
 
 
@@ -121,7 +132,7 @@ class GuiLaunch:
         if not result['gui_launch_supported']:
             raise runtime.RuntimeErrorResponse('This backend lacks GUI launch links; update and explicitly restart it, or open its installed GUI. No second backend was started')
         if self.pending is None or self.pending['expires'] <= time.monotonic():
-            url, ttl = _gui_link(client)
+            url, ttl = gui_link(client)
             self.pending = {'url': url, 'expires': time.monotonic() + ttl, 'attempted': False}
         pending = self.pending
         if open_browser and not pending['attempted']:

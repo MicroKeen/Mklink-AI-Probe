@@ -138,6 +138,8 @@ def _target_records(root: Path) -> list[Mapping[str, object]]:
     assert isinstance(records, list)
     if any(not isinstance(record, Mapping) for record in records):
         raise BuiltinFlmBundleError("builtin FLM target is invalid")
+    from .s32k3_flm import extend_builtin_catalog
+    extend_builtin_catalog(records)
     _TARGET_RECORD_CACHE[cache_key] = (signature, records)
     return records
 
@@ -287,6 +289,7 @@ def load_builtin_flm_targets(root: Optional[Path] = None) -> List[TargetRecord]:
 
 
 def discover_builtin_flm_algorithms(part_number: str, root: Optional[Path] = None):
+    from .s32k3_flm import correct_algorithm
     target = str(part_number or "").strip()
     if not target:
         return []
@@ -316,6 +319,9 @@ def discover_builtin_flm_algorithms(part_number: str, root: Optional[Path] = Non
                 raise BuiltinFlmBundleError("builtin FLM algorithm is invalid")
             if item.get("automatic", True) is False:
                 continue
+            item = correct_algorithm(bundle_root, bundle_target, item)
+            if item is None:
+                continue
             path, digest = _blob(bundle_root, item.get("blob"), item.get("sha256"))
             flash_start = _integer(item.get("flash_start"), "builtin FLM flash start")
             flash_size = _integer(item.get("flash_size"), "builtin FLM flash size")
@@ -342,8 +348,8 @@ def discover_builtin_flm_algorithms(part_number: str, root: Optional[Path] = Non
                 file_name=_text(item.get("file_name"), "builtin FLM file name"),
                 flash_start=flash_start,
                 flash_size=flash_size,
-                ram_start=ram_start,
-                ram_size=ram_size,
+                ram_start=_integer(item.get("ram_start", ram_start), "builtin FLM RAM start"),
+                ram_size=_integer(item.get("ram_size", ram_size), "builtin FLM RAM size"),
                 default=index == 0,
                 source_kind="daplink-builtin",
                 source_name="常用型号内置算法",
@@ -411,10 +417,18 @@ def discover_builtin_option_algorithm(
 
 
 def extract_builtin_flm(algorithm: object) -> bytes:
+    from .s32k3_flm import layout, code_range
+
     path = Path(_text(getattr(algorithm, "builtin_blob_path", None), "builtin FLM blob path"))
     expected = _text(
         getattr(algorithm, "builtin_blob_sha256", None), "builtin FLM SHA-256"
     ).casefold()
+    part = getattr(algorithm, "target_part", "")
+    geometry = layout(part)
+    if geometry is not None and expected == geometry.code_sha:
+        selected = (algorithm.flash_start, algorithm.flash_size)
+        if code_range(*selected, geometry.code_end) != selected:
+            raise BuiltinFlmBundleError(f"Selected range exceeds the {part} Code FLM FlashDevice; inspect again")
     if _SHA256.fullmatch(expected) is None or not path.is_file():
         raise BuiltinFlmBundleError("builtin FLM blob is unavailable")
     payload = path.read_bytes()

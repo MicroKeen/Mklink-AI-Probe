@@ -1,5 +1,7 @@
 <template>
   <div class="rtt-view-tab" @dblclick="fitPanels">
+    <SymbolReloadDialog v-if="reloadPromptOpen && sourcePending" rtt :busy="reloadingSources"
+      @later="reloadPromptOpen = false" @confirm="reloadSources" />
     <SetupHint
       v-if="!deviceConnected"
       kind="device"
@@ -39,7 +41,7 @@
       <div ref="channelGrid" class="rtt-channel-grid" :class="{ 'auto-fit': autoFit, multiple: activeChannels.filter(ch => !hiddenChannels.has(ch)).length > 1 }">
         <RttChannelPanel v-for="ch in activeChannels" :key="ch" :ref="el => setChannelSurface(ch, el)" :channel="ch" :panel-id="panelId ? `${panelId}-rtt-${ch}` : undefined"
           v-show="!hiddenChannels.has(ch)"
-          :running="statusRunning && !runtimeError" :session="captureSession" :channel-status="channelStatus[String(ch)]"
+          :running="active !== false && !hiddenChannels.has(ch) && statusRunning && !runtimeError" :session="captureSession" :channel-status="channelStatus[String(ch)]"
           :send-enabled="!stopping && !runtimeError && downBuffers.some(b => b.channel === ch && b.active)" />
       </div>
   </div>
@@ -56,6 +58,7 @@ const guiId = useGuiId()
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { trackedSymbolPending, reloadTrackedSymbolSource } from '../../lib/trackedSymbolSource'
 import { Search } from '@lucide/vue'
+import SymbolReloadDialog from './SymbolReloadDialog.vue'
 import SymbolFileButton from './SymbolFileButton.vue'
 import { CAPTURE_START_TIMEOUT_MS } from '../../lib/captureStartup'
 import { useDashboard } from '../../composables/useDashboard'
@@ -69,8 +72,9 @@ import SetupHint from './SetupHint.vue'
 import RttChannelPanel from './RttChannelPanel.vue'
 import { tr } from '../../composables/useLanguage'
 import { API_BASE } from '../../lib/runtimeEndpoint'
+import type { DeviceStatus } from '../../types/mklink'
 import { useToast } from '../../composables/useToast'
-const props = defineProps<{ deviceConnected: boolean; panelId?: string }>()
+const props = withDefaults(defineProps<{ deviceConnected: boolean; panelId?: string; active?: boolean }>(), { active: true })
 const channelSurfaces = new Map<number, SemanticSurface>()
 let restoredChannels: JsonObject = {}
 function setChannelSurface(channel: number, surface: unknown) {
@@ -116,6 +120,8 @@ const statusRunning = ref(false)
 const backendSourcePending = ref(false)
 const sourcePending = computed(() => backendSourcePending.value || trackedSymbolPending.value > 0)
 const reloadingSources = ref(false)
+const reloadPromptOpen = ref(false)
+watch(trackedSymbolPending, revision => { if (revision) reloadPromptOpen.value = true }, { immediate: true })
 const statusKnown = ref(false)
 const downBuffers = ref<Array<{ channel?: number, active?: boolean }>>([])
 const runtimeError = ref<string | null>(null)
@@ -247,11 +253,14 @@ async function searchRttAddress(): Promise<void> {
     if (props.deviceConnected) {
       const deviceResponse = await fetch(`${API_BASE}/api/device/status`)
       if (!deviceResponse.ok) throw new Error(tr('读取设备状态失败', 'Could not read device status'))
-      const device = await deviceResponse.json()
+      const device: DeviceStatus = await deviceResponse.json()
       if (disposed || generation !== searchGeneration) return
-      if (device.connected && Number(device.idcode) > 0) {
+      if (device.connected && (Number(device.idcode) > 0 || device.target_attach?.profile)) {
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+        if (device.probe_id) headers['X-MKLink-Probe'] = device.probe_id
+        if (device.device_generation !== undefined) headers['X-MKLink-Device-Generation'] = String(device.device_generation)
         const response = await fetch(`${API_BASE}/api/device/rtt-control-block`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          method: 'POST', headers,
           body: JSON.stringify({ address: result.addr }),
         })
         const info = await response.json()
@@ -275,6 +284,7 @@ async function searchRttAddress(): Promise<void> {
 
 let lastSourceChange = 0
 async function reloadSources(): Promise<void> {
+  reloadPromptOpen.value = false
   reloadingSources.value = true
   try {
     await flushWatchProfile()
@@ -300,6 +310,7 @@ async function refreshStatus(): Promise<Record<string, any> | null> {
       backendSourcePending.value = changed?.state === 'awaiting-reload' || changed?.state === 'failed'
       if (changed && changed.sequence !== lastSourceChange) {
         lastSourceChange = changed.sequence
+        if (changed.state === 'awaiting-reload') reloadPromptOpen.value = true
         if (changed.error) toast.error(changed.error)
         if (!changed.pending && changed.state === 'applied') {
           rttAddress.value = changed.rtt_addr && isRttAddress(changed.rtt_addr) ? changed.rtt_addr : ''

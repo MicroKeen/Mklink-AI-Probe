@@ -9,7 +9,7 @@ import stat
 
 from .frontend_contract import keys, require
 
-REPLAY_EXTENSIONS = {'.csv', '.txt', '.log', '.jsonl', '.ndjson'}
+REPLAY_EXTENSIONS = {'.mklog', '.csv', '.txt', '.log', '.jsonl', '.ndjson'}
 MAX_BYTES = 256 * 1024 * 1024  # superwatch_replay_data.js REPLAY_LIMITS.bytes
 MAX_LINE = 1024 * 1024
 TIME_COLUMNS = {'timestamp', '_t', 'timestamp_s', 'time', 'time(s)', 'timestamp_ms', 'timestamp_us'}
@@ -22,7 +22,7 @@ def recording_file(body):
     candidate = Path(raw).expanduser()
     require(candidate.is_absolute() and not str(candidate).startswith(('\\\\', '//')),
             message='Choose an absolute local path on the backend computer')
-    require(candidate.suffix.lower() in REPLAY_EXTENSIONS, 'UNSUPPORTED_FORMAT', 'Choose a CSV, TXT, LOG, JSONL or NDJSON recording')
+    require(candidate.suffix.lower() in REPLAY_EXTENSIONS, 'UNSUPPORTED_FORMAT', 'Choose an MKLog, CSV, TXT, LOG, JSONL or NDJSON recording')
     try:
         # Check the unresolved chain too: resolve() alone hides a redirect.
         for part in [*reversed(candidate.parents), candidate]:
@@ -33,6 +33,10 @@ def recording_file(body):
         resolved = candidate.resolve(strict=True)
         info = resolved.stat()
         require(stat.S_ISREG(info.st_mode), 'INVALID_PATH', 'Choose a regular recording file')
+        if resolved.suffix.lower() == '.mklog':
+            with resolved.open('rb') as source:
+                require(source.readline(32) == b'MKLOG1 superwatch\n', 'UNSUPPORTED_FORMAT', 'Choose a SuperWatch recording')
+            return resolved, info
         require(0 < info.st_size <= MAX_BYTES, 'FILE_LIMIT', 'Recording must contain 1 byte to 256 MiB', 413)
         with resolved.open('rb') as source:
             # Only inspect the first effective line. The existing Worker owns

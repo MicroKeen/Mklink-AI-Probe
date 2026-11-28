@@ -338,7 +338,17 @@ def install_skill_archive(
         "installed_version": expected_version,
         "backup": str(backup),
         "restart_ai_required": True,
+        **_cli_path_advice(root),
     }
+
+
+def _cli_path_advice(root: Path) -> dict[str, str]:
+    """Offer the installed Skill entry when a separate PATH launcher exists."""
+    launcher = shutil.which("mklink.exe") if os.name == "nt" else None
+    if not launcher or Path(launcher).resolve().is_relative_to(root.resolve()):
+        return {}
+    return {"cli_path_notice": f"PATH uses {launcher}. If it reports ModuleNotFoundError, "
+                               f'run python -m mklink --version from "{root}" using the Skill interpreter.'}
 
 
 def _installed_app() -> tuple[Path | None, str | None]:

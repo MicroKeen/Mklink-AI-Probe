@@ -57,6 +57,7 @@ export interface ConfigStatus {
 }
 
 export interface AxlStatus {
+  image_target?: { status: 'identified' | 'unknown' | 'conflict'; device: string | null; hardware_model?: string; matches_hardware?: boolean }
   loaded: boolean
   axf_path?: string | null
   display_name?: string
@@ -81,7 +82,10 @@ export interface FirmwareCompatibility {
 }
 
 export interface DeviceStatus {
+  target_binding_lost?: boolean
+  disconnect_generation?: number
   probe_id?: string | null
+  target_attach?: { profile: string; mem_ap: number } | null
   firmware_update?: FirmwareUpdateNotice | null
   firmware_compatibility?: FirmwareCompatibility | null
   probe_product?: 'MKLink' | 'HPMLINK'

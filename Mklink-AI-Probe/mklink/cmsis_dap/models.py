@@ -203,6 +203,8 @@ class JobRequest:
     security_flm_path: Optional[str] = None
     security_flm_digest: Optional[str] = None
     security_flm_region: Optional[Tuple[int, int]] = None
+    algorithm_erase_range: Optional[Tuple[int, int]] = None
+    flash_prepare_reset: bool = False
 
     @classmethod
     def full_sequence(
@@ -242,6 +244,7 @@ class JobEvent:
     message: str = ""
     state: Optional[JobState] = None
     progress: Optional[float] = None
+    error_details: Optional[Mapping[str, object]] = None
 
 
 @dataclass(frozen=True)
@@ -271,3 +274,4 @@ class JobSnapshot:
     elapsed_seconds: float = 0.0
     error_code: Optional[str] = None
     error_message: Optional[str] = None
+    error_details: Optional[Mapping[str, object]] = None

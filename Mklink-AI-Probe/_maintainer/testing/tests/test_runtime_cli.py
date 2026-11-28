@@ -99,6 +99,17 @@ def test_cli_read_routes_to_shared_backend(adapter):
     assert ('read_memory',{'address':'0x20000000','size':4}) in adapter
 
 
+def test_cli_model_reaches_runtime_before_memory_read(adapter, monkeypatch):
+    import sys
+    from mklink import cli
+    monkeypatch.setattr(sys, 'argv', ['mklink', 'read-ram', '--probe', 'selected', '--mcu', 's32k314',
+                                      '--addr', '0xE000ED00', '--size', '4'])
+    cli.main()
+    assert adapter[0][0] == 'connect'
+    assert adapter[0][1]['probe'] == 'selected' and adapter[0][1]['mcu'] == 's32k314'
+    assert adapter[1] == ('read_memory', {'address': '0xE000ED00', 'size': 4})
+
+
 def test_device_status_cli_reuses_backend_and_only_detaches(adapter, monkeypatch, capsys):
     import json, sys
     from mklink import cli
@@ -377,6 +388,7 @@ def test_gui_launcher_holds_existing_lease_until_handoff_and_always_releases(mon
     import time
     from types import SimpleNamespace
     from mklink import cli, runtime
+    monkeypatch.setattr("mklink.runtime_gui.gui_link", lambda client: ("http://127.0.0.1:8765/_runtime/open#once", 60))
     calls, clock = [], [0]
     class Client:
         def __init__(self, **kwargs): calls.append(("client", kwargs))

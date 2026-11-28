@@ -21,7 +21,7 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 from anyio import CancelScope
 from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import Response, StreamingResponse
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, StrictBool, StrictInt, field_validator
 from mklink.debug_speed import validate_clock_hz
 from starlette.concurrency import iterate_in_threadpool, run_in_threadpool
 
@@ -178,6 +178,8 @@ class JobBody(ClockBody):
     reset_voltage_mv: Optional[int] = None
     base_address: Optional[int] = None
     sector_addresses: List[int] = Field(default_factory=list)
+    algorithm_erase_range: Optional[Tuple[StrictInt, StrictInt]] = None
+    flash_prepare_reset: StrictBool = False
     board: Optional[str] = None
     hpm_flash_cfg: Optional[Tuple[str, str, str, str]] = None
 
@@ -236,6 +238,8 @@ def _json_primitive(value: object, *, hide_paths: bool = False) -> object:
     if is_dataclass(value) and not isinstance(value, type):
         result = {}
         for field in fields(value):
+            if field.name == "error_details" and getattr(value, field.name) is None:
+                continue
             if hide_paths and field.name in ("file_path", "pack_path", "custom_flm_paths", "flm_path"):
                 continue
             result[field.name] = _json_primitive(getattr(value, field.name), hide_paths=hide_paths)
@@ -703,6 +707,8 @@ def _flash_algorithm_payload(record: object) -> Dict[str, object]:
     }
     if getattr(record, "source_kind", "") == "daplink-builtin":
         payload["sector_sizes"] = [list(pair) for pair in getattr(record, "sector_sizes", ())]
+        payload["ram_start"] = record.ram_start
+        payload["ram_size"] = record.ram_size
     return payload
 
 
@@ -1027,6 +1033,22 @@ def _remove_custom_flm_configuration(
         services.custom_flms.remove(part_number or "__flm_preview__", algorithm_id)
 
 
+def _profile_job_pack(target, selected):
+    """Use the Pack the user selected, including when several Packs define one device."""
+    from mklink.s32k3 import MODELS
+    if target.part_number.upper() not in MODELS or not selected:
+        return target.pack_path
+    packs = {item.pack_path for item in selected if item.pack_path}
+    if len(packs) > 1:
+        raise FlashError(FlashErrorCode.TARGET_NOT_SUPPORTED,
+                         "Select algorithms from one device Pack for this programming session")
+    if packs:
+        return next(iter(packs))
+    if all(item.source_kind == "daplink-builtin" for item in selected):
+        return None
+    return target.pack_path
+
+
 def _job_flash_algorithms(
     target: TargetRecord,
     body: JobBody,
@@ -1037,6 +1059,9 @@ def _job_flash_algorithms(
     from mklink.cmsis_dap.algorithm_catalog import resolve_firmware_algorithms
 
     if not algorithms:
+        if target.source == "target-profile" and set(body.actions).intersection(("program", "erase", "verify")):
+            raise FlashError(FlashErrorCode.TARGET_NOT_SUPPORTED,
+                             f"Import a matching vendor Pack or FLM to program {target.part_number}")
         if target.source == "daplink-builtin":
             raise FlashError(
                 FlashErrorCode.TARGET_NOT_SUPPORTED,
@@ -1213,6 +1238,20 @@ def _start_job_with_configuration(
                 "reset_voltage_mv is only valid for power-cycle reset"
             )
         hpm_target = is_hpm_target(target.part_number)
+        from mklink.s32k3 import MODELS
+        algorithm_erase = body.algorithm_erase_range
+        if body.flash_prepare_reset and (target.part_number not in MODELS or "erase" not in body.actions or
+                                         body.reset_mode not in ("default", "software", "system", "hardware")):
+            raise FlashError(FlashErrorCode.TARGET_NOT_SUPPORTED, "烧录准备复位需要 S32K3 擦写作业和受支持的复位方式。")
+        if algorithm_erase is not None:
+            if (target.part_number not in MODELS or
+                    set(body.actions) - {"connect", "erase", "disconnect", "reset"} or "erase" not in body.actions
+                    or body.sector_addresses or body.image_id or len(body.algorithm_ids) != 1 or body.algorithm_id):
+                raise FlashError(FlashErrorCode.IMAGE_OUT_OF_RANGE,
+                                 "算法范围擦除需要单独的擦除作业、一个指定的 FLM 和确认的起止地址。")
+        elif target.part_number in MODELS and "erase" in body.actions and not body.sector_addresses:
+            raise FlashError(FlashErrorCode.IMAGE_OUT_OF_RANGE,
+                             "请选择镜像扇区，或选择一个 FLM 并确认其地址范围后逐扇区擦除。")
         if (
             target.source == "daplink-builtin"
             and "erase" in body.actions
@@ -1232,6 +1271,7 @@ def _start_job_with_configuration(
         regions, fingerprint, configured_flm_paths = _target_flash_configuration(
             services, target.part_number, body.algorithm_id, body.algorithm_ids
         )
+        job_pack = target.pack_path
         custom_flm_paths = ()
         custom_flm_digests = ()
         custom_flm_regions = ()
@@ -1333,7 +1373,7 @@ def _start_job_with_configuration(
                 needs_catalog = (
                     inspection is not None
                     or bool(body.sector_addresses)
-                    or target.source == "daplink-builtin"
+                    or target.source in {"target-profile", "daplink-builtin"}
                     or ("erase" in body.actions and bool(configured_flm_paths))
                 )
                 catalog = (
@@ -1366,6 +1406,8 @@ def _start_job_with_configuration(
             expected_plan = services.image_algorithm_plans.get(body.image_id)
             if expected_plan is not None and tuple(_algorithm_plan_identity(item) for item in selected) != expected_plan:
                 raise FlashError(FlashErrorCode.TARGET_NOT_SUPPORTED, "Flash algorithm plan changed after inspection; inspect again")
+            if body.algorithm_ids or body.algorithm_id:
+                job_pack = _profile_job_pack(target, selected)
             for index, algorithm in enumerate(selected):
                 if any(algorithm.flash_start < other.flash_start + other.flash_size and other.flash_start < algorithm.flash_start + algorithm.flash_size for other in selected[:index]):
                     raise FlashError(FlashErrorCode.TARGET_NOT_SUPPORTED, "resolved Flash algorithms overlap; select non-overlapping algorithms and inspect again")
@@ -1382,12 +1424,17 @@ def _start_job_with_configuration(
                         (int(algorithm.flash_start), int(algorithm.flash_size)),
                     ))
                 if (
-                    target.source == "daplink-builtin"
+                    (target.source == "daplink-builtin" or (job_pack is None and algorithm.source_kind == "daplink-builtin"))
                     and custom_flm_ram_start is None
                     and algorithm.ram_size > 0
                 ):
                     custom_flm_ram_start = int(algorithm.ram_start)
                     custom_flm_ram_size = int(algorithm.ram_size)
+            if source_records and target.source == "target-profile" and custom_flm_ram_start is None:
+                from mklink.s32k3 import flash_workspace
+                workspace = flash_workspace(target.part_number)
+                if workspace:
+                    custom_flm_ram_start, custom_flm_ram_size = workspace
             if source_records:
                 custom_flm_paths = tuple(record[0] for record in source_records)
                 custom_flm_digests = tuple(record[1] for record in source_records)
@@ -1395,6 +1442,14 @@ def _start_job_with_configuration(
             elif inspection is not None and not catalog and configured_flm_paths:
                 custom_flm_paths = tuple(configured_flm_paths)
                 custom_flm_digests = tuple(fingerprint)
+            if algorithm_erase is not None:
+                if len(source_records) != 1:
+                    raise FlashError(FlashErrorCode.TARGET_NOT_SUPPORTED, "所选算法没有可校验的 FLM 文件。")
+                path, digest, (start, size) = source_records[0]
+                if algorithm_erase != (start, start + size):
+                    raise FlashError(FlashErrorCode.IMAGE_OUT_OF_RANGE, "算法范围已经变化，请重新选择并确认。")
+                from mklink.cmsis_dap.flash_bounds import validate_algorithm_erase_range
+                validate_algorithm_erase_range(path, digest, start, start + size)
             if custom_flm_ram_start is None and target.source == "daplink-builtin":
                 from mklink.cmsis_dap.builtin_flm_bundle import discover_builtin_flm_algorithms
 
@@ -1429,7 +1484,7 @@ def _start_job_with_configuration(
             preempt_ai=body.preempt_ai,
             probe_id=body.probe_id,
             target_part=target.part_number,
-            pack_path=target.pack_path,
+            pack_path=job_pack,
             custom_flm_paths=custom_flm_paths,
             custom_flm_digests=custom_flm_digests,
             custom_flm_regions=custom_flm_regions,
@@ -1442,6 +1497,8 @@ def _start_job_with_configuration(
             reset_voltage_mv=body.reset_voltage_mv,
             base_address=body.base_address,
             sector_addresses=tuple(body.sector_addresses),
+            algorithm_erase_range=algorithm_erase,
+            flash_prepare_reset=body.flash_prepare_reset,
             board=board,
             hpm_flash_cfg=hpm_flash_cfg,
             security_family=security_family,
@@ -2181,10 +2238,13 @@ def default_target_memory_provider(
             return regions
     except (ImportError, OSError, TypeError, ValueError):
         pass
+    from mklink.s32k3 import MODELS
+    if part_number.upper() in MODELS:
+        return ()  # Debug access is available before an algorithm is installed.
     try:
         TARGET = import_pyocd_attr("pyocd.target", "TARGET")
 
-        entries = TARGET.items() if hasattr(TARGET, "items") else ((name, TARGET[name]) for name in TARGET.get_all_target_names())
+        entries = list(TARGET.items()) if hasattr(TARGET, "items") else ((name, TARGET[name]) for name in TARGET.get_all_target_names())
         matches = []
         for name, target_type in entries:
             candidates = {

@@ -1112,6 +1112,31 @@ def test_shared_latest_row_uses_existing_capture_and_invalidates_on_layout_chang
     assert second['values'] == [8.0, 9.0]
 
 
+def test_exact_latest_integers_and_compatible_plot_frames():
+    from mklink.remote.stream_api import _encoded_data_frame
+    from mklink.remote.stream_protocol import decode_frame
+
+    async def scenario():
+        hub = StreamHub(max_batches_per_client=8)
+        queue = hub.subscribe()
+        manager = SuperWatchStreamManager(stream_hub=hub, batch_samples=1)
+        manager._runtime = _MutableWatchRuntime()
+        manager.publish_metadata()
+        for value in (614947609, 0xffffffff, -2147483647, 42):
+            assert manager.publish_sample_points([{'_t': .025, 'a': value}])
+            assert manager.get_latest_sample()['sample']['values'] == [value]
+            batch = await queue.get()
+            while not batch.item_count:
+                batch = await queue.get()
+            old = decode_frame(_encoded_data_frame(StreamType.SUPERWATCH, batch, continuity=True))
+            new = decode_frame(_encoded_data_frame(StreamType.SUPERWATCH, batch, continuity=True, latest64=True))
+            expected_tail = struct.pack('<d', value) if value != 42 else b''
+            assert old.payload == batch.payload
+            assert new.payload == old.payload + expected_tail
+            assert new.flags == old.flags | (8 if expected_tail else 0)
+    asyncio.run(scenario())
+
+
 def test_superwatch_rejects_partial_and_nonfinite_samples_atomically():
     hub = StreamHub(max_batches_per_client=2)
     manager = SuperWatchStreamManager(stream_hub=hub, batch_samples=1)
@@ -1348,7 +1373,8 @@ def test_superwatch_prearmed_recording_survives_capture_start(monkeypatch, tmp_p
     result = manager.recording_status()
     assert result['path'] == initial['path']
     assert result['state'] == 'completed' and result['samples'] == 1
-    assert json.loads(next(tmp_path.glob('*.jsonl')).read_text(encoding='utf-8')) == {'a': 42.0, '_t': 0.0}
+    from mklink.recording_file import capture_rows
+    assert list(capture_rows(next(tmp_path.glob('*.mklog')))) == [{'a': 42.0, '_t': 0.0}]
 
 
 def test_superwatch_concurrent_poll_add_remove_pressure_keeps_batches_aligned(monkeypatch):

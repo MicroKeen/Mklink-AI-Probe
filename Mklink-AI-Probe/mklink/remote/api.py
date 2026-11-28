@@ -16,7 +16,7 @@ from __future__ import annotations
 # See the eager-import block below for the required FastAPI/Pydantic types.
 
 import asyncio
-from contextlib import asynccontextmanager, contextmanager
+from contextlib import asynccontextmanager, contextmanager, nullcontext
 import contextvars
 import hashlib
 import json
@@ -313,6 +313,28 @@ def release_resource_by_name(
     return release_resource_owner(state, lease.owner, stop_active=stop_active)
 
 
+def check_live_attach_profile(device, mcu: str | None) -> bool:
+    """An existing physical claim can be shared, but never relabeled."""
+    if not mcu:
+        return False
+    from mklink.device import target_attach_status
+    from mklink.profiles import TargetProfileError, resolve_attach_profile
+
+    active = target_attach_status(device)
+    try:
+        requested = resolve_attach_profile(mcu)
+    except TargetProfileError as exc:
+        raise HTTPException(422, exc.detail) from exc
+    if requested is None and active is None:
+        return False
+    if active and requested and active["profile"] == requested.name and active["mem_ap"] == requested.mem_ap:
+        return True
+    raise HTTPException(409, {
+        "code": "mux_profile_conflict", "requested": mcu, "target_attach": active,
+        "message": "Disconnect the current target before selecting a different attach profile.",
+    })
+
+
 def remember_device_connection(
     state: dict[str, Any],
     device,
@@ -331,7 +353,7 @@ def remember_device_connection(
     details = {
         "port": getattr(device, "port", None),
         "axf": axf_status.get("axf_path") or device_state.get("_axf"),
-        "mcu": mcu if mcu is not None else device_state.get("_mcu_hint"),
+        "mcu": mcu or device_state.get("_mcu_hint"),
         "elf_backend": (
             axf_status.get("elf_backend")
             or device_state.get("_elf_backend")
@@ -344,6 +366,17 @@ def remember_device_connection(
 
 def prepare_online_flash_connect(state: dict[str, Any], request) -> None:
     """Release shared CDC ownership before jobs that require the command bridge."""
+    from mklink.device import target_attach_status
+    from mklink.profiles import resolve_attach_profile
+    device = state.get("device")
+    hardware = target_attach_status(device)
+    if hardware and hardware.get("source") == "SIUL2.MIDR1" and request.target_part and request.probe_id:
+        from mklink.probes import select_probe
+        serial = select_probe(device.port).get("serial_number")
+        if serial and serial.casefold() == request.probe_id.casefold():
+            required = resolve_attach_profile(request.target_part)
+            if required is None or required.name != hardware["profile"]:
+                raise ValueError(f"烧录目标 {request.target_part} 与实读 {hardware['profile']} 不匹配")
     from mklink.hpm_config import is_hpm_target
 
     if (
@@ -355,7 +388,6 @@ def prepare_online_flash_connect(state: dict[str, Any], request) -> None:
     from mklink.remote.dashboards import stop_bridge_dashboards
 
     stop_bridge_dashboards(resource_manager=state["resource_manager"])
-    device = state.get("device")
     if device is None:
         return
     device.close()
@@ -1014,6 +1046,8 @@ def create_app(
             raise HTTPException(status_code=409, detail=exc.to_detail()) from exc
 
         if result.get("error"):
+            if result.get("detail"):
+                raise HTTPException(status_code=409, detail=result["detail"])
             raise HTTPException(status_code=error_status, detail=result["error"])
         active_axf = result.get("axf_path")
         if axf and not _same_file_source_path(axf, active_axf):
@@ -1040,7 +1074,7 @@ def create_app(
             return {**status, "display_name": name}
         return status
 
-    async def _load_symbol_file(axf=None, elf_backend=None, *, error_status=500, preserve_capture=False, display_name=None):
+    async def _load_symbol_file(axf=None, elf_backend=None, *, error_status=500, preserve_capture=False, display_name=None, expected_axf=None):
         nonlocal symbol_display_source
         # Explicit file loading owns admission and drains capture workers before
         # rebinding addresses. It never resumes acquisition on the new layout.
@@ -1051,6 +1085,9 @@ def create_app(
             runtime.require_symbol_change(stop_acquisition=True)
         async with _dashboard_start_lock(_state):
             async with _async_target_lock():
+                active = _state.get("device") or _state.get("symbol_device")
+                if expected_axf and not _same_file_source_path(expected_axf, getattr(active, '_axf', None)):
+                    raise HTTPException(409, 'The active symbol source changed; select it again before reloading')
                 from mklink.remote.dashboards import BRIDGE_DASHBOARD_TYPES
                 managers = get_managers()
                 if preserve_capture:
@@ -1234,12 +1271,16 @@ def create_app(
         device = _state.get('device') or _state.get('symbol_device')
         if source_path and not _same_file_source_path(expected_axf, getattr(device, '_axf', None)):
             raise HTTPException(409, 'The active symbol source changed; select it again before reloading')
-        result = await _load_symbol_file(source_path)
+        name = active_symbol_status(device).get("display_name") if source_path and device else None
+        result = await _load_symbol_file(source_path, display_name=name, expected_axf=expected_axf)
+        active_path = result.get('axf_path')
+        from mklink.rtt_addr import diagnose_rtt_addr
+        rtt_addr = (await run_in_threadpool(diagnose_rtt_addr, active_path)).addr if active_path else None
         device = _state.get('device') or _state.get('symbol_device')
         source_monitor.acknowledge(device, dict(source_monitor.pending))
         reload_captures.clear()
         event = {'sequence': time.time_ns(), 'state': 'applied', 'pending': False,
-                 'symbols_reloaded': True, 'axf_path': result.get('axf_path'),
+                 'symbols_reloaded': True, 'axf_path': active_path, 'rtt_addr': rtt_addr,
                  'rebind': result.get('rebind', {}), 'rtt_restarted': False}
         _state['file_source_change'] = event
         return event
@@ -1362,9 +1403,20 @@ def create_app(
         return {"project_root": _state["project_root"]}
 
     @app.get("/api/project-root/browse")
-    async def browse_project_root(path: str = ""):
+    async def browse_project_root(path: str = "", recording: str = ""):
         import os
-        p = os.path.abspath(path) if path else os.getcwd()
+        suggested = None
+        if recording and not path:
+            if recording not in {'rtt', 'superwatch', 'serial'}:
+                raise HTTPException(422, 'Unknown recording type')
+            from mklink.systemview_logs import capture_project
+            try:
+                root = capture_project(_state["project_root"], getattr(_state.get("device"), "axf_path", None))
+                suggested = root / ".mklink" / "logs" / recording
+                path = str(next(p for p in (suggested, *suggested.parents) if p.is_dir()))
+            except ValueError:
+                path = str(Path.home())
+        p = os.path.abspath(path) if path else os.path.abspath(_state["project_root"])
         if not os.path.isdir(p):
             p = os.path.dirname(p) or os.path.sep
         parent = os.path.dirname(p)
@@ -1377,7 +1429,8 @@ def create_app(
         except PermissionError:
             pass
         available_drives = _project_root_drives()
-        return {"current": p, "parent": parent, "dirs": entries, "drives": available_drives}
+        return {"current": p, "parent": parent, "dirs": entries, "drives": available_drives,
+                "suggested": str(suggested) if suggested else None}
 
     @app.get("/api/project-history")
     async def get_project_history():
@@ -1846,6 +1899,15 @@ def create_app(
             if isinstance(exc.detail, dict):
                 from mklink.connection_diagnostics import event
                 event('probe.selection_failed', **exc.detail)
+                if (exc.detail.get('reason') == 'probe_in_use' and _state.get('shared_probe_id') == 'lobby'
+                        and (body.get('connect') or {}).get('reuse_connected') is True):
+                    from fastapi.responses import JSONResponse
+                    from mklink.runtime_gui import existing_probe_view
+                    try:
+                        owner = await run_in_threadpool(existing_probe_view, exc.detail['probe_id'], require_connected=True)
+                    except RuntimeErrorResponse as unavailable:
+                        raise HTTPException(409, unavailable.detail) from unavailable
+                    return JSONResponse({'joined_owner': True, **owner}, headers={'Cache-Control': 'no-store'})
             raise HTTPException(409, exc.detail) from exc
 
     @app.get("/api/ports/discover")
@@ -1933,20 +1995,29 @@ def create_app(
         mcu: str | None = None
         elf_backend: str | None = None
 
-    async def _disconnect_shared_device() -> dict[str, object]:
+    async def _disconnect_shared_device(*, all_captures=False) -> dict[str, object]:
         """Stop bridge dashboards and release the GUI-owned Device."""
         async with _dashboard_start_lock(_state):
             async with device_disconnect_lock:
                 from mklink.remote.dashboards import BRIDGE_DASHBOARD_TYPES
 
                 stopped = []
-                for name in BRIDGE_DASHBOARD_TYPES:
+                stop_errors = {}
+                streams = (*BRIDGE_DASHBOARD_TYPES, "serial", "modbus") if all_captures else BRIDGE_DASHBOARD_TYPES
+                for name in streams:
                     manager = dashboard_managers.get(name)
-                    if manager is not None and _dashboard_worker_alive(manager):
-                        await run_in_threadpool(manager.stop)
+                    was_running = manager is not None and _dashboard_worker_alive(manager)
+                    if was_running or (manager is not None and name in ("serial", "modbus")):
+                        try:
+                            await run_in_threadpool(manager.stop)
+                        except Exception as error:
+                            if not all_captures or _dashboard_worker_alive(manager):
+                                raise
+                            stop_errors[name] = str(error)
                         if _dashboard_worker_alive(manager):
                             raise DashboardStopPending(name)
-                        stopped.append(name)
+                        if was_running:
+                            stopped.append(name)
                     _state["resource_manager"].release(f"user:dashboard:{name}")
 
                 device = _state["device"]
@@ -1956,7 +2027,10 @@ def create_app(
                     _state['symbol_device'] = device
                     _state["device"] = None
                     _state["dispatcher"] = None
-                return {"status": "disconnected", "stopped": stopped}
+                result = {"status": "disconnected", "stopped": stopped}
+                if stop_errors:
+                    result["stop_errors"] = stop_errors
+                return result
 
     def _reset_probe_dashboards():
         """Retire all target data after workers stop, retaining independent UART."""
@@ -1998,6 +2072,14 @@ def create_app(
             for name in BRIDGE_DASHBOARD_TYPES:
                 runtime.created_streams.pop(name, None)
 
+    async def verify_profile_target(device):
+        if isinstance(getattr(device, '_hardware_target', None), dict):
+            try:
+                await run_in_threadpool(device.verify_capture_target)
+            except Exception as error:
+                raise HTTPException(409, {"code": "target_binding_unavailable",
+                    "message": f"目标未确认，请检查目标供电后重新开始采集。{error}"}) from error
+
     @app.post("/api/device/connect")
     async def connect_device(
         port: str | None = Body(default=None),
@@ -2007,8 +2089,10 @@ def create_app(
         restore_last: bool = Body(default=False),
         reuse_connected: bool = Body(default=False),
     ):
+        from mklink.device import target_attach_status
         runtime = getattr(app.state, "shared_runtime", None)
         port_changed = False
+        current = _state.get("device")
         if runtime is not None:
             from mklink.probes import select_probe
             from mklink.runtime import RuntimeErrorResponse
@@ -2021,14 +2105,26 @@ def create_app(
             except RuntimeErrorResponse as exc:
                 raise HTTPException(409, exc.detail) from exc
             runtime.prune()
-            current = _state.get("device")
             port_changed = bool(current and current.port and current.port.casefold() != port.casefold())
-            if current and current.connected and not port_changed:
+        from mklink.device import probe_session_connected
+        if current and probe_session_connected(current) and not current.connected and not port_changed:
+            if mcu and isinstance(getattr(current, '_hardware_target', None), dict):
+                from mklink.profiles import resolve_attach_profile
+                requested = resolve_attach_profile(mcu)
+                if requested is None or requested.name != current._hardware_target['profile']:
+                    raise HTTPException(409, 'Explicit model differs from the previously identified target')
+            if port is None or port.casefold() == (current.port or '').casefold():
+                await verify_profile_target(current)
+        if current and current.connected and not port_changed:
+            matching_profile = check_live_attach_profile(current, mcu)
+            if runtime is not None:
                 restore_last = False  # Reuse live symbols; never reparse on an implicit reconnect.
                 if reuse_connected:
                     axf = mcu = elf_backend = None
-            if runtime.target_sessions and current and current.connected and not port_changed and any(value is not None for value in (axf, mcu, elf_backend)):
-                raise HTTPException(status_code=409, detail="Detach shared clients before changing device configuration or symbols")
+                elif matching_profile:
+                    mcu = None  # A subscription to the same profile performs no device I/O.
+                if runtime.target_sessions and any(value is not None for value in (axf, mcu, elf_backend)):
+                    raise HTTPException(status_code=409, detail="Detach shared clients before changing device configuration or symbols")
         preferred_port = None
         symbol_device = _state.get('device') or _state.get('symbol_device')
         if axf is None and symbol_device is not None and not symbol_device.connected:
@@ -2038,7 +2134,8 @@ def create_app(
             if port is None:
                 preferred_port = previous.get("port")
             axf = axf if axf is not None else previous.get("axf")
-            mcu = mcu if mcu is not None else previous.get("mcu")
+            if mcu is None and (axf is None or _same_file_source_path(axf, previous.get("axf"))):
+                mcu = previous.get("mcu")
             elf_backend = (
                 elf_backend
                 if elf_backend is not None
@@ -2064,7 +2161,7 @@ def create_app(
             manager = get_managers()["superwatch"]
             active_axf = axf or (getattr(dev, "axf_status", {}) or {}).get("axf_path")
             if active_axf and (axf is not None or elf_backend is not None):
-                await _reparse_active_symbols(axf, elf_backend)
+                await _load_symbol_file(axf, elf_backend)
             elif manager._device is not dev:
                 await run_in_threadpool(manager.prepare, dev)
                 await activate_watch_profile(dev)
@@ -2077,13 +2174,13 @@ def create_app(
                 "axf_loaded": bool(getattr(dev, "_dwarf_info", None)),
                 "elf_backend": dev.axf_status.get("elf_backend"),
                 "axf": dev.axf_status,
+                "target_attach": target_attach_status(dev),
             }
 
         import mklink
 
-        # Open the command port first. Target SWD/IDCODE initialization is
-        # intentionally deferred so a successful serial connection returns
-        # immediately; it is synchronized in the background below.
+        # Generic target identity is read in the background. A selected native
+        # profile must complete before this connection is shared with clients.
         loop = asyncio.get_event_loop()
 
         def _connect():
@@ -2103,16 +2200,34 @@ def create_app(
                 device = await loop.run_in_executor(None, _connect)
                 await run_in_threadpool(get_managers()["superwatch"].prepare, device)
                 await activate_watch_profile(device)
+                if getattr(device, "_attach_profile", None) and not device.connected:
+                    raise ConnectionError('Target attach binding lost while preparing the shared connection')
                 dispatcher = DeviceDispatcher(device)
             except Exception as exc:
+                from mklink.firmware_compatibility import FirmwareUpgradeRequired
+                from mklink.hil_lock import HilLockHeld
+                from mklink.mux import MuxProfileError
+                from mklink.profiles import TargetProfileError
                 detail = str(exc)
+                status_code = 400 if isinstance(exc, ValueError) else 500
+                if isinstance(exc, MuxProfileError):
+                    detail, status_code = exc.detail, 409
+                elif isinstance(exc, FirmwareUpgradeRequired):
+                    detail, status_code = exc.to_detail(), 409
+                elif isinstance(exc, TargetProfileError):
+                    detail, status_code = exc.detail, 422
+                elif isinstance(exc, HilLockHeld):
+                    detail, status_code = {"code": "PROBE_BUSY", "message": str(exc)}, 409
                 if device is not None:
                     try:
                         await run_in_threadpool(device.close)
                     except Exception as close_error:
-                        detail += f"; connection cleanup failed: {close_error}"
+                        if isinstance(detail, dict):
+                            detail = {**detail, "cleanup_error": str(close_error)}
+                        else:
+                            detail += f"; connection cleanup failed: {close_error}"
                 raise HTTPException(
-                    status_code=400 if isinstance(exc, ValueError) else 500,
+                    status_code=status_code,
                     detail=detail,
                 ) from exc
             # Publish only a fully prepared command session. A catalog/symbol
@@ -2120,12 +2235,13 @@ def create_app(
             _state["device"] = device
             _state["dispatcher"] = dispatcher
             remember_device_connection(_state, device, mcu=mcu)
+            target_attach = target_attach_status(device)
 
         async def _initialize_target_later():
             try:
                 from mklink.device import initialize_target
                 async with async_target_debug_lease(_state, "connect-init"):
-                    if _state.get("device") is not device or not device.connected:
+                    if _state.get("device") is not device or not device.connected or target_attach_status(device):
                         return
                     await run_in_threadpool(
                         initialize_target,
@@ -2141,7 +2257,8 @@ def create_app(
                 # until a target becomes available.
                 return
 
-        asyncio.create_task(_initialize_target_later())
+        if target_attach is None:
+            asyncio.create_task(_initialize_target_later())
         return {
             "status": "connected",
             "mcu": device.mcu_name,
@@ -2149,7 +2266,8 @@ def create_app(
             "port": device.port,
             "axf_loaded": bool(getattr(device, "_dwarf_info", None)),
             "elf_backend": device.axf_status.get("elf_backend"),
-            "target_initializing": True,
+            "target_initializing": target_attach is None,
+            "target_attach": target_attach,
             "clock_warning": getattr(device, "clock_warning", None),
             "clock_hz": getattr(device, "clock_hz", None),
         }
@@ -2158,8 +2276,17 @@ def create_app(
     async def disconnect_device():
         runtime = getattr(app.state, 'shared_runtime', None)
         async with _async_target_lock():
-            result = await _disconnect_shared_device()
-        _retire_target_connection(runtime)
+            result = await _disconnect_shared_device(all_captures=True)
+            if runtime is not None:
+                runtime.sessions.clear()
+                runtime.created_streams.clear()
+            _retire_target_connection(runtime)
+            from mklink.remote.stream_hub import StreamHub
+            stream_registry['serial'] = StreamHub(stream_api.SERIAL_BATCHES_PER_CLIENT)
+            serial = dashboard_managers.get('serial')
+            if hasattr(serial, 'set_stream_hub'):
+                serial.set_stream_hub(stream_registry['serial'])
+            _state['disconnect_generation'] = _state.get('disconnect_generation', 0) + 1
         if runtime is not None and getattr(runtime, 'binding', None) is not None:
             # Keep the window and last connection preferences, release physical
             # ownership so another independent window can connect this probe.
@@ -2170,21 +2297,26 @@ def create_app(
 
     @app.get("/api/device/status")
     async def device_status():
+        from mklink.device import probe_session_connected, target_attach_status
         from mklink.firmware_compatibility import compatibility_snapshot
         if not _state["device"]:
             symbols = _state.get('symbol_device')
             return {"connected": False, "probe_product": "MKLink", "state": "disconnected", "axf": active_symbol_status(symbols),
                     "probe_id": _state.get('shared_probe_id'),
+                    "disconnect_generation": _state.get('disconnect_generation', 0),
                     "device_generation": _state.get('device_generation', 0)}
         dev = _state["device"]
         return {
-            "connected": dev.connected,
+            "connected": probe_session_connected(dev),
+            "target_binding_lost": probe_session_connected(dev) and not dev.connected,
+            "disconnect_generation": _state.get('disconnect_generation', 0),
             "probe_id": _state.get('shared_probe_id'),
             "probe_product": getattr(dev, 'probe_product', 'MKLink') if dev.connected else 'MKLink',
             "connection_recovery": _state.get('connection_recovery'),
             "device_generation": _state.get('device_generation', 0),
             "state": dev.state.name if dev.state else "disconnected",
             "mcu": dev.mcu_name if dev.connected else None,
+            "target_attach": target_attach_status(dev) if dev.connected else None,
             "idcode": hex(dev.idcode) if dev.connected else None,
             "port": dev.port,
             "axf": active_symbol_status(dev),
@@ -2398,6 +2530,20 @@ def create_app(
     async def reset_device():
         from mklink.remote.dashboards import active_bridge_dashboards
         from mklink.runtime_capabilities import capture_reset_supported, capture_reset_hint
+        device = _state.get('device')
+        if isinstance(getattr(device, '_hardware_target', None), dict):
+            from mklink.remote.acquisition import suspend_acquisition
+            if not device.connected:
+                raise HTTPException(409, '目标绑定已失效，请先重新确认目标。')
+            async with suspend_acquisition(_state, getattr(app.state, 'shared_runtime', None), allow_reconnect=False) as report:
+                async with async_target_debug_lease(_state, 'reset'):
+                    try:
+                        await run_in_threadpool(device.reset)
+                    except Exception as error:
+                        raise HTTPException(409, {"code": "functional_reset_unconfirmed",
+                            "message": f"功能复位未确认。{error}。未重发复位。",
+                            "diagnostic": getattr(error, "details", None)}) from error
+            return {"status": "ok", "method": "FunctionalReset", "acquisition": report}
         async with _dashboard_start_lock(_state):
             device = _state.get('device')
             if device is None or not device.connected:
@@ -2745,6 +2891,8 @@ def create_app(
             encoding = normalize_rtt_encoding(encoding)
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+        if not get_managers()["rtt"].running:
+            await verify_profile_target(_state.get("device"))
         if not _state["device"] or not _state["device"].connected:
             raise HTTPException(
                 status_code=400,
@@ -2892,7 +3040,14 @@ def create_app(
     @app.get("/api/dash/rtt/status")
     async def rtt_status():
         managers = get_managers()
-        return {**managers["rtt"].get_status(), "file_source_change": _state["file_source_change"]}
+        status = managers["rtt"].get_status()
+        control = getattr(app.state, 'shared_runtime', None)
+        if control:
+            readers = control.gui_reader_count('rtt')
+            status["clients"] = max(status.get("clients", 0), readers)
+            if status.get("stream") is not None:
+                status["stream"]["active_clients"] = max(status["stream"]["active_clients"], readers)
+        return {**status, "file_source_change": _state["file_source_change"]}
 
     @app.get("/api/dash/rtt/channels/read")
     async def rtt_read_channel(channel: int = 0, cursor: int = 0, session: str | None = None):
@@ -2927,7 +3082,7 @@ def create_app(
     @app.post("/api/dash/systemview/start")
     async def systemview_start(
         addr: str | None = Body(default=None),
-        channel: Annotated[StrictInt, Body()] = 1,
+        channel: Annotated[StrictInt | None, Body()] = None,
         mode: Annotated[StrictInt, Body()] = 0,
         search_size: Annotated[StrictInt, Body()] = 0,
     ):
@@ -2936,14 +3091,16 @@ def create_app(
                 status_code=400,
                 detail=f"mode 必须是 0 或 1，得到 {mode}",
             )
+        if not get_managers()["systemview"].running:
+            await verify_profile_target(_state.get("device"))
         if not _state["device"] or not _state["device"].connected:
             raise HTTPException(status_code=400, detail="Device not connected")
         try:
             from mklink.device import DeviceError, _resolve_rtt_stream_parameters
 
-            addr, channel, search_size, mode = _resolve_rtt_stream_parameters(
+            addr, _, search_size, mode = _resolve_rtt_stream_parameters(
                 addr,
-                channel,
+                0 if channel is None else channel,
                 search_size,
                 mode,
                 _state["project_root"],
@@ -3108,6 +3265,8 @@ def create_app(
         interval: float | None = Body(None, embed=True, ge=SUPERWATCH_MIN_INTERVAL, le=60),
         profile: str | None = Body(None),
     ):
+        if not get_managers()["superwatch"].running:
+            await verify_profile_target(_state.get("device"))
         if not _state["device"] or not _state["device"].connected:
             raise HTTPException(status_code=400, detail="Device not connected")
         managers = get_managers()
@@ -3956,6 +4115,8 @@ def create_app(
         channels: catalog {path, name?, type?} or raw {addr, type?, size?, name?}.
         addr can be hex string or int. type defaults to "float", size to 4.
         """
+        if not get_managers()["vofa"].running:
+            await verify_profile_target(_state.get("device"))
         if not _state["device"] or not _state["device"].connected:
             raise HTTPException(status_code=400, detail="Device not connected")
         from mklink.remote.dashboards import normalize_vofa_interval
@@ -4044,8 +4205,9 @@ def create_app(
         from mklink.runtime_capabilities import validate_arguments
         arguments = validate_arguments('rtt_inspect', body)
         device = _state.get('device')
-        if device is None or not device.connected or not device.idcode:
-            raise HTTPException(400, 'Connect a target with a valid chip ID before inspecting RTT')
+        from mklink.device import target_attach_status
+        if device is None or not device.connected or not (device.idcode or target_attach_status(device)):
+            raise HTTPException(400, 'Connect a target with a valid chip ID or verified attach profile before inspecting RTT')
         async with async_target_debug_lease(_state, 'rtt-inspect'):
             try:
                 return await run_in_threadpool(device.rtt_inspect, int(arguments['address'], 0))

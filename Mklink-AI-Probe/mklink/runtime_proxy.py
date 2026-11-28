@@ -45,6 +45,7 @@ def create_proxy(info, *, port, instance_id, transport=None):
     view_id = f"desktop-{uuid.uuid4()}"
     view_lock = asyncio.Lock()
     view_registered = False
+    view_key = ''
     closing = False
 
     async def renew_view():
@@ -188,6 +189,8 @@ def create_proxy(info, *, port, instance_id, transport=None):
 
     @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"])
     async def forward(request: Request, path: str):
+        nonlocal view_key
+        source_instance = info.get('instance_id')
         headers = {key: value for key, value in request.headers.items() if key.lower() not in HOP_HEADERS}
         headers["X-Auth-Token"] = info["token"]
         if path.startswith('api/dash/') and path.endswith('/stream'):
@@ -198,10 +201,40 @@ def create_proxy(info, *, port, instance_id, transport=None):
             response = await app.state.client.send(upstream, stream=True)
         except httpx.HTTPError:
             return JSONResponse({"detail": "Shared runtime unavailable; CDC not reopened"}, status_code=503)
+        if path == 'api/device/disconnect' and response.status_code == 200:
+            info['probe_id'] = 'lobby'
         if path == "api/runtime/select" and response.status_code == 200:
             await response.aread()
             selection = response.json()
             await response.aclose()
+            if selection.get("joined_owner"):
+                from mklink.runtime import discover, RuntimeErrorResponse
+                try:
+                    destination = await asyncio.to_thread(discover, selection["probe_id"])
+                except RuntimeErrorResponse:
+                    destination = None
+                async with view_lock:
+                    if (closing or not destination or info.get('instance_id') != source_instance
+                            or destination['instance_id'] != selection['owner_instance']
+                            or destination['probe_id'] != selection['probe_id']):
+                        return JSONResponse({'detail': 'Probe owner changed; select the probe again'}, status_code=409)
+                    check = await app.state.client.get(f"http://127.0.0.1:{destination['port']}/api/device/status",
+                                                       headers={"X-Auth-Token": destination['token']}, timeout=3)
+                    status = check.json() if check.is_success else {}
+                    if (status.get('connected') is not True or status.get('probe_id') != selection['probe_id']
+                            or status.get('device_generation') != selection['device_generation']):
+                        return JSONResponse({'detail': 'Selected connection changed'}, status_code=409)
+                    latest = await app.state.client.get(f"http://127.0.0.1:{info['port']}/api/device/status",
+                                                        headers={"X-Auth-Token": info['token']}, timeout=3)
+                    if not latest.is_success or latest.json().get('probe_id') != 'lobby':
+                        return JSONResponse({'detail': 'Source window changed'}, status_code=409)
+                    await release_view()
+                    info.update(destination)
+                    view_key = uuid.uuid4().hex
+                    # The regular presence loop renews the new view even if the page reloads slowly.
+                # Reload the same native origin to discard old catalog and stream sockets.
+                return {'joined_owner': True, 'probe_id': destination['probe_id'],
+                        'desktop_view': view_key, 'desktop_instance': instance_id}
             if selection.get("switched"):
                 info['probe_id'] = selection['probe_id']
             return selection
@@ -259,6 +292,31 @@ def create_proxy(info, *, port, instance_id, transport=None):
             except RuntimeError:
                 pass
 
+    class DesktopViewScope:
+        def __init__(self, app):
+            self.app = app
+
+        async def __call__(self, scope, receive, send):
+            if scope['type'] in ('http', 'websocket'):
+                path = scope['path']
+                if path.startswith('/_view/'):
+                    _, _, key, rest = path.split('/', 3) if path.count('/') >= 3 else ('', '', '', '')
+                    if key and key == view_key:
+                        path = '/' + rest
+                        prefix = f'/_view/{key}'.encode('ascii')
+                        raw = scope.get('raw_path', b'')
+                        scope = {**scope, 'path': path, 'raw_path': raw[len(prefix):] if raw.startswith(prefix + b'/') else path.encode('utf-8')}
+                    else:
+                        path = None
+                elif view_key and path not in ('/api/desktop/shutdown', '/api/health'):
+                    path = None
+                if path is None:
+                    if scope['type'] == 'websocket':
+                        return await send({'type': 'websocket.close', 'code': 1008})
+                    return await JSONResponse({'detail': 'Desktop view changed; reload the window'}, status_code=409)(scope, receive, send)
+            return await self.app(scope, receive, send)
+
+    app.add_middleware(DesktopViewScope)
     return app
 
 

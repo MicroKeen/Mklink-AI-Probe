@@ -8,6 +8,20 @@ ESP32-S3 无线工作台通过传输适配复用本后台，接入步骤见
 
 ## 连接与选择
 
+S32K3 调试连接可以直接调用 `connect(probe="已确认的探针ID", project_root="目标工程绝对路径")`。USB MUX 通过 SWD TARGETID 和 AP 特征确认系列，再从 AP4 采集 SIUL2.MIDR1。回执 `target_attach` 包含实际型号 `profile`、`mem_ap`、`midr1` 和 `target_id`。目录支持解码 22 个型号。RTT、SuperWatch 和内存访问复用同一连接。
+
+```powershell
+python -B -m mklink target-profiles
+$probe = Read-Host '目标探针 ID'
+$project = Read-Host '目标工程绝对路径'
+python -B -m mklink device-status --probe $probe --project-root $project
+python -B -m mklink read-ram --probe $probe --addr 0xE000ED00 --size 4
+```
+
+`axf` 可选，提供 ELF、AXF 或 IAR OUT 的符号。加载或更换符号沿用当前硬件连接。用 `mklink image-target <文件>` 查看文件标注的器件及工程依据。要限定实物型号可传 `mcu="s32k312"`；在线烧录另外校验所选目标及算法。
+
+硬件识别要求 HELLO 能力位 0x2000 和 0x4000。显式要求 S32K3 且固件缺能力时会提示升级。新会话若读不到已知系列 TARGETID，默认连接继续普通路径。芯片报错保留 `step`、`reason`、`actual`；失效的绑定需显式重连。
+
 Skill 首次加载以 `ping(force_update_check=True, background_update_check=True)` 发起客户端
 版本检查，继续任务，后续用 `ping(background_update_check=True)` 取结果。发现 Skill 新版
 主动告知用户当前/最新版本；`checking` 或离线不能当作最新。授权连接后对下述固件状态也
@@ -35,7 +49,7 @@ Web GUI 显示同一清单，AI/CLI 客户端应转述升级提醒。操作返�
 
 从 0.3.4 开始，每个新 GUI 客户端创建独立后台，一次连接一只下载器。
 同一窗口切换下载器时，后台进程、端口和工程保持不变；旧目标采集停止并清空，
-新目标采集需重新启动。下载器已被另一后台使用时，先在原窗口断开才能接手。
+新目标采集需重新启动。下载器已在另一后台连接时，空闲桌面或 Web 窗口可通过“连接”加入该后台。
 同时操作多只下载器应打开多个客户端，各自选择设备；主动断开会释放设备，窗口后台继续保留。
 选择被另一客户端占用的下载器会明确拒绝，保留本窗口当前连接及另一窗口的工作。
 单窗口切换先预留新设备，再释放旧设备；失败选择不改变当前设备。保存的旧 COM
@@ -671,9 +685,9 @@ GUI RTT 按采集通道并排显示，每路复用相同的日志/终端/HEX/曲
 GUI、MCP `disconnect`、SDK `RuntimeClient.disconnect()` 以及管理入口 release-device
 统一处理物理断开：等待已接收的硬件操作收尾，自动停止目标采集，注销旧目标会话，
 释放探针并更新所有共享页面。多个页面或 AI 订阅者不再阻止该明确请求。
-已接收的烧录/擦除任务保留原结果，不通过断开强杀或重放。独立 UART 会话保留。
+后台等待已接收的烧录或擦除任务结束。明确断开也停止串口和 Modbus 采集，并注销该后台的 UART 会话。切换探针保留独立 UART。
 
 同一客户端显式 `connect(probe=另一个ID)` 在原后台切换，PID/端口不变；
-新客户端才创建独立后台。其他独立后台已持有目标探针时仍不能同时打开，先在其持有者断开。
+新客户端才创建独立后台。从空闲桌面或 Web 窗口选择已有连接的探针会加入持有端口的后台，继续使用其现有采集和符号。
 旧目标 AI 会话必须显式重新连接；旧远程 GUI 必须重新建立远程服务连接，不能沿用旧地址操作新目标。
 普通 MCP 收尾用 `detach`，SDK 上下文退出/`close()` 也只解除自身会话，不触发物理断开。

@@ -11,10 +11,12 @@ from pathlib import Path
 import secrets
 import time
 
+from starlette.datastructures import QueryParams
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount
 
+from mklink.device import probe_session_connected
 from mklink.runtime import PROTOCOL, VERSION
 from mklink.runtime_capabilities import CAPABILITIES, STREAMS, LIFECYCLE_CAPABILITIES, UART_CAPABILITIES, is_uart_path, validate_arguments
 from mklink.remote.stream_api import STREAM_TYPES
@@ -99,10 +101,11 @@ class RuntimeControl:
         self.operation_lock = asyncio.Lock()
         self.lifecycle_lock = asyncio.Lock()
         self.lifecycle_pending = 0
+        self.disconnect_pending = 0
         self.shutdown = None
         self.stopping = False
         self.views = {}
-        self.gui_stream_readers = Counter()
+        self.view_stream_readers = Counter()
         self.current_operation = None
         self.last_operation = None
         self.uart_operations: dict[asyncio.Task, str] = {}
@@ -138,12 +141,17 @@ class RuntimeControl:
         return {'kind': 'client', 'active': session is not None,
                 'client_id': session.public_id if session else None}
 
+    def gui_reader_count(self, stream):
+        # A window may show both terminal and waveform for the same stream.
+        return sum(1 if window else count for (window, name), count in self.view_stream_readers.items()
+                   if name == stream)
+
     def require_acquisition_control(self, stream, session_id):
         self.prune()
         recover = False
         if session_id:
             session = self.validate_session(session_id, target=stream in STREAMS)
-            if self.gui_stream_readers[stream]:
+            if self.gui_reader_count(stream):
                 raise HTTPException(409, 'A GUI is reading this acquisition; detach to keep it running')
             owner = self.created_streams.get(stream)
             # An explicit control command may recover an abandoned acquisition.
@@ -200,7 +208,7 @@ class RuntimeControl:
         status = 'present' if selected else 'missing'
         if self.info.get('probe_id') == 'lobby':
             status = 'unselected'
-        elif selected and device and device.connected and device.port.casefold() != selected['port'].casefold():
+        elif selected and probe_session_connected(device) and device.port.casefold() != selected['port'].casefold():
             status = 'port_changed'
         if status != 'present':
             self._memory_identity_cache = None
@@ -289,7 +297,8 @@ class RuntimeControl:
         clients = [{'id': s.public_id, 'kind': s.kind, 'name': s.name, 'scope': s.scope, 'streams': sorted(s.streams),
                     'age_seconds': now-s.joined, 'expires_in': max(0, s.expires-now)} for s in self.sessions.values()]
         represented = {view.get('owner') for view in self.views.values() if view.get('live')}
-        clients += [{'id': key, 'kind': 'gui', 'name': view['name'], 'streams': [],
+        clients += [{'id': key, 'kind': 'gui', 'name': view['name'],
+                     'streams': sorted(stream for (window, stream), count in self.view_stream_readers.items() if window == view.get('reader', key) and count),
                      'age_seconds': now-view['joined'], 'expires_in': None if view.get('live') else max(0, view['expires']-now)}
                     for key, view in self.views.items() if key not in represented]
         device = self.app.state.mklink_state.get('device')
@@ -305,7 +314,8 @@ class RuntimeControl:
                 'acquisition_transition': self.app.state.mklink_state.get('acquisition_transition'),
                 'connection_recovery': self.app.state.mklink_state.get('connection_recovery'),
                 'uart_operations': list(self.uart_operations.values()),
-                'connected': bool(device and device.connected),
+                'connected': probe_session_connected(device),
+                'target_binding_lost': probe_session_connected(device) and not device.connected,
                 'device_generation': self.app.state.mklink_state.get('device_generation', 0),
                 **sleep_access_status(device),
                 'streams': [{'name': name, 'running': manager.running, 'owner': self.acquisition_owner(name),
@@ -384,6 +394,8 @@ class RuntimeControl:
             finally:
                 active_operation.reset(token)
         if is_uart_path(name):
+            if self.disconnect_pending:
+                raise HTTPException(409, 'Device is disconnecting')
             if self.current_operation and (self.current_operation['path'] in UART_EXCLUSIVE_PATHS
                                            or self.current_operation.get('uart_exclusive')):
                 raise HTTPException(409, 'Resource release is in progress; wait before using UART')
@@ -442,10 +454,15 @@ class RuntimeControl:
         if session_id:
             self.session(session_id)  # Even a stale symbol catalog may disconnect.
         self.lifecycle_pending += 1
+        global_disconnect = name == '/api/device/disconnect'
+        if global_disconnect:
+            self.disconnect_pending += 1
         async def transition():
             try:
                 async with self.lifecycle_lock:
                     async with self.attach_lock:
+                        if global_disconnect and self.uart_operations:
+                            await asyncio.gather(*list(self.uart_operations), return_exceptions=True)
                         while True:
                             while self.job_busy():
                                 await asyncio.sleep(.025)
@@ -476,6 +493,8 @@ class RuntimeControl:
                             self.operation_lock.release()
             finally:
                 self.lifecycle_pending -= 1
+                if global_disconnect:
+                    self.disconnect_pending -= 1
         return await settle(asyncio.create_task(transition()))
 
     def prepare_call(self, body):
@@ -525,7 +544,12 @@ class RuntimeControl:
                               'json': {key: value for key, value in (arguments or {}).items() if key != 'channel'}}
             response = await client.request(method, path, headers=headers, **kwargs)
         if response.status_code >= 400:
-            raise HTTPException(response.status_code, response.json())
+            error = response.json()
+            if path == "/api/device/connect" and isinstance(error, dict) and isinstance(error.get("detail"), dict):
+                # Preserve the firmware diagnostic at the normal HTTP detail
+                # level for CLI, SDK and MCP clients of /_runtime/attach.
+                error = error["detail"]
+            raise HTTPException(response.status_code, error)
         return response.json()
 
 
@@ -620,11 +644,15 @@ class RuntimeGate:
         if not hardware or (method == 'POST' and path in LOCAL_IMAGE_INSPECTION_PATHS | LOCAL_RECORDING_EXPORT_PATHS):
             stream = GUI_STREAM_PATHS.get(path)
             if stream and (origin or headers.get(b'cookie') or headers.get(b'x-mklink-view-owner')):
-                c.gui_stream_readers[stream] += 1
+                window = QueryParams(scope.get('query_string', b'')).get('view', '')
+                key = (window, stream)
+                c.view_stream_readers[key] += 1
                 try:
                     return await self.app(scope, receive, send)
                 finally:
-                    c.gui_stream_readers[stream] -= 1
+                    c.view_stream_readers[key] -= 1
+                    if not c.view_stream_readers[key]:
+                        del c.view_stream_readers[key]
             return await self.app(scope, receive, send)
         session_id = headers.get(b"x-mklink-session", b"").decode()
         expected_probe = headers.get(b'x-mklink-probe', b'').decode()
@@ -827,13 +855,18 @@ def install_runtime(app, info):
     async def gui_link(body: dict):
         control.session(body.get('session_id'))
         now = time.monotonic()
-        for ticket, expires in list(gui_tickets.items()):
+        expected = None
+        if 'probe_id' in body:
+            expected = (body['probe_id'], body.get('device_generation'))
+            if expected != (info.get('probe_id'), state.get('device_generation', 0)):
+                raise HTTPException(409, 'Selected connection changed')
+        for ticket, (expires, _) in list(gui_tickets.items()):
             if expires <= now:
                 gui_tickets.pop(ticket, None)
         if len(gui_tickets) >= 8:
             raise HTTPException(429, 'Too many pending GUI launch links')
         ticket = 'gui-' + secrets.token_urlsafe(32)
-        gui_tickets[ticket] = now + 60
+        gui_tickets[ticket] = (now + 60, expected)
         return JSONResponse({'ticket': ticket, 'expires_in': 60}, headers={'Cache-Control': 'no-store'})
 
     @api.get("/open", response_class=HTMLResponse)
@@ -853,7 +886,9 @@ fetch('/_runtime/login', {method:'POST', headers:{'Content-Type':'application/js
     @api.post("/login")
     async def login(body: dict):
         token = body.get("token")
-        ticket_expires = gui_tickets.pop(token, None) if isinstance(token, str) else None
+        ticket_expires, expected = gui_tickets.pop(token, (None, None)) if isinstance(token, str) else (None, None)
+        if expected is not None and expected != (info.get('probe_id'), state.get('device_generation', 0)):
+            raise HTTPException(409, 'Selected connection changed; select the probe again')
         if not isinstance(token, str) or not token.isascii() or not (hmac.compare_digest(token, info["token"])
                                              or (ticket_expires is not None and ticket_expires > time.monotonic())):
             raise HTTPException(401, "Unauthorized")
@@ -865,7 +900,7 @@ fetch('/_runtime/login', {method:'POST', headers:{'Content-Type':'application/js
     async def status():
         control.prune()
         return {"protocol": PROTOCOL, "version": VERSION, "instance_id": info["instance_id"],
-                "gui_launch": 1, "runtime_id": info.get("runtime_id"),
+                "gui_launch": 1, "target_attach_version": 1, "hardware_target_version": 1, "runtime_id": info.get("runtime_id"),
                 "pid": info.get("pid"), "project_root": state["project_root"], "transport": info.get('transport', 'cdc'),
                 "probe_id": info.get("probe_id"), "clients": len(control.sessions), "busy": control.operation_lock.locked(),
                 "capabilities": sorted(CAPABILITIES)}
@@ -925,6 +960,8 @@ fetch('/_runtime/login', {method:'POST', headers:{'Content-Type':'application/js
         if session is None and len(control.sessions) >= 128:
             raise HTTPException(429, 'Too many attached clients')
         if scope == 'uart':
+            if control.disconnect_pending:
+                raise HTTPException(409, 'Device is disconnecting')
             if any(body.get(key) is not None for key in ('port', 'axf', 'mcu', 'elf_backend')):
                 raise HTTPException(422, 'UART-only attachment does not accept target connection settings')
             return attached(body, scope, {'attached': True})
@@ -947,8 +984,12 @@ fetch('/_runtime/login', {method:'POST', headers:{'Content-Type':'application/js
                 if body.get("axf") and (not axf or not same_path(body["axf"], axf)):
                     raise HTTPException(409, "Runtime already has different symbols; change them explicitly in the GUI")
                 if body.get("mcu") or body.get("elf_backend"):
+                    from mklink.remote.api import check_live_attach_profile
+                    matching_profile = check_live_attach_profile(dev, body.get("mcu"))
                     previous = state.get("last_device_connection") or {}
                     for key in ("mcu", "elf_backend"):
+                        if key == "mcu" and matching_profile:
+                            continue
                         if body.get(key) and body[key] != previous.get(key):
                             raise HTTPException(409, f"Shared {key} differs from the requested configuration")
             else:
@@ -983,7 +1024,7 @@ fetch('/_runtime/login', {method:'POST', headers:{'Content-Type':'application/js
             raise HTTPException(409, 'Session expired or detached; connect again')
         device = state.get('device')
         if not transitioning() and (
-                (device is None or not device.connected)
+                (not probe_session_connected(device))
                 or (presence and presence['status'] != 'present')):
             control.sessions.pop(body['session_id'], None)
             raise HTTPException(409, 'Probe connection lost; call connect explicitly to recover the same probe')

@@ -14,6 +14,8 @@ export interface OfflineDiskStatus {
 }
 
 export interface OfflineAlgorithmCandidate {
+  flash_size?: number
+  default?: boolean
   id: string
   file_name: string
   flash_base: string

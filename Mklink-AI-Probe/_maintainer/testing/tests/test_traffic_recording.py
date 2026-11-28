@@ -10,8 +10,19 @@ from test_serial_automation import ports, wait_for
 
 
 def records(directory):
-    return [json.loads(line) for p in sorted(directory.glob('*.jsonl'))
-            for line in p.read_text(encoding='utf-8').splitlines()]
+    from mklink.recording_file import capture_rows
+    return [row for p in directory.glob('*.mklog') for row in capture_rows(p)]
+
+
+def footer(path):
+    from mklink.recording_file import TAIL, TRAILER
+    with open(path, 'rb') as stream:
+        stream.seek(-TAIL.size, 2)
+        offset, marker = TAIL.unpack(stream.read())
+        assert marker == TRAILER
+        stream.seek(offset)
+        return json.loads(stream.readline())
+
 
 
 def test_lossless_raw_direction_session_rotation_and_no_overwrite(tmp_path):
@@ -19,9 +30,9 @@ def test_lossless_raw_direction_session_rotation_and_no_overwrite(tmp_path):
     for i in range(7):
         recorder.append(1, bytes(range(256)), 'TX' if i % 2 else 'RX', f'session-{i//3}', i + .125)
     status = recorder.stop()
-    assert status['state'] == 'completed' and status['samples'] == 7 and status['parts'] == 4
+    assert status['state'] == 'completed' and status['samples'] == 7 and status['parts'] == 1
     rows = records(tmp_path)
-    assert all(r['complete'] for r in rows if r['type'] == 'end')
+    assert footer(status['path']) == {'complete': True, 'blocks': 4}
     frames = [r for r in rows if r['type'] == 'data']
     assert [r['time'] for r in frames] == [i + .125 for i in range(7)]
     assert all(bytes.fromhex(r['hex']) == bytes(range(256)) for r in frames)
@@ -37,9 +48,9 @@ def test_overflow_or_disk_failure_is_reported_instead_of_success(tmp_path):
     recorder.append('COM1', b'hello', 'RX', 's')
     status = recorder.stop()
     assert status['state'] == 'failed' and not status['active']
-    assert records(tmp_path)[-1]['complete'] is False
+    assert footer(status['path'])['complete'] is False
     recorder = TrafficRecorder(tmp_path, 'serial')
-    recorder._file.close()
+    recorder._capture.stream.close()
     recorder.append('COM1', b'hello', 'RX', 's')
     assert recorder.stop()['state'] == 'failed'
 

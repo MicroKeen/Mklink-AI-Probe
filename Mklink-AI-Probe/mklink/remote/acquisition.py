@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def suspend_acquisition(state, control=None):
+async def suspend_acquisition(state, control=None, *, allow_reconnect=True):
     from mklink.remote.api import (
         _dashboard_start_lock, _dashboard_worker_alive,
         _start_dashboard_manager_transaction, stop_dashboard_manager,
@@ -70,7 +70,7 @@ async def suspend_acquisition(state, control=None):
                 # HPM and power-cycle downloads close the shared command handle.
                 # Reopen only the same bound USB identity, preserving symbol state.
                 if was_connected and not device.connected:
-                    if not automatic_recovery:
+                    if not allow_reconnect or not automatic_recovery:
                         raise RuntimeError('Connection lost; transport requires explicit recovery, no automatic reconnect')
                     if any(_dashboard_worker_alive(manager) for _, manager, _, _ in saved):
                         raise RuntimeError('A capture worker still owns the connection')

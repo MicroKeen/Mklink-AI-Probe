@@ -48,9 +48,11 @@ def builder(monkeypatch, tmp_path):
     monkeypatch.setattr(module, "load_builtin_pack_assets", lambda: SimpleNamespace(
         prepare_bundle=lambda _: tmp_path / "builtin_packs",
         validate_bundle=lambda _: {"svd_target_count": 1},
+        stage_windows_packs=lambda *_: None,
+        compress_svd_members=lambda _, destination: destination.write_bytes(b'test archive'),
     ))
     support = tmp_path / "build-work/pyinstaller/dist/mklink-sidecar/_internal"
-    support.mkdir(parents=True)
+    (support / "pyocd/debug/svd").mkdir(parents=True)
     (support / "base_library.zip").write_bytes(b"stdlib")
     return module
 
@@ -537,7 +539,13 @@ def test_sidecar_collects_pyocd_plugins_metadata_and_hid_binary(builder, monkeyp
     assert ["--recursive-copy-metadata", "fastmcp"] in pairs
     assert ["--collect-data", "docket"] in pairs
     assert ["--collect-all", "burner_redis"] in pairs
-    assert ["--collect-all", "pyocd"] in pairs
+    if builder.IS_WINDOWS:
+        assert ["--collect-submodules", "pyocd"] in pairs
+        assert ["--collect-data", "pyocd"] in pairs
+        assert ["--collect-binaries", "pyocd"] in pairs
+        assert ["--collect-all", "pyocd"] not in pairs
+    else:
+        assert ["--collect-all", "pyocd"] in pairs
     assert ["--copy-metadata", "pyocd"] in pairs
     assert ["--collect-all", "cmsis_pack_manager"] in pairs
     assert ["--collect-all", "hid"] in pairs
@@ -1054,10 +1062,18 @@ def test_sidecar_collects_local_builtin_flm_bundle(
     bundle_root = tmp_path / "_maintainer" / "local" / "builtin_flm"
     bundle_root.mkdir(parents=True)
     (bundle_root / "manifest.json").write_text("{}", encoding="utf-8")
+    (bundle_root / "blobs").mkdir()
+    (bundle_root / "blobs" / "chip.flm").write_bytes(b"algorithm")
+    (bundle_root / "unused.tmp").write_bytes(b"build scratch")
     commands = []
+    collected = set()
 
     def fake_run(command, **_kwargs):
         commands.append(command)
+        for index, flag in enumerate(command):
+            if flag == "--add-data" and command[index + 1].endswith(";mklink/builtin_flm"):
+                root = Path(command[index + 1].split(";")[0])
+                collected.update(p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file())
         output = Path(command[command.index("--distpath") + 1]) / "mklink-sidecar" / "mklink-sidecar.exe"
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_bytes(b"sidecar")
@@ -1070,6 +1086,7 @@ def test_sidecar_collects_local_builtin_flm_bundle(
         lambda root=None: {
             "target_count": 7059,
             "blob_count": 2224,
+            "blobs": [{"file": "blobs/chip.flm"}],
             "release_note": "增加了常用型号",
         },
     )
@@ -1084,7 +1101,7 @@ def test_sidecar_collects_local_builtin_flm_bundle(
         if value == "--add-data"
     ]
     assert any(value.endswith(";mklink/builtin_flm") for value in add_data)
-    assert any(value.startswith(str(bundle_root)) for value in add_data)
+    assert collected == {"manifest.json", "blobs/chip.flm"}
 
 
 def test_release_bundle_requires_local_builtin_flm_assets(builder, monkeypatch, tmp_path):

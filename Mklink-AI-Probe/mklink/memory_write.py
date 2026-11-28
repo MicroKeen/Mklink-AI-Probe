@@ -112,6 +112,7 @@ def plan_flush_batches(
 
 def execute_flush(device, parsed, *, verify=False):
     from mklink.observe_bridge import memory_flush_facts, observe_operation
+    from mklink.profiles import MuxAttachProfile
     if type(verify) is not bool:
         raise ValueError('verify must be boolean')
     if getattr(device._bridge, '_sleep_debug_atomic', False) is True:
@@ -122,12 +123,26 @@ def execute_flush(device, parsed, *, verify=False):
         action_class="emit",
     ) as observation:
         total = sum(len(data) for _, data in parsed)
-        batches = plan_flush_batches(parsed)
+        mux = None
+        if isinstance(getattr(device._bridge, 'attach_profile', None), MuxAttachProfile):
+            mux = device._bridge.enable_multiplex()
+            quantum = mux.transfer_quantum
+            # One native write per batch. A later error must not count the
+            # uncertain frame or resend the acknowledged prefix.
+            batches = [[(address + offset, data[offset:offset + quantum])]
+                       for address, data in parsed for offset in range(0, len(data), quantum)]
+        else:
+            batches = plan_flush_batches(parsed)
         results = []
         try:
             for bi, batch in enumerate(batches):
-                resp = device._bridge.send_command(flush_command(batch), timeout=10.0)
-                ok, msg = parse_flush_response(resp)
+                if mux is None:
+                    resp = device._bridge.send_command(flush_command(batch), timeout=10.0)
+                    ok, msg = parse_flush_response(resp)
+                else:
+                    address, data = batch[0]
+                    mux.write_memory(address, data)
+                    ok, msg = True, ''
                 if ok and verify:
                     for address, data in batch:
                         for offset in range(0, len(data), 4096):
@@ -144,7 +159,7 @@ def execute_flush(device, parsed, *, verify=False):
                 })
                 if not ok:
                     break
-        except Exception:
+        except Exception as error:
             successful_batches = sum(result["ok"] for result in results)
             facts = memory_flush_facts(
                 canonical_memory_address(parsed[0][0]) if parsed else None,
@@ -155,6 +170,12 @@ def execute_flush(device, parsed, *, verify=False):
                 failed_batches=1,
             )
             observation.fail("memory_flush_transport_failed", facts=facts)
+            if mux is not None:
+                completed = sum(result['bytes'] for result in results if result['ok'])
+                raise RuntimeError(
+                    f'{error}; completed {successful_batches}/{len(batches)} MUX write batches '
+                    f'({completed}/{total} bytes) before the failed write or verification; no retry'
+                ) from error
             raise
         response = {
             "ok": len(results) == len(batches) and all(r["ok"] for r in results),

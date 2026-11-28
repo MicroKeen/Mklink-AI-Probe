@@ -2707,6 +2707,20 @@ def test_explicit_multiple_algorithms_block_unbounded_chip_erase(app, services, 
     assert not services.job_manager.started
 
 
+@pytest.mark.parametrize("options", [
+    {}, {"algorithm_erase_range": [0x400000, 0x7e0000], "algorithm_ids": ["a", "b"]},
+    {"algorithm_erase_range": [0x400000, 0x7e0000], "algorithm_ids": ["a"], "sector_addresses": [0x602000]},
+    {"algorithm_erase_range": [0x400000, 0x7e0000], "algorithm_ids": ["a"], "image_id": "image"},
+    {"flash_prepare_reset": True, "reset_mode": "core", "sector_addresses": [0x602000]},
+])
+def test_s32k344_mixed_or_unbounded_erase_never_creates_job(app, services, options):
+    services.catalog.search = lambda *a, **kw: [TargetRecord("S32K344", "NXP", installed=True, source="daplink-builtin")]
+    response = request(app, "POST", "/api/online-flash/jobs", json={
+        "target_part": "S32K344", "probe_id": "mk", "actions": ["connect", "erase", "disconnect"], **options})
+    assert response.status_code == 422, response.text
+    assert not services.job_manager.started
+
+
 def test_manual_native_internal_and_custom_external_algorithms(app, services, explicit_algorithms):
     services.catalog.search = lambda *a, **k: [TargetRecord('DEVICE_A', 'Vendor', installed=True, source='builtin')]
     native = 'pyocd-builtin:device_a:00001000'

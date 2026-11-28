@@ -50,7 +50,7 @@ def capture():
         manager = SystemViewStreamManager()
         manager._startup_no_data_timeout_s = .03
         managers.append(manager)
-        manager.start(device, addr="0x20000000", duration=duration)
+        manager.start(device, addr="0x20000000", channel=1, duration=duration)
         wait_until(lambda: transport.rtt_mask == 2)
         return manager, device, transport, calls, emit
 

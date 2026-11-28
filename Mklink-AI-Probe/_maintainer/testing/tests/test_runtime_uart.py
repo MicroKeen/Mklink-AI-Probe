@@ -588,25 +588,35 @@ def test_uart_shared_creator_borrower_and_gui_permissions(uart_app, stream, sett
 def test_concurrent_uart_start_only_registers_the_actual_creator(uart_app, monkeypatch):
     client, control, managers, factory, _ = uart_app
     owner, peer = uart_attach(client), uart_attach(client)
-    entered, release = threading.Event(), threading.Event()
-    def opening(self):
-        entered.set()
-        assert release.wait(3)
-        return True
-    monkeypatch.setattr(factory, 'open', opening)
     async def scenario():
+        loop = asyncio.get_running_loop()
+        entered, release = asyncio.Event(), threading.Event()
+
+        def opening(self):
+            loop.call_soon_threadsafe(entered.set)
+            assert release.wait(30), 'Test did not release the first Modbus open'
+            return True
+
+        monkeypatch.setattr(factory, 'open', opening)
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=control.app),
                 base_url='http://127.0.0.1:8765', headers={'X-Auth-Token': 'test-secret'}) as http:
             body = {'capability': 'modbus_start', 'arguments': {'port': 'TEST', 'registers': []}}
             first = asyncio.create_task(http.post('/_runtime/call', json={**body, 'session_id': owner}))
-            assert await asyncio.to_thread(entered.wait, 1)
-            second = asyncio.create_task(http.post('/_runtime/call', json={**body, 'session_id': peer}))
+            opening_started = asyncio.create_task(entered.wait())
             try:
-                assert (await asyncio.wait_for(second, .5)).status_code == 409
+                done, _ = await asyncio.wait({opening_started, first}, timeout=10,
+                                             return_when=asyncio.FIRST_COMPLETED)
+                if first in done:
+                    pytest.fail(f'First start returned before opening the port: {first.result().text}')
+                assert opening_started in done, 'First start did not reach Modbus open'
+                second = await asyncio.wait_for(
+                    http.post('/_runtime/call', json={**body, 'session_id': peer}), timeout=10)
+                assert second.status_code == 409, second.text
             finally:
                 release.set()
-                responses = await asyncio.gather(first, second)
-            assert [r.status_code for r in responses] == [200, 409]
+                opening_started.cancel()
+                response = await asyncio.wait_for(first, timeout=10)
+            assert response.status_code == 200, response.text
     client.portal.call(scenario)
     assert len(factory.instances) == 1 and control.created_streams == {'modbus': owner}
     assert control.sessions[owner].streams == {'modbus'} and not control.sessions[peer].streams

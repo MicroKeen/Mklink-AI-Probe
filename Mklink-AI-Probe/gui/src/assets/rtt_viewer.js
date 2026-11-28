@@ -3459,7 +3459,7 @@ function acceptBinarySummary(summary, channels) {
   if (channels) configureBinaryChannels(channels);
   if (!binaryChannelNames.length || summary.channelCount !== binaryChannelNames.length) return false;
   if (binaryLastSequence !== null && summary.sequence <= binaryLastSequence) return false;
-  var values = new Float32Array(summary.latestValues);
+  var values = summary.exactLatestValues || new Float32Array(summary.latestValues);
   if (values.length !== summary.channelCount || !Number.isFinite(summary.latestTimeMs)) return false;
   for (var channel = 0; channel < values.length; channel++) {
     if (!Number.isFinite(values[channel])) return false;

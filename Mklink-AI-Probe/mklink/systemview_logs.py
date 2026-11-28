@@ -32,7 +32,8 @@ def capture_project(project_root, axf=None, selected=None):
         if source.is_file() and not source.is_relative_to(root / '.mklink' / 'uploads'):
             for directory in source.parents:
                 if ((directory / '.mklink').is_dir() or (directory / 'CMakeLists.txt').is_file()
-                        or (directory / 'SConstruct').is_file()):
+                        or (directory / 'SConstruct').is_file() or any(directory.glob('*.uvprojx'))
+                        or any(directory.glob('*.ewp'))):
                     return directory
             return source.parent
     raise ValueError('当前后台使用桌面默认工作区。请在 SystemView 的“日志位置”填写用户工程目录，或解析该工程的原始 AXF/ELF，再开始保存。')

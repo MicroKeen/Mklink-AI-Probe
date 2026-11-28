@@ -430,6 +430,50 @@ def test_modbus_explicit_open_uses_finite_write_timeout_and_real_rtu_codec(monke
     assert not wire.is_open
 
 
+def test_disconnect_interrupts_silent_rtu_before_retry_and_releases_port(monkeypatch, tmp_path):
+    from mklink.remote.api import start_dashboard_manager, stop_dashboard_manager_transaction
+    from mklink.remote.dashboards import ModbusStreamManager
+    from mklink.remote.resource_manager import ResourceManager
+
+    monkeypatch.setenv('MKLINK_LOCK_DIR', str(tmp_path))
+    monkeypatch.setattr('serial.tools.list_ports.comports', lambda: [])
+    waiting = threading.Event()
+
+    class SilentWire:
+        is_open = True
+        writes = 0
+
+        @property
+        def in_waiting(self):
+            if self.writes:
+                waiting.set()
+            return 0
+
+        def write(self, data):
+            self.writes += 1
+            return len(data)
+
+        def close(self):
+            self.is_open = False
+
+    wire = SilentWire()
+    monkeypatch.setattr('serial.serial_for_url', lambda *args, **kwargs: wire)
+    manager = ModbusStreamManager()
+    state = {'resource_manager': ResourceManager()}
+
+    async def scenario():
+        await start_dashboard_manager(state, 'modbus', manager,
+            lambda: manager.start({'port': 'TEST', 'timeout': 10, 'retries': 5}, 1, []))
+        manager.start_loop(3, 0, quantity=1, count=0)
+        assert await asyncio.to_thread(waiting.wait, 2)
+        await asyncio.wait_for(stop_dashboard_manager_transaction(state, 'modbus', manager), 2)
+        assert not manager.worker_alive and not manager.get_status()['stopping']
+        assert not state['resource_manager'].get_status()
+
+    asyncio.run(scenario())
+    assert not wire.is_open and wire.writes == 1
+
+
 def test_serial_stop_closes_admission_even_when_read_worker_is_retained(monkeypatch):
     from mklink.serial._monitor import SerialMonitor
     monitor = SerialMonitor([{'port': 'TEST'}])

@@ -17,7 +17,7 @@ class TrafficRecorder:
         from mklink.work_files import capture_directory
         directory = capture_directory(directory)
         self._base = directory / (kind + '-' + datetime.now().strftime('%Y%m%d-%H%M%S-') + uuid.uuid4().hex[:12])
-        self._kind, self._part_bytes, self._part_events = kind, part_bytes, part_events
+        self._kind = kind
         self._queue_limit, self._queued_bytes = queue_bytes, 0
         self._condition = threading.Condition()
         self._queue = deque()
@@ -28,21 +28,13 @@ class TrafficRecorder:
             self._export = ManualExport(kind)
         self._status = dict(state='recording', active=True, path='', directory=str(directory),
                             samples=0, bytes=0, parts=0, error='', started_at=time.time())
-        self._open_part()
+        from mklink.recording_file import RecordingFile
+        path = self._base.with_suffix('.mklog')
+        self._capture = RecordingFile(path, self._kind, block_bytes=min(256 * 1024, part_bytes),
+                                      block_rows=min(2048, part_events))
+        self._status.update(path=str(path), parts=1)
         self._thread = threading.Thread(target=self._run, name=kind + '-traffic-recording', daemon=True)
         self._thread.start()
-
-    def _open_part(self):
-        path = str(self._base) + f'-{self._status["parts"] + 1:04d}.jsonl'
-        self._file = open(path, 'x', encoding='utf-8', newline='\n')
-        try:
-            self._file.write(json.dumps(dict(type='mklink-traffic', version=1, kind=self._kind)) + '\n')
-            self._file.flush()
-        except BaseException:
-            self._file.close()
-            raise
-        with self._condition:
-            self._status.update(path=path, parts=self._status['parts'] + 1)
 
     def status(self):
         with self._condition:
@@ -91,32 +83,24 @@ class TrafficRecorder:
             raise TimeoutError('Recording is still draining; check status before restarting')
         return self.status()
 
-    def _finish_part(self, error=''):
-        self._file.write(json.dumps(dict(type='end', complete=not bool(error), error=error)) + '\n')
-        self._file.close()
-
     def _run(self):
-        count = size = 0
         error = ''
         try:
             while True:
                 with self._condition:
-                    while not self._queue and not self._closing:
-                        self._condition.wait()
-                    if not self._queue:
+                    self._condition.wait_for(lambda: self._queue or self._closing,
+                                             timeout=2 if self._capture.count else None)
+                    if not self._queue and self._closing:
                         break
-                    row, chunk, weight = self._queue.popleft()
+                    batch = self._queue.popleft() if self._queue else None
+                if batch is None:
+                    self._capture.flush_block()
+                    continue
+                row, chunk, weight = batch
                 row['hex'] = chunk.hex()
                 line = json.dumps(row, ensure_ascii=False, separators=(',', ':'), allow_nan=False) + '\n'
-                length = len(line.encode('utf-8'))
-                if count and (size + length > self._part_bytes or count >= self._part_events):
-                    self._finish_part()
-                    self._open_part()
-                    size = count = 0
-                self._file.write(line)
-                self._file.flush()
-                count += 1
-                size += length
+                self._capture.append(line.encode('utf-8'), row['time'], source=row['source'],
+                                     lost=row['lost_bytes'] > 0)
                 with self._condition:
                     self._queued_bytes -= weight
                     self._status['samples'] += 1
@@ -127,14 +111,9 @@ class TrafficRecorder:
             with self._condition:
                 error = error or self._status['error']
             try:
-                self._finish_part(error)
+                self._capture.finish(error)
             except Exception as exc:
                 error = error or str(exc)
-            finally:
-                try:
-                    self._file.close()
-                except Exception as exc:
-                    error = error or str(exc)
             with self._condition:
                 self._closing = True
                 self._queue.clear()

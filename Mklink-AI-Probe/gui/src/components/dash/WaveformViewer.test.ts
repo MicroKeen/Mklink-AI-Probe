@@ -430,8 +430,10 @@ describe('WaveformViewer VOFA binary transport', () => {
     const config = wrapper.vm.read()
     const first = wrapper.vm.readValues()['signal:sensor.temperature']!
     expect(first).toMatchObject({ value: 21.5, sequence: '1', connected: true })
-    summary.value = { ...summary.value, sequence: 2n }
-    expect(wrapper.vm.readValues()['signal:sensor.temperature']?.sequence).toBe('2')
+    summary.value = { ...summary.value, sequence: 2n,
+      latestValues: Float32Array.of(614947609, 1).buffer, exactLatestValues: [614947609, 1] }
+    expect(wrapper.vm.readValues()['signal:sensor.temperature']).toMatchObject({ sequence: '2', value: 614947609 })
+    expect(wrapper.emitted('latest-values')?.at(-1)).toEqual([{ 'sensor.temperature': 614947609, 'sensor.valid': 1 }])
     expect(wrapper.vm.read()).toEqual(config)
     summary.value = { ...summary.value, sequence: 3n, collectedItemCount: 0 }
     expect(wrapper.vm.readValues()['signal:sensor.temperature']?.sequence).toBe('2')
@@ -543,6 +545,31 @@ describe('WaveformViewer VOFA binary transport', () => {
       expect(document.getElementById('pts-count')?.textContent).toBe('6 pts')
     } finally {
       runtime.cleanup()
+    }
+  })
+
+  it('releases the hidden waveform reader and ignores late status and producer starts until visible again', async () => {
+    let resolveStatus!: (value: Response) => void
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+      .mockImplementationOnce(() => new Promise<Response>(resolve => { resolveStatus = resolve }))
+    const wrapper = mount(WaveformViewer, {
+      props: { mode: 'SuperWatch', deviceConnected: true, active: false },
+    })
+    try {
+      expect(mocks.binary.start).not.toHaveBeenCalled()
+      await wrapper.setProps({ active: true })
+      await wrapper.setProps({ active: false })
+      expect(mocks.binary.stop).toHaveBeenCalledOnce()
+      resolveStatus(new Response(JSON.stringify({ items: [] })))
+      window.dispatchEvent(new CustomEvent('mklink:vofa-stream-state', { detail: 'running' }))
+      await new Promise(resolve => setTimeout(resolve, 0))
+      expect(mocks.binary.start).not.toHaveBeenCalled()
+      await wrapper.setProps({ active: true })
+      await new Promise(resolve => setTimeout(resolve, 0))
+      expect(mocks.binary.start).toHaveBeenCalledOnce()
+    } finally {
+      wrapper.unmount()
+      fetchMock.mockRestore()
     }
   })
 

@@ -159,10 +159,13 @@ describe('RttViewTab binary migration', () => {
     wrapper.unmount()
   })
 
-  it('reads channels immediately after search and retains the preview across idle polling', async () => {
+  it.each([
+    { idcode: '0x1ba01477' },
+    { idcode: null, target_attach: { profile: 'S32K314', mem_ap: 4 } },
+  ])('reads channels on the confirmed target and retains the preview across idle polling: %j', async identity => {
     vi.useFakeTimers()
     vi.mocked(fetch).mockImplementation(async (url) => ({ ok: true, json: async () =>
-      String(url).endsWith('/api/device/status') ? { connected: true, idcode: '0x1ba01477' } :
+      String(url).endsWith('/api/device/status') ? { connected: true, probe_id: 'usb-b', device_generation: 7, ...identity } :
       String(url).endsWith('/rtt-control-block') ? { channels: [0, 2], up_buffers: [{ channel: 0 }, { channel: 2 }] } : mocks.status,
     }) as Response)
     const wrapper = mount(RttViewTab, { props: { deviceConnected: true } })
@@ -171,6 +174,7 @@ describe('RttViewTab binary migration', () => {
     await flushPromises()
     expect(fetch).toHaveBeenCalledWith('/api/device/rtt-control-block', expect.objectContaining({
       body: JSON.stringify({ address: '0x20001A40' }),
+      headers: expect.objectContaining({ 'X-MKLink-Probe': 'usb-b', 'X-MKLink-Device-Generation': '7' }),
     }))
     expect(wrapper.get('[data-testid=rtt-channel-2]').element).toHaveProperty('checked', true)
     expect(wrapper.text()).toContain('CH 2')
@@ -202,6 +206,19 @@ describe('RttViewTab binary migration', () => {
     await wrapper.get('[data-testid=rtt-address]').setValue('0x20000200')
     resolve({ channels: [0, 7], up_buffers: [] }); await flushPromises()
     expect(wrapper.find('[data-testid=rtt-channel-7]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('subscribes only while the RTT panel is visible', async () => {
+    mocks.status = { running: true, channels: [0], down_buffers: [] }
+    const wrapper = mount(RttViewTab, { props: { active: false, deviceConnected: true } })
+    await flushPromises()
+    const panel = wrapper.getComponent({ name: 'RttChannelPanel' })
+    expect(panel.props('running')).toBe(false)
+    await wrapper.setProps({ active: true })
+    expect(panel.props('running')).toBe(true)
+    await wrapper.setProps({ active: false })
+    expect(panel.props('running')).toBe(false)
     wrapper.unmount()
   })
 

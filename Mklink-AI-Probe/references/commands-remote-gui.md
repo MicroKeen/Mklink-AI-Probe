@@ -74,7 +74,7 @@ python -m mklink gui --no-browser
 
 GUI 启动后在浏览器中提供以下主页面：
 - **远程服务页** (`/remote-service`) — LAN/VPN 监听、认证令牌、启动/停止及连接说明
-- **配置页** (`/config`) — COM 口选择、MCU 配置、项目初始化
+- **配置页** (`/config`) — COM 口选择、文件来源、固件与后台管理
 - **仪表盘页** (`/dashboard`) — RTT View、烧录、调试控制、串口、Modbus、SuperWatch
 - **在线烧录页** (`/online-flash`) — MKLink-only 探针、目标/Pack、HEX/BIN 检查与预览、烧录任务和 SSE 日志
 

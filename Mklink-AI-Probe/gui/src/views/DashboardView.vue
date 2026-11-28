@@ -82,18 +82,18 @@
         </div>
       </div>
 
-      <RttViewTab :key="'RttViewTab-' + (deviceStatus.device_generation || 0)" v-show="tab === 'rtt'" :device-connected="deviceStatus.connected" />
+      <RttViewTab :key="'RttViewTab-' + (deviceStatus.device_generation || 0)" v-show="tab === 'rtt'" :active="active && tab === 'rtt'" :device-connected="deviceStatus.connected" />
 
       <HardFaultTab :key="'HardFaultTab-' + (deviceStatus.device_generation || 0)" v-if="tab === 'hardfault'" :device-connected="deviceStatus.connected" :symbol-loaded="deviceStatus.axf?.loaded === true" />
       <MemoryTab :key="'MemoryTab-' + (deviceStatus.device_generation || 0)" v-if="tab === 'memory'" :device-connected="deviceStatus.connected" />
-      <SuperWatchTab ref="superwatchSurface" :key="'SuperWatchTab-' + (deviceStatus.device_generation || 0)" v-show="tab === 'superwatch'" :device-connected="deviceStatus.connected" :symbol-loaded="deviceStatus.axf?.loaded === true" :symbol-error="deviceStatus.axf?.error" />
-      <WorkbenchTab v-if="workbenchOpened" v-show="tab === 'workbench'" ref="workbenchSurface" :agent-feedback="frontend.feedback.value" :key="'workbench-' + frontend.sessionEpoch.value" :active="tab === 'workbench'" :device-connected="deviceStatus.connected" :symbol-loaded="deviceStatus.axf?.loaded === true" :symbol-error="deviceStatus.axf?.error" @intent="askAgent">
+      <SuperWatchTab ref="superwatchSurface" :key="'SuperWatchTab-' + (deviceStatus.device_generation || 0)" v-show="tab === 'superwatch'" :active="active && tab === 'superwatch'" :device-connected="deviceStatus.connected" :symbol-loaded="deviceStatus.axf?.loaded === true" :symbol-error="deviceStatus.axf?.error" />
+      <WorkbenchTab v-if="workbenchOpened" v-show="tab === 'workbench'" ref="workbenchSurface" :agent-feedback="frontend.feedback.value" :key="'workbench-' + frontend.sessionEpoch.value" :active="active && tab === 'workbench'" :device-connected="deviceStatus.connected" :symbol-loaded="deviceStatus.axf?.loaded === true" :symbol-error="deviceStatus.axf?.error" @intent="askAgent">
         <template #agent-action>
           <button type="button" class="device-quick-action" aria-haspopup="dialog" :title="frontend.error.value || tr('打开 Agent 协作请求', 'Open Agent request')" @click="askAgent('workbench')"><span class="status-dot" :class="frontend.connected.value ? 'dot-user' : ''"></span>Agent</button>
         </template>
       </WorkbenchTab>
-      <SerialMonitorTab v-if="!IS_REMOTE" v-show="tab === 'serial'" />
-      <ModbusTab v-if="!IS_REMOTE" v-show="tab === 'modbus'" />
+      <SerialMonitorTab :key="'SerialMonitorTab-' + (deviceStatus.disconnect_generation || 0)" v-if="!IS_REMOTE" v-show="tab === 'serial'" />
+      <ModbusTab :key="'ModbusTab-' + (deviceStatus.disconnect_generation || 0)" v-if="!IS_REMOTE" v-show="tab === 'modbus'" />
       <SystemViewTab :key="'SystemViewTab-' + (deviceStatus.device_generation || 0)" v-show="tab === 'systemview'" :active="tab === 'systemview'" :device-connected="deviceStatus.connected" />
       <SymbolsTab :key="'SymbolsTab-' + (deviceStatus.device_generation || 0)" v-if="tab === 'symbols'" :device-connected="deviceStatus.connected" :symbol-loaded="deviceStatus.axf?.loaded === true" :symbol-error="deviceStatus.axf?.error" />
     </div>
@@ -124,6 +124,7 @@ import FrontendIntent from '../components/dash/FrontendIntent.vue'
 import { useFrontendWorkbench } from '../composables/useFrontendWorkbench'
 import type { SemanticSurface } from '../lib/frontendControl'
 
+withDefaults(defineProps<{ active?: boolean }>(), { active: true })
 const route = useRoute()
 const router = useRouter()
 const { deviceStatus, resetDevice, rebootProbe } = useMklinkApi()
@@ -300,12 +301,15 @@ async function quickRebootProbe() {
   min-width: 0;
 }
 .dashboard-nav-row .tabs-bar {
+  overflow-x: auto;
+  flex-wrap: nowrap;
   flex: 1 1 0;
   width: 0;
   min-width: 0;
   margin-bottom: 0;
   border-bottom: 0;
 }
+.dashboard-nav-row .tab-btn { flex: 0 0 auto; white-space: nowrap; }
 .title-right {
   position: relative;
   flex: 0 0 auto;

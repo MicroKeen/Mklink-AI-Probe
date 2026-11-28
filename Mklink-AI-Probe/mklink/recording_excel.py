@@ -109,7 +109,7 @@ def _write_book(job, manifest, target, output):
         sheet = None
         sheets = samples = 0
         for part in range(1, job['parts'] + 1):
-            for point in _rows(Path(job['base'] + f'-{part:04d}.jsonl')):
+            for point in _rows(Path(job.get('source') or job['base'] + f'-{part:04d}.jsonl')):
                 boundary = point.get('event') == 'discontinuity'
                 if sheet is None or sheet.count >= MAX_ROWS or (
                         not boundary and any(name != '_t' and name not in sheet.known_names for name in point)):

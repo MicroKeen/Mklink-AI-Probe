@@ -77,3 +77,34 @@ def test_skill_archive_contains_the_same_verified_pack_payload(assets, bundle, m
     with ZipFile(output) as archive:
         assert archive.read('Skill/mklink/builtin_packs/vendor.pack') == (bundle / 'vendor.pack').read_bytes()
         assert 'Skill/mklink/builtin_packs/manifest.json' in archive.namelist()
+
+def test_windows_compaction_preserves_every_member_and_excludes_unlisted_packs(assets, bundle, tmp_path):
+    from zipfile import ZIP_LZMA
+
+    (bundle / 'unused.pack').write_bytes(b'unlisted')
+    manifest = assets.validate_bundle(bundle)
+    original = (bundle / 'vendor.pack').read_bytes()
+    out = tmp_path / 'staged'
+    assets.stage_windows_packs(bundle, out, manifest)
+    assert assets.validate_bundle(out)['svd_target_count'] == 1
+    assert (bundle / 'vendor.pack').read_bytes() == original
+    assert {p.name for p in out.iterdir()} == {'manifest.json', 'vendor.pack'}
+    with ZipFile(bundle / 'vendor.pack') as before, ZipFile(out / 'vendor.pack') as after:
+        assert after.namelist() == before.namelist()
+        for name in before.namelist():
+            assert after.read(name) == before.read(name)
+        assert after.getinfo('SVD/chip.svd').compress_type == ZIP_LZMA
+        assert after.getinfo('Vendor.pdsc').compress_type == before.getinfo('Vendor.pdsc').compress_type
+
+
+def test_pyocd_xml_named_svd_is_losslessly_compressed(assets, tmp_path):
+    from zipfile import ZIP_LZMA
+
+    original = tmp_path / 'pyocd.zip'
+    compact = tmp_path / 'compact.zip'
+    with ZipFile(original, 'w') as archive:
+        archive.writestr('LPC54114_cm4.xml', b'<device/>')
+    assets.compress_svd_members(original, compact)
+    with ZipFile(compact) as archive:
+        assert archive.getinfo('LPC54114_cm4.xml').compress_type == ZIP_LZMA
+        assert archive.read('LPC54114_cm4.xml') == b'<device/>'

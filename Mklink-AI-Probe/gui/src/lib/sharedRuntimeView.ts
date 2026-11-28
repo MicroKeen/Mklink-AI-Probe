@@ -1,6 +1,11 @@
 import { API_BASE, IS_REMOTE, IS_TAURI } from './runtimeEndpoint'
 import type { GuiCommand } from './guiAutomation'
 
+let windowKey: string | undefined
+export function runtimeWindowKey(): string {
+  return windowKey ??= crypto.randomUUID()
+}
+
 /** A transport-owned presence survives background timer throttling. */
 export function startSharedRuntimeView(present?: (tab: string) => Promise<void>,
   execute?: (command: GuiCommand) => Promise<Record<string, unknown>>): () => void {
@@ -11,6 +16,7 @@ export function startSharedRuntimeView(present?: (tab: string) => Promise<void>,
   const resume = () => {
     if (stopped || suspended || socket !== null) return
     const url = new URL(IS_REMOTE ? `${API_BASE}/presence` : `${API_BASE}/api/runtime/control/view/${crypto.randomUUID()}`, window.location.href)
+    if (!IS_REMOTE) url.searchParams.set('reader', runtimeWindowKey())
     if (!IS_REMOTE && present) url.searchParams.set('presentation', '1')
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
     const current = new WebSocket(url.href)

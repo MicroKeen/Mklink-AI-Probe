@@ -1,3 +1,5 @@
+import { openRecording, type RecordingBlock } from '../../../mklink/static/recording_file.js'
+
 export type TrafficFrame = { source: string; session: string; direction: 'RX' | 'TX'; time: number; hex: string; lost_bytes: number }
 export type TrafficLog = { frames: TrafficFrame[]; sources: string[]; warning: boolean }
 export const TRAFFIC_FILE_LIMIT = 16 * 1024 * 1024
@@ -34,6 +36,65 @@ export function parseTrafficLog(text: string, kind: 'rtt' | 'serial'): TrafficLo
 
 export function trafficBytes(frame: TrafficFrame): Uint8Array {
   return Uint8Array.from(frame.hex.match(/../g)!, value => parseInt(value, 16))
+}
+
+export async function indexedTraffic(file: File, kind: 'rtt' | 'serial') {
+  const capture = await openRecording(file, kind)
+  type Entry = { block: RecordingBlock; first: number; count: number; previousEnd: number; end: number }
+  const tracks = new Map<string, { entries: Entry[]; count: number; origin: number }>()
+  let warning = !capture.complete
+  for (const block of capture.blocks) {
+    warning ||= block.loss
+    for (const [source, meta] of Object.entries(block.tracks)) {
+      const track = tracks.get(source) ?? { entries: [], count: 0, origin: meta[1]! }
+      const previousEnd = track.entries.at(-1)?.end ?? track.origin
+      track.entries.push({ block, first: track.count, count: meta[0]!, previousEnd, end: Math.max(previousEnd, meta[2]!) })
+      track.count += meta[0]!
+      tracks.set(source, track)
+    }
+  }
+  let cached: { block: RecordingBlock; frames: TrafficFrame[] } | undefined
+  async function page(source: string, index: number) {
+    const track = tracks.get(source)!
+    let lo = 0, hi = track.entries.length
+    while (lo < hi) {
+      const mid = Math.floor((lo + hi) / 2)
+      if (track.entries[mid]!.first <= index) lo = mid + 1
+      else hi = mid
+    }
+    const { block, first, count, previousEnd } = track.entries[lo - 1]!
+    if (!cached || cached.block !== block) {
+      const text = await (await capture.payload(block)).text()
+      const header = JSON.stringify({type:'mklink-traffic', version:1, kind})
+      const frames = parseTrafficLog(header + '\n' + text + '{"type":"end","complete":true}', kind).frames
+      if (frames.length !== block.rows) throw new Error('Traffic block record count differs from index')
+      cached = { block, frames }
+    }
+    const frames = cached.frames.filter(f => f.source === source)
+    if (frames.length !== count) throw new Error('Traffic channel count differs from index')
+    let clock = previousEnd
+    const times = frames.map(f => ((clock = Math.max(clock, f.time)) - track.origin) * 1000)
+    return { frames, first, times }
+  }
+  function duration(source: string) {
+    const t = tracks.get(source)
+    return t ? (t.entries.at(-1)!.end - t.origin) * 1000 : 0
+  }
+  async function cursorAt(source: string, ms: number) {
+    const track = tracks.get(source)!, entries = track.entries
+    if (ms >= duration(source)) return track.count
+    let lo = 0, hi = entries.length
+    while (lo < hi) {
+      const mid = Math.floor((lo + hi) / 2)
+      if ((entries[mid]!.end - track.origin) * 1000 <= ms) lo = mid + 1
+      else hi = mid
+    }
+    const chunk = await page(source, entries[lo]!.first)
+    const next = chunk.times.findIndex(t => t > ms)
+    return chunk.first + (next < 0 ? chunk.frames.length : next)
+  }
+  return { sources: [...tracks.keys()], warning, count: (source: string) => tracks.get(source)?.count || 0,
+    duration, cursorAt, page }
 }
 
 /** A decoder per source/direction/session preserves split multibyte characters. */

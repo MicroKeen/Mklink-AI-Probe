@@ -31,7 +31,8 @@ import '../../../../mklink/static/superwatch_replay.css'
 import SuperWatchRecording from './SuperWatchRecording.vue'
 import { createNumericSamples } from '../../lib/numericValue'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
+  active?: boolean
   mode: 'SuperWatch' | 'VOFA'
   deviceConnected: boolean
   panelId?: string
@@ -39,7 +40,7 @@ const props = defineProps<{
   viewState?: Record<string, unknown>
   hiddenChannels?: ReadonlySet<string>
   arraySnapshotPath?: string | null
-}>()
+}>(), { active: true })
 
 const emit = defineEmits<{
   'latest-values': [values: Record<string, number>]
@@ -244,7 +245,7 @@ async function pollArraySnapshot(generation: number): Promise<void> {
 
 function startArraySnapshotPolling(): void {
   stopArraySnapshotPolling()
-  if (props.mode !== 'SuperWatch' || !props.arraySnapshotPath || !props.deviceConnected) {
+  if (!props.active || props.mode !== 'SuperWatch' || !props.arraySnapshotPath || !props.deviceConnected) {
     ;getViewer()?.setArraySnapshot?.(null)
     return
   }
@@ -305,6 +306,7 @@ function startVofaStatusPolling(startTransport: boolean): void {
 }
 
 function onVofaStreamState(event: Event): void {
+  if (!props.active) return
   const state = (event as CustomEvent<unknown>).detail
   if (state === 'running') {
     binary.stop()
@@ -359,7 +361,7 @@ watch(() => binary.waveformBatch.value, batch => {
 watch(() => binary.waveformSummary?.value, summary => {
   if (!summary || props.mode !== 'SuperWatch') return
   if (getViewer()?.isReplaying?.()) return
-  const values = new Float32Array(summary.latestValues)
+  const values = summary.exactLatestValues || new Float32Array(summary.latestValues)
   if (summary.channelCount === vofaChannels.length && values.length === summary.channelCount) {
     const latest: Record<string, number> = {}
     for (let channel = 0; channel < summary.channelCount; channel += 1) {
@@ -447,7 +449,7 @@ onMounted(() => {
     }
     window.addEventListener('mklink:vofa-stream-state', onVofaStreamState)
     vofaScheduler?.start()
-    startVofaStatusPolling(true)
+    if (props.active) startVofaStatusPolling(true)
     startArraySnapshotPolling()
     const viewer = getViewer()
     attachSuperwatchRequesters(viewer)
@@ -459,9 +461,18 @@ watch(() => props.deviceConnected, (val) => {
   if (viewers?.[viewerKey]?.setDeviceConnected) viewers[viewerKey].setDeviceConnected(val)
 })
 
+watch(() => props.active, visible => {
+  if (visible) {
+    startVofaStatusPolling(true)
+  } else {
+    stopVofaStatusPolling()
+    binary.stop()
+  }
+})
+
 watch(() => props.hiddenChannels, applyHiddenChannels)
 watch(() => props.signals, names => getViewer()?.setSignals?.(names), { deep: true })
-watch([() => props.arraySnapshotPath, () => props.deviceConnected], startArraySnapshotPolling)
+watch([() => props.arraySnapshotPath, () => props.deviceConnected, () => props.active], startArraySnapshotPolling)
 
 watch(language, value => {
   getViewer()?.setLanguage?.(value)

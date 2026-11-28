@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import runpy
 import shutil
 from pathlib import Path, PurePosixPath
 from typing import Iterable, Sequence
@@ -141,6 +142,14 @@ def install_bundle(source: Path, destination: Path) -> dict[str, object]:
         raise ValueError(f"source must contain {EXPECTED_TARGET_COUNT} built-in targets")
     if len(original["blobs"]) != EXPECTED_BLOB_COUNT:
         raise ValueError(f"source must contain {EXPECTED_BLOB_COUNT} built-in algorithm blobs")
+
+    # This script also runs directly without an installed mklink package.
+    corrections = Path(__file__).resolve().parents[3] / "mklink/cmsis_dap/s32k3_flm.py"
+    correction_module = runpy.run_path(str(corrections))
+    for target in original["targets"]:
+        if correction_module["layout"](target.get("part_number", "")):
+            corrected = [correction_module["correct_algorithm"](source, target["part_number"], row) for row in target["algorithms"]]
+            target["algorithms"] = [row for row in corrected if row is not None]
 
     destination.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(source / "blobs", destination / "blobs")

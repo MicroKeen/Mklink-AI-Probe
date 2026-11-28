@@ -66,6 +66,8 @@ export interface FlashAlgorithmRecord {
   source_kind: 'installed-pack' | 'builtin-pack' | 'daplink-builtin' | 'pyocd-builtin' | 'custom-flm' | 'hpm-rom-api' | string
   source_name: string
   sector_sizes?: Array<[number, number]>
+  ram_start?: number
+  ram_size?: number
 }
 
 export interface ImageSegment {
@@ -127,6 +129,8 @@ export interface JobRequest {
   reset_voltage_mv?: 1800 | 3300 | 5000 | null
   base_address?: number | null
   sector_addresses?: number[]
+  algorithm_erase_range?: [number, number]
+  flash_prepare_reset?: boolean
   board?: string | null
   hpm_flash_cfg?: [string, string, string, string] | null
 }
@@ -186,6 +190,7 @@ export interface JobSnapshot {
   elapsed_seconds: number
   error_code: string | null
   error_message: string | null
+  error_details?: Record<string, unknown>
 }
 
 export interface JobEvent {
@@ -196,6 +201,7 @@ export interface JobEvent {
   message: string
   state: JobState | null
   progress: number | null
+  error_details?: Record<string, unknown>
 }
 
 export interface JobStreamError {

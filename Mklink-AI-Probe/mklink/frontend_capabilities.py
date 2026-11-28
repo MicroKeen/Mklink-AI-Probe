@@ -105,6 +105,7 @@ def offline_tools():
     from types import SimpleNamespace
     from .mcp_analysis import register_systemview_offline_tools
     from .mcp_configuration import register_configuration_offline_tools
+    from .profiles import target_profile_catalog
     functions = {}
 
     def register(function):
@@ -114,6 +115,7 @@ def offline_tools():
         return function
 
     registry = SimpleNamespace(tool=lambda: register)
+    register(target_profile_catalog)
     register_systemview_offline_tools(registry)
     register_configuration_offline_tools(registry)
     return functions

@@ -1,7 +1,9 @@
 import { frontendFetch as fetch } from '../lib/frontendControl'
 import type { SemanticExecutionContext } from '../lib/frontendControl'
+import { navigateToRuntime } from '../lib/runtimeNavigation'
 import { requestError } from '../lib/requestError'
 import { ref, readonly } from 'vue'
+import { useToast } from './useToast'
 import { tr } from './useLanguage'
 import { flushWatchProfile, useWatchProfile } from './useWatchProfile'
 import { recordStatusFailure, recordStatusRestored } from '../lib/connectionDiagnostics'
@@ -29,7 +31,7 @@ import { toHexPayload } from '../lib/rttTransmit'
 import type { RttEncoding } from '../lib/desktopSettings'
 import { API_BASE, IS_REMOTE } from '../lib/runtimeEndpoint'
 import { sharedRuntime } from './useBackendHealth'
-import { trackSymbolSource } from '../lib/trackedSymbolSource'
+import { restoreSymbolSource, trackSymbolSource, trackedSymbolPath } from '../lib/trackedSymbolSource'
 import { resetDeviceSymbolCatalog } from './useSymbolCatalog'
 
 async function apiRequest<T>(path: string, options?: RequestInit, context?: SemanticExecutionContext): Promise<T> {
@@ -121,19 +123,24 @@ export function useMklinkApi(context?: SemanticExecutionContext) {
   }
 
   function trackUploadedSymbol(file: File, uploaded: UploadedFileSource) {
-    trackSymbolSource(file, uploaded, {
-      upload: (next, operation) => {
-        const data = new FormData()
-        data.append('file', next)
-        return apiRequest<UploadedFileSource>('/api/files/symbol', { method: 'POST', body: data }, operation)
-      },
-      reload: async (path, expectedPath, operation) => {
-        await flushWatchProfile()
-        const result = await apiRequest<{ state?: string; rtt_addr?: string }>(`/api/symbols/reload-sources?${new URLSearchParams({ source_path: path, expected_axf: expectedPath })}`, { method: 'POST' }, operation)
-        await useWatchProfile().load()
-        return result
-      },
-    })
+    trackSymbolSource(file, uploaded, symbolTrackingActions)
+    if (!trackedSymbolPath.value && uploaded.source_kind !== 'local') {
+      useToast().info(tr('当前浏览器只提供文件快照。要自动发现重新编译，请在“配置 → 文件来源”输入后台可访问的原文件路径。', 'This browser provided a snapshot. For automatic rebuild detection, enter the original file path accessible to the backend in Configuration → File Sources.'))
+    }
+  }
+
+  const symbolTrackingActions: Parameters<typeof trackSymbolSource>[2] = {
+    upload: (next, operation) => {
+      const data = new FormData()
+      data.append('file', next)
+      return apiRequest<UploadedFileSource>('/api/files/symbol', { method: 'POST', body: data }, operation)
+    },
+    reload: async (path, expectedPath, operation) => {
+      await flushWatchProfile()
+      const result = await apiRequest<{ state?: string; rtt_addr?: string }>(`/api/symbols/reload-sources?${new URLSearchParams({ source_path: path, expected_axf: expectedPath })}`, { method: 'POST' }, operation)
+      await useWatchProfile().load()
+      return result
+    },
   }
 
   async function getConfigStatus(): Promise<ConfigStatus> {
@@ -233,9 +240,10 @@ export function useMklinkApi(context?: SemanticExecutionContext) {
   }
 
   async function connectDevice(req: ConnectRequest): Promise<DeviceStatus> {
-    const { probe, ...connection } = req
+    const { probe, ...settings } = req
+    const connection = sharedRuntime.value ? { ...settings, reuse_connected: true } : settings
     if (sharedRuntime.value) {
-      let selection: { switched?: boolean; connection?: DeviceStatus }
+      let selection: { switched?: boolean; joined_owner?: boolean; owner_url?: string; desktop_view?: string; desktop_instance?: string; connection?: DeviceStatus }
       try {
         selection = await api('/api/runtime/select', {
           method: 'POST', body: JSON.stringify({ probe, port: req.port, connect: connection }),
@@ -244,6 +252,17 @@ export function useMklinkApi(context?: SemanticExecutionContext) {
         // Also clear the old target after a switch whose new connection failed.
         await refreshStatus()
         throw error
+      }
+      if (selection.joined_owner) {
+        if (selection.desktop_view && selection.desktop_instance) {
+          const target = new URL(window.location.href)
+          target.searchParams.set('mklink_view', selection.desktop_view)
+          target.searchParams.set('mklink_adapter', selection.desktop_instance)
+          navigateToRuntime(target.href)
+        } else if (selection.owner_url) {
+          navigateToRuntime(selection.owner_url)
+        }
+        return deviceStatus.value
       }
       if (selection.switched) {
         await refreshStatus()
@@ -432,6 +451,7 @@ export function useMklinkApi(context?: SemanticExecutionContext) {
     updateConfig,
     uploadFileSource,
     trackUploadedSymbol,
+    restoreSymbolTracking: () => restoreSymbolSource(symbolTrackingActions),
     getConfigStatus,
     getProjectInfo,
     getRttConfig,

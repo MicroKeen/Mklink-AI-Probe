@@ -15,6 +15,7 @@ from mklink.runtime_capabilities import CAPABILITIES
 
 # Wrapper aliases keep their original preconditions and nested action arguments.
 MCP_ALIASES = {
+    'list_target_profiles': 'target_profile_catalog',
     'ping': 'health gui_frontend_capabilities', 'gui_open': 'gui_windows gui_present',
     'gui_control': 'gui_windows gui_action gui_snapshot', 'gui_call': 'gui_frontend_capabilities',
     'connect': 'device_connect', 'disconnect': 'device_disconnect', 'detach': 'runtime_detach_client',
@@ -29,6 +30,7 @@ MCP_ALIASES = {
     'systemview': ' '.join('systemview_' + action for action in 'status history start stop pause resume'.split()),
 }
 CLI_ALIASES = {
+    'target-profiles': 'target_profile_catalog',
     'version': 'probe_version', 'gui': 'gui_windows gui_present gui_action', 'break': 'breakpoints',
     'configuration': 'configuration_description read_configuration configuration_script',
     'debug-speed': 'debug_speed set_debug_speed', 'device-status': 'device_status',

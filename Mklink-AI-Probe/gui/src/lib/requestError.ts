@@ -5,6 +5,11 @@ function detailText(value: unknown): string {
   if (Array.isArray(value)) return value.map(detailText).filter(Boolean).join(' / ')
   if (!value || typeof value !== 'object') return ''
   const data = value as Record<string, unknown>
+  if (Array.isArray(data.busy)) {
+    const labels: Record<string, string> = { rtt: 'RTT', superwatch: 'SuperWatch', systemview: 'SystemView', vofa: 'VOFA' }
+    const readers = data.busy.filter((value): value is string => typeof value === 'string').map(value => labels[value] || value).join(' / ')
+    if (readers) return tr(`当前 ${readers} 正在采集，请先停止对应采集再重试。`, `${readers} acquisition is active. Stop it before retrying.`)
+  }
   const message = detailText(data.message) || detailText(data.msg) || detailText(data.detail) || detailText(data.error) || detailText(data.conflict)
   const field = Array.isArray(data.loc) ? data.loc.join('.') : ''
   const code = typeof data.code === 'string' || typeof data.code === 'number' ? String(data.code) : ''

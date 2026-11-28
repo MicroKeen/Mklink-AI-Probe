@@ -88,7 +88,7 @@ it('opens the native folder picker and enables recording before any acquisition'
   environment.pickDirectory.mockResolvedValue('F:/日志')
   const request = vi.fn(async (url: string) => ({ ok: true, json: async () => url.endsWith('/start')
     ? { active: true, state: 'recording', samples: 0, path: 'F:/日志/log.jsonl' }
-    : { active: false, state: 'idle' } }))
+    : url.includes('/project-root/browse') ? { current: 'F:/logs', suggested: 'F:/logs', dirs: [], drives: [] } : { active: false, state: 'idle' } }))
   vi.stubGlobal('fetch', request)
   const wrapper = mount(SuperWatchRecording)
   try {
@@ -98,7 +98,7 @@ it('opens the native folder picker and enables recording before any acquisition'
     expect(HTMLDialogElement.prototype.showModal).not.toHaveBeenCalled()
     expect(request).toHaveBeenLastCalledWith(expect.stringContaining('/recording/start'), expect.objectContaining({ body: JSON.stringify({ directory: 'F:/日志' }) }))
     expect(wrapper.text()).toMatch(/等待数据|Waiting for data/)
-    expect(localStorage.setItem).toHaveBeenCalledWith('mklink.superwatch.recordDirectory', 'F:/日志')
+    expect(localStorage.setItem).toHaveBeenCalledWith('mklink.superwatch.recordDirectory:F:/logs', 'F:/日志')
   } finally { wrapper.unmount() }
 })
 
@@ -111,13 +111,13 @@ it('cancels without starting or browsing and allows retry after a native picker 
     await flushPromises()
     const toggle = wrapper.get('[data-testid=sw-record-toggle]')
     await toggle.trigger('click'); await flushPromises()
-    expect(request).toHaveBeenCalledTimes(1)
+    expect(request.mock.calls.filter(([url]) => String(url).endsWith('/start'))).toHaveLength(0)
     await toggle.trigger('click'); await flushPromises()
     expect(wrapper.text()).toContain('picker failed')
     expect(toggle.attributes('disabled')).toBeUndefined()
     await toggle.trigger('click'); await flushPromises()
     expect(wrapper.text()).not.toContain('picker failed')
-    expect(request).toHaveBeenCalledTimes(1)
+    expect(request.mock.calls.filter(([url]) => String(url).endsWith('/start'))).toHaveLength(0)
   } finally { wrapper.unmount() }
 })
 

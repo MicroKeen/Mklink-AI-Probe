@@ -1,3 +1,5 @@
+from mklink.recording_file import capture_blocks
+from pathlib import Path
 from array import array
 import json
 from types import SimpleNamespace
@@ -10,8 +12,9 @@ from mklink.remote.dashboards import SuperWatchStreamManager
 
 
 def rows(directory):
-    return [json.loads(line) for path in sorted(directory.glob('*.jsonl'))
-            for line in path.read_text(encoding='utf-8').splitlines()]
+    from mklink.recording_file import capture_rows
+    return [row for path in directory.glob('*.mklog') for row in capture_rows(path)]
+
 
 
 def manager():
@@ -58,7 +61,7 @@ def test_recording_keeps_all_samples_beyond_display_buffer_and_drains_tail(tmp_p
     assert result['state'] == 'completed' and result['samples'] == len(data) == 60_001
     assert [r['value'] for r in data] == list(range(60_001))
     assert data[-1]['_t'] == 6
-    assert result['bytes'] == sum(p.stat().st_size for p in tmp_path.glob('*.jsonl'))
+    assert result['bytes'] == sum(len(block) for block in capture_blocks(Path(result['path'])))
 
 
 def test_parts_retain_every_row_and_layout_without_overwriting(tmp_path):
@@ -66,7 +69,8 @@ def test_parts_retain_every_row_and_layout_without_overwriting(tmp_path):
     recorder.append(array('f', range(8)), array('d', range(8)), [{'name': 'value'}])
     recorder.append(array('f', [42]), array('d', [8]), [{'name': 'new_name'}])
     result = recorder.stop()
-    assert result['parts'] == 4
+    assert result['parts'] == 1 and len(list(tmp_path.glob('*.mklog'))) == 1
+    assert len(list(capture_blocks(Path(result['path'])))) == 4
     assert [r.get('value', r.get('new_name')) for r in rows(tmp_path)] == [*range(8), 42]
     second = SuperWatchRecorder(tmp_path)
     assert second.status()['path'] != result['path']
@@ -109,7 +113,7 @@ def test_numeric_recording_is_byte_identical_to_json_encoder(tmp_path, names):
     recorder.append(values, times, [{'name': n} for n in names])
     result = recorder.stop()
     assert result['state'] == 'completed'
-    data = b''.join(p.read_bytes() for p in sorted(tmp_path.glob('*.jsonl')))
+    data = b''.join(capture_blocks(Path(result['path'])))
     assert data == ''.join(expected).encode('utf-8')
     assert result['bytes'] == len(data)
 
@@ -119,7 +123,7 @@ def test_overflow_and_disk_error_are_visible_not_success(tmp_path):
     recorder.append(array('f', [1]), array('d', [0]), [{'name': 'v'}])
     assert recorder.stop()['state'] == 'failed'
     recorder = SuperWatchRecorder(tmp_path, _local=True)
-    recorder._file.close()
+    recorder._capture.stream.close()
     recorder.append(array('f', [1]), array('d', [0]), [{'name': 'v'}])
     result = recorder.stop()
     assert result['state'] == 'failed' and result['error'] and not result['active']

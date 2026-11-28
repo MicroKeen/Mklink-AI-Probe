@@ -33,6 +33,10 @@ def _safe(text):
 
 
 def _rows(path):
+    if path.suffix == '.mklog':
+        from mklink.recording_file import capture_rows
+        yield from capture_rows(path)
+        return
     from mklink.work_files import open_log_file
     with open_log_file(path, 'r', encoding='utf-8') as stream:
         line_no = 0
@@ -145,7 +149,7 @@ def _save_status(path, value):
 
 
 def export_text(manifest_path):
-    """Stream closed JSONL parts; results/errors are separate from capture status."""
+    """Stream closed recordings; export results are separate from capture status."""
     manifest_path = Path(manifest_path)
     job = json.loads(manifest_path.read_text(encoding='utf-8'))
     from mklink.work_files import file_error, open_log_file
@@ -154,8 +158,9 @@ def export_text(manifest_path):
     try:
         traffic = _RttText() if job['kind'] == 'rtt' else None
         for index in range(1, job['parts'] + 1):
-            source = Path(job['base'] + f'-{index:04d}.jsonl')
-            target = Path(job.get('output_base', job['base']) + f'-{index:04d}.txt')
+            source = Path(job.get('source') or job['base'] + f'-{index:04d}.jsonl')
+            suffix = '.txt' if job.get('source') else f'-{index:04d}.txt'
+            target = Path(job.get('output_base', job['base']) + suffix)
             with open_log_file(target, 'x', encoding='utf-8', newline='\n', buffering=65536) as output:
                 partial = target
                 output.write(f"# MKLink {job['kind']} readable log — {source.name}\n"
@@ -163,10 +168,9 @@ def export_text(manifest_path):
                              f"# Source: {'complete' if job['complete'] else 'INCOMPLETE: ' + _safe(job['source_error'])}\n")
                 if traffic:
                     traffic.begin_part()
-                    output.write('# Timestamps: host RX/TX time, local timezone; fragmented lines use first chunk time.\n'
-                                 '# A line spanning parts appears where it finishes; read numbered parts in order.\n')
+                    output.write('# Timestamps: host RX/TX time, local timezone; fragmented lines use first chunk time.\n')
                 else:
-                    output.write('# t: acquisition-relative seconds (JSONL _t), not host wall-clock time.\n')
+                    output.write('# t: acquisition-relative seconds (_t), not host wall-clock time.\n')
                 for row in _rows(source):
                     if traffic:
                         traffic.row(output, row)
@@ -180,7 +184,7 @@ def export_text(manifest_path):
                         output.write(f'[t={timestamp:.9f} s] {fields}\n')
                 if traffic and index == job['parts']:
                     traffic.finish(output)
-                output.write('# TXT part complete; use JSONL for lossless replay.\n')
+                output.write('# TXT export complete; use the original recording for lossless replay.\n')
             partial = None
             job.update(export_parts=index, export_path=str(target))
             _save_status(manifest_path, job)
@@ -233,7 +237,7 @@ class ManualExport:
             path = Path(recording['path'])
             from mklink.work_files import capture_directory
             capture_directory(path.resolve().parent)
-            base = re.sub(r'-\d{4,}\.jsonl$', '', str(path))
+            base = str(path.with_suffix('')) if path.suffix == '.mklog' else re.sub(r'-\d{4,}\.jsonl$', '', str(path))
             if base == str(path) or not recording['parts']:
                 raise ValueError('No closed recording parts available for conversion')
             # An explicit retry has its own output names. Previously completed
@@ -243,6 +247,8 @@ class ManualExport:
             job = dict(initial, output_base=output_base, kind=self.kind, base=base, parts=recording['parts'],
                        started_at=recording['started_at'], complete=recording['state'] == 'completed',
                        source_error=recording.get('error', ''))
+            if path.suffix == '.mklog':
+                job['source'] = str(path)
             with manifest.open('x', encoding='utf-8') as stream:
                 json.dump(job, stream, ensure_ascii=False)
             created = True

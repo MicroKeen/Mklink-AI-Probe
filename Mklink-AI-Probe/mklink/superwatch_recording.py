@@ -12,8 +12,6 @@ import uuid
 
 
 class SuperWatchRecorder:
-    # Each part stays within the offline player's memory limits. A slow disk
-    # fails explicitly instead of silently discarding the oldest samples.
     def __init__(self, directory, *, max_values=1_000_000, queue_bytes=32 * 1024 * 1024, _local=False):
         directory = Path(directory).expanduser()
         if not directory.is_absolute() or not directory.is_dir():
@@ -21,7 +19,6 @@ class SuperWatchRecorder:
         from mklink.work_files import capture_directory
         directory = capture_directory(directory)
         self._base = directory / ('superwatch-' + datetime.now().strftime('%Y%m%d-%H%M%S-') + uuid.uuid4().hex[:8])
-        self._max_values = max_values
         self._queue_limit = queue_bytes
         self._queue = deque()
         self._queued_bytes = 0
@@ -29,10 +26,12 @@ class SuperWatchRecorder:
         self._closing = False
         self._status = dict(state='recording', active=True, directory=str(directory), path='',
                             parts=0, samples=0, bytes=0, error='', started_at=time.time())
-        self._file = None
         self._export = None
         if _local:
-            self._open_part()
+            from mklink.recording_file import RecordingFile
+            path = self._base.with_suffix('.mklog')
+            self._capture = RecordingFile(path, 'superwatch', block_rows=min(2048, max_values))
+            self._status.update(path=str(path), parts=1)
         else:
             from mklink._recording_worker import RecordingWorker
             self._worker = RecordingWorker(directory, max_values)
@@ -42,11 +41,6 @@ class SuperWatchRecorder:
         self._thread = threading.Thread(target=self._run if _local else self._forward,
                                         name='superwatch-recording', daemon=True)
         self._thread.start()
-
-    def _open_part(self):
-        path = str(self._base) + f'-{self._status["parts"] + 1:04d}.jsonl'
-        self._file = open(path, 'x', encoding='utf-8', newline='\n')
-        self._status.update(path=path, parts=self._status['parts'] + 1)
 
     def status(self):
         with self._condition:
@@ -107,7 +101,7 @@ class SuperWatchRecorder:
                     self._queued_bytes -= size
                 if result['state'] == 'failed':
                     raise RuntimeError(result['error'])
-            result = self._worker.finish()
+            result = self._worker.finish(self._status['error'])
             with self._condition:
                 for key in ('path', 'parts', 'samples', 'bytes'):
                     self._status[key] = result[key]
@@ -127,8 +121,6 @@ class SuperWatchRecorder:
                                     error=error, stopped_at=time.time())
 
     def _run(self):
-        part_values = 0
-        part_bytes = 0
         previous_names = None
         error = ''
         # Reuse the encoder across samples; TextIO already buffers file writes.
@@ -136,11 +128,15 @@ class SuperWatchRecorder:
         try:
             while True:
                 with self._condition:
-                    while not self._queue and not self._closing:
-                        self._condition.wait()
-                    if not self._queue:
+                    self._condition.wait_for(lambda: self._queue or self._closing,
+                                             timeout=2 if self._capture.count else None)
+                    if not self._queue and self._closing:
                         break
-                    values, times, names, size, boundaries = self._queue.popleft()
+                    batch = self._queue.popleft() if self._queue else None
+                if batch is None:
+                    self._capture.flush_block()
+                    continue
+                values, times, names, size, boundaries = batch
                 width = len(names)
                 batch_bytes = 0
                 if not width or len(values) != len(times) * width:
@@ -157,19 +153,11 @@ class SuperWatchRecorder:
                         # with a reserved-looking name such as _break_before.
                         line = json.dumps({'event': 'discontinuity', 'reason': boundaries[row]},
                                           separators=(',', ':')) + '\n' + line
-                    length = len(line.encode('utf-8'))
-                    batch_bytes += length
-                    if part_values and (part_values + width > self._max_values or
-                                        part_bytes + length > 32 * 1024 * 1024 or previous_names != names):
-                        self._file.close()
-                        with self._condition:
-                            self._open_part()
-                        part_values = part_bytes = 0
-                    self._file.write(line)
-                    part_values += width
-                    part_bytes += length
+                    data = line.encode('utf-8')
+                    self._capture.append(data, point['_t'], values=point, gap=boundaries.get(row, 0),
+                                         new_layout=previous_names != names)
+                    batch_bytes += len(data)
                     previous_names = names
-                self._file.flush()
                 with self._condition:
                     self._queued_bytes -= size
                     self._status['samples'] += len(times)
@@ -179,7 +167,7 @@ class SuperWatchRecorder:
             error = str(exc) or type(exc).__name__
         finally:
             try:
-                self._file.close()
+                self._capture.finish(error or self._status['error'])
             except Exception as exc:
                 error = error or str(exc)
             with self._condition:

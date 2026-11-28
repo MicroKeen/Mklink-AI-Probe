@@ -10,7 +10,7 @@ from mklink._types import (
     DeviceState,
 )
 from mklink.bridge import MKLinkSerialBridge
-from mklink.device import Device
+from mklink.device import Device, DeviceError
 from mklink.systemview import LegacySystemViewSession as SystemViewSession
 
 
@@ -567,7 +567,7 @@ def test_device_dynamic_systemview_checks_exact_address_before_scanning(
 
     result = device.systemview_start(
         f"0x{requested_addr:08X}",
-        mode=0,
+        mode=0, channel=1,
         search_size=requested_search_size,
     )
 
@@ -604,7 +604,7 @@ def test_device_static_systemview_validates_exact_control_block_without_scan(
     device = _systemview_device(monkeypatch, read_memory)
 
     result = device.systemview_start(
-        requested_addr, mode=1, search_size=0,
+        requested_addr, mode=1, channel=1, search_size=0,
     )
 
     assert _DeviceSystemViewSession.calls[0]["addr"] == requested_addr
@@ -675,9 +675,23 @@ def test_device_systemview_start_clears_failed_session_and_preserves_error(
     )
 
     with pytest.raises(RuntimeError) as caught:
-        device.systemview_start("0x20000000", mode=1, search_size=0)
+        device.systemview_start("0x20000000", channel=1, mode=1, search_size=0)
 
     assert caught.value is start_error
     assert instances[0].reset_calls == 1
     assert device._systemview_session is None
     assert device._systemview_parser is None
+
+def test_detect_trace_channel_from_descriptor_or_project(monkeypatch, tmp_path):
+    device = Device(project_root=str(tmp_path))
+    monkeypatch.setattr(device, "_target_writable_ram_ranges", lambda: [(0x20001000, 0x20001020)])
+    monkeypatch.setattr(device, "read_memory", lambda addr, size: b"SysView\0" if addr == 0x20001000 else pytest.fail("unexpected target pointer"))
+    trace = {"active": True, "name_address": 0x20001000, "channel": 2}
+    text = {"active": True, "name_address": 0x40000000, "channel": 1}
+    config = tmp_path / "rtconfig.h"
+    config.write_text("#define PKG_SEGGER_SYSVIEW_RTT_CHANNEL 1", encoding="utf-8")
+    assert device._systemview_channel({"up_buffers": [text, trace]}) == 2
+    assert device._systemview_channel({"up_buffers": [text]}) == 1
+    config.unlink()
+    with pytest.raises(DeviceError, match="specify channel explicitly"):
+        device._systemview_channel({"up_buffers": [text]})

@@ -52,6 +52,8 @@ interface FirmwareRow {
   format: 'bin' | 'hex'
   base_address: string
   algorithm_id: string
+  manualSelection?: boolean
+  manualBase?: boolean
 }
 
 type ProbeModel = 'V2' | 'V3' | 'V4'
@@ -151,7 +153,14 @@ const deploymentUncertain = ref(false)
 const preview = ref<OfflinePreview | null>(null)
 const triggerLines = ref<string[]>([])
 const showRunOutput = ref(false)
+const triggerLog = ref<HTMLElement>()
+let followOutput = true
+function trackOutputPosition() {
+  const log = triggerLog.value
+  if (log) followOutput = log.scrollHeight - log.clientHeight - log.scrollTop < 8
+}
 const displayedTriggerLines = computed(() => ispMode.value ? hpmIspOutput(triggerLines.value) : triggerLines.value)
+
 const triggerUncertain = ref(false)
 const deployedScriptName = ref('')
 const deployedModel = ref<'V2' | 'V3' | 'V4' | ''>('')
@@ -179,6 +188,10 @@ const scriptFieldName = computed({
 })
 const hpmMode = computed(() => isHpmPart(targetPart.value))
 const ispMode = computed(() => hpmMode.value && programmingProtocol.value === 'hpm_rom_isp_uart')
+watch(() => [displayedTriggerLines.value.length, displayedTriggerLines.value.at(-1)], () => {
+  if (!displayedTriggerLines.value.length) followOutput = true
+  if (followOutput && triggerLog.value) triggerLog.value.scrollTop = triggerLog.value.scrollHeight
+}, { flush: 'post' })
 watch([targetPart, model], () => {
   if (!hpmMode.value || model.value !== 'V4') programmingProtocol.value = 'debug'
   if (hpmMode.value) resetAfterDownload.value = true
@@ -238,7 +251,8 @@ const canBuild = computed(() => (
       : !!hpmFlashCfg.value) && firmwares.value.every(item => (item.file || item.source_path) && (item.format === 'hex' || !!item.base_address))
     : selectedAlgorithms.value.length > 0
       && unavailableSelectedAlgorithms.value.length === 0
-      && firmwares.value.every(item => (item.file || item.source_path) && item.algorithm_id && algorithms.value.some(algorithm => algorithm.id === item.algorithm_id)))))
+      && firmwares.value.every(item => (item.file || item.source_path) && (item.format !== 'bin' || !!item.base_address)
+        && item.algorithm_id && algorithms.value.some(algorithm => algorithm.id === item.algorithm_id)))))
 ))
 const canTrigger = computed(() => (
   !!disk.value?.available
@@ -594,6 +608,51 @@ function targetSearchKeydown(event: KeyboardEvent): void {
   }
 }
 
+function defaultBinBase(): string {
+  if (hpmMode.value) return '0x80000400'
+  const available = algorithms.value.filter(item => item.available)
+  const defaults = available.filter(item => item.default)
+  const bases = new Set((defaults.length ? defaults : available).map(item => Number(item.flash_base)))
+  if (bases.size !== 1) return ''
+  return '0x' + [...bases][0].toString(16).padStart(8, '0').toUpperCase()
+}
+
+const inspections = new WeakMap<FirmwareRow, number>()
+async function matchFirmware(row: FirmwareRow) {
+  const revision = (inspections.get(row) || 0) + 1
+  inspections.set(row, revision)
+  if (row.format === 'bin' && !row.manualBase && !row.manualSelection) row.base_address = defaultBinBase()
+  if (row.manualSelection || hpmMode.value) return
+  const part = targetPart.value
+  const base = row.format === 'bin' ? row.base_address : null
+  const known = algorithms.value.filter(item => item.flash_size && item.available)
+  row.algorithm_id = ''
+  if (!known.length) {
+    if (algorithms.value.length === 1) row.algorithm_id = algorithms.value[0].id
+    return
+  }
+  if (!part || (row.format === 'bin' && !base)) return
+  try {
+    const segments = row.file && row.format === 'bin'
+      ? [{ start: Number(base), end: Number(base) + row.file.size }]
+      : (row.file ? await online.inspectImage(row.file, part, base)
+         : await online.inspectImagePath(row.source_path!, part, base)).segments
+    if (inspections.get(row) !== revision || part !== targetPart.value || row.manualSelection) return
+    const matching = known.filter(item => segments.length && segments.every(({ start, end }) =>
+      start < end && start >= Number(item.flash_base) && end <= Number(item.flash_base) + item.flash_size!))
+    if (matching.length === 1 && algorithms.value.includes(matching[0])) row.algorithm_id = matching[0].id
+  } catch (error) {
+    if (inspections.get(row) === revision && part === targetPart.value) setError(error)
+  }
+}
+
+function selectFirmwareAlgorithm(row: FirmwareRow): void {
+  row.manualSelection = !!row.algorithm_id
+  if (row.format === 'bin' && !row.manualBase) {
+    row.base_address = algorithms.value.find(item => item.id === row.algorithm_id)?.flash_base || ''
+  }
+}
+
 function mergeAlgorithms(items: OfflineAlgorithmCandidate[]): void {
   for (const item of items) {
     const duplicate = algorithms.value.some(existing => (
@@ -604,9 +663,7 @@ function mergeAlgorithms(items: OfflineAlgorithmCandidate[]): void {
     ))
     if (!duplicate) algorithms.value.push({ ...item, file: null, source_path: null })
   }
-  if (algorithms.value.length === 1) {
-    firmwares.value.forEach(item => { item.algorithm_id = algorithms.value[0].id })
-  }
+  firmwares.value.forEach(row => { void matchFirmware(row) })
 }
 
 async function addTargetAlgorithms(target: TargetRecord): Promise<void> {
@@ -615,6 +672,10 @@ async function addTargetAlgorithms(target: TargetRecord): Promise<void> {
   clearError()
   notice.value = ''
   try {
+    if (targetPart.value !== target.part_number) {
+      algorithms.value = algorithms.value.filter(item => item.source_kind === 'upload')
+      for (const row of firmwares.value) { row.manualSelection = false; row.algorithm_id = '' }
+    }
     targetPart.value = target.part_number
     saveConsumerTarget('offline', target.part_number)
     targetQuery.value = target.part_number
@@ -622,16 +683,17 @@ async function addTargetAlgorithms(target: TargetRecord): Promise<void> {
     activeTargetSuggestion.value = -1
     if (isHpmPart(target.part_number)) {
       algorithms.value = []
-      firmwares.value.forEach(item => { item.algorithm_id = '' })
+      firmwares.value.forEach(item => { item.algorithm_id = ''; void matchFirmware(item) })
       return
     }
     if (!target.installed) await online.installPack(target.part_number)
     const items = await offline.listAlgorithms(target.part_number)
+    if (targetPart.value !== target.part_number) return
     if (!items.length) throw new Error(tr(`未找到 ${target.part_number} 的 FLM 算法`, `No FLM algorithm found for ${target.part_number}`))
     mergeAlgorithms(items)
     notice.value = tr(`已加入 ${items.length} 个 ${target.part_number} 算法候选`, `Added ${items.length} algorithm candidates for ${target.part_number}`)
-  } catch (value) { setError(value) }
-  finally { targetBusy.value = false }
+  } catch (value) { if (targetPart.value === target.part_number) setError(value) }
+  finally { if (targetPart.value === target.part_number) targetBusy.value = false }
 }
 
 function addManualFlmSource(source: string | File): void {
@@ -659,7 +721,7 @@ function addManualFlmSource(source: string | File): void {
     source_path: sourcePath,
   })
   if (algorithms.value.length === 1) {
-    firmwares.value.forEach(item => { item.algorithm_id = id })
+    firmwares.value.forEach(item => { void matchFirmware(item) })
   }
   // A missing-catalog warning can be raised before the user supplies a local
   // FLM.  Once that replacement is present, the old warning must not keep
@@ -702,9 +764,8 @@ function replaceAlgorithm(event: Event): void {
 
 function removeAlgorithm(index: number): void {
   const [removed] = algorithms.value.splice(index, 1)
-  const fallback = algorithms.value[0]?.id || ''
   firmwares.value.forEach(item => {
-    if (item.algorithm_id === removed.id) item.algorithm_id = fallback
+    if (item.algorithm_id === removed.id) { item.manualSelection = false; void matchFirmware(item) }
   })
   preview.value = null
 }
@@ -737,9 +798,10 @@ function addFirmwareSources(sources: Array<string | File>): void {
       source_stamp: '',
       file_name: destinationName,
       format: suffix,
-      base_address: suffix === 'bin' ? (hpmMode.value ? '0x80000400' : '0x08000000') : '',
-      algorithm_id: hpmMode.value ? '' : algorithms.value[0]?.id || '',
+      base_address: suffix === 'bin' ? defaultBinBase() : '',
+      algorithm_id: '',
     })
+    void matchFirmware(firmwares.value[firmwares.value.length - 1])
   }
   preview.value = null
 }
@@ -785,6 +847,7 @@ async function pollFirmwareSources(): Promise<void> {
         deployedModel.value = ''
         notice.value = tr(`已自动加载重新编译的 ${status.file_name}`, `Automatically loaded rebuilt ${status.file_name}`)
       }
+      if (item.source_stamp && stamp !== item.source_stamp) void matchFirmware(item)
       item.source_stamp = stamp
     } catch (value) {
       setError(new Error(tr(`固件路径不可用：${message(value)}`, `Firmware path is unavailable: ${message(value)}`)))
@@ -976,6 +1039,7 @@ async function triggerOffline(): Promise<void> {
   operationBusy.value = true
   invalidateOtp()
   clearError()
+  followOutput = true
   triggerLines.value = []
   ispConnection.value = 'idle'
   showRunOutput.value = true
@@ -1197,12 +1261,12 @@ onBeforeUnmount(() => {
             <div class="sequence-number">{{ ispMode ? 'BIN' : index + 1 }}</div>
             <div class="firmware-fields">
               <input v-model="item.file_name" class="compact-input mono file-name">
-              <select v-if="!hpmMode" v-model="item.algorithm_id" class="compact-input">
+              <select v-if="!hpmMode" v-model="item.algorithm_id" @change="selectFirmwareAlgorithm(item)" class="compact-input">
                 <option value="" disabled>{{ tr('选择 FLM', 'Select FLM') }}</option>
                 <option v-for="algorithm in algorithms" :key="algorithm.id" :value="algorithm.id">{{ algorithm.file_name }}{{ !algorithm.available && algorithm.source_kind !== 'upload' ? ` · ${tr('不可用', 'unavailable')}` : '' }}</option>
               </select>
               <span v-else class="embedded-address">{{ ispMode ? 'USART ISP' : 'HPM ROM API' }}</span>
-              <input v-if="item.format === 'bin'" v-model="item.base_address" class="compact-input mono" :placeholder="tr('BIN 基地址', 'BIN base address')">
+              <input v-if="item.format === 'bin'" v-model="item.base_address" @change="item.manualBase = true; item.manualSelection = false; matchFirmware(item)" class="compact-input mono" :placeholder="tr('BIN 基地址', 'BIN base address')">
               <span v-else class="embedded-address">{{ tr('HEX 文件内地址', 'Address embedded in HEX') }}</span>
             </div>
             <div class="row-actions">
@@ -1285,7 +1349,7 @@ onBeforeUnmount(() => {
         </div>
         <div v-if="showRunOutput" class="trigger-output" data-testid="trigger-output">
           <div class="preview-title">{{ tr('运行输出', 'Run output') }}</div>
-          <pre class="trigger-log">{{ displayedTriggerLines.join('\n') || tr('等待触发测试', 'Waiting to run test') }}</pre>
+          <pre ref="triggerLog" class="trigger-log" @scroll="trackOutputPosition">{{ displayedTriggerLines.join('\n') || tr('等待触发测试', 'Waiting to run test') }}</pre>
         </div>
     </section>
       </main>

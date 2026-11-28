@@ -269,7 +269,10 @@ class SystemViewParser:
                 del self._buf[:discard]
                 self._synced = False
                 continue
-            self._synced = True
+            if ev is not None and ev['kind'] in {
+                'init', 'task_info', 'sysdesc', 'isr_enter', 'task_start_exec', 'task_create',
+            }:
+                self._synced = True
             if ev is not None:
                 events.append(ev)
         return events

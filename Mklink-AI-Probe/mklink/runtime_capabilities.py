@@ -123,6 +123,10 @@ def capture_reset_supported(state, active):
     """Only negotiated framed reset may share a running target acquisition."""
     from mklink.mux import MuxTransport
     mux = getattr(getattr(state.get('device'), '_bridge', None), '_mux', None)
+    device = state.get('device')
+    if isinstance(getattr(device, '_hardware_target', None), dict):
+        # The profile reset route suspends the target producers before CMSIS-DAP access.
+        return bool(device.connected)
     return (multiplex_captures(state, active)
             and isinstance(mux, MuxTransport) and mux.ready
             and mux.supports_software_reset)

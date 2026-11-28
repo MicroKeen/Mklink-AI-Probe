@@ -358,6 +358,15 @@ def build_server():
         return set_alias(probe, alias)
 
     @server.tool()
+    def list_target_profiles() -> dict:
+        """List target model keys and declared aliases for connect(mcu=...) without a GUI, runtime or probe.
+
+        A mem_ap field identifies a model that requires native MUX profile attach.
+        """
+        from mklink.profiles import target_profile_catalog
+        return target_profile_catalog()
+
+    @server.tool()
     def connect(port: str | None = None, axf: str | None = None, mcu: str | None = None,
                 project_root: str | None = None, elf_backend: str | None = None, probe: str | None = None,
                 client_name: str = 'AI client', scope: str = 'target') -> dict:
@@ -366,7 +375,12 @@ def build_server():
         Explicit probe selection switches the existing backend after draining work.
         Other target sessions are retired and must explicitly reconnect; GUI pages follow.
         Conflicting project/symbol settings still require explicit reconfiguration.
-        The default scope connects the USB probe without requiring a target MCU.
+        Native SWD identifies supported S32K3 devices by hardware. An axf supplies symbols.
+        To require a specific model, select a key or alias from list_target_profiles, e.g.
+        mcu="s32k314". No GUI is required. Check target_attach.profile and mem_ap
+        in the receipt before issuing memory or stream operations on this session.
+        A profile failure requires explicit reconnect. A plain probe connection can
+        succeed without a target MCU.
         For a new backend pass the target project's absolute project_root. Do not
         use the Skill/desktop install directory as the project; captures belong
         in the target project's .mklink/logs, with an explicit recording directory.
@@ -410,9 +424,9 @@ def build_server():
 
     @server.tool()
     def disconnect() -> dict:
-        """Stop shared target acquisition and disconnect the physical probe.
+        """Stop all acquisitions on this backend and disconnect the physical probe.
 
-        Drains admitted hardware work first. All target clients lose their old
+        Drains admitted hardware work first. All clients on this backend lose their old
         attachment; GUI pages update. Use detach for session-only cleanup.
         """
         result = client().disconnect()
@@ -626,7 +640,7 @@ def build_server():
         snapshot_select uses name, start_index, count for the same array view as GUI;
         snapshot_clear removes that shared array view. Neither starts acquisition.
         recording_start accepts directory (existing absolute path on the backend computer).
-        recording_status/recording_stop inspect or drain the same continuous JSONL recorder as GUI.
+        recording_status/recording_stop inspect or drain the same single-file indexed recorder as GUI.
         recording_export explicitly converts the closed recording to Excel; pass path from recording_status.
         Stopping never converts automatically. Read export_state/export_path for the separate job result.
         profile/profile_save, workspace/workspace_save and pins/pins_save share the AXF/ELF-adjacent

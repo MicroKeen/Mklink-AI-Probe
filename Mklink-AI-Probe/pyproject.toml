@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mklink"
-version = "0.5.1"
+version = "0.5.2"
 description = "Mklink AI Probe - Embedded Debug Toolkit"
 requires-python = ">=3.9"
 dependencies = [
@@ -12,6 +12,7 @@ dependencies = [
     "pyserial",
     "pymodbus>=3.0",
     "pyelftools==0.32",
+    "PyYAML>=6,<7",
     "pycparser>=2.22,<4",
     "websockets>=11.0",
     "XlsxWriter>=3.2,<4",
