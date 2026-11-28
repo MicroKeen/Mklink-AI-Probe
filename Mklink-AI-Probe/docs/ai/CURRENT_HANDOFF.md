@@ -6,10 +6,10 @@
 
 - 更新时间：`2026-11-28`
 - 分支：`codex/v0.5.2-fixes`
-- HEAD：`f643032b`
-- 远端 HEAD：`f643032b`
-- 工作树：0.5.2 验证包 f643032b，正式版 0.5.1。
-- 当前任务：[重编译提示与 S32K344 整包验收](../verification/v052-web-symbol-rebuild.md)；[S32K344 烧录](../verification/v052-s32k344-online-flash.md)。
+- HEAD：`a8174206`
+- 远端 HEAD：`a8174206`
+- 工作树：0.5.2 Windows 验证包 a8174206，正式版 0.5.1。
+- 当前任务：[Windows 芯片资源精简](../verification/v052-windows-chip-resources.md)；[S32K344 验收](../verification/v052-web-symbol-rebuild.md)。
 - 状态：`0.5.2 开发见 [PR #98](https://github.com/MicroKeen/Mklink-AI-Probe/pull/98)。0.5.1 发布和三平台验证见 [PR #97](https://github.com/MicroKeen/Mklink-AI-Probe/pull/97)。`
 
 ## 里程碑
